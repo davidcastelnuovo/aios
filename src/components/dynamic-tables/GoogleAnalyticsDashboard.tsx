@@ -242,7 +242,208 @@ export function GoogleAnalyticsDashboard({ records, externalDateFilter }: Google
   };
 
   const { trafficSources, dailyData, topPages, totals, prevTotals } = useMemo(() => {
-...
+    // Filter daily records by selected date range
+    const currentDailyRecords = records.filter(r => {
+      if (r.data.report_type !== 'daily') return false;
+      if (!r.data.date) return false;
+
+      try {
+        const recordDate = parseISO(r.data.date);
+        const start = new Date(currentRange.start);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(currentRange.end);
+        end.setHours(23, 59, 59, 999);
+        return isWithinInterval(recordDate, { start, end });
+      } catch {
+        return false;
+      }
+    });
+
+    const previousDailyRecords = showComparison ? records.filter(r => {
+      if (r.data.report_type !== 'daily') return false;
+      if (!r.data.date) return false;
+
+      try {
+        const recordDate = parseISO(r.data.date);
+        const start = new Date(previousRange.start);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(previousRange.end);
+        end.setHours(23, 59, 59, 999);
+        return isWithinInterval(recordDate, { start, end });
+      } catch {
+        return false;
+      }
+    }) : [];
+
+    // Traffic sources - aggregate from date-filtered daily records that have source info
+    const dailySourceRecords = currentDailyRecords.filter(r =>
+      r.data.source_medium || r.data.source || r.data.medium
+    );
+
+    let trafficSources: { name: string; sessions: number; users: number; newUsers: number; pageviews: number; bounceRate: number; avgDuration: number; conversions: number; addToCart: number; purchases: number; purchaseValue: number }[];
+
+    if (dailySourceRecords.length > 0) {
+      const sourceMap = new Map<string, { sessions: number; users: number; newUsers: number; pageviews: number; bounceRate: number; bounceCount: number; avgDuration: number; conversions: number; addToCart: number; purchases: number; purchaseValue: number }>();
+
+      for (const r of dailySourceRecords) {
+        const name = normalizeSourceName(
+          r.data.source_medium ||
+          (r.data.source && r.data.medium ? `${r.data.source} / ${r.data.medium}` : r.data.source) ||
+          'Unknown'
+        );
+        const existing = sourceMap.get(name) || { sessions: 0, users: 0, newUsers: 0, pageviews: 0, bounceRate: 0, bounceCount: 0, avgDuration: 0, conversions: 0, addToCart: 0, purchases: 0, purchaseValue: 0 };
+        existing.sessions += toNumber(r.data.sessions);
+        existing.users += toNumber(r.data.users);
+        existing.newUsers += toNumber(r.data.new_users);
+        existing.pageviews += toNumber(r.data.pageviews);
+        existing.bounceRate += toNumber(r.data.bounce_rate);
+        existing.bounceCount += 1;
+        existing.avgDuration += toNumber(r.data.avg_session_duration);
+        existing.conversions += toNumber(r.data.conversions ?? r.data.transactions ?? r.data.purchases);
+        existing.addToCart += toNumber(r.data.add_to_cart ?? r.data.add_to_carts);
+        existing.purchases += toNumber(r.data.purchases ?? r.data.transactions ?? r.data.conversions);
+        existing.purchaseValue += toNumber(r.data.purchase_value ?? r.data.purchase_revenue ?? r.data.revenue ?? r.data.total_revenue);
+        sourceMap.set(name, existing);
+      }
+
+      trafficSources = Array.from(sourceMap.entries()).map(([name, data]) => ({
+        name,
+        sessions: data.sessions,
+        users: data.users,
+        newUsers: data.newUsers,
+        pageviews: data.pageviews,
+        bounceRate: data.bounceCount > 0 ? data.bounceRate / data.bounceCount : 0,
+        avgDuration: data.bounceCount > 0 ? data.avgDuration / data.bounceCount : 0,
+        conversions: data.conversions,
+        addToCart: data.addToCart,
+        purchases: data.purchases,
+        purchaseValue: data.purchaseValue,
+      })).sort((a, b) => b.sessions - a.sessions);
+    } else {
+      trafficSources = records
+        .filter(r =>
+          r.data.report_type === 'traffic_source' ||
+          (!r.data.report_type && (r.data.source_medium || r.data.source || r.data.medium))
+        )
+        .map(r => ({
+          name: normalizeSourceName(
+            r.data.source_medium ||
+            (r.data.source && r.data.medium ? `${r.data.source} / ${r.data.medium}` : r.data.source) ||
+            'Unknown'
+          ),
+          sessions: toNumber(r.data.sessions),
+          users: toNumber(r.data.users),
+          newUsers: toNumber(r.data.new_users),
+          pageviews: toNumber(r.data.pageviews),
+          bounceRate: toNumber(r.data.bounce_rate),
+          avgDuration: toNumber(r.data.avg_session_duration),
+          conversions: toNumber(r.data.conversions ?? r.data.transactions ?? r.data.purchases),
+          addToCart: toNumber(r.data.add_to_cart ?? r.data.add_to_carts),
+          purchases: toNumber(r.data.purchases ?? r.data.transactions ?? r.data.conversions),
+          purchaseValue: toNumber(r.data.purchase_value ?? r.data.purchase_revenue ?? r.data.revenue ?? r.data.total_revenue),
+        }))
+        .sort((a, b) => b.sessions - a.sessions);
+    }
+
+    const dailyData = currentDailyRecords
+      .map(r => ({
+        date: r.data.date,
+        displayDate: r.data.date ? new Date(r.data.date).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' }) : '',
+        sessions: toNumber(r.data.sessions),
+        users: toNumber(r.data.users),
+        pageviews: toNumber(r.data.pageviews),
+        conversions: toNumber(r.data.conversions ?? r.data.transactions ?? r.data.purchases),
+        addToCart: toNumber(r.data.add_to_cart ?? r.data.add_to_carts),
+        purchases: toNumber(r.data.purchases ?? r.data.transactions ?? r.data.conversions),
+        purchaseValue: toNumber(r.data.purchase_value ?? r.data.purchase_revenue ?? r.data.revenue ?? r.data.total_revenue),
+      }))
+      .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
+    const prevDailyData = previousDailyRecords
+      .map(r => ({
+        sessions: toNumber(r.data.sessions),
+        users: toNumber(r.data.users),
+        pageviews: toNumber(r.data.pageviews),
+        conversions: toNumber(r.data.conversions ?? r.data.transactions ?? r.data.purchases),
+        addToCart: toNumber(r.data.add_to_cart ?? r.data.add_to_carts),
+        purchases: toNumber(r.data.purchases ?? r.data.transactions ?? r.data.conversions),
+        purchaseValue: toNumber(r.data.purchase_value ?? r.data.purchase_revenue ?? r.data.revenue ?? r.data.total_revenue),
+      }));
+
+    const topPages = records
+      .filter(r => r.data.report_type === 'top_pages')
+      .map(r => ({
+        path: r.data.page_path || '/',
+        pageviews: toNumber(r.data.pageviews),
+        sessions: toNumber(r.data.sessions),
+        avgDuration: toNumber(r.data.avg_session_duration),
+      }))
+      .sort((a, b) => b.pageviews - a.pageviews)
+      .slice(0, 10);
+
+    const calculateTotalsFromDaily = (data: typeof dailyData) => ({
+      sessions: data.reduce((sum, d) => sum + d.sessions, 0),
+      users: data.reduce((sum, d) => sum + d.users, 0),
+      newUsers: 0,
+      pageviews: data.reduce((sum, d) => sum + d.pageviews, 0),
+      conversions: data.reduce((sum, d) => sum + d.conversions, 0),
+      addToCart: data.reduce((sum, d) => sum + d.addToCart, 0),
+      purchases: data.reduce((sum, d) => sum + d.purchases, 0),
+      purchaseValue: data.reduce((sum, d) => sum + d.purchaseValue, 0),
+      avgBounceRate: '0',
+    });
+
+    const totals = dailyData.length > 0
+      ? calculateTotalsFromDaily(dailyData)
+      : {
+          sessions: trafficSources.reduce((sum, s) => sum + s.sessions, 0),
+          users: trafficSources.reduce((sum, s) => sum + s.users, 0),
+          newUsers: trafficSources.reduce((sum, s) => sum + s.newUsers, 0),
+          pageviews: trafficSources.reduce((sum, s) => sum + s.pageviews, 0),
+          conversions: trafficSources.reduce((sum, s) => sum + s.conversions, 0),
+          addToCart: trafficSources.reduce((sum, s) => sum + s.addToCart, 0),
+          purchases: trafficSources.reduce((sum, s) => sum + s.purchases, 0),
+          purchaseValue: trafficSources.reduce((sum, s) => sum + s.purchaseValue, 0),
+          avgBounceRate: trafficSources.length > 0
+            ? (trafficSources.reduce((sum, s) => sum + s.bounceRate, 0) / trafficSources.length).toFixed(1)
+            : '0',
+        };
+
+    const prevTotals = showComparison && prevDailyData.length > 0
+      ? calculateTotalsFromDaily(prevDailyData as any)
+      : null;
+
+    return { trafficSources, dailyData, topPages, totals, prevTotals };
+  }, [records, currentRange.start, currentRange.end, previousRange.start, previousRange.end, showComparison]);
+
+  const formatNumber = (num: number) => {
+    return new Intl.NumberFormat('he-IL').format(num);
+  };
+
+  const formatCurrency = (num: number) => {
+    return new Intl.NumberFormat('he-IL', {
+      style: 'currency',
+      currency: 'ILS',
+      maximumFractionDigits: 0,
+    }).format(num);
+  };
+
+  const calculateChange = (current: number, previous: number | undefined): { value: number; positive: boolean } | null => {
+    if (!showComparison || previous === undefined || previous === 0) return null;
+    const change = ((current - previous) / previous) * 100;
+    return { value: Math.abs(change), positive: change >= 0 };
+  };
+
+  const pieData = trafficSources
+    .filter((source) => source.sessions > 0)
+    .slice(0, 6)
+    .map((source, index) => ({
+      name: source.name.length > 20 ? source.name.substring(0, 20) + '...' : source.name,
+      value: source.sessions,
+      purchaseValue: source.purchaseValue,
+      fill: COLORS[index % COLORS.length],
+    }));
+
   const datePresetOptions = [
     { value: 'all', label: 'כל התקופה' },
     { value: 'today', label: 'היום' },
