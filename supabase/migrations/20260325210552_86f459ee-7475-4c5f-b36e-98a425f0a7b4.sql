@@ -1,0 +1,1 @@
+UPDATE crm_tables SET client_id = '5af32e16-162d-4025-addf-266bf0b17cf2' WHERE id = 'cf97d570-d4e0-484d-8adf-84bd84398c7e' AND client_id IS NULL;
