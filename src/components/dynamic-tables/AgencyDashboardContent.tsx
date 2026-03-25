@@ -269,7 +269,7 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
       const clientIds = clients.map(c => c.id);
       return allTables.filter((t: any) => 
         t.client_id && clientIds.includes(t.client_id) &&
-        ['facebook_insights', 'facebook_ecommerce', 'google_ads'].includes(t.integration_type)
+        ['facebook_insights', 'facebook_ecommerce', 'google_ads', 'google_analytics'].includes(t.integration_type)
       );
     },
     enabled: clients.length > 0,
