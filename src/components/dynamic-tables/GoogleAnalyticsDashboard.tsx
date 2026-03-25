@@ -82,7 +82,11 @@ interface DateRange {
   to: Date | undefined;
 }
 
-export function GoogleAnalyticsDashboard({ records, externalDateFilter }: GoogleAnalyticsDashboardProps) {
+export function GoogleAnalyticsDashboard({
+  records,
+  externalDateFilter,
+  externalCustomDateRange,
+}: GoogleAnalyticsDashboardProps) {
   const mapExternalPreset = (ext?: string): DateRangePreset => {
     if (!ext) return 'last_30_days';
     const map: Record<string, DateRangePreset> = {
@@ -104,6 +108,7 @@ export function GoogleAnalyticsDashboard({ records, externalDateFilter }: Google
     return map[ext] || 'last_30_days';
   };
 
+  const usesExternalFilter = typeof externalDateFilter === 'string';
   const [datePreset, setDatePreset] = useState<DateRangePreset>(mapExternalPreset(externalDateFilter));
   const [customDateRange, setCustomDateRange] = useState<DateRange>({ from: undefined, to: undefined });
 
