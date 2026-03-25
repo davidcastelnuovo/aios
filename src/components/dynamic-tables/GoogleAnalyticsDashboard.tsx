@@ -497,19 +497,25 @@ export function GoogleAnalyticsDashboard({
       <div className="flex flex-wrap items-center gap-4 p-4 bg-muted/30 rounded-lg">
         <div className="flex items-center gap-2">
           <Label className="text-sm font-medium">תקופה:</Label>
-          <Select value={datePreset} onValueChange={(v) => setDatePreset(v as DateRangePreset)}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {datePresetOptions.map(option => (
-                <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {usesExternalFilter ? (
+            <Badge variant="outline" className="text-xs">
+              {datePresetOptions.find((option) => option.value === datePreset)?.label || '30 יום אחרונים'}
+            </Badge>
+          ) : (
+            <Select value={datePreset} onValueChange={(v) => setDatePreset(v as DateRangePreset)}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {datePresetOptions.map(option => (
+                  <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
 
-        {datePreset === 'custom' && (
+        {!usesExternalFilter && datePreset === 'custom' && (
           <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
             <PopoverTrigger asChild>
               <Button variant="outline" className="gap-2">
