@@ -666,12 +666,20 @@ export function GoogleAnalyticsDashboard({ records, externalDateFilter }: Google
                   tick={{ fill: 'currentColor', textAnchor: 'start' }}
                 />
                 <Tooltip 
-                  formatter={(value: number) => formatNumber(value)}
+                  formatter={(value: number, name: string) => {
+                    if (name === 'שווי רכישות') return formatCurrency(value);
+                    return formatNumber(value);
+                  }}
                   contentStyle={{ direction: 'rtl', textAlign: 'right' }}
                 />
                 <Bar dataKey="sessions" name="סשנים" radius={[0, 4, 4, 0]}>
                   {trafficSources.slice(0, 10).map((_, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Bar>
+                <Bar dataKey="purchaseValue" name="שווי רכישות" radius={[0, 4, 4, 0]} opacity={0.6}>
+                  {trafficSources.slice(0, 10).map((_, index) => (
+                    <Cell key={`cell-pv-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Bar>
               </BarChart>
