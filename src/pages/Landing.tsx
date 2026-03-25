@@ -235,7 +235,7 @@ const Landing = () => {
             {/* Badge */}
             <div className="inline-flex items-center gap-3 px-6 py-3 rounded-full bg-[#36d399]/10 border border-[#36d399]/30 mb-10">
               <Sparkles className="h-5 w-5 text-[#36d399]" />
-              <span className="text-lg md:text-xl font-medium text-[#36d399]">מערכת CRM לסוכנויות שיווק</span>
+              <span className="text-lg md:text-xl font-medium text-[#36d399]">מערכת AIOS — מערכת הפעלה מבוססת בינה מלאכותית</span>
             </div>
 
             {/* Main Headline */}
@@ -250,6 +250,15 @@ const Landing = () => {
               <br />
               <span className="text-white/40">בנוי במיוחד עבור סוכנויות שיווק.</span>
             </p>
+
+            {/* AIOS Description */}
+            <div className="max-w-2xl mx-auto mb-10 px-6 py-5 rounded-2xl bg-white/5 border border-white/10 text-right">
+              <p className="text-white/70 text-base md:text-lg leading-relaxed">
+                <span className="text-[#36d399] font-semibold">AIOS</span> היא לא סתם תוכנת CRM — היא מערכת הפעלה חכמה לעסק שלך.
+                במקום לנהל כלים נפרדים, AfterLead מרכזת הכל במקום אחד: לידים, לקוחות, משימות, אוטומציות, ואינטגרציות —
+                ומניעה אותם עם בינה מלאכותית שעובדת בשבילך ברקע, 24/7.
+              </p>
+            </div>
 
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
