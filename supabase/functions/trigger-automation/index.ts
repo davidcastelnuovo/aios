@@ -270,6 +270,65 @@ Deno.serve(async (req) => {
     let payloadData: any
     let tenantId: string
 
+    const validateFlowTriggerConfig = (config: any, data: any): { matches: boolean; reason?: string } => {
+      const safeConfig = config || {}
+      const safeData = data || {}
+
+      if (safeConfig.facebook_form_id && safeConfig.facebook_form_id !== safeData.facebook_form_id) {
+        return { matches: false, reason: 'facebook_form_id_mismatch' }
+      }
+      if (safeConfig.group_id && safeConfig.group_id !== safeData.group_id) {
+        return { matches: false, reason: 'group_id_mismatch' }
+      }
+      if (safeConfig.connection_user_id && safeConfig.connection_user_id !== safeData.connection_user_id) {
+        return { matches: false, reason: 'connection_user_id_mismatch' }
+      }
+
+      if (safeConfig.keyword && safeData.message_text) {
+        const keywords = String(safeConfig.keyword)
+          .split(',')
+          .map((k: string) => k.trim().toLowerCase())
+          .filter(Boolean)
+        const msgText = String(safeData.message_text).toLowerCase()
+        const hasMatch = keywords.some((kw: string) => msgText.includes(kw))
+        if (!hasMatch) {
+          return { matches: false, reason: 'keyword_mismatch' }
+        }
+      } else if (safeConfig.keyword && !safeData.message_text) {
+        return { matches: false, reason: 'keyword_no_message' }
+      }
+
+      if (safeConfig.source_filter === 'group' && !safeData.group_id) {
+        return { matches: false, reason: 'source_filter_group' }
+      }
+      if (safeConfig.source_filter === 'all_groups' && !safeData.group_id) {
+        return { matches: false, reason: 'source_filter_all_groups' }
+      }
+      if (safeConfig.source_filter === 'all_groups_except') {
+        if (!safeData.group_id) {
+          return { matches: false, reason: 'source_filter_all_groups_except' }
+        }
+        const excludedIds = safeConfig.excluded_group_ids || []
+        if (excludedIds.length > 0 && excludedIds.includes(safeData.group_id)) {
+          return { matches: false, reason: 'group_excluded' }
+        }
+      }
+      if (safeConfig.source_filter === 'multiple_groups') {
+        if (!safeData.group_id) {
+          return { matches: false, reason: 'source_filter_multiple_groups' }
+        }
+        const selectedIds = safeConfig.selected_group_ids || []
+        if (selectedIds.length > 0 && !selectedIds.includes(safeData.group_id)) {
+          return { matches: false, reason: 'group_not_selected' }
+        }
+      }
+      if (safeConfig.source_filter === 'private' && safeData.group_id) {
+        return { matches: false, reason: 'source_filter_private' }
+      }
+
+      return { matches: true }
+    }
+
     // Check if this is a direct automation execution by ID
     if (requestBody.automationId) {
       // Direct execution mode - fetch the specific automation
@@ -337,32 +396,8 @@ Deno.serve(async (req) => {
           // Filter by trigger configuration BEFORE fetching automations
           const matchingSteps = flowTriggerSteps.filter((step: any) => {
             const config = step.configuration || {}
-            // Facebook form_id filter: if trigger step specifies a form, only match leads from that form
-            if (config.facebook_form_id && config.facebook_form_id !== payloadData?.facebook_form_id) return false
-            if (config.group_id && config.group_id !== payloadData.group_id) return false
-            if (config.connection_user_id && config.connection_user_id !== payloadData.connection_user_id) return false
-            if (config.keyword && payloadData.message_text) {
-              const keywords = config.keyword.split(',').map((k: string) => k.trim().toLowerCase()).filter(Boolean)
-              const msgText = payloadData.message_text.toLowerCase()
-              const hasMatch = keywords.some((kw: string) => msgText.includes(kw))
-              if (!hasMatch) return false
-            } else if (config.keyword && !payloadData.message_text) {
-              return false
-            }
-            if (config.source_filter === 'group' && !payloadData.group_id) return false
-            if (config.source_filter === 'all_groups' && !payloadData.group_id) return false
-            if (config.source_filter === 'all_groups_except') {
-              if (!payloadData.group_id) return false
-              const excludedIds = config.excluded_group_ids || []
-              if (excludedIds.length > 0 && excludedIds.includes(payloadData.group_id)) return false
-            }
-            if (config.source_filter === 'multiple_groups') {
-              if (!payloadData.group_id) return false
-              const selectedIds = config.selected_group_ids || []
-              if (selectedIds.length > 0 && !selectedIds.includes(payloadData.group_id)) return false
-            }
-            if (config.source_filter === 'private' && payloadData.group_id) return false
-            return true
+            const validation = validateFlowTriggerConfig(config, payloadData)
+            return validation.matches
           })
           console.log(`Filtered ${flowTriggerSteps.length} trigger steps down to ${matchingSteps.length} matching steps`)
           const flowAutomationIds = matchingSteps.map((s: any) => s.automation_id)
@@ -439,63 +474,10 @@ Deno.serve(async (req) => {
               }
               // Also validate trigger step filters (group_id, keyword, etc.)
               const config = triggerStep.configuration || {}
-              if (config.facebook_form_id && config.facebook_form_id !== payloadData?.facebook_form_id) {
-                console.log(`⛔ Flow facebook_form_id mismatch — skipping automation ${automation.id}`)
-                return { skipped: true, reason: 'facebook_form_id_mismatch' }
-              }
-              if (config.group_id && config.group_id !== payloadData?.group_id) {
-                console.log(`⛔ Flow group_id mismatch — skipping automation ${automation.id}`)
-                return { skipped: true, reason: 'group_id_mismatch' }
-              }
-              if (config.connection_user_id && config.connection_user_id !== payloadData?.connection_user_id) {
-                console.log(`⛔ Flow connection_user_id mismatch — skipping automation ${automation.id}`)
-                return { skipped: true, reason: 'connection_user_id_mismatch' }
-              }
-              if (config.keyword && payloadData?.message_text) {
-                const keywords = config.keyword.split(',').map((k: string) => k.trim().toLowerCase()).filter(Boolean)
-                const msgText = payloadData.message_text.toLowerCase()
-                const hasMatch = keywords.some((kw: string) => msgText.includes(kw))
-                if (!hasMatch) {
-                  console.log(`⛔ Flow keyword mismatch — skipping automation ${automation.id}`)
-                  return { skipped: true, reason: 'keyword_mismatch' }
-                }
-              } else if (config.keyword && !payloadData?.message_text) {
-                console.log(`⛔ Flow requires keyword but no message_text in payload — skipping automation ${automation.id}`)
-                return { skipped: true, reason: 'keyword_no_message' }
-              }
-              if (config.source_filter === 'group' && !payloadData?.group_id) {
-                console.log(`⛔ Flow requires group but none in payload — skipping automation ${automation.id}`)
-                return { skipped: true, reason: 'source_filter_group' }
-              }
-              if (config.source_filter === 'all_groups' && !payloadData?.group_id) {
-                console.log(`⛔ Flow requires group (all_groups) but none in payload — skipping automation ${automation.id}`)
-                return { skipped: true, reason: 'source_filter_all_groups' }
-              }
-              if (config.source_filter === 'all_groups_except') {
-                if (!payloadData?.group_id) {
-                  console.log(`⛔ Flow requires group (all_groups_except) but none — skipping automation ${automation.id}`)
-                  return { skipped: true, reason: 'source_filter_all_groups_except' }
-                }
-                const excludedIds = config.excluded_group_ids || []
-                if (excludedIds.length > 0 && excludedIds.includes(payloadData.group_id)) {
-                  console.log(`⛔ Flow group is in excluded list — skipping automation ${automation.id}`)
-                  return { skipped: true, reason: 'group_excluded' }
-                }
-              }
-              if (config.source_filter === 'multiple_groups') {
-                if (!payloadData?.group_id) {
-                  console.log(`⛔ Flow requires specific groups but none — skipping automation ${automation.id}`)
-                  return { skipped: true, reason: 'source_filter_multiple_groups' }
-                }
-                const selectedIds = config.selected_group_ids || []
-                if (selectedIds.length > 0 && !selectedIds.includes(payloadData.group_id)) {
-                  console.log(`⛔ Flow group not in selected list — skipping automation ${automation.id}`)
-                  return { skipped: true, reason: 'group_not_selected' }
-                }
-              }
-              if (config.source_filter === 'private' && payloadData?.group_id) {
-                console.log(`⛔ Flow requires private chat but got group — skipping automation ${automation.id}`)
-                return { skipped: true, reason: 'source_filter_private' }
+              const validation = validateFlowTriggerConfig(config, payloadData)
+              if (!validation.matches) {
+                console.log(`⛔ Flow trigger config mismatch (${validation.reason}) — skipping automation ${automation.id}`)
+                return { skipped: true, reason: validation.reason || 'trigger_config_mismatch' }
               }
               console.log(`✅ Flow trigger step validation passed for automation ${automation.id}`)
             }
