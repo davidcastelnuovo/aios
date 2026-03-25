@@ -1582,27 +1582,15 @@ export default function DynamicTableView() {
           {/* Google Analytics Sync Controls */}
           {hasGoogleAnalytics && (
             <div className="flex items-center gap-2 w-full md:w-auto justify-center">
-              <Select value={selectedSyncDateRange} onValueChange={setSelectedSyncDateRange}>
-                <SelectTrigger className="w-[150px]">
-                  <SelectValue placeholder="תקופת סנכרון" />
-                </SelectTrigger>
-                <SelectContent>
-                  {syncDateRangeOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
               <Button 
                 variant="outline" 
                 onClick={() => syncGoogleAnalyticsMutation.mutate()}
-                disabled={syncGoogleAnalyticsMutation.isPending}
+                disabled={syncGoogleAnalyticsMutation.isPending || !isDateRangeReadyForSync}
                 className="flex-1 md:flex-none gap-2"
               >
                 <BarChart3 className="h-4 w-4 text-orange-500" />
                 <RefreshCw className={`h-4 w-4 ${syncGoogleAnalyticsMutation.isPending ? 'animate-spin' : ''}`} />
-                {syncGoogleAnalyticsMutation.isPending ? 'מסנכרן Analytics...' : 'סנכרן Analytics'}
+                {syncGoogleAnalyticsMutation.isPending ? 'מסנכרן Analytics...' : 'סנכרן Analytics לפי הטווח שנבחר'}
               </Button>
             </div>
           )}
@@ -1610,27 +1598,15 @@ export default function DynamicTableView() {
           {/* Google Search Console Sync Controls */}
           {hasGoogleSearchConsole && (
             <div className="flex items-center gap-2 w-full md:w-auto justify-center flex-wrap">
-              <Select value={selectedSyncDateRange} onValueChange={setSelectedSyncDateRange}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="בחר תקופה לסנכרון" />
-                </SelectTrigger>
-                <SelectContent>
-                  {syncDateRangeOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
               <Button 
                 variant="outline" 
                 onClick={() => syncGoogleSearchConsoleMutation.mutate()}
-                disabled={syncGoogleSearchConsoleMutation.isPending}
+                disabled={syncGoogleSearchConsoleMutation.isPending || !isDateRangeReadyForSync}
                 className="flex-1 md:flex-none gap-2"
               >
                 <Search className="h-4 w-4 text-green-600" />
                 <RefreshCw className={`h-4 w-4 ${syncGoogleSearchConsoleMutation.isPending ? 'animate-spin' : ''}`} />
-                {syncGoogleSearchConsoleMutation.isPending ? 'מסנכרן...' : 'סנכרן Search Console'}
+                {syncGoogleSearchConsoleMutation.isPending ? 'מסנכרן...' : 'סנכרן Search Console לפי הטווח שנבחר'}
               </Button>
             </div>
           )}
