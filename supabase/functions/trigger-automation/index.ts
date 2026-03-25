@@ -270,6 +270,65 @@ Deno.serve(async (req) => {
     let payloadData: any
     let tenantId: string
 
+    const validateFlowTriggerConfig = (config: any, data: any): { matches: boolean; reason?: string } => {
+      const safeConfig = config || {}
+      const safeData = data || {}
+
+      if (safeConfig.facebook_form_id && safeConfig.facebook_form_id !== safeData.facebook_form_id) {
+        return { matches: false, reason: 'facebook_form_id_mismatch' }
+      }
+      if (safeConfig.group_id && safeConfig.group_id !== safeData.group_id) {
+        return { matches: false, reason: 'group_id_mismatch' }
+      }
+      if (safeConfig.connection_user_id && safeConfig.connection_user_id !== safeData.connection_user_id) {
+        return { matches: false, reason: 'connection_user_id_mismatch' }
+      }
+
+      if (safeConfig.keyword && safeData.message_text) {
+        const keywords = String(safeConfig.keyword)
+          .split(',')
+          .map((k: string) => k.trim().toLowerCase())
+          .filter(Boolean)
+        const msgText = String(safeData.message_text).toLowerCase()
+        const hasMatch = keywords.some((kw: string) => msgText.includes(kw))
+        if (!hasMatch) {
+          return { matches: false, reason: 'keyword_mismatch' }
+        }
+      } else if (safeConfig.keyword && !safeData.message_text) {
+        return { matches: false, reason: 'keyword_no_message' }
+      }
+
+      if (safeConfig.source_filter === 'group' && !safeData.group_id) {
+        return { matches: false, reason: 'source_filter_group' }
+      }
+      if (safeConfig.source_filter === 'all_groups' && !safeData.group_id) {
+        return { matches: false, reason: 'source_filter_all_groups' }
+      }
+      if (safeConfig.source_filter === 'all_groups_except') {
+        if (!safeData.group_id) {
+          return { matches: false, reason: 'source_filter_all_groups_except' }
+        }
+        const excludedIds = safeConfig.excluded_group_ids || []
+        if (excludedIds.length > 0 && excludedIds.includes(safeData.group_id)) {
+          return { matches: false, reason: 'group_excluded' }
+        }
+      }
+      if (safeConfig.source_filter === 'multiple_groups') {
+        if (!safeData.group_id) {
+          return { matches: false, reason: 'source_filter_multiple_groups' }
+        }
+        const selectedIds = safeConfig.selected_group_ids || []
+        if (selectedIds.length > 0 && !selectedIds.includes(safeData.group_id)) {
+          return { matches: false, reason: 'group_not_selected' }
+        }
+      }
+      if (safeConfig.source_filter === 'private' && safeData.group_id) {
+        return { matches: false, reason: 'source_filter_private' }
+      }
+
+      return { matches: true }
+    }
+
     // Check if this is a direct automation execution by ID
     if (requestBody.automationId) {
       // Direct execution mode - fetch the specific automation
@@ -298,65 +357,6 @@ Deno.serve(async (req) => {
       const payload = requestBody as AutomationPayload
       payloadData = payload.data
       tenantId = payload.tenant_id!
-
-      const validateFlowTriggerConfig = (config: any, data: any): { matches: boolean; reason?: string } => {
-        const safeConfig = config || {}
-        const safeData = data || {}
-
-        if (safeConfig.facebook_form_id && safeConfig.facebook_form_id !== safeData.facebook_form_id) {
-          return { matches: false, reason: 'facebook_form_id_mismatch' }
-        }
-        if (safeConfig.group_id && safeConfig.group_id !== safeData.group_id) {
-          return { matches: false, reason: 'group_id_mismatch' }
-        }
-        if (safeConfig.connection_user_id && safeConfig.connection_user_id !== safeData.connection_user_id) {
-          return { matches: false, reason: 'connection_user_id_mismatch' }
-        }
-
-        if (safeConfig.keyword && safeData.message_text) {
-          const keywords = String(safeConfig.keyword)
-            .split(',')
-            .map((k: string) => k.trim().toLowerCase())
-            .filter(Boolean)
-          const msgText = String(safeData.message_text).toLowerCase()
-          const hasMatch = keywords.some((kw: string) => msgText.includes(kw))
-          if (!hasMatch) {
-            return { matches: false, reason: 'keyword_mismatch' }
-          }
-        } else if (safeConfig.keyword && !safeData.message_text) {
-          return { matches: false, reason: 'keyword_no_message' }
-        }
-
-        if (safeConfig.source_filter === 'group' && !safeData.group_id) {
-          return { matches: false, reason: 'source_filter_group' }
-        }
-        if (safeConfig.source_filter === 'all_groups' && !safeData.group_id) {
-          return { matches: false, reason: 'source_filter_all_groups' }
-        }
-        if (safeConfig.source_filter === 'all_groups_except') {
-          if (!safeData.group_id) {
-            return { matches: false, reason: 'source_filter_all_groups_except' }
-          }
-          const excludedIds = safeConfig.excluded_group_ids || []
-          if (excludedIds.length > 0 && excludedIds.includes(safeData.group_id)) {
-            return { matches: false, reason: 'group_excluded' }
-          }
-        }
-        if (safeConfig.source_filter === 'multiple_groups') {
-          if (!safeData.group_id) {
-            return { matches: false, reason: 'source_filter_multiple_groups' }
-          }
-          const selectedIds = safeConfig.selected_group_ids || []
-          if (selectedIds.length > 0 && !selectedIds.includes(safeData.group_id)) {
-            return { matches: false, reason: 'group_not_selected' }
-          }
-        }
-        if (safeConfig.source_filter === 'private' && safeData.group_id) {
-          return { matches: false, reason: 'source_filter_private' }
-        }
-
-        return { matches: true }
-      }
 
       // 1. Find non-flow automations by trigger_type in automations table
       const { data: foundAutomations, error: fetchError } = await supabase
