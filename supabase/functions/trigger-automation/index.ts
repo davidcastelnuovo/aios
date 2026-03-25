@@ -312,7 +312,12 @@ Deno.serve(async (req) => {
         throw fetchError
       }
 
-      automations = foundAutomations || []
+      // CRITICAL: Exclude flow automations from generic trigger_type lookup.
+      // Flow automations must ONLY be matched via trigger step configuration
+      // (which validates group_id, keyword, source_filter etc.)
+      // Without this, flows bypass their trigger step filters entirely.
+      automations = (foundAutomations || []).filter((a: any) => !a.is_flow)
+      console.log(`Found ${automations.length} non-flow automation(s) by trigger_type (filtered out ${(foundAutomations || []).length - automations.length} flow(s))`)
 
       // 2. Also find flow automations — BUT ONLY if source is NOT 'crm'
       // When source === 'crm', we skip flow lookup entirely to prevent CRM leads from triggering flows
