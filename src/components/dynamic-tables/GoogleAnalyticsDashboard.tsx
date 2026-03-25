@@ -235,33 +235,78 @@ export function GoogleAnalyticsDashboard({ records, externalDateFilter }: Google
       }
     }) : [];
 
-    // Traffic sources - aggregate from daily records if available (to respect date filter)
-    // Fall back to traffic_source records if no daily data exists
-    const rawTrafficSources = records
-      .filter(r =>
-        r.data.report_type === 'traffic_source' ||
-        (!r.data.report_type && (r.data.source_medium || r.data.source || r.data.medium))
-      )
-      .map(r => ({
-        name: normalizeSourceName(
+    // Traffic sources - aggregate from date-filtered daily records that have source info
+    // First try daily records with source data (respects date filter)
+    const dailySourceRecords = currentDailyRecords.filter(r => 
+      r.data.source_medium || r.data.source || r.data.medium
+    );
+    
+    let trafficSources: { name: string; sessions: number; users: number; newUsers: number; pageviews: number; bounceRate: number; avgDuration: number; conversions: number; addToCart: number; purchases: number; purchaseValue: number }[];
+    
+    if (dailySourceRecords.length > 0) {
+      // Aggregate from date-filtered daily records
+      const sourceMap = new Map<string, { sessions: number; users: number; newUsers: number; pageviews: number; bounceRate: number; bounceCount: number; avgDuration: number; conversions: number; addToCart: number; purchases: number; purchaseValue: number }>();
+      
+      for (const r of dailySourceRecords) {
+        const name = normalizeSourceName(
           r.data.source_medium ||
           (r.data.source && r.data.medium ? `${r.data.source} / ${r.data.medium}` : r.data.source) ||
           'Unknown'
-        ),
-        sessions: toNumber(r.data.sessions),
-        users: toNumber(r.data.users),
-        newUsers: toNumber(r.data.new_users),
-        pageviews: toNumber(r.data.pageviews),
-        bounceRate: toNumber(r.data.bounce_rate),
-        avgDuration: toNumber(r.data.avg_session_duration),
-        conversions: toNumber(r.data.conversions ?? r.data.transactions ?? r.data.purchases),
-        addToCart: toNumber(r.data.add_to_cart ?? r.data.add_to_carts),
-        purchases: toNumber(r.data.purchases ?? r.data.transactions ?? r.data.conversions),
-        purchaseValue: toNumber(r.data.purchase_value ?? r.data.purchase_revenue ?? r.data.revenue ?? r.data.total_revenue),
-      }))
-      .sort((a, b) => b.sessions - a.sessions);
-
-    const trafficSources = rawTrafficSources;
+        );
+        const existing = sourceMap.get(name) || { sessions: 0, users: 0, newUsers: 0, pageviews: 0, bounceRate: 0, bounceCount: 0, avgDuration: 0, conversions: 0, addToCart: 0, purchases: 0, purchaseValue: 0 };
+        existing.sessions += toNumber(r.data.sessions);
+        existing.users += toNumber(r.data.users);
+        existing.newUsers += toNumber(r.data.new_users);
+        existing.pageviews += toNumber(r.data.pageviews);
+        existing.bounceRate += toNumber(r.data.bounce_rate);
+        existing.bounceCount += 1;
+        existing.avgDuration += toNumber(r.data.avg_session_duration);
+        existing.conversions += toNumber(r.data.conversions ?? r.data.transactions ?? r.data.purchases);
+        existing.addToCart += toNumber(r.data.add_to_cart ?? r.data.add_to_carts);
+        existing.purchases += toNumber(r.data.purchases ?? r.data.transactions ?? r.data.conversions);
+        existing.purchaseValue += toNumber(r.data.purchase_value ?? r.data.purchase_revenue ?? r.data.revenue ?? r.data.total_revenue);
+        sourceMap.set(name, existing);
+      }
+      
+      trafficSources = Array.from(sourceMap.entries()).map(([name, data]) => ({
+        name,
+        sessions: data.sessions,
+        users: data.users,
+        newUsers: data.newUsers,
+        pageviews: data.pageviews,
+        bounceRate: data.bounceCount > 0 ? data.bounceRate / data.bounceCount : 0,
+        avgDuration: data.bounceCount > 0 ? data.avgDuration / data.bounceCount : 0,
+        conversions: data.conversions,
+        addToCart: data.addToCart,
+        purchases: data.purchases,
+        purchaseValue: data.purchaseValue,
+      })).sort((a, b) => b.sessions - a.sessions);
+    } else {
+      // Fall back to traffic_source records (not date-filtered)
+      trafficSources = records
+        .filter(r =>
+          r.data.report_type === 'traffic_source' ||
+          (!r.data.report_type && (r.data.source_medium || r.data.source || r.data.medium))
+        )
+        .map(r => ({
+          name: normalizeSourceName(
+            r.data.source_medium ||
+            (r.data.source && r.data.medium ? `${r.data.source} / ${r.data.medium}` : r.data.source) ||
+            'Unknown'
+          ),
+          sessions: toNumber(r.data.sessions),
+          users: toNumber(r.data.users),
+          newUsers: toNumber(r.data.new_users),
+          pageviews: toNumber(r.data.pageviews),
+          bounceRate: toNumber(r.data.bounce_rate),
+          avgDuration: toNumber(r.data.avg_session_duration),
+          conversions: toNumber(r.data.conversions ?? r.data.transactions ?? r.data.purchases),
+          addToCart: toNumber(r.data.add_to_cart ?? r.data.add_to_carts),
+          purchases: toNumber(r.data.purchases ?? r.data.transactions ?? r.data.conversions),
+          purchaseValue: toNumber(r.data.purchase_value ?? r.data.purchase_revenue ?? r.data.revenue ?? r.data.total_revenue),
+        }))
+        .sort((a, b) => b.sessions - a.sessions);
+    }
 
     // Daily data for chart - filtered by selected date range
     const dailyData = currentDailyRecords

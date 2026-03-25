@@ -303,7 +303,8 @@ Deno.serve(async (req) => {
         if (startDate) {
           filteredRecords = filteredRecords.filter((record: any) => {
             const recordDate = record.data?.date;
-            if (!recordDate) return false;
+            // Keep records that don't have a date field (aggregated/summary records)
+            if (!recordDate) return true;
             
             // Compare dates as strings (YYYY-MM-DD format)
             if (endDate) {
