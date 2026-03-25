@@ -181,8 +181,10 @@ export default function DashboardView() {
           spend: 0,
           impressions: 0,
           clicks: 0,
+          sessions: 0,
           results: 0,
           revenue: 0,
+          addToCart: 0,
           roas: 0,
           cpl: 0,
           recordCount: 0,
@@ -192,16 +194,24 @@ export default function DashboardView() {
       const data = record.data || {};
       const campaignType: CampaignType = campaignTypeByPlatform[source] || record._campaignType || 'leads';
 
-      // Spend
-      platforms[source].spend += getSpendFromData(data);
-      platforms[source].impressions += Number(data.impressions) || 0;
-      platforms[source].clicks += Number(data.clicks) || 0;
-
-      if (campaignType === 'ecommerce') {
+      if (isAnalyticsPlatform(source)) {
+        // Google Analytics data
+        platforms[source].sessions += getSessionsFromData(data);
         platforms[source].results += getPurchasesFromData(data);
         platforms[source].revenue += getRevenueFromData(data);
+        platforms[source].addToCart += getAddToCartFromData(data);
       } else {
-        platforms[source].results += getLeadsFromData(data);
+        // Ads platforms
+        platforms[source].spend += getSpendFromData(data);
+        platforms[source].impressions += Number(data.impressions) || 0;
+        platforms[source].clicks += Number(data.clicks) || 0;
+
+        if (campaignType === 'ecommerce') {
+          platforms[source].results += getPurchasesFromData(data);
+          platforms[source].revenue += getRevenueFromData(data);
+        } else {
+          platforms[source].results += getLeadsFromData(data);
+        }
       }
 
       platforms[source].recordCount += 1;
@@ -209,6 +219,10 @@ export default function DashboardView() {
 
     // Calculate ROAS/CPL for each platform
     Object.keys(platforms).forEach(key => {
+      if (isAnalyticsPlatform(key)) {
+        // Analytics doesn't have its own ROAS (no spend)
+        return;
+      }
       const ct: CampaignType = campaignTypeByPlatform[key] || 'leads';
       if (ct === 'ecommerce') {
         platforms[key].roas = platforms[key].spend > 0 ? platforms[key].revenue / platforms[key].spend : 0;
