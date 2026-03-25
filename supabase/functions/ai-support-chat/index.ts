@@ -117,7 +117,9 @@ ${memoryContext}
 
 💬 **שיחות WhatsApp:**
 - אתה יכול לשלוף היסטוריית שיחות עם לקוח/ליד כדי להבין הקשר לפני שאתה שולח הודעה
-- השתמש ב-get_chat_history כדי לראות שיחות אחרונות
+- השתמש ב-get_chat_history כדי לראות שיחות אחרונות עם איש קשר ספציפי
+- **כששואלים "מי חיפש אותי?", "מה ההודעה האחרונה?", "מישהו כתב לי?", "תראה לי הודעות אחרונות"** — השתמש ב-**get_recent_inbound_messages** כדי לסרוק את כל ההודעות הנכנסות מכל השיחות (לקוחות, לידים, קבוצות, ואנשי קשר לא משויכים)
+- אחרי שליפת הודעות אחרונות, הצג סיכום טקסטואלי קצר + השתמש ב-display_data עם view_type="table" כדי להציג את ההודעות בטבלה
 
 🤖 **Manus AI — סוכן AI חיצוני:**
 - Manus הוא סוכן AI עצמאי שיכול לבצע משימות מורכבות: מחקר שוק, ניתוח מתחרים, יצירת מצגות, כתיבת תוכן, ניתוח נתונים, בניית אתרים ועוד
@@ -786,6 +788,94 @@ async function executeTool(
         };
       }
 
+      case 'get_recent_inbound_messages': {
+        const { hours = 2, limit: msgLimit = 30 } = toolCall.args;
+        
+        // Query all recent inbound messages across all contacts
+        const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+        
+        const { data: messages, error: msgError } = await supabaseClient
+          .from('chat_messages')
+          .select('id, message_text, sender_name, sender_phone, created_at, lead_id, client_id, group_id, direction')
+          .eq('tenant_id', tenantId)
+          .eq('connection_user_id', userId)
+          .eq('direction', 'inbound')
+          .eq('is_blocked', false)
+          .gte('created_at', cutoff)
+          .order('created_at', { ascending: false })
+          .limit(msgLimit);
+
+        if (msgError) throw msgError;
+
+        if (!messages || messages.length === 0) {
+          return { success: true, result: { count: 0, messages: [], summary: `לא נמצאו הודעות נכנסות ב-${hours} השעות האחרונות.` } };
+        }
+
+        // Collect unique IDs for enrichment
+        const leadIds = [...new Set(messages.filter((m: any) => m.lead_id).map((m: any) => m.lead_id))];
+        const clientIds = [...new Set(messages.filter((m: any) => m.client_id).map((m: any) => m.client_id))];
+        const groupIds = [...new Set(messages.filter((m: any) => m.group_id).map((m: any) => m.group_id))];
+
+        // Batch fetch names
+        const nameMap: Record<string, { name: string; type: string }> = {};
+
+        if (leadIds.length > 0) {
+          const { data: leads } = await supabaseClient.from('leads').select('id, company_name, contact_name').in('id', leadIds);
+          for (const l of leads || []) {
+            nameMap[l.id] = { name: l.contact_name || l.company_name || 'ליד', type: 'ליד' };
+          }
+        }
+        if (clientIds.length > 0) {
+          const { data: clients } = await supabaseClient.from('clients').select('id, name, contact_name').in('id', clientIds);
+          for (const c of clients || []) {
+            nameMap[c.id] = { name: c.contact_name || c.name || 'לקוח', type: 'לקוח' };
+          }
+        }
+        if (groupIds.length > 0) {
+          const { data: groups } = await supabaseClient.from('whatsapp_groups').select('id, group_name').in('id', groupIds);
+          for (const g of groups || []) {
+            nameMap[g.id] = { name: g.group_name || 'קבוצה', type: 'קבוצה' };
+          }
+        }
+
+        // Enrich messages
+        const enriched = messages.map((m: any) => {
+          let senderName = '';
+          let contactType = 'לא משויך';
+          
+          if (m.lead_id && nameMap[m.lead_id]) {
+            senderName = nameMap[m.lead_id].name;
+            contactType = nameMap[m.lead_id].type;
+          } else if (m.client_id && nameMap[m.client_id]) {
+            senderName = nameMap[m.client_id].name;
+            contactType = nameMap[m.client_id].type;
+          } else if (m.group_id && nameMap[m.group_id]) {
+            senderName = nameMap[m.group_id].name;
+            contactType = nameMap[m.group_id].type;
+          } else {
+            senderName = m.sender_name || m.sender_phone || 'לא ידוע';
+            contactType = 'לא משויך';
+          }
+
+          return {
+            sender: senderName,
+            type: contactType,
+            message: m.message_text?.slice(0, 200),
+            time: m.created_at,
+          };
+        });
+
+        return {
+          success: true,
+          result: {
+            count: enriched.length,
+            hours_scanned: hours,
+            messages: enriched,
+            summary: `נמצאו ${enriched.length} הודעות נכנסות ב-${hours} השעות האחרונות.`,
+          },
+        };
+      }
+
       // === DISPLAY DATA TOOL ===
       case 'display_data': {
         const { view_type, title, columns, data } = toolCall.args;
@@ -1380,6 +1470,20 @@ const tools = [
           limit: { type: 'integer', description: 'מספר הודעות מקסימלי (ברירת מחדל: 20)' },
         },
         required: ['contact_type', 'contact_id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_recent_inbound_messages',
+      description: 'סריקת כל ההודעות הנכנסות האחרונות מכל השיחות (לקוחות, לידים, קבוצות, לא משויכים). השתמש כששואלים "מי חיפש אותי?", "מה ההודעה האחרונה?", "מישהו כתב לי?" וכו\'.',
+      parameters: {
+        type: 'object',
+        properties: {
+          hours: { type: 'number', description: 'חלון זמן בשעות לסריקה (ברירת מחדל: 2)' },
+          limit: { type: 'integer', description: 'מספר הודעות מקסימלי (ברירת מחדל: 30)' },
+        },
       },
     },
   },
