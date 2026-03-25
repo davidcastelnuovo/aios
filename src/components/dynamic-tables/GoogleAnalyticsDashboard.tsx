@@ -60,7 +60,21 @@ const COLORS = [
   '#6366F1', // indigo
 ];
 
-type DateRangePreset = 'today' | 'yesterday' | 'last_7_days' | 'last_14_days' | 'last_30_days' | 'this_month' | 'last_month' | 'last_90_days' | 'custom';
+type DateRangePreset =
+  | 'all'
+  | 'today'
+  | 'yesterday'
+  | 'this_week'
+  | 'last_week'
+  | 'last_7_days'
+  | 'last_14_days'
+  | 'last_30_days'
+  | 'this_month'
+  | 'last_month'
+  | 'last_90_days'
+  | 'last_180_days'
+  | 'last_365_days'
+  | 'custom';
 
 interface DateRange {
   from: Date | undefined;
@@ -71,15 +85,20 @@ export function GoogleAnalyticsDashboard({ records, externalDateFilter }: Google
   const mapExternalPreset = (ext?: string): DateRangePreset => {
     if (!ext) return 'last_30_days';
     const map: Record<string, DateRangePreset> = {
-      'all': 'last_90_days',
+      'all': 'all',
       'today': 'today',
       'yesterday': 'yesterday',
+      'this_week': 'this_week',
+      'last_week': 'last_week',
       'last_7_days': 'last_7_days',
       'last_14_days': 'last_14_days',
       'last_30_days': 'last_30_days',
       'this_month': 'this_month',
       'last_month': 'last_month',
       'last_90_days': 'last_90_days',
+      'last_180_days': 'last_180_days',
+      'last_365_days': 'last_365_days',
+      'custom': 'custom',
     };
     return map[ext] || 'last_30_days';
   };
@@ -108,18 +127,34 @@ export function GoogleAnalyticsDashboard({ records, externalDateFilter }: Google
   const getDateRange = (preset: DateRangePreset): { start: Date; end: Date } => {
     const today = new Date();
     today.setHours(23, 59, 59, 999);
-    
+
     switch (preset) {
-      case 'today':
+      case 'all': {
+        const allStart = new Date('2020-01-01');
+        allStart.setHours(0, 0, 0, 0);
+        return { start: allStart, end: today };
+      }
+      case 'today': {
         const todayStart = new Date();
         todayStart.setHours(0, 0, 0, 0);
         return { start: todayStart, end: today };
-      case 'yesterday':
+      }
+      case 'yesterday': {
         const yesterdayStart = subDays(today, 1);
         yesterdayStart.setHours(0, 0, 0, 0);
         const yesterdayEnd = subDays(today, 1);
         yesterdayEnd.setHours(23, 59, 59, 999);
         return { start: yesterdayStart, end: yesterdayEnd };
+      }
+      case 'this_week':
+        return { start: startOfWeek(today, { weekStartsOn: 0 }), end: today };
+      case 'last_week': {
+        const prevWeekRef = subDays(today, 7);
+        return {
+          start: startOfWeek(prevWeekRef, { weekStartsOn: 0 }),
+          end: endOfWeek(prevWeekRef, { weekStartsOn: 0 }),
+        };
+      }
       case 'last_7_days':
         return { start: subDays(today, 6), end: today };
       case 'last_14_days':
@@ -128,11 +163,16 @@ export function GoogleAnalyticsDashboard({ records, externalDateFilter }: Google
         return { start: subDays(today, 29), end: today };
       case 'this_month':
         return { start: startOfMonth(today), end: today };
-      case 'last_month':
+      case 'last_month': {
         const lastMonth = subMonths(today, 1);
         return { start: startOfMonth(lastMonth), end: endOfMonth(lastMonth) };
+      }
       case 'last_90_days':
         return { start: subDays(today, 89), end: today };
+      case 'last_180_days':
+        return { start: subDays(today, 179), end: today };
+      case 'last_365_days':
+        return { start: subDays(today, 364), end: today };
       case 'custom':
         if (customDateRange.from && customDateRange.to) {
           return { start: customDateRange.from, end: customDateRange.to };
@@ -144,7 +184,7 @@ export function GoogleAnalyticsDashboard({ records, externalDateFilter }: Google
   };
 
   const currentRange = getDateRange(datePreset);
-  
+
   // Calculate previous period range (same duration, before current range)
   const getPreviousRange = (currentStart: Date, currentEnd: Date): { start: Date; end: Date } => {
     const durationMs = currentEnd.getTime() - currentStart.getTime();
@@ -160,7 +200,7 @@ export function GoogleAnalyticsDashboard({ records, externalDateFilter }: Google
     return records.filter(r => {
       // If record has no date field, include it (aggregated data)
       if (!r.data.date) return true;
-      
+
       // Try to parse the date
       try {
         const recordDate = parseISO(r.data.date);
@@ -180,24 +220,24 @@ export function GoogleAnalyticsDashboard({ records, externalDateFilter }: Google
   // Normalize source names - provide meaningful Hebrew labels
   const normalizeSourceName = (name: string): string => {
     if (!name) return 'מקור לא ידוע';
-    
+
     const lowerName = name.toLowerCase();
-    
+
     // Direct/none cases
     if (lowerName === '(not set)' || lowerName === 'not set' || lowerName === '(direct) / (none)') {
       return 'תנועה ישירה (Direct)';
     }
-    
+
     // Null/null - likely untagged traffic
     if (lowerName === 'null / null' || lowerName === '(not set) / (not set)') {
       return 'מקור לא ידוע';
     }
-    
+
     // Data not available
     if (lowerName.includes('data not available')) {
       return 'מידע לא זמין';
     }
-    
+
     return name;
   };
 
@@ -206,7 +246,7 @@ export function GoogleAnalyticsDashboard({ records, externalDateFilter }: Google
     const currentDailyRecords = records.filter(r => {
       if (r.data.report_type !== 'daily') return false;
       if (!r.data.date) return false;
-      
+
       try {
         const recordDate = parseISO(r.data.date);
         const start = new Date(currentRange.start);
@@ -222,7 +262,7 @@ export function GoogleAnalyticsDashboard({ records, externalDateFilter }: Google
     const previousDailyRecords = showComparison ? records.filter(r => {
       if (r.data.report_type !== 'daily') return false;
       if (!r.data.date) return false;
-      
+
       try {
         const recordDate = parseISO(r.data.date);
         const start = new Date(previousRange.start);
@@ -236,17 +276,15 @@ export function GoogleAnalyticsDashboard({ records, externalDateFilter }: Google
     }) : [];
 
     // Traffic sources - aggregate from date-filtered daily records that have source info
-    // First try daily records with source data (respects date filter)
-    const dailySourceRecords = currentDailyRecords.filter(r => 
+    const dailySourceRecords = currentDailyRecords.filter(r =>
       r.data.source_medium || r.data.source || r.data.medium
     );
-    
+
     let trafficSources: { name: string; sessions: number; users: number; newUsers: number; pageviews: number; bounceRate: number; avgDuration: number; conversions: number; addToCart: number; purchases: number; purchaseValue: number }[];
-    
+
     if (dailySourceRecords.length > 0) {
-      // Aggregate from date-filtered daily records
       const sourceMap = new Map<string, { sessions: number; users: number; newUsers: number; pageviews: number; bounceRate: number; bounceCount: number; avgDuration: number; conversions: number; addToCart: number; purchases: number; purchaseValue: number }>();
-      
+
       for (const r of dailySourceRecords) {
         const name = normalizeSourceName(
           r.data.source_medium ||
@@ -267,7 +305,7 @@ export function GoogleAnalyticsDashboard({ records, externalDateFilter }: Google
         existing.purchaseValue += toNumber(r.data.purchase_value ?? r.data.purchase_revenue ?? r.data.revenue ?? r.data.total_revenue);
         sourceMap.set(name, existing);
       }
-      
+
       trafficSources = Array.from(sourceMap.entries()).map(([name, data]) => ({
         name,
         sessions: data.sessions,
@@ -282,7 +320,6 @@ export function GoogleAnalyticsDashboard({ records, externalDateFilter }: Google
         purchaseValue: data.purchaseValue,
       })).sort((a, b) => b.sessions - a.sessions);
     } else {
-      // Fall back to traffic_source records (not date-filtered)
       trafficSources = records
         .filter(r =>
           r.data.report_type === 'traffic_source' ||
@@ -308,7 +345,6 @@ export function GoogleAnalyticsDashboard({ records, externalDateFilter }: Google
         .sort((a, b) => b.sessions - a.sessions);
     }
 
-    // Daily data for chart - filtered by selected date range
     const dailyData = currentDailyRecords
       .map(r => ({
         date: r.data.date,
@@ -323,7 +359,6 @@ export function GoogleAnalyticsDashboard({ records, externalDateFilter }: Google
       }))
       .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 
-    // Previous period daily data
     const prevDailyData = previousDailyRecords
       .map(r => ({
         sessions: toNumber(r.data.sessions),
@@ -346,21 +381,19 @@ export function GoogleAnalyticsDashboard({ records, externalDateFilter }: Google
       .sort((a, b) => b.pageviews - a.pageviews)
       .slice(0, 10);
 
-    // Calculate totals from DAILY data (which has dates and can be filtered)
     const calculateTotalsFromDaily = (data: typeof dailyData) => ({
       sessions: data.reduce((sum, d) => sum + d.sessions, 0),
       users: data.reduce((sum, d) => sum + d.users, 0),
-      newUsers: 0, // Not available in daily data
+      newUsers: 0,
       pageviews: data.reduce((sum, d) => sum + d.pageviews, 0),
       conversions: data.reduce((sum, d) => sum + d.conversions, 0),
       addToCart: data.reduce((sum, d) => sum + d.addToCart, 0),
       purchases: data.reduce((sum, d) => sum + d.purchases, 0),
       purchaseValue: data.reduce((sum, d) => sum + d.purchaseValue, 0),
-      avgBounceRate: '0', // Not available in daily data
+      avgBounceRate: '0',
     });
 
-    // If we have filtered daily data, use it for totals. Otherwise fall back to traffic sources
-    const totals = dailyData.length > 0 
+    const totals = dailyData.length > 0
       ? calculateTotalsFromDaily(dailyData)
       : {
           sessions: trafficSources.reduce((sum, s) => sum + s.sessions, 0),
@@ -371,7 +404,7 @@ export function GoogleAnalyticsDashboard({ records, externalDateFilter }: Google
           addToCart: trafficSources.reduce((sum, s) => sum + s.addToCart, 0),
           purchases: trafficSources.reduce((sum, s) => sum + s.purchases, 0),
           purchaseValue: trafficSources.reduce((sum, s) => sum + s.purchaseValue, 0),
-          avgBounceRate: trafficSources.length > 0 
+          avgBounceRate: trafficSources.length > 0
             ? (trafficSources.reduce((sum, s) => sum + s.bounceRate, 0) / trafficSources.length).toFixed(1)
             : '0',
         };
@@ -405,21 +438,26 @@ export function GoogleAnalyticsDashboard({ records, externalDateFilter }: Google
     .filter((source) => source.sessions > 0)
     .slice(0, 6)
     .map((source, index) => ({
-    name: source.name.length > 20 ? source.name.substring(0, 20) + '...' : source.name,
-    value: source.sessions,
-    purchaseValue: source.purchaseValue,
-    fill: COLORS[index % COLORS.length],
-  }));
+      name: source.name.length > 20 ? source.name.substring(0, 20) + '...' : source.name,
+      value: source.sessions,
+      purchaseValue: source.purchaseValue,
+      fill: COLORS[index % COLORS.length],
+    }));
 
   const datePresetOptions = [
+    { value: 'all', label: 'כל התקופה' },
     { value: 'today', label: 'היום' },
     { value: 'yesterday', label: 'אתמול' },
+    { value: 'this_week', label: 'השבוע' },
+    { value: 'last_week', label: 'שבוע שעבר' },
     { value: 'last_7_days', label: '7 ימים אחרונים' },
     { value: 'last_14_days', label: '14 יום אחרונים' },
     { value: 'last_30_days', label: '30 יום אחרונים' },
     { value: 'this_month', label: 'החודש' },
     { value: 'last_month', label: 'חודש שעבר' },
     { value: 'last_90_days', label: '90 יום אחרונים' },
+    { value: 'last_180_days', label: '6 חודשים אחרונים' },
+    { value: 'last_365_days', label: 'שנה אחרונה' },
     { value: 'custom', label: 'בחירה ידנית' },
   ];
 
