@@ -61,9 +61,10 @@ export interface CompetitorResult {
 }
 
 // Helper to safely query tables that might not exist yet
-async function safeQuery<T>(queryFn: () => Promise<{ data: T | null; error: any }>): Promise<T | null> {
+async function safeQuery<T>(queryFn: () => any): Promise<T | null> {
   try {
-    const { data, error } = await queryFn();
+    const result = await queryFn();
+    const { data, error } = result;
     if (error) {
       // Table doesn't exist or other DB error - return null silently
       if (error.code === "42P01" || error.message?.includes("does not exist")) {
