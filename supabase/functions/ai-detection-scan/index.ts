@@ -96,6 +96,7 @@ Deno.serve(async (req: Request) => {
       { name: 'perplexity', model: 'google/gemini-2.5-flash' }, // Using Gemini as proxy for Perplexity
     ];
 
+    const scanId = `scan_${Date.now()}_${Math.random().toString(36).substring(7)}`;
     const results: any[] = [];
     const competitorResults: any[] = [];
 
@@ -163,6 +164,7 @@ Deno.serve(async (req: Request) => {
             sentiment,
             response_snippet: snippet || (brandMentioned ? responseText.substring(0, 500) : null),
             citations,
+            scan_id: scanId,
             scanned_at: new Date().toISOString(),
           });
 
@@ -177,6 +179,7 @@ Deno.serve(async (req: Request) => {
               platform: platform.name,
               is_mentioned: compMentioned,
               position: compMentioned ? findPosition(responseText, competitor) : null,
+              scan_id: scanId,
               scanned_at: new Date().toISOString(),
             });
           }
