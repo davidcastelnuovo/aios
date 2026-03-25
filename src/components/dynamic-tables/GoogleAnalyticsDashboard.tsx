@@ -647,7 +647,7 @@ export function GoogleAnalyticsDashboard({ records, externalDateFilter }: Google
       {/* Traffic Sources Bar Chart */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">מקורות תנועה - סשנים</CardTitle>
+          <CardTitle className="text-lg">מקורות תנועה - סשנים ושווי רכישות</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="h-[400px]" dir="ltr">
