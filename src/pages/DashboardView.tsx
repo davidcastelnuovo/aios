@@ -416,6 +416,13 @@ export default function DashboardView() {
         </div>
         
         <div className="flex items-center gap-3">
+          {!isAgencyDashboard && currentTenantId && (
+            <ShareDashboardDialog
+              dashboardId={dashboardId!}
+              dashboardName={dashboard.name}
+              tenantId={currentTenantId}
+            />
+          )}
           {!isAgencyDashboard && (
             <Button
               variant="outline"
