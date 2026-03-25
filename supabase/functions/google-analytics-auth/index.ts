@@ -41,7 +41,7 @@ serve(async (req) => {
     }
 
     try {
-      const { tenantId, userId } = await req.json();
+      const { tenantId, userId, addNew } = await req.json();
       
       if (!tenantId || !userId) {
         return new Response(
@@ -53,9 +53,10 @@ serve(async (req) => {
       // Google Analytics scopes
       const scopes = [
         'https://www.googleapis.com/auth/analytics.readonly',
+        'https://www.googleapis.com/auth/userinfo.email',
       ].join(' ');
 
-      const state = btoa(JSON.stringify({ tenantId, userId }));
+      const state = btoa(JSON.stringify({ tenantId, userId, addNew: !!addNew }));
 
       const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
       authUrl.searchParams.set('client_id', clientId);
@@ -64,6 +65,10 @@ serve(async (req) => {
       authUrl.searchParams.set('scope', scopes);
       authUrl.searchParams.set('access_type', 'offline');
       authUrl.searchParams.set('prompt', 'consent');
+      // Force account selection when adding a new account
+      if (addNew) {
+        authUrl.searchParams.set('login_hint', '');
+      }
       authUrl.searchParams.set('state', state);
 
       console.log('Generated auth URL for Google Analytics');
@@ -114,7 +119,7 @@ serve(async (req) => {
     }
 
     try {
-      const { tenantId, userId } = JSON.parse(atob(state));
+      const { tenantId, userId, addNew } = JSON.parse(atob(state));
       const tenantSlug = await getTenantSlug(tenantId);
 
       // Exchange code for tokens
@@ -139,14 +144,17 @@ serve(async (req) => {
 
       const expiresAt = new Date(Date.now() + (tokens.expires_in * 1000)).toISOString();
 
-      // Check if integration already exists
-      const { data: existing } = await supabase
-        .from('tenant_integrations')
-        .select('id')
-        .eq('tenant_id', tenantId)
-        .eq('integration_type', 'google_analytics')
-        .eq('user_id', userId)
-        .maybeSingle();
+      // Fetch the Google email for this account
+      let googleEmail = '';
+      try {
+        const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+          headers: { Authorization: `Bearer ${tokens.access_token}` },
+        });
+        const userInfo = await userInfoResponse.json();
+        googleEmail = userInfo.email || '';
+      } catch (e) {
+        console.error('Failed to fetch Google user info:', e);
+      }
 
       const integrationData = {
         is_active: true,
@@ -155,18 +163,50 @@ serve(async (req) => {
           refresh_token: tokens.refresh_token,
           expires_at: expiresAt,
           connected_at: new Date().toISOString(),
+          google_email: googleEmail,
         },
         updated_at: new Date().toISOString(),
       };
 
+      // If addNew, always create a new record; otherwise update existing for this email
       let saveError;
-      if (existing) {
-        const { error } = await supabase
+      if (!addNew && googleEmail) {
+        // Check for existing integration with same email
+        const { data: existingByEmail } = await supabase
           .from('tenant_integrations')
-          .update(integrationData)
-          .eq('id', existing.id);
-        saveError = error;
+          .select('id')
+          .eq('tenant_id', tenantId)
+          .eq('integration_type', 'google_analytics')
+          .maybeSingle();
+        
+        // Try to find by email in settings
+        const { data: allGa } = await supabase
+          .from('tenant_integrations')
+          .select('id, settings')
+          .eq('tenant_id', tenantId)
+          .eq('integration_type', 'google_analytics');
+        
+        const matchByEmail = allGa?.find((row: any) => row.settings?.google_email === googleEmail);
+        
+        if (matchByEmail) {
+          const { error } = await supabase
+            .from('tenant_integrations')
+            .update(integrationData)
+            .eq('id', matchByEmail.id);
+          saveError = error;
+        } else {
+          const { error } = await supabase
+            .from('tenant_integrations')
+            .insert({
+              tenant_id: tenantId,
+              user_id: userId,
+              integration_type: 'google_analytics',
+              ...integrationData,
+            });
+          saveError = error;
+        }
       } else {
+        // addNew or no email — always insert
         const { error } = await supabase
           .from('tenant_integrations')
           .insert({
