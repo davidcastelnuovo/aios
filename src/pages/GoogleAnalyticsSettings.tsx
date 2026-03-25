@@ -336,7 +336,7 @@ export default function GoogleAnalyticsSettings() {
                     חיבור דרך OAuth - דורש הגדרה ב-Google Cloud Console
                   </CardDescription>
                 </div>
-                <Badge variant={integration ? "default" : "secondary"} className={integration ? "bg-green-500" : ""}>
+                <Badge variant={hasAnyDirectConnection ? "default" : "secondary"} className={hasAnyDirectConnection ? "bg-green-500" : ""}>
                   {hasAnyDirectConnection ? `${integrations.length} חשבונות מחוברים` : "לא מחובר"}
                 </Badge>
               </div>
