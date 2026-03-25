@@ -742,8 +742,8 @@ export default function DashboardView() {
 
                           {dashboardCampaignType === 'ecommerce' ? (
                             <>
-                              <TableCell>{formatNumber(dayMetrics.results)}</TableCell>
-                              <TableCell>{formatCurrency(dayMetrics.revenue)}</TableCell>
+                              <TableCell>{formatNumber(dayMetrics.analyticsPurchases || dayMetrics.results)}</TableCell>
+                              <TableCell>{formatCurrency(dayMetrics.analyticsRevenue)}</TableCell>
                               <TableCell>
                                 <span className={dayRoas >= 1 ? 'text-green-600' : 'text-red-600'}>
                                   {dayRoas.toFixed(2)}
