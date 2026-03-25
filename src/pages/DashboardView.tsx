@@ -18,6 +18,8 @@ import { ArrowRight, Facebook, ShoppingCart, FileSpreadsheet, TrendingUp, Trendi
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { toast } from "sonner";
 import { AgencyDashboardContent } from "@/components/dynamic-tables/AgencyDashboardContent";
+import { ShareDashboardDialog } from "@/components/dynamic-tables/ShareDashboardDialog";
+import { useTenant } from "@/contexts/TenantContext";
 
 const DATE_FILTERS = [
   { value: 'today', label: 'היום' },
