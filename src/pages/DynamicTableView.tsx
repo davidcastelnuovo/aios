@@ -1660,38 +1660,36 @@ export default function DynamicTableView() {
             </div>
           )}
           
-          {/* Hide date filter for Analytics and Search Console - they have internal filtering */}
-          {!hasGoogleAnalytics && !hasGoogleSearchConsole && (
-            <div className="flex items-center gap-2 w-full md:w-auto justify-center">
-              <CalendarIcon className="h-4 w-4 text-muted-foreground" />
-              <Select 
-                value={dateFilter} 
-                onValueChange={(val) => {
-                  if (val === 'custom') {
-                    setShowCustomDatePicker(true);
-                  } else {
-                    setDateFilter(val);
+          {/* Main date filter (controls both displayed data and sync range) */}
+          <div className="flex items-center gap-2 w-full md:w-auto justify-center">
+            <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+            <Select 
+              value={dateFilter} 
+              onValueChange={(val) => {
+                if (val === 'custom') {
+                  setShowCustomDatePicker(true);
+                } else {
+                  setDateFilter(val);
+                }
+              }}
+            >
+              <SelectTrigger className="w-full md:w-[180px]">
+                <SelectValue>
+                  {dateFilter === 'custom' && customDateRange.from && customDateRange.to
+                    ? `${format(customDateRange.from, 'dd/MM/yy')} - ${format(customDateRange.to, 'dd/MM/yy')}`
+                    : dateFilterOptions.find(o => o.value === dateFilter)?.label || 'בחר תאריך'
                   }
-                }}
-              >
-                <SelectTrigger className="w-full md:w-[180px]">
-                  <SelectValue>
-                    {dateFilter === 'custom' && customDateRange.from && customDateRange.to
-                      ? `${format(customDateRange.from, 'dd/MM/yy')} - ${format(customDateRange.to, 'dd/MM/yy')}`
-                      : dateFilterOptions.find(o => o.value === dateFilter)?.label || 'בחר תאריך'
-                    }
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {dateFilterOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {dateFilterOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
           {/* Custom Date Range Picker Dialog */}
           <Dialog open={showCustomDatePicker} onOpenChange={setShowCustomDatePicker}>
