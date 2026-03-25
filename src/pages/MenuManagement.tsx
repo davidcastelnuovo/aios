@@ -9,7 +9,9 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Save, RotateCcw, GripVertical, ChevronDown } from "lucide-react";
+import { Save, RotateCcw, GripVertical, ChevronDown, Plus } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   DndContext,
@@ -340,6 +342,8 @@ export default function MenuManagement() {
   const [editingItems, setEditingItems] = useState<Record<string, string>>({});
   const [groupOrder, setGroupOrder] = useState<string[]>(['main', 'management', 'sales']);
   const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [newItem, setNewItem] = useState({ original_label: '', route: '', icon: 'Zap', menu_key: '' });
 
   // Get org_type directly from DB (types not updated yet)
   const { data: tenantData } = useQuery({
@@ -482,6 +486,29 @@ export default function MenuManagement() {
       return updated;
     });
   };
+
+  const addMutation = useMutation({
+    mutationFn: async (item: typeof newItem) => {
+      const maxOrder = menuItems ? Math.max(...menuItems.map(i => i.sort_order), 0) + 1 : 0;
+      const { error } = await supabase.from('menu_items').insert({
+        tenant_id: tenantId,
+        menu_key: item.menu_key || item.original_label.toLowerCase().replace(/\s+/g, '-'),
+        original_label: item.original_label,
+        route: item.route,
+        icon: item.icon || 'Zap',
+        is_visible: true,
+        sort_order: maxOrder,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['menu-items', tenantId] });
+      toast.success('פריט תפריט נוסף');
+      setAddDialogOpen(false);
+      setNewItem({ original_label: '', route: '', icon: 'Zap', menu_key: '' });
+    },
+    onError: (e: Error) => toast.error('שגיאה: ' + e.message),
+  });
 
   const handleToggleVisibility = (item: MenuItem) => {
     updateMutation.mutate({
@@ -660,13 +687,75 @@ export default function MenuManagement() {
 
   return (
     <div className="p-8 space-y-6" dir="rtl">
-      <div>
-        <h1 className="text-3xl font-bold mb-2">ניהול תפריט</h1>
-        <p className="text-muted-foreground">
-          התאם אישית את תפריט הניווט - ערוך שמות, שנה סדר וקבע נראות.
-          פריטי תפריט עם ילדים מסומנים עם חץ שניתן ללחוץ עליו לפתיחה/סגירה.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold mb-2">ניהול תפריט</h1>
+          <p className="text-muted-foreground">
+            התאם אישית את תפריט הניווט - ערוך שמות, שנה סדר וקבע נראות.
+          </p>
+        </div>
+        <Button onClick={() => setAddDialogOpen(true)} className="gap-2">
+          <Plus className="h-4 w-4" />
+          פריט חדש
+        </Button>
       </div>
+
+      {/* Add Item Dialog */}
+      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+        <DialogContent dir="rtl">
+          <DialogHeader>
+            <DialogTitle>הוספת פריט תפריט חדש</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label>שם הפריט *</Label>
+              <Input
+                placeholder="למשל: סוכנים"
+                value={newItem.original_label}
+                onChange={e => setNewItem(p => ({ ...p, original_label: e.target.value }))}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label>מפתח (menu_key)</Label>
+              <Input
+                placeholder="למשל: agents (אות קטנה, ללא רווחים)"
+                value={newItem.menu_key}
+                onChange={e => setNewItem(p => ({ ...p, menu_key: e.target.value }))}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label>נתיב (route) *</Label>
+              <Input
+                placeholder="למשל: /t/{tenant}/agents"
+                value={newItem.route}
+                onChange={e => setNewItem(p => ({ ...p, route: e.target.value }))}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label>אייקון</Label>
+              <Input
+                placeholder="למשל: Bot, Zap, Brain, Star"
+                value={newItem.icon}
+                onChange={e => setNewItem(p => ({ ...p, icon: e.target.value }))}
+                className="mt-1"
+              />
+              <p className="text-xs text-muted-foreground mt-1">שם אייקון מ-Lucide Icons</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddDialogOpen(false)}>ביטול</Button>
+            <Button
+              onClick={() => addMutation.mutate(newItem)}
+              disabled={!newItem.original_label || !newItem.route || addMutation.isPending}
+            >
+              {addMutation.isPending ? 'מוסיף...' : 'הוסף'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardHeader>
