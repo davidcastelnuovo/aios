@@ -623,26 +623,26 @@ export function GoogleAnalyticsDashboard({ records }: GoogleAnalyticsDashboardPr
           <CardTitle className="text-lg">מקורות תנועה - סשנים</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="h-[400px]">
+          <div className="h-[400px]" dir="ltr">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={trafficSources.slice(0, 10)} layout="vertical" margin={{ left: 10, right: 10 }}>
+              <BarChart data={trafficSources.slice(0, 10)} layout="vertical" margin={{ left: 10, right: 160 }}>
                 <CartesianGrid strokeDasharray="3 3" className="opacity-30" horizontal={false} />
-                <XAxis type="number" fontSize={12} orientation="bottom" reversed />
+                <XAxis type="number" fontSize={12} />
                 <YAxis 
                   dataKey="name" 
                   type="category" 
-                  width={160} 
+                  width={150} 
                   fontSize={11}
                   tickLine={false}
                   axisLine={false}
-                  orientation="left"
-                  tick={{ fill: 'currentColor', textAnchor: 'end' }}
+                  orientation="right"
+                  tick={{ fill: 'currentColor', textAnchor: 'start' }}
                 />
                 <Tooltip 
                   formatter={(value: number) => formatNumber(value)}
                   contentStyle={{ direction: 'rtl', textAlign: 'right' }}
                 />
-                <Bar dataKey="sessions" name="סשנים" radius={[4, 0, 0, 4]}>
+                <Bar dataKey="sessions" name="סשנים" radius={[0, 4, 4, 0]}>
                   {trafficSources.slice(0, 10).map((_, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
