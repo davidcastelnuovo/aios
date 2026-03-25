@@ -86,6 +86,13 @@ export function GoogleAnalyticsDashboard({ records, externalDateFilter }: Google
 
   const [datePreset, setDatePreset] = useState<DateRangePreset>(mapExternalPreset(externalDateFilter));
   const [customDateRange, setCustomDateRange] = useState<DateRange>({ from: undefined, to: undefined });
+
+  // Sync with external date filter when it changes
+  useEffect(() => {
+    if (externalDateFilter) {
+      setDatePreset(mapExternalPreset(externalDateFilter));
+    }
+  }, [externalDateFilter]);
   const [showComparison, setShowComparison] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
 
