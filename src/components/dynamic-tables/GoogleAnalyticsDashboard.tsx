@@ -472,41 +472,6 @@ export function GoogleAnalyticsDashboard({ records }: GoogleAnalyticsDashboardPr
             <ChangeIndicator current={totals.pageviews} previous={prevTotals?.pageviews} />
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-2">
-              <Users className="h-4 w-4 text-violet-500" />
-              <span className="text-sm text-muted-foreground">משתמשים חדשים</span>
-            </div>
-            <p className="text-2xl font-bold mt-1">{formatNumber(totals.newUsers)}</p>
-            <ChangeIndicator current={totals.newUsers} previous={prevTotals?.newUsers} />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-pink-500" />
-              <span className="text-sm text-muted-foreground">המרות</span>
-            </div>
-            <p className="text-2xl font-bold mt-1">{formatNumber(totals.conversions)}</p>
-            <ChangeIndicator current={totals.conversions} previous={prevTotals?.conversions} />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-red-500" />
-              <span className="text-sm text-muted-foreground">Bounce Rate</span>
-            </div>
-            <p className="text-2xl font-bold mt-1">{totals.avgBounceRate}%</p>
-            {showComparison && prevTotals && (
-              <div className={`flex items-center gap-1 text-xs ${Number(totals.avgBounceRate) <= Number(prevTotals.avgBounceRate) ? 'text-green-600' : 'text-red-600'}`}>
-                {Number(totals.avgBounceRate) <= Number(prevTotals.avgBounceRate) ? <ArrowDown className="h-3 w-3" /> : <ArrowUp className="h-3 w-3" />}
-                <span>{Math.abs(Number(totals.avgBounceRate) - Number(prevTotals.avgBounceRate)).toFixed(1)}%</span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
 
         <Card>
           <CardContent className="pt-4">
