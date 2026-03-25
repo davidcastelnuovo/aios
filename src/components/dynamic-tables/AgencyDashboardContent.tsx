@@ -5,7 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Facebook, FileSpreadsheet, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { Facebook, FileSpreadsheet, TrendingUp, TrendingDown, Minus, ShoppingCart } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LineChart, Line, ComposedChart, Area } from "recharts";
 
 interface AgencyDashboardContentProps {
   agencyId: string;
@@ -21,6 +22,7 @@ interface CampaignRecord {
   purchases: number;
   spend: number;
   revenue: number;
+  addToCart?: number;
 }
 
 interface ClientTableData {
@@ -52,6 +54,7 @@ const getLeadsFromData = (data: any) =>
   Number(data?.offsite_conversion) || Number(data?.offsite_conversion_fb_pixel_lead) || Number(data?.leadgen_grouped) || Number(data?.lead) || 0;
 const getPurchasesFromData = (data: any) => Number(data?.purchases) || Number(data?.ecommercePurchases) || Number(data?.transactions) || 0;
 const getSessionsFromData = (data: any) => Number(data?.sessions) || 0;
+const getAddToCartFromData = (data: any) => Number(data?.add_to_cart) || Number(data?.addToCarts) || 0;
 
 const getCampaignType = (integrationType: string, integrationSettings?: any): 'leads' | 'ecommerce' => {
   if (integrationType === 'facebook_insights') return 'leads';
@@ -127,7 +130,6 @@ function LeadsTable({ records, totals }: { records: CampaignRecord[]; totals: Ca
             <TableCell>{formatCurrency(getCPL(record.spend, record.leads))}</TableCell>
           </TableRow>
         ))}
-        {/* Total Row */}
         <TableRow className="bg-muted/50 font-bold border-t-2">
           <TableCell>סה"כ</TableCell>
           <TableCell>{formatNumber(totals.impressions)}</TableCell>
@@ -177,7 +179,6 @@ function EcommerceTable({ records, totals }: { records: CampaignRecord[]; totals
             </TableRow>
           );
         })}
-        {/* Total Row */}
         <TableRow className="bg-muted/50 font-bold border-t-2">
           <TableCell>סה"כ</TableCell>
           <TableCell>{formatNumber(totals.impressions)}</TableCell>
@@ -204,6 +205,7 @@ function AnalyticsTable({ records, totals }: { records: CampaignRecord[]; totals
         <TableRow>
           <TableHead className="text-right">מקור / ערוץ</TableHead>
           <TableHead className="text-right">סשנים</TableHead>
+          <TableHead className="text-right">הוספות לעגלה</TableHead>
           <TableHead className="text-right">רכישות</TableHead>
           <TableHead className="text-right">הכנסות</TableHead>
         </TableRow>
@@ -213,6 +215,7 @@ function AnalyticsTable({ records, totals }: { records: CampaignRecord[]; totals
           <TableRow key={idx}>
             <TableCell className="font-medium">{record.campaignName || 'Unknown'}</TableCell>
             <TableCell>{formatNumber(record.impressions)}</TableCell>
+            <TableCell>{formatNumber(record.addToCart || 0)}</TableCell>
             <TableCell>{formatNumber(record.purchases)}</TableCell>
             <TableCell>{formatCurrency(record.revenue)}</TableCell>
           </TableRow>
@@ -220,6 +223,7 @@ function AnalyticsTable({ records, totals }: { records: CampaignRecord[]; totals
         <TableRow className="bg-muted/50 font-bold border-t-2">
           <TableCell>סה"כ</TableCell>
           <TableCell>{formatNumber(totals.impressions)}</TableCell>
+          <TableCell>{formatNumber(totals.addToCart || 0)}</TableCell>
           <TableCell>{formatNumber(totals.purchases)}</TableCell>
           <TableCell>{formatCurrency(totals.revenue)}</TableCell>
         </TableRow>
@@ -385,6 +389,7 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
             purchases: 0,
             spend: 0,
             revenue: 0,
+            addToCart: 0,
           },
         });
       }
@@ -392,7 +397,7 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
       const tableData = tableDataMap.get(key)!;
       const data = record.data || {};
       
-      // For Analytics, only use traffic_source records (skip daily/top_pages)
+      // For Analytics, only use traffic_source records for the table (skip daily/top_pages)
       if (isAnalyticsPlatform(integrationType)) {
         if (data.report_type !== 'traffic_source') return;
       }
@@ -402,7 +407,6 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
         ? (data.source_medium || 'Unknown')
         : (data.campaign_name || data.campaignName || data.name || 'ללא שם');
       
-      // Find existing campaign record or create new one
       let campaignRecord = tableData.records.find(r => r.campaignName === campaignName);
       
       if (!campaignRecord) {
@@ -414,25 +418,27 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
           purchases: 0,
           spend: 0,
           revenue: 0,
+          addToCart: 0,
         };
         tableData.records.push(campaignRecord);
       }
 
       if (isAnalyticsPlatform(integrationType)) {
-        // Analytics data
         const sessions = getSessionsFromData(data);
         const purchases = getPurchasesFromData(data);
         const revenue = getRevenueFromData(data);
+        const addToCart = getAddToCartFromData(data);
         
-        campaignRecord.impressions += sessions; // use impressions field for sessions
+        campaignRecord.impressions += sessions;
         campaignRecord.purchases += purchases;
         campaignRecord.revenue += revenue;
+        campaignRecord.addToCart = (campaignRecord.addToCart || 0) + addToCart;
         
         tableData.totals.impressions += sessions;
         tableData.totals.purchases += purchases;
         tableData.totals.revenue += revenue;
+        tableData.totals.addToCart = (tableData.totals.addToCart || 0) + addToCart;
       } else {
-        // Ads data
         const impressions = Number(data.impressions) || 0;
         const clicks = Number(data.clicks) || 0;
         const leads = getLeadsFromData(data);
@@ -456,11 +462,56 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
       }
     });
 
-    // Convert to array and sort by client name
     return Array.from(tableDataMap.values())
       .filter(d => d.records.length > 0)
       .sort((a, b) => a.clientName.localeCompare(b.clientName, 'he'));
   }, [clients, allRecords]);
+
+  // Build daily chart data from daily records (Analytics + Ads)
+  const dailyChartData = useMemo(() => {
+    const byDate: Record<string, { 
+      date: string; adsSpend: number; analyticsRevenue: number; 
+      analyticsPurchases: number; analyticsAddToCart: number;
+      analyticsSessions: number; adsLeads: number;
+    }> = {};
+
+    allRecords.forEach((record: any) => {
+      const data = record.data || {};
+      const date = data.date;
+      if (!date) return;
+      
+      const integrationType = record._integrationType;
+      
+      if (!byDate[date]) {
+        byDate[date] = { 
+          date, adsSpend: 0, analyticsRevenue: 0, 
+          analyticsPurchases: 0, analyticsAddToCart: 0,
+          analyticsSessions: 0, adsLeads: 0,
+        };
+      }
+      
+      if (isAnalyticsPlatform(integrationType)) {
+        // Use daily records for chart (not traffic_source)
+        if (data.report_type === 'daily') {
+          byDate[date].analyticsRevenue += getRevenueFromData(data);
+          byDate[date].analyticsPurchases += getPurchasesFromData(data);
+          byDate[date].analyticsAddToCart += getAddToCartFromData(data);
+          byDate[date].analyticsSessions += getSessionsFromData(data);
+        }
+      } else if (isAdsPlatform(integrationType)) {
+        byDate[date].adsSpend += getSpendFromData(data);
+        byDate[date].adsLeads += getLeadsFromData(data);
+      }
+    });
+
+    return Object.values(byDate)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map(d => ({
+        ...d,
+        dateLabel: new Date(d.date).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' }),
+        roas: d.adsSpend > 0 ? +(d.analyticsRevenue / d.adsSpend).toFixed(2) : 0,
+      }));
+  }, [allRecords]);
 
   // Calculate overall totals - ROAS uses Analytics revenue / Ads spend
   const overallTotals = useMemo(() => {
@@ -470,12 +521,14 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
     let analyticsRevenue = 0;
     let analyticsPurchases = 0;
     let analyticsSessions = 0;
+    let analyticsAddToCart = 0;
 
     clientTableDataList.forEach((data) => {
       if (isAnalyticsPlatform(data.integrationType)) {
         analyticsRevenue += data.totals.revenue;
         analyticsPurchases += data.totals.purchases;
-        analyticsSessions += data.totals.impressions; // sessions stored in impressions for analytics
+        analyticsSessions += data.totals.impressions;
+        analyticsAddToCart += (data.totals.addToCart || 0);
       } else if (isAdsPlatform(data.integrationType)) {
         adsSpend += data.totals.spend;
         adsLeads += data.totals.leads;
@@ -483,14 +536,7 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
       }
     });
 
-    return {
-      adsSpend,
-      adsLeads,
-      adsPurchases,
-      analyticsRevenue,
-      analyticsPurchases,
-      analyticsSessions,
-    };
+    return { adsSpend, adsLeads, adsPurchases, analyticsRevenue, analyticsPurchases, analyticsSessions, analyticsAddToCart };
   }, [clientTableDataList]);
 
   const hasAnalytics = clientTableDataList.some(d => isAnalyticsPlatform(d.integrationType));
@@ -502,8 +548,8 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <div className="grid gap-4 md:grid-cols-3">
-          {[1, 2, 3].map(i => (
+        <div className="grid gap-4 md:grid-cols-4">
+          {[1, 2, 3, 4].map(i => (
             <Card key={i}>
               <CardContent className="p-6">
                 <Skeleton className="h-4 w-24 mb-2" />
@@ -512,16 +558,11 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
             </Card>
           ))}
         </div>
-        {[1, 2].map(i => (
-          <Card key={i}>
-            <CardHeader>
-              <Skeleton className="h-6 w-48" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-48 w-full" />
-            </CardContent>
-          </Card>
-        ))}
+        <Card>
+          <CardContent className="p-6">
+            <Skeleton className="h-64 w-full" />
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -530,9 +571,7 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
     return (
       <Card className="p-12 text-center">
         <h3 className="text-lg font-semibold mb-2">אין לקוחות פעילים בסוכנות זו</h3>
-        <p className="text-muted-foreground">
-          הוסף לקוחות פעילים לסוכנות כדי לראות נתונים בדשבורד
-        </p>
+        <p className="text-muted-foreground">הוסף לקוחות פעילים לסוכנות כדי לראות נתונים בדשבורד</p>
       </Card>
     );
   }
@@ -541,9 +580,7 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
     return (
       <Card className="p-12 text-center">
         <h3 className="text-lg font-semibold mb-2">אין נתונים להצגה</h3>
-        <p className="text-muted-foreground">
-          הוסף טבלאות Facebook או Google Ads ללקוחות הסוכנות כדי לראות נתונים כאן
-        </p>
+        <p className="text-muted-foreground">הוסף טבלאות Facebook, Google Ads או Analytics ללקוחות הסוכנות</p>
       </Card>
     );
   }
@@ -570,8 +607,18 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
 
             <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900">
               <CardContent className="p-6">
-                <p className="text-sm text-muted-foreground">רכישות (Analytics)</p>
-                <p className="text-3xl font-bold mt-2">{formatNumber(overallTotals.analyticsPurchases)}</p>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">רכישות</p>
+                    <p className="text-3xl font-bold mt-2">{formatNumber(overallTotals.analyticsPurchases)}</p>
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm text-muted-foreground flex items-center gap-1">
+                      <ShoppingCart className="h-3 w-3" /> הוספות לעגלה
+                    </p>
+                    <p className="text-xl font-bold mt-2">{formatNumber(overallTotals.analyticsAddToCart)}</p>
+                  </div>
+                </div>
               </CardContent>
             </Card>
 
@@ -617,6 +664,210 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
           </>
         )}
       </div>
+
+      {/* Daily Charts */}
+      {dailyChartData.length > 0 && (
+        <>
+          {/* Revenue vs Spend Chart */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">הכנסות מול הוצאות - יומי</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <ComposedChart data={dailyChartData}>
+                  <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                  <XAxis dataKey="dateLabel" tick={{ fontSize: 12 }} />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip 
+                    formatter={(value: number, name: string) => [
+                      formatCurrency(value), 
+                      name === 'analyticsRevenue' ? 'הכנסות' : name === 'adsSpend' ? 'הוצאות' : name
+                    ]}
+                    labelFormatter={(label) => `תאריך: ${label}`}
+                  />
+                  <Legend formatter={(value) => value === 'analyticsRevenue' ? 'הכנסות (Analytics)' : value === 'adsSpend' ? 'הוצאות פרסום' : value} />
+                  <Area type="monotone" dataKey="analyticsRevenue" fill="#22c55e" fillOpacity={0.15} stroke="#22c55e" strokeWidth={2} />
+                  <Bar dataKey="adsSpend" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={20} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          {/* ROAS Daily Chart */}
+          {hasAnalytics && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">ROAS יומי</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={250}>
+                  <LineChart data={dailyChartData}>
+                    <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                    <XAxis dataKey="dateLabel" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} />
+                    <Tooltip 
+                      formatter={(value: number) => [value.toFixed(2), 'ROAS']}
+                      labelFormatter={(label) => `תאריך: ${label}`}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="roas" 
+                      stroke="#8b5cf6" 
+                      strokeWidth={2} 
+                      dot={{ r: 3 }}
+                      name="ROAS"
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Purchases & Add to Cart Chart */}
+          {hasAnalytics && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <ShoppingCart className="h-5 w-5" />
+                  רכישות והוספות לעגלה - יומי
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={250}>
+                  <BarChart data={dailyChartData}>
+                    <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                    <XAxis dataKey="dateLabel" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} />
+                    <Tooltip 
+                      formatter={(value: number, name: string) => [
+                        formatNumber(value), 
+                        name === 'analyticsPurchases' ? 'רכישות' : name === 'analyticsAddToCart' ? 'הוספות לעגלה' : name
+                      ]}
+                      labelFormatter={(label) => `תאריך: ${label}`}
+                    />
+                    <Legend formatter={(value) => value === 'analyticsPurchases' ? 'רכישות' : value === 'analyticsAddToCart' ? 'הוספות לעגלה' : value} />
+                    <Bar dataKey="analyticsAddToCart" fill="#f59e0b" radius={[4, 4, 0, 0]} name="analyticsAddToCart" />
+                    <Bar dataKey="analyticsPurchases" fill="#22c55e" radius={[4, 4, 0, 0]} name="analyticsPurchases" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Sessions Chart */}
+          {hasAnalytics && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">סשנים יומיים (Analytics)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={dailyChartData}>
+                    <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                    <XAxis dataKey="dateLabel" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} />
+                    <Tooltip 
+                      formatter={(value: number) => [formatNumber(value), 'סשנים']}
+                      labelFormatter={(label) => `תאריך: ${label}`}
+                    />
+                    <Bar dataKey="analyticsSessions" fill="#f97316" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+        </>
+      )}
+
+      {/* Platform Breakdown Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">פירוט לפי פלטפורמה</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-right">פלטפורמה</TableHead>
+                  <TableHead className="text-right">הוצאה</TableHead>
+                  <TableHead className="text-right">סשנים / חשיפות</TableHead>
+                  <TableHead className="text-right">הוספות לעגלה</TableHead>
+                  <TableHead className="text-right">רכישות</TableHead>
+                  <TableHead className="text-right">הכנסות</TableHead>
+                  <TableHead className="text-right">ROAS</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {/* Aggregate by platform */}
+                {(() => {
+                  const platformTotals: Record<string, { spend: number; impressions: number; addToCart: number; purchases: number; revenue: number }> = {};
+                  clientTableDataList.forEach(d => {
+                    const key = d.integrationType;
+                    if (!platformTotals[key]) platformTotals[key] = { spend: 0, impressions: 0, addToCart: 0, purchases: 0, revenue: 0 };
+                    platformTotals[key].impressions += d.totals.impressions;
+                    platformTotals[key].addToCart += (d.totals.addToCart || 0);
+                    platformTotals[key].purchases += d.totals.purchases;
+                    platformTotals[key].revenue += d.totals.revenue;
+                    if (!isAnalyticsPlatform(key)) {
+                      platformTotals[key].spend += d.totals.spend;
+                    }
+                  });
+                  return Object.entries(platformTotals).map(([platform, metrics]) => {
+                    const config = PLATFORM_CONFIG[platform] || { name: platform, color: 'text-muted-foreground' };
+                    const isAnalytics = isAnalyticsPlatform(platform);
+                    const roas = metrics.spend > 0 ? metrics.revenue / metrics.spend : 0;
+                    return (
+                      <TableRow key={platform}>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2">
+                            {getIntegrationIcon(platform)}
+                            <span className={config.color}>{config.name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>{isAnalytics ? '-' : formatCurrency(metrics.spend)}</TableCell>
+                        <TableCell>{formatNumber(metrics.impressions)}</TableCell>
+                        <TableCell>{isAnalytics ? formatNumber(metrics.addToCart) : '-'}</TableCell>
+                        <TableCell>{formatNumber(metrics.purchases)}</TableCell>
+                        <TableCell>{formatCurrency(metrics.revenue)}</TableCell>
+                        <TableCell>
+                          {isAnalytics ? '-' : (
+                            <span className={roas >= 1 ? 'text-green-600 font-semibold' : 'text-red-600'}>
+                              {roas.toFixed(2)}
+                            </span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  });
+                })()}
+                {/* Total row */}
+                <TableRow className="bg-muted/50 font-bold border-t-2">
+                  <TableCell>
+                    סה"כ
+                    {hasAnalytics && (
+                      <span className="text-xs font-normal text-muted-foreground block">
+                        ROAS = הכנסות Analytics / הוצאות פרסום
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell>{formatCurrency(overallTotals.adsSpend)}</TableCell>
+                  <TableCell>{formatNumber(overallTotals.analyticsSessions || 0)}</TableCell>
+                  <TableCell>{formatNumber(overallTotals.analyticsAddToCart)}</TableCell>
+                  <TableCell>{formatNumber(overallTotals.analyticsPurchases || overallTotals.adsPurchases)}</TableCell>
+                  <TableCell>{formatCurrency(overallTotals.analyticsRevenue)}</TableCell>
+                  <TableCell>
+                    <span className={combinedRoas >= 1 ? 'text-green-600 font-semibold' : 'text-red-600'}>
+                      {combinedRoas.toFixed(2)}
+                    </span>
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Client Cards */}
       {clientTableDataList.map((data) => (
