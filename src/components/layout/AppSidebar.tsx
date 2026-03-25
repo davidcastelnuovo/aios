@@ -301,6 +301,7 @@ export function AppSidebar() {
       'branding': 'branding',
       'accounting-integrations': 'accounting_integrations',
       'ai-support': 'ai_support',
+      'agents': 'agents',
       'menu-management': 'menu_management',
       'fields-management': 'fields_management',
       'lead-integrations': 'lead_integrations',
