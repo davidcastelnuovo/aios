@@ -235,8 +235,9 @@ export function GoogleAnalyticsDashboard({ records, externalDateFilter }: Google
       }
     }) : [];
 
-    // Traffic sources - use all (they're aggregated without dates)
-    const trafficSources = records
+    // Traffic sources - aggregate from daily records if available (to respect date filter)
+    // Fall back to traffic_source records if no daily data exists
+    const rawTrafficSources = records
       .filter(r =>
         r.data.report_type === 'traffic_source' ||
         (!r.data.report_type && (r.data.source_medium || r.data.source || r.data.medium))
@@ -259,6 +260,8 @@ export function GoogleAnalyticsDashboard({ records, externalDateFilter }: Google
         purchaseValue: toNumber(r.data.purchase_value ?? r.data.purchase_revenue ?? r.data.revenue ?? r.data.total_revenue),
       }))
       .sort((a, b) => b.sessions - a.sessions);
+
+    const trafficSources = rawTrafficSources;
 
     // Daily data for chart - filtered by selected date range
     const dailyData = currentDailyRecords
