@@ -355,8 +355,15 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
       const tableData = tableDataMap.get(key)!;
       const data = record.data || {};
       
-      // Extract campaign name
-      const campaignName = data.campaign_name || data.campaignName || data.name || 'ללא שם';
+      // For Analytics, only use traffic_source records (skip daily/top_pages)
+      if (isAnalyticsPlatform(integrationType)) {
+        if (data.report_type !== 'traffic_source') return;
+      }
+      
+      // Extract campaign name - for Analytics use source_medium
+      const campaignName = isAnalyticsPlatform(integrationType) 
+        ? (data.source_medium || 'Unknown')
+        : (data.campaign_name || data.campaignName || data.name || 'ללא שם');
       
       // Find existing campaign record or create new one
       let campaignRecord = tableData.records.find(r => r.campaignName === campaignName);
@@ -374,31 +381,42 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
         tableData.records.push(campaignRecord);
       }
 
-      // Aggregate data
-      const impressions = Number(data.impressions) || 0;
-      const clicks = Number(data.clicks) || 0;
-      // Extract leads from multiple possible field names (website leads, form leads, custom conversions)
-      const leads = Number(data.leads) || Number(data.conversions) || 
-        Number(data.website_leads) || Number(data.offsite_conversion) || 
-        Number(data.offsite_conversion_fb_pixel_lead) || Number(data.leadgen_grouped) || 0;
-      const purchases = Number(data.purchases) || 0;
-      const spend = Number(data.spend) || Number(data.cost) || 0;
-      const revenue = Number(data.purchase_value) || Number(data.conversions_value) || Number(data.conversion_value) || 0;
+      if (isAnalyticsPlatform(integrationType)) {
+        // Analytics data
+        const sessions = getSessionsFromData(data);
+        const purchases = getPurchasesFromData(data);
+        const revenue = getRevenueFromData(data);
+        
+        campaignRecord.impressions += sessions; // use impressions field for sessions
+        campaignRecord.purchases += purchases;
+        campaignRecord.revenue += revenue;
+        
+        tableData.totals.impressions += sessions;
+        tableData.totals.purchases += purchases;
+        tableData.totals.revenue += revenue;
+      } else {
+        // Ads data
+        const impressions = Number(data.impressions) || 0;
+        const clicks = Number(data.clicks) || 0;
+        const leads = getLeadsFromData(data);
+        const purchases = getPurchasesFromData(data);
+        const spend = getSpendFromData(data);
+        const revenue = getRevenueFromData(data);
 
-      campaignRecord.impressions += impressions;
-      campaignRecord.clicks += clicks;
-      campaignRecord.leads += leads;
-      campaignRecord.purchases += purchases;
-      campaignRecord.spend += spend;
-      campaignRecord.revenue += revenue;
+        campaignRecord.impressions += impressions;
+        campaignRecord.clicks += clicks;
+        campaignRecord.leads += leads;
+        campaignRecord.purchases += purchases;
+        campaignRecord.spend += spend;
+        campaignRecord.revenue += revenue;
 
-      // Update totals
-      tableData.totals.impressions += impressions;
-      tableData.totals.clicks += clicks;
-      tableData.totals.leads += leads;
-      tableData.totals.purchases += purchases;
-      tableData.totals.spend += spend;
-      tableData.totals.revenue += revenue;
+        tableData.totals.impressions += impressions;
+        tableData.totals.clicks += clicks;
+        tableData.totals.leads += leads;
+        tableData.totals.purchases += purchases;
+        tableData.totals.spend += spend;
+        tableData.totals.revenue += revenue;
+      }
     });
 
     // Convert to array and sort by client name
