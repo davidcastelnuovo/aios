@@ -560,7 +560,7 @@ export default function DashboardView() {
                     <TableRow>
                       <TableHead className="text-right">פלטפורמה</TableHead>
                       <TableHead className="text-right">הוצאה</TableHead>
-                      <TableHead className="text-right">חשיפות</TableHead>
+                      <TableHead className="text-right">חשיפות / סשנים</TableHead>
                       <TableHead className="text-right">קליקים</TableHead>
                       {dashboardCampaignType === 'ecommerce' ? (
                         <>
@@ -579,8 +579,7 @@ export default function DashboardView() {
                   <TableBody>
                     {Object.entries(summaryByPlatform).map(([platform, metrics]: [string, any]) => {
                       const config = PLATFORM_CONFIG[platform] || { name: platform, color: 'text-gray-600' };
-                      const ct: CampaignType = campaignTypeByPlatform[platform] || 'leads';
-                      if (dashboardCampaignType === 'ecommerce' && ct !== 'ecommerce') return null;
+                      const isAnalytics = isAnalyticsPlatform(platform);
 
                       return (
                         <TableRow key={platform}>
@@ -590,38 +589,50 @@ export default function DashboardView() {
                               <span className={config.color}>{config.name}</span>
                             </div>
                           </TableCell>
-                          <TableCell>{formatCurrency(metrics.spend)}</TableCell>
-                          <TableCell>{formatNumber(metrics.impressions)}</TableCell>
-                          <TableCell>{formatNumber(metrics.clicks)}</TableCell>
+                          <TableCell>{isAnalytics ? '-' : formatCurrency(metrics.spend)}</TableCell>
+                          <TableCell>{formatNumber(isAnalytics ? metrics.sessions : metrics.impressions)}</TableCell>
+                          <TableCell>{isAnalytics ? '-' : formatNumber(metrics.clicks)}</TableCell>
 
                           {dashboardCampaignType === 'ecommerce' ? (
                             <>
                               <TableCell>{formatNumber(metrics.results)}</TableCell>
                               <TableCell>{formatCurrency(metrics.revenue)}</TableCell>
                               <TableCell>
-                                <span className={metrics.roas >= 1 ? 'text-green-600 font-semibold' : 'text-red-600'}>
-                                  {metrics.roas.toFixed(2)}
-                                </span>
+                                {isAnalytics ? (
+                                  <span className="text-muted-foreground">-</span>
+                                ) : (
+                                  <span className={metrics.roas >= 1 ? 'text-green-600 font-semibold' : 'text-red-600'}>
+                                    {metrics.roas.toFixed(2)}
+                                  </span>
+                                )}
                               </TableCell>
                             </>
                           ) : (
                             <>
                               <TableCell>{formatNumber(metrics.results)}</TableCell>
-                              <TableCell>{formatCurrency(metrics.cpl)}</TableCell>
+                              <TableCell>{isAnalytics ? '-' : formatCurrency(metrics.cpl)}</TableCell>
                             </>
                           )}
                         </TableRow>
                       );
                     })}
-                    <TableRow className="bg-muted/50 font-bold">
-                      <TableCell>סה"כ</TableCell>
+                    {/* Total row: spend from ads, revenue from analytics */}
+                    <TableRow className="bg-muted/50 font-bold border-t-2">
+                      <TableCell>
+                        סה"כ
+                        {dashboardCampaignType === 'ecommerce' && summaryByPlatform['google_analytics'] && (
+                          <span className="text-xs font-normal text-muted-foreground block">
+                            הכנסות מ-Analytics / הוצאות פרסום
+                          </span>
+                        )}
+                      </TableCell>
                       <TableCell>{formatCurrency(totalSummary.spend)}</TableCell>
                       <TableCell>{formatNumber(totalSummary.impressions)}</TableCell>
                       <TableCell>{formatNumber(totalSummary.clicks)}</TableCell>
 
                       {dashboardCampaignType === 'ecommerce' ? (
                         <>
-                          <TableCell>{formatNumber(totalSummary.results)}</TableCell>
+                          <TableCell>{formatNumber(totalSummary.analyticsPurchases || totalSummary.results)}</TableCell>
                           <TableCell>{formatCurrency(totalSummary.revenue)}</TableCell>
                           <TableCell>
                             <span className={combinedRoas >= 1 ? 'text-green-600' : 'text-red-600'}>
