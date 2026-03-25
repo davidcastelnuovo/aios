@@ -168,7 +168,47 @@ serve(async (req) => {
 
     const dailyData = await dailyResponse.json();
 
-    // ====== REPORT 3: Top pages ======
+    // ====== REPORT 3: Daily source/medium breakdown (for date-synced source charts) ======
+    const dailySourceRequest = {
+      dateRanges: [{ startDate: actualStartDate, endDate: actualEndDate }],
+      dimensions: [
+        { name: 'date' },
+        { name: 'sessionSourceMedium' },
+      ],
+      metrics: [
+        { name: 'sessions' },
+        { name: 'totalUsers' },
+        { name: 'newUsers' },
+        { name: 'screenPageViews' },
+        { name: 'bounceRate' },
+        { name: 'averageSessionDuration' },
+        { name: 'conversions' },
+        { name: 'addToCarts' },
+        { name: 'ecommercePurchases' },
+        { name: 'purchaseRevenue' },
+      ],
+      orderBys: [
+        { dimension: { dimensionName: 'date' }, desc: false },
+        { metric: { metricName: 'sessions' }, desc: true },
+      ],
+      limit: 10000,
+    };
+
+    const dailySourceResponse = await fetch(
+      `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(dailySourceRequest),
+      }
+    );
+
+    const dailySourceData = await dailySourceResponse.json();
+
+    // ====== REPORT 4: Top pages ======
     const pagesRequest = {
       dateRanges: [{ startDate: actualStartDate, endDate: actualEndDate }],
       dimensions: [{ name: 'pagePath' }],
@@ -194,6 +234,18 @@ serve(async (req) => {
     );
 
     const pagesData = await pagesResponse.json();
+
+    if (dailyData.error) {
+      throw new Error(dailyData.error.message);
+    }
+
+    if (dailySourceData.error) {
+      throw new Error(dailySourceData.error.message);
+    }
+
+    if (pagesData.error) {
+      throw new Error(pagesData.error.message);
+    }
 
     // Delete existing records for this table
     await supabase
@@ -291,6 +343,37 @@ serve(async (req) => {
             add_to_cart: parseInt(row.metricValues[4]?.value) || 0,
             purchases: parseInt(row.metricValues[5]?.value) || 0,
             purchase_value: parseFloat(row.metricValues[6]?.value) || 0,
+          },
+        });
+      }
+    }
+
+    // Daily source breakdown (date + source)
+    if (dailySourceData.rows) {
+      for (const row of dailySourceData.rows) {
+        const date = row.dimensionValues[0].value;
+        const formattedDate = `${date.substring(0, 4)}-${date.substring(4, 6)}-${date.substring(6, 8)}`;
+        const sourceMedium = row.dimensionValues[1]?.value ?? 'Unknown';
+
+        records.push({
+          table_id: tableId,
+          tenant_id: table.tenant_id,
+          agency_id: table.agency_id,
+          data: {
+            report_type: 'daily_source',
+            source_medium: sourceMedium,
+            date: formattedDate,
+            page_path: null,
+            sessions: parseInt(row.metricValues[0].value) || 0,
+            users: parseInt(row.metricValues[1].value) || 0,
+            new_users: parseInt(row.metricValues[2].value) || 0,
+            pageviews: parseInt(row.metricValues[3].value) || 0,
+            bounce_rate: (parseFloat(row.metricValues[4].value) * 100).toFixed(1),
+            avg_session_duration: parseFloat(row.metricValues[5].value).toFixed(1),
+            conversions: parseInt(row.metricValues[6].value) || 0,
+            add_to_cart: parseInt(row.metricValues[7]?.value) || 0,
+            purchases: parseInt(row.metricValues[8]?.value) || 0,
+            purchase_value: parseFloat(row.metricValues[9]?.value) || 0,
           },
         });
       }

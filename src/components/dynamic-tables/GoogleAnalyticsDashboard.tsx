@@ -251,6 +251,73 @@ export function GoogleAnalyticsDashboard({
   };
 
   const { trafficSources, dailyData, topPages, totals, prevTotals } = useMemo(() => {
+    const aggregateTrafficSources = (sourceRecords: CrmRecord[]) => {
+      const sourceMap = new Map<string, {
+        sessions: number;
+        users: number;
+        newUsers: number;
+        pageviews: number;
+        bounceRate: number;
+        bounceCount: number;
+        avgDuration: number;
+        conversions: number;
+        addToCart: number;
+        purchases: number;
+        purchaseValue: number;
+      }>();
+
+      for (const r of sourceRecords) {
+        const name = normalizeSourceName(
+          r.data.source_medium ||
+          (r.data.source && r.data.medium ? `${r.data.source} / ${r.data.medium}` : r.data.source) ||
+          'Unknown'
+        );
+
+        const existing = sourceMap.get(name) || {
+          sessions: 0,
+          users: 0,
+          newUsers: 0,
+          pageviews: 0,
+          bounceRate: 0,
+          bounceCount: 0,
+          avgDuration: 0,
+          conversions: 0,
+          addToCart: 0,
+          purchases: 0,
+          purchaseValue: 0,
+        };
+
+        existing.sessions += toNumber(r.data.sessions);
+        existing.users += toNumber(r.data.users);
+        existing.newUsers += toNumber(r.data.new_users);
+        existing.pageviews += toNumber(r.data.pageviews);
+        existing.bounceRate += toNumber(r.data.bounce_rate);
+        existing.bounceCount += 1;
+        existing.avgDuration += toNumber(r.data.avg_session_duration);
+        existing.conversions += toNumber(r.data.conversions ?? r.data.transactions ?? r.data.purchases);
+        existing.addToCart += toNumber(r.data.add_to_cart ?? r.data.add_to_carts);
+        existing.purchases += toNumber(r.data.purchases ?? r.data.transactions ?? r.data.conversions);
+        existing.purchaseValue += toNumber(r.data.purchase_value ?? r.data.purchase_revenue ?? r.data.revenue ?? r.data.total_revenue);
+        sourceMap.set(name, existing);
+      }
+
+      return Array.from(sourceMap.entries())
+        .map(([name, data]) => ({
+          name,
+          sessions: data.sessions,
+          users: data.users,
+          newUsers: data.newUsers,
+          pageviews: data.pageviews,
+          bounceRate: data.bounceCount > 0 ? data.bounceRate / data.bounceCount : 0,
+          avgDuration: data.bounceCount > 0 ? data.avgDuration / data.bounceCount : 0,
+          conversions: data.conversions,
+          addToCart: data.addToCart,
+          purchases: data.purchases,
+          purchaseValue: data.purchaseValue,
+        }))
+        .sort((a, b) => b.sessions - a.sessions);
+    };
+
     // Filter daily records by selected date range
     const currentDailyRecords = records.filter(r => {
       if (r.data.report_type !== 'daily') return false;
@@ -284,74 +351,44 @@ export function GoogleAnalyticsDashboard({
       }
     }) : [];
 
+    // Date-synced source rows (new schema)
+    const currentDailySourceRecords = records.filter(r => {
+      if (r.data.report_type !== 'daily_source') return false;
+      if (!r.data.date) return false;
+
+      try {
+        const recordDate = parseISO(r.data.date);
+        const start = new Date(currentRange.start);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(currentRange.end);
+        end.setHours(23, 59, 59, 999);
+        return isWithinInterval(recordDate, { start, end });
+      } catch {
+        return false;
+      }
+    });
+
     // Traffic sources - aggregate from date-filtered daily records that have source info
-    const dailySourceRecords = currentDailyRecords.filter(r =>
+    const legacyDailySourceRecords = currentDailyRecords.filter(r =>
       r.data.source_medium || r.data.source || r.data.medium
     );
 
     let trafficSources: { name: string; sessions: number; users: number; newUsers: number; pageviews: number; bounceRate: number; avgDuration: number; conversions: number; addToCart: number; purchases: number; purchaseValue: number }[];
 
-    if (dailySourceRecords.length > 0) {
-      const sourceMap = new Map<string, { sessions: number; users: number; newUsers: number; pageviews: number; bounceRate: number; bounceCount: number; avgDuration: number; conversions: number; addToCart: number; purchases: number; purchaseValue: number }>();
-
-      for (const r of dailySourceRecords) {
-        const name = normalizeSourceName(
-          r.data.source_medium ||
-          (r.data.source && r.data.medium ? `${r.data.source} / ${r.data.medium}` : r.data.source) ||
-          'Unknown'
-        );
-        const existing = sourceMap.get(name) || { sessions: 0, users: 0, newUsers: 0, pageviews: 0, bounceRate: 0, bounceCount: 0, avgDuration: 0, conversions: 0, addToCart: 0, purchases: 0, purchaseValue: 0 };
-        existing.sessions += toNumber(r.data.sessions);
-        existing.users += toNumber(r.data.users);
-        existing.newUsers += toNumber(r.data.new_users);
-        existing.pageviews += toNumber(r.data.pageviews);
-        existing.bounceRate += toNumber(r.data.bounce_rate);
-        existing.bounceCount += 1;
-        existing.avgDuration += toNumber(r.data.avg_session_duration);
-        existing.conversions += toNumber(r.data.conversions ?? r.data.transactions ?? r.data.purchases);
-        existing.addToCart += toNumber(r.data.add_to_cart ?? r.data.add_to_carts);
-        existing.purchases += toNumber(r.data.purchases ?? r.data.transactions ?? r.data.conversions);
-        existing.purchaseValue += toNumber(r.data.purchase_value ?? r.data.purchase_revenue ?? r.data.revenue ?? r.data.total_revenue);
-        sourceMap.set(name, existing);
-      }
-
-      trafficSources = Array.from(sourceMap.entries()).map(([name, data]) => ({
-        name,
-        sessions: data.sessions,
-        users: data.users,
-        newUsers: data.newUsers,
-        pageviews: data.pageviews,
-        bounceRate: data.bounceCount > 0 ? data.bounceRate / data.bounceCount : 0,
-        avgDuration: data.bounceCount > 0 ? data.avgDuration / data.bounceCount : 0,
-        conversions: data.conversions,
-        addToCart: data.addToCart,
-        purchases: data.purchases,
-        purchaseValue: data.purchaseValue,
-      })).sort((a, b) => b.sessions - a.sessions);
+    if (currentDailySourceRecords.length > 0) {
+      trafficSources = aggregateTrafficSources(currentDailySourceRecords);
+    } else if (legacyDailySourceRecords.length > 0) {
+      trafficSources = aggregateTrafficSources(legacyDailySourceRecords);
     } else {
-      trafficSources = records
-        .filter(r =>
-          r.data.report_type === 'traffic_source' ||
-          (!r.data.report_type && (r.data.source_medium || r.data.source || r.data.medium))
-        )
-        .map(r => ({
-          name: normalizeSourceName(
-            r.data.source_medium ||
-            (r.data.source && r.data.medium ? `${r.data.source} / ${r.data.medium}` : r.data.source) ||
-            'Unknown'
-          ),
-          sessions: toNumber(r.data.sessions),
-          users: toNumber(r.data.users),
-          newUsers: toNumber(r.data.new_users),
-          pageviews: toNumber(r.data.pageviews),
-          bounceRate: toNumber(r.data.bounce_rate),
-          avgDuration: toNumber(r.data.avg_session_duration),
-          conversions: toNumber(r.data.conversions ?? r.data.transactions ?? r.data.purchases),
-          addToCart: toNumber(r.data.add_to_cart ?? r.data.add_to_carts),
-          purchases: toNumber(r.data.purchases ?? r.data.transactions ?? r.data.conversions),
-          purchaseValue: toNumber(r.data.purchase_value ?? r.data.purchase_revenue ?? r.data.revenue ?? r.data.total_revenue),
-        }))
-        .sort((a, b) => b.sessions - a.sessions);
+      const isAllRange = datePreset === 'all';
+      trafficSources = isAllRange
+        ? aggregateTrafficSources(
+            records.filter(r =>
+              r.data.report_type === 'traffic_source' ||
+              (!r.data.report_type && (r.data.source_medium || r.data.source || r.data.medium))
+            )
+          )
+        : [];
     }
 
     const dailyData = currentDailyRecords
@@ -423,7 +460,7 @@ export function GoogleAnalyticsDashboard({
       : null;
 
     return { trafficSources, dailyData, topPages, totals, prevTotals };
-  }, [records, currentRange.start, currentRange.end, previousRange.start, previousRange.end, showComparison]);
+  }, [records, currentRange.start, currentRange.end, previousRange.start, previousRange.end, showComparison, datePreset]);
 
   const formatNumber = (num: number) => {
     return new Intl.NumberFormat('he-IL').format(num);
