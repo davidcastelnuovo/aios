@@ -407,21 +407,40 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
       .sort((a, b) => a.clientName.localeCompare(b.clientName, 'he'));
   }, [clients, allRecords]);
 
-  // Calculate overall totals
+  // Calculate overall totals - ROAS uses Analytics revenue / Ads spend
   const overallTotals = useMemo(() => {
-    return clientTableDataList.reduce(
-      (acc, data) => ({
-        spend: acc.spend + data.totals.spend,
-        revenue: acc.revenue + data.totals.revenue,
-        leads: acc.leads + data.totals.leads,
-        purchases: acc.purchases + data.totals.purchases,
-      }),
-      { spend: 0, revenue: 0, leads: 0, purchases: 0 }
-    );
+    let adsSpend = 0;
+    let adsLeads = 0;
+    let adsPurchases = 0;
+    let analyticsRevenue = 0;
+    let analyticsPurchases = 0;
+    let analyticsSessions = 0;
+
+    clientTableDataList.forEach((data) => {
+      if (isAnalyticsPlatform(data.integrationType)) {
+        analyticsRevenue += data.totals.revenue;
+        analyticsPurchases += data.totals.purchases;
+        analyticsSessions += data.totals.impressions; // sessions stored in impressions for analytics
+      } else if (isAdsPlatform(data.integrationType)) {
+        adsSpend += data.totals.spend;
+        adsLeads += data.totals.leads;
+        adsPurchases += data.totals.purchases;
+      }
+    });
+
+    return {
+      adsSpend,
+      adsLeads,
+      adsPurchases,
+      analyticsRevenue,
+      analyticsPurchases,
+      analyticsSessions,
+    };
   }, [clientTableDataList]);
 
-  const totalRoas = overallTotals.spend > 0 ? overallTotals.revenue / overallTotals.spend : 0;
-  const totalCPL = overallTotals.leads > 0 ? overallTotals.spend / overallTotals.leads : 0;
+  const hasAnalytics = clientTableDataList.some(d => isAnalyticsPlatform(d.integrationType));
+  const combinedRoas = overallTotals.adsSpend > 0 ? overallTotals.analyticsRevenue / overallTotals.adsSpend : 0;
+  const totalCPL = overallTotals.adsLeads > 0 ? overallTotals.adsSpend / overallTotals.adsLeads : 0;
 
   const isLoading = clientsLoading || tablesLoading || recordsLoading;
 
