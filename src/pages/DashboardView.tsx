@@ -18,6 +18,8 @@ import { ArrowRight, Facebook, ShoppingCart, FileSpreadsheet, TrendingUp, Trendi
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { toast } from "sonner";
 import { AgencyDashboardContent } from "@/components/dynamic-tables/AgencyDashboardContent";
+import { ShareDashboardDialog } from "@/components/dynamic-tables/ShareDashboardDialog";
+import { useTenant } from "@/contexts/TenantContext";
 
 const DATE_FILTERS = [
   { value: 'today', label: 'היום' },
@@ -72,6 +74,7 @@ export default function DashboardView() {
   const { dashboardId } = useParams();
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
+  const { currentTenantId } = useTenant();
   const [dateFilter, setDateFilter] = useState('last_30_days');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -413,6 +416,13 @@ export default function DashboardView() {
         </div>
         
         <div className="flex items-center gap-3">
+          {!isAgencyDashboard && currentTenantId && (
+            <ShareDashboardDialog
+              dashboardId={dashboardId!}
+              dashboardName={dashboard.name}
+              tenantId={currentTenantId}
+            />
+          )}
           {!isAgencyDashboard && (
             <Button
               variant="outline"

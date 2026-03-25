@@ -1596,6 +1596,57 @@ export type Database = {
         }
         Relationships: []
       }
+      dashboard_shares: {
+        Row: {
+          allowed_emails: string[] | null
+          created_at: string
+          created_by: string
+          dashboard_id: string
+          id: string
+          is_active: boolean
+          share_token: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          allowed_emails?: string[] | null
+          created_at?: string
+          created_by: string
+          dashboard_id: string
+          id?: string
+          is_active?: boolean
+          share_token?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          allowed_emails?: string[] | null
+          created_at?: string
+          created_by?: string
+          dashboard_id?: string
+          id?: string
+          is_active?: boolean
+          share_token?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dashboard_shares_dashboard_id_fkey"
+            columns: ["dashboard_id"]
+            isOneToOne: false
+            referencedRelation: "crm_dashboards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dashboard_shares_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       deleted_facebook_leads: {
         Row: {
           deleted_at: string
