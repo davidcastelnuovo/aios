@@ -580,14 +580,14 @@ export function GoogleAnalyticsDashboard({ records }: GoogleAnalyticsDashboardPr
             </div>
             {/* Legend Below */}
             {pieData.length > 0 && (
-              <div className="flex flex-wrap justify-center gap-3 mt-4">
+              <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 mt-4">
                 {pieData.map((entry, index) => (
-                  <div key={index} className="flex items-center gap-2 text-sm">
+                  <div key={index} className="flex items-center gap-1.5 text-xs whitespace-nowrap">
                     <div 
-                      className="w-3 h-3 rounded-full" 
+                      className="w-2.5 h-2.5 rounded-full shrink-0" 
                       style={{ backgroundColor: entry.fill }}
                     />
-                    <span>{entry.name}</span>
+                    <span className="truncate max-w-[120px]">{entry.name}</span>
                     <span className="text-muted-foreground">({formatNumber(entry.value)})</span>
                   </div>
                 ))}
