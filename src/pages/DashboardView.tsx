@@ -686,34 +686,49 @@ export default function DashboardView() {
                       const dayMetrics = records.reduce(
                         (acc: any, r: any) => {
                           const data = r.data || {};
+                          const source = r._source || 'unknown';
+
+                          if (isAnalyticsPlatform(source)) {
+                            // Analytics: only take revenue and purchases
+                            const purchases = getPurchasesFromData(data);
+                            const revenue = getRevenueFromData(data);
+                            return {
+                              ...acc,
+                              analyticsRevenue: acc.analyticsRevenue + revenue,
+                              analyticsPurchases: acc.analyticsPurchases + purchases,
+                            };
+                          }
+
+                          // Ads platforms: spend, impressions, clicks
                           const spend = getSpendFromData(data);
                           const impressions = Number(data.impressions) || 0;
                           const clicks = Number(data.clicks) || 0;
 
                           if (dashboardCampaignType === 'ecommerce') {
                             const purchases = getPurchasesFromData(data);
-                            const revenue = getRevenueFromData(data);
                             return {
+                              ...acc,
                               spend: acc.spend + spend,
                               impressions: acc.impressions + impressions,
                               clicks: acc.clicks + clicks,
                               results: acc.results + purchases,
-                              revenue: acc.revenue + revenue,
                             };
                           }
 
                           const leads = getLeadsFromData(data);
                           return {
+                            ...acc,
                             spend: acc.spend + spend,
                             impressions: acc.impressions + impressions,
                             clicks: acc.clicks + clicks,
                             results: acc.results + leads,
                           };
                         },
-                        { spend: 0, impressions: 0, clicks: 0, results: 0, revenue: 0 }
+                        { spend: 0, impressions: 0, clicks: 0, results: 0, analyticsRevenue: 0, analyticsPurchases: 0 }
                       );
 
-                      const dayRoas = dayMetrics.spend > 0 ? dayMetrics.revenue / dayMetrics.spend : 0;
+                      // ROAS = Analytics revenue / Ads spend
+                      const dayRoas = dayMetrics.spend > 0 ? dayMetrics.analyticsRevenue / dayMetrics.spend : 0;
                       const dayCpl = dayMetrics.results > 0 ? dayMetrics.spend / dayMetrics.results : 0;
 
                       return (
