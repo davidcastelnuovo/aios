@@ -75,6 +75,14 @@ const getIntegrationIcon = (type: string) => {
           <circle cx="6" cy="18" r="3.5" fill="#34A853"/>
         </svg>
       );
+    case 'google_analytics':
+      return (
+        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none">
+          <path d="M20.5 18.5v-13c0-1.1-.9-2-2-2h-1c-1.1 0-2 .9-2 2v13c0 1.1.9 2 2 2h1c1.1 0 2-.9 2-2z" fill="#F9AB00"/>
+          <path d="M13.5 18.5v-7c0-1.1-.9-2-2-2h-1c-1.1 0-2 .9-2 2v7c0 1.1.9 2 2 2h1c1.1 0 2-.9 2-2z" fill="#E37400"/>
+          <circle cx="5" cy="18.5" r="2.5" fill="#E37400"/>
+        </svg>
+      );
     default:
       return <FileSpreadsheet className="h-4 w-4" />;
   }
