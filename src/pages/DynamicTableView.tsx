@@ -193,12 +193,18 @@ export default function DynamicTableView() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
       const params = new URLSearchParams({ table_id: table.id });
-      if (dateFilter === 'custom' && customDateRange.from && customDateRange.to) {
-        params.append('date_filter', 'custom');
-        params.append('date_from', format(customDateRange.from, 'yyyy-MM-dd'));
-        params.append('date_to', format(customDateRange.to, 'yyyy-MM-dd'));
-      } else if (dateFilter !== 'all') {
-        params.append('date_filter', dateFilter);
+      const isInternallyFilteredTable =
+        table.integration_type === 'google_analytics' ||
+        table.integration_type === 'google_search_console';
+
+      if (!isInternallyFilteredTable) {
+        if (dateFilter === 'custom' && customDateRange.from && customDateRange.to) {
+          params.append('date_filter', 'custom');
+          params.append('date_from', format(customDateRange.from, 'yyyy-MM-dd'));
+          params.append('date_to', format(customDateRange.to, 'yyyy-MM-dd'));
+        } else if (dateFilter !== 'all') {
+          params.append('date_filter', dateFilter);
+        }
       }
       const response = await supabase.functions.invoke(`crm-records?${params.toString()}`, {
         method: 'GET',
