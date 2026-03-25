@@ -220,26 +220,42 @@ export default function DashboardView() {
     return platforms;
   }, [allRecords, campaignTypeByPlatform]);
 
-  // Calculate total summary (respect dashboard campaign type)
+  // Calculate total summary - ROAS uses Analytics revenue and Ads spend only
   const totalSummary = useMemo(() => {
-    return Object.entries(summaryByPlatform).reduce(
-      (acc: any, [platform, data]: [string, any]) => {
-        const ct: CampaignType = campaignTypeByPlatform[platform] || 'leads';
-        if (dashboardCampaignType === 'ecommerce' && ct !== 'ecommerce') return acc;
+    let totalSpend = 0;
+    let totalImpressions = 0;
+    let totalClicks = 0;
+    let totalResults = 0;
+    let adsSpend = 0; // FB + Google Ads spend for ROAS denominator
+    let analyticsRevenue = 0; // Analytics revenue for ROAS numerator
+    let analyticsPurchases = 0;
 
-        return {
-          spend: acc.spend + data.spend,
-          impressions: acc.impressions + data.impressions,
-          clicks: acc.clicks + data.clicks,
-          results: acc.results + data.results,
-          revenue: acc.revenue + (ct === 'ecommerce' ? data.revenue : 0),
-          roas_spend: acc.roas_spend + (ct === 'ecommerce' ? data.spend : 0),
-          roas_value: acc.roas_value + (ct === 'ecommerce' ? data.revenue : 0),
-        };
-      },
-      { spend: 0, impressions: 0, clicks: 0, results: 0, revenue: 0, roas_spend: 0, roas_value: 0 }
-    );
-  }, [summaryByPlatform, campaignTypeByPlatform, dashboardCampaignType]);
+    Object.entries(summaryByPlatform).forEach(([platform, data]: [string, any]) => {
+      if (isAnalyticsPlatform(platform)) {
+        // Analytics provides the "real" revenue
+        analyticsRevenue += data.revenue;
+        analyticsPurchases += data.results;
+      } else if (isAdsPlatform(platform)) {
+        // Ads platforms provide spend
+        totalSpend += data.spend;
+        totalImpressions += data.impressions;
+        totalClicks += data.clicks;
+        totalResults += data.results;
+        adsSpend += data.spend;
+      }
+    });
+
+    return {
+      spend: totalSpend,
+      impressions: totalImpressions,
+      clicks: totalClicks,
+      results: totalResults,
+      revenue: analyticsRevenue,
+      roas_spend: adsSpend,
+      roas_value: analyticsRevenue,
+      analyticsPurchases,
+    };
+  }, [summaryByPlatform]);
 
   const combinedRoas = totalSummary.roas_spend > 0 ? totalSummary.roas_value / totalSummary.roas_spend : 0;
   const combinedCpl = totalSummary.results > 0 ? totalSummary.spend / totalSummary.results : 0;
