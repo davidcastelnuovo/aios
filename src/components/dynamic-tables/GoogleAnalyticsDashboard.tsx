@@ -633,7 +633,7 @@ export function GoogleAnalyticsDashboard({ records }: GoogleAnalyticsDashboardPr
                     type="monotone" 
                     dataKey="pageviews" 
                     name="צפיות"
-                    stroke="hsl(var(--chart-3))" 
+                    stroke="#F59E0B" 
                     strokeWidth={2}
                     dot={false}
                   />
@@ -641,7 +641,7 @@ export function GoogleAnalyticsDashboard({ records }: GoogleAnalyticsDashboardPr
                     type="monotone" 
                     dataKey="purchases" 
                     name="רכישות"
-                    stroke="hsl(var(--chart-4))" 
+                    stroke="#EF4444" 
                     strokeWidth={2}
                     dot={false}
                   />
