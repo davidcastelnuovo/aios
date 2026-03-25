@@ -494,15 +494,15 @@ export default function DashboardView() {
               <>
                 <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
                   <CardContent className="p-6">
-                    <p className="text-sm text-muted-foreground">הכנסות</p>
+                    <p className="text-sm text-muted-foreground">הכנסות (Analytics)</p>
                     <p className="text-3xl font-bold mt-2">{formatCurrency(totalSummary.revenue)}</p>
                   </CardContent>
                 </Card>
 
                 <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900">
                   <CardContent className="p-6">
-                    <p className="text-sm text-muted-foreground">רכישות</p>
-                    <p className="text-3xl font-bold mt-2">{formatNumber(totalSummary.results)}</p>
+                    <p className="text-sm text-muted-foreground">רכישות (Analytics)</p>
+                    <p className="text-3xl font-bold mt-2">{formatNumber(totalSummary.analyticsPurchases || totalSummary.results)}</p>
                   </CardContent>
                 </Card>
 
