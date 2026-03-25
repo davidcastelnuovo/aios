@@ -196,9 +196,42 @@ function EcommerceTable({ records, totals }: { records: CampaignRecord[]; totals
   );
 }
 
+// Analytics Table Component
+function AnalyticsTable({ records, totals }: { records: CampaignRecord[]; totals: CampaignRecord }) {
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="text-right">מקור / ערוץ</TableHead>
+          <TableHead className="text-right">סשנים</TableHead>
+          <TableHead className="text-right">רכישות</TableHead>
+          <TableHead className="text-right">הכנסות</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {records.map((record, idx) => (
+          <TableRow key={idx}>
+            <TableCell className="font-medium">{record.campaignName || 'Unknown'}</TableCell>
+            <TableCell>{formatNumber(record.impressions)}</TableCell>
+            <TableCell>{formatNumber(record.purchases)}</TableCell>
+            <TableCell>{formatCurrency(record.revenue)}</TableCell>
+          </TableRow>
+        ))}
+        <TableRow className="bg-muted/50 font-bold border-t-2">
+          <TableCell>סה"כ</TableCell>
+          <TableCell>{formatNumber(totals.impressions)}</TableCell>
+          <TableCell>{formatNumber(totals.purchases)}</TableCell>
+          <TableCell>{formatCurrency(totals.revenue)}</TableCell>
+        </TableRow>
+      </TableBody>
+    </Table>
+  );
+}
+
 // Client Table Card Component
 function ClientTableCard({ data }: { data: ClientTableData }) {
   const platformConfig = PLATFORM_CONFIG[data.integrationType];
+  const isAnalytics = isAnalyticsPlatform(data.integrationType);
   
   return (
     <Card>
@@ -214,15 +247,19 @@ function ClientTableCard({ data }: { data: ClientTableData }) {
             <span className={`font-medium ${platformConfig?.color || ''}`}>
               {platformConfig?.name || data.integrationType}
             </span>
-            <Badge variant="secondary" className="text-xs">
-              {data.campaignType === 'leads' ? 'לידים' : 'איקומרס'}
-            </Badge>
+            {!isAnalytics && (
+              <Badge variant="secondary" className="text-xs">
+                {data.campaignType === 'leads' ? 'לידים' : 'איקומרס'}
+              </Badge>
+            )}
           </div>
         </div>
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto">
-          {data.campaignType === 'leads' ? (
+          {isAnalytics ? (
+            <AnalyticsTable records={data.records} totals={data.totals} />
+          ) : data.campaignType === 'leads' ? (
             <LeadsTable records={data.records} totals={data.totals} />
           ) : (
             <EcommerceTable records={data.records} totals={data.totals} />
