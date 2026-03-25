@@ -1,63 +1,61 @@
 
+מושלם — מצאתי למה אתה רואה ש“כלום לא השתנה”, ומה בדיוק צריך לתקן.
 
-## הבעיה
+## אבחון קצר (למה זה קורה עכשיו)
+1. אתה נמצא בדשבורד **לקוח** (`dashboard_type=client`), לא בדשבורד סוכנות.  
+   השינויים הקודמים נעשו בעיקר ב-`AgencyDashboardContent.tsx`, ולכן במסך שלך הם כמעט לא באים לידי ביטוי.
+2. ב-`DashboardView.tsx` החישוב של Analytics לוקח **את כל סוגי הרשומות** (כולל `traffic_source` בלי תאריך), ולכן פילטר התאריכים נראה “לא עובד”.
+3. ה“לשוניות” שאתה רואה כרגע הן בעצם `Badge` סטטיים (לא טאבים אינטראקטיביים), לכן לחיצה לא מסננת דוח.
 
-כלי ה-AIOS `get_chat_history` דורש `contact_id` ספציפי, ולכן כששואלים "מי חיפש אותי?" או "מה ההודעה האחרונה שנכנסה?" — הסוכן לא יודע לענות כי אין לו כלי שמאפשר סריקה כללית של כל ההודעות הנכנסות.
+## תכנית יישום ממוקדת
+### 1) להעביר את דשבורד הלקוח לפילטר פלטפורמות אמיתי (טאבים)
+- קובץ: `src/pages/DashboardView.tsx`
+- אוסיף state של `platformFilter` עם ערכים:
+  - `all`
+  - `facebook`
+  - `google_ads`
+  - `google_analytics`
+- אחליף את רשימת ה-Badges העליונה ב-`Tabs` לחיצים, כך שלחיצה תציג רק הדוח שבחרת.
 
-## הפתרון
+### 2) לתקן סנכרון תאריכים של Analytics בדשבורד הלקוח
+- בקוד האגרגציה של הדשבורד, Analytics יחושב לפי:
+  - `report_type = 'daily'` עבור KPI, ROAS, טבלאות יומיות וגרפים
+  - `report_type = 'daily_source'` עבור פירוק מקורות תנועה לפי תאריכים
+  - `traffic_source` ישמש רק fallback אם אין `daily_source` (תאימות לאחור)
+- כך בחירת "30 יום אחרונים"/"7 ימים" באמת תשנה הכנסות/רכישות/ATC.
 
-הוספת כלי חדש `get_recent_inbound_messages` לפונקציית `ai-support-chat` שיסרוק את **כל** ההודעות הנכנסות (מלקוחות, לידים, קבוצות, ואנשי קשר לא משויכים) ויחזיר אותן ממוינות לפי זמן.
+### 3) להחיל את הטאבים על כל חלקי הדשבורד (לא רק כותרת)
+- כרטיסי KPI למעלה
+- טבלת “פירוט לפי פלטפורמה”
+- טבלת “נתונים יומיים”
+- כך:
+  - טאב Analytics: רק נתוני Analytics
+  - טאב Facebook: רק Facebook
+  - טאב Google Ads: רק Google Ads
+  - טאב הכל: שלושתם יחד
 
-## שינויים
+### 4) להשלים “דשבורד מלא” גם בדשבורד לקוח (כמו שביקשת)
+- אוסיף גם כאן גרפים רלוונטיים לפי הטאב:
+  - Analytics/All: הכנסות מול הוצאות, רכישות מול הוספות לעגלה, סשנים יומיים
+  - Facebook/Google Ads: גרף הוצאות יומיות
+- חישוב ROAS משולב יישאר:  
+  `הכנסות Analytics / סך הוצאות פרסום (Facebook + Google Ads)`
 
-### 1. Edge Function — `supabase/functions/ai-support-chat/index.ts`
+### 5) יישור קו גם למסך שיתוף (כדי שלא תהיה התנהגות שונה)
+- קובץ: `src/pages/SharedDashboard.tsx`
+- איישם את אותה לוגיקת סינון לפי `report_type` כדי למנוע פערים בין דשבורד פנימי לדשבורד משותף.
 
-**הוספת כלי חדש `get_recent_inbound_messages`:**
+## פרטים טכניים (בקצרה)
+- קבצים עיקריים:
+  - `src/pages/DashboardView.tsx` (תיקון מרכזי)
+  - `src/pages/SharedDashboard.tsx` (עקביות)
+- אין צורך במיגרציה/שינוי DB.
+- אין צורך בפונקציות backend חדשות — התיקון הוא בלוגיקת הצגה ואגרגציה בצד לקוח.
+- אתמוך גם בחיבור כמה חשבונות Analytics באותו טננט: האגרגציה תעבוד על כל טבלאות Analytics של אותו לקוח, אבל תחת אותו טאב “Analytics”.
 
-- **Tool definition** (בסוף מערך ה-tools):
-  - `hours` (אופציונלי, ברירת מחדל: 2) — חלון זמן לסריקה
-  - `limit` (אופציונלי, ברירת מחדל: 30) — מספר הודעות מקסימלי
-
-- **Tool executor** (ב-switch של executeTool):
-  - שליפה מטבלת `chat_messages` עם:
-    - `tenant_id = tenantId`
-    - `connection_user_id = userId` (רק הודעות ששייכות למשתמש הנוכחי)
-    - `direction = 'inbound'`
-    - `is_blocked = false`
-    - `created_at >= now() - X hours`
-  - מיון לפי `created_at DESC`
-  - עבור כל הודעה — שליפת שם ליד/לקוח/קבוצה בהתאמה:
-    - `lead_id` → שם מ-`leads`
-    - `client_id` → שם מ-`clients`
-    - `group_id` → שם מ-`whatsapp_groups`
-    - אף אחד מהם → "לא משויך" + `sender_name` / `sender_phone`
-  - החזרת מערך הודעות עם: שם שולח, סוג (ליד/לקוח/קבוצה/לא משויך), טקסט ההודעה, שעה
-
-- **עדכון System Prompt**:
-  - הוספת הוראה: "כששואלים 'מי חיפש אותי' או 'מה ההודעה האחרונה' — השתמש ב-`get_recent_inbound_messages` כדי לסרוק את כל השיחות"
-  - הוראה ליצור `display_data` בפורמט טבלה עם ההודעות + סיכום טקסטואלי קצר
-
-### 2. AIOSContext — ללא שינויים
-הכלי החדש פועל בצד השרת בלבד, ללא צורך בשינוי frontend.
-
-## פרטים טכניים
-
-```sql
--- השאילתה שהכלי יריץ (דרך Supabase SDK):
-SELECT cm.id, cm.direction, cm.message_text, cm.sender_name, cm.sender_phone, 
-       cm.created_at, cm.lead_id, cm.client_id, cm.group_id
-FROM chat_messages cm
-WHERE cm.tenant_id = $tenantId
-  AND cm.connection_user_id = $userId
-  AND cm.direction = 'inbound'
-  AND cm.is_blocked = false
-  AND cm.created_at >= now() - interval '$hours hours'
-ORDER BY cm.created_at DESC
-LIMIT $limit
-```
-
-לאחר השליפה — enrichment עם שמות מ-leads, clients, whatsapp_groups בשאילתות נפרדות (batch by IDs).
-
-## סיכום
-שינוי אחד בקובץ אחד (`ai-support-chat/index.ts`) — הוספת כלי + הגדרת כלי + עדכון prompt. זה יאפשר ל-AIOS לענות על "מי חיפש אותי", "מה ההודעה האחרונה", "תראה לי הודעות אחרונות" בלי צורך לציין שם ספציפי.
-
+## בדיקות קבלה שאבצע אחרי היישום
+1. מעבר בין טווחי תאריך משנה בפועל את רכישות/הכנסות/ATC ב-KPI.
+2. לחיצה על כל טאב מציגה רק את הדוח המתאים.
+3. בטאב “הכל” הנתונים משולבים נכון, ו-ROAS מחושב נכון.
+4. התאמה מול דוח Analytics הנפרד באותו טווח תאריכים.
+5. בדיקת UI מלאה end-to-end במסך שלך (כולל רספונסיביות בסיסית).
