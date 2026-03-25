@@ -362,6 +362,7 @@ export function GoogleAnalyticsDashboard({ records, externalDateFilter }: Google
     .map((source, index) => ({
     name: source.name.length > 20 ? source.name.substring(0, 20) + '...' : source.name,
     value: source.sessions,
+    purchaseValue: source.purchaseValue,
     fill: COLORS[index % COLORS.length],
   }));
 
