@@ -2168,7 +2168,7 @@ export default function DynamicTableView() {
 
       {/* Google Analytics Dashboard */}
       {hasGoogleAnalytics && filteredRecords && filteredRecords.length > 0 && (
-        <GoogleAnalyticsDashboard records={filteredRecords} />
+        <GoogleAnalyticsDashboard records={filteredRecords} externalDateFilter={dateFilter} />
       )}
 
       {/* Google Search Console Dashboard */}

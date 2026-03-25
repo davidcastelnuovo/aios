@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -43,6 +43,7 @@ interface CrmRecord {
 
 interface GoogleAnalyticsDashboardProps {
   records: CrmRecord[];
+  externalDateFilter?: string;
 }
 
 // Explicit colorful chart colors
@@ -66,9 +67,32 @@ interface DateRange {
   to: Date | undefined;
 }
 
-export function GoogleAnalyticsDashboard({ records }: GoogleAnalyticsDashboardProps) {
-  const [datePreset, setDatePreset] = useState<DateRangePreset>('last_30_days');
+export function GoogleAnalyticsDashboard({ records, externalDateFilter }: GoogleAnalyticsDashboardProps) {
+  const mapExternalPreset = (ext?: string): DateRangePreset => {
+    if (!ext) return 'last_30_days';
+    const map: Record<string, DateRangePreset> = {
+      'all': 'last_90_days',
+      'today': 'today',
+      'yesterday': 'yesterday',
+      'last_7_days': 'last_7_days',
+      'last_14_days': 'last_14_days',
+      'last_30_days': 'last_30_days',
+      'this_month': 'this_month',
+      'last_month': 'last_month',
+      'last_90_days': 'last_90_days',
+    };
+    return map[ext] || 'last_30_days';
+  };
+
+  const [datePreset, setDatePreset] = useState<DateRangePreset>(mapExternalPreset(externalDateFilter));
   const [customDateRange, setCustomDateRange] = useState<DateRange>({ from: undefined, to: undefined });
+
+  // Sync with external date filter when it changes
+  useEffect(() => {
+    if (externalDateFilter) {
+      setDatePreset(mapExternalPreset(externalDateFilter));
+    }
+  }, [externalDateFilter]);
   const [showComparison, setShowComparison] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
 
