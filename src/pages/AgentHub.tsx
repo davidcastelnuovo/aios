@@ -95,7 +95,7 @@ export default function AgentHub() {
         .eq("tenant_id", tenantId)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data as Agent[];
+      return (data || []).map(d => ({ ...d, allowed_tools: [], active: d.active ?? false, created_at: d.created_at ?? '' })) as Agent[];
     },
     enabled: !!tenantId,
   });
