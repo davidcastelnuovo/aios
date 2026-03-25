@@ -32,7 +32,7 @@ import {
   Line,
   Legend,
 } from "recharts";
-import { Users, Eye, MousePointerClick, Clock, TrendingUp, Globe, CalendarIcon, ArrowUp, ArrowDown } from "lucide-react";
+import { Users, Eye, MousePointerClick, Clock, TrendingUp, Globe, CalendarIcon, ArrowUp, ArrowDown, ShoppingCart, CreditCard } from "lucide-react";
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths, isWithinInterval, parseISO } from "date-fns";
 import { he } from "date-fns/locale";
 
@@ -45,18 +45,18 @@ interface GoogleAnalyticsDashboardProps {
   records: CrmRecord[];
 }
 
-// Concrete, diverse colors for pie chart
+// Theme-aware chart colors
 const COLORS = [
-  '#10B981', // emerald
-  '#3B82F6', // blue
-  '#F59E0B', // amber
-  '#EF4444', // red
-  '#8B5CF6', // violet
-  '#EC4899', // pink
-  '#14B8A6', // teal
-  '#F97316', // orange
-  '#6366F1', // indigo
-  '#84CC16', // lime
+  'hsl(var(--chart-1))',
+  'hsl(var(--chart-2))',
+  'hsl(var(--chart-3))',
+  'hsl(var(--chart-4))',
+  'hsl(var(--chart-5))',
+  'hsl(var(--primary))',
+  'hsl(var(--secondary-foreground))',
+  'hsl(var(--accent-foreground))',
+  'hsl(var(--muted-foreground))',
+  'hsl(var(--foreground))',
 ];
 
 type DateRangePreset = 'today' | 'yesterday' | 'last_7_days' | 'last_14_days' | 'last_30_days' | 'this_month' | 'last_month' | 'last_90_days' | 'custom';
@@ -71,6 +71,14 @@ export function GoogleAnalyticsDashboard({ records }: GoogleAnalyticsDashboardPr
   const [customDateRange, setCustomDateRange] = useState<DateRange>({ from: undefined, to: undefined });
   const [showComparison, setShowComparison] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
+
+  const toNumber = (value: unknown): number => {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    if (value === null || value === undefined) return 0;
+    const cleaned = String(value).replace(/[^0-9.-]/g, '');
+    const parsed = Number(cleaned);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
 
   // Calculate date range based on preset
   const getDateRange = (preset: DateRangePreset): { start: Date; end: Date } => {
@@ -205,16 +213,26 @@ export function GoogleAnalyticsDashboard({ records }: GoogleAnalyticsDashboardPr
 
     // Traffic sources - use all (they're aggregated without dates)
     const trafficSources = records
-      .filter(r => r.data.report_type === 'traffic_source')
+      .filter(r =>
+        r.data.report_type === 'traffic_source' ||
+        (!r.data.report_type && (r.data.source_medium || r.data.source || r.data.medium))
+      )
       .map(r => ({
-        name: normalizeSourceName(r.data.source_medium || 'Unknown'),
-        sessions: Number(r.data.sessions) || 0,
-        users: Number(r.data.users) || 0,
-        newUsers: Number(r.data.new_users) || 0,
-        pageviews: Number(r.data.pageviews) || 0,
-        bounceRate: Number(r.data.bounce_rate) || 0,
-        avgDuration: Number(r.data.avg_session_duration) || 0,
-        conversions: Number(r.data.conversions) || 0,
+        name: normalizeSourceName(
+          r.data.source_medium ||
+          (r.data.source && r.data.medium ? `${r.data.source} / ${r.data.medium}` : r.data.source) ||
+          'Unknown'
+        ),
+        sessions: toNumber(r.data.sessions),
+        users: toNumber(r.data.users),
+        newUsers: toNumber(r.data.new_users),
+        pageviews: toNumber(r.data.pageviews),
+        bounceRate: toNumber(r.data.bounce_rate),
+        avgDuration: toNumber(r.data.avg_session_duration),
+        conversions: toNumber(r.data.conversions ?? r.data.transactions ?? r.data.purchases),
+        addToCart: toNumber(r.data.add_to_cart ?? r.data.add_to_carts),
+        purchases: toNumber(r.data.purchases ?? r.data.transactions ?? r.data.conversions),
+        purchaseValue: toNumber(r.data.purchase_value ?? r.data.purchase_revenue ?? r.data.revenue ?? r.data.total_revenue),
       }))
       .sort((a, b) => b.sessions - a.sessions);
 
@@ -223,29 +241,35 @@ export function GoogleAnalyticsDashboard({ records }: GoogleAnalyticsDashboardPr
       .map(r => ({
         date: r.data.date,
         displayDate: r.data.date ? new Date(r.data.date).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' }) : '',
-        sessions: Number(r.data.sessions) || 0,
-        users: Number(r.data.users) || 0,
-        pageviews: Number(r.data.pageviews) || 0,
-        conversions: Number(r.data.conversions) || 0,
+        sessions: toNumber(r.data.sessions),
+        users: toNumber(r.data.users),
+        pageviews: toNumber(r.data.pageviews),
+        conversions: toNumber(r.data.conversions ?? r.data.transactions ?? r.data.purchases),
+        addToCart: toNumber(r.data.add_to_cart ?? r.data.add_to_carts),
+        purchases: toNumber(r.data.purchases ?? r.data.transactions ?? r.data.conversions),
+        purchaseValue: toNumber(r.data.purchase_value ?? r.data.purchase_revenue ?? r.data.revenue ?? r.data.total_revenue),
       }))
       .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 
     // Previous period daily data
     const prevDailyData = previousDailyRecords
       .map(r => ({
-        sessions: Number(r.data.sessions) || 0,
-        users: Number(r.data.users) || 0,
-        pageviews: Number(r.data.pageviews) || 0,
-        conversions: Number(r.data.conversions) || 0,
+        sessions: toNumber(r.data.sessions),
+        users: toNumber(r.data.users),
+        pageviews: toNumber(r.data.pageviews),
+        conversions: toNumber(r.data.conversions ?? r.data.transactions ?? r.data.purchases),
+        addToCart: toNumber(r.data.add_to_cart ?? r.data.add_to_carts),
+        purchases: toNumber(r.data.purchases ?? r.data.transactions ?? r.data.conversions),
+        purchaseValue: toNumber(r.data.purchase_value ?? r.data.purchase_revenue ?? r.data.revenue ?? r.data.total_revenue),
       }));
 
     const topPages = records
       .filter(r => r.data.report_type === 'top_pages')
       .map(r => ({
         path: r.data.page_path || '/',
-        pageviews: Number(r.data.pageviews) || 0,
-        sessions: Number(r.data.sessions) || 0,
-        avgDuration: Number(r.data.avg_session_duration) || 0,
+        pageviews: toNumber(r.data.pageviews),
+        sessions: toNumber(r.data.sessions),
+        avgDuration: toNumber(r.data.avg_session_duration),
       }))
       .sort((a, b) => b.pageviews - a.pageviews)
       .slice(0, 10);
@@ -257,6 +281,9 @@ export function GoogleAnalyticsDashboard({ records }: GoogleAnalyticsDashboardPr
       newUsers: 0, // Not available in daily data
       pageviews: data.reduce((sum, d) => sum + d.pageviews, 0),
       conversions: data.reduce((sum, d) => sum + d.conversions, 0),
+      addToCart: data.reduce((sum, d) => sum + d.addToCart, 0),
+      purchases: data.reduce((sum, d) => sum + d.purchases, 0),
+      purchaseValue: data.reduce((sum, d) => sum + d.purchaseValue, 0),
       avgBounceRate: '0', // Not available in daily data
     });
 
@@ -269,6 +296,9 @@ export function GoogleAnalyticsDashboard({ records }: GoogleAnalyticsDashboardPr
           newUsers: trafficSources.reduce((sum, s) => sum + s.newUsers, 0),
           pageviews: trafficSources.reduce((sum, s) => sum + s.pageviews, 0),
           conversions: trafficSources.reduce((sum, s) => sum + s.conversions, 0),
+          addToCart: trafficSources.reduce((sum, s) => sum + s.addToCart, 0),
+          purchases: trafficSources.reduce((sum, s) => sum + s.purchases, 0),
+          purchaseValue: trafficSources.reduce((sum, s) => sum + s.purchaseValue, 0),
           avgBounceRate: trafficSources.length > 0 
             ? (trafficSources.reduce((sum, s) => sum + s.bounceRate, 0) / trafficSources.length).toFixed(1)
             : '0',
@@ -279,12 +309,18 @@ export function GoogleAnalyticsDashboard({ records }: GoogleAnalyticsDashboardPr
       : null;
 
     return { trafficSources, dailyData, topPages, totals, prevTotals };
-
-    return { trafficSources, dailyData, topPages, totals, prevTotals };
   }, [records, currentRange.start, currentRange.end, previousRange.start, previousRange.end, showComparison]);
 
   const formatNumber = (num: number) => {
     return new Intl.NumberFormat('he-IL').format(num);
+  };
+
+  const formatCurrency = (num: number) => {
+    return new Intl.NumberFormat('he-IL', {
+      style: 'currency',
+      currency: 'ILS',
+      maximumFractionDigits: 0,
+    }).format(num);
   };
 
   const calculateChange = (current: number, previous: number | undefined): { value: number; positive: boolean } | null => {
@@ -293,7 +329,10 @@ export function GoogleAnalyticsDashboard({ records }: GoogleAnalyticsDashboardPr
     return { value: Math.abs(change), positive: change >= 0 };
   };
 
-  const pieData = trafficSources.slice(0, 6).map((source, index) => ({
+  const pieData = trafficSources
+    .filter((source) => source.sessions > 0)
+    .slice(0, 6)
+    .map((source, index) => ({
     name: source.name.length > 20 ? source.name.substring(0, 20) + '...' : source.name,
     value: source.sessions,
     fill: COLORS[index % COLORS.length],
@@ -402,7 +441,7 @@ export function GoogleAnalyticsDashboard({ records }: GoogleAnalyticsDashboardPr
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 2xl:grid-cols-9 gap-4">
         <Card>
           <CardContent className="pt-4">
             <div className="flex items-center gap-2">
@@ -468,6 +507,39 @@ export function GoogleAnalyticsDashboard({ records }: GoogleAnalyticsDashboardPr
             )}
           </CardContent>
         </Card>
+
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2">
+              <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">הוספה לעגלה</span>
+            </div>
+            <p className="text-2xl font-bold mt-1">{formatNumber(totals.addToCart)}</p>
+            <ChangeIndicator current={totals.addToCart} previous={prevTotals?.addToCart} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2">
+              <CreditCard className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">רכישות</span>
+            </div>
+            <p className="text-2xl font-bold mt-1">{formatNumber(totals.purchases)}</p>
+            <ChangeIndicator current={totals.purchases} previous={prevTotals?.purchases} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">שווי רכישות</span>
+            </div>
+            <p className="text-2xl font-bold mt-1">{formatCurrency(totals.purchaseValue)}</p>
+            <ChangeIndicator current={totals.purchaseValue} previous={prevTotals?.purchaseValue} />
+          </CardContent>
+        </Card>
       </div>
 
       {/* Charts Row */}
@@ -479,41 +551,48 @@ export function GoogleAnalyticsDashboard({ records }: GoogleAnalyticsDashboardPr
           </CardHeader>
           <CardContent>
             <div className="h-[250px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    outerRadius={90}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.fill} />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    formatter={(value: number) => formatNumber(value)}
-                    contentStyle={{ direction: 'rtl', textAlign: 'right' }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+              {pieData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      outerRadius={90}
+                      dataKey="value"
+                    >
+                      {pieData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      formatter={(value: number) => formatNumber(value)}
+                      contentStyle={{ direction: 'rtl', textAlign: 'right' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+                  אין נתוני מקורות תנועה לתקופה הזו
+                </div>
+              )}
             </div>
             {/* Legend Below */}
-            <div className="flex flex-wrap justify-center gap-3 mt-4">
-              {pieData.map((entry, index) => (
-                <div key={index} className="flex items-center gap-2 text-sm">
-                  <div 
-                    className="w-3 h-3 rounded-full" 
-                    style={{ backgroundColor: entry.fill }}
-                  />
-                  <span>{entry.name}</span>
-                  <span className="text-muted-foreground">({formatNumber(entry.value)})</span>
-                </div>
-              ))}
-            </div>
+            {pieData.length > 0 && (
+              <div className="flex flex-wrap justify-center gap-3 mt-4">
+                {pieData.map((entry, index) => (
+                  <div key={index} className="flex items-center gap-2 text-sm">
+                    <div 
+                      className="w-3 h-3 rounded-full" 
+                      style={{ backgroundColor: entry.fill }}
+                    />
+                    <span>{entry.name}</span>
+                    <span className="text-muted-foreground">({formatNumber(entry.value)})</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -554,7 +633,15 @@ export function GoogleAnalyticsDashboard({ records }: GoogleAnalyticsDashboardPr
                     type="monotone" 
                     dataKey="pageviews" 
                     name="צפיות"
-                    stroke="#F59E0B" 
+                    stroke="hsl(var(--chart-3))" 
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="purchases" 
+                    name="רכישות"
+                    stroke="hsl(var(--chart-4))" 
                     strokeWidth={2}
                     dot={false}
                   />
@@ -619,6 +706,9 @@ export function GoogleAnalyticsDashboard({ records }: GoogleAnalyticsDashboardPr
                   <th className="text-center py-2 px-3 font-medium">Bounce</th>
                   <th className="text-center py-2 px-3 font-medium">זמן ממוצע</th>
                   <th className="text-center py-2 px-3 font-medium">המרות</th>
+                  <th className="text-center py-2 px-3 font-medium">הוספה לעגלה</th>
+                  <th className="text-center py-2 px-3 font-medium">רכישות</th>
+                  <th className="text-center py-2 px-3 font-medium">שווי רכישות</th>
                 </tr>
               </thead>
               <tbody>
@@ -645,8 +735,18 @@ export function GoogleAnalyticsDashboard({ records }: GoogleAnalyticsDashboardPr
                       )}
                       {source.conversions === 0 && '-'}
                     </td>
+                    <td className="text-center py-2 px-3">{formatNumber(source.addToCart)}</td>
+                    <td className="text-center py-2 px-3">{formatNumber(source.purchases)}</td>
+                    <td className="text-center py-2 px-3">{formatCurrency(source.purchaseValue)}</td>
                   </tr>
                 ))}
+                {trafficSources.length === 0 && (
+                  <tr>
+                    <td colSpan={11} className="text-center py-8 text-muted-foreground">
+                      אין נתוני מקורות תנועה להצגה בטווח הנוכחי
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
