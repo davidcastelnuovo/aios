@@ -180,6 +180,9 @@ export function GoogleAnalyticsDashboard({
       case 'last_365_days':
         return { start: subDays(today, 364), end: today };
       case 'custom':
+        if (usesExternalFilter && externalCustomDateRange?.from && externalCustomDateRange?.to) {
+          return { start: externalCustomDateRange.from, end: externalCustomDateRange.to };
+        }
         if (customDateRange.from && customDateRange.to) {
           return { start: customDateRange.from, end: customDateRange.to };
         }
