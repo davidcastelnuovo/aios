@@ -1,0 +1,1 @@
+UPDATE automations SET active = false WHERE active = true;
