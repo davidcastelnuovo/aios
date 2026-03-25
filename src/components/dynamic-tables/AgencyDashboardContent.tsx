@@ -38,7 +38,20 @@ const PLATFORM_CONFIG: Record<string, { name: string; color: string; bgColor: st
   facebook_insights: { name: 'Facebook', color: 'text-blue-600', bgColor: 'bg-blue-100' },
   facebook_ecommerce: { name: 'Facebook', color: 'text-blue-600', bgColor: 'bg-blue-100' },
   google_ads: { name: 'Google Ads', color: 'text-red-500', bgColor: 'bg-red-100' },
+  google_analytics: { name: 'Analytics', color: 'text-orange-500', bgColor: 'bg-orange-100' },
 };
+
+const isAdsPlatform = (source: string) => ['facebook_insights', 'facebook_ecommerce', 'google_ads'].includes(source);
+const isAnalyticsPlatform = (source: string) => source === 'google_analytics';
+
+const getSpendFromData = (data: any) => Number(data?.spend) || Number(data?.cost) || 0;
+const getRevenueFromData = (data: any) =>
+  Number(data?.purchase_value) || Number(data?.purchaseRevenue) || Number(data?.conversions_value) || Number(data?.conversion_value) || 0;
+const getLeadsFromData = (data: any) =>
+  Number(data?.leads) || Number(data?.conversions) || Number(data?.website_leads) ||
+  Number(data?.offsite_conversion) || Number(data?.offsite_conversion_fb_pixel_lead) || Number(data?.leadgen_grouped) || Number(data?.lead) || 0;
+const getPurchasesFromData = (data: any) => Number(data?.purchases) || Number(data?.ecommercePurchases) || Number(data?.transactions) || 0;
+const getSessionsFromData = (data: any) => Number(data?.sessions) || 0;
 
 const getCampaignType = (integrationType: string, integrationSettings?: any): 'leads' | 'ecommerce' => {
   if (integrationType === 'facebook_insights') return 'leads';
