@@ -235,8 +235,9 @@ export function GoogleAnalyticsDashboard({ records, externalDateFilter }: Google
       }
     }) : [];
 
-    // Traffic sources - use all (they're aggregated without dates)
-    const trafficSources = records
+    // Traffic sources - aggregate from daily records if available (to respect date filter)
+    // Fall back to traffic_source records if no daily data exists
+    const rawTrafficSources = records
       .filter(r =>
         r.data.report_type === 'traffic_source' ||
         (!r.data.report_type && (r.data.source_medium || r.data.source || r.data.medium))
@@ -259,6 +260,8 @@ export function GoogleAnalyticsDashboard({ records, externalDateFilter }: Google
         purchaseValue: toNumber(r.data.purchase_value ?? r.data.purchase_revenue ?? r.data.revenue ?? r.data.total_revenue),
       }))
       .sort((a, b) => b.sessions - a.sessions);
+
+    const trafficSources = rawTrafficSources;
 
     // Daily data for chart - filtered by selected date range
     const dailyData = currentDailyRecords
@@ -359,6 +362,7 @@ export function GoogleAnalyticsDashboard({ records, externalDateFilter }: Google
     .map((source, index) => ({
     name: source.name.length > 20 ? source.name.substring(0, 20) + '...' : source.name,
     value: source.sessions,
+    purchaseValue: source.purchaseValue,
     fill: COLORS[index % COLORS.length],
   }));
 
@@ -557,7 +561,17 @@ export function GoogleAnalyticsDashboard({ records, externalDateFilter }: Google
                     </Pie>
                     <Tooltip 
                       formatter={(value: number) => formatNumber(value)}
-                      contentStyle={{ direction: 'rtl', textAlign: 'right' }}
+                      content={({ active, payload }) => {
+                        if (!active || !payload?.length) return null;
+                        const d = payload[0].payload;
+                        return (
+                          <div className="bg-background border rounded-lg p-2 shadow-lg text-sm" dir="rtl">
+                            <p className="font-medium">{d.name}</p>
+                            <p>סשנים: {formatNumber(d.value)}</p>
+                            {d.purchaseValue > 0 && <p>שווי רכישות: {formatCurrency(d.purchaseValue)}</p>}
+                          </div>
+                        );
+                      }}
                     />
                   </PieChart>
                 </ResponsiveContainer>
@@ -644,7 +658,7 @@ export function GoogleAnalyticsDashboard({ records, externalDateFilter }: Google
       {/* Traffic Sources Bar Chart */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">מקורות תנועה - סשנים</CardTitle>
+          <CardTitle className="text-lg">מקורות תנועה - סשנים ושווי רכישות</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="h-[400px]" dir="ltr">
@@ -663,12 +677,20 @@ export function GoogleAnalyticsDashboard({ records, externalDateFilter }: Google
                   tick={{ fill: 'currentColor', textAnchor: 'start' }}
                 />
                 <Tooltip 
-                  formatter={(value: number) => formatNumber(value)}
+                  formatter={(value: number, name: string) => {
+                    if (name === 'שווי רכישות') return formatCurrency(value);
+                    return formatNumber(value);
+                  }}
                   contentStyle={{ direction: 'rtl', textAlign: 'right' }}
                 />
                 <Bar dataKey="sessions" name="סשנים" radius={[0, 4, 4, 0]}>
                   {trafficSources.slice(0, 10).map((_, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Bar>
+                <Bar dataKey="purchaseValue" name="שווי רכישות" radius={[0, 4, 4, 0]} opacity={0.6}>
+                  {trafficSources.slice(0, 10).map((_, index) => (
+                    <Cell key={`cell-pv-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Bar>
               </BarChart>
