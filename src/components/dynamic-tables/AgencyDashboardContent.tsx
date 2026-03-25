@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Facebook, FileSpreadsheet } from "lucide-react";
+import { Facebook, FileSpreadsheet, TrendingUp, TrendingDown, Minus } from "lucide-react";
 
 interface AgencyDashboardContentProps {
   agencyId: string;
@@ -38,7 +38,20 @@ const PLATFORM_CONFIG: Record<string, { name: string; color: string; bgColor: st
   facebook_insights: { name: 'Facebook', color: 'text-blue-600', bgColor: 'bg-blue-100' },
   facebook_ecommerce: { name: 'Facebook', color: 'text-blue-600', bgColor: 'bg-blue-100' },
   google_ads: { name: 'Google Ads', color: 'text-red-500', bgColor: 'bg-red-100' },
+  google_analytics: { name: 'Analytics', color: 'text-orange-500', bgColor: 'bg-orange-100' },
 };
+
+const isAdsPlatform = (source: string) => ['facebook_insights', 'facebook_ecommerce', 'google_ads'].includes(source);
+const isAnalyticsPlatform = (source: string) => source === 'google_analytics';
+
+const getSpendFromData = (data: any) => Number(data?.spend) || Number(data?.cost) || 0;
+const getRevenueFromData = (data: any) =>
+  Number(data?.purchase_value) || Number(data?.purchaseRevenue) || Number(data?.conversions_value) || Number(data?.conversion_value) || 0;
+const getLeadsFromData = (data: any) =>
+  Number(data?.leads) || Number(data?.conversions) || Number(data?.website_leads) ||
+  Number(data?.offsite_conversion) || Number(data?.offsite_conversion_fb_pixel_lead) || Number(data?.leadgen_grouped) || Number(data?.lead) || 0;
+const getPurchasesFromData = (data: any) => Number(data?.purchases) || Number(data?.ecommercePurchases) || Number(data?.transactions) || 0;
+const getSessionsFromData = (data: any) => Number(data?.sessions) || 0;
 
 const getCampaignType = (integrationType: string, integrationSettings?: any): 'leads' | 'ecommerce' => {
   if (integrationType === 'facebook_insights') return 'leads';
@@ -60,6 +73,14 @@ const getIntegrationIcon = (type: string) => {
           <path d="M3.654 14.916l6.26-10.857c.68-1.18 2.184-1.59 3.361-.916l.004.003c1.178.68 1.586 2.184.909 3.361l-6.26 10.857c-.68 1.18-2.184 1.59-3.361.916l-.004-.003c-1.178-.68-1.586-2.184-.909-3.361z" fill="#FBBC04"/>
           <path d="M14.088 14.916l6.26-10.857c.68-1.18.27-2.684-.909-3.361l-.004-.003c-1.177-.674-2.681-.264-3.361.916l-6.26 10.857c-.68 1.18-.27 2.684.909 3.361l.004.003c1.177.674 2.681.264 3.361-.916z" fill="#4285F4"/>
           <circle cx="6" cy="18" r="3.5" fill="#34A853"/>
+        </svg>
+      );
+    case 'google_analytics':
+      return (
+        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none">
+          <path d="M20.5 18.5v-13c0-1.1-.9-2-2-2h-1c-1.1 0-2 .9-2 2v13c0 1.1.9 2 2 2h1c1.1 0 2-.9 2-2z" fill="#F9AB00"/>
+          <path d="M13.5 18.5v-7c0-1.1-.9-2-2-2h-1c-1.1 0-2 .9-2 2v7c0 1.1.9 2 2 2h1c1.1 0 2-.9 2-2z" fill="#E37400"/>
+          <circle cx="5" cy="18.5" r="2.5" fill="#E37400"/>
         </svg>
       );
     default:
@@ -175,9 +196,42 @@ function EcommerceTable({ records, totals }: { records: CampaignRecord[]; totals
   );
 }
 
+// Analytics Table Component
+function AnalyticsTable({ records, totals }: { records: CampaignRecord[]; totals: CampaignRecord }) {
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="text-right">מקור / ערוץ</TableHead>
+          <TableHead className="text-right">סשנים</TableHead>
+          <TableHead className="text-right">רכישות</TableHead>
+          <TableHead className="text-right">הכנסות</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {records.map((record, idx) => (
+          <TableRow key={idx}>
+            <TableCell className="font-medium">{record.campaignName || 'Unknown'}</TableCell>
+            <TableCell>{formatNumber(record.impressions)}</TableCell>
+            <TableCell>{formatNumber(record.purchases)}</TableCell>
+            <TableCell>{formatCurrency(record.revenue)}</TableCell>
+          </TableRow>
+        ))}
+        <TableRow className="bg-muted/50 font-bold border-t-2">
+          <TableCell>סה"כ</TableCell>
+          <TableCell>{formatNumber(totals.impressions)}</TableCell>
+          <TableCell>{formatNumber(totals.purchases)}</TableCell>
+          <TableCell>{formatCurrency(totals.revenue)}</TableCell>
+        </TableRow>
+      </TableBody>
+    </Table>
+  );
+}
+
 // Client Table Card Component
 function ClientTableCard({ data }: { data: ClientTableData }) {
   const platformConfig = PLATFORM_CONFIG[data.integrationType];
+  const isAnalytics = isAnalyticsPlatform(data.integrationType);
   
   return (
     <Card>
@@ -193,15 +247,19 @@ function ClientTableCard({ data }: { data: ClientTableData }) {
             <span className={`font-medium ${platformConfig?.color || ''}`}>
               {platformConfig?.name || data.integrationType}
             </span>
-            <Badge variant="secondary" className="text-xs">
-              {data.campaignType === 'leads' ? 'לידים' : 'איקומרס'}
-            </Badge>
+            {!isAnalytics && (
+              <Badge variant="secondary" className="text-xs">
+                {data.campaignType === 'leads' ? 'לידים' : 'איקומרס'}
+              </Badge>
+            )}
           </div>
         </div>
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto">
-          {data.campaignType === 'leads' ? (
+          {isAnalytics ? (
+            <AnalyticsTable records={data.records} totals={data.totals} />
+          ) : data.campaignType === 'leads' ? (
             <LeadsTable records={data.records} totals={data.totals} />
           ) : (
             <EcommerceTable records={data.records} totals={data.totals} />
@@ -248,7 +306,7 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
       const clientIds = clients.map(c => c.id);
       return allTables.filter((t: any) => 
         t.client_id && clientIds.includes(t.client_id) &&
-        ['facebook_insights', 'facebook_ecommerce', 'google_ads'].includes(t.integration_type)
+        ['facebook_insights', 'facebook_ecommerce', 'google_ads', 'google_analytics'].includes(t.integration_type)
       );
     },
     enabled: clients.length > 0,
@@ -334,8 +392,15 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
       const tableData = tableDataMap.get(key)!;
       const data = record.data || {};
       
-      // Extract campaign name
-      const campaignName = data.campaign_name || data.campaignName || data.name || 'ללא שם';
+      // For Analytics, only use traffic_source records (skip daily/top_pages)
+      if (isAnalyticsPlatform(integrationType)) {
+        if (data.report_type !== 'traffic_source') return;
+      }
+      
+      // Extract campaign name - for Analytics use source_medium
+      const campaignName = isAnalyticsPlatform(integrationType) 
+        ? (data.source_medium || 'Unknown')
+        : (data.campaign_name || data.campaignName || data.name || 'ללא שם');
       
       // Find existing campaign record or create new one
       let campaignRecord = tableData.records.find(r => r.campaignName === campaignName);
@@ -353,31 +418,42 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
         tableData.records.push(campaignRecord);
       }
 
-      // Aggregate data
-      const impressions = Number(data.impressions) || 0;
-      const clicks = Number(data.clicks) || 0;
-      // Extract leads from multiple possible field names (website leads, form leads, custom conversions)
-      const leads = Number(data.leads) || Number(data.conversions) || 
-        Number(data.website_leads) || Number(data.offsite_conversion) || 
-        Number(data.offsite_conversion_fb_pixel_lead) || Number(data.leadgen_grouped) || 0;
-      const purchases = Number(data.purchases) || 0;
-      const spend = Number(data.spend) || Number(data.cost) || 0;
-      const revenue = Number(data.purchase_value) || Number(data.conversions_value) || Number(data.conversion_value) || 0;
+      if (isAnalyticsPlatform(integrationType)) {
+        // Analytics data
+        const sessions = getSessionsFromData(data);
+        const purchases = getPurchasesFromData(data);
+        const revenue = getRevenueFromData(data);
+        
+        campaignRecord.impressions += sessions; // use impressions field for sessions
+        campaignRecord.purchases += purchases;
+        campaignRecord.revenue += revenue;
+        
+        tableData.totals.impressions += sessions;
+        tableData.totals.purchases += purchases;
+        tableData.totals.revenue += revenue;
+      } else {
+        // Ads data
+        const impressions = Number(data.impressions) || 0;
+        const clicks = Number(data.clicks) || 0;
+        const leads = getLeadsFromData(data);
+        const purchases = getPurchasesFromData(data);
+        const spend = getSpendFromData(data);
+        const revenue = getRevenueFromData(data);
 
-      campaignRecord.impressions += impressions;
-      campaignRecord.clicks += clicks;
-      campaignRecord.leads += leads;
-      campaignRecord.purchases += purchases;
-      campaignRecord.spend += spend;
-      campaignRecord.revenue += revenue;
+        campaignRecord.impressions += impressions;
+        campaignRecord.clicks += clicks;
+        campaignRecord.leads += leads;
+        campaignRecord.purchases += purchases;
+        campaignRecord.spend += spend;
+        campaignRecord.revenue += revenue;
 
-      // Update totals
-      tableData.totals.impressions += impressions;
-      tableData.totals.clicks += clicks;
-      tableData.totals.leads += leads;
-      tableData.totals.purchases += purchases;
-      tableData.totals.spend += spend;
-      tableData.totals.revenue += revenue;
+        tableData.totals.impressions += impressions;
+        tableData.totals.clicks += clicks;
+        tableData.totals.leads += leads;
+        tableData.totals.purchases += purchases;
+        tableData.totals.spend += spend;
+        tableData.totals.revenue += revenue;
+      }
     });
 
     // Convert to array and sort by client name
@@ -386,21 +462,40 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
       .sort((a, b) => a.clientName.localeCompare(b.clientName, 'he'));
   }, [clients, allRecords]);
 
-  // Calculate overall totals
+  // Calculate overall totals - ROAS uses Analytics revenue / Ads spend
   const overallTotals = useMemo(() => {
-    return clientTableDataList.reduce(
-      (acc, data) => ({
-        spend: acc.spend + data.totals.spend,
-        revenue: acc.revenue + data.totals.revenue,
-        leads: acc.leads + data.totals.leads,
-        purchases: acc.purchases + data.totals.purchases,
-      }),
-      { spend: 0, revenue: 0, leads: 0, purchases: 0 }
-    );
+    let adsSpend = 0;
+    let adsLeads = 0;
+    let adsPurchases = 0;
+    let analyticsRevenue = 0;
+    let analyticsPurchases = 0;
+    let analyticsSessions = 0;
+
+    clientTableDataList.forEach((data) => {
+      if (isAnalyticsPlatform(data.integrationType)) {
+        analyticsRevenue += data.totals.revenue;
+        analyticsPurchases += data.totals.purchases;
+        analyticsSessions += data.totals.impressions; // sessions stored in impressions for analytics
+      } else if (isAdsPlatform(data.integrationType)) {
+        adsSpend += data.totals.spend;
+        adsLeads += data.totals.leads;
+        adsPurchases += data.totals.purchases;
+      }
+    });
+
+    return {
+      adsSpend,
+      adsLeads,
+      adsPurchases,
+      analyticsRevenue,
+      analyticsPurchases,
+      analyticsSessions,
+    };
   }, [clientTableDataList]);
 
-  const totalRoas = overallTotals.spend > 0 ? overallTotals.revenue / overallTotals.spend : 0;
-  const totalCPL = overallTotals.leads > 0 ? overallTotals.spend / overallTotals.leads : 0;
+  const hasAnalytics = clientTableDataList.some(d => isAnalyticsPlatform(d.integrationType));
+  const combinedRoas = overallTotals.adsSpend > 0 ? overallTotals.analyticsRevenue / overallTotals.adsSpend : 0;
+  const totalCPL = overallTotals.adsLeads > 0 ? overallTotals.adsSpend / overallTotals.adsLeads : 0;
 
   const isLoading = clientsLoading || tablesLoading || recordsLoading;
 
@@ -455,6 +550,74 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
 
   return (
     <div className="space-y-6">
+      {/* Summary Cards */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900">
+          <CardContent className="p-6">
+            <p className="text-sm text-muted-foreground">הוצאת פרסום</p>
+            <p className="text-3xl font-bold mt-2">{formatCurrency(overallTotals.adsSpend)}</p>
+          </CardContent>
+        </Card>
+
+        {hasAnalytics ? (
+          <>
+            <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
+              <CardContent className="p-6">
+                <p className="text-sm text-muted-foreground">הכנסות (Analytics)</p>
+                <p className="text-3xl font-bold mt-2">{formatCurrency(overallTotals.analyticsRevenue)}</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900">
+              <CardContent className="p-6">
+                <p className="text-sm text-muted-foreground">רכישות (Analytics)</p>
+                <p className="text-3xl font-bold mt-2">{formatNumber(overallTotals.analyticsPurchases)}</p>
+              </CardContent>
+            </Card>
+
+            <Card className={`bg-gradient-to-br ${combinedRoas >= 1 ? 'from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900' : 'from-red-50 to-red-100 dark:from-red-950 dark:to-red-900'}`}>
+              <CardContent className="p-6">
+                <p className="text-sm text-muted-foreground">ROAS כולל</p>
+                <div className="flex items-center gap-2 mt-2">
+                  <p className="text-3xl font-bold">{combinedRoas.toFixed(2)}</p>
+                  {combinedRoas > 1 ? (
+                    <TrendingUp className="h-6 w-6 text-green-600" />
+                  ) : combinedRoas < 1 && combinedRoas > 0 ? (
+                    <TrendingDown className="h-6 w-6 text-red-600" />
+                  ) : (
+                    <Minus className="h-6 w-6 text-muted-foreground" />
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">הכנסות Analytics / הוצאות פרסום</p>
+              </CardContent>
+            </Card>
+          </>
+        ) : (
+          <>
+            <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
+              <CardContent className="p-6">
+                <p className="text-sm text-muted-foreground">לידים</p>
+                <p className="text-3xl font-bold mt-2">{formatNumber(overallTotals.adsLeads)}</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900">
+              <CardContent className="p-6">
+                <p className="text-sm text-muted-foreground">רכישות</p>
+                <p className="text-3xl font-bold mt-2">{formatNumber(overallTotals.adsPurchases)}</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900">
+              <CardContent className="p-6">
+                <p className="text-sm text-muted-foreground">עלות לליד (CPL)</p>
+                <p className="text-3xl font-bold mt-2">{formatCurrency(totalCPL)}</p>
+              </CardContent>
+            </Card>
+          </>
+        )}
+      </div>
+
       {/* Client Cards */}
       {clientTableDataList.map((data) => (
         <ClientTableCard key={`${data.clientId}-${data.tableId}`} data={data} />
