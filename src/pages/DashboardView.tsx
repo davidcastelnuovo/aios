@@ -49,7 +49,7 @@ const getCampaignType = (integrationType?: string | null, integrationSettings?: 
 
 const getSpendFromData = (data: any) => Number(data?.spend) || Number(data?.cost) || 0;
 const getRevenueFromData = (data: any) =>
-  Number(data?.purchase_value) || Number(data?.conversions_value) || Number(data?.conversion_value) || 0;
+  Number(data?.purchase_value) || Number(data?.purchaseRevenue) || Number(data?.conversions_value) || Number(data?.conversion_value) || 0;
 
 const getLeadsFromData = (data: any) =>
   Number(data?.leads) ||
@@ -61,7 +61,12 @@ const getLeadsFromData = (data: any) =>
   Number(data?.lead) ||
   0;
 
-const getPurchasesFromData = (data: any) => Number(data?.purchases) || 0;
+const getPurchasesFromData = (data: any) => Number(data?.purchases) || Number(data?.ecommercePurchases) || Number(data?.transactions) || 0;
+const getSessionsFromData = (data: any) => Number(data?.sessions) || 0;
+const getAddToCartFromData = (data: any) => Number(data?.add_to_cart) || Number(data?.addToCarts) || 0;
+
+const isAdsPlatform = (source: string) => ['facebook_insights', 'facebook_ecommerce', 'google_ads'].includes(source);
+const isAnalyticsPlatform = (source: string) => source === 'google_analytics';
 
 export default function DashboardView() {
   const { dashboardId } = useParams();
