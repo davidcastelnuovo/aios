@@ -111,6 +111,9 @@ serve(async (req) => {
         { name: 'bounceRate' },
         { name: 'averageSessionDuration' },
         { name: 'conversions' },
+        { name: 'addToCarts' },
+        { name: 'ecommercePurchases' },
+        { name: 'purchaseRevenue' },
       ],
       orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
       limit: 50,
@@ -144,6 +147,9 @@ serve(async (req) => {
         { name: 'totalUsers' },
         { name: 'screenPageViews' },
         { name: 'conversions' },
+        { name: 'addToCarts' },
+        { name: 'ecommercePurchases' },
+        { name: 'purchaseRevenue' },
       ],
       orderBys: [{ dimension: { dimensionName: 'date' }, desc: false }],
     };
@@ -208,6 +214,9 @@ serve(async (req) => {
       { key: 'bounce_rate', name: 'Bounce Rate (%)', type: 'number', position: 8 },
       { key: 'avg_session_duration', name: 'Avg Duration (sec)', type: 'number', position: 9 },
       { key: 'conversions', name: 'Conversions', type: 'number', position: 10 },
+      { key: 'add_to_cart', name: 'Add To Cart', type: 'number', position: 11 },
+      { key: 'purchases', name: 'Purchases', type: 'number', position: 12 },
+      { key: 'purchase_value', name: 'Purchase Value', type: 'number', position: 13 },
     ];
 
     for (const field of fieldDefinitions) {
@@ -249,6 +258,9 @@ serve(async (req) => {
             bounce_rate: (parseFloat(row.metricValues[4].value) * 100).toFixed(1),
             avg_session_duration: parseFloat(row.metricValues[5].value).toFixed(1),
             conversions: parseInt(row.metricValues[6].value) || 0,
+            add_to_cart: parseInt(row.metricValues[7]?.value) || 0,
+            purchases: parseInt(row.metricValues[8]?.value) || 0,
+            purchase_value: parseFloat(row.metricValues[9]?.value) || 0,
           },
         });
       }
@@ -276,6 +288,9 @@ serve(async (req) => {
             bounce_rate: null,
             avg_session_duration: null,
             conversions: parseInt(row.metricValues[3].value) || 0,
+            add_to_cart: parseInt(row.metricValues[4]?.value) || 0,
+            purchases: parseInt(row.metricValues[5]?.value) || 0,
+            purchase_value: parseFloat(row.metricValues[6]?.value) || 0,
           },
         });
       }
@@ -300,6 +315,9 @@ serve(async (req) => {
             bounce_rate: null,
             avg_session_duration: parseFloat(row.metricValues[2].value).toFixed(1),
             conversions: null,
+            add_to_cart: null,
+            purchases: null,
+            purchase_value: null,
           },
         });
       }
