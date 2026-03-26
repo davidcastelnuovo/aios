@@ -767,9 +767,12 @@ export default function DynamicTableView() {
           region: makeRegion,
           template_scenario_id: templateScenarioId,
           table_id: table.id,
+          tenant_id: table.tenant_id,
           webhook_url: webhookUrl,
           webhook_secret: integrationSettings.webhook_secret,
           scenario_name: `Google Ads Sync - ${table.name}`,
+          customer_id: customerId,
+          campaign_type: integrationSettings.campaign_type || 'leads',
         },
       });
       
