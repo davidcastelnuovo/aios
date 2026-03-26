@@ -212,7 +212,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   // Redirect to tenant-scoped route if needed
   useEffect(() => {
     const path = window.location.pathname;
-    const isPublicRoute = ['/', '/auth', '/signup', '/landing', '/setup', '/privacy', '/terms'].includes(path) || path.startsWith('/chat-invite');
+    const isPublicRoute = ['/', '/auth', '/signup', '/landing', '/setup', '/privacy', '/terms'].includes(path) || path.startsWith('/chat-invite') || path.startsWith('/shared/') || path.startsWith('/sign-document');
     const isAlreadyTenantScoped = path.startsWith('/t/');
     
     if (!isPublicRoute && !isAlreadyTenantScoped && currentTenant?.slug) {
