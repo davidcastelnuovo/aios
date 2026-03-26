@@ -361,24 +361,23 @@ export function LeadsChatView({
                   {/* Info cards grid */}
                   <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                     {/* Contact info */}
-                    <div className="border rounded-lg p-4 space-y-3">
-                      <h3 className="font-semibold text-sm flex items-center gap-2">
-                        <User className="h-4 w-4 text-primary" />
+                    <div className="border rounded-lg p-4 space-y-3 text-right">
+                      <h3 className="font-semibold text-sm flex items-center gap-2 justify-end">
                         פרטי קשר
+                        <User className="h-4 w-4 text-primary" />
                       </h3>
                       <div className="space-y-2 text-sm">
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground min-w-[60px]">שם:</span>
+                        <div className="flex items-center justify-end gap-2">
                           <span className="font-medium">{selectedLead.contact_name || "—"}</span>
+                          <span className="text-muted-foreground">:שם</span>
                         </div>
                         {isCompanyNameVisible && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground min-w-[60px]">חברה:</span>
+                          <div className="flex items-center justify-end gap-2">
                             <span className="font-medium">{selectedLead.company_name || "—"}</span>
+                            <span className="text-muted-foreground">:חברה</span>
                           </div>
                         )}
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground min-w-[60px]">טלפון:</span>
+                        <div className="flex items-center justify-end gap-2">
                           {selectedLead.phone ? (
                             <a href={`tel:${selectedLead.phone}`} className="font-medium text-primary hover:underline">
                               {selectedLead.phone}
@@ -386,9 +385,9 @@ export function LeadsChatView({
                           ) : (
                             <span>—</span>
                           )}
+                          <span className="text-muted-foreground">:טלפון</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground min-w-[60px]">אימייל:</span>
+                        <div className="flex items-center justify-end gap-2">
                           {selectedLead.email ? (
                             <a href={`mailto:${selectedLead.email}`} className="font-medium text-primary hover:underline truncate">
                               {selectedLead.email}
@@ -396,81 +395,82 @@ export function LeadsChatView({
                           ) : (
                             <span>—</span>
                           )}
+                          <span className="text-muted-foreground">:אימייל</span>
                         </div>
                       </div>
                     </div>
 
                     {/* Deal info */}
-                    <div className="border rounded-lg p-4 space-y-3">
-                      <h3 className="font-semibold text-sm flex items-center gap-2">
-                        <DollarSign className="h-4 w-4 text-primary" />
+                    <div className="border rounded-lg p-4 space-y-3 text-right">
+                      <h3 className="font-semibold text-sm flex items-center gap-2 justify-end">
                         מידע עסקי
+                        <DollarSign className="h-4 w-4 text-primary" />
                       </h3>
                       <div className="space-y-2 text-sm">
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground min-w-[80px]">ערך עסקה:</span>
+                        <div className="flex items-center justify-end gap-2">
                           <span className="font-medium">
                             {selectedLead.estimated_deal_value
                               ? `₪${Number(selectedLead.estimated_deal_value).toLocaleString()}`
                               : "—"}
                           </span>
+                          <span className="text-muted-foreground">:ערך עסקה</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground min-w-[80px]">תקציב חודשי:</span>
+                        <div className="flex items-center justify-end gap-2">
                           <span className="font-medium">
                             {selectedLead.monthly_budget
                               ? `₪${Number(selectedLead.monthly_budget).toLocaleString()}`
                               : "—"}
                           </span>
+                          <span className="text-muted-foreground">:תקציב חודשי</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground min-w-[80px]">מקור:</span>
+                        <div className="flex items-center justify-end gap-2">
                           <span className="font-medium">{selectedLead.source || "—"}</span>
+                          <span className="text-muted-foreground">:מקור</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground min-w-[80px]">תעשייה:</span>
+                        <div className="flex items-center justify-end gap-2">
                           <span className="font-medium">{selectedLead.industry || "—"}</span>
+                          <span className="text-muted-foreground">:תעשייה</span>
                         </div>
                       </div>
                     </div>
 
                     {/* Dates & timeline */}
-                    <div className="border rounded-lg p-4 space-y-3">
-                      <h3 className="font-semibold text-sm flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-primary" />
+                    <div className="border rounded-lg p-4 space-y-3 text-right">
+                      <h3 className="font-semibold text-sm flex items-center gap-2 justify-end">
                         ציר זמן
+                        <Clock className="h-4 w-4 text-primary" />
                       </h3>
                       <div className="space-y-2 text-sm">
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground min-w-[80px]">נוצר:</span>
+                        <div className="flex items-center justify-end gap-2">
                           <span className="font-medium">
                             {selectedLead.created_at
                               ? format(new Date(selectedLead.created_at), "dd/MM/yyyy HH:mm", { locale: he })
                               : "—"}
                           </span>
+                          <span className="text-muted-foreground">:נוצר</span>
                         </div>
                         {selectedLead.proposal_date && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground min-w-[80px]">הצעת מחיר:</span>
+                          <div className="flex items-center justify-end gap-2">
                             <span className="font-medium">
                               {format(new Date(selectedLead.proposal_date), "dd/MM/yyyy", { locale: he })}
                             </span>
+                            <span className="text-muted-foreground">:הצעת מחיר</span>
                           </div>
                         )}
                         {selectedLead.sale_date && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground min-w-[80px]">תאריך מכירה:</span>
+                          <div className="flex items-center justify-end gap-2">
                             <span className="font-medium">
                               {format(new Date(selectedLead.sale_date), "dd/MM/yyyy", { locale: he })}
                             </span>
+                            <span className="text-muted-foreground">:תאריך מכירה</span>
                           </div>
                         )}
                         {selectedLead.follow_up_date && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground min-w-[80px]">מעקב:</span>
+                          <div className="flex items-center justify-end gap-2">
                             <span className="font-medium">
                               {format(new Date(selectedLead.follow_up_date), "dd/MM/yyyy", { locale: he })}
                             </span>
+                            <span className="text-muted-foreground">:מעקב</span>
                           </div>
                         )}
                       </div>
@@ -479,9 +479,9 @@ export function LeadsChatView({
 
                   {/* Notes */}
                   {selectedLead.notes && (
-                    <div className="border rounded-lg p-4">
+                    <div className="border rounded-lg p-4 text-right">
                       <h3 className="font-semibold text-sm mb-2">הערות</h3>
-                      <p className="text-sm text-muted-foreground whitespace-pre-wrap">{selectedLead.notes}</p>
+                      <p className="text-sm text-muted-foreground whitespace-pre-wrap text-right">{selectedLead.notes}</p>
                     </div>
                   )}
 
