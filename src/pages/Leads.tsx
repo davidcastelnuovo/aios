@@ -2465,6 +2465,10 @@ export default function Leads() {
         <>
           {/* Mobile Kanban - Single Stage with Floating Button */}
           <div className="block md:hidden relative pb-20">
+@@ (this won't match, need exact context)
+        <>
+          {/* Mobile Kanban - Single Stage with Floating Button */}
+          <div className="block md:hidden relative pb-20">
             <DndContext
               collisionDetection={closestCorners}
               onDragStart={handleDragStart}
