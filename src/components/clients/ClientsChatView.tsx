@@ -573,34 +573,10 @@ export function ClientsChatView({
                         <User className="h-4 w-4 text-primary" />
                       </h3>
                       <div className="space-y-2 text-sm">
-                        <div className="flex items-center justify-end gap-2">
-                          <span className="font-medium">{selectedClient.contact_name || "—"}</span>
-                          <span className="text-muted-foreground">:איש קשר</span>
-                        </div>
-                        <div className="flex items-center justify-end gap-2">
-                          {selectedClient.phone ? (
-                            <a href={`tel:${selectedClient.phone}`} className="font-medium text-primary hover:underline">
-                              {selectedClient.phone}
-                            </a>
-                          ) : <span>—</span>}
-                          <span className="text-muted-foreground">:טלפון</span>
-                        </div>
-                        <div className="flex items-center justify-end gap-2">
-                          {selectedClient.email ? (
-                            <a href={`mailto:${selectedClient.email}`} className="font-medium text-primary hover:underline truncate">
-                              {selectedClient.email}
-                            </a>
-                          ) : <span>—</span>}
-                          <span className="text-muted-foreground">:אימייל</span>
-                        </div>
-                        {selectedClient.website && (
-                          <div className="flex items-center justify-end gap-2">
-                            <a href={selectedClient.website} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline truncate">
-                              {selectedClient.website}
-                            </a>
-                            <span className="text-muted-foreground">:אתר</span>
-                          </div>
-                        )}
+                        <EditableField label=":איש קשר" value={selectedClient.contact_name} field="contact_name" clientId={selectedClient.id} />
+                        <EditableField label=":טלפון" value={selectedClient.phone} field="phone" clientId={selectedClient.id} isLink linkPrefix="tel:" />
+                        <EditableField label=":אימייל" value={selectedClient.email} field="email" clientId={selectedClient.id} isLink linkPrefix="mailto:" />
+                        <EditableField label=":אתר" value={selectedClient.website} field="website" clientId={selectedClient.id} isLink />
                       </div>
                     </div>
 
@@ -652,12 +628,10 @@ export function ClientsChatView({
                   )}
 
                   {/* Notes */}
-                  {selectedClient.notes && (
-                    <div className="border rounded-lg p-4 text-right">
-                      <h3 className="font-semibold text-sm mb-2">הערות</h3>
-                      <p className="text-sm text-muted-foreground whitespace-pre-wrap text-right" dir="rtl">{selectedClient.notes}</p>
-                    </div>
-                  )}
+                  <div className="border rounded-lg p-4 text-right">
+                    <h3 className="font-semibold text-sm mb-2">הערות</h3>
+                    <EditableField label="" value={selectedClient.notes} field="notes" clientId={selectedClient.id} type="textarea" />
+                  </div>
                 </TabsContent>
 
                 <TabsContent value="business" className="mt-0 space-y-6">
@@ -673,32 +647,11 @@ export function ClientsChatView({
                       </div>
                       {canViewFinance && (
                         <>
-                          <div className="flex items-center justify-end gap-2">
-                            <span className="font-medium">
-                              {(() => {
-                                const fin = getClientFinancialData?.(selectedClient.id);
-                                const val = fin?.retainer ?? selectedClient.retainer;
-                                return val ? `₪${Number(val).toLocaleString()}` : "—";
-                              })()}
-                            </span>
-                            <span className="text-muted-foreground">:ריטיינר</span>
-                          </div>
-                          <div className="flex items-center justify-end gap-2">
-                            <span className="font-medium">
-                              {(() => {
-                                const fin = getClientFinancialData?.(selectedClient.id);
-                                const val = fin?.monthly_budget ?? selectedClient.monthly_budget;
-                                return val ? `₪${Number(val).toLocaleString()}` : "—";
-                              })()}
-                            </span>
-                            <span className="text-muted-foreground">:תקציב חודשי</span>
-                          </div>
+                          <EditableField label=":ריטיינר" value={selectedClient.retainer?.toString() || ""} field="retainer" clientId={selectedClient.id} type="number" />
+                          <EditableField label=":תקציב חודשי" value={selectedClient.monthly_budget?.toString() || ""} field="monthly_budget" clientId={selectedClient.id} type="number" />
                         </>
                       )}
-                      <div className="flex items-center justify-end gap-2">
-                        <span className="font-medium">{selectedClient.industry || "—"}</span>
-                        <span className="text-muted-foreground">:תעשייה</span>
-                      </div>
+                      <EditableField label=":תעשייה" value={selectedClient.industry} field="industry" clientId={selectedClient.id} />
                     </div>
                   </div>
                 </TabsContent>
