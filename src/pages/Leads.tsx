@@ -2775,6 +2775,30 @@ export default function Leads() {
             </DragOverlay>
           </DndContext>
         </>
+      ) : viewMode === "chat" ? (
+        <LeadsChatView
+          leads={filteredLeads || []}
+          pipelineStages={PIPELINE_STAGES}
+          leadStatuses={leadStatuses}
+          allTags={allTags}
+          leadsTagsMap={leadsTagsMap}
+          productsLookup={productsLookup}
+          onStatusChange={(leadId, newStatus) => updateLeadStatus.mutate({ leadId, newStatus })}
+          onResponseStatusChange={(leadId, responseStatus) => updateResponseStatus.mutate({ leadId, responseStatus })}
+          onFollowUpDateUpdate={(leadId, newDate) => {
+            queryClient.setQueryData(["leads-kanban", tenantId, selectedAgency, searchQuery, filterSalesPersonIds, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate, endDate], (old: any) => {
+              if (!old) return old;
+              return Object.fromEntries(
+                Object.entries(old).map(([key, leads]: [string, any]) => [
+                  key,
+                  Array.isArray(leads) ? leads.map((l: any) => l.id === leadId ? { ...l, follow_up_date: newDate } : l) : leads,
+                ])
+              );
+            });
+          }}
+          isCompanyNameVisible={isFieldVisible('company_name')}
+          searchQuery={searchQuery}
+        />
       ) : (
         <div className="space-y-6">
           {PIPELINE_STAGES.map((stage) => {
