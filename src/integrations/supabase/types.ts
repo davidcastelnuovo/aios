@@ -249,6 +249,67 @@ export type Database = {
           },
         ]
       }
+      ai_detection_competitor_results: {
+        Row: {
+          brand_id: string | null
+          competitor_name: string
+          id: string
+          is_mentioned: boolean | null
+          platform: string
+          position: number | null
+          prompt_id: string | null
+          scan_id: string | null
+          scanned_at: string | null
+          tenant_id: string | null
+        }
+        Insert: {
+          brand_id?: string | null
+          competitor_name: string
+          id?: string
+          is_mentioned?: boolean | null
+          platform: string
+          position?: number | null
+          prompt_id?: string | null
+          scan_id?: string | null
+          scanned_at?: string | null
+          tenant_id?: string | null
+        }
+        Update: {
+          brand_id?: string | null
+          competitor_name?: string
+          id?: string
+          is_mentioned?: boolean | null
+          platform?: string
+          position?: number | null
+          prompt_id?: string | null
+          scan_id?: string | null
+          scanned_at?: string | null
+          tenant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_detection_competitor_results_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "ai_detection_brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_detection_competitor_results_prompt_id_fkey"
+            columns: ["prompt_id"]
+            isOneToOne: false
+            referencedRelation: "ai_detection_prompts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_detection_competitor_results_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_detection_prompts: {
         Row: {
           brand_id: string
@@ -296,6 +357,7 @@ export type Database = {
       }
       ai_detection_results: {
         Row: {
+          brand_id: string | null
           citations: string[] | null
           id: string
           is_mentioned: boolean | null
@@ -306,8 +368,10 @@ export type Database = {
           scan_id: string | null
           scanned_at: string | null
           sentiment: string | null
+          tenant_id: string | null
         }
         Insert: {
+          brand_id?: string | null
           citations?: string[] | null
           id?: string
           is_mentioned?: boolean | null
@@ -318,8 +382,10 @@ export type Database = {
           scan_id?: string | null
           scanned_at?: string | null
           sentiment?: string | null
+          tenant_id?: string | null
         }
         Update: {
+          brand_id?: string | null
           citations?: string[] | null
           id?: string
           is_mentioned?: boolean | null
@@ -330,13 +396,28 @@ export type Database = {
           scan_id?: string | null
           scanned_at?: string | null
           sentiment?: string | null
+          tenant_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "ai_detection_results_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "ai_detection_brands"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "ai_detection_results_prompt_id_fkey"
             columns: ["prompt_id"]
             isOneToOne: false
             referencedRelation: "ai_detection_prompts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_detection_results_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -351,6 +432,7 @@ export type Database = {
           mentioned_prompts: number | null
           perplexity_score: number | null
           score: number | null
+          tenant_id: string | null
           total_prompts: number | null
           week_start: string
         }
@@ -363,6 +445,7 @@ export type Database = {
           mentioned_prompts?: number | null
           perplexity_score?: number | null
           score?: number | null
+          tenant_id?: string | null
           total_prompts?: number | null
           week_start: string
         }
@@ -375,6 +458,7 @@ export type Database = {
           mentioned_prompts?: number | null
           perplexity_score?: number | null
           score?: number | null
+          tenant_id?: string | null
           total_prompts?: number | null
           week_start?: string
         }
@@ -384,6 +468,13 @@ export type Database = {
             columns: ["brand_id"]
             isOneToOne: false
             referencedRelation: "ai_detection_brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_detection_scores_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
