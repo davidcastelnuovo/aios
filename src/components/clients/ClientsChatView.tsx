@@ -189,6 +189,73 @@ export function ClientsChatView({
   const getMoodInfo = (mood: string | null) => MOOD_CONFIG[mood || "happy"] || MOOD_CONFIG.happy;
   const getAgencyName = (agencyId: string) => agencies?.find((a: any) => a.id === agencyId)?.name || "";
 
+  const updateClientField = async (clientId: string, field: string, value: any) => {
+    try {
+      const { error } = await supabase.from("clients").update({ [field]: value }).eq("id", clientId);
+      if (error) throw error;
+      toast.success("עודכן בהצלחה");
+      queryClient.invalidateQueries({ queryKey: ["clients"] });
+    } catch {
+      toast.error("שגיאה בעדכון");
+    }
+  };
+
+  const EditableField = ({ label, value, field, clientId, type = "text", isLink, linkPrefix }: {
+    label: string; value: string | null; field: string; clientId: string;
+    type?: "text" | "number" | "textarea"; isLink?: boolean; linkPrefix?: string;
+  }) => {
+    const [editing, setEditing] = useState(false);
+    const [editValue, setEditValue] = useState(value || "");
+
+    const handleSave = () => {
+      const finalValue = type === "number" ? (editValue ? Number(editValue) : null) : (editValue || null);
+      updateClientField(clientId, field, finalValue);
+      setEditing(false);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" && type !== "textarea") handleSave();
+      if (e.key === "Escape") { setEditValue(value || ""); setEditing(false); }
+    };
+
+    if (editing) {
+      return (
+        <div className="flex items-center justify-end gap-2">
+          <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={handleSave}>
+            <Check className="h-3 w-3 text-primary" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => { setEditValue(value || ""); setEditing(false); }}>
+            <X className="h-3 w-3 text-muted-foreground" />
+          </Button>
+          {type === "textarea" ? (
+            <Textarea value={editValue} onChange={e => setEditValue(e.target.value)} onKeyDown={handleKeyDown}
+              className="text-sm h-20 text-right" dir="rtl" autoFocus />
+          ) : (
+            <Input value={editValue} onChange={e => setEditValue(e.target.value)} onKeyDown={handleKeyDown}
+              type={type === "number" ? "number" : "text"} className="text-sm h-7 text-right" dir="rtl" autoFocus />
+          )}
+          <span className="text-muted-foreground text-sm shrink-0">{label}</span>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex items-center justify-end gap-2 group cursor-pointer" onClick={() => { setEditValue(value || ""); setEditing(true); }}>
+        <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+        {isLink && value ? (
+          <a href={`${linkPrefix || ""}${value}`} target={linkPrefix?.startsWith("http") || linkPrefix === undefined ? "_blank" : undefined}
+            className="font-medium text-primary hover:underline truncate"
+            onClick={e => e.stopPropagation()}>
+            {value}
+          </a>
+        ) : (
+          <span className="font-medium">{type === "number" && value ? `₪${Number(value).toLocaleString()}` : (value || "—")}</span>
+        )}
+        <span className="text-muted-foreground text-sm shrink-0">{label}</span>
+      </div>
+    );
+  };
+
   return (
     <div className="flex h-[calc(100vh-220px)] border rounded-lg overflow-hidden bg-background" dir="rtl">
       {/* Right side - Client list (25%) */}
