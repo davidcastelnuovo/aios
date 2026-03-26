@@ -581,7 +581,7 @@ export default function DashboardView() {
                       </Card>
                     )}
 
-                    {platformFilter === 'all' && (
+                    {(platformFilter === 'all' || platformFilter === 'google_analytics') && (
                       <Card className={`bg-gradient-to-br ${combinedRoas >= 1 ? 'from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900' : 'from-red-50 to-red-100 dark:from-red-950 dark:to-red-900'}`}>
                         <CardContent className="p-6">
                           <p className="text-sm text-muted-foreground">ROAS משולב</p>
