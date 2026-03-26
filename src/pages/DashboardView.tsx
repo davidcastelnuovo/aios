@@ -936,7 +936,6 @@ export default function DashboardView() {
                         <TableHeader>
                           <TableRow>
                             <TableHead className="text-right">מקור / מדיום</TableHead>
-                            <TableHead className="text-right">הוצאה</TableHead>
                             <TableHead className="text-right">סשנים</TableHead>
                             <TableHead className="text-right">משתמשים יחודיים</TableHead>
                             {dashboardCampaignType === 'ecommerce' && (
@@ -944,7 +943,6 @@ export default function DashboardView() {
                                 <TableHead className="text-right">הוספה לעגלה</TableHead>
                                 <TableHead className="text-right">רכישות</TableHead>
                                 <TableHead className="text-right">הכנסות</TableHead>
-                                <TableHead className="text-right">ROAS</TableHead>
                               </>
                             )}
                           </TableRow>
