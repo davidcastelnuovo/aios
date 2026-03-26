@@ -422,6 +422,7 @@ export function ClientsChatView({
               const isChecked = selectedClientIds.has(client.id);
               const statusInfo = getStatusInfo(client.status);
               const moodInfo = getMoodInfo(client.mood_status);
+              const displayName = getClientDisplayName(client);
 
               return (
                 <button
@@ -454,7 +455,7 @@ export function ClientsChatView({
                       className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
                       style={{ backgroundColor: statusInfo.color }}
                     >
-                      {(client.name || "?")[0]}
+                      {(displayName || "?")[0]}
                     </div>
                     <div className="flex-1 min-w-0 text-right">
                       <div className="flex items-center justify-between gap-1">
@@ -462,7 +463,7 @@ export function ClientsChatView({
                           {moodInfo.emoji}
                         </span>
                         <span className="font-semibold text-sm truncate">
-                          {client.name || "ללא שם"}
+                          {displayName}
                         </span>
                       </div>
                       {client.agencies?.name && (
