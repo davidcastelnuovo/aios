@@ -798,24 +798,22 @@ export default function DashboardView() {
                             <TableCell>סה"כ</TableCell>
                             <TableCell>{formatNumber(campaignTotals.impressions)}</TableCell>
                             <TableCell>{formatNumber(campaignTotals.clicks)}</TableCell>
-                            {dashboardCampaignType === 'ecommerce' ? (
+                            <TableCell className="text-green-600">{formatNumber(campaignTotals.leads)}</TableCell>
+                            <TableCell className="text-green-600">
+                              {campaignTotals.leads > 0 ? formatCurrency(campaignTotals.spend / campaignTotals.leads) : '₪0'}
+                            </TableCell>
+                            {dashboardCampaignType === 'ecommerce' && (
                               <>
                                 <TableCell>{formatNumber(campaignTotals.purchases)}</TableCell>
                                 <TableCell>{formatCurrency(campaignTotals.revenue)}</TableCell>
                               </>
-                            ) : (
-                              <TableCell className="text-green-600">{formatNumber(campaignTotals.leads)}</TableCell>
                             )}
                             <TableCell>{formatCurrency(campaignTotals.spend)}</TableCell>
-                            {dashboardCampaignType === 'ecommerce' ? (
+                            {dashboardCampaignType === 'ecommerce' && (
                               <TableCell>
                                 <span className={(campaignTotals.spend > 0 ? campaignTotals.revenue / campaignTotals.spend : 0) >= 1 ? 'text-green-600' : 'text-red-600'}>
                                   {(campaignTotals.spend > 0 ? campaignTotals.revenue / campaignTotals.spend : 0).toFixed(2)}
                                 </span>
-                              </TableCell>
-                            ) : (
-                              <TableCell className="text-green-600">
-                                {campaignTotals.leads > 0 ? formatCurrency(campaignTotals.spend / campaignTotals.leads) : '₪0'}
                               </TableCell>
                             )}
                           </TableRow>
