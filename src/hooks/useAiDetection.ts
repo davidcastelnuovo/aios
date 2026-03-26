@@ -313,6 +313,19 @@ export function useAiDetectionProject(projectId: string | null) {
     }
   };
 
+  // Edit prompt
+  const editPrompt = useMutation({
+    mutationFn: async ({ promptId, prompt, category }: { promptId: string; prompt: string; category: string }) => {
+      const { error } = await supabase.from("ai_detection_prompts" as any).update({ prompt, category }).eq("id", promptId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ai-detection-prompts", projectId] });
+      toast.success("הפרומפט עודכן");
+    },
+    onError: (error) => toast.error("שגיאה: " + error.message),
+  });
+
   // Delete prompt
   const deletePrompt = useMutation({
     mutationFn: async (promptId: string) => {
@@ -400,6 +413,7 @@ export function useAiDetectionProject(projectId: string | null) {
     isScanning,
     isGenerating,
     addPrompt,
+    editPrompt,
     deletePrompt,
     runScan,
     generatePrompts,
