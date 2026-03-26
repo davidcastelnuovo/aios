@@ -15,7 +15,7 @@ interface ClientTablesTabProps {
 
 export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) {
   const navigate = useNavigate();
-  const buildPath = useTenantPath();
+  const { buildPath } = useTenantPath();
 
   const { data: tables, isLoading } = useQuery({
     queryKey: ["client-tables", clientId],
