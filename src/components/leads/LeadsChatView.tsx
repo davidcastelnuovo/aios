@@ -165,7 +165,9 @@ export function LeadsChatView({
       if (error) throw error;
       toast.success(`${selectedLeadIds.size} לידים עודכנו`);
       exitMultiSelect();
-      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-table"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-count"] });
     } catch (error: any) {
       toast.error("שגיאה בעדכון: " + error.message);
     } finally {
