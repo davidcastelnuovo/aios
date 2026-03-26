@@ -111,13 +111,12 @@ export function ClientsChatView({
 
   const getClientDisplayName = useCallback((client: any) => {
     const candidates = [client?.name, client?.contact_name, client?.website, client?.phone]
-      .map((v) => (typeof v === "string" ? v.trim() : ""));
+      .map((value) => (typeof value === "string" ? value.trim() : ""));
 
-    const firstReadable = candidates.find((value) => /[\p{L}\p{N}]/u.test(value));
-    if (firstReadable) return firstReadable;
+    const firstNonEmpty = candidates.find((value) => value.length > 0);
+    if (firstNonEmpty) return firstNonEmpty;
 
-    const firstNonEmpty = candidates.find(Boolean);
-    return firstNonEmpty || "ללא שם";
+    return client?.id ? `לקוח ${String(client.id).slice(0, 6)}` : "ללא שם";
   }, []);
 
   const filteredClients = useMemo(() => {
@@ -459,10 +458,10 @@ export function ClientsChatView({
                     </div>
                     <div className="flex-1 min-w-0 text-right">
                       <div className="flex items-center justify-between gap-1">
-                        <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                        <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
                           {moodInfo.emoji}
                         </span>
-                        <span className="font-semibold text-sm truncate">
+                        <span className="font-semibold text-sm truncate text-foreground min-w-0">
                           {displayName}
                         </span>
                       </div>
