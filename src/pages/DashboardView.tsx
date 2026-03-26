@@ -70,6 +70,7 @@ const getLeadsFromData = (data: any) =>
 
 const getPurchasesFromData = (data: any) => Number(data?.purchases) || Number(data?.ecommercePurchases) || Number(data?.transactions) || 0;
 const getSessionsFromData = (data: any) => Number(data?.sessions) || 0;
+const getUsersFromData = (data: any) => Number(data?.users) || 0;
 const getAddToCartFromData = (data: any) => Number(data?.add_to_cart) || Number(data?.addToCarts) || 0;
 
 const isAdsPlatform = (source: string) => ['facebook_insights', 'facebook_ecommerce', 'google_ads'].includes(source);
