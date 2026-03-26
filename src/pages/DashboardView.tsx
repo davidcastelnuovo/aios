@@ -291,7 +291,7 @@ export default function DashboardView() {
   // Total summary
   const totalSummary = useMemo(() => {
     let totalSpend = 0, totalImpressions = 0, totalClicks = 0, totalResults = 0;
-    let adsSpend = 0, analyticsRevenue = 0, analyticsPurchases = 0, analyticsAddToCart = 0, analyticsSessions = 0;
+    let adsSpend = 0, analyticsRevenue = 0, analyticsPurchases = 0, analyticsAddToCart = 0, analyticsSessions = 0, analyticsUsers = 0;
 
     Object.entries(summaryByPlatform).forEach(([platform, data]: [string, any]) => {
       if (isAnalyticsPlatform(platform)) {
@@ -299,6 +299,7 @@ export default function DashboardView() {
         analyticsPurchases += data.results;
         analyticsAddToCart += data.addToCart;
         analyticsSessions += data.sessions;
+        analyticsUsers += data.users || 0;
       } else if (isAdsPlatform(platform)) {
         totalSpend += data.spend;
         totalImpressions += data.impressions;
@@ -311,7 +312,7 @@ export default function DashboardView() {
     return {
       spend: totalSpend, impressions: totalImpressions, clicks: totalClicks, results: totalResults,
       revenue: analyticsRevenue, roas_spend: adsSpend, roas_value: analyticsRevenue,
-      analyticsPurchases, analyticsAddToCart, analyticsSessions,
+      analyticsPurchases, analyticsAddToCart, analyticsSessions, analyticsUsers,
     };
   }, [summaryByPlatform]);
 
