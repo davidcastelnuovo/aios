@@ -359,7 +359,7 @@ export function LeadsChatView({
               <ScrollArea className="flex-1 p-4">
                 <TabsContent value="details" className="mt-0 space-y-6">
                   {/* Info cards grid */}
-                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-4" dir="rtl">
                     {/* Contact info */}
                     <div className="border rounded-lg p-4 space-y-3">
                       <h3 className="font-semibold text-sm flex items-center gap-2">
