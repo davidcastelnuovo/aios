@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useRef } from "react";
 import ChatViewComponent from "@/components/chat/ChatView";
-import { User, Phone, PhoneCall, Building2, Clock, Search, Mail, Globe, CheckSquare, Trash2, MessageSquare, FileText, DollarSign, X, Edit, Pencil, Check, Users } from "lucide-react";
+import { User, Phone, PhoneCall, Building2, Clock, Search, Mail, Globe, CheckSquare, Trash2, MessageSquare, FileText, DollarSign, X, Edit, Pencil, Check, Users, Plus, UserPlus } from "lucide-react";
 import { CallDialog } from "@/components/telephony/CallDialog";
 import { CallHistoryTab } from "@/components/telephony/CallHistoryTab";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +19,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
-import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 interface ClientsChatViewProps {
@@ -75,6 +75,25 @@ export function ClientsChatView({
     },
     enabled: !!tenantId,
   });
+
+  const selectedClientIdForContacts = selectedClientId;
+  const { data: clientContacts = [] } = useQuery({
+    queryKey: ["client-contacts", selectedClientIdForContacts],
+    queryFn: async () => {
+      if (!selectedClientIdForContacts) return [];
+      const { data, error } = await supabase
+        .from("client_contacts")
+        .select("*")
+        .eq("client_id", selectedClientIdForContacts)
+        .order("is_primary", { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!selectedClientIdForContacts,
+  });
+
+  const [addingContact, setAddingContact] = useState(false);
+  const [newContact, setNewContact] = useState({ contact_name: "", phone: "", email: "", role: "" });
 
   const filteredClients = useMemo(() => {
     if (!listSearch.trim()) return clients;
@@ -587,7 +606,7 @@ export function ClientsChatView({
                     {/* Contact info */}
                     <div className="border rounded-lg p-4 space-y-3 text-right">
                       <h3 className="font-semibold text-sm flex items-center gap-2 justify-end">
-                        פרטי קשר
+                        פרטי קשר ראשי
                         <User className="h-4 w-4 text-primary" />
                       </h3>
                       <div className="space-y-2 text-sm">
@@ -649,6 +668,92 @@ export function ClientsChatView({
                         </div>
                       </div>
                     </div>
+                  </div>
+
+                  {/* Additional contacts */}
+                  <div className="border rounded-lg p-4 text-right space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => setAddingContact(true)}>
+                        <UserPlus className="h-3.5 w-3.5" />
+                        הוסף איש קשר
+                      </Button>
+                      <h3 className="font-semibold text-sm flex items-center gap-2">
+                        אנשי קשר נוספים
+                        <Users className="h-4 w-4 text-primary" />
+                      </h3>
+                    </div>
+
+                    {addingContact && (
+                      <div className="border rounded-md p-3 space-y-2 bg-muted/30">
+                        <div className="grid grid-cols-2 gap-2">
+                          <Input placeholder="שם" value={newContact.contact_name} onChange={e => setNewContact(p => ({ ...p, contact_name: e.target.value }))} className="text-sm h-8 text-right" dir="rtl" />
+                          <Input placeholder="תפקיד" value={newContact.role} onChange={e => setNewContact(p => ({ ...p, role: e.target.value }))} className="text-sm h-8 text-right" dir="rtl" />
+                          <Input placeholder="טלפון" value={newContact.phone} onChange={e => setNewContact(p => ({ ...p, phone: e.target.value }))} className="text-sm h-8 text-right" dir="rtl" />
+                          <Input placeholder="אימייל" value={newContact.email} onChange={e => setNewContact(p => ({ ...p, email: e.target.value }))} className="text-sm h-8 text-right" dir="rtl" />
+                        </div>
+                        <div className="flex gap-2 justify-end">
+                          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setAddingContact(false); setNewContact({ contact_name: "", phone: "", email: "", role: "" }); }}>ביטול</Button>
+                          <Button size="sm" className="h-7 text-xs" disabled={!newContact.contact_name.trim()} onClick={async () => {
+                            if (!tenantId) return;
+                            try {
+                              const { error } = await supabase.from("client_contacts").insert({
+                                client_id: selectedClient.id,
+                                tenant_id: tenantId,
+                                contact_name: newContact.contact_name.trim(),
+                                phone: newContact.phone.trim() || null,
+                                email: newContact.email.trim() || null,
+                                role: newContact.role.trim() || null,
+                              });
+                              if (error) throw error;
+                              toast.success("איש קשר נוסף");
+                              setAddingContact(false);
+                              setNewContact({ contact_name: "", phone: "", email: "", role: "" });
+                              queryClient.invalidateQueries({ queryKey: ["client-contacts", selectedClient.id] });
+                            } catch { toast.error("שגיאה בהוספת איש קשר"); }
+                          }}>שמור</Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {clientContacts.length > 0 ? (
+                      <div className="space-y-2">
+                        {clientContacts.map((contact: any) => (
+                          <div key={contact.id} className="border rounded-md p-3 flex items-start justify-between gap-2 group">
+                            <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 text-destructive shrink-0"
+                              onClick={async () => {
+                                try {
+                                  const { error } = await supabase.from("client_contacts").delete().eq("id", contact.id);
+                                  if (error) throw error;
+                                  toast.success("איש קשר נמחק");
+                                  queryClient.invalidateQueries({ queryKey: ["client-contacts", selectedClient.id] });
+                                } catch { toast.error("שגיאה במחיקה"); }
+                              }}>
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                            <div className="text-sm space-y-1 text-right flex-1">
+                              <div className="font-medium flex items-center gap-2 justify-end">
+                                {contact.role && <Badge variant="outline" className="text-xs">{contact.role}</Badge>}
+                                {contact.contact_name}
+                              </div>
+                              {contact.phone && (
+                                <div className="flex items-center gap-1 justify-end text-muted-foreground">
+                                  <a href={`tel:${contact.phone}`} className="text-primary hover:underline">{contact.phone}</a>
+                                  <Phone className="h-3 w-3" />
+                                </div>
+                              )}
+                              {contact.email && (
+                                <div className="flex items-center gap-1 justify-end text-muted-foreground">
+                                  <a href={`mailto:${contact.email}`} className="text-primary hover:underline truncate">{contact.email}</a>
+                                  <Mail className="h-3 w-3" />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : !addingContact && (
+                      <p className="text-sm text-muted-foreground">אין אנשי קשר נוספים</p>
+                    )}
                   </div>
 
                   {/* Team */}
