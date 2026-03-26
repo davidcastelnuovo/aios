@@ -504,6 +504,19 @@ export default function ClientOnboarding() {
           onOpenChange={(open) => !open && setEditingItem(null)}
         />
       )}
+
+      {viewingClient && (
+        <EditClientDialog
+          client={viewingClient}
+          open={!!viewingClient}
+          onOpenChange={(open) => {
+            if (!open) {
+              setViewingClientId(null);
+              queryClient.invalidateQueries({ queryKey: ["client-onboarding"] });
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
