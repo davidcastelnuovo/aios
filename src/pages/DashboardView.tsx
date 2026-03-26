@@ -621,7 +621,7 @@ export default function DashboardView() {
                   <>
                     {showAdsCards && (
                       <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
-                        <CardContent className="p-6">
+                        <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
                           <p className="text-sm text-muted-foreground">לידים</p>
                           <p className="text-3xl font-bold mt-2">{formatNumber(totalSummary.results)}</p>
                         </CardContent>
@@ -630,7 +630,7 @@ export default function DashboardView() {
 
                     {showAdsCards && (
                       <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900">
-                        <CardContent className="p-6">
+                        <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
                           <p className="text-sm text-muted-foreground">קליקים</p>
                           <p className="text-3xl font-bold mt-2">{formatNumber(totalSummary.clicks)}</p>
                         </CardContent>
@@ -639,7 +639,7 @@ export default function DashboardView() {
 
                     {showAdsCards && (
                       <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900">
-                        <CardContent className="p-6">
+                        <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
                           <p className="text-sm text-muted-foreground">עלות לליד (CPL)</p>
                           <p className="text-3xl font-bold mt-2">{formatCurrency(combinedCpl)}</p>
                         </CardContent>
@@ -648,7 +648,7 @@ export default function DashboardView() {
 
                     {showAnalyticsCards && (
                       <Card className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-950 dark:to-orange-900">
-                        <CardContent className="p-6">
+                        <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
                           <p className="text-sm text-muted-foreground">סשנים (Analytics)</p>
                           <p className="text-3xl font-bold mt-2">{formatNumber(totalSummary.analyticsSessions)}</p>
                         </CardContent>
