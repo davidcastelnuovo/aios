@@ -1,12 +1,16 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileSpreadsheet, Facebook, ShoppingCart, ExternalLink, LayoutDashboard } from "lucide-react";
+import { FileSpreadsheet, Facebook, ShoppingCart, ExternalLink, LayoutDashboard, X, Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { TableCardAlerts } from "@/components/dynamic-tables/TableCardAlerts";
+import { toast } from "sonner";
 
 interface ClientTablesTabProps {
   clientId: string;
@@ -16,7 +20,13 @@ interface ClientTablesTabProps {
 export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) {
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
+  const { tenantId } = useCurrentTenant();
+  const queryClient = useQueryClient();
 
+  const [dashboardSearch, setDashboardSearch] = useState("");
+  const [showDashboardDropdown, setShowDashboardDropdown] = useState(false);
+
+  // Tables linked to this client
   const { data: tables, isLoading } = useQuery({
     queryKey: ["client-tables", clientId],
     queryFn: async () => {
@@ -30,6 +40,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
     enabled: !!clientId,
   });
 
+  // Dashboards linked to this client
   const { data: dashboards = [] } = useQuery({
     queryKey: ["client-dashboards", clientId],
     queryFn: async () => {
@@ -44,6 +55,62 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
     enabled: !!clientId,
   });
 
+  // All dashboards for the tenant (for the selector)
+  const { data: allDashboards = [] } = useQuery({
+    queryKey: ["all-dashboards", tenantId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("crm_dashboards")
+        .select("id, name, client_id")
+        .eq("tenant_id", tenantId!)
+        .order("name");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenantId,
+  });
+
+  // Dashboards not yet linked to this client
+  const availableDashboards = useMemo(() => {
+    const linkedIds = new Set(dashboards.map((d: any) => d.id));
+    let filtered = allDashboards.filter((d: any) => !linkedIds.has(d.id));
+    if (dashboardSearch.trim()) {
+      const q = dashboardSearch.toLowerCase();
+      filtered = filtered.filter((d: any) => d.name?.toLowerCase().includes(q));
+    }
+    return filtered;
+  }, [allDashboards, dashboards, dashboardSearch]);
+
+  const linkDashboard = async (dashboardId: string) => {
+    const { error } = await supabase
+      .from("crm_dashboards")
+      .update({ client_id: clientId })
+      .eq("id", dashboardId);
+    if (error) {
+      toast.error("שגיאה בשיוך הדשבורד");
+      return;
+    }
+    toast.success("דשבורד שויך בהצלחה");
+    queryClient.invalidateQueries({ queryKey: ["client-dashboards", clientId] });
+    queryClient.invalidateQueries({ queryKey: ["all-dashboards"] });
+    setDashboardSearch("");
+    setShowDashboardDropdown(false);
+  };
+
+  const unlinkDashboard = async (dashboardId: string) => {
+    const { error } = await supabase
+      .from("crm_dashboards")
+      .update({ client_id: null })
+      .eq("id", dashboardId);
+    if (error) {
+      toast.error("שגיאה בהסרת השיוך");
+      return;
+    }
+    toast.success("שיוך הדשבורד הוסר");
+    queryClient.invalidateQueries({ queryKey: ["client-dashboards", clientId] });
+    queryClient.invalidateQueries({ queryKey: ["all-dashboards"] });
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-3" dir="rtl">
@@ -57,24 +124,76 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
 
   return (
     <div className="space-y-4" dir="rtl">
-      {/* Dashboards */}
+      {/* Dashboard selector */}
+      <div className="flex flex-col items-end gap-1">
+        <span className="text-muted-foreground text-sm flex items-center gap-1">
+          <LayoutDashboard className="h-3.5 w-3.5" />
+          :שייך דשבורד
+        </span>
+        <div className="relative w-full">
+          <Input
+            placeholder="חפש דשבורד לשיוך..."
+            value={dashboardSearch}
+            onChange={(e) => { setDashboardSearch(e.target.value); setShowDashboardDropdown(true); }}
+            onFocus={() => setShowDashboardDropdown(true)}
+            onBlur={() => setTimeout(() => setShowDashboardDropdown(false), 200)}
+            className="h-7 text-xs text-right"
+            dir="rtl"
+          />
+          {showDashboardDropdown && (
+            <div className="absolute z-50 top-full mt-1 w-full bg-popover border rounded-md shadow-md max-h-[200px] overflow-y-auto">
+              {availableDashboards.length > 0 ? availableDashboards.map((d: any) => (
+                <button
+                  key={d.id}
+                  className="w-full text-right px-3 py-1.5 text-xs hover:bg-accent transition-colors flex items-center justify-between"
+                  onClick={() => linkDashboard(d.id)}
+                >
+                  <Plus className="h-3 w-3 text-muted-foreground shrink-0" />
+                  <span className="truncate">{d.name}</span>
+                </button>
+              )) : (
+                <div className="px-3 py-2 text-xs text-muted-foreground text-center">אין דשבורדים זמינים</div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Linked dashboards */}
       {dashboards.length > 0 && (
         <div className="space-y-2">
           <h3 className="font-semibold text-sm flex items-center gap-2 justify-end">
             <LayoutDashboard className="h-4 w-4 text-primary" />
-            דשבורדים
+            דשבורדים משויכים
           </h3>
           <div className="grid gap-3 md:grid-cols-2">
             {dashboards.map((dash: any) => (
               <Card
                 key={dash.id}
                 className="cursor-pointer hover:shadow-md transition-shadow"
-                onClick={() => navigate(buildPath(`/dashboard/${dash.id}`))}
               >
                 <CardHeader className="p-4">
                   <CardTitle className="text-sm flex items-center gap-2 justify-between">
-                    <ExternalLink className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                    <span className="truncate">{dash.name}</span>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5 shrink-0"
+                        onClick={(e) => { e.stopPropagation(); unlinkDashboard(dash.id); }}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                      <ExternalLink
+                        className="h-3.5 w-3.5 text-muted-foreground shrink-0 cursor-pointer"
+                        onClick={() => navigate(buildPath(`/dashboard/${dash.id}`))}
+                      />
+                    </div>
+                    <span
+                      className="truncate cursor-pointer"
+                      onClick={() => navigate(buildPath(`/dashboard/${dash.id}`))}
+                    >
+                      {dash.name}
+                    </span>
                   </CardTitle>
                 </CardHeader>
               </Card>
@@ -138,7 +257,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
         <div className="text-center py-8 text-sm text-muted-foreground">
           <FileSpreadsheet className="h-8 w-8 mx-auto mb-2 opacity-30" />
           <p>אין טבלאות או דשבורדים משויכים ל{clientName}</p>
-          <p className="text-xs mt-1">ניתן לשייך טבלאות מדף ניהול טבלאות</p>
+          <p className="text-xs mt-1">ניתן לשייך דשבורדים מהשדה למעלה</p>
         </div>
       )}
     </div>
