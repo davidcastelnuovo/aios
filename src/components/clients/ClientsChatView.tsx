@@ -606,7 +606,7 @@ export function ClientsChatView({
                     {/* Contact info */}
                     <div className="border rounded-lg p-4 space-y-3 text-right">
                       <h3 className="font-semibold text-sm flex items-center gap-2 justify-end">
-                        פרטי קשר
+                        פרטי קשר ראשי
                         <User className="h-4 w-4 text-primary" />
                       </h3>
                       <div className="space-y-2 text-sm">
