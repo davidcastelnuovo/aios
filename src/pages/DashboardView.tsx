@@ -362,6 +362,42 @@ export default function DashboardView() {
       .sort((a, b) => b.sessions - a.sessions);
   }, [allRecords]);
 
+  // Traffic Acquisition by Channel Group
+  const channelGroupBreakdown = useMemo(() => {
+    const channels: Record<string, { sessions: number; engagedSessions: number; engagementRate: number; avgDuration: number; eventsPerSession: number; users: number; purchases: number; revenue: number; rateSum: number; durationSum: number; eventsSum: number; count: number }> = {};
+    allRecords.forEach((record: any) => {
+      const source = record._source || 'unknown';
+      if (!isAnalyticsPlatform(source)) return;
+      const data = record.data || {};
+      if (data.report_type !== 'channel_group') return;
+      
+      const ch = data.channel_group || 'Unknown';
+      if (!channels[ch]) channels[ch] = { sessions: 0, engagedSessions: 0, engagementRate: 0, avgDuration: 0, eventsPerSession: 0, users: 0, purchases: 0, revenue: 0, rateSum: 0, durationSum: 0, eventsSum: 0, count: 0 };
+      channels[ch].sessions += Number(data.sessions) || 0;
+      channels[ch].engagedSessions += Number(data.engaged_sessions) || 0;
+      channels[ch].users += Number(data.users) || 0;
+      channels[ch].purchases += getPurchasesFromData(data);
+      channels[ch].revenue += getRevenueFromData(data);
+      channels[ch].rateSum += Number(data.engagement_rate) || 0;
+      channels[ch].durationSum += Number(data.avg_session_duration) || 0;
+      channels[ch].eventsSum += Number(data.events_per_session) || 0;
+      channels[ch].count += 1;
+    });
+    return Object.entries(channels)
+      .map(([name, d]) => ({
+        name,
+        sessions: d.sessions,
+        engagedSessions: d.engagedSessions,
+        engagementRate: d.count > 0 ? d.rateSum / d.count : 0,
+        avgDuration: d.count > 0 ? d.durationSum / d.count : 0,
+        eventsPerSession: d.count > 0 ? d.eventsSum / d.count : 0,
+        users: d.users,
+        purchases: d.purchases,
+        revenue: d.revenue,
+      }))
+      .sort((a, b) => b.sessions - a.sessions);
+  }, [allRecords]);
+
   // Daily chart data
   const dailyChartData = useMemo(() => {
     const byDate: Record<string, any> = {};
