@@ -86,12 +86,86 @@ export function LeadsChatView({
       const { error } = await supabase.from("leads").delete().eq("id", id);
       if (error) throw error;
       toast.success("ליד נמחק בהצלחה");
-      // Select next lead
       const idx = leads.findIndex(l => l.id === id);
       const next = leads[idx + 1] || leads[idx - 1] || null;
       setSelectedLeadId(next?.id || null);
     } catch (error: any) {
       toast.error("שגיאה במחיקת ליד: " + error.message);
+    }
+  };
+
+  const toggleLeadSelection = useCallback((leadId: string) => {
+    setSelectedLeadIds(prev => {
+      const next = new Set(prev);
+      if (next.has(leadId)) next.delete(leadId);
+      else next.add(leadId);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    if (selectedLeadIds.size === filteredListLeads.length) {
+      setSelectedLeadIds(new Set());
+    } else {
+      setSelectedLeadIds(new Set(filteredListLeads.map(l => l.id)));
+    }
+  }, [filteredListLeads, selectedLeadIds.size]);
+
+  const exitMultiSelect = useCallback(() => {
+    setMultiSelectMode(false);
+    setSelectedLeadIds(new Set());
+  }, []);
+
+  const handleBulkDelete = async () => {
+    if (selectedLeadIds.size === 0) return;
+    const confirmed = window.confirm(`האם למחוק ${selectedLeadIds.size} לידים?`);
+    if (!confirmed) return;
+    setBulkActionLoading(true);
+    try {
+      const { error } = await supabase.from("leads").delete().in("id", Array.from(selectedLeadIds));
+      if (error) throw error;
+      toast.success(`${selectedLeadIds.size} לידים נמחקו בהצלחה`);
+      if (selectedLeadIds.has(selectedLeadId || "")) {
+        setSelectedLeadId(null);
+      }
+      exitMultiSelect();
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+    } catch (error: any) {
+      toast.error("שגיאה במחיקה: " + error.message);
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  const handleBulkStageChange = async (stageId: string) => {
+    if (selectedLeadIds.size === 0) return;
+    setBulkActionLoading(true);
+    try {
+      const { error } = await supabase.from("leads").update({ status: stageId }).in("id", Array.from(selectedLeadIds));
+      if (error) throw error;
+      toast.success(`${selectedLeadIds.size} לידים עודכנו`);
+      exitMultiSelect();
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+    } catch (error: any) {
+      toast.error("שגיאה בעדכון: " + error.message);
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  const handleBulkResponseStatusChange = async (statusKey: string | null) => {
+    if (selectedLeadIds.size === 0) return;
+    setBulkActionLoading(true);
+    try {
+      const { error } = await supabase.from("leads").update({ response_status: statusKey }).in("id", Array.from(selectedLeadIds));
+      if (error) throw error;
+      toast.success(`${selectedLeadIds.size} לידים עודכנו`);
+      exitMultiSelect();
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+    } catch (error: any) {
+      toast.error("שגיאה בעדכון: " + error.message);
+    } finally {
+      setBulkActionLoading(false);
     }
   };
 
