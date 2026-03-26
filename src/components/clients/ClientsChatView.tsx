@@ -458,10 +458,10 @@ export function ClientsChatView({
                     </div>
                     <div className="flex-1 min-w-0 text-right">
                       <div className="flex items-center justify-between gap-1">
-                        <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                        <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
                           {moodInfo.emoji}
                         </span>
-                        <span className="font-semibold text-sm truncate">
+                        <span className="font-semibold text-sm truncate text-foreground min-w-0">
                           {displayName}
                         </span>
                       </div>
