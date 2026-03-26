@@ -649,8 +649,9 @@ export default function DashboardView() {
                           <TableRow>
                             <TableHead className="text-right">פלטפורמה</TableHead>
                             <TableHead className="text-right">הוצאה</TableHead>
-                            <TableHead className="text-right">חשיפות / סשנים יחודיים</TableHead>
-                            <TableHead className="text-right">קליקים</TableHead>
+                            <TableHead className="text-right">חשיפות</TableHead>
+                            <TableHead className="text-right">סשנים</TableHead>
+                            <TableHead className="text-right">סשנים יחודיים</TableHead>
                             {dashboardCampaignType === 'ecommerce' ? (
                               <>
                                 <TableHead className="text-right">הוספה לעגלה</TableHead>
