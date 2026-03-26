@@ -14,6 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { EditClientDialog } from "@/components/forms/EditClientDialog";
 import { ClientUpdatesTab } from "@/components/clients/ClientUpdatesTab";
+import { ClientWeeklyReport } from "@/components/clients/ClientWeeklyReport";
 import AddTaskForm from "@/components/forms/AddTaskForm";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
