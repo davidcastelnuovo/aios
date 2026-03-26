@@ -747,19 +747,17 @@ export default function DashboardView() {
                             <TableHead className="text-right">קמפיין</TableHead>
                             <TableHead className="text-right">חשיפות</TableHead>
                             <TableHead className="text-right">קליקים</TableHead>
-                            {dashboardCampaignType === 'ecommerce' ? (
+                            <TableHead className="text-right">לידים</TableHead>
+                            <TableHead className="text-right">עלות לליד</TableHead>
+                            {dashboardCampaignType === 'ecommerce' && (
                               <>
                                 <TableHead className="text-right">רכישות</TableHead>
                                 <TableHead className="text-right">הכנסות</TableHead>
                               </>
-                            ) : (
-                              <TableHead className="text-right">לידים</TableHead>
                             )}
                             <TableHead className="text-right">הוצאה</TableHead>
-                            {dashboardCampaignType === 'ecommerce' ? (
+                            {dashboardCampaignType === 'ecommerce' && (
                               <TableHead className="text-right">ROAS</TableHead>
-                            ) : (
-                              <TableHead className="text-right">עלות לליד</TableHead>
                             )}
                           </TableRow>
                         </TableHeader>
@@ -772,26 +770,24 @@ export default function DashboardView() {
                                 <TableCell className="font-medium max-w-[300px] truncate">{c.campaign}</TableCell>
                                 <TableCell>{formatNumber(c.impressions)}</TableCell>
                                 <TableCell>{formatNumber(c.clicks)}</TableCell>
-                                {dashboardCampaignType === 'ecommerce' ? (
+                                <TableCell className={c.leads > 0 ? 'text-green-600 font-semibold' : ''}>
+                                  {formatNumber(c.leads)}
+                                </TableCell>
+                                <TableCell className={cpl > 0 ? 'text-green-600' : ''}>
+                                  {cpl > 0 ? formatCurrency(cpl) : '₪0'}
+                                </TableCell>
+                                {dashboardCampaignType === 'ecommerce' && (
                                   <>
                                     <TableCell>{formatNumber(c.purchases)}</TableCell>
                                     <TableCell>{formatCurrency(c.revenue)}</TableCell>
                                   </>
-                                ) : (
-                                  <TableCell className={c.leads > 0 ? 'text-green-600 font-semibold' : ''}>
-                                    {formatNumber(c.leads)}
-                                  </TableCell>
                                 )}
                                 <TableCell>{formatCurrency(c.spend)}</TableCell>
-                                {dashboardCampaignType === 'ecommerce' ? (
+                                {dashboardCampaignType === 'ecommerce' && (
                                   <TableCell>
                                     <span className={roas >= 1 ? 'text-green-600 font-semibold' : 'text-red-600'}>
                                       {roas.toFixed(2)}
                                     </span>
-                                  </TableCell>
-                                ) : (
-                                  <TableCell className={cpl > 0 ? 'text-green-600' : ''}>
-                                    {cpl > 0 ? formatCurrency(cpl) : '₪0'}
                                   </TableCell>
                                 )}
                               </TableRow>
@@ -802,24 +798,22 @@ export default function DashboardView() {
                             <TableCell>סה"כ</TableCell>
                             <TableCell>{formatNumber(campaignTotals.impressions)}</TableCell>
                             <TableCell>{formatNumber(campaignTotals.clicks)}</TableCell>
-                            {dashboardCampaignType === 'ecommerce' ? (
+                            <TableCell className="text-green-600">{formatNumber(campaignTotals.leads)}</TableCell>
+                            <TableCell className="text-green-600">
+                              {campaignTotals.leads > 0 ? formatCurrency(campaignTotals.spend / campaignTotals.leads) : '₪0'}
+                            </TableCell>
+                            {dashboardCampaignType === 'ecommerce' && (
                               <>
                                 <TableCell>{formatNumber(campaignTotals.purchases)}</TableCell>
                                 <TableCell>{formatCurrency(campaignTotals.revenue)}</TableCell>
                               </>
-                            ) : (
-                              <TableCell className="text-green-600">{formatNumber(campaignTotals.leads)}</TableCell>
                             )}
                             <TableCell>{formatCurrency(campaignTotals.spend)}</TableCell>
-                            {dashboardCampaignType === 'ecommerce' ? (
+                            {dashboardCampaignType === 'ecommerce' && (
                               <TableCell>
                                 <span className={(campaignTotals.spend > 0 ? campaignTotals.revenue / campaignTotals.spend : 0) >= 1 ? 'text-green-600' : 'text-red-600'}>
                                   {(campaignTotals.spend > 0 ? campaignTotals.revenue / campaignTotals.spend : 0).toFixed(2)}
                                 </span>
-                              </TableCell>
-                            ) : (
-                              <TableCell className="text-green-600">
-                                {campaignTotals.leads > 0 ? formatCurrency(campaignTotals.spend / campaignTotals.leads) : '₪0'}
                               </TableCell>
                             )}
                           </TableRow>
