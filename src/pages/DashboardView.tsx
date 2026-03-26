@@ -291,7 +291,7 @@ export default function DashboardView() {
   // Total summary
   const totalSummary = useMemo(() => {
     let totalSpend = 0, totalImpressions = 0, totalClicks = 0, totalResults = 0;
-    let adsSpend = 0, analyticsRevenue = 0, analyticsPurchases = 0, analyticsAddToCart = 0, analyticsSessions = 0;
+    let adsSpend = 0, analyticsRevenue = 0, analyticsPurchases = 0, analyticsAddToCart = 0, analyticsSessions = 0, analyticsUsers = 0;
 
     Object.entries(summaryByPlatform).forEach(([platform, data]: [string, any]) => {
       if (isAnalyticsPlatform(platform)) {
@@ -299,6 +299,7 @@ export default function DashboardView() {
         analyticsPurchases += data.results;
         analyticsAddToCart += data.addToCart;
         analyticsSessions += data.sessions;
+        analyticsUsers += data.users || 0;
       } else if (isAdsPlatform(platform)) {
         totalSpend += data.spend;
         totalImpressions += data.impressions;
@@ -311,7 +312,7 @@ export default function DashboardView() {
     return {
       spend: totalSpend, impressions: totalImpressions, clicks: totalClicks, results: totalResults,
       revenue: analyticsRevenue, roas_spend: adsSpend, roas_value: analyticsRevenue,
-      analyticsPurchases, analyticsAddToCart, analyticsSessions,
+      analyticsPurchases, analyticsAddToCart, analyticsSessions, analyticsUsers,
     };
   }, [summaryByPlatform]);
 
@@ -648,8 +649,9 @@ export default function DashboardView() {
                           <TableRow>
                             <TableHead className="text-right">פלטפורמה</TableHead>
                             <TableHead className="text-right">הוצאה</TableHead>
-                            <TableHead className="text-right">חשיפות / סשנים יחודיים</TableHead>
-                            <TableHead className="text-right">קליקים</TableHead>
+                            <TableHead className="text-right">חשיפות</TableHead>
+                            <TableHead className="text-right">סשנים</TableHead>
+                            <TableHead className="text-right">סשנים יחודיים</TableHead>
                             {dashboardCampaignType === 'ecommerce' ? (
                               <>
                                 <TableHead className="text-right">הוספה לעגלה</TableHead>
@@ -678,8 +680,9 @@ export default function DashboardView() {
                                   </div>
                                 </TableCell>
                                 <TableCell>{isAnalytics ? '-' : formatCurrency(metrics.spend)}</TableCell>
-                                <TableCell>{formatNumber(isAnalytics ? metrics.users : metrics.impressions)}</TableCell>
-                                <TableCell>{isAnalytics ? '-' : formatNumber(metrics.clicks)}</TableCell>
+                                <TableCell>{isAnalytics ? '-' : formatNumber(metrics.impressions)}</TableCell>
+                                <TableCell>{isAnalytics ? formatNumber(metrics.sessions) : '-'}</TableCell>
+                                <TableCell>{isAnalytics ? formatNumber(metrics.users) : '-'}</TableCell>
                                 {dashboardCampaignType === 'ecommerce' ? (
                                   <>
                                     <TableCell>{formatNumber(metrics.addToCart)}</TableCell>
@@ -711,7 +714,8 @@ export default function DashboardView() {
                             </TableCell>
                             <TableCell>{formatCurrency(totalSummary.spend)}</TableCell>
                             <TableCell>{formatNumber(totalSummary.impressions)}</TableCell>
-                            <TableCell>{formatNumber(totalSummary.clicks)}</TableCell>
+                            <TableCell>{formatNumber(totalSummary.analyticsSessions)}</TableCell>
+                            <TableCell>{formatNumber(totalSummary.analyticsUsers)}</TableCell>
                             {dashboardCampaignType === 'ecommerce' ? (
                               <>
                                 <TableCell>{formatNumber(totalSummary.analyticsAddToCart)}</TableCell>
