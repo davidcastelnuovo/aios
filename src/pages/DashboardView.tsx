@@ -206,19 +206,20 @@ export default function DashboardView() {
     return platforms;
   }, [tables]);
 
-  // Filter records by platform tab AND only use daily records for Analytics
+  // Filter records by platform tab AND only use daily aggregate records for Analytics
+  // IMPORTANT: Use only report_type='daily' for aggregation (KPI, charts).
+  // report_type='daily_source' breaks down by traffic source and would cause double-counting.
   const filteredRecords = useMemo(() => {
     return allRecords.filter((record: any) => {
       const source = record._source || 'unknown';
       // Platform filter
       if (!matchesPlatformFilter(source, platformFilter)) return false;
-      // For Analytics: only use daily records (have date field) for accurate date filtering
+      // For Analytics: only use 'daily' records for accurate totals
       if (isAnalyticsPlatform(source)) {
         const data = record.data || {};
-        // Only include daily records (not traffic_source aggregations)
-        if (data.report_type === 'traffic_source') return false;
-        // Include daily and daily_source records that have a date
-        if (!data.date && data.report_type !== 'daily' && data.report_type !== 'daily_source') return false;
+        // Only include report_type='daily' (aggregate per day)
+        // Exclude: traffic_source (no date), daily_source (per-source breakdown = double counting), top_pages
+        if (data.report_type !== 'daily') return false;
       }
       return true;
     });
