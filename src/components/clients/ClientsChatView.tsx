@@ -601,6 +601,10 @@ export function ClientsChatView({
                   <FolderOpen className="h-3.5 w-3.5" />
                   מסמכים
                 </TabsTrigger>
+                <TabsTrigger value="credentials" className="text-xs gap-1">
+                  <KeyRound className="h-3.5 w-3.5" />
+                  ססמאות
+                </TabsTrigger>
                 <TabsTrigger value="report" className="text-xs gap-1">
                   <BarChart3 className="h-3.5 w-3.5" />
                   דוח שבועי
