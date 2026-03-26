@@ -1637,6 +1637,7 @@ export type Database = {
           contact_name: string | null
           created_at: string
           email: string | null
+          end_date: string | null
           folder_link: string | null
           folder_links: Json
           id: string
@@ -1666,6 +1667,7 @@ export type Database = {
           contact_name?: string | null
           created_at?: string
           email?: string | null
+          end_date?: string | null
           folder_link?: string | null
           folder_links?: Json
           id?: string
@@ -1695,6 +1697,7 @@ export type Database = {
           contact_name?: string | null
           created_at?: string
           email?: string | null
+          end_date?: string | null
           folder_link?: string | null
           folder_links?: Json
           id?: string

@@ -1,6 +1,8 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import ChatViewComponent from "@/components/chat/ChatView";
 import { User, Phone, PhoneCall, Building2, Clock, Search, Mail, Globe, CheckSquare, Trash2, MessageSquare, FileText, DollarSign, X, Edit, Pencil, Check, Users, Plus, UserPlus, BarChart3, FolderOpen, Link, KeyRound, Calendar as CalendarIcon } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CallDialog } from "@/components/telephony/CallDialog";
 import { CallHistoryTab } from "@/components/telephony/CallHistoryTab";
 import { Badge } from "@/components/ui/badge";
@@ -693,7 +695,6 @@ export function ClientsChatView({
                       </div>
                     </div>
 
-                    {/* Dates */}
                     <div className="border rounded-lg p-4 space-y-3 text-right">
                       <h3 className="font-semibold text-sm flex items-center gap-2 justify-end">
                         ציר זמן
@@ -701,12 +702,52 @@ export function ClientsChatView({
                       </h3>
                       <div className="space-y-2 text-sm">
                         <div className="flex items-center justify-end gap-2">
-                          <span className="font-medium">
-                            {selectedClient.start_date
-                              ? format(new Date(selectedClient.start_date), "dd/MM/yyyy", { locale: he })
-                              : "—"}
-                          </span>
-                          <span className="text-muted-foreground">:תאריך התחלה</span>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button variant="outline" size="sm" className="h-7 text-xs font-medium gap-1">
+                                <CalendarIcon className="h-3 w-3" />
+                                {selectedClient.start_date
+                                  ? format(new Date(selectedClient.start_date), "dd/MM/yyyy", { locale: he })
+                                  : "בחר תאריך"}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="end">
+                              <Calendar
+                                mode="single"
+                                selected={selectedClient.start_date ? new Date(selectedClient.start_date) : undefined}
+                                onSelect={(date) => {
+                                  updateClientField(selectedClient.id, "start_date", date ? format(date, "yyyy-MM-dd") : null);
+                                }}
+                                initialFocus
+                                className={cn("p-3 pointer-events-auto")}
+                              />
+                            </PopoverContent>
+                          </Popover>
+                          <span className="text-muted-foreground">:תחילת פעילות</span>
+                        </div>
+                        <div className="flex items-center justify-end gap-2">
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button variant="outline" size="sm" className="h-7 text-xs font-medium gap-1">
+                                <CalendarIcon className="h-3 w-3" />
+                                {(selectedClient as any).end_date
+                                  ? format(new Date((selectedClient as any).end_date), "dd/MM/yyyy", { locale: he })
+                                  : "בחר תאריך"}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="end">
+                              <Calendar
+                                mode="single"
+                                selected={(selectedClient as any).end_date ? new Date((selectedClient as any).end_date) : undefined}
+                                onSelect={(date) => {
+                                  updateClientField(selectedClient.id, "end_date", date ? format(date, "yyyy-MM-dd") : null);
+                                }}
+                                initialFocus
+                                className={cn("p-3 pointer-events-auto")}
+                              />
+                            </PopoverContent>
+                          </Popover>
+                          <span className="text-muted-foreground">:סיום פעילות</span>
                         </div>
                         <div className="flex items-center justify-end gap-2">
                           <span className="font-medium">
