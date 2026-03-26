@@ -202,6 +202,192 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_detection_brands: {
+        Row: {
+          brand_name: string
+          competitor_names: string[] | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          id: string
+          keywords: string[] | null
+          tenant_id: string
+          updated_at: string | null
+          url: string | null
+        }
+        Insert: {
+          brand_name: string
+          competitor_names?: string[] | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          keywords?: string[] | null
+          tenant_id: string
+          updated_at?: string | null
+          url?: string | null
+        }
+        Update: {
+          brand_name?: string
+          competitor_names?: string[] | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          keywords?: string[] | null
+          tenant_id?: string
+          updated_at?: string | null
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_detection_brands_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_detection_prompts: {
+        Row: {
+          brand_id: string
+          category: string | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          prompt: string
+          tenant_id: string
+        }
+        Insert: {
+          brand_id: string
+          category?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          prompt: string
+          tenant_id: string
+        }
+        Update: {
+          brand_id?: string
+          category?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          prompt?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_detection_prompts_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "ai_detection_brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_detection_prompts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_detection_results: {
+        Row: {
+          citations: string[] | null
+          id: string
+          is_mentioned: boolean | null
+          platform: string
+          position: number | null
+          prompt_id: string
+          response_snippet: string | null
+          scan_id: string | null
+          scanned_at: string | null
+          sentiment: string | null
+        }
+        Insert: {
+          citations?: string[] | null
+          id?: string
+          is_mentioned?: boolean | null
+          platform: string
+          position?: number | null
+          prompt_id: string
+          response_snippet?: string | null
+          scan_id?: string | null
+          scanned_at?: string | null
+          sentiment?: string | null
+        }
+        Update: {
+          citations?: string[] | null
+          id?: string
+          is_mentioned?: boolean | null
+          platform?: string
+          position?: number | null
+          prompt_id?: string
+          response_snippet?: string | null
+          scan_id?: string | null
+          scanned_at?: string | null
+          sentiment?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_detection_results_prompt_id_fkey"
+            columns: ["prompt_id"]
+            isOneToOne: false
+            referencedRelation: "ai_detection_prompts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_detection_scores: {
+        Row: {
+          brand_id: string
+          chatgpt_score: number | null
+          created_at: string | null
+          gemini_score: number | null
+          id: string
+          mentioned_prompts: number | null
+          perplexity_score: number | null
+          score: number | null
+          total_prompts: number | null
+          week_start: string
+        }
+        Insert: {
+          brand_id: string
+          chatgpt_score?: number | null
+          created_at?: string | null
+          gemini_score?: number | null
+          id?: string
+          mentioned_prompts?: number | null
+          perplexity_score?: number | null
+          score?: number | null
+          total_prompts?: number | null
+          week_start: string
+        }
+        Update: {
+          brand_id?: string
+          chatgpt_score?: number | null
+          created_at?: string | null
+          gemini_score?: number | null
+          id?: string
+          mentioned_prompts?: number | null
+          perplexity_score?: number | null
+          score?: number | null
+          total_prompts?: number | null
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_detection_scores_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "ai_detection_brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_memory: {
         Row: {
           category: string
