@@ -611,6 +611,7 @@ export default function DashboardView() {
                   </>
                 )}
               </div>
+              )}
 
               {/* Platform Breakdown */}
               {Object.keys(summaryByPlatform).length > 0 && (
