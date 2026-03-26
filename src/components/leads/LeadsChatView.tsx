@@ -479,9 +479,9 @@ export function LeadsChatView({
 
                   {/* Notes */}
                   {selectedLead.notes && (
-                    <div className="border rounded-lg p-4">
+                    <div className="border rounded-lg p-4 text-right">
                       <h3 className="font-semibold text-sm mb-2">הערות</h3>
-                      <p className="text-sm text-muted-foreground whitespace-pre-wrap">{selectedLead.notes}</p>
+                      <p className="text-sm text-muted-foreground whitespace-pre-wrap text-right">{selectedLead.notes}</p>
                     </div>
                   )}
 
