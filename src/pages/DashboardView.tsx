@@ -398,6 +398,42 @@ export default function DashboardView() {
       }));
   }, [filteredRecords]);
 
+  // Campaign breakdown for platform-specific tabs (Facebook, Google Ads)
+  const campaignBreakdown = useMemo(() => {
+    if (platformFilter === 'all' || platformFilter === 'google_analytics') return [];
+    
+    const campaigns: Record<string, { campaign: string; spend: number; impressions: number; clicks: number; leads: number; revenue: number; purchases: number }> = {};
+    
+    filteredRecords.forEach((record: any) => {
+      const data = record.data || {};
+      const campaignName = data.campaign_name || data.campaign || 'ללא שם קמפיין';
+      
+      if (!campaigns[campaignName]) {
+        campaigns[campaignName] = { campaign: campaignName, spend: 0, impressions: 0, clicks: 0, leads: 0, revenue: 0, purchases: 0 };
+      }
+      
+      campaigns[campaignName].spend += getSpendFromData(data);
+      campaigns[campaignName].impressions += Number(data.impressions) || 0;
+      campaigns[campaignName].clicks += Number(data.clicks) || Number(data.link_clicks) || 0;
+      campaigns[campaignName].leads += getLeadsFromData(data);
+      campaigns[campaignName].revenue += getRevenueFromData(data);
+      campaigns[campaignName].purchases += getPurchasesFromData(data);
+    });
+    
+    return Object.values(campaigns).sort((a, b) => b.spend - a.spend);
+  }, [filteredRecords, platformFilter]);
+
+  const campaignTotals = useMemo(() => {
+    return campaignBreakdown.reduce((acc, c) => ({
+      spend: acc.spend + c.spend,
+      impressions: acc.impressions + c.impressions,
+      clicks: acc.clicks + c.clicks,
+      leads: acc.leads + c.leads,
+      revenue: acc.revenue + c.revenue,
+      purchases: acc.purchases + c.purchases,
+    }), { spend: 0, impressions: 0, clicks: 0, leads: 0, revenue: 0, purchases: 0 });
+  }, [campaignBreakdown]);
+
   // Group records by date for table
   const recordsByDate = useMemo(() => {
     const byDate: Record<string, any[]> = {};
@@ -659,7 +695,105 @@ export default function DashboardView() {
               </div>
               )}
 
-              {/* Platform Breakdown */}
+              {/* Campaign Breakdown - show on platform-specific tabs (Facebook, Google Ads) */}
+              {(platformFilter === 'facebook' || platformFilter === 'google_ads') && campaignBreakdown.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>
+                      {platformFilter === 'facebook' ? 'קמפיינים - Facebook' : 'קמפיינים - Google Ads'}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-right">קמפיין</TableHead>
+                            <TableHead className="text-right">חשיפות</TableHead>
+                            <TableHead className="text-right">קליקים</TableHead>
+                            {dashboardCampaignType === 'ecommerce' ? (
+                              <>
+                                <TableHead className="text-right">רכישות</TableHead>
+                                <TableHead className="text-right">הכנסות</TableHead>
+                              </>
+                            ) : (
+                              <TableHead className="text-right">לידים</TableHead>
+                            )}
+                            <TableHead className="text-right">הוצאה</TableHead>
+                            {dashboardCampaignType === 'ecommerce' ? (
+                              <TableHead className="text-right">ROAS</TableHead>
+                            ) : (
+                              <TableHead className="text-right">עלות לליד</TableHead>
+                            )}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {campaignBreakdown.map((c, i) => {
+                            const cpl = c.leads > 0 ? c.spend / c.leads : 0;
+                            const roas = c.spend > 0 ? c.revenue / c.spend : 0;
+                            return (
+                              <TableRow key={i}>
+                                <TableCell className="font-medium max-w-[300px] truncate">{c.campaign}</TableCell>
+                                <TableCell>{formatNumber(c.impressions)}</TableCell>
+                                <TableCell>{formatNumber(c.clicks)}</TableCell>
+                                {dashboardCampaignType === 'ecommerce' ? (
+                                  <>
+                                    <TableCell>{formatNumber(c.purchases)}</TableCell>
+                                    <TableCell>{formatCurrency(c.revenue)}</TableCell>
+                                  </>
+                                ) : (
+                                  <TableCell className={c.leads > 0 ? 'text-green-600 font-semibold' : ''}>
+                                    {formatNumber(c.leads)}
+                                  </TableCell>
+                                )}
+                                <TableCell>{formatCurrency(c.spend)}</TableCell>
+                                {dashboardCampaignType === 'ecommerce' ? (
+                                  <TableCell>
+                                    <span className={roas >= 1 ? 'text-green-600 font-semibold' : 'text-red-600'}>
+                                      {roas.toFixed(2)}
+                                    </span>
+                                  </TableCell>
+                                ) : (
+                                  <TableCell className={cpl > 0 ? 'text-green-600' : ''}>
+                                    {cpl > 0 ? formatCurrency(cpl) : '₪0'}
+                                  </TableCell>
+                                )}
+                              </TableRow>
+                            );
+                          })}
+                          {/* Totals row */}
+                          <TableRow className="bg-muted/50 font-bold border-t-2">
+                            <TableCell>סה"כ</TableCell>
+                            <TableCell>{formatNumber(campaignTotals.impressions)}</TableCell>
+                            <TableCell>{formatNumber(campaignTotals.clicks)}</TableCell>
+                            {dashboardCampaignType === 'ecommerce' ? (
+                              <>
+                                <TableCell>{formatNumber(campaignTotals.purchases)}</TableCell>
+                                <TableCell>{formatCurrency(campaignTotals.revenue)}</TableCell>
+                              </>
+                            ) : (
+                              <TableCell className="text-green-600">{formatNumber(campaignTotals.leads)}</TableCell>
+                            )}
+                            <TableCell>{formatCurrency(campaignTotals.spend)}</TableCell>
+                            {dashboardCampaignType === 'ecommerce' ? (
+                              <TableCell>
+                                <span className={(campaignTotals.spend > 0 ? campaignTotals.revenue / campaignTotals.spend : 0) >= 1 ? 'text-green-600' : 'text-red-600'}>
+                                  {(campaignTotals.spend > 0 ? campaignTotals.revenue / campaignTotals.spend : 0).toFixed(2)}
+                                </span>
+                              </TableCell>
+                            ) : (
+                              <TableCell className="text-green-600">
+                                {campaignTotals.leads > 0 ? formatCurrency(campaignTotals.spend / campaignTotals.leads) : '₪0'}
+                              </TableCell>
+                            )}
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
               {Object.keys(summaryByPlatform).length > 0 && (platformFilter === 'all' || platformFilter === 'google_analytics') && (
                 <Card>
                   <CardHeader><CardTitle>פירוט לפי פלטפורמה</CardTitle></CardHeader>
@@ -816,8 +950,8 @@ export default function DashboardView() {
                 </Card>
               )}
 
-              {/* Charts - only show in All and Analytics tabs */}
-              {dailyChartData.length > 1 && (platformFilter === 'all' || platformFilter === 'google_analytics') && (
+              {/* Charts - show on all tabs */}
+              {dailyChartData.length > 1 && (
                 <div className="grid gap-4 md:grid-cols-2">
                   {/* Revenue vs Spend */}
                   {dashboardCampaignType === 'ecommerce' && (showAdsCards || showAnalyticsCards) && (
