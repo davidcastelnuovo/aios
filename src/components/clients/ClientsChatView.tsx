@@ -131,7 +131,7 @@ export function ClientsChatView({
     if (selectedClientIds.size === 0) return;
     setBulkActionLoading(true);
     try {
-      const { error } = await supabase.from("clients").update({ status }).in("id", Array.from(selectedClientIds));
+      const { error } = await supabase.from("clients").update({ status: status as any }).in("id", Array.from(selectedClientIds));
       if (error) throw error;
       toast.success(`${selectedClientIds.size} לקוחות עודכנו`);
       exitMultiSelect();
