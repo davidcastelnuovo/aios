@@ -82,6 +82,7 @@ export function SimpleTableDialog({ open, onOpenChange }: SimpleTableDialogProps
   // Reset client when agency changes
   useEffect(() => {
     setClientId("none");
+    setClientSearch("");
   }, [agencyId]);
 
   const createMutation = useMutation({
