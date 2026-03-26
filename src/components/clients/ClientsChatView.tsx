@@ -94,6 +94,14 @@ export function ClientsChatView({
 
   const [addingContact, setAddingContact] = useState(false);
   const [newContact, setNewContact] = useState({ contact_name: "", phone: "", email: "", role: "" });
+  const [groupSearch, setGroupSearch] = useState("");
+  const [showGroupDropdown, setShowGroupDropdown] = useState(false);
+
+  const filteredGroups = useMemo(() => {
+    if (!groupSearch.trim()) return whatsappGroups;
+    const q = groupSearch.toLowerCase();
+    return whatsappGroups.filter((g: any) => g.group_name?.toLowerCase().includes(q));
+  }, [whatsappGroups, groupSearch]);
 
   const filteredClients = useMemo(() => {
     if (!listSearch.trim()) return clients;
