@@ -109,19 +109,35 @@ export function ClientsChatView({
     return whatsappGroups.filter((g: any) => g.group_name?.toLowerCase().includes(q));
   }, [whatsappGroups, groupSearch]);
 
+  const getClientDisplayName = useCallback((client: any) => {
+    const candidates = [client?.name, client?.contact_name, client?.website, client?.phone]
+      .map((v) => (typeof v === "string" ? v.trim() : ""));
+
+    const firstReadable = candidates.find((value) => /[\p{L}\p{N}]/u.test(value));
+    if (firstReadable) return firstReadable;
+
+    const firstNonEmpty = candidates.find(Boolean);
+    return firstNonEmpty || "ללא שם";
+  }, []);
+
   const filteredClients = useMemo(() => {
     if (!listSearch.trim()) return clients;
     const q = listSearch.toLowerCase();
     return clients.filter(c =>
-      (c.name || "").toLowerCase().includes(q) ||
+      getClientDisplayName(c).toLowerCase().includes(q) ||
       (c.contact_name || "").toLowerCase().includes(q) ||
       (c.phone || "").includes(q)
     );
-  }, [clients, listSearch]);
+  }, [clients, listSearch, getClientDisplayName]);
 
   const selectedClient = useMemo(() => {
     return clients.find(c => c.id === selectedClientId) || null;
   }, [clients, selectedClientId]);
+
+  const selectedClientDisplayName = useMemo(
+    () => (selectedClient ? getClientDisplayName(selectedClient) : "ללא שם"),
+    [selectedClient, getClientDisplayName]
+  );
 
   const handleDelete = async (id: string) => {
     const confirmed = window.confirm("האם למחוק את הלקוח?");
