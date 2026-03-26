@@ -138,15 +138,15 @@ export default function SharedDashboard() {
     return platforms;
   }, [tables]);
 
-  // Filter records: platform filter + exclude traffic_source for Analytics
+  // Filter records: platform filter + only use 'daily' aggregate records for Analytics
   const filteredRecords = useMemo(() => {
     return records.filter((record: any) => {
       const source = record._source || 'unknown';
       if (!matchesPlatformFilter(source, platformFilter)) return false;
       if (isAnalyticsPlatform(source)) {
         const data = record.data || {};
-        if (data.report_type === 'traffic_source') return false;
-        if (!data.date && data.report_type !== 'daily' && data.report_type !== 'daily_source') return false;
+        // Only include report_type='daily' to avoid double-counting with daily_source
+        if (data.report_type !== 'daily') return false;
       }
       return true;
     });
