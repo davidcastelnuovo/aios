@@ -132,7 +132,7 @@ export function LeadsChatView({
                     isSelected && "bg-primary/10 border-e-4 border-e-primary"
                   )}
                 >
-                  <div className="flex items-start gap-2">
+                  <div className="flex items-start gap-2 flex-row-reverse">
                     {/* Avatar circle */}
                     <div
                       className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
@@ -140,19 +140,19 @@ export function LeadsChatView({
                     >
                       {(lead.contact_name || "?")[0]}
                     </div>
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 text-right">
                       <div className="flex items-center justify-between gap-1">
-                        <span className="font-semibold text-sm truncate">
-                          {lead.contact_name || "ללא שם"}
-                        </span>
                         <span className="text-[10px] text-muted-foreground whitespace-nowrap">
                           {lead.created_at && format(new Date(lead.created_at), "dd/MM", { locale: he })}
+                        </span>
+                        <span className="font-semibold text-sm truncate">
+                          {lead.contact_name || "ללא שם"}
                         </span>
                       </div>
                       {isCompanyNameVisible && lead.company_name && (
                         <p className="text-xs text-muted-foreground truncate">{lead.company_name}</p>
                       )}
-                      <div className="flex items-center gap-1 mt-1 flex-wrap">
+                      <div className="flex items-center gap-1 mt-1 flex-wrap justify-end">
                         {stageInfo && (
                           <Badge
                             variant="outline"
