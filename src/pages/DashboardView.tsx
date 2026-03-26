@@ -648,10 +648,11 @@ export default function DashboardView() {
                           <TableRow>
                             <TableHead className="text-right">פלטפורמה</TableHead>
                             <TableHead className="text-right">הוצאה</TableHead>
-                            <TableHead className="text-right">חשיפות / סשנים</TableHead>
+                            <TableHead className="text-right">חשיפות / סשנים יחודיים</TableHead>
                             <TableHead className="text-right">קליקים</TableHead>
                             {dashboardCampaignType === 'ecommerce' ? (
                               <>
+                                <TableHead className="text-right">הוספה לעגלה</TableHead>
                                 <TableHead className="text-right">רכישות</TableHead>
                                 <TableHead className="text-right">הכנסות</TableHead>
                                 <TableHead className="text-right">ROAS</TableHead>
@@ -677,10 +678,11 @@ export default function DashboardView() {
                                   </div>
                                 </TableCell>
                                 <TableCell>{isAnalytics ? '-' : formatCurrency(metrics.spend)}</TableCell>
-                                <TableCell>{formatNumber(isAnalytics ? metrics.sessions : metrics.impressions)}</TableCell>
+                                <TableCell>{formatNumber(isAnalytics ? metrics.users : metrics.impressions)}</TableCell>
                                 <TableCell>{isAnalytics ? '-' : formatNumber(metrics.clicks)}</TableCell>
                                 {dashboardCampaignType === 'ecommerce' ? (
                                   <>
+                                    <TableCell>{formatNumber(metrics.addToCart)}</TableCell>
                                     <TableCell>{formatNumber(metrics.results)}</TableCell>
                                     <TableCell>{formatCurrency(metrics.revenue)}</TableCell>
                                     <TableCell>
@@ -712,6 +714,7 @@ export default function DashboardView() {
                             <TableCell>{formatNumber(totalSummary.clicks)}</TableCell>
                             {dashboardCampaignType === 'ecommerce' ? (
                               <>
+                                <TableCell>{formatNumber(totalSummary.analyticsAddToCart)}</TableCell>
                                 <TableCell>{formatNumber(totalSummary.analyticsPurchases || totalSummary.results)}</TableCell>
                                 <TableCell>{formatCurrency(totalSummary.revenue)}</TableCell>
                                 <TableCell>
@@ -727,6 +730,49 @@ export default function DashboardView() {
                               </>
                             )}
                           </TableRow>
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Analytics Source Breakdown */}
+              {analyticsSourceBreakdown.length > 0 && (platformFilter === 'all' || platformFilter === 'google_analytics') && (
+                <Card>
+                  <CardHeader><CardTitle>פירוט לפי מקור הגעה (Analytics)</CardTitle></CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-right">מקור / מדיום</TableHead>
+                            <TableHead className="text-right">סשנים</TableHead>
+                            <TableHead className="text-right">משתמשים יחודיים</TableHead>
+                            {dashboardCampaignType === 'ecommerce' && (
+                              <>
+                                <TableHead className="text-right">הוספה לעגלה</TableHead>
+                                <TableHead className="text-right">רכישות</TableHead>
+                                <TableHead className="text-right">הכנסות</TableHead>
+                              </>
+                            )}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {analyticsSourceBreakdown.map((source) => (
+                            <TableRow key={source.name}>
+                              <TableCell className="font-medium">{source.name}</TableCell>
+                              <TableCell>{formatNumber(source.sessions)}</TableCell>
+                              <TableCell>{formatNumber(source.users)}</TableCell>
+                              {dashboardCampaignType === 'ecommerce' && (
+                                <>
+                                  <TableCell>{formatNumber(source.addToCart)}</TableCell>
+                                  <TableCell>{formatNumber(source.purchases)}</TableCell>
+                                  <TableCell>{formatCurrency(source.revenue)}</TableCell>
+                                </>
+                              )}
+                            </TableRow>
+                          ))}
                         </TableBody>
                       </Table>
                     </div>
