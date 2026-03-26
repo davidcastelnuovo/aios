@@ -488,6 +488,19 @@ export default function Integrations() {
       route: "manus-settings",
       gradient: "bg-gradient-to-r from-violet-500 to-indigo-700",
     },
+    {
+      icon: <Phone className="h-6 w-6" />,
+      title: "Paycall (מרכזיה)",
+      description: "מרכזיה וירטואלית - חייג ללקוחות ולידים ישירות מהמערכת",
+      features: [
+        "שיחות Click2Call מתוך כרטיס ליד/לקוח",
+        "הקלטת שיחות אוטומטית",
+        "היסטוריית שיחות מלאה",
+      ],
+      isConnected: false,
+      route: "telephony-settings",
+      gradient: "bg-gradient-to-r from-teal-600 to-cyan-700",
+    },
   ];
 
   return (
