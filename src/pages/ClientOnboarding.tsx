@@ -206,6 +206,7 @@ export default function ClientOnboarding() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["client-onboarding"] });
+      queryClient.invalidateQueries({ queryKey: ["clients"] });
       toast.success("סטטוס עודכן בהצלחה");
     },
     onError: (error) => {
