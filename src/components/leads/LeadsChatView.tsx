@@ -94,7 +94,7 @@ export function LeadsChatView({
   return (
     <div className="flex h-[calc(100vh-220px)] border rounded-lg overflow-hidden bg-background" dir="rtl">
       {/* Right side - Lead list (25%) */}
-      <div className="w-[25%] min-w-[240px] border-l flex flex-col bg-muted/20">
+      <div className="w-[25%] min-w-[240px] border-s flex flex-col bg-muted/20">
         {/* List header with search */}
         <div className="p-3 border-b bg-background/80 backdrop-blur-sm">
           <div className="relative">
@@ -129,7 +129,7 @@ export function LeadsChatView({
                   }}
                   className={cn(
                     "w-full text-right p-3 hover:bg-muted/50 transition-colors cursor-pointer",
-                    isSelected && "bg-primary/10 border-r-4 border-r-primary"
+                    isSelected && "bg-primary/10 border-e-4 border-e-primary"
                   )}
                 >
                   <div className="flex items-start gap-2">
