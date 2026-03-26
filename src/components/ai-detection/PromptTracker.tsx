@@ -30,7 +30,7 @@ interface PromptTrackerProps {
   isGenerating?: boolean;
 }
 
-export function PromptTracker({ prompts, onAddPrompt }: PromptTrackerProps) {
+export function PromptTracker({ prompts, onAddPrompt, onAutoGenerate, isGenerating }: PromptTrackerProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [newPrompt, setNewPrompt] = useState("");
   const [newCategory, setNewCategory] = useState("");
