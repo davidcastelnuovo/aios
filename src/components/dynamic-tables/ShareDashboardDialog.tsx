@@ -3,12 +3,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Share2, Copy, Plus, X, Link, Mail, Trash2 } from "lucide-react";
+import { Share2, Copy, Plus, Trash2 } from "lucide-react";
 
 interface ShareDashboardDialogProps {
   dashboardId: string;
@@ -18,7 +16,6 @@ interface ShareDashboardDialogProps {
 
 export function ShareDashboardDialog({ dashboardId, dashboardName, tenantId }: ShareDashboardDialogProps) {
   const [open, setOpen] = useState(false);
-  const [newEmail, setNewEmail] = useState("");
   const queryClient = useQueryClient();
 
   const { data: shares = [], isLoading } = useQuery({
@@ -37,7 +34,9 @@ export function ShareDashboardDialog({ dashboardId, dashboardName, tenantId }: S
 
   const createShareMutation = useMutation({
     mutationFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
       const { data, error } = await supabase
@@ -60,24 +59,11 @@ export function ShareDashboardDialog({ dashboardId, dashboardName, tenantId }: S
     onError: () => toast.error("שגיאה ביצירת קישור"),
   });
 
-  const updateEmailsMutation = useMutation({
-    mutationFn: async ({ shareId, emails }: { shareId: string; emails: string[] }) => {
-      const { error } = await supabase
-        .from("dashboard_shares")
-        .update({ allowed_emails: emails, updated_at: new Date().toISOString() } as any)
-        .eq("id", shareId);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["dashboard-shares", dashboardId] });
-    },
-  });
-
   const toggleActiveMutation = useMutation({
     mutationFn: async ({ shareId, isActive }: { shareId: string; isActive: boolean }) => {
       const { error } = await supabase
         .from("dashboard_shares")
-        .update({ is_active: isActive, updated_at: new Date().toISOString() } as any)
+        .update({ is_active: isActive, allowed_emails: [], updated_at: new Date().toISOString() } as any)
         .eq("id", shareId);
       if (error) throw error;
     },
@@ -89,10 +75,7 @@ export function ShareDashboardDialog({ dashboardId, dashboardName, tenantId }: S
 
   const deleteShareMutation = useMutation({
     mutationFn: async (shareId: string) => {
-      const { error } = await supabase
-        .from("dashboard_shares")
-        .delete()
-        .eq("id", shareId);
+      const { error } = await supabase.from("dashboard_shares").delete().eq("id", shareId);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -102,38 +85,16 @@ export function ShareDashboardDialog({ dashboardId, dashboardName, tenantId }: S
   });
 
   const getShareUrl = (token: string) => {
-    // Use published domain if available, fallback to current origin
-    const origin = window.location.hostname.includes('preview') || window.location.hostname.includes('lovableproject')
-      ? 'https://after-lead.lovable.app'
-      : window.location.origin;
+    const origin =
+      window.location.hostname.includes("preview") || window.location.hostname.includes("lovableproject")
+        ? "https://after-lead.lovable.app"
+        : window.location.origin;
     return `${origin}/shared/dashboard/${token}`;
   };
 
   const copyLink = (token: string) => {
     navigator.clipboard.writeText(getShareUrl(token));
     toast.success("הקישור הועתק ללוח");
-  };
-
-  const addEmail = (shareId: string, currentEmails: string[]) => {
-    const email = newEmail.trim().toLowerCase();
-    if (!email || !email.includes("@")) {
-      toast.error("נא להזין אימייל תקין");
-      return;
-    }
-    if (currentEmails.includes(email)) {
-      toast.error("אימייל זה כבר ברשימה");
-      return;
-    }
-    updateEmailsMutation.mutate({ shareId, emails: [...currentEmails, email] });
-    setNewEmail("");
-    toast.success("אימייל נוסף");
-  };
-
-  const removeEmail = (shareId: string, currentEmails: string[], emailToRemove: string) => {
-    updateEmailsMutation.mutate({
-      shareId,
-      emails: currentEmails.filter((e) => e !== emailToRemove),
-    });
   };
 
   return (
@@ -166,7 +127,6 @@ export function ShareDashboardDialog({ dashboardId, dashboardName, tenantId }: S
 
           {shares.map((share: any) => (
             <div key={share.id} className="border rounded-lg p-4 space-y-3">
-              {/* Link */}
               <div className="flex items-center gap-2 justify-end">
                 <Button variant="default" size="sm" onClick={() => copyLink(share.share_token)} className="shrink-0">
                   <Copy className="ml-1 h-4 w-4" />
@@ -174,7 +134,6 @@ export function ShareDashboardDialog({ dashboardId, dashboardName, tenantId }: S
                 </Button>
               </div>
 
-              {/* Active toggle */}
               <div className="flex items-center justify-between">
                 <Label className="text-sm">קישור פעיל</Label>
                 <Switch
@@ -185,59 +144,8 @@ export function ShareDashboardDialog({ dashboardId, dashboardName, tenantId }: S
                 />
               </div>
 
-              {/* Email restrictions */}
-              <div className="space-y-2">
-                <Label className="text-sm flex items-center gap-1">
-                  <Mail className="h-3 w-3" />
-                  הגבלת גישה לאימיילים (אופציונלי)
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  {(share.allowed_emails || []).length === 0
-                    ? "הקישור פתוח לכולם. הוסף אימיילים כדי להגביל גישה."
-                    : "רק אימיילים ברשימה יוכלו לצפות בדשבורד."}
-                </p>
+              <p className="text-xs text-muted-foreground">כל מי שיש לו את הקישור יכול לצפות בדשבורד.</p>
 
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="email@example.com"
-                    value={newEmail}
-                    onChange={(e) => setNewEmail(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        addEmail(share.id, share.allowed_emails || []);
-                      }
-                    }}
-                    className="text-sm"
-                    dir="ltr"
-                  />
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => addEmail(share.id, share.allowed_emails || [])}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-
-                {(share.allowed_emails || []).length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {(share.allowed_emails as string[]).map((email: string) => (
-                      <Badge key={email} variant="secondary" className="text-xs gap-1">
-                        {email}
-                        <button
-                          onClick={() => removeEmail(share.id, share.allowed_emails || [], email)}
-                          className="hover:text-destructive"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Delete */}
               <div className="flex justify-end">
                 <Button
                   variant="ghost"

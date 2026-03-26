@@ -5,8 +5,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
@@ -16,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Facebook, FileSpreadsheet, TrendingUp, TrendingDown, Minus, Lock, BarChart3 } from "lucide-react";
+import { Facebook, FileSpreadsheet, TrendingUp, TrendingDown, Minus, BarChart3 } from "lucide-react";
 
 const DATE_FILTERS = [
   { value: 'today', label: 'היום' },
@@ -103,16 +101,12 @@ const getIntegrationIcon = (type: string | null) => {
 export default function SharedDashboard() {
   const { shareToken } = useParams();
   const [dateFilter, setDateFilter] = useState('last_30_days');
-  const [email, setEmail] = useState('');
-  const [submittedEmail, setSubmittedEmail] = useState('');
-  const [emailError, setEmailError] = useState('');
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all');
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['shared-dashboard', shareToken, dateFilter, submittedEmail],
+    queryKey: ['shared-dashboard', shareToken, dateFilter],
     queryFn: async () => {
       const params = new URLSearchParams({ token: shareToken!, date_filter: dateFilter });
-      if (submittedEmail) params.set('email', submittedEmail);
       const response = await supabase.functions.invoke(`public-dashboard?${params.toString()}`, { method: 'GET' });
       if (response.error) throw response.error;
       return response.data;
@@ -120,9 +114,6 @@ export default function SharedDashboard() {
     enabled: !!shareToken,
     retry: false,
   });
-
-  const needsEmail = data?.error === 'email_required';
-  const emailNotAllowed = data?.error === 'email_not_allowed';
 
   const tables = data?.tables || [];
   const records = data?.records || [];
@@ -226,46 +217,6 @@ export default function SharedDashboard() {
 
   const combinedRoas = totalSummary.roas_spend > 0 ? totalSummary.roas_value / totalSummary.roas_spend : 0;
   const combinedCpl = totalSummary.results > 0 ? totalSummary.spend / totalSummary.results : 0;
-
-  // Email gate
-  if (needsEmail || emailNotAllowed) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4" dir="rtl">
-        <Card className="max-w-md w-full">
-          <CardContent className="p-8 text-center space-y-4">
-            <Lock className="h-12 w-12 mx-auto text-muted-foreground" />
-            <h2 className="text-xl font-bold">דשבורד מוגן</h2>
-            <p className="text-muted-foreground">
-              {emailNotAllowed
-                ? 'האימייל שהזנת אינו מורשה לצפות בדשבורד זה.'
-                : 'נא להזין את כתובת האימייל שלך כדי לצפות בדשבורד.'}
-            </p>
-            {emailError && <p className="text-destructive text-sm">{emailError}</p>}
-            <div className="flex gap-2">
-              <Input
-                placeholder="email@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                dir="ltr"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    setSubmittedEmail(email.trim().toLowerCase());
-                    setEmailError('');
-                  }
-                }}
-              />
-              <Button onClick={() => {
-                setSubmittedEmail(email.trim().toLowerCase());
-                setEmailError('');
-              }}>
-                כניסה
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   if (isLoading) {
     return (
