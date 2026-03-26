@@ -164,12 +164,12 @@ export function ShareDashboardDialog({ dashboardId, dashboardName, tenantId }: S
             <div key={share.id} className="border rounded-lg p-4 space-y-3">
               {/* Link */}
               <div className="flex items-center gap-2">
-                <Link className="h-4 w-4 text-muted-foreground shrink-0" />
-                <code className="text-xs bg-muted px-2 py-1 rounded flex-1 truncate">
+                <code className="text-xs bg-muted px-2 py-1 rounded flex-1 truncate" dir="ltr">
                   {getShareUrl(share.share_token)}
                 </code>
-                <Button variant="ghost" size="sm" onClick={() => copyLink(share.share_token)}>
-                  <Copy className="h-4 w-4" />
+                <Button variant="default" size="sm" onClick={() => copyLink(share.share_token)} className="shrink-0">
+                  <Copy className="ml-1 h-4 w-4" />
+                  העתק
                 </Button>
               </div>
 
