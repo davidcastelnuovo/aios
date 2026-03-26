@@ -14,7 +14,6 @@ Deno.serve(async (req) => {
   try {
     const url = new URL(req.url);
     const shareToken = url.searchParams.get("token");
-    const viewerEmail = url.searchParams.get("email");
     const dateFilter = url.searchParams.get("date_filter") || "last_30_days";
 
     if (!shareToken) {
@@ -46,38 +45,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Check email restriction
-    const allowedEmails: string[] = share.allowed_emails || [];
-    if (allowedEmails.length > 0) {
-      if (!viewerEmail) {
-        return new Response(
-          JSON.stringify({
-            error: "email_required",
-            message: "This dashboard requires email verification",
-          }),
-          {
-            status: 403,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      }
-      const normalizedEmail = viewerEmail.toLowerCase().trim();
-      const isAllowed = allowedEmails.some(
-        (e) => e.toLowerCase().trim() === normalizedEmail
-      );
-      if (!isAllowed) {
-        return new Response(
-          JSON.stringify({
-            error: "email_not_allowed",
-            message: "Your email is not authorized to view this dashboard",
-          }),
-          {
-            status: 403,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      }
-    }
+    // Public link access: anyone with an active link can view
+    const allowedEmails: string[] = [];
 
     const dashboard = share.crm_dashboards;
     if (!dashboard) {
