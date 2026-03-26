@@ -142,6 +142,7 @@ const App = () => (
                    <Route path="/privacy" element={<Privacy />} />
                    <Route path="/chat-invite/:token" element={<ChatInvite />} />
                    <Route path="/shared/dashboard/:shareToken" element={<SharedDashboard />} />
+                   <Route path="/shared/table/:shareToken" element={<SharedTable />} />
                   <Route path="/terms" element={<Terms />} />
                   
                   {/* Tenant-scoped routes */}
