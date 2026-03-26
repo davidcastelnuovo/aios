@@ -288,7 +288,7 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
       {/* Add Update Form */}
       <Card>
         <CardContent className="p-3 sm:p-4">
-          <div className="flex gap-2 flex-row-reverse">
+          <div className="flex gap-2">
             <Textarea
               placeholder="הוסף עדכון חדש..."
               value={newUpdate}
