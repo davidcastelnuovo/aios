@@ -249,7 +249,7 @@ export default function DashboardView() {
     filteredRecords.forEach((record: any) => {
       const source = record._source || 'unknown';
       if (!platforms[source]) {
-        platforms[source] = { spend: 0, impressions: 0, clicks: 0, sessions: 0, users: 0, results: 0, revenue: 0, addToCart: 0, roas: 0, cpl: 0, recordCount: 0 };
+        platforms[source] = { spend: 0, impressions: 0, clicks: 0, sessions: 0, users: 0, results: 0, leads: 0, revenue: 0, addToCart: 0, roas: 0, cpl: 0, recordCount: 0 };
       }
       
       const data = record.data || {};
