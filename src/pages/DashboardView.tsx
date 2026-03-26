@@ -326,11 +326,6 @@ export default function DashboardView() {
       if (!isAnalyticsPlatform(source)) return;
       const data = record.data || {};
       if (data.report_type !== 'daily_source') return;
-      const dateStr = data.date || data.day;
-      if (!dateStr) return;
-      const recordDate = new Date(dateStr);
-      if (dateFilter.from && recordDate < dateFilter.from) return;
-      if (dateFilter.to && recordDate > dateFilter.to) return;
       
       const sm = data.source_medium || 'Unknown';
       if (!sources[sm]) sources[sm] = { sessions: 0, users: 0, purchases: 0, revenue: 0, addToCart: 0 };
@@ -343,7 +338,7 @@ export default function DashboardView() {
     return Object.entries(sources)
       .map(([name, data]) => ({ name, ...data }))
       .sort((a, b) => b.sessions - a.sessions);
-  }, [allRecords, dateFilter]);
+  }, [allRecords]);
 
   // Daily chart data
   const dailyChartData = useMemo(() => {
