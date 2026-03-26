@@ -44,6 +44,8 @@ export function SimpleTableDialog({ open, onOpenChange }: SimpleTableDialogProps
   const [category, setCategory] = useState("");
   const [agencyId, setAgencyId] = useState<string>("none");
   const [clientId, setClientId] = useState<string>("none");
+  const [clientSearch, setClientSearch] = useState("");
+  const [clientPopoverOpen, setClientPopoverOpen] = useState(false);
 
   // Fetch agencies
   const { data: agencies = [] } = useQuery({
