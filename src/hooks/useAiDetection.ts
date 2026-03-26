@@ -413,6 +413,7 @@ export function useAiDetectionProject(projectId: string | null) {
     isScanning,
     isGenerating,
     addPrompt,
+    editPrompt,
     deletePrompt,
     runScan,
     generatePrompts,
