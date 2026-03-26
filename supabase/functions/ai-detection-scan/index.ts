@@ -162,7 +162,7 @@ Deno.serve(async (req: Request) => {
             is_mentioned: brandMentioned,
             position,
             sentiment,
-            response_snippet: snippet || (brandMentioned ? responseText.substring(0, 500) : null),
+            response_snippet: snippet || responseText.substring(0, 500),
             citations,
             scan_id: scanId,
             scanned_at: new Date().toISOString(),
