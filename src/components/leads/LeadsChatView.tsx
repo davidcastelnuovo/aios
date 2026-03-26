@@ -65,6 +65,7 @@ export function LeadsChatView({
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const [callDialogOpen, setCallDialogOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const filteredListLeads = useMemo(() => {
