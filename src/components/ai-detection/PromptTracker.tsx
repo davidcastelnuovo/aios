@@ -62,13 +62,20 @@ export function PromptTracker({ prompts, onAddPrompt, onAutoGenerate, isGenerati
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg">מעקב פרומפטים</CardTitle>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm">
-                <Plus className="h-4 w-4 mr-1" />
-                הוסף פרומפט
+          <div className="flex items-center gap-2">
+            {onAutoGenerate && (
+              <Button size="sm" variant="outline" onClick={onAutoGenerate} disabled={isGenerating}>
+                {isGenerating ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Sparkles className="h-4 w-4 mr-1" />}
+                {isGenerating ? "מייצר..." : "יצירה אוטומטית"}
               </Button>
-            </DialogTrigger>
+            )}
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm">
+                  <Plus className="h-4 w-4 mr-1" />
+                  הוסף פרומפט
+                </Button>
+              </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>הוסף פרומפט למעקב</DialogTitle>
