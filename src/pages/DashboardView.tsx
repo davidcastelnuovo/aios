@@ -290,18 +290,18 @@ export default function DashboardView() {
 
   // Calculate total ads spend from ALL records (regardless of platform filter)
   // This ensures Analytics tab can still show spend and ROAS
-  const globalAdsSpend = useMemo(() => {
-    let spend = 0;
+  const globalAdsMetrics = useMemo(() => {
+    let spend = 0, impressions = 0;
     allRecords.forEach((record: any) => {
       const source = record._source || 'unknown';
       if (isAdsPlatform(source)) {
         const data = record.data || {};
-        // Only daily records to avoid double counting
         if (data.report_type && data.report_type !== 'daily') return;
         spend += getSpendFromData(data);
+        impressions += Number(data.impressions) || 0;
       }
     });
-    return spend;
+    return { spend, impressions };
   }, [allRecords]);
 
   // Total summary
