@@ -615,6 +615,8 @@ export function ClientsChatView({
                             :קבוצת WhatsApp
                           </span>
                         </div>
+                      </div>
+                    </div>
 
                     {/* Dates */}
                     <div className="border rounded-lg p-4 space-y-3 text-right">
