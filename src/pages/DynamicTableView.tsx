@@ -2446,16 +2446,28 @@ export default function DynamicTableView() {
               {(!filteredRecords || filteredRecords.length === 0) && (
                 <div className="flex items-center justify-center p-12 text-center">
                   <div>
-                    <p className="text-muted-foreground mb-3">{campaignSearch ? 'לא נמצאו קמפיינים תואמים' : 'אין שורות בטבלה'}</p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => addRowMutation.mutate()}
-                      disabled={addRowMutation.isPending}
-                    >
-                      <Plus className="ml-2 h-4 w-4" />
-                      הוסף שורה ראשונה
-                    </Button>
+                    {campaignSearch ? (
+                      <p className="text-muted-foreground mb-3">לא נמצאו קמפיינים תואמים</p>
+                    ) : table?.integration_type ? (
+                      <>
+                        <Info className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
+                        <p className="text-muted-foreground mb-1">אין נתונים לתקופה זו</p>
+                        <p className="text-muted-foreground text-xs">נסה לסנכרן מחדש או לשנות את טווח התאריכים</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-muted-foreground mb-3">אין שורות בטבלה</p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => addRowMutation.mutate()}
+                          disabled={addRowMutation.isPending}
+                        >
+                          <Plus className="ml-2 h-4 w-4" />
+                          הוסף שורה ראשונה
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
               )}
