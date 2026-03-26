@@ -91,9 +91,9 @@ Deno.serve(async (req: Request) => {
 
     // Scan each prompt against each platform model
     const platforms = [
-      { name: 'chatgpt', model: 'openai/gpt-4o-mini' },
-      { name: 'gemini', model: 'google/gemini-3-flash-preview' },
-      { name: 'perplexity', model: 'google/gemini-2.5-flash' }, // Using Gemini as proxy for Perplexity
+      { name: 'chatgpt', model: 'openai/gpt-5-mini' },
+      { name: 'gemini', model: 'google/gemini-2.5-flash' },
+      { name: 'perplexity', model: 'google/gemini-2.5-pro' },
     ];
 
     const scanId = `scan_${Date.now()}_${Math.random().toString(36).substring(7)}`;
