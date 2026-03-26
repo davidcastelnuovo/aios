@@ -680,8 +680,9 @@ export default function DashboardView() {
                                   </div>
                                 </TableCell>
                                 <TableCell>{isAnalytics ? '-' : formatCurrency(metrics.spend)}</TableCell>
-                                <TableCell>{formatNumber(isAnalytics ? metrics.users : metrics.impressions)}</TableCell>
-                                <TableCell>{isAnalytics ? '-' : formatNumber(metrics.clicks)}</TableCell>
+                                <TableCell>{isAnalytics ? '-' : formatNumber(metrics.impressions)}</TableCell>
+                                <TableCell>{isAnalytics ? formatNumber(metrics.sessions) : '-'}</TableCell>
+                                <TableCell>{isAnalytics ? formatNumber(metrics.users) : '-'}</TableCell>
                                 {dashboardCampaignType === 'ecommerce' ? (
                                   <>
                                     <TableCell>{formatNumber(metrics.addToCart)}</TableCell>
