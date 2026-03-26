@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, Building2, Globe, Coins, Phone, Mail, LayoutGrid, Table as TableIcon, Edit, Search, Plus, Trash2, FolderOpen, ExternalLink, Download } from "lucide-react";
+import { Users, Building2, Globe, Coins, Phone, Mail, LayoutGrid, Table as TableIcon, MessageCircle, Edit, Search, Plus, Trash2, FolderOpen, ExternalLink, Download } from "lucide-react";
 import { AddClientForm } from "@/components/forms/AddClientForm";
 import { ImportClientsSheet } from "@/components/forms/ImportClientsSheet";
 import { ImportClientsCSV } from "@/components/forms/ImportClientsCSV";
