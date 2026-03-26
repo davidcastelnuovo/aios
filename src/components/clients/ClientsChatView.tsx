@@ -887,6 +887,10 @@ export function ClientsChatView({
                   })()}
                 </TabsContent>
 
+                <TabsContent value="credentials" className="mt-0">
+                  <ClientCredentialsTab clientId={selectedClient.id} tenantId={tenantId || ""} />
+                </TabsContent>
+
                 <TabsContent value="report" className="mt-0">
                   <ClientWeeklyReport clientId={selectedClient.id} clientName={selectedClient.name || "לקוח"} />
                 </TabsContent>
