@@ -51,7 +51,7 @@ export default function Clients() {
   const { selectedAgency } = useAgency();
   const { userAgencyIds } = useUserAgencies();
   const { canViewFinance } = useUserPermissions();
-  const { campaignerId, isCampaigner, isTeamManager, isOwner } = useUserRole();
+  const { campaignerId, isCampaigner, isTeamManager, isOwner, isSuperAdmin } = useUserRole();
   const [viewMode, setViewMode] = useState<"grid" | "table" | "chat">("chat");
   const [editingClient, setEditingClient] = useState<any>(null);
   const [hideInactive, setHideInactive] = useState(true);
