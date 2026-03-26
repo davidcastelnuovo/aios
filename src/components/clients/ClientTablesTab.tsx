@@ -5,7 +5,8 @@ import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/ca
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileSpreadsheet, Facebook, ShoppingCart, ExternalLink, LayoutDashboard, X, Plus } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { FileSpreadsheet, Facebook, ShoppingCart, ExternalLink, LayoutDashboard, X, Plus, Maximize2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
