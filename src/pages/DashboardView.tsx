@@ -564,7 +564,7 @@ export default function DashboardView() {
             <>
               {/* Summary Cards - only show in All and Analytics tabs */}
               {(platformFilter === 'all' || platformFilter === 'google_analytics') && (
-              <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-5 items-stretch [&>*]:h-full [&>*]:min-h-[120px]">
+              <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-5 items-stretch [&>*]:h-full [&>*]:min-h-[120px] [&_Card]:flex [&_Card]:flex-col [&_Card]:justify-center [&_.card-content]:flex [&_.card-content]:flex-col [&_.card-content]:items-center [&_.card-content]:justify-center [&_.card-content]:text-center">
                 {(showAdsCards || showAnalyticsCards) && (
                   <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900">
                     <CardContent className="p-6">
