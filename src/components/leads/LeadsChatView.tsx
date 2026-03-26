@@ -711,6 +711,12 @@ export function LeadsChatView({
                 </TabsContent>
               </ScrollArea>
 
+              {activeTab === "calls" && (
+                <div className="flex-1 min-h-0 p-4">
+                  <CallHistoryTab leadId={selectedLead.id} />
+                </div>
+              )}
+
               {activeTab === "whatsapp" && (
                 <div className="flex-1 min-h-0">
                   {selectedLead.phone ? (
