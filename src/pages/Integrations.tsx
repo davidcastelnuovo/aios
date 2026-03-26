@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Webhook, Facebook, MessageCircle, ArrowLeft, Settings, TrendingUp, Calculator, Zap, Search, Video, Mail, Brain } from "lucide-react";
+import { Webhook, Facebook, MessageCircle, ArrowLeft, Settings, TrendingUp, Calculator, Zap, Search, Video, Mail, Brain, Phone } from "lucide-react";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -487,6 +487,19 @@ export default function Integrations() {
       isConnected: !!manusIntegration,
       route: "manus-settings",
       gradient: "bg-gradient-to-r from-violet-500 to-indigo-700",
+    },
+    {
+      icon: <Phone className="h-6 w-6" />,
+      title: "Paycall (מרכזיה)",
+      description: "מרכזיה וירטואלית - חייג ללקוחות ולידים ישירות מהמערכת",
+      features: [
+        "שיחות Click2Call מתוך כרטיס ליד/לקוח",
+        "הקלטת שיחות אוטומטית",
+        "היסטוריית שיחות מלאה",
+      ],
+      isConnected: false,
+      route: "telephony-settings",
+      gradient: "bg-gradient-to-r from-teal-600 to-cyan-700",
     },
   ];
 
