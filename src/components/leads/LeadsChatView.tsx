@@ -435,42 +435,42 @@ export function LeadsChatView({
                     </div>
 
                     {/* Dates & timeline */}
-                    <div className="border rounded-lg p-4 space-y-3">
-                      <h3 className="font-semibold text-sm flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-primary" />
+                    <div className="border rounded-lg p-4 space-y-3 text-right">
+                      <h3 className="font-semibold text-sm flex items-center gap-2 justify-end">
                         ציר זמן
+                        <Clock className="h-4 w-4 text-primary" />
                       </h3>
                       <div className="space-y-2 text-sm">
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground min-w-[80px]">נוצר:</span>
+                        <div className="flex items-center justify-end gap-2">
                           <span className="font-medium">
                             {selectedLead.created_at
                               ? format(new Date(selectedLead.created_at), "dd/MM/yyyy HH:mm", { locale: he })
                               : "—"}
                           </span>
+                          <span className="text-muted-foreground">:נוצר</span>
                         </div>
                         {selectedLead.proposal_date && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground min-w-[80px]">הצעת מחיר:</span>
+                          <div className="flex items-center justify-end gap-2">
                             <span className="font-medium">
                               {format(new Date(selectedLead.proposal_date), "dd/MM/yyyy", { locale: he })}
                             </span>
+                            <span className="text-muted-foreground">:הצעת מחיר</span>
                           </div>
                         )}
                         {selectedLead.sale_date && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground min-w-[80px]">תאריך מכירה:</span>
+                          <div className="flex items-center justify-end gap-2">
                             <span className="font-medium">
                               {format(new Date(selectedLead.sale_date), "dd/MM/yyyy", { locale: he })}
                             </span>
+                            <span className="text-muted-foreground">:תאריך מכירה</span>
                           </div>
                         )}
                         {selectedLead.follow_up_date && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground min-w-[80px]">מעקב:</span>
+                          <div className="flex items-center justify-end gap-2">
                             <span className="font-medium">
                               {format(new Date(selectedLead.follow_up_date), "dd/MM/yyyy", { locale: he })}
                             </span>
+                            <span className="text-muted-foreground">:מעקב</span>
                           </div>
                         )}
                       </div>
