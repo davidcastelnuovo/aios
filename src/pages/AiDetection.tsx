@@ -113,8 +113,8 @@ function ProjectDashboard({
 }) {
   const {
     prompts, results, scores, currentScore, previousScore,
-    isLoading, isScanning,
-    addPrompt, deletePrompt, runScan,
+    isLoading, isScanning, isGenerating,
+    addPrompt, deletePrompt, runScan, generatePrompts,
     getPromptResults, getCompetitorScores,
   } = useAiDetectionProject(project.id);
 
@@ -275,7 +275,12 @@ function ProjectDashboard({
         </TabsContent>
 
         <TabsContent value="prompts" className="mt-6">
-          <PromptTracker prompts={trackedPrompts} onAddPrompt={(prompt, category) => addPrompt.mutate({ prompt, category })} />
+          <PromptTracker
+            prompts={trackedPrompts}
+            onAddPrompt={(prompt, category) => addPrompt.mutate({ prompt, category })}
+            onAutoGenerate={() => generatePrompts(project)}
+            isGenerating={isGenerating}
+          />
         </TabsContent>
 
         <TabsContent value="history" className="mt-6">

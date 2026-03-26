@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Check, X, Plus, Search, ExternalLink } from "lucide-react";
+import { Check, X, Plus, Search, ExternalLink, Sparkles, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -26,9 +26,11 @@ export interface TrackedPrompt {
 interface PromptTrackerProps {
   prompts: TrackedPrompt[];
   onAddPrompt: (prompt: string, category: string) => void;
+  onAutoGenerate?: () => void;
+  isGenerating?: boolean;
 }
 
-export function PromptTracker({ prompts, onAddPrompt }: PromptTrackerProps) {
+export function PromptTracker({ prompts, onAddPrompt, onAutoGenerate, isGenerating }: PromptTrackerProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [newPrompt, setNewPrompt] = useState("");
   const [newCategory, setNewCategory] = useState("");
@@ -60,13 +62,20 @@ export function PromptTracker({ prompts, onAddPrompt }: PromptTrackerProps) {
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg">מעקב פרומפטים</CardTitle>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm">
-                <Plus className="h-4 w-4 mr-1" />
-                הוסף פרומפט
+          <div className="flex items-center gap-2">
+            {onAutoGenerate && (
+              <Button size="sm" variant="outline" onClick={onAutoGenerate} disabled={isGenerating}>
+                {isGenerating ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Sparkles className="h-4 w-4 mr-1" />}
+                {isGenerating ? "מייצר..." : "יצירה אוטומטית"}
               </Button>
-            </DialogTrigger>
+            )}
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm">
+                  <Plus className="h-4 w-4 mr-1" />
+                  הוסף פרומפט
+                </Button>
+              </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>הוסף פרומפט למעקב</DialogTitle>
@@ -94,6 +103,7 @@ export function PromptTracker({ prompts, onAddPrompt }: PromptTrackerProps) {
               </div>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
