@@ -446,7 +446,37 @@ serve(async (req) => {
       }
     }
 
-    // Insert records
+    // Channel group data (Traffic Acquisition)
+    if (channelGroupData.rows) {
+      for (const row of channelGroupData.rows) {
+        records.push({
+          table_id: tableId,
+          tenant_id: table.tenant_id,
+          agency_id: table.agency_id,
+          data: {
+            report_type: 'channel_group',
+            channel_group: row.dimensionValues[0].value,
+            source_medium: null,
+            date: null,
+            page_path: null,
+            sessions: parseInt(row.metricValues[0].value) || 0,
+            engaged_sessions: parseInt(row.metricValues[1].value) || 0,
+            engagement_rate: (parseFloat(row.metricValues[2].value) * 100).toFixed(1),
+            avg_session_duration: parseFloat(row.metricValues[3].value).toFixed(1),
+            events_per_session: parseFloat(row.metricValues[4].value).toFixed(2),
+            users: parseInt(row.metricValues[5].value) || 0,
+            purchases: parseInt(row.metricValues[6]?.value) || 0,
+            purchase_value: parseFloat(row.metricValues[7]?.value) || 0,
+            new_users: null,
+            pageviews: null,
+            bounce_rate: null,
+            conversions: null,
+            add_to_cart: null,
+          },
+        });
+      }
+    }
+
     if (records.length > 0) {
       const { error: insertError } = await supabase
         .from('crm_records')
