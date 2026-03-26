@@ -76,6 +76,25 @@ export function ClientsChatView({
     enabled: !!tenantId,
   });
 
+  const selectedClientIdForContacts = selectedClientId;
+  const { data: clientContacts = [] } = useQuery({
+    queryKey: ["client-contacts", selectedClientIdForContacts],
+    queryFn: async () => {
+      if (!selectedClientIdForContacts) return [];
+      const { data, error } = await supabase
+        .from("client_contacts")
+        .select("*")
+        .eq("client_id", selectedClientIdForContacts)
+        .order("is_primary", { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!selectedClientIdForContacts,
+  });
+
+  const [addingContact, setAddingContact] = useState(false);
+  const [newContact, setNewContact] = useState({ contact_name: "", phone: "", email: "", role: "" });
+
   const filteredClients = useMemo(() => {
     if (!listSearch.trim()) return clients;
     const q = listSearch.toLowerCase();
