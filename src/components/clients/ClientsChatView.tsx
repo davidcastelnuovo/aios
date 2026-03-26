@@ -614,25 +614,53 @@ export function ClientsChatView({
                         <EditableField label=":טלפון" value={selectedClient.phone} field="phone" clientId={selectedClient.id} isLink linkPrefix="tel:" />
                         <EditableField label=":אימייל" value={selectedClient.email} field="email" clientId={selectedClient.id} isLink linkPrefix="mailto:" />
                         <EditableField label=":אתר" value={selectedClient.website} field="website" clientId={selectedClient.id} isLink />
-                        <div className="flex items-center justify-end gap-2">
-                          <Select
-                            value={selectedClient.whatsapp_group_id || "none"}
-                            onValueChange={(value) => updateClientField(selectedClient.id, "whatsapp_group_id", value === "none" ? null : value)}
-                          >
-                            <SelectTrigger className="h-7 text-xs w-auto min-w-[140px]">
-                              <SelectValue placeholder="בחר קבוצה" />
-                            </SelectTrigger>
-                            <SelectContent className="bg-background z-[100]">
-                              <SelectItem value="none">ללא קבוצה</SelectItem>
-                              {whatsappGroups.map((g: any) => (
-                                <SelectItem key={g.id} value={g.id}>{g.group_name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <span className="text-muted-foreground text-sm shrink-0 flex items-center gap-1">
+                        <div className="flex flex-col items-end gap-1">
+                          <span className="text-muted-foreground text-sm flex items-center gap-1">
                             <Users className="h-3.5 w-3.5" />
                             :קבוצת WhatsApp
                           </span>
+                          <div className="relative w-full">
+                            <Input
+                              placeholder="חפש קבוצה..."
+                              value={groupSearch}
+                              onChange={(e) => { setGroupSearch(e.target.value); setShowGroupDropdown(true); }}
+                              onFocus={() => setShowGroupDropdown(true)}
+                              className="h-7 text-xs text-right"
+                              dir="rtl"
+                            />
+                            {selectedClient.whatsapp_group_id && !groupSearch && (
+                              <div className="absolute inset-0 flex items-center justify-between px-2 pointer-events-none">
+                                <span></span>
+                                <span className="text-xs truncate">
+                                  {whatsappGroups.find((g: any) => g.id === selectedClient.whatsapp_group_id)?.group_name || "קבוצה מקושרת"}
+                                </span>
+                              </div>
+                            )}
+                            {selectedClient.whatsapp_group_id && (
+                              <Button variant="ghost" size="icon" className="absolute left-0 top-0 h-7 w-7 pointer-events-auto" onClick={() => updateClientField(selectedClient.id, "whatsapp_group_id", null)}>
+                                <X className="h-3 w-3" />
+                              </Button>
+                            )}
+                            {showGroupDropdown && (
+                              <div className="absolute z-50 top-full mt-1 w-full bg-popover border rounded-md shadow-md max-h-[200px] overflow-y-auto">
+                                {filteredGroups.length > 0 ? filteredGroups.map((g: any) => (
+                                  <button
+                                    key={g.id}
+                                    className="w-full text-right px-3 py-1.5 text-xs hover:bg-accent transition-colors"
+                                    onClick={() => {
+                                      updateClientField(selectedClient.id, "whatsapp_group_id", g.id);
+                                      setGroupSearch("");
+                                      setShowGroupDropdown(false);
+                                    }}
+                                  >
+                                    {g.group_name}
+                                  </button>
+                                )) : (
+                                  <div className="px-3 py-2 text-xs text-muted-foreground text-center">לא נמצאו קבוצות</div>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
