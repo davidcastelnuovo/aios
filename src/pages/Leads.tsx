@@ -2195,6 +2195,15 @@ export default function Leads() {
               >
                 <TableIcon className="h-4 w-4" />
               </Button>
+              <Button
+                variant={viewMode === "chat" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode("chat")}
+                className="h-8 w-8 p-0"
+                title="תצוגת צ'אט"
+              >
+                <MessageCircle className="h-4 w-4" />
+              </Button>
             </div>
 
             {/* Mobile Pagination (Table view only) */}
@@ -2329,6 +2338,13 @@ export default function Leads() {
                 onClick={() => setViewMode("table")}
               >
                 <TableIcon className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === "chat" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode("chat")}
+              >
+                <MessageCircle className="h-4 w-4" />
               </Button>
             </div>
             <div className="flex gap-2">
