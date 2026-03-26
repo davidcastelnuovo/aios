@@ -109,19 +109,35 @@ export function ClientsChatView({
     return whatsappGroups.filter((g: any) => g.group_name?.toLowerCase().includes(q));
   }, [whatsappGroups, groupSearch]);
 
+  const getClientDisplayName = useCallback((client: any) => {
+    const candidates = [client?.name, client?.contact_name, client?.website, client?.phone]
+      .map((v) => (typeof v === "string" ? v.trim() : ""));
+
+    const firstReadable = candidates.find((value) => /[\p{L}\p{N}]/u.test(value));
+    if (firstReadable) return firstReadable;
+
+    const firstNonEmpty = candidates.find(Boolean);
+    return firstNonEmpty || "ללא שם";
+  }, []);
+
   const filteredClients = useMemo(() => {
     if (!listSearch.trim()) return clients;
     const q = listSearch.toLowerCase();
     return clients.filter(c =>
-      (c.name || "").toLowerCase().includes(q) ||
+      getClientDisplayName(c).toLowerCase().includes(q) ||
       (c.contact_name || "").toLowerCase().includes(q) ||
       (c.phone || "").includes(q)
     );
-  }, [clients, listSearch]);
+  }, [clients, listSearch, getClientDisplayName]);
 
   const selectedClient = useMemo(() => {
     return clients.find(c => c.id === selectedClientId) || null;
   }, [clients, selectedClientId]);
+
+  const selectedClientDisplayName = useMemo(
+    () => (selectedClient ? getClientDisplayName(selectedClient) : "ללא שם"),
+    [selectedClient, getClientDisplayName]
+  );
 
   const handleDelete = async (id: string) => {
     const confirmed = window.confirm("האם למחוק את הלקוח?");
@@ -406,6 +422,7 @@ export function ClientsChatView({
               const isChecked = selectedClientIds.has(client.id);
               const statusInfo = getStatusInfo(client.status);
               const moodInfo = getMoodInfo(client.mood_status);
+              const displayName = getClientDisplayName(client);
 
               return (
                 <button
@@ -438,7 +455,7 @@ export function ClientsChatView({
                       className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
                       style={{ backgroundColor: statusInfo.color }}
                     >
-                      {(client.name || "?")[0]}
+                      {(displayName || "?")[0]}
                     </div>
                     <div className="flex-1 min-w-0 text-right">
                       <div className="flex items-center justify-between gap-1">
@@ -446,7 +463,7 @@ export function ClientsChatView({
                           {moodInfo.emoji}
                         </span>
                         <span className="font-semibold text-sm truncate">
-                          {client.name || "ללא שם"}
+                          {displayName}
                         </span>
                       </div>
                       {client.agencies?.name && (
@@ -486,10 +503,10 @@ export function ClientsChatView({
                   className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
                   style={{ backgroundColor: getStatusInfo(selectedClient.status).color }}
                 >
-                  {(selectedClient.name || "?")[0]}
+                  {(selectedClientDisplayName || "?")[0]}
                 </div>
                 <div className="min-w-0">
-                  <h2 className="font-bold text-base truncate">{selectedClient.name || "ללא שם"}</h2>
+                  <h2 className="font-bold text-base truncate">{selectedClientDisplayName}</h2>
                   {selectedClient.agencies?.name && (
                     <p className="text-xs text-muted-foreground truncate">{selectedClient.agencies.name}</p>
                   )}
@@ -942,7 +959,7 @@ export function ClientsChatView({
                 </TabsContent>
 
                 <TabsContent value="report" className="mt-0">
-                  <ClientTablesTab clientId={selectedClient.id} clientName={selectedClient.name || "לקוח"} />
+                  <ClientTablesTab clientId={selectedClient.id} clientName={selectedClientDisplayName || "לקוח"} />
                 </TabsContent>
 
                 <TabsContent value="updates" className="mt-0">
