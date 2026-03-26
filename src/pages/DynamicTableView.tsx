@@ -44,6 +44,7 @@ import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnal
 import { SearchConsoleDashboard } from "@/components/dynamic-tables/SearchConsoleDashboard";
 import { AlertsManagementDialog } from "@/components/dynamic-tables/AlertsManagementDialog";
 import { ActiveAlerts } from "@/components/dynamic-tables/ActiveAlerts";
+import { ShareTableDialog } from "@/components/dynamic-tables/ShareTableDialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { MakeScenarioSettings } from "@/components/dynamic-tables/MakeScenarioSettings";
 
