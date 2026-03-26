@@ -28,6 +28,8 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
   const [showDashboardDropdown, setShowDashboardDropdown] = useState(false);
   const [tableSearch, setTableSearch] = useState("");
   const [showTableDropdown, setShowTableDropdown] = useState(false);
+  const [viewDashboard, setViewDashboard] = useState<{ id: string; name: string } | null>(null);
+  const [showTableDropdown, setShowTableDropdown] = useState(false);
 
   // All tables for the tenant
   const { data: allTables = [], isLoading } = useQuery({
