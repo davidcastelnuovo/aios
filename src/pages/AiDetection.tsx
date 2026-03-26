@@ -247,8 +247,24 @@ function ProjectDashboard({
           ) : (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatsCards totalPrompts={prompts.length} totalMentions={totalMentions} totalCitations={citations.length} avgPosition={avgPosition} />
+          <StatsCards totalPrompts={prompts.length} totalMentions={totalMentions} totalCitations={citations.length} avgPosition={avgPosition} />
               </div>
+              <Card className="border-dashed border-2 border-primary/30 bg-primary/5">
+                <CardContent className="flex items-center justify-between py-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-full bg-primary/10">
+                      <Radar className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-medium">הפעלת ניטור ידני</p>
+                      <p className="text-xs text-muted-foreground">סרוק את כל הפרומפטים מול ChatGPT, Gemini ו-Perplexity</p>
+                    </div>
+                  </div>
+                  <Button size="lg" onClick={runScan} disabled={isScanning || prompts.length === 0}>
+                    {isScanning ? <><Loader2 className="h-5 w-5 mr-2 animate-spin" />סורק...</> : <><Radar className="h-5 w-5 mr-2" />הפעל סריקה</>}
+                  </Button>
+                </CardContent>
+              </Card>
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <AiVisibilityScore score={currentScore?.score || 0} previousScore={previousScore?.score || 0} totalPrompts={currentScore?.total_prompts || prompts.length} mentionedPrompts={currentScore?.mentioned_prompts || 0} />
                 <PlatformBreakdown platforms={platformBreakdown} />
