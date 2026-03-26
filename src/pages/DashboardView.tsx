@@ -714,7 +714,8 @@ export default function DashboardView() {
                             </TableCell>
                             <TableCell>{formatCurrency(totalSummary.spend)}</TableCell>
                             <TableCell>{formatNumber(totalSummary.impressions)}</TableCell>
-                            <TableCell>{formatNumber(totalSummary.clicks)}</TableCell>
+                            <TableCell>{formatNumber(totalSummary.analyticsSessions)}</TableCell>
+                            <TableCell>{formatNumber(totalSummary.analyticsUsers)}</TableCell>
                             {dashboardCampaignType === 'ecommerce' ? (
                               <>
                                 <TableCell>{formatNumber(totalSummary.analyticsAddToCart)}</TableCell>
