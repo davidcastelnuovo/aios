@@ -949,11 +949,9 @@ export default function DashboardView() {
                         </TableHeader>
                         <TableBody>
                           {analyticsSourceBreakdown.map((source) => {
-                            const sourceRoas = totalSummary.spend > 0 ? source.revenue / totalSummary.spend : 0;
                             return (
                               <TableRow key={source.name}>
                                 <TableCell className="font-medium">{source.name}</TableCell>
-                                <TableCell>{formatCurrency(totalSummary.spend)}</TableCell>
                                 <TableCell>{formatNumber(source.sessions)}</TableCell>
                                 <TableCell>{formatNumber(source.users)}</TableCell>
                                 {dashboardCampaignType === 'ecommerce' && (
@@ -961,11 +959,6 @@ export default function DashboardView() {
                                     <TableCell>{formatNumber(source.addToCart)}</TableCell>
                                     <TableCell>{formatNumber(source.purchases)}</TableCell>
                                     <TableCell>{formatCurrency(source.revenue)}</TableCell>
-                                    <TableCell>
-                                      <span className={sourceRoas >= 1 ? 'text-green-600 font-semibold' : 'text-red-600'}>
-                                        {sourceRoas.toFixed(2)}
-                                      </span>
-                                    </TableCell>
                                   </>
                                 )}
                               </TableRow>
