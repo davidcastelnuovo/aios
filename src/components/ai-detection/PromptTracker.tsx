@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Check, X, Plus, Search, ExternalLink, Sparkles, Loader2 } from "lucide-react";
+import { Check, X, Plus, Search, Sparkles, Loader2, Trash2, Pencil } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -26,15 +26,21 @@ export interface TrackedPrompt {
 interface PromptTrackerProps {
   prompts: TrackedPrompt[];
   onAddPrompt: (prompt: string, category: string) => void;
+  onDeletePrompt?: (promptId: string) => void;
+  onEditPrompt?: (promptId: string, prompt: string, category: string) => void;
   onAutoGenerate?: () => void;
   isGenerating?: boolean;
 }
 
-export function PromptTracker({ prompts, onAddPrompt, onAutoGenerate, isGenerating }: PromptTrackerProps) {
+export function PromptTracker({ prompts, onAddPrompt, onDeletePrompt, onEditPrompt, onAutoGenerate, isGenerating }: PromptTrackerProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [newPrompt, setNewPrompt] = useState("");
   const [newCategory, setNewCategory] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingPrompt, setEditingPrompt] = useState<TrackedPrompt | null>(null);
+  const [editPromptText, setEditPromptText] = useState("");
+  const [editCategoryText, setEditCategoryText] = useState("");
 
   const filteredPrompts = prompts.filter(p =>
     p.prompt.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -47,6 +53,27 @@ export function PromptTracker({ prompts, onAddPrompt, onAutoGenerate, isGenerati
       setNewPrompt("");
       setNewCategory("");
       setDialogOpen(false);
+    }
+  };
+
+  const handleEditClick = (prompt: TrackedPrompt) => {
+    setEditingPrompt(prompt);
+    setEditPromptText(prompt.prompt);
+    setEditCategoryText(prompt.category);
+    setEditDialogOpen(true);
+  };
+
+  const handleEditSave = () => {
+    if (editingPrompt && editPromptText.trim() && onEditPrompt) {
+      onEditPrompt(editingPrompt.id, editPromptText.trim(), editCategoryText.trim() || "כללי");
+      setEditDialogOpen(false);
+      setEditingPrompt(null);
+    }
+  };
+
+  const handleDelete = (promptId: string) => {
+    if (onDeletePrompt && window.confirm("למחוק את הפרומפט הזה?")) {
+      onDeletePrompt(promptId);
     }
   };
 
@@ -76,33 +103,33 @@ export function PromptTracker({ prompts, onAddPrompt, onAutoGenerate, isGenerati
                   הוסף פרומפט
                 </Button>
               </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>הוסף פרומפט למעקב</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label>פרומפט</Label>
-                  <Textarea
-                    value={newPrompt}
-                    onChange={(e) => setNewPrompt(e.target.value)}
-                    placeholder="לדוגמה: מהי תוכנת ה-CRM הטובה ביותר לעסקים קטנים?"
-                    className="mt-1"
-                  />
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>הוסף פרומפט למעקב</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <Label>פרומפט</Label>
+                    <Textarea
+                      value={newPrompt}
+                      onChange={(e) => setNewPrompt(e.target.value)}
+                      placeholder="לדוגמה: מהי תוכנת ה-CRM הטובה ביותר לעסקים קטנים?"
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label>קטגוריה</Label>
+                    <Input
+                      value={newCategory}
+                      onChange={(e) => setNewCategory(e.target.value)}
+                      placeholder="לדוגמה: CRM, שיווק, מכירות"
+                      className="mt-1"
+                    />
+                  </div>
+                  <Button onClick={handleAddPrompt} className="w-full">הוסף</Button>
                 </div>
-                <div>
-                  <Label>קטגוריה</Label>
-                  <Input
-                    value={newCategory}
-                    onChange={(e) => setNewCategory(e.target.value)}
-                    placeholder="לדוגמה: CRM, שיווק, מכירות"
-                    className="mt-1"
-                  />
-                </div>
-                <Button onClick={handleAddPrompt} className="w-full">הוסף</Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
       </CardHeader>
@@ -127,6 +154,9 @@ export function PromptTracker({ prompts, onAddPrompt, onAutoGenerate, isGenerati
                 <TableHead className="text-center">Perplexity</TableHead>
                 <TableHead className="text-center">סנטימנט</TableHead>
                 <TableHead className="text-right">נבדק לאחרונה</TableHead>
+                {(onEditPrompt || onDeletePrompt) && (
+                  <TableHead className="text-center w-[80px]">פעולות</TableHead>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -159,11 +189,27 @@ export function PromptTracker({ prompts, onAddPrompt, onAutoGenerate, isGenerati
                   </TableCell>
                   <TableCell className="text-center">{sentimentLabel(prompt.sentiment)}</TableCell>
                   <TableCell className="text-muted-foreground text-sm">{prompt.lastChecked}</TableCell>
+                  {(onEditPrompt || onDeletePrompt) && (
+                    <TableCell className="text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        {onEditPrompt && (
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEditClick(prompt)}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                        {onDeletePrompt && (
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDelete(prompt.id)}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
               {filteredPrompts.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={onEditPrompt || onDeletePrompt ? 8 : 7} className="text-center text-muted-foreground py-8">
                     לא נמצאו פרומפטים
                   </TableCell>
                 </TableRow>
@@ -172,6 +218,34 @@ export function PromptTracker({ prompts, onAddPrompt, onAutoGenerate, isGenerati
           </Table>
         </div>
       </CardContent>
+
+      {/* Edit Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>ערוך פרומפט</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>פרומפט</Label>
+              <Textarea
+                value={editPromptText}
+                onChange={(e) => setEditPromptText(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label>קטגוריה</Label>
+              <Input
+                value={editCategoryText}
+                onChange={(e) => setEditCategoryText(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+            <Button onClick={handleEditSave} className="w-full">שמור</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
