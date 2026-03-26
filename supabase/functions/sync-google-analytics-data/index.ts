@@ -305,6 +305,10 @@ serve(async (req) => {
       { key: 'add_to_cart', name: 'Add To Cart', type: 'number', position: 11 },
       { key: 'purchases', name: 'Purchases', type: 'number', position: 12 },
       { key: 'purchase_value', name: 'Purchase Value', type: 'number', position: 13 },
+      { key: 'channel_group', name: 'Channel Group', type: 'text', position: 14 },
+      { key: 'engaged_sessions', name: 'Engaged Sessions', type: 'number', position: 15 },
+      { key: 'engagement_rate', name: 'Engagement Rate', type: 'number', position: 16 },
+      { key: 'events_per_session', name: 'Events per Session', type: 'number', position: 17 },
     ];
 
     for (const field of fieldDefinitions) {
