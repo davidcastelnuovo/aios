@@ -491,7 +491,7 @@ export function ClientsChatView({
                 </TabsTrigger>
               </TabsList>
 
-              <ScrollArea className={cn("flex-1 p-4", activeTab === "whatsapp" && "hidden")}>
+              <ScrollArea className={cn("flex-1 p-4", (activeTab === "whatsapp" || activeTab === "calls") && "hidden")}>
                 <TabsContent value="details" className="mt-0 space-y-6">
                   <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                     {/* Contact info */}
