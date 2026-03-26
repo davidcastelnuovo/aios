@@ -286,6 +286,7 @@ export default function Clients() {
     onSuccess: () => {
       toast.success("הסטטוס עודכן בהצלחה");
       queryClient.invalidateQueries({ queryKey: ["clients"] });
+      queryClient.invalidateQueries({ queryKey: ["client-onboarding"] });
     },
     onError: () => {
       toast.error("שגיאה בעדכון הסטטוס");

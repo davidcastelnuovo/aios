@@ -25,9 +25,11 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import AddOnboardingForm from "@/components/forms/AddOnboardingForm";
 import EditOnboardingDialog from "@/components/forms/EditOnboardingDialog";
+import { EditClientDialog } from "@/components/forms/EditClientDialog";
 import AddTaskForm from "@/components/forms/AddTaskForm";
 import { Button } from "@/components/ui/button";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { Eye } from "lucide-react";
 
 type OnboardingStatus = "research_meeting" | "receiving_access" | "setup_and_content" | "campaign_live";
 
@@ -60,7 +62,24 @@ export default function ClientOnboarding() {
   const [editingItem, setEditingItem] = useState<OnboardingItem | null>(null);
   const [selectedCampaigner, setSelectedCampaigner] = useState<string>("all");
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [viewingClientId, setViewingClientId] = useState<string | null>(null);
   const { tenantId } = useCurrentTenant();
+
+  // Fetch client data when viewing client dialog
+  const { data: viewingClient } = useQuery({
+    queryKey: ["client-for-onboarding", viewingClientId],
+    queryFn: async () => {
+      if (!viewingClientId) return null;
+      const { data, error } = await supabase
+        .from("clients")
+        .select(`*, agencies (name), client_team (campaigner_id, campaigners!inner (id, full_name))`)
+        .eq("id", viewingClientId)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!viewingClientId,
+  });
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -187,6 +206,7 @@ export default function ClientOnboarding() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["client-onboarding"] });
+      queryClient.invalidateQueries({ queryKey: ["clients"] });
       toast.success("סטטוס עודכן בהצלחה");
     },
     onError: (error) => {
@@ -333,6 +353,9 @@ export default function ClientOnboarding() {
               {item.clients && <CardDescription>{item.clients.name}</CardDescription>}
             </div>
             <div className="flex items-center gap-1">
+              <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setViewingClientId(item.client_id); }} title="צפה בלקוח">
+                <Eye className="h-4 w-4" />
+              </Button>
               <Button
                 variant="ghost"
                 size="icon"
@@ -479,6 +502,19 @@ export default function ClientOnboarding() {
           item={editingItem}
           open={!!editingItem}
           onOpenChange={(open) => !open && setEditingItem(null)}
+        />
+      )}
+
+      {viewingClient && (
+        <EditClientDialog
+          client={viewingClient}
+          open={!!viewingClient}
+          onOpenChange={(open) => {
+            if (!open) {
+              setViewingClientId(null);
+              queryClient.invalidateQueries({ queryKey: ["client-onboarding"] });
+            }
+          }}
         />
       )}
     </div>
