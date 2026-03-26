@@ -468,12 +468,23 @@ export function LeadsChatView({
                 />
 
                 {selectedLead.phone && (
-                  <Button variant="outline" size="sm" className="h-8 gap-1" asChild>
-                    <a href={`tel:${selectedLead.phone}`}>
-                      <Phone className="h-3.5 w-3.5" />
-                      {selectedLead.phone}
-                    </a>
-                  </Button>
+                  <>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
+                      onClick={() => setCallDialogOpen(true)}
+                      title="התקשר דרך מרכזיה"
+                    >
+                      <PhoneCall className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-8 gap-1" asChild>
+                      <a href={`tel:${selectedLead.phone}`}>
+                        <Phone className="h-3.5 w-3.5" />
+                        {selectedLead.phone}
+                      </a>
+                    </Button>
+                  </>
                 )}
 
                 {selectedLead.email && (
