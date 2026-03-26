@@ -308,7 +308,7 @@ export default function DashboardView() {
 
   // Total summary
   const totalSummary = useMemo(() => {
-    let totalSpend = 0, totalImpressions = 0, totalClicks = 0, totalResults = 0;
+    let totalSpend = 0, totalImpressions = 0, totalClicks = 0, totalResults = 0, totalLeads = 0;
     let adsSpend = 0, analyticsRevenue = 0, analyticsPurchases = 0, analyticsAddToCart = 0, analyticsSessions = 0, analyticsUsers = 0;
 
     Object.entries(summaryByPlatform).forEach(([platform, data]: [string, any]) => {
@@ -323,6 +323,7 @@ export default function DashboardView() {
         totalImpressions += data.impressions;
         totalClicks += data.clicks;
         totalResults += data.results;
+        totalLeads += data.leads || 0;
         adsSpend += data.spend;
       }
     });
@@ -333,7 +334,7 @@ export default function DashboardView() {
     const effectiveImpressions = totalImpressions > 0 ? totalImpressions : globalAdsMetrics.impressions;
 
     return {
-      spend: effectiveSpend, impressions: effectiveImpressions, clicks: totalClicks, results: totalResults,
+      spend: effectiveSpend, impressions: effectiveImpressions, clicks: totalClicks, results: totalResults, leads: totalLeads,
       revenue: analyticsRevenue, roas_spend: effectiveAdsSpend, roas_value: analyticsRevenue,
       analyticsPurchases, analyticsAddToCart, analyticsSessions, analyticsUsers,
     };
