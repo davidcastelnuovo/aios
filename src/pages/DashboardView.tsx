@@ -398,6 +398,42 @@ export default function DashboardView() {
       }));
   }, [filteredRecords]);
 
+  // Campaign breakdown for platform-specific tabs (Facebook, Google Ads)
+  const campaignBreakdown = useMemo(() => {
+    if (platformFilter === 'all' || platformFilter === 'google_analytics') return [];
+    
+    const campaigns: Record<string, { campaign: string; spend: number; impressions: number; clicks: number; leads: number; revenue: number; purchases: number }> = {};
+    
+    filteredRecords.forEach((record: any) => {
+      const data = record.data || {};
+      const campaignName = data.campaign_name || data.campaign || 'ללא שם קמפיין';
+      
+      if (!campaigns[campaignName]) {
+        campaigns[campaignName] = { campaign: campaignName, spend: 0, impressions: 0, clicks: 0, leads: 0, revenue: 0, purchases: 0 };
+      }
+      
+      campaigns[campaignName].spend += getSpendFromData(data);
+      campaigns[campaignName].impressions += Number(data.impressions) || 0;
+      campaigns[campaignName].clicks += Number(data.clicks) || Number(data.link_clicks) || 0;
+      campaigns[campaignName].leads += getLeadsFromData(data);
+      campaigns[campaignName].revenue += getRevenueFromData(data);
+      campaigns[campaignName].purchases += getPurchasesFromData(data);
+    });
+    
+    return Object.values(campaigns).sort((a, b) => b.spend - a.spend);
+  }, [filteredRecords, platformFilter]);
+
+  const campaignTotals = useMemo(() => {
+    return campaignBreakdown.reduce((acc, c) => ({
+      spend: acc.spend + c.spend,
+      impressions: acc.impressions + c.impressions,
+      clicks: acc.clicks + c.clicks,
+      leads: acc.leads + c.leads,
+      revenue: acc.revenue + c.revenue,
+      purchases: acc.purchases + c.purchases,
+    }), { spend: 0, impressions: 0, clicks: 0, leads: 0, revenue: 0, purchases: 0 });
+  }, [campaignBreakdown]);
+
   // Group records by date for table
   const recordsByDate = useMemo(() => {
     const byDate: Record<string, any[]> = {};
