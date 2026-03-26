@@ -103,6 +103,7 @@ export function PromptTracker({ prompts, onAddPrompt, onAutoGenerate, isGenerati
               </div>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
