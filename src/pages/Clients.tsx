@@ -571,8 +571,16 @@ export default function Clients() {
             >
               <TableIcon className="h-4 w-4" />
             </Button>
+            <Button
+              variant={viewMode === "chat" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setViewMode("chat")}
+              title="תצוגת צ'אט"
+            >
+              <MessageCircle className="h-4 w-4" />
+            </Button>
           </div>
-          
+
           <div className="h-8 w-px bg-border"></div>
           
           <div className="flex items-center gap-2" dir="ltr">
