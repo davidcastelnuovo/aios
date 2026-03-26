@@ -102,7 +102,11 @@ export function ShareDashboardDialog({ dashboardId, dashboardName, tenantId }: S
   });
 
   const getShareUrl = (token: string) => {
-    return `${window.location.origin}/shared/dashboard/${token}`;
+    // Use published domain if available, fallback to current origin
+    const origin = window.location.hostname.includes('preview') || window.location.hostname.includes('lovableproject')
+      ? 'https://after-lead.lovable.app'
+      : window.location.origin;
+    return `${origin}/shared/dashboard/${token}`;
   };
 
   const copyLink = (token: string) => {
