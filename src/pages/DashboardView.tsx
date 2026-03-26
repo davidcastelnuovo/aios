@@ -340,8 +340,31 @@ export default function DashboardView() {
   const combinedRoas = totalSummary.roas_spend > 0 ? totalSummary.roas_value / totalSummary.roas_spend : 0;
   const combinedCpl = totalSummary.results > 0 ? totalSummary.spend / totalSummary.results : 0;
 
-  // Analytics source breakdown from daily_source records
+  // Analytics source breakdown - aggregated by channel category
   const analyticsSourceBreakdown = useMemo(() => {
+    const categorize = (sourceMedium: string): string => {
+      const sm = sourceMedium.toLowerCase();
+      if (sm.includes('facebook') || sm.includes('fb')) {
+        if (sm.includes('paid') || sm.includes('cpc') || sm.includes('cpm')) return 'Facebook ממומן';
+        return 'Facebook אורגני';
+      }
+      if (sm.includes('instagram') || sm.includes('ig')) {
+        if (sm.includes('paid') || sm.includes('cpc') || sm.includes('cpm')) return 'Instagram ממומן';
+        return 'Instagram אורגני';
+      }
+      if (sm.includes('google') || sm.includes('googleads')) {
+        if (sm.includes('organic')) return 'Google אורגני';
+        if (sm.includes('cpc') || sm.includes('paid') || sm.includes('ads')) return 'Google ממומן';
+        return 'Google';
+      }
+      if (sm.includes('email') || sm.includes('newsletter') || sm.includes('mailchimp') || sm.includes('klaviyo') || sm.includes('activetrail')) return 'דיוור';
+      if (sm.includes('whatsapp') || sm.includes('wa.me')) return 'WhatsApp';
+      if (sm.includes('organic') || sm.includes('seo')) return 'אורגני';
+      if (sm === '(direct) / (none)' || sm === 'direct' || sm.includes('(direct)') || sm.includes('(none)')) return 'ישיר (Direct)';
+      if (sm.includes('referral')) return 'הפניות (Referral)';
+      return 'אחר';
+    };
+
     const sources: Record<string, { sessions: number; users: number; purchases: number; revenue: number; addToCart: number }> = {};
     allRecords.forEach((record: any) => {
       const source = record._source || 'unknown';
@@ -350,12 +373,13 @@ export default function DashboardView() {
       if (data.report_type !== 'daily_source') return;
       
       const sm = data.source_medium || 'Unknown';
-      if (!sources[sm]) sources[sm] = { sessions: 0, users: 0, purchases: 0, revenue: 0, addToCart: 0 };
-      sources[sm].sessions += Number(data.sessions) || 0;
-      sources[sm].users += Number(data.users) || 0;
-      sources[sm].purchases += getPurchasesFromData(data);
-      sources[sm].revenue += getRevenueFromData(data);
-      sources[sm].addToCart += getAddToCartFromData(data);
+      const category = categorize(sm);
+      if (!sources[category]) sources[category] = { sessions: 0, users: 0, purchases: 0, revenue: 0, addToCart: 0 };
+      sources[category].sessions += Number(data.sessions) || 0;
+      sources[category].users += Number(data.users) || 0;
+      sources[category].purchases += getPurchasesFromData(data);
+      sources[category].revenue += getRevenueFromData(data);
+      sources[category].addToCart += getAddToCartFromData(data);
     });
     return Object.entries(sources)
       .map(([name, data]) => ({ name, ...data }))
