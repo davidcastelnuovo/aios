@@ -606,6 +606,10 @@ export function ClientsChatView({
                   <KeyRound className="h-3.5 w-3.5" />
                   ססמאות
                 </TabsTrigger>
+                <TabsTrigger value="meeting" className="text-xs gap-1">
+                  <CalendarIcon className="h-3.5 w-3.5" />
+                  פגישה
+                </TabsTrigger>
                 <TabsTrigger value="report" className="text-xs gap-1">
                   <BarChart3 className="h-3.5 w-3.5" />
                   דוח שבועי
