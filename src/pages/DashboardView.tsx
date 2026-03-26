@@ -288,6 +288,22 @@ export default function DashboardView() {
     return platforms;
   }, [filteredRecords, campaignTypeByPlatform]);
 
+  // Calculate total ads spend from ALL records (regardless of platform filter)
+  // This ensures Analytics tab can still show spend and ROAS
+  const globalAdsSpend = useMemo(() => {
+    let spend = 0;
+    allRecords.forEach((record: any) => {
+      const source = record._source || 'unknown';
+      if (isAdsPlatform(source)) {
+        const data = record.data || {};
+        // Only daily records to avoid double counting
+        if (data.report_type && data.report_type !== 'daily') return;
+        spend += getSpendFromData(data);
+      }
+    });
+    return spend;
+  }, [allRecords]);
+
   // Total summary
   const totalSummary = useMemo(() => {
     let totalSpend = 0, totalImpressions = 0, totalClicks = 0, totalResults = 0;
@@ -309,12 +325,16 @@ export default function DashboardView() {
       }
     });
 
+    // When on Analytics tab, ads platforms are filtered out, so use globalAdsSpend
+    const effectiveSpend = totalSpend > 0 ? totalSpend : globalAdsSpend;
+    const effectiveAdsSpend = adsSpend > 0 ? adsSpend : globalAdsSpend;
+
     return {
-      spend: totalSpend, impressions: totalImpressions, clicks: totalClicks, results: totalResults,
-      revenue: analyticsRevenue, roas_spend: adsSpend, roas_value: analyticsRevenue,
+      spend: effectiveSpend, impressions: totalImpressions, clicks: totalClicks, results: totalResults,
+      revenue: analyticsRevenue, roas_spend: effectiveAdsSpend, roas_value: analyticsRevenue,
       analyticsPurchases, analyticsAddToCart, analyticsSessions, analyticsUsers,
     };
-  }, [summaryByPlatform]);
+  }, [summaryByPlatform, globalAdsSpend]);
 
   const combinedRoas = totalSummary.roas_spend > 0 ? totalSummary.roas_value / totalSummary.roas_spend : 0;
   const combinedCpl = totalSummary.results > 0 ? totalSummary.spend / totalSummary.results : 0;
