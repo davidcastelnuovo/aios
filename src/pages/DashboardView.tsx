@@ -249,7 +249,7 @@ export default function DashboardView() {
     filteredRecords.forEach((record: any) => {
       const source = record._source || 'unknown';
       if (!platforms[source]) {
-        platforms[source] = { spend: 0, impressions: 0, clicks: 0, sessions: 0, users: 0, results: 0, revenue: 0, addToCart: 0, roas: 0, cpl: 0, recordCount: 0 };
+        platforms[source] = { spend: 0, impressions: 0, clicks: 0, sessions: 0, users: 0, results: 0, leads: 0, revenue: 0, addToCart: 0, roas: 0, cpl: 0, recordCount: 0 };
       }
       
       const data = record.data || {};
@@ -265,6 +265,8 @@ export default function DashboardView() {
         platforms[source].spend += getSpendFromData(data);
         platforms[source].impressions += Number(data.impressions) || 0;
         platforms[source].clicks += Number(data.clicks) || 0;
+        // Always track leads for all platforms
+        platforms[source].leads += getLeadsFromData(data);
         if (campaignType === 'ecommerce') {
           platforms[source].results += getPurchasesFromData(data);
           platforms[source].revenue += getRevenueFromData(data);
@@ -306,7 +308,7 @@ export default function DashboardView() {
 
   // Total summary
   const totalSummary = useMemo(() => {
-    let totalSpend = 0, totalImpressions = 0, totalClicks = 0, totalResults = 0;
+    let totalSpend = 0, totalImpressions = 0, totalClicks = 0, totalResults = 0, totalLeads = 0;
     let adsSpend = 0, analyticsRevenue = 0, analyticsPurchases = 0, analyticsAddToCart = 0, analyticsSessions = 0, analyticsUsers = 0;
 
     Object.entries(summaryByPlatform).forEach(([platform, data]: [string, any]) => {
@@ -321,6 +323,7 @@ export default function DashboardView() {
         totalImpressions += data.impressions;
         totalClicks += data.clicks;
         totalResults += data.results;
+        totalLeads += data.leads || 0;
         adsSpend += data.spend;
       }
     });
@@ -331,7 +334,7 @@ export default function DashboardView() {
     const effectiveImpressions = totalImpressions > 0 ? totalImpressions : globalAdsMetrics.impressions;
 
     return {
-      spend: effectiveSpend, impressions: effectiveImpressions, clicks: totalClicks, results: totalResults,
+      spend: effectiveSpend, impressions: effectiveImpressions, clicks: totalClicks, results: totalResults, leads: totalLeads,
       revenue: analyticsRevenue, roas_spend: effectiveAdsSpend, roas_value: analyticsRevenue,
       analyticsPurchases, analyticsAddToCart, analyticsSessions, analyticsUsers,
     };
@@ -660,7 +663,7 @@ export default function DashboardView() {
             <>
               {/* Summary Cards - only show in All and Analytics tabs */}
               {(platformFilter === 'all' || platformFilter === 'google_analytics') && (
-              <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-5 auto-rows-fr">
+              <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 auto-rows-fr">
                 {(showAdsCards || showAnalyticsCards) && (
                   <Card className="h-full bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900">
                     <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
@@ -672,6 +675,24 @@ export default function DashboardView() {
                 
                 {dashboardCampaignType === 'ecommerce' ? (
                   <>
+                    {showAdsCards && totalSummary.leads > 0 && (
+                      <Card className="h-full bg-gradient-to-br from-cyan-50 to-cyan-100 dark:from-cyan-950 dark:to-cyan-900">
+                        <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
+                          <p className="text-sm text-muted-foreground">לידים</p>
+                          <p className="text-3xl font-bold mt-2">{formatNumber(totalSummary.leads)}</p>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {showAdsCards && totalSummary.leads > 0 && (
+                      <Card className="h-full bg-gradient-to-br from-teal-50 to-teal-100 dark:from-teal-950 dark:to-teal-900">
+                        <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
+                          <p className="text-sm text-muted-foreground">עלות לליד (CPL)</p>
+                          <p className="text-3xl font-bold mt-2">{formatCurrency(totalSummary.leads > 0 ? totalSummary.spend / totalSummary.leads : 0)}</p>
+                        </CardContent>
+                      </Card>
+                    )}
+
                     {showAnalyticsCards && (
                       <Card className="h-full bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
                         <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
