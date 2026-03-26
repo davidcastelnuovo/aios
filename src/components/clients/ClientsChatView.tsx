@@ -161,7 +161,7 @@ export function ClientsChatView({
 
   const handleStatusChange = async (clientId: string, status: string) => {
     try {
-      const { error } = await supabase.from("clients").update({ status }).eq("id", clientId);
+      const { error } = await supabase.from("clients").update({ status: status as any }).eq("id", clientId);
       if (error) throw error;
       toast.success("הסטטוס עודכן בהצלחה");
       queryClient.invalidateQueries({ queryKey: ["clients"] });
