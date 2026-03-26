@@ -318,6 +318,33 @@ export default function DashboardView() {
   const combinedRoas = totalSummary.roas_spend > 0 ? totalSummary.roas_value / totalSummary.roas_spend : 0;
   const combinedCpl = totalSummary.results > 0 ? totalSummary.spend / totalSummary.results : 0;
 
+  // Analytics source breakdown from daily_source records
+  const analyticsSourceBreakdown = useMemo(() => {
+    const sources: Record<string, { sessions: number; users: number; purchases: number; revenue: number; addToCart: number }> = {};
+    allRecords.forEach((record: any) => {
+      const source = record._source || 'unknown';
+      if (!isAnalyticsPlatform(source)) return;
+      const data = record.data || {};
+      if (data.report_type !== 'daily_source') return;
+      const dateStr = data.date || data.day;
+      if (!dateStr) return;
+      const recordDate = new Date(dateStr);
+      if (dateFilter.from && recordDate < dateFilter.from) return;
+      if (dateFilter.to && recordDate > dateFilter.to) return;
+      
+      const sm = data.source_medium || 'Unknown';
+      if (!sources[sm]) sources[sm] = { sessions: 0, users: 0, purchases: 0, revenue: 0, addToCart: 0 };
+      sources[sm].sessions += Number(data.sessions) || 0;
+      sources[sm].users += Number(data.users) || 0;
+      sources[sm].purchases += getPurchasesFromData(data);
+      sources[sm].revenue += getRevenueFromData(data);
+      sources[sm].addToCart += getAddToCartFromData(data);
+    });
+    return Object.entries(sources)
+      .map(([name, data]) => ({ name, ...data }))
+      .sort((a, b) => b.sessions - a.sessions);
+  }, [allRecords, dateFilter]);
+
   // Daily chart data
   const dailyChartData = useMemo(() => {
     const byDate: Record<string, any> = {};
