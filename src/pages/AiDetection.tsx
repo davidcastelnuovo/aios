@@ -275,7 +275,12 @@ function ProjectDashboard({
         </TabsContent>
 
         <TabsContent value="prompts" className="mt-6">
-          <PromptTracker prompts={trackedPrompts} onAddPrompt={(prompt, category) => addPrompt.mutate({ prompt, category })} />
+          <PromptTracker
+            prompts={trackedPrompts}
+            onAddPrompt={(prompt, category) => addPrompt.mutate({ prompt, category })}
+            onAutoGenerate={() => generatePrompts(project)}
+            isGenerating={isGenerating}
+          />
         </TabsContent>
 
         <TabsContent value="history" className="mt-6">
