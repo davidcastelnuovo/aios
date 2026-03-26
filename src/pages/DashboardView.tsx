@@ -516,7 +516,8 @@ export default function DashboardView() {
             </Card>
           ) : (
             <>
-              {/* Summary Cards */}
+              {/* Summary Cards - only show in All and Analytics tabs */}
+              {(platformFilter === 'all' || platformFilter === 'google_analytics') && (
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 {showAdsCards && (
                   <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900">
@@ -610,6 +611,7 @@ export default function DashboardView() {
                   </>
                 )}
               </div>
+              )}
 
               {/* Platform Breakdown */}
               {Object.keys(summaryByPlatform).length > 0 && (
