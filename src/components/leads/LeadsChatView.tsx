@@ -401,35 +401,35 @@ export function LeadsChatView({
                     </div>
 
                     {/* Deal info */}
-                    <div className="border rounded-lg p-4 space-y-3">
-                      <h3 className="font-semibold text-sm flex items-center gap-2">
-                        <DollarSign className="h-4 w-4 text-primary" />
+                    <div className="border rounded-lg p-4 space-y-3 text-right">
+                      <h3 className="font-semibold text-sm flex items-center gap-2 justify-end">
                         מידע עסקי
+                        <DollarSign className="h-4 w-4 text-primary" />
                       </h3>
                       <div className="space-y-2 text-sm">
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground min-w-[80px]">ערך עסקה:</span>
+                        <div className="flex items-center justify-end gap-2">
                           <span className="font-medium">
                             {selectedLead.estimated_deal_value
                               ? `₪${Number(selectedLead.estimated_deal_value).toLocaleString()}`
                               : "—"}
                           </span>
+                          <span className="text-muted-foreground">:ערך עסקה</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground min-w-[80px]">תקציב חודשי:</span>
+                        <div className="flex items-center justify-end gap-2">
                           <span className="font-medium">
                             {selectedLead.monthly_budget
                               ? `₪${Number(selectedLead.monthly_budget).toLocaleString()}`
                               : "—"}
                           </span>
+                          <span className="text-muted-foreground">:תקציב חודשי</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground min-w-[80px]">מקור:</span>
+                        <div className="flex items-center justify-end gap-2">
                           <span className="font-medium">{selectedLead.source || "—"}</span>
+                          <span className="text-muted-foreground">:מקור</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground min-w-[80px]">תעשייה:</span>
+                        <div className="flex items-center justify-end gap-2">
                           <span className="font-medium">{selectedLead.industry || "—"}</span>
+                          <span className="text-muted-foreground">:תעשייה</span>
                         </div>
                       </div>
                     </div>
