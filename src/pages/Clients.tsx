@@ -607,7 +607,14 @@ export default function Clients() {
         </div>
       </div>
 
-      {viewMode === "grid" ? (
+      {viewMode === "chat" ? (
+        <ClientsChatView
+          clients={visibleClients || []}
+          agencies={agencies}
+          canViewFinance={canViewFinance}
+          getClientFinancialData={getClientFinancialData}
+        />
+      ) : viewMode === "grid" ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {visibleClients?.map((client) => (
           <Card 
