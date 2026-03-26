@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import ChatViewComponent from "@/components/chat/ChatView";
 import { User, Phone, Building2, Clock, Search, Tag, Mail, ExternalLink, CheckSquare, Trash2, Settings2, MessageSquare, FileText, DollarSign, Paperclip, Users, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
