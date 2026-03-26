@@ -129,7 +129,7 @@ export function LeadsChatView({
                   }}
                   className={cn(
                     "w-full text-right p-3 hover:bg-muted/50 transition-colors cursor-pointer",
-                    isSelected && "bg-primary/10 border-r-4 border-r-primary"
+                    isSelected && "bg-primary/10 border-e-4 border-e-primary"
                   )}
                 >
                   <div className="flex items-start gap-2">
