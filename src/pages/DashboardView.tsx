@@ -611,7 +611,7 @@ export default function DashboardView() {
                 )}
               </div>
 
-              {/* Charts */}
+              {/* Platform Breakdown - moved above charts */}
               {dailyChartData.length > 1 && (
                 <div className="grid gap-4 md:grid-cols-2">
                   {/* Revenue vs Spend */}
