@@ -25,9 +25,11 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import AddOnboardingForm from "@/components/forms/AddOnboardingForm";
 import EditOnboardingDialog from "@/components/forms/EditOnboardingDialog";
+import { EditClientDialog } from "@/components/forms/EditClientDialog";
 import AddTaskForm from "@/components/forms/AddTaskForm";
 import { Button } from "@/components/ui/button";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { Eye } from "lucide-react";
 
 type OnboardingStatus = "research_meeting" | "receiving_access" | "setup_and_content" | "campaign_live";
 
