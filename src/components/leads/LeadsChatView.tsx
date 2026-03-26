@@ -748,6 +748,17 @@ export function LeadsChatView({
       {/* Management dialogs */}
       <ManagePipelineStagesDialog open={manageStagesOpen} onOpenChange={setManageStagesOpen} showTrigger={false} />
       <ManageLeadStatusesDialog open={manageStatusesOpen} onOpenChange={setManageStatusesOpen} showTrigger={false} />
+
+      {/* Call dialog */}
+      {selectedLead?.phone && (
+        <CallDialog
+          open={callDialogOpen}
+          onOpenChange={setCallDialogOpen}
+          phoneNumber={selectedLead.phone}
+          contactName={selectedLead.contact_name || selectedLead.company_name || "ליד"}
+          leadId={selectedLead.id}
+        />
+      )}
     </div>
   );
 }
