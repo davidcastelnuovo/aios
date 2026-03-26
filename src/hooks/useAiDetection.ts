@@ -108,7 +108,7 @@ export function useAiDetection() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      const { error } = await supabase.from("ai_detection_brands" as any).insert({
+      const { data: brand, error } = await supabase.from("ai_detection_brands" as any).insert({
         tenant_id: tenantId,
         brand_name: data.brandName,
         url: data.url || null,
@@ -116,12 +116,39 @@ export function useAiDetection() {
         keywords: data.keywords,
         competitor_names: data.competitors,
         created_by: user.id,
-      });
+      }).select().single();
       if (error) throw error;
+
+      // Auto-generate default prompts based on brand name and keywords
+      const brandId = (brand as any).id;
+      const defaultPrompts = [
+        { prompt: `מה הכלי הכי טוב ל${data.keywords[0] || data.brandName}?`, category: "recommendation" },
+        { prompt: `השווה בין ${data.brandName}${data.competitors.length > 0 ? ` ל-${data.competitors[0]}` : " למתחרים בשוק"}`, category: "comparison" },
+        { prompt: `מה דעתך על ${data.brandName}? האם כדאי להשתמש בהם?`, category: "review" },
+      ];
+
+      if (data.keywords.length > 1) {
+        defaultPrompts.push({
+          prompt: `איזה שירות מומלץ ל${data.keywords[1]}?`,
+          category: "recommendation",
+        });
+      }
+
+      const promptInserts = defaultPrompts.map(p => ({
+        tenant_id: tenantId,
+        brand_id: brandId,
+        prompt: p.prompt,
+        category: p.category,
+        is_active: true,
+        created_by: user.id,
+      }));
+
+      const { error: promptError } = await supabase.from("ai_detection_prompts" as any).insert(promptInserts);
+      if (promptError) console.error("Error creating default prompts:", promptError);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ai-detection-projects", tenantId] });
-      toast.success("הפרויקט נוצר בהצלחה");
+      toast.success("הפרויקט נוצר בהצלחה עם פרומפטים ברירת מחדל");
     },
     onError: (error) => toast.error("שגיאה: " + error.message),
   });
