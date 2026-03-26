@@ -588,7 +588,7 @@ export function ClientsChatView({
 
             {/* Detail tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
-              <TabsList className="mx-4 mt-3 grid grid-cols-7 w-auto max-w-3xl h-9 bg-muted/50 mr-4 ml-auto">
+              <TabsList className="mx-4 mt-3 grid grid-cols-8 w-auto max-w-3xl h-9 bg-muted/50 mr-4 ml-auto">
                 <TabsTrigger value="details" className="text-xs gap-1">
                   <FileText className="h-3.5 w-3.5" />
                   פרטי לקוח
