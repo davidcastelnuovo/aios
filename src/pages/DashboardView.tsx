@@ -708,7 +708,7 @@ export default function DashboardView() {
                 </Card>
               )}
 
-              {/* Platform Breakdown - moved above charts */}
+              {/* Charts */}
               {dailyChartData.length > 1 && (
                 <div className="grid gap-4 md:grid-cols-2">
                   {/* Revenue vs Spend */}
