@@ -140,7 +140,7 @@ export function ShareDashboardDialog({ dashboardId, dashboardName, tenantId }: S
           שתף דשבורד
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-lg" dir="rtl">
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto" dir="rtl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Share2 className="h-5 w-5" />
