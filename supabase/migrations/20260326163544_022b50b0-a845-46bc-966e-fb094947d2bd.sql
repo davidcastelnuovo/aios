@@ -1,0 +1,1 @@
+UPDATE public.crm_tables SET client_id = '5138ef7f-f820-466a-a01c-8cc9f11d21ec', agency_id = '13147295-9bdd-49ac-a9d5-4a7bae2f3620' WHERE id = 'cc94e9ad-f50b-4618-b150-2dad34c126d8';
