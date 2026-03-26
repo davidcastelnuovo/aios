@@ -419,12 +419,23 @@ export function ClientsChatView({
                 </Select>
 
                 {selectedClient.phone && (
-                  <Button variant="outline" size="sm" className="h-8 gap-1" asChild>
-                    <a href={`tel:${selectedClient.phone}`}>
-                      <Phone className="h-3.5 w-3.5" />
-                      {selectedClient.phone}
-                    </a>
-                  </Button>
+                  <>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
+                      onClick={() => setCallDialogOpen(true)}
+                      title="התקשר דרך מרכזיה"
+                    >
+                      <PhoneCall className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-8 gap-1" asChild>
+                      <a href={`tel:${selectedClient.phone}`}>
+                        <Phone className="h-3.5 w-3.5" />
+                        {selectedClient.phone}
+                      </a>
+                    </Button>
+                  </>
                 )}
 
                 {selectedClient.email && (
