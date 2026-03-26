@@ -178,19 +178,91 @@ export function LeadsChatView({
       <div className="w-[25%] min-w-[240px] border-s flex flex-col bg-muted/20">
         {/* List header with search */}
         <div className="p-3 border-b bg-background/80 backdrop-blur-sm">
-          <div className="relative">
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="חיפוש ליד..."
-              value={listSearch}
-              onChange={(e) => setListSearch(e.target.value)}
-              className="pr-9 h-9 text-sm"
-            />
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="חיפוש ליד..."
+                value={listSearch}
+                onChange={(e) => setListSearch(e.target.value)}
+                className="pr-9 h-9 text-sm"
+              />
+            </div>
+            <Button
+              variant={multiSelectMode ? "default" : "outline"}
+              size="icon"
+              className="h-9 w-9 shrink-0"
+              onClick={() => multiSelectMode ? exitMultiSelect() : setMultiSelectMode(true)}
+              title={multiSelectMode ? "בטל בחירה" : "בחירה מרובה"}
+            >
+              <CheckSquare className="h-4 w-4" />
+            </Button>
           </div>
           <div className="mt-2 text-xs text-muted-foreground text-center">
             {filteredListLeads.length} לידים
           </div>
         </div>
+
+        {/* Multi-select toolbar */}
+        {multiSelectMode && (
+          <div className="p-2 border-b bg-primary/5 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={toggleSelectAll}>
+                {selectedLeadIds.size === filteredListLeads.length ? "בטל הכל" : "בחר הכל"}
+              </Button>
+              <span className="text-xs font-medium text-muted-foreground">
+                {selectedLeadIds.size} נבחרו
+              </span>
+              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={exitMultiSelect}>
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+            {selectedLeadIds.size > 0 && (
+              <div className="flex items-center gap-1 flex-wrap">
+                {/* Bulk stage change */}
+                <Select onValueChange={handleBulkStageChange} disabled={bulkActionLoading}>
+                  <SelectTrigger className="h-7 text-[11px] w-auto min-w-[80px]">
+                    <SelectValue placeholder="שלב" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background z-[100]">
+                    {pipelineStages.map((stage) => (
+                      <SelectItem key={stage.id} value={stage.id} style={{ backgroundColor: stage.hexColor, color: "#fff" }}>
+                        {stage.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* Bulk response status */}
+                <Select onValueChange={(v) => handleBulkResponseStatusChange(v === "none" ? null : v)} disabled={bulkActionLoading}>
+                  <SelectTrigger className="h-7 text-[11px] w-auto min-w-[80px]">
+                    <SelectValue placeholder="סטטוס" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background z-[100]">
+                    <SelectItem value="none">ללא סטטוס</SelectItem>
+                    {leadStatuses.map((s) => (
+                      <SelectItem key={s.status_key} value={s.status_key} style={{ backgroundColor: s.color, color: "#fff" }}>
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* Bulk delete */}
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="h-7 text-[11px] gap-1"
+                  onClick={handleBulkDelete}
+                  disabled={bulkActionLoading}
+                >
+                  <Trash2 className="h-3 w-3" />
+                  מחק
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Lead list */}
         <ScrollArea className="flex-1">
