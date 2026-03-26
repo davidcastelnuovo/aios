@@ -5,7 +5,8 @@ import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/ca
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileSpreadsheet, Facebook, ShoppingCart, ExternalLink, LayoutDashboard, X, Plus } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { FileSpreadsheet, Facebook, ShoppingCart, ExternalLink, LayoutDashboard, X, Plus, Maximize2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
@@ -27,6 +28,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
   const [showDashboardDropdown, setShowDashboardDropdown] = useState(false);
   const [tableSearch, setTableSearch] = useState("");
   const [showTableDropdown, setShowTableDropdown] = useState(false);
+  const [viewDashboard, setViewDashboard] = useState<{ id: string; name: string } | null>(null);
 
   // All tables for the tenant
   const { data: allTables = [], isLoading } = useQuery({
@@ -287,7 +289,8 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
           </h3>
           <div className="grid gap-3 md:grid-cols-2">
             {dashboards.map((dash: any) => (
-              <Card key={dash.id} className="cursor-pointer hover:shadow-md transition-shadow">
+              <Card key={dash.id} className="cursor-pointer hover:shadow-md transition-shadow"
+                onClick={() => setViewDashboard({ id: dash.id, name: dash.name })}>
                 <CardHeader className="p-4">
                   <CardTitle className="text-sm flex items-center gap-2 justify-between">
                     <div className="flex items-center gap-1">
@@ -296,12 +299,9 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
                         <X className="h-3 w-3" />
                       </Button>
                       <ExternalLink className="h-3.5 w-3.5 text-muted-foreground shrink-0 cursor-pointer"
-                        onClick={() => navigate(buildPath(`/dashboard/${dash.id}`))} />
+                        onClick={(e) => { e.stopPropagation(); navigate(buildPath(`/dashboard/${dash.id}`)); }} />
                     </div>
-                    <span className="truncate cursor-pointer"
-                      onClick={() => navigate(buildPath(`/dashboard/${dash.id}`))}>
-                      {dash.name}
-                    </span>
+                    <span className="truncate">{dash.name}</span>
                   </CardTitle>
                 </CardHeader>
               </Card>
@@ -317,6 +317,27 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
           <p className="text-xs mt-1">ניתן לשייך מהשדות למעלה</p>
         </div>
       )}
+
+      {/* Dashboard view dialog */}
+      <Dialog open={!!viewDashboard} onOpenChange={(open) => !open && setViewDashboard(null)}>
+        <DialogContent className="max-w-[95vw] w-[95vw] max-h-[90vh] h-[90vh] p-0 overflow-hidden">
+          <DialogHeader className="p-4 pb-0 flex flex-row items-center justify-between">
+            <DialogTitle className="text-base">{viewDashboard?.name}</DialogTitle>
+            <Button variant="ghost" size="sm" className="gap-1 text-xs"
+              onClick={() => { navigate(buildPath(`/dashboard/${viewDashboard?.id}`)); setViewDashboard(null); }}>
+              <Maximize2 className="h-3.5 w-3.5" />
+              פתח במסך מלא
+            </Button>
+          </DialogHeader>
+          {viewDashboard && (
+            <iframe
+              src={`${window.location.origin}${buildPath(`/dashboard/${viewDashboard.id}`)}`}
+              className="w-full flex-1 border-0"
+              style={{ height: 'calc(90vh - 60px)' }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
