@@ -359,26 +359,25 @@ export function LeadsChatView({
               <ScrollArea className="flex-1 p-4">
                 <TabsContent value="details" className="mt-0 space-y-6">
                   {/* Info cards grid */}
-                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-4" dir="rtl">
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                     {/* Contact info */}
-                    <div className="border rounded-lg p-4 space-y-3">
-                      <h3 className="font-semibold text-sm flex items-center gap-2">
-                        <User className="h-4 w-4 text-primary" />
+                    <div className="border rounded-lg p-4 space-y-3 text-right">
+                      <h3 className="font-semibold text-sm flex items-center gap-2 justify-end">
                         פרטי קשר
+                        <User className="h-4 w-4 text-primary" />
                       </h3>
                       <div className="space-y-2 text-sm">
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground min-w-[60px]">שם:</span>
+                        <div className="flex items-center justify-end gap-2">
                           <span className="font-medium">{selectedLead.contact_name || "—"}</span>
+                          <span className="text-muted-foreground">:שם</span>
                         </div>
                         {isCompanyNameVisible && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground min-w-[60px]">חברה:</span>
+                          <div className="flex items-center justify-end gap-2">
                             <span className="font-medium">{selectedLead.company_name || "—"}</span>
+                            <span className="text-muted-foreground">:חברה</span>
                           </div>
                         )}
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground min-w-[60px]">טלפון:</span>
+                        <div className="flex items-center justify-end gap-2">
                           {selectedLead.phone ? (
                             <a href={`tel:${selectedLead.phone}`} className="font-medium text-primary hover:underline">
                               {selectedLead.phone}
@@ -386,9 +385,9 @@ export function LeadsChatView({
                           ) : (
                             <span>—</span>
                           )}
+                          <span className="text-muted-foreground">:טלפון</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground min-w-[60px]">אימייל:</span>
+                        <div className="flex items-center justify-end gap-2">
                           {selectedLead.email ? (
                             <a href={`mailto:${selectedLead.email}`} className="font-medium text-primary hover:underline truncate">
                               {selectedLead.email}
@@ -396,6 +395,7 @@ export function LeadsChatView({
                           ) : (
                             <span>—</span>
                           )}
+                          <span className="text-muted-foreground">:אימייל</span>
                         </div>
                       </div>
                     </div>
