@@ -129,7 +129,9 @@ export function LeadsChatView({
         setSelectedLeadId(null);
       }
       exitMultiSelect();
-      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-table"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-count"] });
     } catch (error: any) {
       toast.error("שגיאה במחיקה: " + error.message);
     } finally {
