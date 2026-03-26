@@ -398,9 +398,11 @@ export function useAiDetectionProject(projectId: string | null) {
     previousScore,
     isLoading: promptsLoading || resultsLoading,
     isScanning,
+    isGenerating,
     addPrompt,
     deletePrompt,
     runScan,
+    generatePrompts,
     getPromptResults,
     getCompetitorScores,
   };

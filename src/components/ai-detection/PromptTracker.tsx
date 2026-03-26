@@ -26,6 +26,8 @@ export interface TrackedPrompt {
 interface PromptTrackerProps {
   prompts: TrackedPrompt[];
   onAddPrompt: (prompt: string, category: string) => void;
+  onAutoGenerate?: () => void;
+  isGenerating?: boolean;
 }
 
 export function PromptTracker({ prompts, onAddPrompt }: PromptTrackerProps) {
