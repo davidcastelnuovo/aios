@@ -2784,7 +2784,7 @@ export default function Leads() {
           leadsTagsMap={leadsTagsMap}
           productsLookup={productsLookup}
           onStatusChange={(leadId, newStatus) => updateLeadStatus.mutate({ leadId, newStatus })}
-          onResponseStatusChange={(leadId, responseStatus) => updateResponseStatus.mutate({ leadId, responseStatus })}
+          onResponseStatusChange={(leadId, responseStatus) => updateLeadResponseStatus.mutate({ leadId, responseStatus })}
           onFollowUpDateUpdate={(leadId, newDate) => {
             queryClient.setQueryData(["leads-kanban", tenantId, selectedAgency, searchQuery, filterSalesPersonIds, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate, endDate], (old: any) => {
               if (!old) return old;
