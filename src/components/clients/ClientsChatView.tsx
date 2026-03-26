@@ -14,7 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { EditClientDialog } from "@/components/forms/EditClientDialog";
 import { ClientUpdatesTab } from "@/components/clients/ClientUpdatesTab";
-import { ClientWeeklyReport } from "@/components/clients/ClientWeeklyReport";
+import { ClientTablesTab } from "@/components/clients/ClientTablesTab";
 import { ClientLinkedFiles } from "@/components/clients/ClientLinkedFiles";
 import { ClientCredentialsTab } from "@/components/clients/ClientCredentialsTab";
 import { ClientMeetingTab } from "@/components/clients/ClientMeetingTab";
