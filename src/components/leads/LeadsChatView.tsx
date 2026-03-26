@@ -1,12 +1,13 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import ChatViewComponent from "@/components/chat/ChatView";
-import { User, Phone, Building2, Clock, Search, Tag, Mail, ExternalLink, CheckSquare, Trash2, Settings2, MessageSquare, FileText, DollarSign, Paperclip, Users, ChevronRight } from "lucide-react";
+import { User, Phone, Building2, Clock, Search, Tag, Mail, ExternalLink, CheckSquare, Trash2, Settings2, MessageSquare, FileText, DollarSign, Paperclip, Users, ChevronRight, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
 import { LeadTagSelector, LeadTagBadges, LeadTagBadgesEditable } from "@/components/leads/LeadTagSelector";
@@ -19,6 +20,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface LeadsChatViewProps {
   leads: any[];
@@ -58,6 +60,10 @@ export function LeadsChatView({
   const [activeTab, setActiveTab] = useState("details");
   const [manageStagesOpen, setManageStagesOpen] = useState(false);
   const [manageStatusesOpen, setManageStatusesOpen] = useState(false);
+  const [multiSelectMode, setMultiSelectMode] = useState(false);
+  const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const queryClient = useQueryClient();
 
   const filteredListLeads = useMemo(() => {
     if (!listSearch.trim()) return leads;
@@ -80,12 +86,86 @@ export function LeadsChatView({
       const { error } = await supabase.from("leads").delete().eq("id", id);
       if (error) throw error;
       toast.success("ליד נמחק בהצלחה");
-      // Select next lead
       const idx = leads.findIndex(l => l.id === id);
       const next = leads[idx + 1] || leads[idx - 1] || null;
       setSelectedLeadId(next?.id || null);
     } catch (error: any) {
       toast.error("שגיאה במחיקת ליד: " + error.message);
+    }
+  };
+
+  const toggleLeadSelection = useCallback((leadId: string) => {
+    setSelectedLeadIds(prev => {
+      const next = new Set(prev);
+      if (next.has(leadId)) next.delete(leadId);
+      else next.add(leadId);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    if (selectedLeadIds.size === filteredListLeads.length) {
+      setSelectedLeadIds(new Set());
+    } else {
+      setSelectedLeadIds(new Set(filteredListLeads.map(l => l.id)));
+    }
+  }, [filteredListLeads, selectedLeadIds.size]);
+
+  const exitMultiSelect = useCallback(() => {
+    setMultiSelectMode(false);
+    setSelectedLeadIds(new Set());
+  }, []);
+
+  const handleBulkDelete = async () => {
+    if (selectedLeadIds.size === 0) return;
+    const confirmed = window.confirm(`האם למחוק ${selectedLeadIds.size} לידים?`);
+    if (!confirmed) return;
+    setBulkActionLoading(true);
+    try {
+      const { error } = await supabase.from("leads").delete().in("id", Array.from(selectedLeadIds));
+      if (error) throw error;
+      toast.success(`${selectedLeadIds.size} לידים נמחקו בהצלחה`);
+      if (selectedLeadIds.has(selectedLeadId || "")) {
+        setSelectedLeadId(null);
+      }
+      exitMultiSelect();
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+    } catch (error: any) {
+      toast.error("שגיאה במחיקה: " + error.message);
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  const handleBulkStageChange = async (stageId: string) => {
+    if (selectedLeadIds.size === 0) return;
+    setBulkActionLoading(true);
+    try {
+      const { error } = await supabase.from("leads").update({ status: stageId }).in("id", Array.from(selectedLeadIds));
+      if (error) throw error;
+      toast.success(`${selectedLeadIds.size} לידים עודכנו`);
+      exitMultiSelect();
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+    } catch (error: any) {
+      toast.error("שגיאה בעדכון: " + error.message);
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  const handleBulkResponseStatusChange = async (statusKey: string | null) => {
+    if (selectedLeadIds.size === 0) return;
+    setBulkActionLoading(true);
+    try {
+      const { error } = await supabase.from("leads").update({ response_status: statusKey }).in("id", Array.from(selectedLeadIds));
+      if (error) throw error;
+      toast.success(`${selectedLeadIds.size} לידים עודכנו`);
+      exitMultiSelect();
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+    } catch (error: any) {
+      toast.error("שגיאה בעדכון: " + error.message);
+    } finally {
+      setBulkActionLoading(false);
     }
   };
 
@@ -98,25 +178,98 @@ export function LeadsChatView({
       <div className="w-[25%] min-w-[240px] border-s flex flex-col bg-muted/20">
         {/* List header with search */}
         <div className="p-3 border-b bg-background/80 backdrop-blur-sm">
-          <div className="relative">
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="חיפוש ליד..."
-              value={listSearch}
-              onChange={(e) => setListSearch(e.target.value)}
-              className="pr-9 h-9 text-sm"
-            />
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="חיפוש ליד..."
+                value={listSearch}
+                onChange={(e) => setListSearch(e.target.value)}
+                className="pr-9 h-9 text-sm"
+              />
+            </div>
+            <Button
+              variant={multiSelectMode ? "default" : "outline"}
+              size="icon"
+              className="h-9 w-9 shrink-0"
+              onClick={() => multiSelectMode ? exitMultiSelect() : setMultiSelectMode(true)}
+              title={multiSelectMode ? "בטל בחירה" : "בחירה מרובה"}
+            >
+              <CheckSquare className="h-4 w-4" />
+            </Button>
           </div>
           <div className="mt-2 text-xs text-muted-foreground text-center">
             {filteredListLeads.length} לידים
           </div>
         </div>
 
+        {/* Multi-select toolbar */}
+        {multiSelectMode && (
+          <div className="p-2 border-b bg-primary/5 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={toggleSelectAll}>
+                {selectedLeadIds.size === filteredListLeads.length ? "בטל הכל" : "בחר הכל"}
+              </Button>
+              <span className="text-xs font-medium text-muted-foreground">
+                {selectedLeadIds.size} נבחרו
+              </span>
+              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={exitMultiSelect}>
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+            {selectedLeadIds.size > 0 && (
+              <div className="flex items-center gap-1 flex-wrap">
+                {/* Bulk stage change */}
+                <Select onValueChange={handleBulkStageChange} disabled={bulkActionLoading}>
+                  <SelectTrigger className="h-7 text-[11px] w-auto min-w-[80px]">
+                    <SelectValue placeholder="שלב" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background z-[100]">
+                    {pipelineStages.map((stage) => (
+                      <SelectItem key={stage.id} value={stage.id} style={{ backgroundColor: stage.hexColor, color: "#fff" }}>
+                        {stage.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* Bulk response status */}
+                <Select onValueChange={(v) => handleBulkResponseStatusChange(v === "none" ? null : v)} disabled={bulkActionLoading}>
+                  <SelectTrigger className="h-7 text-[11px] w-auto min-w-[80px]">
+                    <SelectValue placeholder="סטטוס" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background z-[100]">
+                    <SelectItem value="none">ללא סטטוס</SelectItem>
+                    {leadStatuses.map((s) => (
+                      <SelectItem key={s.status_key} value={s.status_key} style={{ backgroundColor: s.color, color: "#fff" }}>
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* Bulk delete */}
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="h-7 text-[11px] gap-1"
+                  onClick={handleBulkDelete}
+                  disabled={bulkActionLoading}
+                >
+                  <Trash2 className="h-3 w-3" />
+                  מחק
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Lead list */}
         <ScrollArea className="flex-1">
           <div className="divide-y">
             {filteredListLeads.map((lead) => {
               const isSelected = lead.id === selectedLeadId;
+              const isChecked = selectedLeadIds.has(lead.id);
               const stageInfo = getStageInfo(lead.status);
               const statusInfo = getLeadStatusInfo(lead.response_status);
               const tagIds = leadsTagsMap[lead.id] || [];
@@ -125,15 +278,29 @@ export function LeadsChatView({
                 <button
                   key={lead.id}
                   onClick={() => {
-                    setSelectedLeadId(lead.id);
-                    setActiveTab("details");
+                    if (multiSelectMode) {
+                      toggleLeadSelection(lead.id);
+                    } else {
+                      setSelectedLeadId(lead.id);
+                      setActiveTab("details");
+                    }
                   }}
                   className={cn(
                     "w-full text-right p-3 hover:bg-muted/50 transition-colors cursor-pointer",
-                    isSelected && "bg-primary/10 border-e-4 border-e-primary"
+                    isSelected && !multiSelectMode && "bg-primary/10 border-e-4 border-e-primary",
+                    isChecked && multiSelectMode && "bg-primary/10"
                   )}
                 >
                   <div className="flex items-start gap-2 flex-row-reverse">
+                    {/* Checkbox in multi-select mode */}
+                    {multiSelectMode && (
+                      <div className="pt-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={isChecked}
+                          onCheckedChange={() => toggleLeadSelection(lead.id)}
+                        />
+                      </div>
+                    )}
                     {/* Avatar circle */}
                     <div
                       className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
