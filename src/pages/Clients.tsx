@@ -611,7 +611,7 @@ export default function Clients() {
         <ClientsChatView
           clients={visibleClients || []}
           agencies={agencies}
-          canViewFinance={canViewFinance}
+          canViewFinance={canViewFinance()}
           getClientFinancialData={getClientFinancialData}
         />
       ) : viewMode === "grid" ? (
