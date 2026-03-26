@@ -3,12 +3,13 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, Building2, Globe, Coins, Phone, Mail, LayoutGrid, Table as TableIcon, Edit, Search, Plus, Trash2, FolderOpen, ExternalLink, Download } from "lucide-react";
+import { Users, Building2, Globe, Coins, Phone, Mail, LayoutGrid, Table as TableIcon, MessageCircle, Edit, Search, Plus, Trash2, FolderOpen, ExternalLink, Download } from "lucide-react";
 import { AddClientForm } from "@/components/forms/AddClientForm";
 import { ImportClientsSheet } from "@/components/forms/ImportClientsSheet";
 import { ImportClientsCSV } from "@/components/forms/ImportClientsCSV";
 import { EditClientDialog } from "@/components/forms/EditClientDialog";
 import AddTaskForm from "@/components/forms/AddTaskForm";
+import { ClientsChatView } from "@/components/clients/ClientsChatView";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
@@ -51,7 +52,7 @@ export default function Clients() {
   const { userAgencyIds } = useUserAgencies();
   const { canViewFinance } = useUserPermissions();
   const { campaignerId, isCampaigner, isTeamManager, isOwner } = useUserRole();
-  const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
+  const [viewMode, setViewMode] = useState<"grid" | "table" | "chat">("grid");
   const [editingClient, setEditingClient] = useState<any>(null);
   const [hideInactive, setHideInactive] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -571,8 +572,16 @@ export default function Clients() {
             >
               <TableIcon className="h-4 w-4" />
             </Button>
+            <Button
+              variant={viewMode === "chat" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setViewMode("chat")}
+              title="תצוגת צ'אט"
+            >
+              <MessageCircle className="h-4 w-4" />
+            </Button>
           </div>
-          
+
           <div className="h-8 w-px bg-border"></div>
           
           <div className="flex items-center gap-2" dir="ltr">
@@ -598,7 +607,14 @@ export default function Clients() {
         </div>
       </div>
 
-      {viewMode === "grid" ? (
+      {viewMode === "chat" ? (
+        <ClientsChatView
+          clients={visibleClients || []}
+          agencies={agencies}
+          canViewFinance={canViewFinance()}
+          getClientFinancialData={getClientFinancialData}
+        />
+      ) : viewMode === "grid" ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {visibleClients?.map((client) => (
           <Card 
