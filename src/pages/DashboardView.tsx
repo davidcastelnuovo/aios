@@ -325,16 +325,17 @@ export default function DashboardView() {
       }
     });
 
-    // When on Analytics tab, ads platforms are filtered out, so use globalAdsSpend
-    const effectiveSpend = totalSpend > 0 ? totalSpend : globalAdsSpend;
-    const effectiveAdsSpend = adsSpend > 0 ? adsSpend : globalAdsSpend;
+    // When on Analytics tab, ads platforms are filtered out, so use globalAdsMetrics
+    const effectiveSpend = totalSpend > 0 ? totalSpend : globalAdsMetrics.spend;
+    const effectiveAdsSpend = adsSpend > 0 ? adsSpend : globalAdsMetrics.spend;
+    const effectiveImpressions = totalImpressions > 0 ? totalImpressions : globalAdsMetrics.impressions;
 
     return {
-      spend: effectiveSpend, impressions: totalImpressions, clicks: totalClicks, results: totalResults,
+      spend: effectiveSpend, impressions: effectiveImpressions, clicks: totalClicks, results: totalResults,
       revenue: analyticsRevenue, roas_spend: effectiveAdsSpend, roas_value: analyticsRevenue,
       analyticsPurchases, analyticsAddToCart, analyticsSessions, analyticsUsers,
     };
-  }, [summaryByPlatform, globalAdsSpend]);
+  }, [summaryByPlatform, globalAdsMetrics]);
 
   const combinedRoas = totalSummary.roas_spend > 0 ? totalSummary.roas_value / totalSummary.roas_spend : 0;
   const combinedCpl = totalSummary.results > 0 ? totalSummary.spend / totalSummary.results : 0;
