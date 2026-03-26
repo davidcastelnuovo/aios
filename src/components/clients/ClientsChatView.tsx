@@ -172,7 +172,7 @@ export function ClientsChatView({
 
   const handleMoodChange = async (clientId: string, moodStatus: string) => {
     try {
-      const { error } = await supabase.from("clients").update({ mood_status: moodStatus }).eq("id", clientId);
+      const { error } = await supabase.from("clients").update({ mood_status: moodStatus as any }).eq("id", clientId);
       if (error) throw error;
       toast.success("מצב הלקוח עודכן בהצלחה");
       queryClient.invalidateQueries({ queryKey: ["clients"] });
