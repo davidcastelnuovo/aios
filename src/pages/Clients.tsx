@@ -209,6 +209,9 @@ export default function Clients() {
   const secureFilteredClients = useMemo(() => {
     if (!clients || !tenantId) return [];
     
+    // Super admins see all fetched clients (query already scopes to their owned tenants)
+    if (isSuperAdmin) return clients;
+    
     return clients.filter(client => {
       // ALWAYS check tenant match first - strict isolation
       const isTenantMatch = client.tenant_id === tenantId;
@@ -225,7 +228,7 @@ export default function Clients() {
       // Block everything else
       return false;
     });
-  }, [clients, tenantId, userAgencyIds, isOwner]);
+  }, [clients, tenantId, userAgencyIds, isOwner, isSuperAdmin]);
 
 
   const { data: campaigners } = useQuery({
