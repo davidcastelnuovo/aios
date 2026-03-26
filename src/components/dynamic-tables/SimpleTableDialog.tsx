@@ -19,6 +19,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Check, ChevronsUpDown, Search } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
@@ -38,6 +44,8 @@ export function SimpleTableDialog({ open, onOpenChange }: SimpleTableDialogProps
   const [category, setCategory] = useState("");
   const [agencyId, setAgencyId] = useState<string>("none");
   const [clientId, setClientId] = useState<string>("none");
+  const [clientSearch, setClientSearch] = useState("");
+  const [clientPopoverOpen, setClientPopoverOpen] = useState(false);
 
   // Fetch agencies
   const { data: agencies = [] } = useQuery({
@@ -74,6 +82,7 @@ export function SimpleTableDialog({ open, onOpenChange }: SimpleTableDialogProps
   // Reset client when agency changes
   useEffect(() => {
     setClientId("none");
+    setClientSearch("");
   }, [agencyId]);
 
   const createMutation = useMutation({
@@ -178,19 +187,57 @@ export function SimpleTableDialog({ open, onOpenChange }: SimpleTableDialogProps
           {agencyId && agencyId !== 'none' && (
             <div className="space-y-2">
               <Label>שיוך ללקוח (אופציונלי)</Label>
-              <Select value={clientId} onValueChange={setClientId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="ללא שיוך - כל הלקוחות" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">ללא שיוך - כל הלקוחות</SelectItem>
-                  {clients.map((client) => (
-                    <SelectItem key={client.id} value={client.id}>
-                      {client.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={clientPopoverOpen} onOpenChange={setClientPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between font-normal"
+                  >
+                    {clientId && clientId !== 'none'
+                      ? clients.find((c) => c.id === clientId)?.name || 'לקוח נבחר'
+                      : 'ללא שיוך - כל הלקוחות'}
+                    <ChevronsUpDown className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <div className="flex items-center border-b px-3">
+                    <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    <Input
+                      placeholder="חפש לקוח..."
+                      value={clientSearch}
+                      onChange={(e) => setClientSearch(e.target.value)}
+                      className="border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+                    />
+                  </div>
+                  <div className="max-h-[200px] overflow-y-auto p-1">
+                    <button
+                      type="button"
+                      className="relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent"
+                      onClick={() => { setClientId("none"); setClientPopoverOpen(false); setClientSearch(""); }}
+                    >
+                      <Check className={`ml-2 h-4 w-4 ${clientId === 'none' ? 'opacity-100' : 'opacity-0'}`} />
+                      ללא שיוך - כל הלקוחות
+                    </button>
+                    {clients
+                      .filter((c) => c.name.toLowerCase().includes(clientSearch.toLowerCase()))
+                      .map((client) => (
+                        <button
+                          type="button"
+                          key={client.id}
+                          className="relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent"
+                          onClick={() => { setClientId(client.id); setClientPopoverOpen(false); setClientSearch(""); }}
+                        >
+                          <Check className={`ml-2 h-4 w-4 ${clientId === client.id ? 'opacity-100' : 'opacity-0'}`} />
+                          {client.name}
+                        </button>
+                      ))}
+                    {clients.filter((c) => c.name.toLowerCase().includes(clientSearch.toLowerCase())).length === 0 && (
+                      <p className="py-4 text-center text-sm text-muted-foreground">לא נמצאו לקוחות</p>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
           )}
           <DialogFooter>
