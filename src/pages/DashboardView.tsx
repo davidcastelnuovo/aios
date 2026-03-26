@@ -936,7 +936,6 @@ export default function DashboardView() {
                         <TableHeader>
                           <TableRow>
                             <TableHead className="text-right">מקור / מדיום</TableHead>
-                            <TableHead className="text-right">הוצאה</TableHead>
                             <TableHead className="text-right">סשנים</TableHead>
                             <TableHead className="text-right">משתמשים יחודיים</TableHead>
                             {dashboardCampaignType === 'ecommerce' && (
@@ -944,18 +943,15 @@ export default function DashboardView() {
                                 <TableHead className="text-right">הוספה לעגלה</TableHead>
                                 <TableHead className="text-right">רכישות</TableHead>
                                 <TableHead className="text-right">הכנסות</TableHead>
-                                <TableHead className="text-right">ROAS</TableHead>
                               </>
                             )}
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {analyticsSourceBreakdown.map((source) => {
-                            const sourceRoas = totalSummary.spend > 0 ? source.revenue / totalSummary.spend : 0;
                             return (
                               <TableRow key={source.name}>
                                 <TableCell className="font-medium">{source.name}</TableCell>
-                                <TableCell>{formatCurrency(totalSummary.spend)}</TableCell>
                                 <TableCell>{formatNumber(source.sessions)}</TableCell>
                                 <TableCell>{formatNumber(source.users)}</TableCell>
                                 {dashboardCampaignType === 'ecommerce' && (
@@ -963,11 +959,6 @@ export default function DashboardView() {
                                     <TableCell>{formatNumber(source.addToCart)}</TableCell>
                                     <TableCell>{formatNumber(source.purchases)}</TableCell>
                                     <TableCell>{formatCurrency(source.revenue)}</TableCell>
-                                    <TableCell>
-                                      <span className={sourceRoas >= 1 ? 'text-green-600 font-semibold' : 'text-red-600'}>
-                                        {sourceRoas.toFixed(2)}
-                                      </span>
-                                    </TableCell>
                                   </>
                                 )}
                               </TableRow>
