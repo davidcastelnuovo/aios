@@ -840,6 +840,10 @@ export function ClientsChatView({
                   </div>
                 </TabsContent>
 
+                <TabsContent value="report" className="mt-0">
+                  <ClientWeeklyReport clientId={selectedClient.id} clientName={selectedClient.name || "לקוח"} />
+                </TabsContent>
+
                 <TabsContent value="updates" className="mt-0">
                   <ClientUpdatesTab clientId={selectedClient.id} clientName={selectedClient.name || "לקוח"} />
                 </TabsContent>
