@@ -1,0 +1,1 @@
+ALTER TABLE public.clients ADD COLUMN whatsapp_group_id uuid REFERENCES public.whatsapp_groups(id) ON DELETE SET NULL;

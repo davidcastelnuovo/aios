@@ -1601,6 +1601,7 @@ export type Database = {
           updated_at: string
           website: string | null
           whatsapp_avatar_url: string | null
+          whatsapp_group_id: string | null
         }
         Insert: {
           active_chat_provider?:
@@ -1629,6 +1630,7 @@ export type Database = {
           updated_at?: string
           website?: string | null
           whatsapp_avatar_url?: string | null
+          whatsapp_group_id?: string | null
         }
         Update: {
           active_chat_provider?:
@@ -1657,6 +1659,7 @@ export type Database = {
           updated_at?: string
           website?: string | null
           whatsapp_avatar_url?: string | null
+          whatsapp_group_id?: string | null
         }
         Relationships: [
           {
@@ -1671,6 +1674,13 @@ export type Database = {
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clients_whatsapp_group_id_fkey"
+            columns: ["whatsapp_group_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_groups"
             referencedColumns: ["id"]
           },
         ]

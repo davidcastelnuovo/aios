@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useRef } from "react";
 import ChatViewComponent from "@/components/chat/ChatView";
-import { User, Phone, PhoneCall, Building2, Clock, Search, Mail, Globe, CheckSquare, Trash2, MessageSquare, FileText, DollarSign, X, Edit, Pencil, Check } from "lucide-react";
+import { User, Phone, PhoneCall, Building2, Clock, Search, Mail, Globe, CheckSquare, Trash2, MessageSquare, FileText, DollarSign, X, Edit, Pencil, Check, Users } from "lucide-react";
 import { CallDialog } from "@/components/telephony/CallDialog";
 import { CallHistoryTab } from "@/components/telephony/CallHistoryTab";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +19,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 interface ClientsChatViewProps {
   clients: any[];
@@ -57,6 +58,23 @@ export function ClientsChatView({
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [callDialogOpen, setCallDialogOpen] = useState(false);
   const queryClient = useQueryClient();
+  const { tenantId } = useCurrentTenant();
+
+  const { data: whatsappGroups = [] } = useQuery({
+    queryKey: ["whatsapp-groups", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from("whatsapp_groups")
+        .select("id, group_name")
+        .eq("tenant_id", tenantId)
+        .eq("is_blocked", false)
+        .order("group_name");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenantId,
+  });
 
   const filteredClients = useMemo(() => {
     if (!listSearch.trim()) return clients;
@@ -577,6 +595,26 @@ export function ClientsChatView({
                         <EditableField label=":טלפון" value={selectedClient.phone} field="phone" clientId={selectedClient.id} isLink linkPrefix="tel:" />
                         <EditableField label=":אימייל" value={selectedClient.email} field="email" clientId={selectedClient.id} isLink linkPrefix="mailto:" />
                         <EditableField label=":אתר" value={selectedClient.website} field="website" clientId={selectedClient.id} isLink />
+                        <div className="flex items-center justify-end gap-2">
+                          <Select
+                            value={selectedClient.whatsapp_group_id || "none"}
+                            onValueChange={(value) => updateClientField(selectedClient.id, "whatsapp_group_id", value === "none" ? null : value)}
+                          >
+                            <SelectTrigger className="h-7 text-xs w-auto min-w-[140px]">
+                              <SelectValue placeholder="בחר קבוצה" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-background z-[100]">
+                              <SelectItem value="none">ללא קבוצה</SelectItem>
+                              {whatsappGroups.map((g: any) => (
+                                <SelectItem key={g.id} value={g.id}>{g.group_name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <span className="text-muted-foreground text-sm shrink-0 flex items-center gap-1">
+                            <Users className="h-3.5 w-3.5" />
+                            :קבוצת WhatsApp
+                          </span>
+                        </div>
                       </div>
                     </div>
 
