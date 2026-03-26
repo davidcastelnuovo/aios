@@ -611,6 +611,103 @@ export default function DashboardView() {
                 )}
               </div>
 
+              {/* Platform Breakdown */}
+              {Object.keys(summaryByPlatform).length > 0 && (
+                <Card>
+                  <CardHeader><CardTitle>פירוט לפי פלטפורמה</CardTitle></CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-right">פלטפורמה</TableHead>
+                            <TableHead className="text-right">הוצאה</TableHead>
+                            <TableHead className="text-right">חשיפות / סשנים</TableHead>
+                            <TableHead className="text-right">קליקים</TableHead>
+                            {dashboardCampaignType === 'ecommerce' ? (
+                              <>
+                                <TableHead className="text-right">רכישות</TableHead>
+                                <TableHead className="text-right">הכנסות</TableHead>
+                                <TableHead className="text-right">ROAS</TableHead>
+                              </>
+                            ) : (
+                              <>
+                                <TableHead className="text-right">לידים</TableHead>
+                                <TableHead className="text-right">עלות לליד</TableHead>
+                              </>
+                            )}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {Object.entries(summaryByPlatform).map(([platform, metrics]: [string, any]) => {
+                            const config = PLATFORM_CONFIG[platform] || { name: platform, color: 'text-muted-foreground' };
+                            const isAnalytics = isAnalyticsPlatform(platform);
+                            return (
+                              <TableRow key={platform}>
+                                <TableCell className="font-medium">
+                                  <div className="flex items-center gap-2">
+                                    {getIntegrationIcon(platform)}
+                                    <span className={config.color}>{config.name}</span>
+                                  </div>
+                                </TableCell>
+                                <TableCell>{isAnalytics ? '-' : formatCurrency(metrics.spend)}</TableCell>
+                                <TableCell>{formatNumber(isAnalytics ? metrics.sessions : metrics.impressions)}</TableCell>
+                                <TableCell>{isAnalytics ? '-' : formatNumber(metrics.clicks)}</TableCell>
+                                {dashboardCampaignType === 'ecommerce' ? (
+                                  <>
+                                    <TableCell>{formatNumber(metrics.results)}</TableCell>
+                                    <TableCell>{formatCurrency(metrics.revenue)}</TableCell>
+                                    <TableCell>
+                                      {isAnalytics ? '-' : (
+                                        <span className={metrics.roas >= 1 ? 'text-green-600 font-semibold' : 'text-red-600'}>
+                                          {metrics.roas.toFixed(2)}
+                                        </span>
+                                      )}
+                                    </TableCell>
+                                  </>
+                                ) : (
+                                  <>
+                                    <TableCell>{formatNumber(metrics.results)}</TableCell>
+                                    <TableCell>{isAnalytics ? '-' : formatCurrency(metrics.cpl)}</TableCell>
+                                  </>
+                                )}
+                              </TableRow>
+                            );
+                          })}
+                          <TableRow className="bg-muted/50 font-bold border-t-2">
+                            <TableCell>
+                              סה"כ
+                              {dashboardCampaignType === 'ecommerce' && summaryByPlatform['google_analytics'] && (
+                                <span className="text-xs font-normal text-muted-foreground block">הכנסות מ-Analytics / הוצאות פרסום</span>
+                              )}
+                            </TableCell>
+                            <TableCell>{formatCurrency(totalSummary.spend)}</TableCell>
+                            <TableCell>{formatNumber(totalSummary.impressions)}</TableCell>
+                            <TableCell>{formatNumber(totalSummary.clicks)}</TableCell>
+                            {dashboardCampaignType === 'ecommerce' ? (
+                              <>
+                                <TableCell>{formatNumber(totalSummary.analyticsPurchases || totalSummary.results)}</TableCell>
+                                <TableCell>{formatCurrency(totalSummary.revenue)}</TableCell>
+                                <TableCell>
+                                  <span className={combinedRoas >= 1 ? 'text-green-600' : 'text-red-600'}>
+                                    {combinedRoas.toFixed(2)}
+                                  </span>
+                                </TableCell>
+                              </>
+                            ) : (
+                              <>
+                                <TableCell>{formatNumber(totalSummary.results)}</TableCell>
+                                <TableCell>{formatCurrency(combinedCpl)}</TableCell>
+                              </>
+                            )}
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Platform Breakdown - moved above charts */}
               {dailyChartData.length > 1 && (
                 <div className="grid gap-4 md:grid-cols-2">
@@ -726,103 +823,6 @@ export default function DashboardView() {
                     </Card>
                   )}
                 </div>
-              )}
-
-              {/* Platform Breakdown */}
-              {Object.keys(summaryByPlatform).length > 0 && (
-                <Card>
-                  <CardHeader><CardTitle>פירוט לפי פלטפורמה</CardTitle></CardHeader>
-                  <CardContent>
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="text-right">פלטפורמה</TableHead>
-                            <TableHead className="text-right">הוצאה</TableHead>
-                            <TableHead className="text-right">חשיפות / סשנים</TableHead>
-                            <TableHead className="text-right">קליקים</TableHead>
-                            {dashboardCampaignType === 'ecommerce' ? (
-                              <>
-                                <TableHead className="text-right">רכישות</TableHead>
-                                <TableHead className="text-right">הכנסות</TableHead>
-                                <TableHead className="text-right">ROAS</TableHead>
-                              </>
-                            ) : (
-                              <>
-                                <TableHead className="text-right">לידים</TableHead>
-                                <TableHead className="text-right">עלות לליד</TableHead>
-                              </>
-                            )}
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {Object.entries(summaryByPlatform).map(([platform, metrics]: [string, any]) => {
-                            const config = PLATFORM_CONFIG[platform] || { name: platform, color: 'text-muted-foreground' };
-                            const isAnalytics = isAnalyticsPlatform(platform);
-                            return (
-                              <TableRow key={platform}>
-                                <TableCell className="font-medium">
-                                  <div className="flex items-center gap-2">
-                                    {getIntegrationIcon(platform)}
-                                    <span className={config.color}>{config.name}</span>
-                                  </div>
-                                </TableCell>
-                                <TableCell>{isAnalytics ? '-' : formatCurrency(metrics.spend)}</TableCell>
-                                <TableCell>{formatNumber(isAnalytics ? metrics.sessions : metrics.impressions)}</TableCell>
-                                <TableCell>{isAnalytics ? '-' : formatNumber(metrics.clicks)}</TableCell>
-                                {dashboardCampaignType === 'ecommerce' ? (
-                                  <>
-                                    <TableCell>{formatNumber(metrics.results)}</TableCell>
-                                    <TableCell>{formatCurrency(metrics.revenue)}</TableCell>
-                                    <TableCell>
-                                      {isAnalytics ? '-' : (
-                                        <span className={metrics.roas >= 1 ? 'text-green-600 font-semibold' : 'text-red-600'}>
-                                          {metrics.roas.toFixed(2)}
-                                        </span>
-                                      )}
-                                    </TableCell>
-                                  </>
-                                ) : (
-                                  <>
-                                    <TableCell>{formatNumber(metrics.results)}</TableCell>
-                                    <TableCell>{isAnalytics ? '-' : formatCurrency(metrics.cpl)}</TableCell>
-                                  </>
-                                )}
-                              </TableRow>
-                            );
-                          })}
-                          <TableRow className="bg-muted/50 font-bold border-t-2">
-                            <TableCell>
-                              סה"כ
-                              {dashboardCampaignType === 'ecommerce' && summaryByPlatform['google_analytics'] && (
-                                <span className="text-xs font-normal text-muted-foreground block">הכנסות מ-Analytics / הוצאות פרסום</span>
-                              )}
-                            </TableCell>
-                            <TableCell>{formatCurrency(totalSummary.spend)}</TableCell>
-                            <TableCell>{formatNumber(totalSummary.impressions)}</TableCell>
-                            <TableCell>{formatNumber(totalSummary.clicks)}</TableCell>
-                            {dashboardCampaignType === 'ecommerce' ? (
-                              <>
-                                <TableCell>{formatNumber(totalSummary.analyticsPurchases || totalSummary.results)}</TableCell>
-                                <TableCell>{formatCurrency(totalSummary.revenue)}</TableCell>
-                                <TableCell>
-                                  <span className={combinedRoas >= 1 ? 'text-green-600' : 'text-red-600'}>
-                                    {combinedRoas.toFixed(2)}
-                                  </span>
-                                </TableCell>
-                              </>
-                            ) : (
-                              <>
-                                <TableCell>{formatNumber(totalSummary.results)}</TableCell>
-                                <TableCell>{formatCurrency(combinedCpl)}</TableCell>
-                              </>
-                            )}
-                          </TableRow>
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </CardContent>
-                </Card>
               )}
 
               {/* Daily Breakdown */}
