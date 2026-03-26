@@ -361,7 +361,7 @@ export function LeadsChatView({
                 </TabsTrigger>
               </TabsList>
 
-              <ScrollArea className="flex-1 p-4">
+              <ScrollArea className={cn("flex-1 p-4", activeTab === "whatsapp" && "hidden")}>
                 <TabsContent value="details" className="mt-0 space-y-6">
                   {/* Info cards grid */}
                   <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
@@ -518,24 +518,24 @@ export function LeadsChatView({
                 <TabsContent value="updates" className="mt-0">
                   <LeadUpdatesTab leadId={selectedLead.id} leadName={selectedLead.contact_name || selectedLead.company_name || "ליד"} />
                 </TabsContent>
+              </ScrollArea>
 
-                <TabsContent value="whatsapp" className="mt-0 flex-1 flex flex-col min-h-0">
+              {activeTab === "whatsapp" && (
+                <div className="flex-1 min-h-0">
                   {selectedLead.phone ? (
-                    <div className="flex-1 min-h-0">
-                      <ChatViewComponent
-                        contactId={selectedLead.id}
-                        contactType="lead"
-                        senderPhone={selectedLead.phone}
-                        contactName={selectedLead.contact_name || selectedLead.company_name || "ליד"}
-                      />
-                    </div>
+                    <ChatViewComponent
+                      contactId={selectedLead.id}
+                      contactType="lead"
+                      senderPhone={selectedLead.phone}
+                      contactName={selectedLead.contact_name || selectedLead.company_name || "ליד"}
+                    />
                   ) : (
                     <div className="text-center py-8 text-sm text-muted-foreground">
                       אין מספר טלפון לליד זה
                     </div>
                   )}
-                </TabsContent>
-              </ScrollArea>
+                </div>
+              )}
             </Tabs>
           </>
         ) : (
