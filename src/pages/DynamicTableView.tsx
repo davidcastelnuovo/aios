@@ -1906,6 +1906,10 @@ export default function DynamicTableView() {
             </DialogContent>
           </Dialog>
 
+          {table?.id && table?.tenant_id && (
+            <ShareTableDialog tableId={table.id} tableName={table.name} tenantId={table.tenant_id} />
+          )}
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="icon">
