@@ -882,6 +882,85 @@ export type Database = {
         }
         Relationships: []
       }
+      call_logs: {
+        Row: {
+          caller_user_id: string
+          client_id: string | null
+          created_at: string
+          duration: number | null
+          from_number: string | null
+          id: string
+          lead_id: string | null
+          notes: string | null
+          provider: string | null
+          provider_call_id: string | null
+          recording_duration: number | null
+          recording_url: string | null
+          status: string
+          tenant_id: string
+          to_number: string
+          updated_at: string
+        }
+        Insert: {
+          caller_user_id: string
+          client_id?: string | null
+          created_at?: string
+          duration?: number | null
+          from_number?: string | null
+          id?: string
+          lead_id?: string | null
+          notes?: string | null
+          provider?: string | null
+          provider_call_id?: string | null
+          recording_duration?: number | null
+          recording_url?: string | null
+          status?: string
+          tenant_id: string
+          to_number: string
+          updated_at?: string
+        }
+        Update: {
+          caller_user_id?: string
+          client_id?: string | null
+          created_at?: string
+          duration?: number | null
+          from_number?: string | null
+          id?: string
+          lead_id?: string | null
+          notes?: string | null
+          provider?: string | null
+          provider_call_id?: string | null
+          recording_duration?: number | null
+          recording_url?: string | null
+          status?: string
+          tenant_id?: string
+          to_number?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_logs_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_logs_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_logs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       campaigner_agencies: {
         Row: {
           agency_id: string
@@ -5518,6 +5597,50 @@ export type Database = {
           },
           {
             foreignKeyName: "team_messages_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      telephony_settings: {
+        Row: {
+          auto_record: boolean | null
+          created_at: string
+          id: string
+          personal_phone: string | null
+          provider: string | null
+          tenant_id: string
+          updated_at: string
+          user_id: string
+          virtual_number: string | null
+        }
+        Insert: {
+          auto_record?: boolean | null
+          created_at?: string
+          id?: string
+          personal_phone?: string | null
+          provider?: string | null
+          tenant_id: string
+          updated_at?: string
+          user_id: string
+          virtual_number?: string | null
+        }
+        Update: {
+          auto_record?: boolean | null
+          created_at?: string
+          id?: string
+          personal_phone?: string | null
+          provider?: string | null
+          tenant_id?: string
+          updated_at?: string
+          user_id?: string
+          virtual_number?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "telephony_settings_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
