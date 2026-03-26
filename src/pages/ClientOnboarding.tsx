@@ -352,6 +352,9 @@ export default function ClientOnboarding() {
               {item.clients && <CardDescription>{item.clients.name}</CardDescription>}
             </div>
             <div className="flex items-center gap-1">
+              <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setViewingClientId(item.client_id); }} title="צפה בלקוח">
+                <Eye className="h-4 w-4" />
+              </Button>
               <Button
                 variant="ghost"
                 size="icon"
