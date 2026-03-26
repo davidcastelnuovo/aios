@@ -62,7 +62,24 @@ export default function ClientOnboarding() {
   const [editingItem, setEditingItem] = useState<OnboardingItem | null>(null);
   const [selectedCampaigner, setSelectedCampaigner] = useState<string>("all");
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [viewingClientId, setViewingClientId] = useState<string | null>(null);
   const { tenantId } = useCurrentTenant();
+
+  // Fetch client data when viewing client dialog
+  const { data: viewingClient } = useQuery({
+    queryKey: ["client-for-onboarding", viewingClientId],
+    queryFn: async () => {
+      if (!viewingClientId) return null;
+      const { data, error } = await supabase
+        .from("clients")
+        .select(`*, agencies (name), client_team (campaigner_id, campaigners!inner (id, full_name))`)
+        .eq("id", viewingClientId)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!viewingClientId,
+  });
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
