@@ -503,10 +503,10 @@ export function ClientsChatView({
                   className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
                   style={{ backgroundColor: getStatusInfo(selectedClient.status).color }}
                 >
-                  {(selectedClient.name || "?")[0]}
+                  {(selectedClientDisplayName || "?")[0]}
                 </div>
                 <div className="min-w-0">
-                  <h2 className="font-bold text-base truncate">{selectedClient.name || "ללא שם"}</h2>
+                  <h2 className="font-bold text-base truncate">{selectedClientDisplayName}</h2>
                   {selectedClient.agencies?.name && (
                     <p className="text-xs text-muted-foreground truncate">{selectedClient.agencies.name}</p>
                   )}
