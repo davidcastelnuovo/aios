@@ -58,6 +58,23 @@ export function ClientsChatView({
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [callDialogOpen, setCallDialogOpen] = useState(false);
   const queryClient = useQueryClient();
+  const { tenantId } = useCurrentTenant();
+
+  const { data: whatsappGroups = [] } = useQuery({
+    queryKey: ["whatsapp-groups", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from("whatsapp_groups")
+        .select("id, group_name")
+        .eq("tenant_id", tenantId)
+        .eq("is_blocked", false)
+        .order("group_name");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenantId,
+  });
 
   const filteredClients = useMemo(() => {
     if (!listSearch.trim()) return clients;
