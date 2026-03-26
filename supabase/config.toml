@@ -170,3 +170,9 @@ verify_jwt = true
 
 [functions.process-job-queue]
 verify_jwt = false
+
+[functions.make-paycall-call]
+verify_jwt = true
+
+[functions.paycall-webhook]
+verify_jwt = false

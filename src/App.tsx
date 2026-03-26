@@ -203,6 +203,7 @@ const App = () => (
                   <Route path="/t/:tenantSlug/manus-tasks" element={<ProtectedRoute><AppLayout><ManusTasksPage /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/agents" element={<ProtectedRoute><AppLayout><AgentHub /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/ai-detection" element={<ProtectedRoute><AppLayout><AiDetection /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/telephony-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><TelephonySettings /></AppLayout></ProtectedRoute>} />
                    
                    {/* Public signing page */}
                   <Route path="/sign/:token" element={<SignDocument />} />
