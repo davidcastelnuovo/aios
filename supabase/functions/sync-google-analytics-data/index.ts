@@ -208,6 +208,42 @@ serve(async (req) => {
 
     const dailySourceData = await dailySourceResponse.json();
 
+    // ====== REPORT 5: Traffic Acquisition by Channel Group ======
+    const channelGroupRequest = {
+      dateRanges: [{ startDate: actualStartDate, endDate: actualEndDate }],
+      dimensions: [{ name: 'sessionDefaultChannelGrouping' }],
+      metrics: [
+        { name: 'sessions' },
+        { name: 'engagedSessions' },
+        { name: 'engagementRate' },
+        { name: 'averageSessionDuration' },
+        { name: 'eventsPerSession' },
+        { name: 'totalUsers' },
+        { name: 'ecommercePurchases' },
+        { name: 'purchaseRevenue' },
+      ],
+      orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
+      limit: 50,
+    };
+
+    const channelGroupResponse = await fetch(
+      `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(channelGroupRequest),
+      }
+    );
+
+    const channelGroupData = await channelGroupResponse.json();
+
+    if (channelGroupData.error) {
+      console.log('Channel group report error (non-fatal):', channelGroupData.error.message);
+    }
+
     // ====== REPORT 4: Top pages ======
     const pagesRequest = {
       dateRanges: [{ startDate: actualStartDate, endDate: actualEndDate }],
@@ -269,6 +305,10 @@ serve(async (req) => {
       { key: 'add_to_cart', name: 'Add To Cart', type: 'number', position: 11 },
       { key: 'purchases', name: 'Purchases', type: 'number', position: 12 },
       { key: 'purchase_value', name: 'Purchase Value', type: 'number', position: 13 },
+      { key: 'channel_group', name: 'Channel Group', type: 'text', position: 14 },
+      { key: 'engaged_sessions', name: 'Engaged Sessions', type: 'number', position: 15 },
+      { key: 'engagement_rate', name: 'Engagement Rate', type: 'number', position: 16 },
+      { key: 'events_per_session', name: 'Events per Session', type: 'number', position: 17 },
     ];
 
     for (const field of fieldDefinitions) {
@@ -406,7 +446,37 @@ serve(async (req) => {
       }
     }
 
-    // Insert records
+    // Channel group data (Traffic Acquisition)
+    if (channelGroupData.rows) {
+      for (const row of channelGroupData.rows) {
+        records.push({
+          table_id: tableId,
+          tenant_id: table.tenant_id,
+          agency_id: table.agency_id,
+          data: {
+            report_type: 'channel_group',
+            channel_group: row.dimensionValues[0].value,
+            source_medium: null,
+            date: null,
+            page_path: null,
+            sessions: parseInt(row.metricValues[0].value) || 0,
+            engaged_sessions: parseInt(row.metricValues[1].value) || 0,
+            engagement_rate: (parseFloat(row.metricValues[2].value) * 100).toFixed(1),
+            avg_session_duration: parseFloat(row.metricValues[3].value).toFixed(1),
+            events_per_session: parseFloat(row.metricValues[4].value).toFixed(2),
+            users: parseInt(row.metricValues[5].value) || 0,
+            purchases: parseInt(row.metricValues[6]?.value) || 0,
+            purchase_value: parseFloat(row.metricValues[7]?.value) || 0,
+            new_users: null,
+            pageviews: null,
+            bounce_rate: null,
+            conversions: null,
+            add_to_cart: null,
+          },
+        });
+      }
+    }
+
     if (records.length > 0) {
       const { error: insertError } = await supabase
         .from('crm_records')
