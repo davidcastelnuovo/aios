@@ -278,6 +278,8 @@ function ProjectDashboard({
           <PromptTracker
             prompts={trackedPrompts}
             onAddPrompt={(prompt, category) => addPrompt.mutate({ prompt, category })}
+            onDeletePrompt={(promptId) => deletePrompt.mutate(promptId)}
+            onEditPrompt={(promptId, prompt, category) => editPrompt.mutate({ promptId, prompt, category })}
             onAutoGenerate={() => generatePrompts(project)}
             isGenerating={isGenerating}
           />
