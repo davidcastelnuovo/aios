@@ -265,6 +265,8 @@ export default function DashboardView() {
         platforms[source].spend += getSpendFromData(data);
         platforms[source].impressions += Number(data.impressions) || 0;
         platforms[source].clicks += Number(data.clicks) || 0;
+        // Always track leads for all platforms
+        platforms[source].leads += getLeadsFromData(data);
         if (campaignType === 'ecommerce') {
           platforms[source].results += getPurchasesFromData(data);
           platforms[source].revenue += getRevenueFromData(data);
