@@ -269,6 +269,7 @@ export function LeadsChatView({
           <div className="divide-y">
             {filteredListLeads.map((lead) => {
               const isSelected = lead.id === selectedLeadId;
+              const isChecked = selectedLeadIds.has(lead.id);
               const stageInfo = getStageInfo(lead.status);
               const statusInfo = getLeadStatusInfo(lead.response_status);
               const tagIds = leadsTagsMap[lead.id] || [];
@@ -277,15 +278,29 @@ export function LeadsChatView({
                 <button
                   key={lead.id}
                   onClick={() => {
-                    setSelectedLeadId(lead.id);
-                    setActiveTab("details");
+                    if (multiSelectMode) {
+                      toggleLeadSelection(lead.id);
+                    } else {
+                      setSelectedLeadId(lead.id);
+                      setActiveTab("details");
+                    }
                   }}
                   className={cn(
                     "w-full text-right p-3 hover:bg-muted/50 transition-colors cursor-pointer",
-                    isSelected && "bg-primary/10 border-e-4 border-e-primary"
+                    isSelected && !multiSelectMode && "bg-primary/10 border-e-4 border-e-primary",
+                    isChecked && multiSelectMode && "bg-primary/10"
                   )}
                 >
                   <div className="flex items-start gap-2 flex-row-reverse">
+                    {/* Checkbox in multi-select mode */}
+                    {multiSelectMode && (
+                      <div className="pt-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={isChecked}
+                          onCheckedChange={() => toggleLeadSelection(lead.id)}
+                        />
+                      </div>
+                    )}
                     {/* Avatar circle */}
                     <div
                       className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
