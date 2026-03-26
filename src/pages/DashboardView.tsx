@@ -70,6 +70,7 @@ const getLeadsFromData = (data: any) =>
 
 const getPurchasesFromData = (data: any) => Number(data?.purchases) || Number(data?.ecommercePurchases) || Number(data?.transactions) || 0;
 const getSessionsFromData = (data: any) => Number(data?.sessions) || 0;
+const getUsersFromData = (data: any) => Number(data?.users) || 0;
 const getAddToCartFromData = (data: any) => Number(data?.add_to_cart) || Number(data?.addToCarts) || 0;
 
 const isAdsPlatform = (source: string) => ['facebook_insights', 'facebook_ecommerce', 'google_ads'].includes(source);
@@ -248,7 +249,7 @@ export default function DashboardView() {
     filteredRecords.forEach((record: any) => {
       const source = record._source || 'unknown';
       if (!platforms[source]) {
-        platforms[source] = { spend: 0, impressions: 0, clicks: 0, sessions: 0, results: 0, revenue: 0, addToCart: 0, roas: 0, cpl: 0, recordCount: 0 };
+        platforms[source] = { spend: 0, impressions: 0, clicks: 0, sessions: 0, users: 0, results: 0, revenue: 0, addToCart: 0, roas: 0, cpl: 0, recordCount: 0 };
       }
       
       const data = record.data || {};
@@ -256,6 +257,7 @@ export default function DashboardView() {
 
       if (isAnalyticsPlatform(source)) {
         platforms[source].sessions += getSessionsFromData(data);
+        platforms[source].users += getUsersFromData(data);
         platforms[source].results += getPurchasesFromData(data);
         platforms[source].revenue += getRevenueFromData(data);
         platforms[source].addToCart += getAddToCartFromData(data);
@@ -315,6 +317,28 @@ export default function DashboardView() {
 
   const combinedRoas = totalSummary.roas_spend > 0 ? totalSummary.roas_value / totalSummary.roas_spend : 0;
   const combinedCpl = totalSummary.results > 0 ? totalSummary.spend / totalSummary.results : 0;
+
+  // Analytics source breakdown from daily_source records
+  const analyticsSourceBreakdown = useMemo(() => {
+    const sources: Record<string, { sessions: number; users: number; purchases: number; revenue: number; addToCart: number }> = {};
+    allRecords.forEach((record: any) => {
+      const source = record._source || 'unknown';
+      if (!isAnalyticsPlatform(source)) return;
+      const data = record.data || {};
+      if (data.report_type !== 'daily_source') return;
+      
+      const sm = data.source_medium || 'Unknown';
+      if (!sources[sm]) sources[sm] = { sessions: 0, users: 0, purchases: 0, revenue: 0, addToCart: 0 };
+      sources[sm].sessions += Number(data.sessions) || 0;
+      sources[sm].users += Number(data.users) || 0;
+      sources[sm].purchases += getPurchasesFromData(data);
+      sources[sm].revenue += getRevenueFromData(data);
+      sources[sm].addToCart += getAddToCartFromData(data);
+    });
+    return Object.entries(sources)
+      .map(([name, data]) => ({ name, ...data }))
+      .sort((a, b) => b.sessions - a.sessions);
+  }, [allRecords]);
 
   // Daily chart data
   const dailyChartData = useMemo(() => {
@@ -624,10 +648,11 @@ export default function DashboardView() {
                           <TableRow>
                             <TableHead className="text-right">פלטפורמה</TableHead>
                             <TableHead className="text-right">הוצאה</TableHead>
-                            <TableHead className="text-right">חשיפות / סשנים</TableHead>
+                            <TableHead className="text-right">חשיפות / סשנים יחודיים</TableHead>
                             <TableHead className="text-right">קליקים</TableHead>
                             {dashboardCampaignType === 'ecommerce' ? (
                               <>
+                                <TableHead className="text-right">הוספה לעגלה</TableHead>
                                 <TableHead className="text-right">רכישות</TableHead>
                                 <TableHead className="text-right">הכנסות</TableHead>
                                 <TableHead className="text-right">ROAS</TableHead>
@@ -653,10 +678,11 @@ export default function DashboardView() {
                                   </div>
                                 </TableCell>
                                 <TableCell>{isAnalytics ? '-' : formatCurrency(metrics.spend)}</TableCell>
-                                <TableCell>{formatNumber(isAnalytics ? metrics.sessions : metrics.impressions)}</TableCell>
+                                <TableCell>{formatNumber(isAnalytics ? metrics.users : metrics.impressions)}</TableCell>
                                 <TableCell>{isAnalytics ? '-' : formatNumber(metrics.clicks)}</TableCell>
                                 {dashboardCampaignType === 'ecommerce' ? (
                                   <>
+                                    <TableCell>{formatNumber(metrics.addToCart)}</TableCell>
                                     <TableCell>{formatNumber(metrics.results)}</TableCell>
                                     <TableCell>{formatCurrency(metrics.revenue)}</TableCell>
                                     <TableCell>
@@ -688,6 +714,7 @@ export default function DashboardView() {
                             <TableCell>{formatNumber(totalSummary.clicks)}</TableCell>
                             {dashboardCampaignType === 'ecommerce' ? (
                               <>
+                                <TableCell>{formatNumber(totalSummary.analyticsAddToCart)}</TableCell>
                                 <TableCell>{formatNumber(totalSummary.analyticsPurchases || totalSummary.results)}</TableCell>
                                 <TableCell>{formatCurrency(totalSummary.revenue)}</TableCell>
                                 <TableCell>
@@ -703,6 +730,49 @@ export default function DashboardView() {
                               </>
                             )}
                           </TableRow>
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Analytics Source Breakdown */}
+              {analyticsSourceBreakdown.length > 0 && (platformFilter === 'all' || platformFilter === 'google_analytics') && (
+                <Card>
+                  <CardHeader><CardTitle>פירוט לפי מקור הגעה (Analytics)</CardTitle></CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-right">מקור / מדיום</TableHead>
+                            <TableHead className="text-right">סשנים</TableHead>
+                            <TableHead className="text-right">משתמשים יחודיים</TableHead>
+                            {dashboardCampaignType === 'ecommerce' && (
+                              <>
+                                <TableHead className="text-right">הוספה לעגלה</TableHead>
+                                <TableHead className="text-right">רכישות</TableHead>
+                                <TableHead className="text-right">הכנסות</TableHead>
+                              </>
+                            )}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {analyticsSourceBreakdown.map((source) => (
+                            <TableRow key={source.name}>
+                              <TableCell className="font-medium">{source.name}</TableCell>
+                              <TableCell>{formatNumber(source.sessions)}</TableCell>
+                              <TableCell>{formatNumber(source.users)}</TableCell>
+                              {dashboardCampaignType === 'ecommerce' && (
+                                <>
+                                  <TableCell>{formatNumber(source.addToCart)}</TableCell>
+                                  <TableCell>{formatNumber(source.purchases)}</TableCell>
+                                  <TableCell>{formatCurrency(source.revenue)}</TableCell>
+                                </>
+                              )}
+                            </TableRow>
+                          ))}
                         </TableBody>
                       </Table>
                     </div>
