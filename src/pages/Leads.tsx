@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical, ChevronDown, ChevronUp, User, Calendar as CalendarIcon, Search, X, Settings2, CheckSquare, Download, Clock, Tag, Filter, FileSpreadsheet } from "lucide-react";
+import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical, ChevronDown, ChevronUp, User, Calendar as CalendarIcon, Search, X, Settings2, CheckSquare, Download, Clock, Tag, Filter, FileSpreadsheet, MessageCircle } from "lucide-react";
 import confetti from "canvas-confetti";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -75,6 +75,7 @@ import { LeadTagSelector, LeadTagBadges } from "@/components/leads/LeadTagSelect
 import { ChatTagsManager } from "@/components/chat/ChatTagsManager";
 import { ImportLeadsSheet } from "@/components/forms/ImportLeadsSheet";
 import { FollowUpDatePicker } from "@/components/leads/FollowUpDatePicker";
+import { LeadsChatView } from "@/components/leads/LeadsChatView";
 
 
 const DROP_ANIMATION_MS = 220;
@@ -669,7 +670,7 @@ export default function Leads() {
 
   const queryClient = useQueryClient();
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<"kanban" | "table">("kanban");
+  const [viewMode, setViewMode] = useState<"kanban" | "table" | "chat">("kanban");
   const [openTables, setOpenTables] = useState<Record<string, boolean>>({});
   const [selectedMobileStage, setSelectedMobileStage] = useState<string>("");
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
@@ -679,7 +680,7 @@ export default function Leads() {
   const TABLE_LEADS_PER_PAGE = 50;
   const KANBAN_LEADS_PER_STAGE_LIMIT = 50; // How many leads to fetch per stage from DB
 
-  const isKanbanView = viewMode === "kanban";
+  const isKanbanView = viewMode === "kanban" || viewMode === "chat";
   const effectivePage = isKanbanView ? 1 : page;
   const effectiveLimit = TABLE_LEADS_PER_PAGE;
 
@@ -2194,6 +2195,15 @@ export default function Leads() {
               >
                 <TableIcon className="h-4 w-4" />
               </Button>
+              <Button
+                variant={viewMode === "chat" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode("chat")}
+                className="h-8 w-8 p-0"
+                title="תצוגת צ'אט"
+              >
+                <MessageCircle className="h-4 w-4" />
+              </Button>
             </div>
 
             {/* Mobile Pagination (Table view only) */}
@@ -2328,6 +2338,13 @@ export default function Leads() {
                 onClick={() => setViewMode("table")}
               >
                 <TableIcon className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === "chat" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode("chat")}
+              >
+                <MessageCircle className="h-4 w-4" />
               </Button>
             </div>
             <div className="flex gap-2">
@@ -2758,6 +2775,30 @@ export default function Leads() {
             </DragOverlay>
           </DndContext>
         </>
+      ) : viewMode === "chat" ? (
+        <LeadsChatView
+          leads={filteredLeads || []}
+          pipelineStages={PIPELINE_STAGES}
+          leadStatuses={leadStatuses}
+          allTags={allTags}
+          leadsTagsMap={leadsTagsMap}
+          productsLookup={productsLookup}
+          onStatusChange={(leadId, newStatus) => updateLeadStatus.mutate({ leadId, newStatus })}
+          onResponseStatusChange={(leadId, responseStatus) => updateLeadResponseStatus.mutate({ leadId, responseStatus: responseStatus as any })}
+          onFollowUpDateUpdate={(leadId, newDate) => {
+            queryClient.setQueryData(["leads-kanban", tenantId, selectedAgency, searchQuery, filterSalesPersonIds, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate, endDate], (old: any) => {
+              if (!old) return old;
+              return Object.fromEntries(
+                Object.entries(old).map(([key, leads]: [string, any]) => [
+                  key,
+                  Array.isArray(leads) ? leads.map((l: any) => l.id === leadId ? { ...l, follow_up_date: newDate } : l) : leads,
+                ])
+              );
+            });
+          }}
+          isCompanyNameVisible={isFieldVisible('company_name')}
+          searchQuery={searchQuery}
+        />
       ) : (
         <div className="space-y-6">
           {PIPELINE_STAGES.map((stage) => {
