@@ -564,10 +564,10 @@ export default function DashboardView() {
             <>
               {/* Summary Cards - only show in All and Analytics tabs */}
               {(platformFilter === 'all' || platformFilter === 'google_analytics') && (
-              <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-5 items-stretch [&>*]:h-full">
+              <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-5 items-stretch [&>*]:h-full [&>*]:min-h-[120px]">
                 {(showAdsCards || showAnalyticsCards) && (
                   <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900">
-                    <CardContent className="p-6">
+                    <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
                       <p className="text-sm text-muted-foreground">הוצאה כוללת</p>
                       <p className="text-3xl font-bold mt-2">{formatCurrency(totalSummary.spend)}</p>
                     </CardContent>
@@ -578,7 +578,7 @@ export default function DashboardView() {
                   <>
                     {showAnalyticsCards && (
                       <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
-                        <CardContent className="p-6">
+                        <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
                           <p className="text-sm text-muted-foreground">הכנסות (Analytics)</p>
                           <p className="text-3xl font-bold mt-2">{formatCurrency(totalSummary.revenue)}</p>
                         </CardContent>
@@ -587,7 +587,7 @@ export default function DashboardView() {
 
                     {showAnalyticsCards && (
                       <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900">
-                        <CardContent className="p-6">
+                        <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
                           <p className="text-sm text-muted-foreground">רכישות (Analytics)</p>
                           <p className="text-3xl font-bold mt-2">{formatNumber(totalSummary.analyticsPurchases || totalSummary.results)}</p>
                         </CardContent>
@@ -596,7 +596,7 @@ export default function DashboardView() {
 
                     {showAnalyticsCards && (
                       <Card className="bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950 dark:to-amber-900">
-                        <CardContent className="p-6">
+                        <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
                           <p className="text-sm text-muted-foreground">הוספה לעגלה (ATC)</p>
                           <p className="text-3xl font-bold mt-2">{formatNumber(totalSummary.analyticsAddToCart)}</p>
                         </CardContent>
@@ -605,7 +605,7 @@ export default function DashboardView() {
 
                     {(platformFilter === 'all' || platformFilter === 'google_analytics') && (
                       <Card className={`bg-gradient-to-br ${combinedRoas >= 1 ? 'from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900' : 'from-red-50 to-red-100 dark:from-red-950 dark:to-red-900'}`}>
-                        <CardContent className="p-6">
+                        <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
                           <p className="text-sm text-muted-foreground">ROAS משולב</p>
                           <div className="flex items-center gap-2 mt-2">
                             <p className="text-3xl font-bold">{combinedRoas.toFixed(2)}</p>
@@ -621,7 +621,7 @@ export default function DashboardView() {
                   <>
                     {showAdsCards && (
                       <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
-                        <CardContent className="p-6">
+                        <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
                           <p className="text-sm text-muted-foreground">לידים</p>
                           <p className="text-3xl font-bold mt-2">{formatNumber(totalSummary.results)}</p>
                         </CardContent>
@@ -630,7 +630,7 @@ export default function DashboardView() {
 
                     {showAdsCards && (
                       <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900">
-                        <CardContent className="p-6">
+                        <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
                           <p className="text-sm text-muted-foreground">קליקים</p>
                           <p className="text-3xl font-bold mt-2">{formatNumber(totalSummary.clicks)}</p>
                         </CardContent>
@@ -639,7 +639,7 @@ export default function DashboardView() {
 
                     {showAdsCards && (
                       <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900">
-                        <CardContent className="p-6">
+                        <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
                           <p className="text-sm text-muted-foreground">עלות לליד (CPL)</p>
                           <p className="text-3xl font-bold mt-2">{formatCurrency(combinedCpl)}</p>
                         </CardContent>
@@ -648,7 +648,7 @@ export default function DashboardView() {
 
                     {showAnalyticsCards && (
                       <Card className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-950 dark:to-orange-900">
-                        <CardContent className="p-6">
+                        <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
                           <p className="text-sm text-muted-foreground">סשנים (Analytics)</p>
                           <p className="text-3xl font-bold mt-2">{formatNumber(totalSummary.analyticsSessions)}</p>
                         </CardContent>
