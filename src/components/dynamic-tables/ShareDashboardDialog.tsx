@@ -140,7 +140,7 @@ export function ShareDashboardDialog({ dashboardId, dashboardName, tenantId }: S
           שתף דשבורד
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-lg" dir="rtl">
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto" dir="rtl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Share2 className="h-5 w-5" />
@@ -164,7 +164,7 @@ export function ShareDashboardDialog({ dashboardId, dashboardName, tenantId }: S
             <div key={share.id} className="border rounded-lg p-4 space-y-3">
               {/* Link */}
               <div className="flex items-center gap-2">
-                <code className="text-xs bg-muted px-2 py-1 rounded flex-1 truncate" dir="ltr">
+                <code className="text-xs bg-muted px-2 py-1 rounded flex-1 overflow-hidden text-ellipsis whitespace-nowrap block min-w-0" dir="ltr">
                   {getShareUrl(share.share_token)}
                 </code>
                 <Button variant="default" size="sm" onClick={() => copyLink(share.share_token)} className="shrink-0">
