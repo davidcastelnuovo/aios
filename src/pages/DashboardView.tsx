@@ -708,8 +708,8 @@ export default function DashboardView() {
                 </Card>
               )}
 
-              {/* Charts */}
-              {dailyChartData.length > 1 && (
+              {/* Charts - only show in All and Analytics tabs */}
+              {dailyChartData.length > 1 && (platformFilter === 'all' || platformFilter === 'google_analytics') && (
                 <div className="grid gap-4 md:grid-cols-2">
                   {/* Revenue vs Spend */}
                   {dashboardCampaignType === 'ecommerce' && (showAdsCards || showAnalyticsCards) && (
