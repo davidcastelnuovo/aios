@@ -60,6 +60,10 @@ export function LeadsChatView({
   const [activeTab, setActiveTab] = useState("details");
   const [manageStagesOpen, setManageStagesOpen] = useState(false);
   const [manageStatusesOpen, setManageStatusesOpen] = useState(false);
+  const [multiSelectMode, setMultiSelectMode] = useState(false);
+  const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const queryClient = useQueryClient();
 
   const filteredListLeads = useMemo(() => {
     if (!listSearch.trim()) return leads;
