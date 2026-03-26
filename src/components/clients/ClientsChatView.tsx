@@ -472,10 +472,14 @@ export function ClientsChatView({
 
             {/* Detail tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
-              <TabsList className="mx-4 mt-3 grid grid-cols-4 w-auto max-w-xl h-9 bg-muted/50 mr-4 ml-auto">
+              <TabsList className="mx-4 mt-3 grid grid-cols-5 w-auto max-w-2xl h-9 bg-muted/50 mr-4 ml-auto">
                 <TabsTrigger value="details" className="text-xs gap-1.5">
                   <FileText className="h-3.5 w-3.5" />
                   פרטי לקוח
+                </TabsTrigger>
+                <TabsTrigger value="business" className="text-xs gap-1.5">
+                  <DollarSign className="h-3.5 w-3.5" />
+                  מידע עסקי
                 </TabsTrigger>
                 <TabsTrigger value="updates" className="text-xs gap-1.5">
                   <MessageSquare className="h-3.5 w-3.5" />
@@ -493,7 +497,7 @@ export function ClientsChatView({
 
               <ScrollArea className={cn("flex-1 p-4", (activeTab === "whatsapp" || activeTab === "calls") && "hidden")}>
                 <TabsContent value="details" className="mt-0 space-y-6">
-                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-2 gap-4">
                     {/* Contact info */}
                     <div className="border rounded-lg p-4 space-y-3 text-right">
                       <h3 className="font-semibold text-sm flex items-center gap-2 justify-end">
@@ -529,48 +533,6 @@ export function ClientsChatView({
                             <span className="text-muted-foreground">:אתר</span>
                           </div>
                         )}
-                      </div>
-                    </div>
-
-                    {/* Business info */}
-                    <div className="border rounded-lg p-4 space-y-3 text-right">
-                      <h3 className="font-semibold text-sm flex items-center gap-2 justify-end">
-                        מידע עסקי
-                        <DollarSign className="h-4 w-4 text-primary" />
-                      </h3>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex items-center justify-end gap-2">
-                          <span className="font-medium">{selectedClient.agencies?.name || "—"}</span>
-                          <span className="text-muted-foreground">:סוכנות</span>
-                        </div>
-                        {canViewFinance && (
-                          <>
-                            <div className="flex items-center justify-end gap-2">
-                              <span className="font-medium">
-                                {(() => {
-                                  const fin = getClientFinancialData?.(selectedClient.id);
-                                  const val = fin?.retainer ?? selectedClient.retainer;
-                                  return val ? `₪${Number(val).toLocaleString()}` : "—";
-                                })()}
-                              </span>
-                              <span className="text-muted-foreground">:ריטיינר</span>
-                            </div>
-                            <div className="flex items-center justify-end gap-2">
-                              <span className="font-medium">
-                                {(() => {
-                                  const fin = getClientFinancialData?.(selectedClient.id);
-                                  const val = fin?.monthly_budget ?? selectedClient.monthly_budget;
-                                  return val ? `₪${Number(val).toLocaleString()}` : "—";
-                                })()}
-                              </span>
-                              <span className="text-muted-foreground">:תקציב חודשי</span>
-                            </div>
-                          </>
-                        )}
-                        <div className="flex items-center justify-end gap-2">
-                          <span className="font-medium">{selectedClient.industry || "—"}</span>
-                          <span className="text-muted-foreground">:תעשייה</span>
-                        </div>
                       </div>
                     </div>
 
@@ -628,6 +590,49 @@ export function ClientsChatView({
                       <p className="text-sm text-muted-foreground whitespace-pre-wrap text-right" dir="rtl">{selectedClient.notes}</p>
                     </div>
                   )}
+                </TabsContent>
+
+                <TabsContent value="business" className="mt-0 space-y-6">
+                  <div className="border rounded-lg p-4 space-y-3 text-right">
+                    <h3 className="font-semibold text-sm flex items-center gap-2 justify-end">
+                      מידע עסקי
+                      <DollarSign className="h-4 w-4 text-primary" />
+                    </h3>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-center justify-end gap-2">
+                        <span className="font-medium">{selectedClient.agencies?.name || "—"}</span>
+                        <span className="text-muted-foreground">:סוכנות</span>
+                      </div>
+                      {canViewFinance && (
+                        <>
+                          <div className="flex items-center justify-end gap-2">
+                            <span className="font-medium">
+                              {(() => {
+                                const fin = getClientFinancialData?.(selectedClient.id);
+                                const val = fin?.retainer ?? selectedClient.retainer;
+                                return val ? `₪${Number(val).toLocaleString()}` : "—";
+                              })()}
+                            </span>
+                            <span className="text-muted-foreground">:ריטיינר</span>
+                          </div>
+                          <div className="flex items-center justify-end gap-2">
+                            <span className="font-medium">
+                              {(() => {
+                                const fin = getClientFinancialData?.(selectedClient.id);
+                                const val = fin?.monthly_budget ?? selectedClient.monthly_budget;
+                                return val ? `₪${Number(val).toLocaleString()}` : "—";
+                              })()}
+                            </span>
+                            <span className="text-muted-foreground">:תקציב חודשי</span>
+                          </div>
+                        </>
+                      )}
+                      <div className="flex items-center justify-end gap-2">
+                        <span className="font-medium">{selectedClient.industry || "—"}</span>
+                        <span className="text-muted-foreground">:תעשייה</span>
+                      </div>
+                    </div>
+                  </div>
                 </TabsContent>
 
                 <TabsContent value="updates" className="mt-0">
