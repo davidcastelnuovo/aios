@@ -1,11 +1,12 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef } from "react";
 import ChatViewComponent from "@/components/chat/ChatView";
-import { User, Phone, PhoneCall, Building2, Clock, Search, Mail, Globe, CheckSquare, Trash2, MessageSquare, FileText, DollarSign, X, Edit } from "lucide-react";
+import { User, Phone, PhoneCall, Building2, Clock, Search, Mail, Globe, CheckSquare, Trash2, MessageSquare, FileText, DollarSign, X, Edit, Pencil, Check } from "lucide-react";
 import { CallDialog } from "@/components/telephony/CallDialog";
 import { CallHistoryTab } from "@/components/telephony/CallHistoryTab";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -187,6 +188,73 @@ export function ClientsChatView({
   const getStatusInfo = (status: string) => STATUS_CONFIG[status] || STATUS_CONFIG.active;
   const getMoodInfo = (mood: string | null) => MOOD_CONFIG[mood || "happy"] || MOOD_CONFIG.happy;
   const getAgencyName = (agencyId: string) => agencies?.find((a: any) => a.id === agencyId)?.name || "";
+
+  const updateClientField = async (clientId: string, field: string, value: any) => {
+    try {
+      const { error } = await supabase.from("clients").update({ [field]: value }).eq("id", clientId);
+      if (error) throw error;
+      toast.success("עודכן בהצלחה");
+      queryClient.invalidateQueries({ queryKey: ["clients"] });
+    } catch {
+      toast.error("שגיאה בעדכון");
+    }
+  };
+
+  const EditableField = ({ label, value, field, clientId, type = "text", isLink, linkPrefix }: {
+    label: string; value: string | null; field: string; clientId: string;
+    type?: "text" | "number" | "textarea"; isLink?: boolean; linkPrefix?: string;
+  }) => {
+    const [editing, setEditing] = useState(false);
+    const [editValue, setEditValue] = useState(value || "");
+
+    const handleSave = () => {
+      const finalValue = type === "number" ? (editValue ? Number(editValue) : null) : (editValue || null);
+      updateClientField(clientId, field, finalValue);
+      setEditing(false);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" && type !== "textarea") handleSave();
+      if (e.key === "Escape") { setEditValue(value || ""); setEditing(false); }
+    };
+
+    if (editing) {
+      return (
+        <div className="flex items-center justify-end gap-2">
+          <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={handleSave}>
+            <Check className="h-3 w-3 text-primary" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => { setEditValue(value || ""); setEditing(false); }}>
+            <X className="h-3 w-3 text-muted-foreground" />
+          </Button>
+          {type === "textarea" ? (
+            <Textarea value={editValue} onChange={e => setEditValue(e.target.value)} onKeyDown={handleKeyDown}
+              className="text-sm h-20 text-right" dir="rtl" autoFocus />
+          ) : (
+            <Input value={editValue} onChange={e => setEditValue(e.target.value)} onKeyDown={handleKeyDown}
+              type={type === "number" ? "number" : "text"} className="text-sm h-7 text-right" dir="rtl" autoFocus />
+          )}
+          <span className="text-muted-foreground text-sm shrink-0">{label}</span>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex items-center justify-end gap-2 group cursor-pointer" onClick={() => { setEditValue(value || ""); setEditing(true); }}>
+        <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+        {isLink && value ? (
+          <a href={`${linkPrefix || ""}${value}`} target={linkPrefix?.startsWith("http") || linkPrefix === undefined ? "_blank" : undefined}
+            className="font-medium text-primary hover:underline truncate"
+            onClick={e => e.stopPropagation()}>
+            {value}
+          </a>
+        ) : (
+          <span className="font-medium">{type === "number" && value ? `₪${Number(value).toLocaleString()}` : (value || "—")}</span>
+        )}
+        <span className="text-muted-foreground text-sm shrink-0">{label}</span>
+      </div>
+    );
+  };
 
   return (
     <div className="flex h-[calc(100vh-220px)] border rounded-lg overflow-hidden bg-background" dir="rtl">
@@ -505,34 +573,10 @@ export function ClientsChatView({
                         <User className="h-4 w-4 text-primary" />
                       </h3>
                       <div className="space-y-2 text-sm">
-                        <div className="flex items-center justify-end gap-2">
-                          <span className="font-medium">{selectedClient.contact_name || "—"}</span>
-                          <span className="text-muted-foreground">:איש קשר</span>
-                        </div>
-                        <div className="flex items-center justify-end gap-2">
-                          {selectedClient.phone ? (
-                            <a href={`tel:${selectedClient.phone}`} className="font-medium text-primary hover:underline">
-                              {selectedClient.phone}
-                            </a>
-                          ) : <span>—</span>}
-                          <span className="text-muted-foreground">:טלפון</span>
-                        </div>
-                        <div className="flex items-center justify-end gap-2">
-                          {selectedClient.email ? (
-                            <a href={`mailto:${selectedClient.email}`} className="font-medium text-primary hover:underline truncate">
-                              {selectedClient.email}
-                            </a>
-                          ) : <span>—</span>}
-                          <span className="text-muted-foreground">:אימייל</span>
-                        </div>
-                        {selectedClient.website && (
-                          <div className="flex items-center justify-end gap-2">
-                            <a href={selectedClient.website} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline truncate">
-                              {selectedClient.website}
-                            </a>
-                            <span className="text-muted-foreground">:אתר</span>
-                          </div>
-                        )}
+                        <EditableField label=":איש קשר" value={selectedClient.contact_name} field="contact_name" clientId={selectedClient.id} />
+                        <EditableField label=":טלפון" value={selectedClient.phone} field="phone" clientId={selectedClient.id} isLink linkPrefix="tel:" />
+                        <EditableField label=":אימייל" value={selectedClient.email} field="email" clientId={selectedClient.id} isLink linkPrefix="mailto:" />
+                        <EditableField label=":אתר" value={selectedClient.website} field="website" clientId={selectedClient.id} isLink />
                       </div>
                     </div>
 
@@ -584,12 +628,10 @@ export function ClientsChatView({
                   )}
 
                   {/* Notes */}
-                  {selectedClient.notes && (
-                    <div className="border rounded-lg p-4 text-right">
-                      <h3 className="font-semibold text-sm mb-2">הערות</h3>
-                      <p className="text-sm text-muted-foreground whitespace-pre-wrap text-right" dir="rtl">{selectedClient.notes}</p>
-                    </div>
-                  )}
+                  <div className="border rounded-lg p-4 text-right">
+                    <h3 className="font-semibold text-sm mb-2">הערות</h3>
+                    <EditableField label="" value={selectedClient.notes} field="notes" clientId={selectedClient.id} type="textarea" />
+                  </div>
                 </TabsContent>
 
                 <TabsContent value="business" className="mt-0 space-y-6">
@@ -605,32 +647,11 @@ export function ClientsChatView({
                       </div>
                       {canViewFinance && (
                         <>
-                          <div className="flex items-center justify-end gap-2">
-                            <span className="font-medium">
-                              {(() => {
-                                const fin = getClientFinancialData?.(selectedClient.id);
-                                const val = fin?.retainer ?? selectedClient.retainer;
-                                return val ? `₪${Number(val).toLocaleString()}` : "—";
-                              })()}
-                            </span>
-                            <span className="text-muted-foreground">:ריטיינר</span>
-                          </div>
-                          <div className="flex items-center justify-end gap-2">
-                            <span className="font-medium">
-                              {(() => {
-                                const fin = getClientFinancialData?.(selectedClient.id);
-                                const val = fin?.monthly_budget ?? selectedClient.monthly_budget;
-                                return val ? `₪${Number(val).toLocaleString()}` : "—";
-                              })()}
-                            </span>
-                            <span className="text-muted-foreground">:תקציב חודשי</span>
-                          </div>
+                          <EditableField label=":ריטיינר" value={selectedClient.retainer?.toString() || ""} field="retainer" clientId={selectedClient.id} type="number" />
+                          <EditableField label=":תקציב חודשי" value={selectedClient.monthly_budget?.toString() || ""} field="monthly_budget" clientId={selectedClient.id} type="number" />
                         </>
                       )}
-                      <div className="flex items-center justify-end gap-2">
-                        <span className="font-medium">{selectedClient.industry || "—"}</span>
-                        <span className="text-muted-foreground">:תעשייה</span>
-                      </div>
+                      <EditableField label=":תעשייה" value={selectedClient.industry} field="industry" clientId={selectedClient.id} />
                     </div>
                   </div>
                 </TabsContent>
