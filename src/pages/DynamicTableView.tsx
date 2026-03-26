@@ -800,6 +800,35 @@ export default function DynamicTableView() {
         })
         .eq('id', table.id);
       
+      // Patch the blueprint with proper date range before running
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now);
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const cloneStartDate = thirtyDaysAgo.toISOString().split('T')[0];
+      const cloneEndDate = now.toISOString().split('T')[0];
+      
+      try {
+        await supabase.functions.invoke('make-api', {
+          body: {
+            action: 'patch_scenario_blueprint',
+            api_token: makeApiToken,
+            team_id: makeTeamId,
+            region: makeRegion,
+            scenario_id: scenarioId,
+            table_id: table.id,
+            tenant_id: table.tenant_id,
+            webhook_url: webhookUrl,
+            customer_id: customerId,
+            campaign_type: integrationSettings.campaign_type || 'leads',
+            start_date: cloneStartDate,
+            end_date: cloneEndDate,
+          },
+        });
+        console.log(`Blueprint dates patched after clone: ${cloneStartDate} → ${cloneEndDate}`);
+      } catch (patchErr) {
+        console.warn('Failed to patch dates after clone, running anyway:', patchErr);
+      }
+      
       // Run the scenario
       console.log('Running Make.com scenario:', scenarioId);
       const runResponse = await supabase.functions.invoke('make-api', {
