@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import ChatViewComponent from "@/components/chat/ChatView";
-import { User, Phone, PhoneCall, Building2, Clock, Search, Mail, Globe, CheckSquare, Trash2, MessageSquare, FileText, DollarSign, X, Edit, Pencil, Check, Users, Plus, UserPlus } from "lucide-react";
+import { User, Phone, PhoneCall, Building2, Clock, Search, Mail, Globe, CheckSquare, Trash2, MessageSquare, FileText, DollarSign, X, Edit, Pencil, Check, Users, Plus, UserPlus, BarChart3 } from "lucide-react";
 import { CallDialog } from "@/components/telephony/CallDialog";
 import { CallHistoryTab } from "@/components/telephony/CallHistoryTab";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { EditClientDialog } from "@/components/forms/EditClientDialog";
 import { ClientUpdatesTab } from "@/components/clients/ClientUpdatesTab";
+import { ClientWeeklyReport } from "@/components/clients/ClientWeeklyReport";
 import AddTaskForm from "@/components/forms/AddTaskForm";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -585,7 +586,7 @@ export function ClientsChatView({
 
             {/* Detail tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
-              <TabsList className="mx-4 mt-3 grid grid-cols-5 w-auto max-w-2xl h-9 bg-muted/50 mr-4 ml-auto">
+              <TabsList className="mx-4 mt-3 grid grid-cols-6 w-auto max-w-2xl h-9 bg-muted/50 mr-4 ml-auto">
                 <TabsTrigger value="details" className="text-xs gap-1.5">
                   <FileText className="h-3.5 w-3.5" />
                   פרטי לקוח
@@ -593,6 +594,10 @@ export function ClientsChatView({
                 <TabsTrigger value="business" className="text-xs gap-1.5">
                   <DollarSign className="h-3.5 w-3.5" />
                   מידע עסקי
+                </TabsTrigger>
+                <TabsTrigger value="report" className="text-xs gap-1.5">
+                  <BarChart3 className="h-3.5 w-3.5" />
+                  דוח שבועי
                 </TabsTrigger>
                 <TabsTrigger value="updates" className="text-xs gap-1.5">
                   <MessageSquare className="h-3.5 w-3.5" />
@@ -833,6 +838,10 @@ export function ClientsChatView({
                       <EditableField label=":תעשייה" value={selectedClient.industry} field="industry" clientId={selectedClient.id} />
                     </div>
                   </div>
+                </TabsContent>
+
+                <TabsContent value="report" className="mt-0">
+                  <ClientWeeklyReport clientId={selectedClient.id} clientName={selectedClient.name || "לקוח"} />
                 </TabsContent>
 
                 <TabsContent value="updates" className="mt-0">
