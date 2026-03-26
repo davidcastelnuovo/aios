@@ -274,6 +274,45 @@ export function useAiDetectionProject(projectId: string | null) {
     onError: (error) => toast.error("שגיאה: " + error.message),
   });
 
+  // Generate prompts with AI
+  const [isGenerating, setIsGenerating] = useState(false);
+  const generatePrompts = async (brand: AiDetectionBrand) => {
+    if (!projectId || !tenantId) return;
+    setIsGenerating(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data, error } = await supabase.functions.invoke("generate-ai-prompts", {
+        body: {
+          brand_name: brand.brand_name,
+          keywords: brand.keywords || [],
+          competitors: brand.competitor_names || [],
+          description: brand.description || "",
+        },
+      });
+      if (error) throw error;
+      if (!data?.prompts?.length) throw new Error("No prompts generated");
+
+      const inserts = data.prompts.map((p: { prompt: string; category: string }) => ({
+        tenant_id: tenantId,
+        brand_id: projectId,
+        prompt: p.prompt,
+        category: p.category,
+        is_active: true,
+        created_by: user?.id,
+      }));
+
+      const { error: insertError } = await supabase.from("ai_detection_prompts" as any).insert(inserts);
+      if (insertError) throw insertError;
+
+      queryClient.invalidateQueries({ queryKey: ["ai-detection-prompts", projectId] });
+      toast.success(`${data.prompts.length} פרומפטים נוצרו בהצלחה!`);
+    } catch (error: any) {
+      toast.error("שגיאה ביצירת פרומפטים: " + (error.message || "Unknown error"));
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   // Delete prompt
   const deletePrompt = useMutation({
     mutationFn: async (promptId: string) => {
