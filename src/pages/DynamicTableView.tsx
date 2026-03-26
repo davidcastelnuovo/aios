@@ -767,9 +767,12 @@ export default function DynamicTableView() {
           region: makeRegion,
           template_scenario_id: templateScenarioId,
           table_id: table.id,
+          tenant_id: table.tenant_id,
           webhook_url: webhookUrl,
           webhook_secret: integrationSettings.webhook_secret,
           scenario_name: `Google Ads Sync - ${table.name}`,
+          customer_id: customerId,
+          campaign_type: integrationSettings.campaign_type || 'leads',
         },
       });
       
@@ -796,6 +799,35 @@ export default function DynamicTableView() {
           },
         })
         .eq('id', table.id);
+      
+      // Patch the blueprint with proper date range before running
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now);
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const cloneStartDate = thirtyDaysAgo.toISOString().split('T')[0];
+      const cloneEndDate = now.toISOString().split('T')[0];
+      
+      try {
+        await supabase.functions.invoke('make-api', {
+          body: {
+            action: 'patch_scenario_blueprint',
+            api_token: makeApiToken,
+            team_id: makeTeamId,
+            region: makeRegion,
+            scenario_id: scenarioId,
+            table_id: table.id,
+            tenant_id: table.tenant_id,
+            webhook_url: webhookUrl,
+            customer_id: customerId,
+            campaign_type: integrationSettings.campaign_type || 'leads',
+            start_date: cloneStartDate,
+            end_date: cloneEndDate,
+          },
+        });
+        console.log(`Blueprint dates patched after clone: ${cloneStartDate} → ${cloneEndDate}`);
+      } catch (patchErr) {
+        console.warn('Failed to patch dates after clone, running anyway:', patchErr);
+      }
       
       // Run the scenario
       console.log('Running Make.com scenario:', scenarioId);
@@ -2414,16 +2446,28 @@ export default function DynamicTableView() {
               {(!filteredRecords || filteredRecords.length === 0) && (
                 <div className="flex items-center justify-center p-12 text-center">
                   <div>
-                    <p className="text-muted-foreground mb-3">{campaignSearch ? 'לא נמצאו קמפיינים תואמים' : 'אין שורות בטבלה'}</p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => addRowMutation.mutate()}
-                      disabled={addRowMutation.isPending}
-                    >
-                      <Plus className="ml-2 h-4 w-4" />
-                      הוסף שורה ראשונה
-                    </Button>
+                    {campaignSearch ? (
+                      <p className="text-muted-foreground mb-3">לא נמצאו קמפיינים תואמים</p>
+                    ) : table?.integration_type ? (
+                      <>
+                        <Info className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
+                        <p className="text-muted-foreground mb-1">אין נתונים לתקופה זו</p>
+                        <p className="text-muted-foreground text-xs">נסה לסנכרן מחדש או לשנות את טווח התאריכים</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-muted-foreground mb-3">אין שורות בטבלה</p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => addRowMutation.mutate()}
+                          disabled={addRowMutation.isPending}
+                        >
+                          <Plus className="ml-2 h-4 w-4" />
+                          הוסף שורה ראשונה
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
               )}
