@@ -635,6 +635,12 @@ export function ClientsChatView({
                 </TabsContent>
               </ScrollArea>
 
+              {activeTab === "calls" && (
+                <div className="flex-1 min-h-0 p-4">
+                  <CallHistoryTab clientId={selectedClient.id} />
+                </div>
+              )}
+
               {activeTab === "whatsapp" && (
                 <div className="flex-1 min-h-0">
                   {selectedClient.phone ? (
@@ -662,6 +668,17 @@ export function ClientsChatView({
           </div>
         )}
       </div>
+
+      {/* Call dialog */}
+      {selectedClient?.phone && (
+        <CallDialog
+          open={callDialogOpen}
+          onOpenChange={setCallDialogOpen}
+          phoneNumber={selectedClient.phone}
+          contactName={selectedClient.name || "לקוח"}
+          clientId={selectedClient.id}
+        />
+      )}
     </div>
   );
 }
