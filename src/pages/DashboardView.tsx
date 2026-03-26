@@ -290,18 +290,18 @@ export default function DashboardView() {
 
   // Calculate total ads spend from ALL records (regardless of platform filter)
   // This ensures Analytics tab can still show spend and ROAS
-  const globalAdsSpend = useMemo(() => {
-    let spend = 0;
+  const globalAdsMetrics = useMemo(() => {
+    let spend = 0, impressions = 0;
     allRecords.forEach((record: any) => {
       const source = record._source || 'unknown';
       if (isAdsPlatform(source)) {
         const data = record.data || {};
-        // Only daily records to avoid double counting
         if (data.report_type && data.report_type !== 'daily') return;
         spend += getSpendFromData(data);
+        impressions += Number(data.impressions) || 0;
       }
     });
-    return spend;
+    return { spend, impressions };
   }, [allRecords]);
 
   // Total summary
@@ -325,16 +325,17 @@ export default function DashboardView() {
       }
     });
 
-    // When on Analytics tab, ads platforms are filtered out, so use globalAdsSpend
-    const effectiveSpend = totalSpend > 0 ? totalSpend : globalAdsSpend;
-    const effectiveAdsSpend = adsSpend > 0 ? adsSpend : globalAdsSpend;
+    // When on Analytics tab, ads platforms are filtered out, so use globalAdsMetrics
+    const effectiveSpend = totalSpend > 0 ? totalSpend : globalAdsMetrics.spend;
+    const effectiveAdsSpend = adsSpend > 0 ? adsSpend : globalAdsMetrics.spend;
+    const effectiveImpressions = totalImpressions > 0 ? totalImpressions : globalAdsMetrics.impressions;
 
     return {
-      spend: effectiveSpend, impressions: totalImpressions, clicks: totalClicks, results: totalResults,
+      spend: effectiveSpend, impressions: effectiveImpressions, clicks: totalClicks, results: totalResults,
       revenue: analyticsRevenue, roas_spend: effectiveAdsSpend, roas_value: analyticsRevenue,
       analyticsPurchases, analyticsAddToCart, analyticsSessions, analyticsUsers,
     };
-  }, [summaryByPlatform, globalAdsSpend]);
+  }, [summaryByPlatform, globalAdsMetrics]);
 
   const combinedRoas = totalSummary.roas_spend > 0 ? totalSummary.roas_value / totalSummary.roas_spend : 0;
   const combinedCpl = totalSummary.results > 0 ? totalSummary.spend / totalSummary.results : 0;
