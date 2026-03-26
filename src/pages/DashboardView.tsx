@@ -770,26 +770,24 @@ export default function DashboardView() {
                                 <TableCell className="font-medium max-w-[300px] truncate">{c.campaign}</TableCell>
                                 <TableCell>{formatNumber(c.impressions)}</TableCell>
                                 <TableCell>{formatNumber(c.clicks)}</TableCell>
-                                {dashboardCampaignType === 'ecommerce' ? (
+                                <TableCell className={c.leads > 0 ? 'text-green-600 font-semibold' : ''}>
+                                  {formatNumber(c.leads)}
+                                </TableCell>
+                                <TableCell className={cpl > 0 ? 'text-green-600' : ''}>
+                                  {cpl > 0 ? formatCurrency(cpl) : '₪0'}
+                                </TableCell>
+                                {dashboardCampaignType === 'ecommerce' && (
                                   <>
                                     <TableCell>{formatNumber(c.purchases)}</TableCell>
                                     <TableCell>{formatCurrency(c.revenue)}</TableCell>
                                   </>
-                                ) : (
-                                  <TableCell className={c.leads > 0 ? 'text-green-600 font-semibold' : ''}>
-                                    {formatNumber(c.leads)}
-                                  </TableCell>
                                 )}
                                 <TableCell>{formatCurrency(c.spend)}</TableCell>
-                                {dashboardCampaignType === 'ecommerce' ? (
+                                {dashboardCampaignType === 'ecommerce' && (
                                   <TableCell>
                                     <span className={roas >= 1 ? 'text-green-600 font-semibold' : 'text-red-600'}>
                                       {roas.toFixed(2)}
                                     </span>
-                                  </TableCell>
-                                ) : (
-                                  <TableCell className={cpl > 0 ? 'text-green-600' : ''}>
-                                    {cpl > 0 ? formatCurrency(cpl) : '₪0'}
                                   </TableCell>
                                 )}
                               </TableRow>
