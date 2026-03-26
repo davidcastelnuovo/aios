@@ -82,6 +82,7 @@ const ManusSettings = lazy(() => import("./pages/ManusSettings"));
 const ManusTasksPage = lazy(() => import("./pages/ManusTasksPage"));
 const AgentHub = lazy(() => import("./pages/AgentHub"));
 const SharedDashboard = lazy(() => import("./pages/SharedDashboard"));
+const SharedTable = lazy(() => import("./pages/SharedTable"));
 const AiDetection = lazy(() => import("./pages/AiDetection"));
 const TelephonySettings = lazy(() => import("./pages/TelephonySettings"));
 
@@ -141,6 +142,7 @@ const App = () => (
                    <Route path="/privacy" element={<Privacy />} />
                    <Route path="/chat-invite/:token" element={<ChatInvite />} />
                    <Route path="/shared/dashboard/:shareToken" element={<SharedDashboard />} />
+                   <Route path="/shared/table/:shareToken" element={<SharedTable />} />
                   <Route path="/terms" element={<Terms />} />
                   
                   {/* Tenant-scoped routes */}

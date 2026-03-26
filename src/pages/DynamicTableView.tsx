@@ -44,6 +44,7 @@ import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnal
 import { SearchConsoleDashboard } from "@/components/dynamic-tables/SearchConsoleDashboard";
 import { AlertsManagementDialog } from "@/components/dynamic-tables/AlertsManagementDialog";
 import { ActiveAlerts } from "@/components/dynamic-tables/ActiveAlerts";
+import { ShareTableDialog } from "@/components/dynamic-tables/ShareTableDialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { MakeScenarioSettings } from "@/components/dynamic-tables/MakeScenarioSettings";
 
@@ -1904,6 +1905,10 @@ export default function DynamicTableView() {
               </div>
             </DialogContent>
           </Dialog>
+
+          {table?.id && table?.tenant_id && (
+            <ShareTableDialog tableId={table.id} tableName={table.name} tenantId={table.tenant_id} />
+          )}
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
