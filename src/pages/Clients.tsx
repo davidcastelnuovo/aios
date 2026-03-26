@@ -142,8 +142,27 @@ export default function Clients() {
     return clientFinancialData?.find((f: any) => f.client_id === clientId) || null;
   };
 
+  // For super admins: fetch all tenant IDs they own so we can show cross-tenant clients
+  const { data: superAdminTenantIds } = useQuery({
+    queryKey: ["super-admin-tenant-ids", isSuperAdmin],
+    queryFn: async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user?.id) return [];
+      const { data, error } = await supabase
+        .from("user_roles")
+        .select("tenant_id")
+        .eq("user_id", session.user.id)
+        .eq("role", "owner")
+        .not("tenant_id", "is", null);
+      if (error) throw error;
+      return data?.map(r => r.tenant_id).filter(Boolean) || [];
+    },
+    enabled: isSuperAdmin,
+    staleTime: 1000 * 60 * 10,
+  });
+
   const { data: clients, isLoading } = useQuery({
-    queryKey: ["clients", tenantId, campaignerId, isCampaigner, isTeamManager, isOwner, selectedAgency, (agencies?.length || 0)],
+    queryKey: ["clients", tenantId, campaignerId, isCampaigner, isTeamManager, isOwner, isSuperAdmin, selectedAgency, (agencies?.length || 0), (superAdminTenantIds?.length || 0)],
     queryFn: async () => {
       if (!tenantId) return [] as any[];
       const selectStr = `
@@ -158,16 +177,19 @@ export default function Clients() {
         )
       `;
 
-      // If no accessible agencies and no specific selection, nothing should be visible
-      // Skip query if not ready
-
       let query = supabase
         .from("clients")
         .select(selectStr)
         .order("created_at", { ascending: false });
 
-      // 🔒 CRITICAL SECURITY: Filter by tenant_id OR accessible agencies
-      if (selectedAgency && selectedAgency !== "all") {
+      // 🔒 Super admins: show clients from all their owned tenants
+      if (isSuperAdmin && superAdminTenantIds && superAdminTenantIds.length > 0) {
+        if (selectedAgency && selectedAgency !== "all") {
+          query = query.or(`tenant_id.in.(${superAdminTenantIds.join(',')}),agency_id.eq.${selectedAgency}`);
+        } else {
+          query = query.in("tenant_id", superAdminTenantIds);
+        }
+      } else if (selectedAgency && selectedAgency !== "all") {
         query = query.or(`tenant_id.eq.${tenantId},agency_id.eq.${selectedAgency}`);
       } else if (agencies && agencies.length > 0) {
         const ids = agencies.map((a: any) => a.id);
@@ -180,7 +202,7 @@ export default function Clients() {
       if (error) throw error;
       return data;
     },
-    enabled: (!(isCampaigner && !isTeamManager && !isOwner) || !!campaignerId) && !!tenantId && (!!agencies || (selectedAgency && selectedAgency !== "all")),
+    enabled: (!(isCampaigner && !isTeamManager && !isOwner) || !!campaignerId) && !!tenantId && (!!agencies || (selectedAgency && selectedAgency !== "all") || isSuperAdmin),
   });
 
   // 🔒 SECURITY GUARD: Filter clients by current tenant and accessible agencies
