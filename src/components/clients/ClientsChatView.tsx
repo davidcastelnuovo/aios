@@ -959,7 +959,7 @@ export function ClientsChatView({
                 </TabsContent>
 
                 <TabsContent value="report" className="mt-0">
-                  <ClientTablesTab clientId={selectedClient.id} clientName={selectedClient.name || "לקוח"} />
+                  <ClientTablesTab clientId={selectedClient.id} clientName={selectedClientDisplayName || "לקוח"} />
                 </TabsContent>
 
                 <TabsContent value="updates" className="mt-0">
