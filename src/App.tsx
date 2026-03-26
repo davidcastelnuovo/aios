@@ -83,6 +83,7 @@ const ManusTasksPage = lazy(() => import("./pages/ManusTasksPage"));
 const AgentHub = lazy(() => import("./pages/AgentHub"));
 const SharedDashboard = lazy(() => import("./pages/SharedDashboard"));
 const AiDetection = lazy(() => import("./pages/AiDetection"));
+const TelephonySettings = lazy(() => import("./pages/TelephonySettings"));
 
 // QueryClient with optimized defaults for better caching
 const queryClient = new QueryClient({
