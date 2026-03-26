@@ -174,7 +174,7 @@ export function LeadsChatView({
                       </div>
                       {tagIds.length > 0 && (
                         <div className="mt-1">
-                          <LeadTagBadges allTags={allTags} tagIds={tagIds} maxDisplay={2} />
+                          <LeadTagBadges allTags={allTags} tagIds={tagIds} />
                         </div>
                       )}
                     </div>
