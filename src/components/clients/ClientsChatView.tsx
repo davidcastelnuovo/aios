@@ -595,8 +595,26 @@ export function ClientsChatView({
                         <EditableField label=":טלפון" value={selectedClient.phone} field="phone" clientId={selectedClient.id} isLink linkPrefix="tel:" />
                         <EditableField label=":אימייל" value={selectedClient.email} field="email" clientId={selectedClient.id} isLink linkPrefix="mailto:" />
                         <EditableField label=":אתר" value={selectedClient.website} field="website" clientId={selectedClient.id} isLink />
-                      </div>
-                    </div>
+                        <div className="flex items-center justify-end gap-2">
+                          <Select
+                            value={selectedClient.whatsapp_group_id || "none"}
+                            onValueChange={(value) => updateClientField(selectedClient.id, "whatsapp_group_id", value === "none" ? null : value)}
+                          >
+                            <SelectTrigger className="h-7 text-xs w-auto min-w-[140px]">
+                              <SelectValue placeholder="בחר קבוצה" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-background z-[100]">
+                              <SelectItem value="none">ללא קבוצה</SelectItem>
+                              {whatsappGroups.map((g: any) => (
+                                <SelectItem key={g.id} value={g.id}>{g.group_name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <span className="text-muted-foreground text-sm shrink-0 flex items-center gap-1">
+                            <Users className="h-3.5 w-3.5" />
+                            :קבוצת WhatsApp
+                          </span>
+                        </div>
 
                     {/* Dates */}
                     <div className="border rounded-lg p-4 space-y-3 text-right">
