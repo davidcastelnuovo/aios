@@ -986,7 +986,87 @@ export default function DashboardView() {
                 </Card>
               )}
 
-              {/* Charts - show on all tabs */}
+              {/* Traffic Acquisition by Channel Group */}
+              {channelGroupBreakdown.length > 0 && (platformFilter === 'all' || platformFilter === 'google_analytics') && (
+                <Card>
+                  <CardHeader><CardTitle>טרפיק לפי ערוץ (Traffic Acquisition)</CardTitle></CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-right">Channel Group</TableHead>
+                            <TableHead className="text-right">Sessions</TableHead>
+                            <TableHead className="text-right">Engaged Sessions</TableHead>
+                            <TableHead className="text-right">Engagement Rate</TableHead>
+                            <TableHead className="text-right">Avg. Engagement Time</TableHead>
+                            <TableHead className="text-right">Events / Session</TableHead>
+                            <TableHead className="text-right">Users</TableHead>
+                            {dashboardCampaignType === 'ecommerce' && (
+                              <>
+                                <TableHead className="text-right">רכישות</TableHead>
+                                <TableHead className="text-right">הכנסות</TableHead>
+                              </>
+                            )}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {channelGroupBreakdown.map((ch) => {
+                            const mins = Math.floor(ch.avgDuration / 60);
+                            const secs = Math.round(ch.avgDuration % 60);
+                            return (
+                              <TableRow key={ch.name}>
+                                <TableCell className="font-medium">{ch.name}</TableCell>
+                                <TableCell>{formatNumber(ch.sessions)}</TableCell>
+                                <TableCell>{formatNumber(ch.engagedSessions)}</TableCell>
+                                <TableCell>{Number(ch.engagementRate).toFixed(1)}%</TableCell>
+                                <TableCell>{mins}:{secs.toString().padStart(2, '0')}</TableCell>
+                                <TableCell>{Number(ch.eventsPerSession).toFixed(2)}</TableCell>
+                                <TableCell>{formatNumber(ch.users)}</TableCell>
+                                {dashboardCampaignType === 'ecommerce' && (
+                                  <>
+                                    <TableCell>{formatNumber(ch.purchases)}</TableCell>
+                                    <TableCell>{formatCurrency(ch.revenue)}</TableCell>
+                                  </>
+                                )}
+                              </TableRow>
+                            );
+                          })}
+                          {/* Totals row */}
+                          {(() => {
+                            const totals = channelGroupBreakdown.reduce((acc, ch) => ({
+                              sessions: acc.sessions + ch.sessions,
+                              engagedSessions: acc.engagedSessions + ch.engagedSessions,
+                              users: acc.users + ch.users,
+                              purchases: acc.purchases + ch.purchases,
+                              revenue: acc.revenue + ch.revenue,
+                            }), { sessions: 0, engagedSessions: 0, users: 0, purchases: 0, revenue: 0 });
+                            const totalRate = totals.sessions > 0 ? (totals.engagedSessions / totals.sessions * 100) : 0;
+                            return (
+                              <TableRow className="bg-muted/50 font-bold border-t-2">
+                                <TableCell>סה"כ</TableCell>
+                                <TableCell>{formatNumber(totals.sessions)}</TableCell>
+                                <TableCell>{formatNumber(totals.engagedSessions)}</TableCell>
+                                <TableCell>{totalRate.toFixed(1)}%</TableCell>
+                                <TableCell>-</TableCell>
+                                <TableCell>-</TableCell>
+                                <TableCell>{formatNumber(totals.users)}</TableCell>
+                                {dashboardCampaignType === 'ecommerce' && (
+                                  <>
+                                    <TableCell>{formatNumber(totals.purchases)}</TableCell>
+                                    <TableCell>{formatCurrency(totals.revenue)}</TableCell>
+                                  </>
+                                )}
+                              </TableRow>
+                            );
+                          })()}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
               {dailyChartData.length > 1 && (
                 <div className="grid gap-4 md:grid-cols-2">
                   {/* Revenue vs Spend */}
