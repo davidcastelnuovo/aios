@@ -345,7 +345,7 @@ export function LeadsChatView({
 
             {/* Detail tabs content */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
-              <TabsList className="mx-4 mt-3 grid grid-cols-2 w-auto max-w-md h-9 bg-muted/50">
+              <TabsList className="mx-4 mt-3 grid grid-cols-2 w-auto max-w-md h-9 bg-muted/50 mr-4 ml-auto">
                 <TabsTrigger value="details" className="text-xs gap-1.5">
                   <FileText className="h-3.5 w-3.5" />
                   פרטי ליד
