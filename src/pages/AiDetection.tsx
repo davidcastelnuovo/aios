@@ -114,7 +114,7 @@ function ProjectDashboard({
   const {
     prompts, results, scores, currentScore, previousScore,
     isLoading, isScanning, isGenerating,
-    addPrompt, deletePrompt, runScan, generatePrompts,
+    addPrompt, editPrompt, deletePrompt, runScan, generatePrompts,
     getPromptResults, getCompetitorScores,
   } = useAiDetectionProject(project.id);
 
