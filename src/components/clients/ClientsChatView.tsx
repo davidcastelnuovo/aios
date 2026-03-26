@@ -54,6 +54,7 @@ export function ClientsChatView({
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [selectedClientIds, setSelectedClientIds] = useState<Set<string>>(new Set());
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const [callDialogOpen, setCallDialogOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const filteredClients = useMemo(() => {
