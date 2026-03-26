@@ -638,7 +638,7 @@ export default function DashboardView() {
               )}
 
               {/* Platform Breakdown */}
-              {Object.keys(summaryByPlatform).length > 0 && (
+              {Object.keys(summaryByPlatform).length > 0 && (platformFilter === 'all' || platformFilter === 'google_analytics') && (
                 <Card>
                   <CardHeader><CardTitle>פירוט לפי פלטפורמה</CardTitle></CardHeader>
                   <CardContent>
