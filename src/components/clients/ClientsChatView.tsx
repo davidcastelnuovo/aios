@@ -14,7 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { EditClientDialog } from "@/components/forms/EditClientDialog";
 import { ClientUpdatesTab } from "@/components/clients/ClientUpdatesTab";
-import { ClientWeeklyReport } from "@/components/clients/ClientWeeklyReport";
+import { ClientTablesTab } from "@/components/clients/ClientTablesTab";
 import { ClientLinkedFiles } from "@/components/clients/ClientLinkedFiles";
 import { ClientCredentialsTab } from "@/components/clients/ClientCredentialsTab";
 import { ClientMeetingTab } from "@/components/clients/ClientMeetingTab";
@@ -612,7 +612,7 @@ export function ClientsChatView({
                 </TabsTrigger>
                 <TabsTrigger value="report" className="text-xs gap-1">
                   <BarChart3 className="h-3.5 w-3.5" />
-                  דוח שבועי
+                  טבלאות
                 </TabsTrigger>
                 <TabsTrigger value="updates" className="text-xs gap-1">
                   <MessageSquare className="h-3.5 w-3.5" />
@@ -901,7 +901,7 @@ export function ClientsChatView({
                 </TabsContent>
 
                 <TabsContent value="report" className="mt-0">
-                  <ClientWeeklyReport clientId={selectedClient.id} clientName={selectedClient.name || "לקוח"} />
+                  <ClientTablesTab clientId={selectedClient.id} clientName={selectedClient.name || "לקוח"} />
                 </TabsContent>
 
                 <TabsContent value="updates" className="mt-0">
