@@ -208,6 +208,42 @@ serve(async (req) => {
 
     const dailySourceData = await dailySourceResponse.json();
 
+    // ====== REPORT 5: Traffic Acquisition by Channel Group ======
+    const channelGroupRequest = {
+      dateRanges: [{ startDate: actualStartDate, endDate: actualEndDate }],
+      dimensions: [{ name: 'sessionDefaultChannelGrouping' }],
+      metrics: [
+        { name: 'sessions' },
+        { name: 'engagedSessions' },
+        { name: 'engagementRate' },
+        { name: 'averageSessionDuration' },
+        { name: 'eventsPerSession' },
+        { name: 'totalUsers' },
+        { name: 'ecommercePurchases' },
+        { name: 'purchaseRevenue' },
+      ],
+      orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
+      limit: 50,
+    };
+
+    const channelGroupResponse = await fetch(
+      `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(channelGroupRequest),
+      }
+    );
+
+    const channelGroupData = await channelGroupResponse.json();
+
+    if (channelGroupData.error) {
+      console.log('Channel group report error (non-fatal):', channelGroupData.error.message);
+    }
+
     // ====== REPORT 4: Top pages ======
     const pagesRequest = {
       dateRanges: [{ startDate: actualStartDate, endDate: actualEndDate }],
