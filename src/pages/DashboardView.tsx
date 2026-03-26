@@ -747,19 +747,17 @@ export default function DashboardView() {
                             <TableHead className="text-right">קמפיין</TableHead>
                             <TableHead className="text-right">חשיפות</TableHead>
                             <TableHead className="text-right">קליקים</TableHead>
-                            {dashboardCampaignType === 'ecommerce' ? (
+                            <TableHead className="text-right">לידים</TableHead>
+                            <TableHead className="text-right">עלות לליד</TableHead>
+                            {dashboardCampaignType === 'ecommerce' && (
                               <>
                                 <TableHead className="text-right">רכישות</TableHead>
                                 <TableHead className="text-right">הכנסות</TableHead>
                               </>
-                            ) : (
-                              <TableHead className="text-right">לידים</TableHead>
                             )}
                             <TableHead className="text-right">הוצאה</TableHead>
-                            {dashboardCampaignType === 'ecommerce' ? (
+                            {dashboardCampaignType === 'ecommerce' && (
                               <TableHead className="text-right">ROAS</TableHead>
-                            ) : (
-                              <TableHead className="text-right">עלות לליד</TableHead>
                             )}
                           </TableRow>
                         </TableHeader>
