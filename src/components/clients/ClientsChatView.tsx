@@ -456,9 +456,9 @@ export function ClientsChatView({
                     >
                       {(displayName || "?")[0]}
                     </div>
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 overflow-hidden">
                       <div className="flex items-center gap-1">
-                        <span className="font-semibold text-sm truncate text-foreground min-w-0 flex-1">
+                        <span className="font-semibold text-sm text-foreground block truncate">
                           {displayName}
                         </span>
                         <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
