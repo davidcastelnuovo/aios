@@ -88,7 +88,7 @@ const matchesPlatformFilter = (integrationType: string, filter: PlatformFilter):
 const formatNumber = (num: number) => {
   if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
   if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
-  return num.toFixed(num % 1 === 0 ? 0 : 2);
+  return num.toFixed(num % 1 === 0 ? 0 : 1);
 };
 
 const formatCurrency = (num: number) =>
@@ -878,6 +878,8 @@ export default function DashboardView() {
                                       displayVal = formatCurrency(val);
                                     } else if (['roas', 'engagement_rate', 'ctr'].includes(field.key)) {
                                       displayVal = val.toFixed(2);
+                                    } else if (['bounce_rate', 'avg_session_duration', 'pages_per_session', 'events_per_session'].includes(field.key)) {
+                                      displayVal = field.key.includes('rate') ? val.toFixed(1) + '%' : val.toFixed(1) + 's';
                                     } else {
                                       displayVal = formatNumber(val);
                                     }
