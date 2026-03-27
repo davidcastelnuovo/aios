@@ -526,7 +526,7 @@ export default function SharedTable() {
         )}
 
         <p className="text-center text-xs text-muted-foreground">
-          {filteredRecords.length} שורות • {data.table.name} • Powered by Marketing Captain
+          {filteredRecords.length} שורות • {data.table.name} • Powered by {data.table.agency_name || 'Marketing Captain'}
         </p>
       </div>
     </div>

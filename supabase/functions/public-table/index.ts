@@ -91,6 +91,17 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Fetch agency name via client association
+    let agencyName: string | null = null;
+    if (table.client_id) {
+      const { data: client } = await supabase
+        .from("clients")
+        .select("agency_id, agencies(name)")
+        .eq("id", table.client_id)
+        .single();
+      agencyName = (client?.agencies as any)?.name || null;
+    }
+
     // Fetch fields
     const { data: fields } = await supabase
       .from("crm_fields")
@@ -144,6 +155,7 @@ Deno.serve(async (req) => {
           name: table.name,
           integration_type: table.integration_type,
           integration_settings: table.integration_settings,
+          agency_name: agencyName,
         },
         fields: fields || [],
         records: filteredRecords,

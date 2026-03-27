@@ -473,7 +473,7 @@ export default function SharedDashboard() {
 
       {/* Footer */}
       <p className="text-center text-xs text-muted-foreground">
-        Powered by Marketing Captain
+        Powered by {data?.dashboard?.agency_name || 'Marketing Captain'}
       </p>
     </div>
   );
