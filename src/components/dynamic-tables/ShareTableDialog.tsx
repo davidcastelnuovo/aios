@@ -102,7 +102,11 @@ export function ShareTableDialog({ tableId, tableName, tenantId }: ShareTableDia
   });
 
   const getShareUrl = (token: string) => {
-    return `${window.location.origin}/shared/table/${token}`;
+    const origin =
+      window.location.hostname.includes("preview") || window.location.hostname.includes("lovableproject")
+        ? "https://after-lead.lovable.app"
+        : window.location.origin;
+    return `${origin}/shared/table/${token}`;
   };
 
   const copyLink = (token: string) => {
