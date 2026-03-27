@@ -116,7 +116,7 @@ export default function DynamicTables() {
     enabled: !!campaignerId && isCampaigner,
   });
 
-  const canManageTables = isOwner || isTeamManager || isSuperAdmin;
+  const canManageTables = isOwner || isTeamManager || isSuperAdmin || isCampaigner;
 
   // Fetch agencies and clients for displaying names
   const { data: agencies = [] } = useQuery({
