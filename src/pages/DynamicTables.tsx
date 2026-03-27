@@ -62,6 +62,7 @@ import {
 import { toast } from "sonner";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useUserRole } from "@/hooks/useUserRole";
 
 interface CrmTable {
   id: string;

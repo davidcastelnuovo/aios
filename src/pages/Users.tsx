@@ -911,14 +911,14 @@ export default function Users() {
                       
                       // *** FIX: Set default modules based on role ***
                       if (newRole === 'campaigner') {
-                        // Campaigners get basic modules
-                        setSelectedModules(['dashboard', 'clients', 'tasks', 'chat', 'time_tracking']);
+                        // Campaigners get basic modules + dynamic tables for their clients
+                        setSelectedModules(['dashboard', 'clients', 'tasks', 'chat', 'time_tracking', 'dynamic_tables']);
                       } else if (newRole === 'sales_person') {
                         // Sales people get sales modules
                         setSelectedModules(['dashboard', 'leads', 'sales_dashboard', 'products', 'chat']);
                       } else if (newRole === 'team_manager') {
-                        // Team managers get more access
-                        setSelectedModules(['dashboard', 'clients', 'tasks', 'campaigners', 'reports', 'client_onboarding', 'chat', 'time_tracking']);
+                        // Team managers get more access including dynamic tables & dashboards
+                        setSelectedModules(['dashboard', 'clients', 'tasks', 'campaigners', 'reports', 'client_onboarding', 'chat', 'time_tracking', 'dynamic_tables']);
                       } else if (newRole === 'seo') {
                         // SEO gets specific modules
                         setSelectedModules(['dashboard', 'clients', 'tasks', 'time_tracking']);
