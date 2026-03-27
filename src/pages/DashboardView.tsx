@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { AgencyDashboardContent } from "@/components/dynamic-tables/AgencyDashboardContent";
 import { ShareDashboardDialog } from "@/components/dynamic-tables/ShareDashboardDialog";
 import { useTenant } from "@/contexts/TenantContext";
+import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnalyticsDashboard";
 import {
   LineChart, Line, BarChart, Bar, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts";
@@ -248,7 +249,14 @@ export default function DashboardView() {
     });
   }, [allRecords, platformFilter]);
 
-  // Determine campaign type per platform - dynamically from actual record data
+  // All analytics records (unfiltered by report_type) for GoogleAnalyticsDashboard component
+  const allAnalyticsRecords = useMemo(() => {
+    return allRecords
+      .filter((r: any) => isAnalyticsPlatform(r._source || ''))
+      .map((r: any) => ({ id: r.id, data: r.data }));
+  }, [allRecords]);
+
+
   const campaignTypeByPlatform: Record<string, CampaignType> = useMemo(() => {
     const map: Record<string, CampaignType> = {};
     // First set defaults from table settings
@@ -758,10 +766,16 @@ export default function DashboardView() {
               <p className="text-muted-foreground mb-4">צור טבלאות ושייך אותן ללקוח כדי לראות נתונים בדשבורד</p>
               <Button onClick={() => navigate(buildPath('/dynamic-tables'))}>עבור לניהול טבלאות</Button>
             </Card>
+          ) : platformFilter === 'google_analytics' ? (
+            /* Analytics tab: render the same GoogleAnalyticsDashboard used in standalone table view */
+            <GoogleAnalyticsDashboard
+              records={allAnalyticsRecords}
+              externalDateFilter={dateFilter}
+            />
           ) : (
             <>
               {/* Summary Cards - only show in All and Analytics tabs */}
-              {(platformFilter === 'all' || platformFilter === 'google_analytics') && (
+              {(platformFilter === 'all') && (
               <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 auto-rows-fr">
                 {(showAdsCards || showAnalyticsCards) && (
                   <Card className="h-full bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900">
@@ -1078,7 +1092,7 @@ export default function DashboardView() {
                 </Card>
               )}
 
-              {Object.keys(summaryByPlatform).length > 0 && (platformFilter === 'all' || platformFilter === 'google_analytics') && (
+              {Object.keys(summaryByPlatform).length > 0 && platformFilter === 'all' && (
                 <Card>
                   <CardHeader><CardTitle>פירוט לפי פלטפורמה</CardTitle></CardHeader>
                   <CardContent>
@@ -1181,7 +1195,7 @@ export default function DashboardView() {
               )}
 
               {/* Analytics Source Breakdown */}
-              {analyticsSourceBreakdown.length > 0 && (platformFilter === 'all' || platformFilter === 'google_analytics') && (
+              {analyticsSourceBreakdown.length > 0 && platformFilter === 'all' && (
                 <Card>
                   <CardHeader><CardTitle>פירוט לפי מקור הגעה (Analytics)</CardTitle></CardHeader>
                   <CardContent>
@@ -1226,7 +1240,7 @@ export default function DashboardView() {
               )}
 
               {/* Traffic Acquisition by Channel Group */}
-              {channelGroupBreakdown.length > 0 && (platformFilter === 'all' || platformFilter === 'google_analytics') && (
+              {channelGroupBreakdown.length > 0 && platformFilter === 'all' && (
                 <Card>
                   <CardHeader><CardTitle>טרפיק לפי ערוץ (Traffic Acquisition)</CardTitle></CardHeader>
                   <CardContent>
