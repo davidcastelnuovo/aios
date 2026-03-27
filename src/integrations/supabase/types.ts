@@ -137,7 +137,7 @@ export type Database = {
           report_data: Json
           report_date: string | null
           report_type: string
-          tenant_id: string
+          tenant_id: string | null
         }
         Insert: {
           agency_id?: string | null
@@ -150,7 +150,7 @@ export type Database = {
           report_data?: Json
           report_date?: string | null
           report_type: string
-          tenant_id: string
+          tenant_id?: string | null
         }
         Update: {
           agency_id?: string | null
@@ -163,7 +163,7 @@ export type Database = {
           report_data?: Json
           report_date?: string | null
           report_type?: string
-          tenant_id?: string
+          tenant_id?: string | null
         }
         Relationships: [
           {
