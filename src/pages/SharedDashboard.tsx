@@ -221,7 +221,10 @@ export default function SharedDashboard() {
     });
     Object.keys(platforms).forEach(key => {
       if (isAnalyticsPlatform(key)) return;
-      const ct = campaignTypeByPlatform[key] || 'leads';
+      // For merged Facebook platform, check if any Facebook type was ecommerce
+      const ct = isFacebookPlatform(key) 
+        ? (campaignTypeByPlatform['facebook_insights'] === 'ecommerce' || campaignTypeByPlatform['facebook_ecommerce'] === 'ecommerce' ? 'ecommerce' : 'leads')
+        : (campaignTypeByPlatform[key] || 'leads');
       if (ct === 'ecommerce') {
         platforms[key].roas = platforms[key].spend > 0 ? platforms[key].revenue / platforms[key].spend : 0;
       } else {
