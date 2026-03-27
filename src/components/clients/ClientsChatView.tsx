@@ -505,10 +505,11 @@ export function ClientsChatView({
                   {(selectedClientDisplayName || "?")[0]}
                 </div>
                 <div className="min-w-0">
-                  <h2 className="font-bold text-base truncate">{selectedClientDisplayName}</h2>
-                  {selectedClient.agencies?.name && (
-                    <p className="text-xs text-muted-foreground truncate">{selectedClient.agencies.name}</p>
-                  )}
+                  <EditableClientName
+                    clientId={selectedClient.id}
+                    currentName={selectedClientDisplayName}
+                    agencyName={selectedClient.agencies?.name}
+                  />
                 </div>
               </div>
 
