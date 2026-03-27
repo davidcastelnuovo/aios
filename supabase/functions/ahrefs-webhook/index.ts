@@ -18,77 +18,73 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Authenticate via x-api-key header
-    const apiKey = req.headers.get("x-api-key");
-    const expectedKey = Deno.env.get("AHREFS_WEBHOOK_SECRET");
-
-    if (!expectedKey) {
-      console.error("AHREFS_WEBHOOK_SECRET not configured");
-      return new Response(JSON.stringify({ error: "Webhook not configured" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    if (!apiKey || apiKey !== expectedKey) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
     const body = await req.json();
+    console.log("Ahrefs webhook received:", JSON.stringify(body).substring(0, 500));
 
     // Support batch: if body is an array, process multiple reports
     const reports = Array.isArray(body) ? body : [body];
-    const results: Array<{ success: boolean; id?: string; error?: string }> = [];
+    const results: Array<{ success: boolean; id?: string; error?: string; domain?: string }> = [];
 
     for (const report of reports) {
-      const {
-        tenant_id,
-        client_id,
-        agency_id,
-        domain,
-        report_type,
-        report_data,
-        metadata,
-        report_date,
-      } = report;
+      // Be flexible: extract fields from wherever they are in the payload
+      const tenant_id = report.tenant_id || report.tenantId || null;
+      const client_id = report.client_id || report.clientId || null;
+      const agency_id = report.agency_id || report.agencyId || null;
+      const domain = report.domain || report.target || report.url || report.site || null;
+      const report_type = report.report_type || report.reportType || report.type || "general";
+      const report_date = report.report_date || report.reportDate || report.date || null;
 
-      // Validate required fields
-      if (!tenant_id || !domain || !report_type || !report_data) {
+      // Everything else goes into report_data
+      // If there's an explicit report_data field, use it; otherwise store the entire payload
+      const report_data = report.report_data || report.reportData || report.data || report;
+
+      // Metadata - any extra info
+      const metadata = report.metadata || report.meta || {};
+
+      // Domain is the only truly required field - we need to know what site this is about
+      if (!domain) {
         results.push({
           success: false,
-          error: `Missing required fields: tenant_id, domain, report_type, report_data. Got: tenant_id=${!!tenant_id}, domain=${!!domain}, report_type=${!!report_type}, report_data=${!!report_data}`,
+          error: `Missing domain. Send at least { "domain": "example.com", ... }. Got keys: ${Object.keys(report).join(", ")}`,
         });
         continue;
       }
 
+      const insertPayload: Record<string, unknown> = {
+        domain,
+        report_type,
+        report_data,
+        metadata: typeof metadata === "object" ? metadata : { raw: metadata },
+        report_date: report_date || null,
+      };
+
+      // Only add tenant_id if provided (otherwise let it be handled later)
+      if (tenant_id) {
+        insertPayload.tenant_id = tenant_id;
+      }
+      if (client_id) {
+        insertPayload.client_id = client_id;
+      }
+      if (agency_id) {
+        insertPayload.agency_id = agency_id;
+      }
+
       const { data: inserted, error: insertError } = await supabase
         .from("ahrefs_reports")
-        .insert({
-          tenant_id,
-          client_id: client_id || null,
-          agency_id: agency_id || null,
-          domain,
-          report_type,
-          report_data,
-          metadata: metadata || {},
-          report_date: report_date || null,
-        })
+        .insert(insertPayload)
         .select("id")
         .single();
 
       if (insertError) {
         console.error("Error inserting ahrefs report:", insertError);
-        results.push({ success: false, error: insertError.message });
+        results.push({ success: false, error: insertError.message, domain });
       } else {
-        results.push({ success: true, id: inserted.id });
+        results.push({ success: true, id: inserted.id, domain });
       }
     }
 
