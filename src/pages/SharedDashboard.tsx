@@ -190,7 +190,8 @@ export default function SharedDashboard() {
   const summaryByPlatform = useMemo(() => {
     const platforms: Record<string, any> = {};
     filteredRecords.forEach((record: any) => {
-      const source = record._source || 'unknown';
+      const rawSource = record._source || 'unknown';
+      const source = normalizePlatformKey(rawSource);
       if (!platforms[source]) {
         platforms[source] = { spend: 0, impressions: 0, clicks: 0, sessions: 0, users: 0, results: 0, leads: 0, revenue: 0, addToCart: 0, roas: 0, cpl: 0 };
       }
