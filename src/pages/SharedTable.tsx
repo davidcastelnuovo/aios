@@ -310,7 +310,7 @@ export default function SharedTable() {
               </Card>
             )}
 
-            {isEcommerce || isAnalyticsPlatform(integrationType!) ? (
+            {summary.hasEcommerce || isAnalyticsPlatform(integrationType!) ? (
               <>
                 <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
                   <CardContent className="p-6">
@@ -336,6 +336,22 @@ export default function SharedTable() {
                       </div>
                     </CardContent>
                   </Card>
+                )}
+                {summary.hasLeads && (
+                  <>
+                    <Card className="bg-gradient-to-br from-cyan-50 to-cyan-100 dark:from-cyan-950 dark:to-cyan-900">
+                      <CardContent className="p-6">
+                        <p className="text-sm text-muted-foreground">לידים</p>
+                        <p className="text-3xl font-bold mt-2">{formatNumber(summary.leads)}</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-gradient-to-br from-teal-50 to-teal-100 dark:from-teal-950 dark:to-teal-900">
+                      <CardContent className="p-6">
+                        <p className="text-sm text-muted-foreground">עלות לליד (CPL)</p>
+                        <p className="text-3xl font-bold mt-2">{formatCurrency(summary.cpl)}</p>
+                      </CardContent>
+                    </Card>
+                  </>
                 )}
               </>
             ) : (
