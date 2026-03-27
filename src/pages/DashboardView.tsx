@@ -78,6 +78,7 @@ const getAddToCartFromData = (data: any) => Number(data?.add_to_cart) || Number(
 const isAdsPlatform = (source: string) => ['facebook_insights', 'facebook_ecommerce', 'google_ads'].includes(source);
 const isAnalyticsPlatform = (source: string) => source === 'google_analytics';
 const isFacebookPlatform = (source: string) => ['facebook_insights', 'facebook_ecommerce'].includes(source);
+const normalizePlatformKey = (source: string) => isFacebookPlatform(source) ? 'facebook_insights' : source;
 
 const matchesPlatformFilter = (integrationType: string, filter: PlatformFilter): boolean => {
   if (filter === 'all') return true;
@@ -294,13 +295,14 @@ export default function DashboardView() {
     const platforms: Record<string, any> = {};
     
     filteredRecords.forEach((record: any) => {
-      const source = record._source || 'unknown';
+      const rawSource = record._source || 'unknown';
+      const source = normalizePlatformKey(rawSource);
       if (!platforms[source]) {
         platforms[source] = { spend: 0, impressions: 0, clicks: 0, sessions: 0, users: 0, results: 0, leads: 0, revenue: 0, addToCart: 0, roas: 0, cpl: 0, recordCount: 0 };
       }
       
       const data = record.data || {};
-      const campaignType: CampaignType = campaignTypeByPlatform[source] || record._campaignType || 'leads';
+      const campaignType: CampaignType = campaignTypeByPlatform[rawSource] || campaignTypeByPlatform[source] || record._campaignType || 'leads';
 
       if (isAnalyticsPlatform(source)) {
         platforms[source].sessions += getSessionsFromData(data);
@@ -329,7 +331,10 @@ export default function DashboardView() {
 
     Object.keys(platforms).forEach(key => {
       if (isAnalyticsPlatform(key)) return;
-      const ct: CampaignType = campaignTypeByPlatform[key] || 'leads';
+      // For merged Facebook platform, check if any Facebook type was ecommerce
+      const ct: CampaignType = isFacebookPlatform(key)
+        ? (campaignTypeByPlatform['facebook_insights'] === 'ecommerce' || campaignTypeByPlatform['facebook_ecommerce'] === 'ecommerce' ? 'ecommerce' : 'leads')
+        : (campaignTypeByPlatform[key] || 'leads');
       if (ct === 'ecommerce') {
         platforms[key].roas = platforms[key].spend > 0 ? platforms[key].revenue / platforms[key].spend : 0;
       } else {
