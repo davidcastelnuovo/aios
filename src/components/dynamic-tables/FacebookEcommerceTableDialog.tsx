@@ -49,7 +49,7 @@ const dateRangeOptions = [
   { value: "this_month", label: "החודש הנוכחי" },
 ];
 
-export function FacebookEcommerceTableDialog({ open, onOpenChange }: FacebookEcommerceTableDialogProps) {
+export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClientIds }: FacebookEcommerceTableDialogProps) {
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
   const queryClient = useQueryClient();
