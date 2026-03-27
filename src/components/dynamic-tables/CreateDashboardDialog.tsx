@@ -44,6 +44,7 @@ import { useTenantPath } from "@/hooks/useTenantPath";
 interface CreateDashboardDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  assignedClientIds?: string[];
 }
 
 export function CreateDashboardDialog({ open, onOpenChange }: CreateDashboardDialogProps) {

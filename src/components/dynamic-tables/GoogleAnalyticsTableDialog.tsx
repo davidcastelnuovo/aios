@@ -16,6 +16,7 @@ import { Loader2, BarChart3, ExternalLink, Search, Zap, AlertCircle, CheckCircle
 interface GoogleAnalyticsTableDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  assignedClientIds?: string[];
 }
 
 interface GAProperty {

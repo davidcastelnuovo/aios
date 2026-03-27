@@ -29,6 +29,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 interface FacebookEcommerceTableDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  assignedClientIds?: string[];
 }
 
 interface AdAccount {

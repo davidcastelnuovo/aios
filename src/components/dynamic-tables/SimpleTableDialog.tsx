@@ -65,10 +65,10 @@ export function SimpleTableDialog({ open, onOpenChange, assignedClientIds }: Sim
   });
 
   // Fetch clients based on selected agency
-  const { data: clients = [] } = useQuery({
+  const { data: rawClients = [] } = useQuery({
     queryKey: ['clients-for-table', agencyId],
     queryFn: async () => {
-      if (!agencyId) return [];
+      if (!agencyId || agencyId === 'none') return [];
       const { data, error } = await supabase
         .from('clients')
         .select('id, name')
@@ -77,8 +77,13 @@ export function SimpleTableDialog({ open, onOpenChange, assignedClientIds }: Sim
       if (error) throw error;
       return data || [];
     },
-    enabled: open && !!agencyId,
+    enabled: open && !!agencyId && agencyId !== 'none',
   });
+
+  // Filter clients for campaigners
+  const clients = assignedClientIds
+    ? rawClients.filter(c => assignedClientIds.includes(c.id))
+    : rawClients;
 
   // Reset client when agency changes
   useEffect(() => {

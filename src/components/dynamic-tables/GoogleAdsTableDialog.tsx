@@ -30,6 +30,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 interface GoogleAdsTableDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  assignedClientIds?: string[];
 }
 
 interface GoogleAdsAccount {

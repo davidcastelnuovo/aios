@@ -13,6 +13,7 @@ import { Loader2, Search, ExternalLink } from "lucide-react";
 interface GoogleSearchConsoleTableDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  assignedClientIds?: string[];
 }
 
 interface GSCSite {
