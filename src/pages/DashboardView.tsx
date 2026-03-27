@@ -573,6 +573,29 @@ export default function DashboardView() {
     return { records, fields, tableIds };
   }, [platformFilter, tables, tableFields, allRecords]);
 
+  // Facebook campaign summary - aggregate all Facebook records by campaign name
+  const facebookCampaignSummary = useMemo(() => {
+    if (platformFilter !== 'facebook') return [];
+    const map: Record<string, { name: string; impressions: number; clicks: number; spend: number; addToCart: number; purchases: number; revenue: number }> = {};
+    
+    const fbRecords = allRecords.filter((r: any) => isFacebookPlatform(r._source || ''));
+    fbRecords.forEach((r: any) => {
+      const d = r.data || {};
+      const name = d.campaign_name || d.campaign || 'ללא שם';
+      if (!map[name]) {
+        map[name] = { name, impressions: 0, clicks: 0, spend: 0, addToCart: 0, purchases: 0, revenue: 0 };
+      }
+      map[name].impressions += Number(d.impressions) || 0;
+      map[name].clicks += Number(d.clicks) || 0;
+      map[name].spend += getSpendFromData(d);
+      map[name].addToCart += getAddToCartFromData(d);
+      map[name].purchases += getPurchasesFromData(d);
+      map[name].revenue += getRevenueFromData(d);
+    });
+    
+    return Object.values(map).sort((a, b) => b.spend - a.spend);
+  }, [platformFilter, allRecords]);
+
   // Group records by date for table
   const recordsByDate = useMemo(() => {
     const byDate: Record<string, any[]> = {};
