@@ -68,7 +68,7 @@ export function AhrefsTableDialog({ open, onOpenChange, assignedClientIds }: Ahr
   });
 
   // Fetch clients based on selected agency
-  const { data: clients } = useQuery({
+  const { data: rawClients } = useQuery({
     queryKey: ['clients-for-table', selectedAgency],
     queryFn: async () => {
       if (!selectedAgency) return [];
@@ -81,6 +81,10 @@ export function AhrefsTableDialog({ open, onOpenChange, assignedClientIds }: Ahr
     },
     enabled: !!selectedAgency,
   });
+
+  const clients = assignedClientIds
+    ? (rawClients || []).filter(c => assignedClientIds.includes(c.id))
+    : rawClients;
 
   const parseReportUrl = (url: string) => {
     // Parse Ahrefs Site Explorer report URL to extract report type and target domain

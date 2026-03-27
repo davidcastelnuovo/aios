@@ -100,7 +100,7 @@ export function GoogleAdsTableDialog({ open, onOpenChange, assignedClientIds }: 
   });
 
   // Fetch clients based on selected agency
-  const { data: clients = [] } = useQuery({
+  const { data: rawClients = [] } = useQuery({
     queryKey: ['clients-for-table', agencyId],
     queryFn: async () => {
       if (!agencyId) return [];
@@ -114,6 +114,10 @@ export function GoogleAdsTableDialog({ open, onOpenChange, assignedClientIds }: 
     },
     enabled: open && !!agencyId,
   });
+
+  const clients = assignedClientIds
+    ? rawClients.filter(c => assignedClientIds.includes(c.id))
+    : rawClients;
 
   // Fetch Make API integration
   const { data: makeApiIntegration } = useQuery({

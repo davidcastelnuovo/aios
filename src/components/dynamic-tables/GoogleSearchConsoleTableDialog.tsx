@@ -87,7 +87,7 @@ export function GoogleSearchConsoleTableDialog({ open, onOpenChange, assignedCli
   });
 
   // Fetch clients based on selected agency
-  const { data: clients } = useQuery({
+  const { data: rawClients } = useQuery({
     queryKey: ['clients-for-table', selectedAgency],
     queryFn: async () => {
       if (!selectedAgency) return [];
@@ -100,6 +100,10 @@ export function GoogleSearchConsoleTableDialog({ open, onOpenChange, assignedCli
     },
     enabled: !!selectedAgency,
   });
+
+  const clients = assignedClientIds
+    ? (rawClients || []).filter(c => assignedClientIds.includes(c.id))
+    : rawClients;
 
   const handleCreate = async () => {
     if (!tableName.trim() || !selectedSite || !integration) {
