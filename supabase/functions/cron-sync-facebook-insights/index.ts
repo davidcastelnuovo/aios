@@ -17,6 +17,12 @@ interface InsightRecord {
   leads: number;
   cost_per_lead: number;
   spend: number;
+  purchases: number;
+  purchase_value: number;
+  add_to_cart: number;
+  roas: number;
+  campaign_objective: string | null;
+  campaign_type: 'lead' | 'ecommerce' | 'other';
   effective_status?: string;
   configured_status?: string;
 }
@@ -26,6 +32,7 @@ interface CampaignStatus {
   name: string;
   effective_status: string;
   configured_status: string;
+  objective?: string | null;
 }
 
 Deno.serve(async (req) => {
@@ -153,7 +160,7 @@ Deno.serve(async (req) => {
         console.log(`📅 Fetching data from ${sinceStr} to ${untilStr}`);
 
         // First, fetch campaign statuses to detect real blocks
-        const campaignsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/campaigns?fields=id,name,effective_status,configured_status&limit=500&access_token=${accessToken}`;
+        const campaignsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/campaigns?fields=id,name,effective_status,configured_status,objective&limit=500&access_token=${accessToken}`;
         const campaignsResponse = await fetch(campaignsUrl);
         const campaignsData = await campaignsResponse.json();
         
@@ -165,6 +172,7 @@ Deno.serve(async (req) => {
               name: campaign.name,
               effective_status: campaign.effective_status,
               configured_status: campaign.configured_status,
+              objective: campaign.objective || null,
             };
           }
           console.log(`📋 Fetched statuses for ${Object.keys(campaignStatuses).length} campaigns`);
@@ -192,7 +200,7 @@ Deno.serve(async (req) => {
         }
 
         // Fetch insights from Facebook
-        const insightsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/insights?level=campaign&fields=campaign_id,campaign_name,impressions,clicks,cpm,ctr,actions,conversions,cost_per_action_type,cost_per_conversion,spend&time_range={"since":"${sinceStr}","until":"${untilStr}"}&time_increment=1&limit=500&access_token=${accessToken}`;
+        const insightsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/insights?level=campaign&fields=campaign_id,campaign_name,impressions,clicks,cpm,ctr,actions,action_values,conversions,cost_per_action_type,cost_per_conversion,spend&time_range={"since":"${sinceStr}","until":"${untilStr}"}&time_increment=1&limit=500&access_token=${accessToken}`;
         
         const response = await fetch(insightsUrl);
         const data = await response.json();
@@ -214,9 +222,23 @@ Deno.serve(async (req) => {
           'onsite_conversion.lead_grouped', // On-site leads
           'app_custom_event.fb_mobile_lead', // App leads
         ];
+        const purchaseActionTypes = ['purchase', 'omni_purchase', 'offsite_conversion.fb_pixel_purchase'];
+        const addToCartActionTypes = ['add_to_cart', 'offsite_conversion.fb_pixel_add_to_cart'];
 
         const insights: InsightRecord[] = (data.data || []).map((insight: any) => {
           const allActions = [...(insight.actions ?? []), ...(insight.conversions ?? [])];
+          const actionValues = insight.action_values ?? [];
+          const actionTypeSet = new Set(allActions.map((a: any) => String(a.action_type || '')));
+
+          const getActionCount = (actionTypes: string[]) =>
+            allActions
+              .filter((a: any) => actionTypes.includes(String(a.action_type || '')))
+              .reduce((sum: number, a: any) => sum + (parseInt(a.value) || 0), 0);
+
+          const getActionValue = (actionTypes: string[]) =>
+            actionValues
+              .filter((a: any) => actionTypes.includes(String(a.action_type || '')))
+              .reduce((sum: number, a: any) => sum + (parseFloat(a.value) || 0), 0);
 
           // Extract lead count
           let leads = 0;
@@ -269,8 +291,33 @@ Deno.serve(async (req) => {
             costPerLead = spend / leads;
           }
 
+          const purchases = getActionCount(purchaseActionTypes);
+          const purchaseValue = getActionValue(purchaseActionTypes);
+          const addToCart = getActionCount(addToCartActionTypes);
+          const roas = spend > 0 ? purchaseValue / spend : 0;
+
           // Get campaign status
           const campaignStatus = campaignStatuses[insight.campaign_id];
+          const objective = String(campaignStatus?.objective || '').toUpperCase();
+          const isEcommerceObjective = ['OUTCOME_SALES', 'PRODUCT_CATALOG_SALES', 'SALES'].includes(objective);
+          const isLeadObjective = ['OUTCOME_LEADS', 'LEAD_GENERATION'].includes(objective);
+          const hasEcommerceSignal =
+            purchases > 0 ||
+            purchaseValue > 0 ||
+            addToCart > 0 ||
+            purchaseActionTypes.some((type) => actionTypeSet.has(type)) ||
+            addToCartActionTypes.some((type) => actionTypeSet.has(type));
+          const hasLeadSignal =
+            leads > 0 ||
+            leadActionTypes.some((type) => actionTypeSet.has(type)) ||
+            Array.from(actionTypeSet).some((type) => type.startsWith('offsite_conversion.custom'));
+
+          const campaignType: 'lead' | 'ecommerce' | 'other' =
+            hasEcommerceSignal || isEcommerceObjective
+              ? 'ecommerce'
+              : hasLeadSignal || isLeadObjective
+                ? 'lead'
+                : 'other';
 
           return {
             date: insight.date_start,
@@ -284,6 +331,12 @@ Deno.serve(async (req) => {
             leads,
             cost_per_lead: costPerLead,
             spend: parseFloat(insight.spend) || 0,
+            purchases,
+            purchase_value: purchaseValue,
+            add_to_cart: addToCart,
+            roas,
+            campaign_objective: campaignStatus?.objective || null,
+            campaign_type: campaignType,
             effective_status: campaignStatus?.effective_status || null,
             configured_status: campaignStatus?.configured_status || null,
           };
@@ -292,9 +345,9 @@ Deno.serve(async (req) => {
         console.log(`📊 Got ${insights.length} daily campaign insights`);
 
         // Ensure fields exist
-        const fieldKeys = ['date', 'campaign_name', 'campaign_id', 'impressions', 'clicks', 'lp_or_form_views', 'cpm', 'ctr', 'leads', 'cost_per_lead', 'spend', 'effective_status', 'configured_status'];
-        const fieldNames = ['תאריך', 'שם הקמפיין', 'מזהה קמפיין', 'חשיפות', 'קליקים', 'צפיות LP / פתיחות טופס', 'עלות ל-1000 חשיפות', 'אחוז קליקים', 'לידים', 'עלות לליד', 'הוצאה', 'סטטוס בפועל', 'סטטוס מוגדר'];
-        const fieldTypes = ['date', 'text', 'text', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'text', 'text'];
+        const fieldKeys = ['date', 'campaign_name', 'campaign_id', 'impressions', 'clicks', 'lp_or_form_views', 'cpm', 'ctr', 'leads', 'cost_per_lead', 'spend', 'purchases', 'purchase_value', 'add_to_cart', 'roas', 'campaign_objective', 'campaign_type', 'effective_status', 'configured_status'];
+        const fieldNames = ['תאריך', 'שם הקמפיין', 'מזהה קמפיין', 'חשיפות', 'קליקים', 'צפיות LP / פתיחות טופס', 'עלות ל-1000 חשיפות', 'אחוז קליקים', 'לידים', 'עלות לליד', 'הוצאה', 'רכישות', 'ערך רכישות', 'הוספות לעגלה', 'ROAS', 'מטרת קמפיין', 'סוג קמפיין', 'סטטוס בפועל', 'סטטוס מוגדר'];
+        const fieldTypes = ['date', 'text', 'text', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'text', 'text', 'text', 'text'];
         
         for (let i = 0; i < fieldKeys.length; i++) {
           const { data: existingField } = await supabase

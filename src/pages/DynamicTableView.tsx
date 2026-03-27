@@ -1944,85 +1944,181 @@ export default function DynamicTableView() {
         />
       )}
 
-      {/* Summary Stats for Facebook Insights */}
+      {/* Summary Stats for Facebook Insights (split by campaign type) */}
       {hasFacebook && filteredRecords && filteredRecords.length > 0 && (
-        <Card className="mb-4 overflow-hidden">
-          {(() => {
-            // Check if records actually have lead data
-            const totalLeads = filteredRecords.reduce((sum, r) => sum + (Number(r.data?.leads) || 0), 0);
-            const showLeads = totalLeads > 0;
+        (() => {
+          const campaignGroups = filteredRecords.reduce((acc, record) => {
+            const campaignName = String(record.data?.campaign_name || 'ללא קמפיין');
+            if (!acc[campaignName]) {
+              acc[campaignName] = {
+                impressions: 0,
+                clicks: 0,
+                leads: 0,
+                spend: 0,
+                purchases: 0,
+                purchase_value: 0,
+                add_to_cart: 0,
+                campaign_type: 'other' as 'lead' | 'ecommerce' | 'other',
+              };
+            }
 
-            // Group records by campaign_name
-            const campaignGroups = filteredRecords.reduce((acc, record) => {
-              const campaignName = String(record.data?.campaign_name || 'ללא קמפיין');
-              if (!acc[campaignName]) {
-                acc[campaignName] = { impressions: 0, clicks: 0, leads: 0, spend: 0 };
-              }
-              acc[campaignName].impressions += Number(record.data?.impressions) || 0;
-              acc[campaignName].clicks += Number(record.data?.clicks) || 0;
-              acc[campaignName].leads += Number(record.data?.leads) || 0;
-              acc[campaignName].spend += Number(record.data?.spend) || 0;
-              return acc;
-            }, {} as Record<string, { impressions: number; clicks: number; leads: number; spend: number }>);
+            const rowType = String(record.data?.campaign_type || '').toLowerCase();
+            if (rowType === 'ecommerce' || rowType === 'lead') {
+              acc[campaignName].campaign_type = rowType as 'lead' | 'ecommerce';
+            }
 
-            const totals = Object.values(campaignGroups).reduce((acc, campaign) => ({
-              impressions: acc.impressions + campaign.impressions,
-              clicks: acc.clicks + campaign.clicks,
-              leads: acc.leads + campaign.leads,
-              spend: acc.spend + campaign.spend,
-            }), { impressions: 0, clicks: 0, leads: 0, spend: 0 });
+            acc[campaignName].impressions += Number(record.data?.impressions) || 0;
+            acc[campaignName].clicks += Number(record.data?.clicks) || 0;
+            acc[campaignName].leads += Number(record.data?.leads) || 0;
+            acc[campaignName].spend += Number(record.data?.spend) || 0;
+            acc[campaignName].purchases += Number(record.data?.purchases) || 0;
+            acc[campaignName].purchase_value += Number(record.data?.purchase_value) || 0;
+            acc[campaignName].add_to_cart += Number(record.data?.add_to_cart) || 0;
 
-            return (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm" dir="rtl">
-                  <thead className="bg-muted/50 border-b">
-                    <tr>
-                      <th className="p-2 text-right font-medium">קמפיין</th>
-                      <th className="p-2 text-center font-medium">חשיפות</th>
-                      <th className="p-2 text-center font-medium">קליקים</th>
-                      {showLeads && <th className="p-2 text-center font-medium">לידים</th>}
-                      <th className="p-2 text-center font-medium">הוצאה</th>
-                      {showLeads && <th className="p-2 text-center font-medium">עלות לליד</th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(() => {
-                      const currency = table.integration_settings?.currency === 'USD' ? '$' : '₪';
-                      return Object.entries(campaignGroups).map(([campaignName, data]) => {
-                        const costPerLead = data.leads > 0 ? data.spend / data.leads : 0;
-                        return (
-                          <tr key={campaignName} className="border-b hover:bg-muted/30">
-                            <td className="p-2 text-right font-medium">{campaignName}</td>
-                            <td className="p-2 text-center">{data.impressions.toLocaleString('he-IL')}</td>
-                            <td className="p-2 text-center">{data.clicks.toLocaleString('he-IL')}</td>
-                            {showLeads && <td className="p-2 text-center text-green-600 font-medium">{data.leads.toLocaleString('he-IL')}</td>}
-                            <td className="p-2 text-center">{currency}{data.spend.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
-                            {showLeads && <td className="p-2 text-center text-blue-600 font-medium">{currency}{costPerLead.toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>}
-                          </tr>
-                        );
-                      });
-                    })()}
-                  </tbody>
-                  <tfoot className="bg-primary/10 font-bold">
-                    {(() => {
-                      const currency = table.integration_settings?.currency === 'USD' ? '$' : '₪';
-                      return (
+            return acc;
+          }, {} as Record<string, {
+            impressions: number;
+            clicks: number;
+            leads: number;
+            spend: number;
+            purchases: number;
+            purchase_value: number;
+            add_to_cart: number;
+            campaign_type: 'lead' | 'ecommerce' | 'other';
+          }>);
+
+          const entries = Object.entries(campaignGroups);
+          const ecommerceCampaigns = entries.filter(([, data]) =>
+            data.campaign_type === 'ecommerce' ||
+            data.purchases > 0 ||
+            data.purchase_value > 0 ||
+            data.add_to_cart > 0
+          );
+          const leadCampaigns = entries.filter(([, data]) =>
+            !(
+              data.campaign_type === 'ecommerce' ||
+              data.purchases > 0 ||
+              data.purchase_value > 0 ||
+              data.add_to_cart > 0
+            )
+          );
+
+          const currency = table.integration_settings?.currency === 'USD' ? '$' : '₪';
+
+          const leadTotals = leadCampaigns.reduce((acc, [, campaign]) => ({
+            impressions: acc.impressions + campaign.impressions,
+            clicks: acc.clicks + campaign.clicks,
+            leads: acc.leads + campaign.leads,
+            spend: acc.spend + campaign.spend,
+          }), { impressions: 0, clicks: 0, leads: 0, spend: 0 });
+
+          const ecommerceTotals = ecommerceCampaigns.reduce((acc, [, campaign]) => ({
+            impressions: acc.impressions + campaign.impressions,
+            clicks: acc.clicks + campaign.clicks,
+            spend: acc.spend + campaign.spend,
+            purchases: acc.purchases + campaign.purchases,
+            purchase_value: acc.purchase_value + campaign.purchase_value,
+            add_to_cart: acc.add_to_cart + campaign.add_to_cart,
+          }), { impressions: 0, clicks: 0, spend: 0, purchases: 0, purchase_value: 0, add_to_cart: 0 });
+
+          return (
+            <>
+              {ecommerceCampaigns.length > 0 && (
+                <Card className="mb-4 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm" dir="rtl">
+                      <thead className="bg-muted/50 border-b">
+                        <tr>
+                          <th className="p-2 text-right font-medium">קמפיין איקומרס</th>
+                          <th className="p-2 text-center font-medium">חשיפות</th>
+                          <th className="p-2 text-center font-medium">קליקים</th>
+                          <th className="p-2 text-center font-medium">הוצאה</th>
+                          <th className="p-2 text-center font-medium">הוספות לעגלה</th>
+                          <th className="p-2 text-center font-medium">רכישות</th>
+                          <th className="p-2 text-center font-medium">ערך רכישות</th>
+                          <th className="p-2 text-center font-medium">ROAS</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ecommerceCampaigns.map(([campaignName, data]) => {
+                          const roas = data.spend > 0 ? data.purchase_value / data.spend : 0;
+                          return (
+                            <tr key={`ecom-${campaignName}`} className="border-b hover:bg-muted/30">
+                              <td className="p-2 text-right font-medium">{campaignName}</td>
+                              <td className="p-2 text-center">{data.impressions.toLocaleString('he-IL')}</td>
+                              <td className="p-2 text-center">{data.clicks.toLocaleString('he-IL')}</td>
+                              <td className="p-2 text-center">{currency}{data.spend.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
+                              <td className="p-2 text-center text-orange-600">{data.add_to_cart.toLocaleString('he-IL')}</td>
+                              <td className="p-2 text-center text-green-600 font-medium">{data.purchases.toLocaleString('he-IL')}</td>
+                              <td className="p-2 text-center text-green-600">{currency}{data.purchase_value.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
+                              <td className="p-2 text-center text-blue-600 font-medium">{roas.toLocaleString('he-IL', { maximumFractionDigits: 1 })}x</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot className="bg-primary/10 font-bold">
                         <tr>
                           <td className="p-2 text-right">סה״כ</td>
-                          <td className="p-2 text-center">{totals.impressions.toLocaleString('he-IL')}</td>
-                          <td className="p-2 text-center">{totals.clicks.toLocaleString('he-IL')}</td>
-                          {showLeads && <td className="p-2 text-center text-green-600">{totals.leads.toLocaleString('he-IL')}</td>}
-                          <td className="p-2 text-center">{currency}{totals.spend.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
-                          {showLeads && <td className="p-2 text-center text-blue-600">{currency}{(totals.leads > 0 ? totals.spend / totals.leads : 0).toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>}
+                          <td className="p-2 text-center">{ecommerceTotals.impressions.toLocaleString('he-IL')}</td>
+                          <td className="p-2 text-center">{ecommerceTotals.clicks.toLocaleString('he-IL')}</td>
+                          <td className="p-2 text-center">{currency}{ecommerceTotals.spend.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
+                          <td className="p-2 text-center text-orange-600">{ecommerceTotals.add_to_cart.toLocaleString('he-IL')}</td>
+                          <td className="p-2 text-center text-green-600">{ecommerceTotals.purchases.toLocaleString('he-IL')}</td>
+                          <td className="p-2 text-center text-green-600">{currency}{ecommerceTotals.purchase_value.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
+                          <td className="p-2 text-center text-blue-600">{(ecommerceTotals.spend > 0 ? ecommerceTotals.purchase_value / ecommerceTotals.spend : 0).toLocaleString('he-IL', { maximumFractionDigits: 1 })}x</td>
                         </tr>
-                      );
-                    })()}
-                  </tfoot>
-                </table>
-              </div>
-            );
-          })()}
-        </Card>
+                      </tfoot>
+                    </table>
+                  </div>
+                </Card>
+              )}
+
+              {leadCampaigns.length > 0 && (
+                <Card className="mb-4 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm" dir="rtl">
+                      <thead className="bg-muted/50 border-b">
+                        <tr>
+                          <th className="p-2 text-right font-medium">קמפיין לידים</th>
+                          <th className="p-2 text-center font-medium">חשיפות</th>
+                          <th className="p-2 text-center font-medium">קליקים</th>
+                          <th className="p-2 text-center font-medium">לידים</th>
+                          <th className="p-2 text-center font-medium">הוצאה</th>
+                          <th className="p-2 text-center font-medium">עלות לליד</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {leadCampaigns.map(([campaignName, data]) => {
+                          const costPerLead = data.leads > 0 ? data.spend / data.leads : 0;
+                          return (
+                            <tr key={`lead-${campaignName}`} className="border-b hover:bg-muted/30">
+                              <td className="p-2 text-right font-medium">{campaignName}</td>
+                              <td className="p-2 text-center">{data.impressions.toLocaleString('he-IL')}</td>
+                              <td className="p-2 text-center">{data.clicks.toLocaleString('he-IL')}</td>
+                              <td className="p-2 text-center text-green-600 font-medium">{data.leads.toLocaleString('he-IL')}</td>
+                              <td className="p-2 text-center">{currency}{data.spend.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
+                              <td className="p-2 text-center text-blue-600 font-medium">{currency}{costPerLead.toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot className="bg-primary/10 font-bold">
+                        <tr>
+                          <td className="p-2 text-right">סה״כ</td>
+                          <td className="p-2 text-center">{leadTotals.impressions.toLocaleString('he-IL')}</td>
+                          <td className="p-2 text-center">{leadTotals.clicks.toLocaleString('he-IL')}</td>
+                          <td className="p-2 text-center text-green-600">{leadTotals.leads.toLocaleString('he-IL')}</td>
+                          <td className="p-2 text-center">{currency}{leadTotals.spend.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
+                          <td className="p-2 text-center text-blue-600">{currency}{(leadTotals.leads > 0 ? leadTotals.spend / leadTotals.leads : 0).toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </Card>
+              )}
+            </>
+          );
+        })()
       )}
 
       {/* Summary Stats for Facebook Ecommerce */}
