@@ -21,7 +21,7 @@ interface GSCSite {
   permissionLevel: string;
 }
 
-export function GoogleSearchConsoleTableDialog({ open, onOpenChange }: GoogleSearchConsoleTableDialogProps) {
+export function GoogleSearchConsoleTableDialog({ open, onOpenChange, assignedClientIds }: GoogleSearchConsoleTableDialogProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { currentTenant, currentTenantId: activeTenantId } = useTenant();
