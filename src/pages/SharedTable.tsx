@@ -4,8 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Select,
@@ -14,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Lock, FileSpreadsheet, Facebook, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { FileSpreadsheet, Facebook, TrendingUp, TrendingDown, Minus } from "lucide-react";
 
 const DATE_FILTERS = [
   { value: 'today', label: 'היום' },
@@ -84,15 +82,11 @@ const getIntegrationIcon = (type: string | null) => {
 export default function SharedTable() {
   const { shareToken } = useParams();
   const [dateFilter, setDateFilter] = useState('last_30_days');
-  const [email, setEmail] = useState('');
-  const [submittedEmail, setSubmittedEmail] = useState('');
-  const [emailError, setEmailError] = useState('');
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['shared-table', shareToken, dateFilter, submittedEmail],
+    queryKey: ['shared-table', shareToken, dateFilter],
     queryFn: async () => {
       const params = new URLSearchParams({ token: shareToken!, date_filter: dateFilter });
-      if (submittedEmail) params.set('email', submittedEmail);
       const response = await supabase.functions.invoke(`public-table?${params.toString()}`, { method: 'GET' });
       if (response.error) throw response.error;
       return response.data;
@@ -100,18 +94,6 @@ export default function SharedTable() {
     enabled: !!shareToken,
     retry: false,
   });
-
-  const needsEmail = data?.error === 'email_required';
-  const emailNotAllowed = data?.error === 'email_not_allowed';
-
-  const handleEmailSubmit = () => {
-    if (!email.trim() || !email.includes('@')) {
-      setEmailError('נא להזין אימייל תקין');
-      return;
-    }
-    setEmailError('');
-    setSubmittedEmail(email.trim().toLowerCase());
-  };
 
   const integrationType = data?.table?.integration_type;
   const isIntegrationTable = isAdsPlatform(integrationType || '') || isAnalyticsPlatform(integrationType || '');
@@ -207,39 +189,6 @@ export default function SharedTable() {
           <Skeleton className="h-10 w-64" />
           <Skeleton className="h-96 w-full" />
         </div>
-      </div>
-    );
-  }
-
-  // Email gate
-  if (needsEmail || emailNotAllowed) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center" dir="rtl">
-        <Card className="w-full max-w-md mx-4">
-          <CardHeader className="text-center">
-            <Lock className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
-            <CardTitle>טבלה מוגנת</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {emailNotAllowed && (
-              <p className="text-sm text-destructive text-center">
-                האימייל שהזנת אינו מורשה לצפות בטבלה זו.
-              </p>
-            )}
-            <p className="text-sm text-muted-foreground text-center">
-              נא להזין את כתובת האימייל שלך כדי לצפות בטבלה
-            </p>
-            <Input
-              placeholder="email@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleEmailSubmit()}
-              dir="ltr"
-            />
-            {emailError && <p className="text-sm text-destructive">{emailError}</p>}
-            <Button className="w-full" onClick={handleEmailSubmit}>כניסה</Button>
-          </CardContent>
-        </Card>
       </div>
     );
   }
