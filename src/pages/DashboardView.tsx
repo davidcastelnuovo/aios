@@ -1092,7 +1092,7 @@ export default function DashboardView() {
                 </Card>
               )}
 
-              {Object.keys(summaryByPlatform).length > 0 && (platformFilter === 'all' || platformFilter === 'google_analytics') && (
+              {Object.keys(summaryByPlatform).length > 0 && platformFilter === 'all' && (
                 <Card>
                   <CardHeader><CardTitle>פירוט לפי פלטפורמה</CardTitle></CardHeader>
                   <CardContent>
