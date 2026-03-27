@@ -114,10 +114,7 @@ export default function SharedTable() {
   };
 
   const integrationType = data?.table?.integration_type;
-  const integrationSettings = data?.table?.integration_settings;
   const isIntegrationTable = isAdsPlatform(integrationType || '') || isAnalyticsPlatform(integrationType || '');
-  const campaignType = getCampaignType(integrationType, integrationSettings);
-  const isEcommerce = campaignType === 'ecommerce';
 
   // For integration tables: filter only daily records for analytics
   const filteredRecords = useMemo(() => {
@@ -145,25 +142,25 @@ export default function SharedTable() {
         spend += getSpendFromData(d);
         impressions += Number(d.impressions) || 0;
         clicks += Number(d.clicks) || 0;
-        if (isEcommerce) {
-          purchases += getPurchasesFromData(d);
-          revenue += getRevenueFromData(d);
-          addToCart += getAddToCartFromData(d);
-        } else {
-          leads += getLeadsFromData(d);
-        }
+        // Always aggregate both - we'll display based on what exists
+        purchases += getPurchasesFromData(d);
+        revenue += getRevenueFromData(d);
+        addToCart += getAddToCartFromData(d);
+        leads += getLeadsFromData(d);
       }
     });
 
     const roas = spend > 0 ? revenue / spend : 0;
     const cpl = leads > 0 ? spend / leads : 0;
+    const hasEcommerce = purchases > 0 || revenue > 0 || addToCart > 0;
+    const hasLeads = leads > 0;
 
-    return { spend, impressions, clicks, leads, sessions, purchases, revenue, addToCart, roas, cpl };
-  }, [filteredRecords, integrationType, isIntegrationTable, isEcommerce]);
+    return { spend, impressions, clicks, leads, sessions, purchases, revenue, addToCart, roas, cpl, hasEcommerce, hasLeads };
+  }, [filteredRecords, integrationType, isIntegrationTable]);
 
   // Campaign-level aggregation for Facebook / Google Ads
   const campaignSummary = useMemo(() => {
-    if (!isAdsPlatform(integrationType || '')) return [];
+    if (!isAdsPlatform(integrationType || '')) return { ecommerce: [] as any[], leads: [] as any[], all: [] as any[] };
     const map: Record<string, any> = {};
     filteredRecords.forEach((r: any) => {
       const d = r.data || {};
@@ -174,16 +171,22 @@ export default function SharedTable() {
       map[name].spend += getSpendFromData(d);
       map[name].impressions += Number(d.impressions) || 0;
       map[name].clicks += Number(d.clicks) || 0;
-      if (isEcommerce) {
-        map[name].purchases += getPurchasesFromData(d);
-        map[name].revenue += getRevenueFromData(d);
-        map[name].addToCart += getAddToCartFromData(d);
-      } else {
-        map[name].leads += getLeadsFromData(d);
-      }
+      // Always aggregate both types
+      map[name].purchases += getPurchasesFromData(d);
+      map[name].revenue += getRevenueFromData(d);
+      map[name].addToCart += getAddToCartFromData(d);
+      map[name].leads += getLeadsFromData(d);
     });
-    return Object.values(map).sort((a: any, b: any) => b.spend - a.spend);
-  }, [filteredRecords, integrationType, isEcommerce]);
+    const allCampaigns = Object.values(map).sort((a: any, b: any) => b.spend - a.spend);
+    // Classify each campaign
+    const ecommerceCampaigns = allCampaigns.filter((c: any) => c.purchases > 0 || c.revenue > 0 || c.addToCart > 0);
+    const leadCampaigns = allCampaigns.filter((c: any) => c.leads > 0 && c.purchases === 0 && c.revenue === 0 && c.addToCart === 0);
+    // If no clear separation, show all as-is
+    if (ecommerceCampaigns.length === 0 && leadCampaigns.length === 0) {
+      return { ecommerce: [], leads: allCampaigns, all: allCampaigns };
+    }
+    return { ecommerce: ecommerceCampaigns, leads: leadCampaigns, all: allCampaigns };
+  }, [filteredRecords, integrationType]);
 
   // Generic table columns from fields or data keys
   const genericColumns = useMemo(() => {
@@ -307,7 +310,7 @@ export default function SharedTable() {
               </Card>
             )}
 
-            {isEcommerce || isAnalyticsPlatform(integrationType!) ? (
+            {summary.hasEcommerce || isAnalyticsPlatform(integrationType!) ? (
               <>
                 <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
                   <CardContent className="p-6">
@@ -333,6 +336,22 @@ export default function SharedTable() {
                       </div>
                     </CardContent>
                   </Card>
+                )}
+                {summary.hasLeads && (
+                  <>
+                    <Card className="bg-gradient-to-br from-cyan-50 to-cyan-100 dark:from-cyan-950 dark:to-cyan-900">
+                      <CardContent className="p-6">
+                        <p className="text-sm text-muted-foreground">לידים</p>
+                        <p className="text-3xl font-bold mt-2">{formatNumber(summary.leads)}</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-gradient-to-br from-teal-50 to-teal-100 dark:from-teal-950 dark:to-teal-900">
+                      <CardContent className="p-6">
+                        <p className="text-sm text-muted-foreground">עלות לליד (CPL)</p>
+                        <p className="text-3xl font-bold mt-2">{formatCurrency(summary.cpl)}</p>
+                      </CardContent>
+                    </Card>
+                  </>
                 )}
               </>
             ) : (
@@ -360,11 +379,11 @@ export default function SharedTable() {
           </div>
         )}
 
-        {/* Campaign Breakdown for Ads platforms */}
-        {isAdsPlatform(integrationType || '') && campaignSummary.length > 0 && (
+        {/* Campaign Breakdown for Ads platforms - Ecommerce */}
+        {isAdsPlatform(integrationType || '') && campaignSummary.ecommerce?.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle>פירוט לפי קמפיין</CardTitle>
+              <CardTitle>קמפייני איקומרס</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
@@ -375,24 +394,77 @@ export default function SharedTable() {
                       <TableHead className="text-right">הוצאה</TableHead>
                       <TableHead className="text-right">חשיפות</TableHead>
                       <TableHead className="text-right">קליקים</TableHead>
-                      {isEcommerce ? (
-                        <>
-                          <TableHead className="text-right">הוספות לסל</TableHead>
-                          <TableHead className="text-right">רכישות</TableHead>
-                          <TableHead className="text-right">הכנסות</TableHead>
-                          <TableHead className="text-right">ROAS</TableHead>
-                        </>
-                      ) : (
-                        <>
-                          <TableHead className="text-right">לידים</TableHead>
-                          <TableHead className="text-right">עלות לליד</TableHead>
-                        </>
-                      )}
+                      <TableHead className="text-right">הוספות לסל</TableHead>
+                      <TableHead className="text-right">רכישות</TableHead>
+                      <TableHead className="text-right">הכנסות</TableHead>
+                      <TableHead className="text-right">ROAS</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {campaignSummary.map((c: any) => {
+                    {campaignSummary.ecommerce.map((c: any) => {
                       const roas = c.spend > 0 ? c.revenue / c.spend : 0;
+                      return (
+                        <TableRow key={c.name}>
+                          <TableCell className="font-medium max-w-[200px] truncate">{c.name}</TableCell>
+                          <TableCell>{formatCurrency(c.spend)}</TableCell>
+                          <TableCell>{formatNumber(c.impressions)}</TableCell>
+                          <TableCell>{formatNumber(c.clicks)}</TableCell>
+                          <TableCell>{formatNumber(c.addToCart)}</TableCell>
+                          <TableCell>{formatNumber(c.purchases)}</TableCell>
+                          <TableCell>{formatCurrency(c.revenue)}</TableCell>
+                          <TableCell>
+                            <span className={roas >= 1 ? 'text-green-600 font-semibold' : 'text-red-600'}>
+                              {roas.toFixed(2)}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                    <TableRow className="bg-primary/10 font-bold border-t-2">
+                      <TableCell>סה"כ</TableCell>
+                      <TableCell>{formatCurrency(campaignSummary.ecommerce.reduce((s: number, c: any) => s + c.spend, 0))}</TableCell>
+                      <TableCell>{formatNumber(campaignSummary.ecommerce.reduce((s: number, c: any) => s + c.impressions, 0))}</TableCell>
+                      <TableCell>{formatNumber(campaignSummary.ecommerce.reduce((s: number, c: any) => s + c.clicks, 0))}</TableCell>
+                      <TableCell>{formatNumber(campaignSummary.ecommerce.reduce((s: number, c: any) => s + c.addToCart, 0))}</TableCell>
+                      <TableCell>{formatNumber(campaignSummary.ecommerce.reduce((s: number, c: any) => s + c.purchases, 0))}</TableCell>
+                      <TableCell>{formatCurrency(campaignSummary.ecommerce.reduce((s: number, c: any) => s + c.revenue, 0))}</TableCell>
+                      <TableCell>
+                        {(() => {
+                          const totalSpend = campaignSummary.ecommerce.reduce((s: number, c: any) => s + c.spend, 0);
+                          const totalRevenue = campaignSummary.ecommerce.reduce((s: number, c: any) => s + c.revenue, 0);
+                          const roas = totalSpend > 0 ? totalRevenue / totalSpend : 0;
+                          return <span className={roas >= 1 ? 'text-green-600' : 'text-red-600'}>{roas.toFixed(2)}</span>;
+                        })()}
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Campaign Breakdown for Ads platforms - Leads */}
+        {isAdsPlatform(integrationType || '') && campaignSummary.leads?.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>קמפייני לידים</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-right">קמפיין</TableHead>
+                      <TableHead className="text-right">הוצאה</TableHead>
+                      <TableHead className="text-right">חשיפות</TableHead>
+                      <TableHead className="text-right">קליקים</TableHead>
+                      <TableHead className="text-right">לידים</TableHead>
+                      <TableHead className="text-right">עלות לליד</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {campaignSummary.leads.map((c: any) => {
                       const cpl = c.leads > 0 ? c.spend / c.leads : 0;
                       return (
                         <TableRow key={c.name}>
@@ -400,49 +472,24 @@ export default function SharedTable() {
                           <TableCell>{formatCurrency(c.spend)}</TableCell>
                           <TableCell>{formatNumber(c.impressions)}</TableCell>
                           <TableCell>{formatNumber(c.clicks)}</TableCell>
-                          {isEcommerce ? (
-                            <>
-                              <TableCell>{formatNumber(c.addToCart)}</TableCell>
-                              <TableCell>{formatNumber(c.purchases)}</TableCell>
-                              <TableCell>{formatCurrency(c.revenue)}</TableCell>
-                              <TableCell>
-                                <span className={roas >= 1 ? 'text-green-600 font-semibold' : 'text-red-600'}>
-                                  {roas.toFixed(2)}
-                                </span>
-                              </TableCell>
-                            </>
-                          ) : (
-                            <>
-                              <TableCell>{formatNumber(c.leads)}</TableCell>
-                              <TableCell>{formatCurrency(cpl)}</TableCell>
-                            </>
-                          )}
+                          <TableCell>{formatNumber(c.leads)}</TableCell>
+                          <TableCell>{formatCurrency(cpl)}</TableCell>
                         </TableRow>
                       );
                     })}
-                    {/* Totals row */}
-                    <TableRow className="bg-muted/50 font-bold border-t-2">
+                    <TableRow className="bg-primary/10 font-bold border-t-2">
                       <TableCell>סה"כ</TableCell>
-                      <TableCell>{formatCurrency(summary?.spend || 0)}</TableCell>
-                      <TableCell>{formatNumber(summary?.impressions || 0)}</TableCell>
-                      <TableCell>{formatNumber(summary?.clicks || 0)}</TableCell>
-                      {isEcommerce ? (
-                        <>
-                          <TableCell>{formatNumber(summary?.addToCart || 0)}</TableCell>
-                          <TableCell>{formatNumber(summary?.purchases || 0)}</TableCell>
-                          <TableCell>{formatCurrency(summary?.revenue || 0)}</TableCell>
-                          <TableCell>
-                            <span className={(summary?.roas || 0) >= 1 ? 'text-green-600' : 'text-red-600'}>
-                              {(summary?.roas || 0).toFixed(2)}
-                            </span>
-                          </TableCell>
-                        </>
-                      ) : (
-                        <>
-                          <TableCell>{formatNumber(summary?.leads || 0)}</TableCell>
-                          <TableCell>{formatCurrency(summary?.cpl || 0)}</TableCell>
-                        </>
-                      )}
+                      <TableCell>{formatCurrency(campaignSummary.leads.reduce((s: number, c: any) => s + c.spend, 0))}</TableCell>
+                      <TableCell>{formatNumber(campaignSummary.leads.reduce((s: number, c: any) => s + c.impressions, 0))}</TableCell>
+                      <TableCell>{formatNumber(campaignSummary.leads.reduce((s: number, c: any) => s + c.clicks, 0))}</TableCell>
+                      <TableCell>{formatNumber(campaignSummary.leads.reduce((s: number, c: any) => s + c.leads, 0))}</TableCell>
+                      <TableCell>
+                        {(() => {
+                          const totalSpend = campaignSummary.leads.reduce((s: number, c: any) => s + c.spend, 0);
+                          const totalLeads = campaignSummary.leads.reduce((s: number, c: any) => s + c.leads, 0);
+                          return formatCurrency(totalLeads > 0 ? totalSpend / totalLeads : 0);
+                        })()}
+                      </TableCell>
                     </TableRow>
                   </TableBody>
                 </Table>

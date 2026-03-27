@@ -46,11 +46,11 @@ type CampaignType = 'leads' | 'ecommerce';
 type PlatformFilter = 'all' | 'facebook' | 'google_ads' | 'google_analytics';
 
 const getCampaignType = (integrationType?: string | null, integrationSettings?: any): CampaignType => {
-  if (integrationType === 'facebook_insights') return 'leads';
   if (integrationType === 'facebook_ecommerce') return 'ecommerce';
   if (integrationType === 'google_ads') {
     return integrationSettings?.campaign_type === 'ecommerce' ? 'ecommerce' : 'leads';
   }
+  // For facebook_insights, don't assume — will be determined dynamically from data
   return 'leads';
 };
 
@@ -248,16 +248,32 @@ export default function DashboardView() {
     });
   }, [allRecords, platformFilter]);
 
-  // Determine campaign type per platform
+  // Determine campaign type per platform - dynamically from actual record data
   const campaignTypeByPlatform: Record<string, CampaignType> = useMemo(() => {
     const map: Record<string, CampaignType> = {};
+    // First set defaults from table settings
     tables.forEach((t: any) => {
       const key = t?.integration_type || 'unknown';
       const ct = getCampaignType(t?.integration_type, t?.integration_settings);
-      map[key] = map[key] === 'ecommerce' || ct === 'ecommerce' ? 'ecommerce' : 'leads';
+      if (ct === 'ecommerce') map[key] = 'ecommerce';
+    });
+    // Then override by scanning actual data for ecommerce signals
+    allRecords.forEach((record: any) => {
+      const source = record._source || 'unknown';
+      if (map[source] === 'ecommerce') return; // already detected
+      const d = record.data || {};
+      if (Number(d.purchases) > 0 || Number(d.purchase_value) > 0 || Number(d.add_to_cart) > 0 ||
+          String(d.campaign_type || '').toLowerCase() === 'ecommerce') {
+        map[source] = 'ecommerce';
+      }
+    });
+    // Default remaining to leads
+    tables.forEach((t: any) => {
+      const key = t?.integration_type || 'unknown';
+      if (!map[key]) map[key] = 'leads';
     });
     return map;
-  }, [tables]);
+  }, [tables, allRecords]);
 
   const dashboardCampaignType: CampaignType = useMemo(() => {
     const types = Object.values(campaignTypeByPlatform);
