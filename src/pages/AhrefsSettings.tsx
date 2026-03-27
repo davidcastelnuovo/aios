@@ -5,11 +5,32 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Check, X, Loader2, Link2, ExternalLink, TrendingUp, Search, Link as LinkIcon, BarChart3 } from "lucide-react";
+import { Check, X, Loader2, Link2, ExternalLink, TrendingUp, Search, Link as LinkIcon, BarChart3, Copy, Webhook, FileText, Calendar, Globe } from "lucide-react";
+import { useAhrefsReports, AhrefsReport } from "@/hooks/useAhrefsReports";
+import { format } from "date-fns";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+
+const WEBHOOK_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ahrefs-webhook`;
+
+const REPORT_TYPE_LABELS: Record<string, string> = {
+  organic_keywords: "מילות מפתח אורגניות",
+  backlinks: "בקלינקים",
+  referring_domains: "דומיינים מפנים",
+  site_explorer: "Site Explorer",
+  domain_rating: "דירוג דומיין",
+  keywords_explorer: "Keywords Explorer",
+  content_explorer: "Content Explorer",
+  rank_tracker: "מעקב דירוגים",
+};
 
 export default function AhrefsSettings() {
   const queryClient = useQueryClient();
   const [isConnecting, setIsConnecting] = useState(false);
+  const [filterReportType, setFilterReportType] = useState<string>("all");
+  const [selectedReport, setSelectedReport] = useState<AhrefsReport | null>(null);
 
   const { data: connectionStatus, isLoading } = useQuery({
     queryKey: ['ahrefs-status'],
@@ -56,7 +77,7 @@ export default function AhrefsSettings() {
 
       return response.json();
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       toast.success('התחברת בהצלחה ל-Ahrefs');
       queryClient.invalidateQueries({ queryKey: ['ahrefs-status'] });
     },
@@ -93,12 +114,23 @@ export default function AhrefsSettings() {
     },
   });
 
+  const { data: reports = [], isLoading: reportsLoading } = useAhrefsReports({
+    reportType: filterReportType !== "all" ? filterReportType : undefined,
+  });
+
+  const copyWebhookUrl = () => {
+    navigator.clipboard.writeText(WEBHOOK_URL);
+    toast.success("כתובת ה-Webhook הועתקה");
+  };
+
   const features = [
     { icon: TrendingUp, title: 'Rank Tracker', description: 'מעקב דירוגים יומי למילות מפתח ספציפיות' },
     { icon: Search, title: 'Site Explorer', description: 'ניתוח תנועה אורגנית ובקלינקים' },
     { icon: BarChart3, title: 'Keywords Explorer', description: 'נפח חיפוש, קושי ורעיונות למילות מפתח' },
     { icon: LinkIcon, title: 'Backlinks', description: 'ניתוח קישורים נכנסים ודומיינים מפנים' },
   ];
+
+  const reportTypes = [...new Set(reports.map((r) => r.report_type))];
 
   return (
     <div className="container mx-auto py-6 space-y-6">
@@ -194,6 +226,49 @@ export default function AhrefsSettings() {
         </CardContent>
       </Card>
 
+      {/* Webhook URL Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Webhook className="h-5 w-5" />
+            Webhook לקליטת דוחות
+          </CardTitle>
+          <CardDescription>
+            שלח נתוני SEO מ-Ahrefs או כל מערכת חיצונית ישירות למערכת דרך Webhook
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center gap-2">
+            <code className="flex-1 bg-muted px-3 py-2 rounded text-sm font-mono break-all" dir="ltr">
+              {WEBHOOK_URL}
+            </code>
+            <Button variant="outline" size="icon" onClick={copyWebhookUrl}>
+              <Copy className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="bg-muted/50 p-4 rounded-lg space-y-2 text-sm">
+            <h4 className="font-medium">איך להשתמש:</h4>
+            <p>שלח בקשת POST עם הכותרת <code className="bg-muted px-1 rounded" dir="ltr">x-api-key</code> ו-body בפורמט JSON:</p>
+            <pre className="bg-background p-3 rounded text-xs overflow-x-auto" dir="ltr">{`{
+  "tenant_id": "your-tenant-id",
+  "domain": "example.com",
+  "report_type": "organic_keywords",
+  "report_data": { ... },
+  "client_id": "optional-client-id",
+  "agency_id": "optional-agency-id",
+  "report_date": "2026-03-27",
+  "metadata": { "source": "ahrefs" }
+}`}</pre>
+            <p className="text-muted-foreground">
+              סוגי דוחות נתמכים: organic_keywords, backlinks, referring_domains, site_explorer, domain_rating, keywords_explorer, content_explorer, rank_tracker
+            </p>
+            <p className="text-muted-foreground">
+              ניתן לשלוח מערך של דוחות בבת אחת (batch).
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {features.map((feature) => (
           <Card key={feature.title}>
@@ -212,6 +287,92 @@ export default function AhrefsSettings() {
         ))}
       </div>
 
+      {/* Received Reports Section */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                דוחות שהתקבלו
+              </CardTitle>
+              <CardDescription>
+                {reports.length} דוחות נקלטו דרך Webhook
+              </CardDescription>
+            </div>
+            <Select value={filterReportType} onValueChange={setFilterReportType}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="סוג דוח" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">הכל</SelectItem>
+                {Object.entries(REPORT_TYPE_LABELS).map(([key, label]) => (
+                  <SelectItem key={key} value={key}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {reportsLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin" />
+            </div>
+          ) : reports.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Webhook className="h-10 w-10 mx-auto mb-2 opacity-50" />
+              <p>עדיין לא התקבלו דוחות</p>
+              <p className="text-sm">שלח נתונים לכתובת ה-Webhook למעלה</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>דומיין</TableHead>
+                  <TableHead>סוג דוח</TableHead>
+                  <TableHead>תאריך דוח</TableHead>
+                  <TableHead>התקבל</TableHead>
+                  <TableHead></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {reports.map((report) => (
+                  <TableRow key={report.id}>
+                    <TableCell className="font-medium flex items-center gap-1">
+                      <Globe className="h-3 w-3 text-muted-foreground" />
+                      {report.domain}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">
+                        {REPORT_TYPE_LABELS[report.report_type] || report.report_type}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {report.report_date ? (
+                        <span className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3 text-muted-foreground" />
+                          {format(new Date(report.report_date), "dd/MM/yyyy")}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-sm">
+                      {format(new Date(report.received_at), "dd/MM/yyyy HH:mm")}
+                    </TableCell>
+                    <TableCell>
+                      <Button variant="ghost" size="sm" onClick={() => setSelectedReport(report)}>
+                        צפה
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>איך להשתמש</CardTitle>
@@ -222,8 +383,26 @@ export default function AhrefsSettings() {
           <p>3. בחר "Ahrefs" כמקור נתונים</p>
           <p>4. הזן את הדומיין לניתוח ובחר את סוג הדוח</p>
           <p>5. לחץ על "סנכרן" לשליפת הנתונים</p>
+          <p>6. <strong>חדש!</strong> שלח דוחות דרך Webhook לקליטה אוטומטית</p>
         </CardContent>
       </Card>
+
+      {/* Report Detail Dialog */}
+      <Dialog open={!!selectedReport} onOpenChange={(open) => !open && setSelectedReport(null)}>
+        <DialogContent className="max-w-3xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              {selectedReport?.domain} — {selectedReport && (REPORT_TYPE_LABELS[selectedReport.report_type] || selectedReport.report_type)}
+            </DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="max-h-[60vh]">
+            <pre className="bg-muted p-4 rounded text-xs overflow-x-auto whitespace-pre-wrap" dir="ltr">
+              {selectedReport && JSON.stringify(selectedReport.report_data, null, 2)}
+            </pre>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
