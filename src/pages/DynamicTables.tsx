@@ -741,6 +741,7 @@ export default function DynamicTables() {
       <GoogleSearchConsoleTableDialog
         open={showGSCDialog}
         onOpenChange={setShowGSCDialog}
+        assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
       />
 
       {/* Edit Dialog */}
