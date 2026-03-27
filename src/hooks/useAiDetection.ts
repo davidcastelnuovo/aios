@@ -334,7 +334,6 @@ export function useAiDetectionProject(projectId: string | null) {
     addPrompt,
     deletePrompt,
     runScan,
-    generatePrompts,
     getPromptResults,
     getCompetitorScores,
   };
