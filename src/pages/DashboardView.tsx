@@ -249,7 +249,14 @@ export default function DashboardView() {
     });
   }, [allRecords, platformFilter]);
 
-  // Determine campaign type per platform - dynamically from actual record data
+  // All analytics records (unfiltered by report_type) for GoogleAnalyticsDashboard component
+  const allAnalyticsRecords = useMemo(() => {
+    return allRecords
+      .filter((r: any) => isAnalyticsPlatform(r._source || ''))
+      .map((r: any) => ({ id: r.id, data: r.data }));
+  }, [allRecords]);
+
+
   const campaignTypeByPlatform: Record<string, CampaignType> = useMemo(() => {
     const map: Record<string, CampaignType> = {};
     // First set defaults from table settings
