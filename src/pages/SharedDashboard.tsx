@@ -108,9 +108,13 @@ export default function SharedDashboard() {
     queryKey: ['shared-dashboard', shareToken, dateFilter],
     queryFn: async () => {
       const params = new URLSearchParams({ token: shareToken!, date_filter: dateFilter });
-      const response = await supabase.functions.invoke(`public-dashboard?${params.toString()}`, { method: 'GET' });
-      if (response.error) throw response.error;
-      return response.data;
+      const baseUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/public-dashboard`;
+      const res = await fetch(`${baseUrl}?${params.toString()}`, {
+        method: 'GET',
+        headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
     },
     enabled: !!shareToken,
     retry: false,
