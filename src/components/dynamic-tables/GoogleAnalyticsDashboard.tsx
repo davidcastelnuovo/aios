@@ -922,7 +922,7 @@ export function GoogleAnalyticsDashboard({
                       <td className="py-2 px-3 font-mono text-xs max-w-[300px] truncate">{page.path}</td>
                       <td className="text-center py-2 px-3">{formatNumber(page.pageviews)}</td>
                       <td className="text-center py-2 px-3">{formatNumber(page.sessions)}</td>
-                      <td className="text-center py-2 px-3">{page.avgDuration}s</td>
+                      <td className="text-center py-2 px-3">{Number(page.avgDuration).toFixed(1)}s</td>
                     </tr>
                   ))}
                 </tbody>
