@@ -483,14 +483,17 @@ export default function DashboardView() {
       }));
   }, [filteredRecords]);
 
-  // Campaign breakdown for platform-specific tabs (Facebook, Google Ads)
+  // Campaign breakdown for "All" tab summary
   const campaignBreakdown = useMemo(() => {
-    if (platformFilter === 'all' || platformFilter === 'google_analytics') return [];
+    if (platformFilter !== 'all') return [];
     
     const campaigns: Record<string, { campaign: string; spend: number; impressions: number; clicks: number; leads: number; revenue: number; purchases: number }> = {};
     
-    filteredRecords.forEach((record: any) => {
+    allRecords.forEach((record: any) => {
+      const source = record._source || 'unknown';
+      if (!isAdsPlatform(source)) return;
       const data = record.data || {};
+      if (data.report_type && data.report_type !== 'daily') return;
       const campaignName = data.campaign_name || data.campaign || 'ללא שם קמפיין';
       
       if (!campaigns[campaignName]) {
@@ -506,7 +509,7 @@ export default function DashboardView() {
     });
     
     return Object.values(campaigns).sort((a, b) => b.spend - a.spend);
-  }, [filteredRecords, platformFilter]);
+  }, [allRecords, platformFilter]);
 
   const campaignTotals = useMemo(() => {
     return campaignBreakdown.reduce((acc, c) => ({
@@ -518,6 +521,38 @@ export default function DashboardView() {
       purchases: acc.purchases + c.purchases,
     }), { spend: 0, impressions: 0, clicks: 0, leads: 0, revenue: 0, purchases: 0 });
   }, [campaignBreakdown]);
+
+  // Get raw records and fields for platform-specific tabs
+  const platformRawData = useMemo(() => {
+    if (platformFilter === 'all') return { records: [], fields: [], tableIds: [] };
+    
+    // Find matching tables
+    const matchingTables = tables.filter((t: any) => {
+      if (platformFilter === 'facebook') return isFacebookPlatform(t.integration_type);
+      if (platformFilter === 'google_ads') return t.integration_type === 'google_ads';
+      if (platformFilter === 'google_analytics') return t.integration_type === 'google_analytics';
+      return false;
+    });
+    
+    const tableIds = matchingTables.map((t: any) => t.id);
+    
+    // Combine fields from matching tables (dedup by key)
+    const fieldsMap = new Map<string, any>();
+    matchingTables.forEach((t: any) => {
+      const fields = tableFields[t.id] || [];
+      fields.forEach((f: any) => {
+        if (!fieldsMap.has(f.key)) {
+          fieldsMap.set(f.key, f);
+        }
+      });
+    });
+    const fields = Array.from(fieldsMap.values()).sort((a: any, b: any) => a.position - b.position);
+    
+    // Get matching records
+    const records = allRecords.filter((r: any) => tableIds.includes(r._tableId));
+    
+    return { records, fields, tableIds };
+  }, [platformFilter, tables, tableFields, allRecords]);
 
   // Group records by date for table
   const recordsByDate = useMemo(() => {
