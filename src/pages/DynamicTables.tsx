@@ -83,6 +83,7 @@ export default function DynamicTables() {
   const queryClient = useQueryClient();
   const { selectedAgency } = useAgency();
   const { tenantId } = useCurrentTenant();
+  const { isCampaigner, isOwner, isTeamManager, isSuperAdmin, campaignerId } = useUserRole();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showFacebookDialog, setShowFacebookDialog] = useState(false);
   const [showFacebookEcommerceDialog, setShowFacebookEcommerceDialog] = useState(false);
@@ -99,6 +100,23 @@ export default function DynamicTables() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showCreateDashboardDialog, setShowCreateDashboardDialog] = useState(false);
   const [mainTab, setMainTab] = useState<string>("tables");
+
+  // For campaigners: fetch their assigned client IDs
+  const { data: assignedClientIds } = useQuery({
+    queryKey: ['campaigner-client-ids', campaignerId],
+    queryFn: async () => {
+      if (!campaignerId) return [];
+      const { data, error } = await supabase
+        .from('client_team')
+        .select('client_id')
+        .eq('campaigner_id', campaignerId);
+      if (error) throw error;
+      return data?.map(ct => ct.client_id) || [];
+    },
+    enabled: !!campaignerId && isCampaigner,
+  });
+
+  const canManageTables = isOwner || isTeamManager || isSuperAdmin;
 
   // Fetch agencies and clients for displaying names
   const { data: agencies = [] } = useQuery({
