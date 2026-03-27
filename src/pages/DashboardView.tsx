@@ -1199,9 +1199,11 @@ export default function DashboardView() {
                         </TableBody>
                       </Table>
                     </div>
+                    <p className="text-xs text-muted-foreground mt-3 px-1">
+                      * נתוני רכישות וערך רכישות של פייסבוק מבוססים על דיווח פייסבוק (כולל ייחוס צפייה וחלון 7 ימים), ועשויים להיות גבוהים מנתוני Analytics בשל ספירה כפולה בין קמפיינים. ה-ROAS הכללי בשורת הסה"כ מחושב לפי הכנסות Analytics בלבד.
+                    </p>
                   </CardContent>
                 </Card>
-              )}
 
               {/* Analytics Source Breakdown */}
               {analyticsSourceBreakdown.length > 0 && platformFilter === 'all' && (
