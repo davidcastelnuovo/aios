@@ -2,10 +2,8 @@ import { useState, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Select,
@@ -14,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Lock, FileSpreadsheet, Facebook, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { FileSpreadsheet, Facebook, TrendingUp, TrendingDown, Minus } from "lucide-react";
 
 const DATE_FILTERS = [
   { value: 'today', label: 'היום' },
