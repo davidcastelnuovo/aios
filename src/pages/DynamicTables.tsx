@@ -717,6 +717,7 @@ export default function DynamicTables() {
       <SimpleTableDialog
         open={showCreateDialog}
         onOpenChange={setShowCreateDialog}
+        assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
       />
 
       <FacebookTableDialog
