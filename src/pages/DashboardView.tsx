@@ -875,14 +875,148 @@ export default function DashboardView() {
               </div>
               )}
 
-              {/* Raw Table Data - show on platform-specific tabs (Facebook, Google Ads, Analytics) */}
-              {platformFilter !== 'all' && platformRawData.fields.length > 0 && (
+              {/* Facebook Campaign Summary Table */}
+              {platformFilter === 'facebook' && facebookCampaignSummary.length > 0 && (() => {
+                const totals = facebookCampaignSummary.reduce((acc, c) => ({
+                  impressions: acc.impressions + c.impressions,
+                  clicks: acc.clicks + c.clicks,
+                  spend: acc.spend + c.spend,
+                  addToCart: acc.addToCart + c.addToCart,
+                  purchases: acc.purchases + c.purchases,
+                  revenue: acc.revenue + c.revenue,
+                }), { impressions: 0, clicks: 0, spend: 0, addToCart: 0, purchases: 0, revenue: 0 });
+                const totalRoas = totals.spend > 0 ? totals.revenue / totals.spend : 0;
+                const isEcom = totals.purchases > 0 || totals.revenue > 0 || totals.addToCart > 0;
+
+                return (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Facebook className="h-5 w-5 text-blue-600" />
+                        סיכום קמפיינים - Facebook
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="text-right">קמפיין</TableHead>
+                              <TableHead className="text-right">חשיפות</TableHead>
+                              <TableHead className="text-right">קליקים</TableHead>
+                              <TableHead className="text-right">הוצאה</TableHead>
+                              {isEcom && (
+                                <>
+                                  <TableHead className="text-right">הוספות לעגלה</TableHead>
+                                  <TableHead className="text-right">רכישות</TableHead>
+                                  <TableHead className="text-right">ערך רכישות</TableHead>
+                                  <TableHead className="text-right">ROAS</TableHead>
+                                </>
+                              )}
+                              {!isEcom && (
+                                <>
+                                  <TableHead className="text-right">לידים</TableHead>
+                                  <TableHead className="text-right">עלות לליד</TableHead>
+                                </>
+                              )}
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {facebookCampaignSummary.map((c, i) => {
+                              const roas = c.spend > 0 ? c.revenue / c.spend : 0;
+                              const leads = getLeadsFromData(allRecords
+                                .filter((r: any) => isFacebookPlatform(r._source || '') && (r.data?.campaign_name === c.name || r.data?.campaign === c.name))
+                                .reduce((acc: any, r: any) => {
+                                  const d = r.data || {};
+                                  return {
+                                    leads: (acc.leads || 0) + (Number(d.leads) || 0),
+                                    conversions: (acc.conversions || 0) + (Number(d.conversions) || 0),
+                                    website_leads: (acc.website_leads || 0) + (Number(d.website_leads) || 0),
+                                    offsite_conversion: (acc.offsite_conversion || 0) + (Number(d.offsite_conversion) || 0),
+                                    offsite_conversion_fb_pixel_lead: (acc.offsite_conversion_fb_pixel_lead || 0) + (Number(d.offsite_conversion_fb_pixel_lead) || 0),
+                                    leadgen_grouped: (acc.leadgen_grouped || 0) + (Number(d.leadgen_grouped) || 0),
+                                    lead: (acc.lead || 0) + (Number(d.lead) || 0),
+                                  };
+                                }, {}));
+                              const cpl = leads > 0 ? c.spend / leads : 0;
+
+                              return (
+                                <TableRow key={i}>
+                                  <TableCell className="font-medium max-w-[300px]">{c.name}</TableCell>
+                                  <TableCell>{formatNumber(c.impressions)}</TableCell>
+                                  <TableCell>{formatNumber(c.clicks)}</TableCell>
+                                  <TableCell>{formatCurrency(c.spend)}</TableCell>
+                                  {isEcom && (
+                                    <>
+                                      <TableCell className={c.addToCart > 0 ? 'text-orange-600 font-medium' : ''}>{formatNumber(c.addToCart)}</TableCell>
+                                      <TableCell className={c.purchases > 0 ? 'text-green-600 font-medium' : ''}>{formatNumber(c.purchases)}</TableCell>
+                                      <TableCell className={c.revenue > 0 ? 'text-green-600 font-medium' : ''}>{formatCurrency(c.revenue)}</TableCell>
+                                      <TableCell>
+                                        <span className={roas >= 1 ? 'text-green-600 font-semibold' : roas > 0 ? 'text-red-600' : ''}>
+                                          {roas > 0 ? roas.toFixed(2) + 'x' : '0x'}
+                                        </span>
+                                      </TableCell>
+                                    </>
+                                  )}
+                                  {!isEcom && (
+                                    <>
+                                      <TableCell className={leads > 0 ? 'text-green-600 font-medium' : ''}>{formatNumber(leads)}</TableCell>
+                                      <TableCell>{cpl > 0 ? formatCurrency(cpl) : '-'}</TableCell>
+                                    </>
+                                  )}
+                                </TableRow>
+                              );
+                            })}
+                            {/* Totals row */}
+                            <TableRow className="bg-muted/50 font-bold border-t-2">
+                              <TableCell>סה"כ</TableCell>
+                              <TableCell>{formatNumber(totals.impressions)}</TableCell>
+                              <TableCell>{formatNumber(totals.clicks)}</TableCell>
+                              <TableCell>{formatCurrency(totals.spend)}</TableCell>
+                              {isEcom && (
+                                <>
+                                  <TableCell className="text-orange-600">{formatNumber(totals.addToCart)}</TableCell>
+                                  <TableCell className="text-green-600">{formatNumber(totals.purchases)}</TableCell>
+                                  <TableCell className="text-green-600">{formatCurrency(totals.revenue)}</TableCell>
+                                  <TableCell>
+                                    <span className={totalRoas >= 1 ? 'text-green-600 font-semibold' : 'text-red-600'}>
+                                      {totalRoas.toFixed(2)}x
+                                    </span>
+                                  </TableCell>
+                                </>
+                              )}
+                              {!isEcom && (() => {
+                                const totalLeads = facebookCampaignSummary.reduce((sum, c) => {
+                                  return sum + getLeadsFromData(allRecords
+                                    .filter((r: any) => isFacebookPlatform(r._source || '') && (r.data?.campaign_name === c.name || r.data?.campaign === c.name))
+                                    .reduce((acc: any, r: any) => {
+                                      const d = r.data || {};
+                                      return { leads: (acc.leads || 0) + (Number(d.leads) || 0), conversions: (acc.conversions || 0) + (Number(d.conversions) || 0), website_leads: (acc.website_leads || 0) + (Number(d.website_leads) || 0), offsite_conversion: (acc.offsite_conversion || 0) + (Number(d.offsite_conversion) || 0), offsite_conversion_fb_pixel_lead: (acc.offsite_conversion_fb_pixel_lead || 0) + (Number(d.offsite_conversion_fb_pixel_lead) || 0), leadgen_grouped: (acc.leadgen_grouped || 0) + (Number(d.leadgen_grouped) || 0), lead: (acc.lead || 0) + (Number(d.lead) || 0) };
+                                    }, {}));
+                                }, 0);
+                                const totalCpl = totalLeads > 0 ? totals.spend / totalLeads : 0;
+                                return (
+                                  <>
+                                    <TableCell className="text-green-600">{formatNumber(totalLeads)}</TableCell>
+                                    <TableCell>{totalCpl > 0 ? formatCurrency(totalCpl) : '-'}</TableCell>
+                                  </>
+                                );
+                              })()}
+                            </TableRow>
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })()}
+
+              {/* Raw Table Data - show on platform-specific tabs (Google Ads, Analytics) */}
+              {platformFilter !== 'all' && platformFilter !== 'facebook' && platformRawData.fields.length > 0 && (
                 <Card>
                   <CardHeader>
                     <CardTitle>
-                      {platformFilter === 'facebook' ? 'נתוני Facebook' : 
-                       platformFilter === 'google_ads' ? 'נתוני Google Ads' : 
-                       'נתוני Analytics'}
+                      {platformFilter === 'google_ads' ? 'נתוני Google Ads' : 'נתוני Analytics'}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -912,7 +1046,6 @@ export default function DashboardView() {
                                   if (val === null || val === undefined) {
                                     displayVal = '-';
                                   } else if (typeof val === 'number') {
-                                    // Format currency-like fields
                                     if (['spend', 'cost', 'revenue', 'purchase_value', 'conversions_value', 'conversion_value', 'cpl', 'cost_per_lead', 'cpc', 'cpm'].includes(field.key)) {
                                       displayVal = formatCurrency(val);
                                     } else if (['roas', 'engagement_rate', 'ctr'].includes(field.key)) {
