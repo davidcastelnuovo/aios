@@ -206,7 +206,7 @@ export default function SharedDashboard() {
         platforms[source].spend += getSpendFromData(d);
         platforms[source].impressions += Number(d.impressions) || 0;
         platforms[source].clicks += Number(d.clicks) || 0;
-        const ct = campaignTypeByPlatform[source] || 'leads';
+        const ct = campaignTypeByPlatform[rawSource] || campaignTypeByPlatform[source] || 'leads';
         if (ct === 'ecommerce') {
           platforms[source].results += getPurchasesFromData(d);
           platforms[source].revenue += getRevenueFromData(d);
