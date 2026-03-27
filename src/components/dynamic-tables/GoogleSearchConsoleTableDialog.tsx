@@ -13,6 +13,7 @@ import { Loader2, Search, ExternalLink } from "lucide-react";
 interface GoogleSearchConsoleTableDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  assignedClientIds?: string[];
 }
 
 interface GSCSite {
@@ -20,7 +21,7 @@ interface GSCSite {
   permissionLevel: string;
 }
 
-export function GoogleSearchConsoleTableDialog({ open, onOpenChange }: GoogleSearchConsoleTableDialogProps) {
+export function GoogleSearchConsoleTableDialog({ open, onOpenChange, assignedClientIds }: GoogleSearchConsoleTableDialogProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { currentTenant, currentTenantId: activeTenantId } = useTenant();
@@ -86,7 +87,7 @@ export function GoogleSearchConsoleTableDialog({ open, onOpenChange }: GoogleSea
   });
 
   // Fetch clients based on selected agency
-  const { data: clients } = useQuery({
+  const { data: rawClients } = useQuery({
     queryKey: ['clients-for-table', selectedAgency],
     queryFn: async () => {
       if (!selectedAgency) return [];
@@ -99,6 +100,10 @@ export function GoogleSearchConsoleTableDialog({ open, onOpenChange }: GoogleSea
     },
     enabled: !!selectedAgency,
   });
+
+  const clients = assignedClientIds
+    ? (rawClients || []).filter(c => assignedClientIds.includes(c.id))
+    : rawClients;
 
   const handleCreate = async () => {
     if (!tableName.trim() || !selectedSite || !integration) {

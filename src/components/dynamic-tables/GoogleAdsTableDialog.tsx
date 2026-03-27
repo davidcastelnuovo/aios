@@ -30,6 +30,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 interface GoogleAdsTableDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  assignedClientIds?: string[];
 }
 
 interface GoogleAdsAccount {
@@ -64,7 +65,7 @@ const MakeIcon = ({ className = "h-4 w-4" }: { className?: string }) => (
   </svg>
 );
 
-export function GoogleAdsTableDialog({ open, onOpenChange }: GoogleAdsTableDialogProps) {
+export function GoogleAdsTableDialog({ open, onOpenChange, assignedClientIds }: GoogleAdsTableDialogProps) {
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
   const queryClient = useQueryClient();
@@ -99,7 +100,7 @@ export function GoogleAdsTableDialog({ open, onOpenChange }: GoogleAdsTableDialo
   });
 
   // Fetch clients based on selected agency
-  const { data: clients = [] } = useQuery({
+  const { data: rawClients = [] } = useQuery({
     queryKey: ['clients-for-table', agencyId],
     queryFn: async () => {
       if (!agencyId) return [];
@@ -113,6 +114,10 @@ export function GoogleAdsTableDialog({ open, onOpenChange }: GoogleAdsTableDialo
     },
     enabled: open && !!agencyId,
   });
+
+  const clients = assignedClientIds
+    ? rawClients.filter(c => assignedClientIds.includes(c.id))
+    : rawClients;
 
   // Fetch Make API integration
   const { data: makeApiIntegration } = useQuery({

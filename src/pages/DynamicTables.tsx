@@ -116,7 +116,7 @@ export default function DynamicTables() {
     enabled: !!campaignerId && isCampaigner,
   });
 
-  const canManageTables = isOwner || isTeamManager || isSuperAdmin;
+  const canManageTables = isOwner || isTeamManager || isSuperAdmin || isCampaigner;
 
   // Fetch agencies and clients for displaying names
   const { data: agencies = [] } = useQuery({
@@ -149,8 +149,13 @@ export default function DynamicTables() {
   // Filter clients by selected agency in edit dialog
   const editFilteredClients = useMemo(() => {
     if (!editAgencyId) return [];
-    return clients.filter(c => c.agency_id === editAgencyId);
-  }, [clients, editAgencyId]);
+    let filtered = clients.filter(c => c.agency_id === editAgencyId);
+    // Campaigners can only see their assigned clients
+    if (isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin && assignedClientIds) {
+      filtered = filtered.filter(c => assignedClientIds.includes(c.id));
+    }
+    return filtered;
+  }, [clients, editAgencyId, isCampaigner, isOwner, isTeamManager, isSuperAdmin, assignedClientIds]);
 
   const { data: tables, isLoading } = useQuery({
     queryKey: ['crm-tables', tenantId],
@@ -712,26 +717,31 @@ export default function DynamicTables() {
       <SimpleTableDialog
         open={showCreateDialog}
         onOpenChange={setShowCreateDialog}
+        assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
       />
 
       <FacebookTableDialog
         open={showFacebookDialog}
         onOpenChange={setShowFacebookDialog}
+        assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
       />
 
       <GoogleAdsTableDialog
         open={showGoogleAdsDialog}
         onOpenChange={setShowGoogleAdsDialog}
+        assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
       />
 
       <GoogleAnalyticsTableDialog
         open={showGADialog}
         onOpenChange={setShowGADialog}
+        assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
       />
 
       <GoogleSearchConsoleTableDialog
         open={showGSCDialog}
         onOpenChange={setShowGSCDialog}
+        assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
       />
 
       {/* Edit Dialog */}
@@ -897,17 +907,20 @@ export default function DynamicTables() {
 
       <AhrefsTableDialog 
         open={showAhrefsDialog} 
-        onOpenChange={setShowAhrefsDialog} 
+        onOpenChange={setShowAhrefsDialog}
+        assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
       />
 
       <FacebookEcommerceTableDialog
         open={showFacebookEcommerceDialog}
         onOpenChange={setShowFacebookEcommerceDialog}
+        assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
       />
 
       <CreateDashboardDialog
         open={showCreateDashboardDialog}
         onOpenChange={setShowCreateDashboardDialog}
+        assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
       />
     </div>
   );

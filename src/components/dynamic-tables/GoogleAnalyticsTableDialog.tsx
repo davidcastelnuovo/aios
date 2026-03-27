@@ -16,6 +16,7 @@ import { Loader2, BarChart3, ExternalLink, Search, Zap, AlertCircle, CheckCircle
 interface GoogleAnalyticsTableDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  assignedClientIds?: string[];
 }
 
 interface GAProperty {
@@ -24,7 +25,7 @@ interface GAProperty {
   accountName: string;
 }
 
-export function GoogleAnalyticsTableDialog({ open, onOpenChange }: GoogleAnalyticsTableDialogProps) {
+export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientIds }: GoogleAnalyticsTableDialogProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { currentTenant, currentTenantId: activeTenantId } = useTenant();
@@ -112,7 +113,7 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange }: GoogleAnalyti
   });
 
   // Fetch clients based on selected agency
-  const { data: clients } = useQuery({
+  const { data: rawClients } = useQuery({
     queryKey: ['clients-for-table', selectedAgency],
     queryFn: async () => {
       if (!selectedAgency) return [];
@@ -125,6 +126,10 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange }: GoogleAnalyti
     },
     enabled: !!selectedAgency,
   });
+
+  const clients = assignedClientIds
+    ? (rawClients || []).filter(c => assignedClientIds.includes(c.id))
+    : rawClients;
 
   const handleCreate = async () => {
     if (!tableName.trim()) {

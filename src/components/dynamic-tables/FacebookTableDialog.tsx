@@ -29,6 +29,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 interface FacebookTableDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  assignedClientIds?: string[];
 }
 
 interface AdAccount {
@@ -48,7 +49,7 @@ const dateRangeOptions = [
   { value: "this_month", label: "החודש הנוכחי" },
 ];
 
-export function FacebookTableDialog({ open, onOpenChange }: FacebookTableDialogProps) {
+export function FacebookTableDialog({ open, onOpenChange, assignedClientIds }: FacebookTableDialogProps) {
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
   const queryClient = useQueryClient();
@@ -79,7 +80,7 @@ export function FacebookTableDialog({ open, onOpenChange }: FacebookTableDialogP
   });
 
   // Fetch clients based on selected agency
-  const { data: clients = [] } = useQuery({
+  const { data: rawClients = [] } = useQuery({
     queryKey: ['clients-for-table', agencyId],
     queryFn: async () => {
       if (!agencyId) return [];
@@ -93,6 +94,10 @@ export function FacebookTableDialog({ open, onOpenChange }: FacebookTableDialogP
     },
     enabled: open && !!agencyId,
   });
+
+  const clients = assignedClientIds
+    ? rawClients.filter(c => assignedClientIds.includes(c.id))
+    : rawClients;
 
   // Reset client when agency changes
   useEffect(() => {

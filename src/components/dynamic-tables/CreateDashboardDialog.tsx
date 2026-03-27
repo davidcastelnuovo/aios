@@ -44,9 +44,10 @@ import { useTenantPath } from "@/hooks/useTenantPath";
 interface CreateDashboardDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  assignedClientIds?: string[];
 }
 
-export function CreateDashboardDialog({ open, onOpenChange }: CreateDashboardDialogProps) {
+export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }: CreateDashboardDialogProps) {
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
   const queryClient = useQueryClient();
@@ -89,8 +90,12 @@ export function CreateDashboardDialog({ open, onOpenChange }: CreateDashboardDia
 
   const filteredClients = useMemo(() => {
     if (!agencyId) return [];
-    return allClients.filter(c => c.agency_id === agencyId);
-  }, [allClients, agencyId]);
+    let filtered = allClients.filter(c => c.agency_id === agencyId);
+    if (assignedClientIds) {
+      filtered = filtered.filter(c => assignedClientIds.includes(c.id));
+    }
+    return filtered;
+  }, [allClients, agencyId, assignedClientIds]);
 
   // Fetch tables for selected client (preview) - only for client type
   const { data: clientTables = [] } = useQuery({
