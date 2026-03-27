@@ -621,14 +621,24 @@ export default function DynamicTables() {
               <p className="text-muted-foreground mb-4">
                 צור דשבורד כדי לראות נתונים מאוחדים מכל הפלטפורמות של לקוח
               </p>
-              <Button onClick={() => setShowCreateDashboardDialog(true)}>
-                <Plus className="ml-2 h-4 w-4" />
-                צור דשבורד ראשון
-              </Button>
+              {canManageTables && (
+                <Button onClick={() => setShowCreateDashboardDialog(true)}>
+                  <Plus className="ml-2 h-4 w-4" />
+                  צור דשבורד ראשון
+                </Button>
+              )}
             </Card>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {dashboards.map((dashboard: any) => (
+              {dashboards
+                .filter((dashboard: any) => {
+                  // Campaigners can only see dashboards linked to their assigned clients
+                  if (isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin && assignedClientIds) {
+                    return dashboard.client_id && assignedClientIds.includes(dashboard.client_id);
+                  }
+                  return true;
+                })
+                .map((dashboard: any) => (
                 <Card
                   key={dashboard.id}
                   className="cursor-pointer hover:shadow-lg transition-shadow"
@@ -640,18 +650,20 @@ export default function DynamicTables() {
                         <LayoutDashboard className="h-5 w-5" />
                         {dashboard.name}
                       </CardTitle>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (confirm('האם אתה בטוח שברצונך למחוק את הדשבורד?')) {
-                            deleteDashboardMutation.mutate(dashboard.id);
-                          }
-                        }}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
+                      {canManageTables && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm('האם אתה בטוח שברצונך למחוק את הדשבורד?')) {
+                              deleteDashboardMutation.mutate(dashboard.id);
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      )}
                     </div>
                     <div className="flex flex-wrap gap-1 mt-2">
                       {/* Dashboard Type Badge */}
