@@ -193,39 +193,6 @@ export default function SharedTable() {
     );
   }
 
-  // Email gate
-  if (needsEmail || emailNotAllowed) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center" dir="rtl">
-        <Card className="w-full max-w-md mx-4">
-          <CardHeader className="text-center">
-            <Lock className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
-            <CardTitle>טבלה מוגנת</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {emailNotAllowed && (
-              <p className="text-sm text-destructive text-center">
-                האימייל שהזנת אינו מורשה לצפות בטבלה זו.
-              </p>
-            )}
-            <p className="text-sm text-muted-foreground text-center">
-              נא להזין את כתובת האימייל שלך כדי לצפות בטבלה
-            </p>
-            <Input
-              placeholder="email@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleEmailSubmit()}
-              dir="ltr"
-            />
-            {emailError && <p className="text-sm text-destructive">{emailError}</p>}
-            <Button className="w-full" onClick={handleEmailSubmit}>כניסה</Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   // Error
   if (error || data?.error) {
     return (
