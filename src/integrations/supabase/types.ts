@@ -125,6 +125,70 @@ export type Database = {
           },
         ]
       }
+      ahrefs_reports: {
+        Row: {
+          agency_id: string | null
+          client_id: string | null
+          created_at: string
+          domain: string
+          id: string
+          metadata: Json | null
+          received_at: string
+          report_data: Json
+          report_date: string | null
+          report_type: string
+          tenant_id: string
+        }
+        Insert: {
+          agency_id?: string | null
+          client_id?: string | null
+          created_at?: string
+          domain: string
+          id?: string
+          metadata?: Json | null
+          received_at?: string
+          report_data?: Json
+          report_date?: string | null
+          report_type: string
+          tenant_id: string
+        }
+        Update: {
+          agency_id?: string | null
+          client_id?: string | null
+          created_at?: string
+          domain?: string
+          id?: string
+          metadata?: Json | null
+          received_at?: string
+          report_data?: Json
+          report_date?: string | null
+          report_type?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ahrefs_reports_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ahrefs_reports_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ahrefs_reports_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_agents: {
         Row: {
           active: boolean | null
