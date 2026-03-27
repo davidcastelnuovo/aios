@@ -65,7 +65,7 @@ const MakeIcon = ({ className = "h-4 w-4" }: { className?: string }) => (
   </svg>
 );
 
-export function GoogleAdsTableDialog({ open, onOpenChange }: GoogleAdsTableDialogProps) {
+export function GoogleAdsTableDialog({ open, onOpenChange, assignedClientIds }: GoogleAdsTableDialogProps) {
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
   const queryClient = useQueryClient();
