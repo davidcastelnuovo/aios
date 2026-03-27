@@ -287,13 +287,16 @@ export default function DashboardView() {
         platforms[source].spend += getSpendFromData(data);
         platforms[source].impressions += Number(data.impressions) || 0;
         platforms[source].clicks += Number(data.clicks) || 0;
-        // Always track leads for all platforms
-        platforms[source].leads += getLeadsFromData(data);
         if (campaignType === 'ecommerce') {
           platforms[source].results += getPurchasesFromData(data);
           platforms[source].revenue += getRevenueFromData(data);
+          // Only count explicit lead fields for ecommerce (not conversions which are purchases)
+          const explicitLeads = Number(data.leads) || Number(data.website_leads) || Number(data.leadgen_grouped) || Number(data.lead) || 0;
+          platforms[source].leads += explicitLeads;
         } else {
-          platforms[source].results += getLeadsFromData(data);
+          const leads = getLeadsFromData(data);
+          platforms[source].leads += leads;
+          platforms[source].results += leads;
         }
       }
       platforms[source].recordCount += 1;
