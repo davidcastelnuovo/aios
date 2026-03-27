@@ -1132,7 +1132,7 @@ export default function DashboardView() {
                 </Card>
               )}
 
-              {dailyChartData.length > 1 && (
+              {dailyChartData.length > 1 && platformFilter === 'all' && (
                 <div className="grid gap-4 md:grid-cols-2">
                   {/* Revenue vs Spend */}
                   {dashboardCampaignType === 'ecommerce' && (showAdsCards || showAnalyticsCards) && (
