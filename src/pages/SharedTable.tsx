@@ -379,11 +379,11 @@ export default function SharedTable() {
           </div>
         )}
 
-        {/* Campaign Breakdown for Ads platforms */}
-        {isAdsPlatform(integrationType || '') && campaignSummary.length > 0 && (
+        {/* Campaign Breakdown for Ads platforms - Ecommerce */}
+        {isAdsPlatform(integrationType || '') && campaignSummary.ecommerce?.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle>פירוט לפי קמפיין</CardTitle>
+              <CardTitle>קמפייני איקומרס</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
@@ -394,24 +394,77 @@ export default function SharedTable() {
                       <TableHead className="text-right">הוצאה</TableHead>
                       <TableHead className="text-right">חשיפות</TableHead>
                       <TableHead className="text-right">קליקים</TableHead>
-                      {isEcommerce ? (
-                        <>
-                          <TableHead className="text-right">הוספות לסל</TableHead>
-                          <TableHead className="text-right">רכישות</TableHead>
-                          <TableHead className="text-right">הכנסות</TableHead>
-                          <TableHead className="text-right">ROAS</TableHead>
-                        </>
-                      ) : (
-                        <>
-                          <TableHead className="text-right">לידים</TableHead>
-                          <TableHead className="text-right">עלות לליד</TableHead>
-                        </>
-                      )}
+                      <TableHead className="text-right">הוספות לסל</TableHead>
+                      <TableHead className="text-right">רכישות</TableHead>
+                      <TableHead className="text-right">הכנסות</TableHead>
+                      <TableHead className="text-right">ROAS</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {campaignSummary.map((c: any) => {
+                    {campaignSummary.ecommerce.map((c: any) => {
                       const roas = c.spend > 0 ? c.revenue / c.spend : 0;
+                      return (
+                        <TableRow key={c.name}>
+                          <TableCell className="font-medium max-w-[200px] truncate">{c.name}</TableCell>
+                          <TableCell>{formatCurrency(c.spend)}</TableCell>
+                          <TableCell>{formatNumber(c.impressions)}</TableCell>
+                          <TableCell>{formatNumber(c.clicks)}</TableCell>
+                          <TableCell>{formatNumber(c.addToCart)}</TableCell>
+                          <TableCell>{formatNumber(c.purchases)}</TableCell>
+                          <TableCell>{formatCurrency(c.revenue)}</TableCell>
+                          <TableCell>
+                            <span className={roas >= 1 ? 'text-green-600 font-semibold' : 'text-red-600'}>
+                              {roas.toFixed(2)}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                    <TableRow className="bg-primary/10 font-bold border-t-2">
+                      <TableCell>סה"כ</TableCell>
+                      <TableCell>{formatCurrency(campaignSummary.ecommerce.reduce((s: number, c: any) => s + c.spend, 0))}</TableCell>
+                      <TableCell>{formatNumber(campaignSummary.ecommerce.reduce((s: number, c: any) => s + c.impressions, 0))}</TableCell>
+                      <TableCell>{formatNumber(campaignSummary.ecommerce.reduce((s: number, c: any) => s + c.clicks, 0))}</TableCell>
+                      <TableCell>{formatNumber(campaignSummary.ecommerce.reduce((s: number, c: any) => s + c.addToCart, 0))}</TableCell>
+                      <TableCell>{formatNumber(campaignSummary.ecommerce.reduce((s: number, c: any) => s + c.purchases, 0))}</TableCell>
+                      <TableCell>{formatCurrency(campaignSummary.ecommerce.reduce((s: number, c: any) => s + c.revenue, 0))}</TableCell>
+                      <TableCell>
+                        {(() => {
+                          const totalSpend = campaignSummary.ecommerce.reduce((s: number, c: any) => s + c.spend, 0);
+                          const totalRevenue = campaignSummary.ecommerce.reduce((s: number, c: any) => s + c.revenue, 0);
+                          const roas = totalSpend > 0 ? totalRevenue / totalSpend : 0;
+                          return <span className={roas >= 1 ? 'text-green-600' : 'text-red-600'}>{roas.toFixed(2)}</span>;
+                        })()}
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Campaign Breakdown for Ads platforms - Leads */}
+        {isAdsPlatform(integrationType || '') && campaignSummary.leads?.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>קמפייני לידים</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-right">קמפיין</TableHead>
+                      <TableHead className="text-right">הוצאה</TableHead>
+                      <TableHead className="text-right">חשיפות</TableHead>
+                      <TableHead className="text-right">קליקים</TableHead>
+                      <TableHead className="text-right">לידים</TableHead>
+                      <TableHead className="text-right">עלות לליד</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {campaignSummary.leads.map((c: any) => {
                       const cpl = c.leads > 0 ? c.spend / c.leads : 0;
                       return (
                         <TableRow key={c.name}>
@@ -419,49 +472,24 @@ export default function SharedTable() {
                           <TableCell>{formatCurrency(c.spend)}</TableCell>
                           <TableCell>{formatNumber(c.impressions)}</TableCell>
                           <TableCell>{formatNumber(c.clicks)}</TableCell>
-                          {isEcommerce ? (
-                            <>
-                              <TableCell>{formatNumber(c.addToCart)}</TableCell>
-                              <TableCell>{formatNumber(c.purchases)}</TableCell>
-                              <TableCell>{formatCurrency(c.revenue)}</TableCell>
-                              <TableCell>
-                                <span className={roas >= 1 ? 'text-green-600 font-semibold' : 'text-red-600'}>
-                                  {roas.toFixed(2)}
-                                </span>
-                              </TableCell>
-                            </>
-                          ) : (
-                            <>
-                              <TableCell>{formatNumber(c.leads)}</TableCell>
-                              <TableCell>{formatCurrency(cpl)}</TableCell>
-                            </>
-                          )}
+                          <TableCell>{formatNumber(c.leads)}</TableCell>
+                          <TableCell>{formatCurrency(cpl)}</TableCell>
                         </TableRow>
                       );
                     })}
-                    {/* Totals row */}
-                    <TableRow className="bg-muted/50 font-bold border-t-2">
+                    <TableRow className="bg-primary/10 font-bold border-t-2">
                       <TableCell>סה"כ</TableCell>
-                      <TableCell>{formatCurrency(summary?.spend || 0)}</TableCell>
-                      <TableCell>{formatNumber(summary?.impressions || 0)}</TableCell>
-                      <TableCell>{formatNumber(summary?.clicks || 0)}</TableCell>
-                      {isEcommerce ? (
-                        <>
-                          <TableCell>{formatNumber(summary?.addToCart || 0)}</TableCell>
-                          <TableCell>{formatNumber(summary?.purchases || 0)}</TableCell>
-                          <TableCell>{formatCurrency(summary?.revenue || 0)}</TableCell>
-                          <TableCell>
-                            <span className={(summary?.roas || 0) >= 1 ? 'text-green-600' : 'text-red-600'}>
-                              {(summary?.roas || 0).toFixed(2)}
-                            </span>
-                          </TableCell>
-                        </>
-                      ) : (
-                        <>
-                          <TableCell>{formatNumber(summary?.leads || 0)}</TableCell>
-                          <TableCell>{formatCurrency(summary?.cpl || 0)}</TableCell>
-                        </>
-                      )}
+                      <TableCell>{formatCurrency(campaignSummary.leads.reduce((s: number, c: any) => s + c.spend, 0))}</TableCell>
+                      <TableCell>{formatNumber(campaignSummary.leads.reduce((s: number, c: any) => s + c.impressions, 0))}</TableCell>
+                      <TableCell>{formatNumber(campaignSummary.leads.reduce((s: number, c: any) => s + c.clicks, 0))}</TableCell>
+                      <TableCell>{formatNumber(campaignSummary.leads.reduce((s: number, c: any) => s + c.leads, 0))}</TableCell>
+                      <TableCell>
+                        {(() => {
+                          const totalSpend = campaignSummary.leads.reduce((s: number, c: any) => s + c.spend, 0);
+                          const totalLeads = campaignSummary.leads.reduce((s: number, c: any) => s + c.leads, 0);
+                          return formatCurrency(totalLeads > 0 ? totalSpend / totalLeads : 0);
+                        })()}
+                      </TableCell>
                     </TableRow>
                   </TableBody>
                 </Table>
