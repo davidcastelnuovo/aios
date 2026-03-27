@@ -33,6 +33,7 @@ import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 interface SimpleTableDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  assignedClientIds?: string[];
 }
 
 export function SimpleTableDialog({ open, onOpenChange }: SimpleTableDialogProps) {
