@@ -723,6 +723,7 @@ export default function DynamicTables() {
       <FacebookTableDialog
         open={showFacebookDialog}
         onOpenChange={setShowFacebookDialog}
+        assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
       />
 
       <GoogleAdsTableDialog
