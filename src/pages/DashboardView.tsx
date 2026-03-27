@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { AgencyDashboardContent } from "@/components/dynamic-tables/AgencyDashboardContent";
 import { ShareDashboardDialog } from "@/components/dynamic-tables/ShareDashboardDialog";
 import { useTenant } from "@/contexts/TenantContext";
+import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnalyticsDashboard";
 import {
   LineChart, Line, BarChart, Bar, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts";
