@@ -873,8 +873,8 @@ export function GoogleAnalyticsDashboard({
                     <td className="text-center py-2 px-3">{formatNumber(source.users)}</td>
                     <td className="text-center py-2 px-3">{formatNumber(source.newUsers)}</td>
                     <td className="text-center py-2 px-3">{formatNumber(source.pageviews)}</td>
-                    <td className="text-center py-2 px-3">{source.bounceRate}%</td>
-                    <td className="text-center py-2 px-3">{source.avgDuration}s</td>
+                    <td className="text-center py-2 px-3">{Number(source.bounceRate).toFixed(1)}%</td>
+                    <td className="text-center py-2 px-3">{Number(source.avgDuration).toFixed(1)}s</td>
                     <td className="text-center py-2 px-3">
                       {source.conversions > 0 && (
                         <Badge variant="secondary">{source.conversions}</Badge>
@@ -922,7 +922,7 @@ export function GoogleAnalyticsDashboard({
                       <td className="py-2 px-3 font-mono text-xs max-w-[300px] truncate">{page.path}</td>
                       <td className="text-center py-2 px-3">{formatNumber(page.pageviews)}</td>
                       <td className="text-center py-2 px-3">{formatNumber(page.sessions)}</td>
-                      <td className="text-center py-2 px-3">{page.avgDuration}s</td>
+                      <td className="text-center py-2 px-3">{Number(page.avgDuration).toFixed(1)}s</td>
                     </tr>
                   ))}
                 </tbody>
