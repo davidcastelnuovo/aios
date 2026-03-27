@@ -62,6 +62,7 @@ import {
 import { toast } from "sonner";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useUserRole } from "@/hooks/useUserRole";
 
 interface CrmTable {
   id: string;
@@ -82,6 +83,7 @@ export default function DynamicTables() {
   const queryClient = useQueryClient();
   const { selectedAgency } = useAgency();
   const { tenantId } = useCurrentTenant();
+  const { isCampaigner, isOwner, isTeamManager, isSuperAdmin, campaignerId } = useUserRole();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showFacebookDialog, setShowFacebookDialog] = useState(false);
   const [showFacebookEcommerceDialog, setShowFacebookEcommerceDialog] = useState(false);
@@ -98,6 +100,23 @@ export default function DynamicTables() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showCreateDashboardDialog, setShowCreateDashboardDialog] = useState(false);
   const [mainTab, setMainTab] = useState<string>("tables");
+
+  // For campaigners: fetch their assigned client IDs
+  const { data: assignedClientIds } = useQuery({
+    queryKey: ['campaigner-client-ids', campaignerId],
+    queryFn: async () => {
+      if (!campaignerId) return [];
+      const { data, error } = await supabase
+        .from('client_team')
+        .select('client_id')
+        .eq('campaigner_id', campaignerId);
+      if (error) throw error;
+      return data?.map(ct => ct.client_id) || [];
+    },
+    enabled: !!campaignerId && isCampaigner,
+  });
+
+  const canManageTables = isOwner || isTeamManager || isSuperAdmin;
 
   // Fetch agencies and clients for displaying names
   const { data: agencies = [] } = useQuery({
@@ -165,20 +184,28 @@ export default function DynamicTables() {
     enabled: !!tenantId,
   });
 
-  // Filter tables by selected agency
+  // Filter tables by selected agency and role
   const filteredTables = useMemo(() => {
     if (!tables) return [];
     
-    // When "all agencies" is selected, show all tables for this tenant
-    // (tenant filtering is done in the Edge Function)
-    if (!selectedAgency || selectedAgency === 'all') return tables;
+    let result = tables;
+
+    // Campaigners can only see tables linked to their assigned clients
+    if (isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin && assignedClientIds) {
+      result = result.filter(table => 
+        table.client_id && assignedClientIds.includes(table.client_id)
+      );
+    }
     
-    // Filter by selected agency - show general tables + agency-specific tables
-    return tables.filter(table => 
-      table.agency_id === null ||  // General tables always shown
-      table.agency_id === selectedAgency
-    );
-  }, [tables, selectedAgency]);
+    // Filter by selected agency
+    if (selectedAgency && selectedAgency !== 'all') {
+      result = result.filter(table => 
+        table.agency_id === null || table.agency_id === selectedAgency
+      );
+    }
+    
+    return result;
+  }, [tables, selectedAgency, isCampaigner, isOwner, isTeamManager, isSuperAdmin, assignedClientIds]);
 
   // Delete dashboard mutation
   const deleteDashboardMutation = useMutation({
@@ -355,8 +382,8 @@ export default function DynamicTables() {
             </TabsTrigger>
           </TabsList>
 
-          {/* Action buttons based on tab */}
-          {mainTab === 'tables' ? (
+          {/* Action buttons based on tab - only for managers */}
+          {canManageTables && mainTab === 'tables' ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button>
@@ -403,12 +430,12 @@ export default function DynamicTables() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-          ) : (
+          ) : canManageTables && mainTab === 'dashboards' ? (
             <Button onClick={() => setShowCreateDashboardDialog(true)}>
               <Plus className="ml-2 h-4 w-4" />
               דשבורד חדש
             </Button>
-          )}
+          ) : null}
         </div>
 
         {/* Tables Tab Content */}
@@ -479,22 +506,24 @@ export default function DynamicTables() {
                         )}
                         {table.name}
                       </CardTitle>
-                      <div className="flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => handleEdit(table, e)}
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => handleDelete(table, e)}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
+                      {canManageTables && (
+                        <div className="flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => handleEdit(table, e)}
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => handleDelete(table, e)}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
                     </div>
                     {/* Agency & Client Badges */}
                     <div className="flex flex-wrap gap-1 mt-2">
@@ -592,14 +621,24 @@ export default function DynamicTables() {
               <p className="text-muted-foreground mb-4">
                 צור דשבורד כדי לראות נתונים מאוחדים מכל הפלטפורמות של לקוח
               </p>
-              <Button onClick={() => setShowCreateDashboardDialog(true)}>
-                <Plus className="ml-2 h-4 w-4" />
-                צור דשבורד ראשון
-              </Button>
+              {canManageTables && (
+                <Button onClick={() => setShowCreateDashboardDialog(true)}>
+                  <Plus className="ml-2 h-4 w-4" />
+                  צור דשבורד ראשון
+                </Button>
+              )}
             </Card>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {dashboards.map((dashboard: any) => (
+              {dashboards
+                .filter((dashboard: any) => {
+                  // Campaigners can only see dashboards linked to their assigned clients
+                  if (isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin && assignedClientIds) {
+                    return dashboard.client_id && assignedClientIds.includes(dashboard.client_id);
+                  }
+                  return true;
+                })
+                .map((dashboard: any) => (
                 <Card
                   key={dashboard.id}
                   className="cursor-pointer hover:shadow-lg transition-shadow"
@@ -611,18 +650,20 @@ export default function DynamicTables() {
                         <LayoutDashboard className="h-5 w-5" />
                         {dashboard.name}
                       </CardTitle>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (confirm('האם אתה בטוח שברצונך למחוק את הדשבורד?')) {
-                            deleteDashboardMutation.mutate(dashboard.id);
-                          }
-                        }}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
+                      {canManageTables && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm('האם אתה בטוח שברצונך למחוק את הדשבורד?')) {
+                              deleteDashboardMutation.mutate(dashboard.id);
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      )}
                     </div>
                     <div className="flex flex-wrap gap-1 mt-2">
                       {/* Dashboard Type Badge */}
