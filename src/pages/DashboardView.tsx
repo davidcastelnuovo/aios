@@ -163,6 +163,27 @@ export default function DashboardView() {
     enabled: !!dashboard?.client_id,
   });
 
+  // Fetch fields for all tables (for raw table display)
+  const { data: tableFields = {} } = useQuery({
+    queryKey: ['crm-fields-dashboard', tables.map((t: any) => t.id).join(',')],
+    queryFn: async () => {
+      if (tables.length === 0) return {};
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      const fieldsMap: Record<string, any[]> = {};
+      await Promise.all(tables.map(async (table: any) => {
+        const response = await supabase.functions.invoke(`crm-fields?table_id=${table.id}`, { method: 'GET' });
+        if (!response.error) {
+          const fields = (response.data as any)?.fields || [];
+          fieldsMap[table.id] = (fields as any[]).sort((a: any, b: any) => a.position - b.position);
+        }
+      }));
+      return fieldsMap;
+    },
+    enabled: tables.length > 0,
+  });
+
   // Fetch records from all tables
   const { data: allRecords = [], isLoading: recordsLoading, refetch: refetchRecords } = useQuery({
     queryKey: ['crm-records-dashboard', tables.map((t: any) => t.id).join(','), dateFilter],
@@ -183,6 +204,7 @@ export default function DashboardView() {
           ...r,
           _source: table.integration_type,
           _tableName: table.name,
+          _tableId: table.id,
           _integrationType: table.integration_type,
           _campaignType: getCampaignType(table.integration_type, table.integration_settings),
         }));
