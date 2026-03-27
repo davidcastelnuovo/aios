@@ -155,6 +155,7 @@ Deno.serve(async (req) => {
           name: table.name,
           integration_type: table.integration_type,
           integration_settings: table.integration_settings,
+          agency_name: agencyName,
         },
         fields: fields || [],
         records: filteredRecords,
