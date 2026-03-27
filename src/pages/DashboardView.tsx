@@ -833,12 +833,14 @@ export default function DashboardView() {
               </div>
               )}
 
-              {/* Campaign Breakdown - show on platform-specific tabs (Facebook, Google Ads) */}
-              {(platformFilter === 'facebook' || platformFilter === 'google_ads') && campaignBreakdown.length > 0 && (
+              {/* Raw Table Data - show on platform-specific tabs (Facebook, Google Ads, Analytics) */}
+              {platformFilter !== 'all' && platformRawData.fields.length > 0 && (
                 <Card>
                   <CardHeader>
                     <CardTitle>
-                      {platformFilter === 'facebook' ? 'קמפיינים - Facebook' : 'קמפיינים - Google Ads'}
+                      {platformFilter === 'facebook' ? 'נתוני Facebook' : 
+                       platformFilter === 'google_ads' ? 'נתוני Google Ads' : 
+                       'נתוני Analytics'}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -846,79 +848,52 @@ export default function DashboardView() {
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead className="text-right">קמפיין</TableHead>
-                            <TableHead className="text-right">חשיפות</TableHead>
-                            <TableHead className="text-right">קליקים</TableHead>
-                            <TableHead className="text-right">לידים</TableHead>
-                            <TableHead className="text-right">עלות לליד</TableHead>
-                            {dashboardCampaignType === 'ecommerce' && (
-                              <>
-                                <TableHead className="text-right">רכישות</TableHead>
-                                <TableHead className="text-right">הכנסות</TableHead>
-                              </>
-                            )}
-                            <TableHead className="text-right">הוצאה</TableHead>
-                            {dashboardCampaignType === 'ecommerce' && (
-                              <TableHead className="text-right">ROAS</TableHead>
-                            )}
+                            {platformRawData.fields.map((field: any) => (
+                              <TableHead key={field.key} className="text-right whitespace-nowrap">
+                                {field.name}
+                              </TableHead>
+                            ))}
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {campaignBreakdown.map((c, i) => {
-                            const cpl = c.leads > 0 ? c.spend / c.leads : 0;
-                            const roas = c.spend > 0 ? c.revenue / c.spend : 0;
-                            return (
-                              <TableRow key={i}>
-                                <TableCell className="font-medium max-w-[300px] truncate">{c.campaign}</TableCell>
-                                <TableCell>{formatNumber(c.impressions)}</TableCell>
-                                <TableCell>{formatNumber(c.clicks)}</TableCell>
-                                <TableCell className={c.leads > 0 ? 'text-green-600 font-semibold' : ''}>
-                                  {formatNumber(c.leads)}
-                                </TableCell>
-                                <TableCell className={cpl > 0 ? 'text-green-600' : ''}>
-                                  {cpl > 0 ? formatCurrency(cpl) : '₪0'}
-                                </TableCell>
-                                {dashboardCampaignType === 'ecommerce' && (
-                                  <>
-                                    <TableCell>{formatNumber(c.purchases)}</TableCell>
-                                    <TableCell>{formatCurrency(c.revenue)}</TableCell>
-                                  </>
-                                )}
-                                <TableCell>{formatCurrency(c.spend)}</TableCell>
-                                {dashboardCampaignType === 'ecommerce' && (
-                                  <TableCell>
-                                    <span className={roas >= 1 ? 'text-green-600 font-semibold' : 'text-red-600'}>
-                                      {roas.toFixed(2)}
-                                    </span>
-                                  </TableCell>
-                                )}
+                          {platformRawData.records
+                            .sort((a: any, b: any) => {
+                              const dateA = a.data?.date || '';
+                              const dateB = b.data?.date || '';
+                              return dateB.localeCompare(dateA);
+                            })
+                            .map((record: any, i: number) => (
+                              <TableRow key={record.id || i}>
+                                {platformRawData.fields.map((field: any) => {
+                                  const val = record.data?.[field.key];
+                                  let displayVal = val;
+                                  if (val === null || val === undefined) {
+                                    displayVal = '-';
+                                  } else if (typeof val === 'number') {
+                                    // Format currency-like fields
+                                    if (['spend', 'cost', 'revenue', 'purchase_value', 'conversions_value', 'conversion_value', 'cpl', 'cost_per_lead', 'cpc', 'cpm'].includes(field.key)) {
+                                      displayVal = formatCurrency(val);
+                                    } else if (['roas', 'engagement_rate', 'ctr'].includes(field.key)) {
+                                      displayVal = val.toFixed(2);
+                                    } else {
+                                      displayVal = formatNumber(val);
+                                    }
+                                  }
+                                  return (
+                                    <TableCell key={field.key} className="whitespace-nowrap">
+                                      {displayVal}
+                                    </TableCell>
+                                  );
+                                })}
                               </TableRow>
-                            );
-                          })}
-                          {/* Totals row */}
-                          <TableRow className="bg-muted/50 font-bold border-t-2">
-                            <TableCell>סה"כ</TableCell>
-                            <TableCell>{formatNumber(campaignTotals.impressions)}</TableCell>
-                            <TableCell>{formatNumber(campaignTotals.clicks)}</TableCell>
-                            <TableCell className="text-green-600">{formatNumber(campaignTotals.leads)}</TableCell>
-                            <TableCell className="text-green-600">
-                              {campaignTotals.leads > 0 ? formatCurrency(campaignTotals.spend / campaignTotals.leads) : '₪0'}
-                            </TableCell>
-                            {dashboardCampaignType === 'ecommerce' && (
-                              <>
-                                <TableCell>{formatNumber(campaignTotals.purchases)}</TableCell>
-                                <TableCell>{formatCurrency(campaignTotals.revenue)}</TableCell>
-                              </>
-                            )}
-                            <TableCell>{formatCurrency(campaignTotals.spend)}</TableCell>
-                            {dashboardCampaignType === 'ecommerce' && (
-                              <TableCell>
-                                <span className={(campaignTotals.spend > 0 ? campaignTotals.revenue / campaignTotals.spend : 0) >= 1 ? 'text-green-600' : 'text-red-600'}>
-                                  {(campaignTotals.spend > 0 ? campaignTotals.revenue / campaignTotals.spend : 0).toFixed(2)}
-                                </span>
+                            ))}
+                          {platformRawData.records.length === 0 && (
+                            <TableRow>
+                              <TableCell colSpan={platformRawData.fields.length} className="text-center text-muted-foreground py-8">
+                                אין נתונים בטווח התאריכים הנבחר
                               </TableCell>
-                            )}
-                          </TableRow>
+                            </TableRow>
+                          )}
                         </TableBody>
                       </Table>
                     </div>
