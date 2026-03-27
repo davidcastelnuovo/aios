@@ -47,7 +47,7 @@ interface CreateDashboardDialogProps {
   assignedClientIds?: string[];
 }
 
-export function CreateDashboardDialog({ open, onOpenChange }: CreateDashboardDialogProps) {
+export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }: CreateDashboardDialogProps) {
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
   const queryClient = useQueryClient();
