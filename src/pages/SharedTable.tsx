@@ -82,15 +82,11 @@ const getIntegrationIcon = (type: string | null) => {
 export default function SharedTable() {
   const { shareToken } = useParams();
   const [dateFilter, setDateFilter] = useState('last_30_days');
-  const [email, setEmail] = useState('');
-  const [submittedEmail, setSubmittedEmail] = useState('');
-  const [emailError, setEmailError] = useState('');
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['shared-table', shareToken, dateFilter, submittedEmail],
+    queryKey: ['shared-table', shareToken, dateFilter],
     queryFn: async () => {
       const params = new URLSearchParams({ token: shareToken!, date_filter: dateFilter });
-      if (submittedEmail) params.set('email', submittedEmail);
       const response = await supabase.functions.invoke(`public-table?${params.toString()}`, { method: 'GET' });
       if (response.error) throw response.error;
       return response.data;
@@ -98,18 +94,6 @@ export default function SharedTable() {
     enabled: !!shareToken,
     retry: false,
   });
-
-  const needsEmail = data?.error === 'email_required';
-  const emailNotAllowed = data?.error === 'email_not_allowed';
-
-  const handleEmailSubmit = () => {
-    if (!email.trim() || !email.includes('@')) {
-      setEmailError('נא להזין אימייל תקין');
-      return;
-    }
-    setEmailError('');
-    setSubmittedEmail(email.trim().toLowerCase());
-  };
 
   const integrationType = data?.table?.integration_type;
   const isIntegrationTable = isAdsPlatform(integrationType || '') || isAnalyticsPlatform(integrationType || '');
