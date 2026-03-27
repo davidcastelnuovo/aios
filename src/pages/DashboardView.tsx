@@ -766,6 +766,12 @@ export default function DashboardView() {
               <p className="text-muted-foreground mb-4">צור טבלאות ושייך אותן ללקוח כדי לראות נתונים בדשבורד</p>
               <Button onClick={() => navigate(buildPath('/dynamic-tables'))}>עבור לניהול טבלאות</Button>
             </Card>
+          ) : platformFilter === 'google_analytics' ? (
+            /* Analytics tab: render the same GoogleAnalyticsDashboard used in standalone table view */
+            <GoogleAnalyticsDashboard
+              records={allAnalyticsRecords}
+              externalDateFilter={dateFilter}
+            />
           ) : (
             <>
               {/* Summary Cards - only show in All and Analytics tabs */}
