@@ -878,6 +878,8 @@ export default function DashboardView() {
                                       displayVal = formatCurrency(val);
                                     } else if (['roas', 'engagement_rate', 'ctr'].includes(field.key)) {
                                       displayVal = val.toFixed(2);
+                                    } else if (['bounce_rate', 'avg_session_duration', 'pages_per_session', 'events_per_session'].includes(field.key)) {
+                                      displayVal = field.key.includes('rate') ? val.toFixed(1) + '%' : val.toFixed(1) + 's';
                                     } else {
                                       displayVal = formatNumber(val);
                                     }
