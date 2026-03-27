@@ -46,11 +46,11 @@ type CampaignType = 'leads' | 'ecommerce';
 type PlatformFilter = 'all' | 'facebook' | 'google_ads' | 'google_analytics';
 
 const getCampaignType = (integrationType?: string | null, integrationSettings?: any): CampaignType => {
-  if (integrationType === 'facebook_insights') return 'leads';
   if (integrationType === 'facebook_ecommerce') return 'ecommerce';
   if (integrationType === 'google_ads') {
     return integrationSettings?.campaign_type === 'ecommerce' ? 'ecommerce' : 'leads';
   }
+  // For facebook_insights, don't assume — will be determined dynamically from data
   return 'leads';
 };
 
