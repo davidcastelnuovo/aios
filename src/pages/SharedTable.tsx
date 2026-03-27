@@ -114,10 +114,7 @@ export default function SharedTable() {
   };
 
   const integrationType = data?.table?.integration_type;
-  const integrationSettings = data?.table?.integration_settings;
   const isIntegrationTable = isAdsPlatform(integrationType || '') || isAnalyticsPlatform(integrationType || '');
-  const campaignType = getCampaignType(integrationType, integrationSettings);
-  const isEcommerce = campaignType === 'ecommerce';
 
   // For integration tables: filter only daily records for analytics
   const filteredRecords = useMemo(() => {
