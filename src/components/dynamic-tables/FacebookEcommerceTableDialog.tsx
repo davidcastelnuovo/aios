@@ -80,7 +80,7 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
   });
 
   // Fetch clients based on selected agency
-  const { data: clients = [] } = useQuery({
+  const { data: rawClients = [] } = useQuery({
     queryKey: ['clients-for-table', agencyId],
     queryFn: async () => {
       if (!agencyId) return [];
@@ -94,6 +94,10 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
     },
     enabled: open && !!agencyId,
   });
+
+  const clients = assignedClientIds
+    ? rawClients.filter(c => assignedClientIds.includes(c.id))
+    : rawClients;
 
   // Reset client when agency changes
   useEffect(() => {
