@@ -1,48 +1,24 @@
 
 
-## תוכנית: דשבורד שמשקף את הטבלאות הדינמיות
+## תיקון קישור שיתוף טבלה
 
 ### הבעיה
-1. בדשבורד של לידר (ecommerce) מוצגים כרטיסי "לידים" למרות שאין קמפיינים של לידים
-2. הלשוניות (Facebook, Analytics) מציגות KPI מחושבים במקום הנתונים כפי שהם בטבלה המקורית
-3. המשתמש רוצה שכל לשונית תשקף את הטבלה הדינמית עצמה
+ב-`ShareTableDialog` הפונקציה `getShareUrl` משתמשת ב-`window.location.origin` ישירות, מה שגורם ליצירת קישורים עם דומיין ה-preview (שלא עובד לצפייה חיצונית). בדשבורד זה כבר תוקן לשימוש בדומיין הפרסום `after-lead.lovable.app`.
 
 ### הפתרון
+**קובץ: `src/components/dynamic-tables/ShareTableDialog.tsx`**
 
-#### שינוי 1: לשוניות פלטפורמה → הצגת הטבלה המקורית
-- בלשונית **Facebook**: להציג את הנתונים בדיוק כפי שהם מופיעים בטבלה הדינמית של Facebook (שורה לכל יום/קמפיין עם כל העמודות)
-- בלשונית **Google Ads**: להציג את טבלת Google Ads כפי שהיא
-- בלשונית **Analytics**: להציג את טבלת Analytics כפי שהיא
-- בלשונית **הכל**: לסכם KPI מכל הפלטפורמות + הגרפים + טבלאות סיכום (כמו היום)
+שינוי `getShareUrl` (שורה 104-106) לאותה לוגיקה כמו בדשבורד:
 
-#### שינוי 2: הפרדה בין לידים ואיקומרס
-- אם יש קמפיינים מסוג leads וגם ecommerce → שתי טבלאות נפרדות
-- אם יש רק ecommerce → להציג רק אותו, ללא כרטיסי לידים
-- אם יש רק leads → להציג רק אותו
+```typescript
+const getShareUrl = (token: string) => {
+  const origin =
+    window.location.hostname.includes("preview") || window.location.hostname.includes("lovableproject")
+      ? "https://after-lead.lovable.app"
+      : window.location.origin;
+  return `${origin}/shared/table/${token}`;
+};
+```
 
-#### שינויים טכניים
-
-**קובץ: `src/pages/DashboardView.tsx`**
-
-1. **לשוניות פלטפורמה (Facebook/Google Ads/Analytics)**:
-   - במקום לחשב KPI ולהציג טבלת קמפיינים מחושבת, לשלוף את השדות (`fields`) של הטבלה הדינמית המקורית דרך `crm-fields`
-   - להציג את הרשומות (`records`) בטבלה עם אותן עמודות כמו ב-`DynamicTableView` (תאריך, שם קמפיין, הוצאה, חשיפות, קליקים, לידים/רכישות וכו')
-   - שורת סה"כ בתחתית
-
-2. **לשונית "הכל"**:
-   - נשארת כפי שהיא עם KPI cards וגרפים
-   - מסירה כרטיסי לידים/CPL כאשר `dashboardCampaignType === 'ecommerce'` ואין קמפיינים של לידים
-
-3. **שליפת שדות הטבלה**:
-   - הוספת query חדש לשלוף `fields` לכל טבלה דרך `crm-fields?table_id=X`
-   - מיפוי עמודות לפי `field.key` ו-`field.name`
-
-4. **לוגיקת הפרדה leads/ecommerce**:
-   - בדיקה האם יש בפועל נתוני לידים (leads > 0) לפני הצגת כרטיסים
-   - לא מספיק לבדוק `campaignType` - צריך לבדוק אם יש **נתונים אמיתיים** של לידים
-
-### תוצאה צפויה
-- לשונית Facebook → טבלה זהה לטבלה הדינמית של Facebook
-- לשונית Analytics → טבלה זהה לטבלה הדינמית של Analytics  
-- לשונית הכל → סיכום KPI + גרפים (ללא לידים אם אין)
+שינוי של 3 שורות בלבד בקובץ אחד.
 
