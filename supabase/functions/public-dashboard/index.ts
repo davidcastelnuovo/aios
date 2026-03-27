@@ -38,6 +38,10 @@ function getDateRange(filter: string): { startDate: string | null; endDate: stri
       endDate = endOfLastMonth.toISOString().split("T")[0];
       break;
     }
+    case 'last_70_days':
+      startDate = new Date(today.getTime() - 70 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+      endDate = today.toISOString().split("T")[0];
+      break;
     default: // last_30_days
       startDate = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
       endDate = today.toISOString().split("T")[0];

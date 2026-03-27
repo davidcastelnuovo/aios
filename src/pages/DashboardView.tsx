@@ -127,7 +127,7 @@ export default function DashboardView() {
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
   const { currentTenantId } = useTenant();
-  const [dateFilter, setDateFilter] = useState('last_30_days');
+  const [dateFilter, setDateFilter] = useState('last_70_days');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all');
 
