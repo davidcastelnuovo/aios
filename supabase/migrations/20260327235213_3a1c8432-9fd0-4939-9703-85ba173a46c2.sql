@@ -1,0 +1,1 @@
+UPDATE public.ahrefs_reports SET tenant_id = '2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019' WHERE tenant_id IS NULL
