@@ -53,6 +53,7 @@ const getAddToCartFromData = (data: any) => Number(data?.add_to_cart) || Number(
 const isAdsPlatform = (s: string) => ['facebook_insights', 'facebook_ecommerce', 'google_ads'].includes(s);
 const isAnalyticsPlatform = (s: string) => s === 'google_analytics';
 const isFacebookPlatform = (s: string) => ['facebook_insights', 'facebook_ecommerce'].includes(s);
+const normalizePlatformKey = (s: string) => isFacebookPlatform(s) ? 'facebook_insights' : s;
 
 const matchesPlatformFilter = (integrationType: string, filter: PlatformFilter): boolean => {
   if (filter === 'all') return true;
