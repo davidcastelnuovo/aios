@@ -61,10 +61,9 @@ export interface CompetitorResult {
 }
 
 // Helper to safely query tables that might not exist yet
-async function safeQuery<T>(queryFn: () => any): Promise<T | null> {
+async function safeQuery<T>(queryFn: () => Promise<{ data: T | null; error: any }>): Promise<T | null> {
   try {
-    const result = await queryFn();
-    const { data, error } = result;
+    const { data, error } = await queryFn();
     if (error) {
       // Table doesn't exist or other DB error - return null silently
       if (error.code === "42P01" || error.message?.includes("does not exist")) {
@@ -108,7 +107,7 @@ export function useAiDetection() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      const { data: brand, error } = await supabase.from("ai_detection_brands" as any).insert({
+      const { error } = await supabase.from("ai_detection_brands" as any).insert({
         tenant_id: tenantId,
         brand_name: data.brandName,
         url: data.url || null,
@@ -116,39 +115,12 @@ export function useAiDetection() {
         keywords: data.keywords,
         competitor_names: data.competitors,
         created_by: user.id,
-      }).select().single();
+      });
       if (error) throw error;
-
-      // Auto-generate default prompts based on brand name and keywords
-      const brandId = (brand as any).id;
-      const defaultPrompts = [
-        { prompt: `מה הכלי הכי טוב ל${data.keywords[0] || data.brandName}?`, category: "recommendation" },
-        { prompt: `השווה בין ${data.brandName}${data.competitors.length > 0 ? ` ל-${data.competitors[0]}` : " למתחרים בשוק"}`, category: "comparison" },
-        { prompt: `מה דעתך על ${data.brandName}? האם כדאי להשתמש בהם?`, category: "review" },
-      ];
-
-      if (data.keywords.length > 1) {
-        defaultPrompts.push({
-          prompt: `איזה שירות מומלץ ל${data.keywords[1]}?`,
-          category: "recommendation",
-        });
-      }
-
-      const promptInserts = defaultPrompts.map(p => ({
-        tenant_id: tenantId,
-        brand_id: brandId,
-        prompt: p.prompt,
-        category: p.category,
-        is_active: true,
-        created_by: user.id,
-      }));
-
-      const { error: promptError } = await supabase.from("ai_detection_prompts" as any).insert(promptInserts);
-      if (promptError) console.error("Error creating default prompts:", promptError);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ai-detection-projects", tenantId] });
-      toast.success("הפרויקט נוצר בהצלחה עם פרומפטים ברירת מחדל");
+      toast.success("הפרויקט נוצר בהצלחה");
     },
     onError: (error) => toast.error("שגיאה: " + error.message),
   });
@@ -274,58 +246,6 @@ export function useAiDetectionProject(projectId: string | null) {
     onError: (error) => toast.error("שגיאה: " + error.message),
   });
 
-  // Generate prompts with AI
-  const [isGenerating, setIsGenerating] = useState(false);
-  const generatePrompts = async (brand: AiDetectionBrand) => {
-    if (!projectId || !tenantId) return;
-    setIsGenerating(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data, error } = await supabase.functions.invoke("generate-ai-prompts", {
-        body: {
-          brand_name: brand.brand_name,
-          keywords: brand.keywords || [],
-          competitors: brand.competitor_names || [],
-          description: brand.description || "",
-        },
-      });
-      if (error) throw error;
-      if (!data?.prompts?.length) throw new Error("No prompts generated");
-
-      const inserts = data.prompts.map((p: { prompt: string; category: string }) => ({
-        tenant_id: tenantId,
-        brand_id: projectId,
-        prompt: p.prompt,
-        category: p.category,
-        is_active: true,
-        created_by: user?.id,
-      }));
-
-      const { error: insertError } = await supabase.from("ai_detection_prompts" as any).insert(inserts);
-      if (insertError) throw insertError;
-
-      queryClient.invalidateQueries({ queryKey: ["ai-detection-prompts", projectId] });
-      toast.success(`${data.prompts.length} פרומפטים נוצרו בהצלחה!`);
-    } catch (error: any) {
-      toast.error("שגיאה ביצירת פרומפטים: " + (error.message || "Unknown error"));
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  // Edit prompt
-  const editPrompt = useMutation({
-    mutationFn: async ({ promptId, prompt, category }: { promptId: string; prompt: string; category: string }) => {
-      const { error } = await supabase.from("ai_detection_prompts" as any).update({ prompt, category }).eq("id", promptId);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["ai-detection-prompts", projectId] });
-      toast.success("הפרומפט עודכן");
-    },
-    onError: (error) => toast.error("שגיאה: " + error.message),
-  });
-
   // Delete prompt
   const deletePrompt = useMutation({
     mutationFn: async (promptId: string) => {
@@ -411,9 +331,7 @@ export function useAiDetectionProject(projectId: string | null) {
     previousScore,
     isLoading: promptsLoading || resultsLoading,
     isScanning,
-    isGenerating,
     addPrompt,
-    editPrompt,
     deletePrompt,
     runScan,
     generatePrompts,
