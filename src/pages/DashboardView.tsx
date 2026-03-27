@@ -1204,7 +1204,7 @@ export default function DashboardView() {
                     </p>
                   </CardContent>
                 </Card>
-              )
+              )}
 
               {/* Analytics Source Breakdown */}
               {analyticsSourceBreakdown.length > 0 && platformFilter === 'all' && (
