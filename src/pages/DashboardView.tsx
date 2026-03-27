@@ -1195,7 +1195,7 @@ export default function DashboardView() {
               )}
 
               {/* Analytics Source Breakdown */}
-              {analyticsSourceBreakdown.length > 0 && (platformFilter === 'all' || platformFilter === 'google_analytics') && (
+              {analyticsSourceBreakdown.length > 0 && platformFilter === 'all' && (
                 <Card>
                   <CardHeader><CardTitle>פירוט לפי מקור הגעה (Analytics)</CardTitle></CardHeader>
                   <CardContent>
