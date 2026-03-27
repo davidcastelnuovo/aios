@@ -149,8 +149,13 @@ export default function DynamicTables() {
   // Filter clients by selected agency in edit dialog
   const editFilteredClients = useMemo(() => {
     if (!editAgencyId) return [];
-    return clients.filter(c => c.agency_id === editAgencyId);
-  }, [clients, editAgencyId]);
+    let filtered = clients.filter(c => c.agency_id === editAgencyId);
+    // Campaigners can only see their assigned clients
+    if (isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin && assignedClientIds) {
+      filtered = filtered.filter(c => assignedClientIds.includes(c.id));
+    }
+    return filtered;
+  }, [clients, editAgencyId, isCampaigner, isOwner, isTeamManager, isSuperAdmin, assignedClientIds]);
 
   const { data: tables, isLoading } = useQuery({
     queryKey: ['crm-tables', tenantId],
