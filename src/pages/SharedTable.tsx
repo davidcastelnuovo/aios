@@ -69,7 +69,7 @@ export default function SharedTable() {
   }, [data]);
 
   const records = useMemo(() => {
-    return (data?.records || []).filter((r: any) => r.data?.report_type === 'daily' || !r.data?.report_type);
+    return data?.records || [];
   }, [data]);
 
   if (isLoading) {
