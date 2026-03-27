@@ -389,17 +389,58 @@ export default function AhrefsSettings() {
 
       {/* Report Detail Dialog */}
       <Dialog open={!!selectedReport} onOpenChange={(open) => !open && setSelectedReport(null)}>
-        <DialogContent className="max-w-3xl max-h-[80vh]">
+        <DialogContent className="max-w-4xl max-h-[85vh]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5" />
               {selectedReport?.domain} — {selectedReport && (REPORT_TYPE_LABELS[selectedReport.report_type] || selectedReport.report_type)}
             </DialogTitle>
           </DialogHeader>
-          <ScrollArea className="max-h-[60vh]">
-            <pre className="bg-muted p-4 rounded text-xs overflow-x-auto whitespace-pre-wrap" dir="ltr">
-              {selectedReport && JSON.stringify(selectedReport.report_data, null, 2)}
-            </pre>
+          <ScrollArea className="max-h-[70vh]">
+            {selectedReport && (() => {
+              const data = selectedReport.report_data;
+              // Check if report_data contains HTML string
+              const htmlContent = typeof data === 'string' ? data 
+                : typeof data === 'object' && data !== null && 'html' in data && typeof (data as any).html === 'string' ? (data as any).html
+                : null;
+              
+              if (htmlContent) {
+                return (
+                  <div className="space-y-4">
+                    {/* Render project name if exists */}
+                    {typeof data === 'object' && data !== null && 'project_name' in data && (
+                      <Badge variant="outline" className="text-sm">
+                        פרויקט: {String((data as any).project_name)}
+                      </Badge>
+                    )}
+                    <div 
+                      className="prose prose-sm max-w-none dark:prose-invert
+                        [&_table]:w-full [&_table]:border-collapse [&_table]:rounded-lg [&_table]:overflow-hidden
+                        [&_th]:bg-primary [&_th]:text-primary-foreground [&_th]:px-4 [&_th]:py-2.5 [&_th]:text-right [&_th]:text-sm [&_th]:font-medium
+                        [&_td]:px-4 [&_td]:py-2.5 [&_td]:border-b [&_td]:border-border [&_td]:text-sm
+                        [&_tr:hover_td]:bg-muted/50
+                        [&_.metrics-grid]:grid [&_.metrics-grid]:grid-cols-2 [&_.metrics-grid]:md:grid-cols-4 [&_.metrics-grid]:gap-3 [&_.metrics-grid]:mb-6
+                        [&_.metric-card]:bg-card [&_.metric-card]:border [&_.metric-card]:border-border [&_.metric-card]:rounded-lg [&_.metric-card]:p-4 [&_.metric-card]:shadow-sm
+                        [&_.metric-value]:text-2xl [&_.metric-value]:font-bold [&_.metric-value]:text-primary
+                        [&_h1]:text-xl [&_h1]:font-bold [&_h1]:mb-4
+                        [&_h2]:text-lg [&_h2]:font-semibold [&_h2]:mt-6 [&_h2]:mb-3
+                        [&_h3]:text-sm [&_h3]:font-medium [&_h3]:text-muted-foreground [&_h3]:mb-1
+                        [&_.header]:bg-gradient-to-l [&_.header]:from-primary/80 [&_.header]:to-primary [&_.header]:text-primary-foreground [&_.header]:p-6 [&_.header]:rounded-lg [&_.header]:mb-6
+                      "
+                      dir="rtl"
+                      dangerouslySetInnerHTML={{ __html: htmlContent }}
+                    />
+                  </div>
+                );
+              }
+              
+              // Fallback: render as formatted JSON
+              return (
+                <pre className="bg-muted p-4 rounded text-xs overflow-x-auto whitespace-pre-wrap" dir="ltr">
+                  {JSON.stringify(data, null, 2)}
+                </pre>
+              );
+            })()}
           </ScrollArea>
         </DialogContent>
       </Dialog>
