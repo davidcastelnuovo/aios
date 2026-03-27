@@ -31,6 +31,7 @@ const DATE_FILTERS = [
   { value: 'yesterday', label: 'אתמול' },
   { value: 'last_7_days', label: '7 ימים אחרונים' },
   { value: 'last_30_days', label: '30 יום אחרונים' },
+  { value: 'last_70_days', label: '70 יום אחרונים' },
   { value: 'this_month', label: 'החודש הנוכחי' },
   { value: 'last_month', label: 'חודש קודם' },
 ];
