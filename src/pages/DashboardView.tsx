@@ -1240,7 +1240,7 @@ export default function DashboardView() {
               )}
 
               {/* Traffic Acquisition by Channel Group */}
-              {channelGroupBreakdown.length > 0 && (platformFilter === 'all' || platformFilter === 'google_analytics') && (
+              {channelGroupBreakdown.length > 0 && platformFilter === 'all' && (
                 <Card>
                   <CardHeader><CardTitle>טרפיק לפי ערוץ (Traffic Acquisition)</CardTitle></CardHeader>
                   <CardContent>
