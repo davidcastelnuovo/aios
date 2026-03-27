@@ -17,7 +17,7 @@ interface AhrefsTableDialogProps {
   assignedClientIds?: string[];
 }
 
-export function AhrefsTableDialog({ open, onOpenChange }: AhrefsTableDialogProps) {
+export function AhrefsTableDialog({ open, onOpenChange, assignedClientIds }: AhrefsTableDialogProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { currentTenant, currentTenantId: activeTenantId } = useTenant();
