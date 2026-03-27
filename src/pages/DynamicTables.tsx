@@ -184,20 +184,28 @@ export default function DynamicTables() {
     enabled: !!tenantId,
   });
 
-  // Filter tables by selected agency
+  // Filter tables by selected agency and role
   const filteredTables = useMemo(() => {
     if (!tables) return [];
     
-    // When "all agencies" is selected, show all tables for this tenant
-    // (tenant filtering is done in the Edge Function)
-    if (!selectedAgency || selectedAgency === 'all') return tables;
+    let result = tables;
+
+    // Campaigners can only see tables linked to their assigned clients
+    if (isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin && assignedClientIds) {
+      result = result.filter(table => 
+        table.client_id && assignedClientIds.includes(table.client_id)
+      );
+    }
     
-    // Filter by selected agency - show general tables + agency-specific tables
-    return tables.filter(table => 
-      table.agency_id === null ||  // General tables always shown
-      table.agency_id === selectedAgency
-    );
-  }, [tables, selectedAgency]);
+    // Filter by selected agency
+    if (selectedAgency && selectedAgency !== 'all') {
+      result = result.filter(table => 
+        table.agency_id === null || table.agency_id === selectedAgency
+      );
+    }
+    
+    return result;
+  }, [tables, selectedAgency, isCampaigner, isOwner, isTeamManager, isSuperAdmin, assignedClientIds]);
 
   // Delete dashboard mutation
   const deleteDashboardMutation = useMutation({
