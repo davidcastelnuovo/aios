@@ -920,6 +920,7 @@ export default function DynamicTables() {
       <CreateDashboardDialog
         open={showCreateDashboardDialog}
         onOpenChange={setShowCreateDashboardDialog}
+        assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
       />
     </div>
   );
