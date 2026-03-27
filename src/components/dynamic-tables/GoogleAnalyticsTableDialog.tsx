@@ -25,7 +25,7 @@ interface GAProperty {
   accountName: string;
 }
 
-export function GoogleAnalyticsTableDialog({ open, onOpenChange }: GoogleAnalyticsTableDialogProps) {
+export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientIds }: GoogleAnalyticsTableDialogProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { currentTenant, currentTenantId: activeTenantId } = useTenant();
