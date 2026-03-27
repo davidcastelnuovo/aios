@@ -85,11 +85,8 @@ export function ShareDashboardDialog({ dashboardId, dashboardName, tenantId }: S
   });
 
   const getShareUrl = (token: string) => {
-    const origin =
-      window.location.hostname.includes("preview") || window.location.hostname.includes("lovableproject")
-        ? "https://after-lead.lovable.app"
-        : window.location.origin;
-    return `${origin}/shared/dashboard/${token}`;
+    const publicAppOrigin = "https://after-lead.lovable.app";
+    return `${publicAppOrigin}/shared/dashboard/${token}`;
   };
 
   const copyLink = (token: string) => {
