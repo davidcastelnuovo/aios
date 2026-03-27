@@ -382,8 +382,8 @@ export default function DynamicTables() {
             </TabsTrigger>
           </TabsList>
 
-          {/* Action buttons based on tab */}
-          {mainTab === 'tables' ? (
+          {/* Action buttons based on tab - only for managers */}
+          {canManageTables && mainTab === 'tables' ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button>
@@ -430,12 +430,12 @@ export default function DynamicTables() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-          ) : (
+          ) : canManageTables && mainTab === 'dashboards' ? (
             <Button onClick={() => setShowCreateDashboardDialog(true)}>
               <Plus className="ml-2 h-4 w-4" />
               דשבורד חדש
             </Button>
-          )}
+          ) : null}
         </div>
 
         {/* Tables Tab Content */}
