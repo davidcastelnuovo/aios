@@ -322,6 +322,39 @@ export function ClientsChatView({
     );
   };
 
+  const EditableClientName = ({ clientId, currentName, agencyName }: {
+    clientId: string; currentName: string; agencyName?: string;
+  }) => {
+    const [editing, setEditing] = useState(false);
+    const [editValue, setEditValue] = useState(currentName);
+    const handleSave = () => {
+      if (editValue.trim()) {
+        updateClientField(clientId, "name", editValue.trim());
+      }
+      setEditing(false);
+    };
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === "Enter") handleSave();
+      if (e.key === "Escape") { setEditValue(currentName); setEditing(false); }
+    };
+    if (editing) {
+      return (
+        <div className="flex items-center gap-2">
+          <Input value={editValue} onChange={e => setEditValue(e.target.value)} onKeyDown={handleKeyDown} onBlur={handleSave} className="text-sm h-7 font-bold text-right max-w-[200px]" dir="rtl" autoFocus />
+        </div>
+      );
+    }
+    return (
+      <>
+        <h2 className="font-bold text-base truncate cursor-pointer group flex items-center gap-1" onClick={() => { setEditValue(currentName); setEditing(true); }}>
+          {currentName}
+          <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+        </h2>
+        {agencyName && <p className="text-xs text-muted-foreground truncate">{agencyName}</p>}
+      </>
+    );
+  };
+
   return (
     <div className="flex h-[calc(100vh-220px)] border rounded-lg overflow-hidden bg-background" dir="rtl">
       {/* Right side - Client list (25%) */}
