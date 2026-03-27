@@ -61,7 +61,7 @@ export interface CompetitorResult {
 }
 
 // Helper to safely query tables that might not exist yet
-async function safeQuery<T>(queryFn: () => Promise<{ data: T | null; error: any }>): Promise<T | null> {
+async function safeQuery<T>(queryFn: () => PromiseLike<{ data: T | null; error: any }>): Promise<T | null> {
   try {
     const { data, error } = await queryFn();
     if (error) {
