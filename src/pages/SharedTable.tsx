@@ -160,7 +160,7 @@ export default function SharedTable() {
 
   // Campaign-level aggregation for Facebook / Google Ads
   const campaignSummary = useMemo(() => {
-    if (!isAdsPlatform(integrationType || '')) return [];
+    if (!isAdsPlatform(integrationType || '')) return { ecommerce: [] as any[], leads: [] as any[], all: [] as any[] };
     const map: Record<string, any> = {};
     filteredRecords.forEach((r: any) => {
       const d = r.data || {};
