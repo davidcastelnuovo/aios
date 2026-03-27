@@ -10,7 +10,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Bot, Zap, Brain, Heart, Sparkles, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Bot, Zap, Brain, Heart, Sparkles, ChevronDown, ChevronUp, Github } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { useTenantPath } from "@/hooks/useTenantPath";
 import { toast } from "sonner";
 
 const ALL_TOOLS = [
@@ -221,6 +223,8 @@ export default function AgentHub() {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {/* GitHub Agent - built-in */}
+                <GithubAgentCard />
                 {activeAgents.map(agent => (
                   <AgentCard
                     key={agent.id}
@@ -450,6 +454,32 @@ export default function AgentHub() {
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function GithubAgentCard() {
+  const { buildPath } = useTenantPath();
+  const navigate = useNavigate();
+
+  return (
+    <div
+      className="border rounded-xl p-5 cursor-pointer hover:shadow-md hover:border-primary/50 transition-all bg-gradient-to-br from-gray-50 to-white dark:from-gray-900 dark:to-gray-800"
+      onClick={() => navigate(buildPath("github-agent"))}
+    >
+      <div className="flex items-start justify-between mb-3">
+        <Badge className="bg-purple-500 text-white text-xs">מובנה</Badge>
+        <div className="p-2 rounded-lg bg-gray-900 text-white">
+          <Github className="h-5 w-5" />
+        </div>
+      </div>
+      <h3 className="font-bold text-lg mb-1">GitHub Agent</h3>
+      <p className="text-sm text-muted-foreground mb-3">סוכן אוטומטי לניתוח שגיאות, תיקון קוד ותמיכה טכנית עם אישורים</p>
+      <div className="flex gap-1 flex-wrap">
+        <Badge variant="outline" className="text-xs">תיקון קוד</Badge>
+        <Badge variant="outline" className="text-xs">ניתוח שגיאות</Badge>
+        <Badge variant="outline" className="text-xs">PR אוטומטי</Badge>
+      </div>
     </div>
   );
 }
