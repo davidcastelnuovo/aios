@@ -1948,6 +1948,10 @@ export default function DynamicTableView() {
       {hasFacebook && filteredRecords && filteredRecords.length > 0 && (
         <Card className="mb-4 overflow-hidden">
           {(() => {
+            // Check if records actually have lead data
+            const totalLeads = filteredRecords.reduce((sum, r) => sum + (Number(r.data?.leads) || 0), 0);
+            const showLeads = totalLeads > 0;
+
             // Group records by campaign_name
             const campaignGroups = filteredRecords.reduce((acc, record) => {
               const campaignName = String(record.data?.campaign_name || 'ללא קמפיין');
@@ -1976,9 +1980,9 @@ export default function DynamicTableView() {
                       <th className="p-2 text-right font-medium">קמפיין</th>
                       <th className="p-2 text-center font-medium">חשיפות</th>
                       <th className="p-2 text-center font-medium">קליקים</th>
-                      <th className="p-2 text-center font-medium">לידים</th>
+                      {showLeads && <th className="p-2 text-center font-medium">לידים</th>}
                       <th className="p-2 text-center font-medium">הוצאה</th>
-                      <th className="p-2 text-center font-medium">עלות לליד</th>
+                      {showLeads && <th className="p-2 text-center font-medium">עלות לליד</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -1991,9 +1995,9 @@ export default function DynamicTableView() {
                             <td className="p-2 text-right font-medium">{campaignName}</td>
                             <td className="p-2 text-center">{data.impressions.toLocaleString('he-IL')}</td>
                             <td className="p-2 text-center">{data.clicks.toLocaleString('he-IL')}</td>
-                            <td className="p-2 text-center text-green-600 font-medium">{data.leads.toLocaleString('he-IL')}</td>
+                            {showLeads && <td className="p-2 text-center text-green-600 font-medium">{data.leads.toLocaleString('he-IL')}</td>}
                             <td className="p-2 text-center">{currency}{data.spend.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
-                            <td className="p-2 text-center text-blue-600 font-medium">{currency}{costPerLead.toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
+                            {showLeads && <td className="p-2 text-center text-blue-600 font-medium">{currency}{costPerLead.toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>}
                           </tr>
                         );
                       });
@@ -2007,9 +2011,9 @@ export default function DynamicTableView() {
                           <td className="p-2 text-right">סה״כ</td>
                           <td className="p-2 text-center">{totals.impressions.toLocaleString('he-IL')}</td>
                           <td className="p-2 text-center">{totals.clicks.toLocaleString('he-IL')}</td>
-                          <td className="p-2 text-center text-green-600">{totals.leads.toLocaleString('he-IL')}</td>
+                          {showLeads && <td className="p-2 text-center text-green-600">{totals.leads.toLocaleString('he-IL')}</td>}
                           <td className="p-2 text-center">{currency}{totals.spend.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
-                          <td className="p-2 text-center text-blue-600">{currency}{(totals.leads > 0 ? totals.spend / totals.leads : 0).toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
+                          {showLeads && <td className="p-2 text-center text-blue-600">{currency}{(totals.leads > 0 ? totals.spend / totals.leads : 0).toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>}
                         </tr>
                       );
                     })()}
