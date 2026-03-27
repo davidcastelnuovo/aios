@@ -172,8 +172,8 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange }: GoogleAnalyti
             : `Google Analytics - ${properties?.find(p => p.id === selectedProperty)?.name || ''}`,
           category,
           icon: 'BarChart3',
-          agencyId: selectedAgency || null,
-          clientId: selectedClient || null,
+          agency_id: selectedAgency || null,
+          client_id: selectedClient || null,
           integration_type: integrationType,
           integration_settings: integrationSettings,
         }
