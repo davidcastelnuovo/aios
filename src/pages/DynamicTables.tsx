@@ -907,7 +907,8 @@ export default function DynamicTables() {
 
       <AhrefsTableDialog 
         open={showAhrefsDialog} 
-        onOpenChange={setShowAhrefsDialog} 
+        onOpenChange={setShowAhrefsDialog}
+        assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
       />
 
       <FacebookEcommerceTableDialog
