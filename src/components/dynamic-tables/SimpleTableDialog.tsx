@@ -36,7 +36,7 @@ interface SimpleTableDialogProps {
   assignedClientIds?: string[];
 }
 
-export function SimpleTableDialog({ open, onOpenChange }: SimpleTableDialogProps) {
+export function SimpleTableDialog({ open, onOpenChange, assignedClientIds }: SimpleTableDialogProps) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
