@@ -163,6 +163,27 @@ export default function DashboardView() {
     enabled: !!dashboard?.client_id,
   });
 
+  // Fetch fields for all tables (for raw table display)
+  const { data: tableFields = {} } = useQuery({
+    queryKey: ['crm-fields-dashboard', tables.map((t: any) => t.id).join(',')],
+    queryFn: async () => {
+      if (tables.length === 0) return {};
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      const fieldsMap: Record<string, any[]> = {};
+      await Promise.all(tables.map(async (table: any) => {
+        const response = await supabase.functions.invoke(`crm-fields?table_id=${table.id}`, { method: 'GET' });
+        if (!response.error) {
+          const fields = (response.data as any)?.fields || [];
+          fieldsMap[table.id] = (fields as any[]).sort((a: any, b: any) => a.position - b.position);
+        }
+      }));
+      return fieldsMap;
+    },
+    enabled: tables.length > 0,
+  });
+
   // Fetch records from all tables
   const { data: allRecords = [], isLoading: recordsLoading, refetch: refetchRecords } = useQuery({
     queryKey: ['crm-records-dashboard', tables.map((t: any) => t.id).join(','), dateFilter],
@@ -183,6 +204,7 @@ export default function DashboardView() {
           ...r,
           _source: table.integration_type,
           _tableName: table.name,
+          _tableId: table.id,
           _integrationType: table.integration_type,
           _campaignType: getCampaignType(table.integration_type, table.integration_settings),
         }));
@@ -265,13 +287,16 @@ export default function DashboardView() {
         platforms[source].spend += getSpendFromData(data);
         platforms[source].impressions += Number(data.impressions) || 0;
         platforms[source].clicks += Number(data.clicks) || 0;
-        // Always track leads for all platforms
-        platforms[source].leads += getLeadsFromData(data);
         if (campaignType === 'ecommerce') {
           platforms[source].results += getPurchasesFromData(data);
           platforms[source].revenue += getRevenueFromData(data);
+          // Only count explicit lead fields for ecommerce (not conversions which are purchases)
+          const explicitLeads = Number(data.leads) || Number(data.website_leads) || Number(data.leadgen_grouped) || Number(data.lead) || 0;
+          platforms[source].leads += explicitLeads;
         } else {
-          platforms[source].results += getLeadsFromData(data);
+          const leads = getLeadsFromData(data);
+          platforms[source].leads += leads;
+          platforms[source].results += leads;
         }
       }
       platforms[source].recordCount += 1;
@@ -461,14 +486,17 @@ export default function DashboardView() {
       }));
   }, [filteredRecords]);
 
-  // Campaign breakdown for platform-specific tabs (Facebook, Google Ads)
+  // Campaign breakdown for "All" tab summary
   const campaignBreakdown = useMemo(() => {
-    if (platformFilter === 'all' || platformFilter === 'google_analytics') return [];
+    if (platformFilter !== 'all') return [];
     
     const campaigns: Record<string, { campaign: string; spend: number; impressions: number; clicks: number; leads: number; revenue: number; purchases: number }> = {};
     
-    filteredRecords.forEach((record: any) => {
+    allRecords.forEach((record: any) => {
+      const source = record._source || 'unknown';
+      if (!isAdsPlatform(source)) return;
       const data = record.data || {};
+      if (data.report_type && data.report_type !== 'daily') return;
       const campaignName = data.campaign_name || data.campaign || 'ללא שם קמפיין';
       
       if (!campaigns[campaignName]) {
@@ -484,7 +512,7 @@ export default function DashboardView() {
     });
     
     return Object.values(campaigns).sort((a, b) => b.spend - a.spend);
-  }, [filteredRecords, platformFilter]);
+  }, [allRecords, platformFilter]);
 
   const campaignTotals = useMemo(() => {
     return campaignBreakdown.reduce((acc, c) => ({
@@ -496,6 +524,38 @@ export default function DashboardView() {
       purchases: acc.purchases + c.purchases,
     }), { spend: 0, impressions: 0, clicks: 0, leads: 0, revenue: 0, purchases: 0 });
   }, [campaignBreakdown]);
+
+  // Get raw records and fields for platform-specific tabs
+  const platformRawData = useMemo(() => {
+    if (platformFilter === 'all') return { records: [], fields: [], tableIds: [] };
+    
+    // Find matching tables
+    const matchingTables = tables.filter((t: any) => {
+      if (platformFilter === 'facebook') return isFacebookPlatform(t.integration_type);
+      if (platformFilter === 'google_ads') return t.integration_type === 'google_ads';
+      if (platformFilter === 'google_analytics') return t.integration_type === 'google_analytics';
+      return false;
+    });
+    
+    const tableIds = matchingTables.map((t: any) => t.id);
+    
+    // Combine fields from matching tables (dedup by key)
+    const fieldsMap = new Map<string, any>();
+    matchingTables.forEach((t: any) => {
+      const fields = tableFields[t.id] || [];
+      fields.forEach((f: any) => {
+        if (!fieldsMap.has(f.key)) {
+          fieldsMap.set(f.key, f);
+        }
+      });
+    });
+    const fields = Array.from(fieldsMap.values()).sort((a: any, b: any) => a.position - b.position);
+    
+    // Get matching records
+    const records = allRecords.filter((r: any) => tableIds.includes(r._tableId));
+    
+    return { records, fields, tableIds };
+  }, [platformFilter, tables, tableFields, allRecords]);
 
   // Group records by date for table
   const recordsByDate = useMemo(() => {
@@ -776,12 +836,14 @@ export default function DashboardView() {
               </div>
               )}
 
-              {/* Campaign Breakdown - show on platform-specific tabs (Facebook, Google Ads) */}
-              {(platformFilter === 'facebook' || platformFilter === 'google_ads') && campaignBreakdown.length > 0 && (
+              {/* Raw Table Data - show on platform-specific tabs (Facebook, Google Ads, Analytics) */}
+              {platformFilter !== 'all' && platformRawData.fields.length > 0 && (
                 <Card>
                   <CardHeader>
                     <CardTitle>
-                      {platformFilter === 'facebook' ? 'קמפיינים - Facebook' : 'קמפיינים - Google Ads'}
+                      {platformFilter === 'facebook' ? 'נתוני Facebook' : 
+                       platformFilter === 'google_ads' ? 'נתוני Google Ads' : 
+                       'נתוני Analytics'}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -789,79 +851,52 @@ export default function DashboardView() {
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead className="text-right">קמפיין</TableHead>
-                            <TableHead className="text-right">חשיפות</TableHead>
-                            <TableHead className="text-right">קליקים</TableHead>
-                            <TableHead className="text-right">לידים</TableHead>
-                            <TableHead className="text-right">עלות לליד</TableHead>
-                            {dashboardCampaignType === 'ecommerce' && (
-                              <>
-                                <TableHead className="text-right">רכישות</TableHead>
-                                <TableHead className="text-right">הכנסות</TableHead>
-                              </>
-                            )}
-                            <TableHead className="text-right">הוצאה</TableHead>
-                            {dashboardCampaignType === 'ecommerce' && (
-                              <TableHead className="text-right">ROAS</TableHead>
-                            )}
+                            {platformRawData.fields.map((field: any) => (
+                              <TableHead key={field.key} className="text-right whitespace-nowrap">
+                                {field.name}
+                              </TableHead>
+                            ))}
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {campaignBreakdown.map((c, i) => {
-                            const cpl = c.leads > 0 ? c.spend / c.leads : 0;
-                            const roas = c.spend > 0 ? c.revenue / c.spend : 0;
-                            return (
-                              <TableRow key={i}>
-                                <TableCell className="font-medium max-w-[300px] truncate">{c.campaign}</TableCell>
-                                <TableCell>{formatNumber(c.impressions)}</TableCell>
-                                <TableCell>{formatNumber(c.clicks)}</TableCell>
-                                <TableCell className={c.leads > 0 ? 'text-green-600 font-semibold' : ''}>
-                                  {formatNumber(c.leads)}
-                                </TableCell>
-                                <TableCell className={cpl > 0 ? 'text-green-600' : ''}>
-                                  {cpl > 0 ? formatCurrency(cpl) : '₪0'}
-                                </TableCell>
-                                {dashboardCampaignType === 'ecommerce' && (
-                                  <>
-                                    <TableCell>{formatNumber(c.purchases)}</TableCell>
-                                    <TableCell>{formatCurrency(c.revenue)}</TableCell>
-                                  </>
-                                )}
-                                <TableCell>{formatCurrency(c.spend)}</TableCell>
-                                {dashboardCampaignType === 'ecommerce' && (
-                                  <TableCell>
-                                    <span className={roas >= 1 ? 'text-green-600 font-semibold' : 'text-red-600'}>
-                                      {roas.toFixed(2)}
-                                    </span>
-                                  </TableCell>
-                                )}
+                          {platformRawData.records
+                            .sort((a: any, b: any) => {
+                              const dateA = a.data?.date || '';
+                              const dateB = b.data?.date || '';
+                              return dateB.localeCompare(dateA);
+                            })
+                            .map((record: any, i: number) => (
+                              <TableRow key={record.id || i}>
+                                {platformRawData.fields.map((field: any) => {
+                                  const val = record.data?.[field.key];
+                                  let displayVal = val;
+                                  if (val === null || val === undefined) {
+                                    displayVal = '-';
+                                  } else if (typeof val === 'number') {
+                                    // Format currency-like fields
+                                    if (['spend', 'cost', 'revenue', 'purchase_value', 'conversions_value', 'conversion_value', 'cpl', 'cost_per_lead', 'cpc', 'cpm'].includes(field.key)) {
+                                      displayVal = formatCurrency(val);
+                                    } else if (['roas', 'engagement_rate', 'ctr'].includes(field.key)) {
+                                      displayVal = val.toFixed(2);
+                                    } else {
+                                      displayVal = formatNumber(val);
+                                    }
+                                  }
+                                  return (
+                                    <TableCell key={field.key} className="whitespace-nowrap">
+                                      {displayVal}
+                                    </TableCell>
+                                  );
+                                })}
                               </TableRow>
-                            );
-                          })}
-                          {/* Totals row */}
-                          <TableRow className="bg-muted/50 font-bold border-t-2">
-                            <TableCell>סה"כ</TableCell>
-                            <TableCell>{formatNumber(campaignTotals.impressions)}</TableCell>
-                            <TableCell>{formatNumber(campaignTotals.clicks)}</TableCell>
-                            <TableCell className="text-green-600">{formatNumber(campaignTotals.leads)}</TableCell>
-                            <TableCell className="text-green-600">
-                              {campaignTotals.leads > 0 ? formatCurrency(campaignTotals.spend / campaignTotals.leads) : '₪0'}
-                            </TableCell>
-                            {dashboardCampaignType === 'ecommerce' && (
-                              <>
-                                <TableCell>{formatNumber(campaignTotals.purchases)}</TableCell>
-                                <TableCell>{formatCurrency(campaignTotals.revenue)}</TableCell>
-                              </>
-                            )}
-                            <TableCell>{formatCurrency(campaignTotals.spend)}</TableCell>
-                            {dashboardCampaignType === 'ecommerce' && (
-                              <TableCell>
-                                <span className={(campaignTotals.spend > 0 ? campaignTotals.revenue / campaignTotals.spend : 0) >= 1 ? 'text-green-600' : 'text-red-600'}>
-                                  {(campaignTotals.spend > 0 ? campaignTotals.revenue / campaignTotals.spend : 0).toFixed(2)}
-                                </span>
+                            ))}
+                          {platformRawData.records.length === 0 && (
+                            <TableRow>
+                              <TableCell colSpan={platformRawData.fields.length} className="text-center text-muted-foreground py-8">
+                                אין נתונים בטווח התאריכים הנבחר
                               </TableCell>
-                            )}
-                          </TableRow>
+                            </TableRow>
+                          )}
                         </TableBody>
                       </Table>
                     </div>
@@ -1097,7 +1132,7 @@ export default function DashboardView() {
                 </Card>
               )}
 
-              {dailyChartData.length > 1 && (
+              {dailyChartData.length > 1 && platformFilter === 'all' && (
                 <div className="grid gap-4 md:grid-cols-2">
                   {/* Revenue vs Spend */}
                   {dashboardCampaignType === 'ecommerce' && (showAdsCards || showAnalyticsCards) && (
