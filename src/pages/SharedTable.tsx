@@ -41,13 +41,11 @@ const isAnalyticsPlatform = (s: string) => s === 'google_analytics';
 const isAdsPlatform = (s: string) => ['facebook_insights', 'facebook_ecommerce', 'google_ads'].includes(s);
 const isFacebookPlatform = (s: string) => ['facebook_insights', 'facebook_ecommerce'].includes(s);
 
-type CampaignType = 'leads' | 'ecommerce';
-const getCampaignType = (type?: string, settings?: any): CampaignType => {
-  if (type === 'facebook_insights') return 'leads';
-  if (type === 'facebook_ecommerce') return 'ecommerce';
-  if (type === 'google_ads') return settings?.campaign_type === 'ecommerce' ? 'ecommerce' : 'leads';
-  return 'leads';
-};
+const isEcommerceRecord = (d: any) =>
+  String(d?.campaign_type || '').toLowerCase() === 'ecommerce' ||
+  Number(d?.purchases) > 0 ||
+  Number(d?.purchase_value) > 0 ||
+  Number(d?.add_to_cart) > 0;
 
 const formatCurrency = (num: number) =>
   new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(num);
