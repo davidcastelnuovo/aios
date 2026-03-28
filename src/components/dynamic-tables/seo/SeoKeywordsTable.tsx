@@ -209,7 +209,7 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [] }: SeoKeywords
             <KeywordTable
               keywords={top10}
               title="10 הביטויים הכי מקודמים"
-              icon={<Trophy className="h-4 w-4 text-amber-500" />}
+              icon={<Trophy className="h-4 w-4 text-primary" />}
               showCampaignStart
               showPrevMonth
             />
