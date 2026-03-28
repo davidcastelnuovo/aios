@@ -621,7 +621,7 @@ export function GoogleAnalyticsDashboard({
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 2xl:grid-cols-9 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
         <Card>
           <CardContent className="pt-4">
             <div className="flex items-center gap-2">
@@ -653,38 +653,75 @@ export function GoogleAnalyticsDashboard({
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-2">
-              <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">הוספה לעגלה</span>
-            </div>
-            <p className="text-2xl font-bold mt-1">{formatNumber(totals.addToCart)}</p>
-            <ChangeIndicator current={totals.addToCart} previous={prevTotals?.addToCart} />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-2">
-              <CreditCard className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">רכישות</span>
-            </div>
-            <p className="text-2xl font-bold mt-1">{formatNumber(totals.purchases)}</p>
-            <ChangeIndicator current={totals.purchases} previous={prevTotals?.purchases} />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">שווי רכישות</span>
-            </div>
-            <p className="text-2xl font-bold mt-1">{formatCurrency(totals.purchaseValue)}</p>
-            <ChangeIndicator current={totals.purchaseValue} previous={prevTotals?.purchaseValue} />
-          </CardContent>
-        </Card>
+        {reportMode === 'ecommerce' ? (
+          <>
+            <Card>
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-2">
+                  <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">הוספה לעגלה</span>
+                </div>
+                <p className="text-2xl font-bold mt-1">{formatNumber(totals.addToCart)}</p>
+                <ChangeIndicator current={totals.addToCart} previous={prevTotals?.addToCart} />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">רכישות</span>
+                </div>
+                <p className="text-2xl font-bold mt-1">{formatNumber(totals.purchases)}</p>
+                <ChangeIndicator current={totals.purchases} previous={prevTotals?.purchases} />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">שווי רכישות</span>
+                </div>
+                <p className="text-2xl font-bold mt-1">{formatCurrency(totals.purchaseValue)}</p>
+                <ChangeIndicator current={totals.purchaseValue} previous={prevTotals?.purchaseValue} />
+              </CardContent>
+            </Card>
+          </>
+        ) : (
+          <>
+            <Card>
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-2">
+                  <Target className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">המרות (לידים)</span>
+                </div>
+                <p className="text-2xl font-bold mt-1">{formatNumber(totals.conversions)}</p>
+                <ChangeIndicator current={totals.conversions} previous={prevTotals?.conversions} />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">שיעור המרה</span>
+                </div>
+                <p className="text-2xl font-bold mt-1">
+                  {totals.sessions > 0 ? ((totals.conversions / totals.sessions) * 100).toFixed(2) : '0'}%
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-2">
+                  <UserCheck className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">המרות למשתמש</span>
+                </div>
+                <p className="text-2xl font-bold mt-1">
+                  {totals.users > 0 ? ((totals.conversions / totals.users) * 100).toFixed(2) : '0'}%
+                </p>
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
 
       {/* Charts Row */}
