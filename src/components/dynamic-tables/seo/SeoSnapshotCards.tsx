@@ -27,10 +27,9 @@ export function SeoSnapshotCards({ snapshot, prevMonth, campaignStart }: SeoSnap
     { key: 'org_keywords_top3', label: 'מילות מפתח (Top 3)', icon: '🥇' },
     { key: 'org_keywords_top10', label: 'מילות מפתח (Top 10)', icon: '🔟' },
     { key: 'org_keywords_total', label: 'סה״כ מילות מפתח', icon: '🔑' },
-    { key: 'referring_domains', label: 'דומיינים מפנים', icon: '🔗' },
+    { key: 'referring_domains_all_time', label: 'דומיינים מפנים (כולל)', icon: '🔗' },
     { key: 'backlinks_live', label: 'קישורים נכנסים (פעילים)', icon: '🌐' },
     { key: 'backlinks_all_time', label: 'קישורים נכנסים (כולל)', icon: '📊' },
-    { key: 'referring_domains_all_time', label: 'דומיינים מפנים (כולל)', icon: '🔗' },
   ].filter(m => snapshot[m.key] !== undefined && snapshot[m.key] !== null);
 
   if (metrics.length === 0) return null;
