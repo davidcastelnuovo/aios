@@ -293,7 +293,7 @@ export default function DynamicTables() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
       setEditingTable(null);
-      toast.success('הטבלה עודכנה בהצלחה');
+      toast.success('הדוח עודכן בהצלחה');
     },
     onError: (error: any) => {
       toast.error('שגיאה בעדכון הטבלה: ' + error.message);
