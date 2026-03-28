@@ -379,7 +379,7 @@ export default function DynamicTables() {
           <TabsList>
             <TabsTrigger value="tables" className="gap-2">
               <Table2 className="h-4 w-4" />
-              טבלאות
+              דוחות
             </TabsTrigger>
             <TabsTrigger value="dashboards" className="gap-2">
               <LayoutDashboard className="h-4 w-4" />
