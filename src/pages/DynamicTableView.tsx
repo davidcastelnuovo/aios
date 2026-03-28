@@ -2487,7 +2487,15 @@ export default function DynamicTableView() {
         <SearchConsoleDashboard tableId={table.id} />
       )}
 
-      {isLoading ? (
+      {/* SEO (Ahrefs) Dashboard */}
+      {hasAhrefs && table?.integration_settings?.data_source === 'ahrefs_reports' && table?.integration_settings?.clientId && table?.tenant_id && (
+        <SeoDashboardView 
+          tenantId={table.tenant_id} 
+          clientId={table.integration_settings.clientId} 
+        />
+      )}
+
+      {hasAhrefs && table?.integration_settings?.data_source === 'ahrefs_reports' ? null : isLoading ? (
         <Skeleton className="h-96 w-full" />
       ) : (
         <div className="border rounded-lg overflow-hidden bg-background shadow-sm">
