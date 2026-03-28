@@ -277,8 +277,6 @@ Deno.serve(async (req) => {
         }
       }
     }
-      }
-    }
 
     console.log("Sync complete:", JSON.stringify(results));
     return new Response(JSON.stringify({ success: true, results }), {
