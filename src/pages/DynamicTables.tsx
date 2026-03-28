@@ -459,13 +459,13 @@ export default function DynamicTables() {
           ) : !filteredTables || filteredTables.length === 0 ? (
             <Card className="p-12 text-center">
               <Table2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">אין טבלאות עדיין</h3>
+              <h3 className="text-lg font-semibold mb-2">אין דוחות עדיין</h3>
               <p className="text-muted-foreground mb-4">
-                צור את הטבלה הראשונה שלך כדי להתחיל
+                צור את הדוח הראשון שלך כדי להתחיל
               </p>
               <Button onClick={() => setShowCreateDialog(true)}>
                 <Plus className="ml-2 h-4 w-4" />
-                צור טבלה ראשונה
+                צור דוח ראשון
               </Button>
             </Card>
           ) : (
