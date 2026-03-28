@@ -972,37 +972,102 @@ export default function DynamicTableView() {
         if (error) throw error;
         if (!reports || reports.length === 0) throw new Error('לא נמצאו דוחות SEO עבור לקוח זה');
 
-        // Convert ahrefs_reports into crm_records
-        const recordsToInsert = reports.map((report: any) => {
-          const rd = report.report_data as any || {};
-          const snapshot = rd.snapshot || {};
-          return {
-            table_id: table.id,
-            tenant_id: table.tenant_id,
-            data: {
-              domain: report.domain,
-              report_type: report.report_type,
-              received_at: report.received_at,
-              dr: snapshot.dr,
-              org_traffic: snapshot.org_traffic,
-              org_keywords_top3: snapshot.org_keywords_top3,
-              org_keywords_top10: snapshot.org_keywords_top10,
-              org_keywords_total: snapshot.org_keywords_total,
-              referring_domains: snapshot.referring_domains,
-              backlinks_live: snapshot.backlinks_live,
-              backlinks_all_time: snapshot.backlinks_all_time,
-              ...rd,
-            },
-          };
-        });
+        // Flatten report data into simple key-value records for the table
+        const latestReport = reports[0];
+        const rd = latestReport.report_data as any || {};
+        const snapshot = rd.snapshot || {};
+        const snapshotPrev = rd.snapshot_prev_month || {};
+        const organicKeywords = Array.isArray(rd.organic_keywords) ? rd.organic_keywords : [];
+        const trackedKeywords = Array.isArray(rd.tracked_keywords) ? rd.tracked_keywords : [];
+        const allKeywords = [...organicKeywords, ...trackedKeywords];
+
+        // Create one record per keyword for a useful table view
+        const recordsToInsert = allKeywords.length > 0
+          ? allKeywords.map((kw: any) => ({
+              table_id: table.id,
+              tenant_id: table.tenant_id,
+              data: {
+                keyword: String(kw.keyword || ''),
+                position: kw.position ?? null,
+                position_prev_month: kw.position_prev_month ?? null,
+                position_change: kw.position_prev_month != null && kw.position != null 
+                  ? kw.position_prev_month - kw.position : null,
+                traffic: kw.traffic ?? 0,
+                traffic_prev_month: kw.traffic_prev_month ?? 0,
+                volume: kw.volume ?? 0,
+                kd: kw.kd ?? null,
+                cpc: kw.cpc ?? null,
+                url: kw.url ?? '',
+                domain: latestReport.domain,
+                dr: snapshot.dr,
+                report_date: rd.report_date || latestReport.received_at,
+              },
+            }))
+          : [{
+              table_id: table.id,
+              tenant_id: table.tenant_id,
+              data: {
+                domain: latestReport.domain,
+                dr: snapshot.dr,
+                org_traffic: snapshot.org_traffic,
+                org_keywords_top3: snapshot.org_keywords_top3,
+                org_keywords_top10: snapshot.org_keywords_top10,
+                org_keywords_total: snapshot.org_keywords_total,
+                referring_domains: snapshot.referring_domains,
+                backlinks_live: snapshot.backlinks_live,
+                backlinks_all_time: snapshot.backlinks_all_time,
+                report_date: rd.report_date || latestReport.received_at,
+              },
+            }];
 
         // Delete old records first, then insert
         await supabase.from('crm_records').delete().eq('table_id', table.id);
 
         const { error: insertError } = await supabase
           .from('crm_records')
-          .insert(recordsToInsert);
+          .insert(recordsToInsert as any[]);
         if (insertError) throw insertError;
+
+        // Auto-create fields if none exist
+        const { data: existingFields } = await supabase.functions.invoke(`crm-fields?table_id=${table.id}`, { method: 'GET' });
+        const fieldsList = (existingFields as any)?.fields || [];
+        
+        if (fieldsList.length === 0) {
+          const seoFields = allKeywords.length > 0
+            ? [
+                { key: 'keyword', label: 'מילת מפתח', type: 'text' },
+                { key: 'position', label: 'מיקום', type: 'number' },
+                { key: 'position_prev_month', label: 'מיקום חודש קודם', type: 'number' },
+                { key: 'position_change', label: 'שינוי', type: 'number' },
+                { key: 'traffic', label: 'תנועה', type: 'number' },
+                { key: 'traffic_prev_month', label: 'תנועה חודש קודם', type: 'number' },
+                { key: 'volume', label: 'נפח חיפוש', type: 'number' },
+                { key: 'kd', label: 'KD', type: 'number' },
+                { key: 'url', label: 'URL', type: 'text' },
+              ]
+            : [
+                { key: 'domain', label: 'דומיין', type: 'text' },
+                { key: 'dr', label: 'DR', type: 'number' },
+                { key: 'org_traffic', label: 'תנועה אורגנית', type: 'number' },
+                { key: 'org_keywords_top3', label: 'Top 3', type: 'number' },
+                { key: 'org_keywords_top10', label: 'Top 10', type: 'number' },
+                { key: 'referring_domains', label: 'דומיינים מפנים', type: 'number' },
+                { key: 'backlinks_live', label: 'בקלינקים פעילים', type: 'number' },
+              ];
+
+          for (let i = 0; i < seoFields.length; i++) {
+            await supabase.functions.invoke('crm-fields', {
+              method: 'POST',
+              body: {
+                table_id: table.id,
+                key: seoFields[i].key,
+                label: seoFields[i].label,
+                type: seoFields[i].type,
+                sort_order: i,
+              },
+            });
+          }
+        }
 
         // Update last_sync_at
         await supabase.functions.invoke('crm-tables', {
@@ -1059,6 +1124,7 @@ export default function DynamicTableView() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
+      queryClient.invalidateQueries({ queryKey: ['crm-fields', table?.id] });
       queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
       toast.success(`נתוני SEO סונכרנו בהצלחה (${data?.recordsCount || 0} שורות)`);
     },
