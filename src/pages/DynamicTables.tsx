@@ -268,10 +268,13 @@ export default function DynamicTables() {
   });
 
   const updateTableMutation = useMutation({
-    mutationFn: async ({ tableId, name, agency_id, client_id }: { tableId: string; name: string; agency_id: string | null; client_id: string | null }) => {
+    mutationFn: async ({ tableId, name, agency_id, client_id, integration_settings }: { tableId: string; name: string; agency_id: string | null; client_id: string | null; integration_settings?: any }) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
       
+      const body: any = { table_id: tableId, name, agency_id, client_id };
+      if (integration_settings !== undefined) body.integration_settings = integration_settings;
+
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/crm-tables`,
         {
@@ -281,7 +284,7 @@ export default function DynamicTables() {
             'Authorization': `Bearer ${session.access_token}`,
             'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
           },
-          body: JSON.stringify({ table_id: tableId, name, agency_id, client_id }),
+          body: JSON.stringify(body),
         }
       );
       
@@ -308,6 +311,7 @@ export default function DynamicTables() {
     setEditName(table.name);
     setEditAgencyId(table.agency_id || "");
     setEditClientId(table.client_id || "");
+    setEditAdAccountId(table.integration_settings?.ad_account_id || "");
   };
 
   const handleDelete = (table: CrmTable, e: React.MouseEvent) => {
@@ -317,11 +321,19 @@ export default function DynamicTables() {
 
   const handleSaveEdit = () => {
     if (!editingTable || !editName.trim()) return;
+    const isFacebook = editingTable.integration_type === 'facebook_insights' || editingTable.integration_type === 'facebook_ecommerce';
+    const updatedSettings = isFacebook && editAdAccountId ? {
+      ...editingTable.integration_settings,
+      ad_account_id: editAdAccountId,
+      ad_account_name: editAdAccounts.find(a => a.id === editAdAccountId)?.name || editingTable.integration_settings?.ad_account_name || '',
+    } : undefined;
+
     updateTableMutation.mutate({ 
       tableId: editingTable.id, 
       name: editName,
       agency_id: editAgencyId || null,
       client_id: editClientId || null,
+      integration_settings: updatedSettings,
     });
   };
 
