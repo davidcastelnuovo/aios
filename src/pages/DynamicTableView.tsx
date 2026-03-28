@@ -1124,6 +1124,7 @@ export default function DynamicTableView() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
+      queryClient.invalidateQueries({ queryKey: ['crm-fields', table?.id] });
       queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
       toast.success(`נתוני SEO סונכרנו בהצלחה (${data?.recordsCount || 0} שורות)`);
     },
