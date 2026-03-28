@@ -103,6 +103,7 @@ export default function DynamicTables() {
   const [showCreateDashboardDialog, setShowCreateDashboardDialog] = useState(false);
   const [mainTab, setMainTab] = useState<string>("tables");
   const [editAdAccountId, setEditAdAccountId] = useState<string>("");
+  const [clientSearch, setClientSearch] = useState<string>("");
 
   // For campaigners: fetch their assigned client IDs
   const { data: assignedClientIds } = useQuery({
