@@ -695,9 +695,16 @@ serve(async (req) => {
               if (module.module && isGoogleAdsModule(module.module)) {
                 // Update connection_id if provided
                 if (connection_id) {
-                  if (!module.metadata) module.metadata = {};
-                  module.metadata.connection = { id: parseInt(connection_id) };
-                  console.log(`Updated Google Ads module connection to ${connection_id}`);
+                  const parsedConnectionId = parseInt(connection_id, 10);
+                  if (!Number.isNaN(parsedConnectionId)) {
+                    if (!module.metadata) module.metadata = {};
+                    if (!module.parameters) module.parameters = {};
+                    module.metadata.connection = { id: parsedConnectionId };
+                    module.parameters.__IMTCONN__ = parsedConnectionId;
+                    console.log(`Updated Google Ads module connection to ${parsedConnectionId}`);
+                  } else {
+                    console.warn(`Invalid connection_id provided: ${connection_id}`);
+                  }
                 }
                 
                 if (customer_id) {

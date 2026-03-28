@@ -47,6 +47,7 @@ async function patchAndRunScenario(
   tenantId: string,
   customerId: string | undefined,
   campaignType: string,
+  connectionId: string | undefined,
   startDate: string,
   endDate: string,
   webhookUrl: string
@@ -62,29 +63,44 @@ async function patchAndRunScenario(
   // Step 2: Patch blueprint
   if (bp.flow && Array.isArray(bp.flow)) {
     for (const mod of bp.flow) {
-      if (mod.module && isGoogleAdsModule(mod.module) && mod.mapper) {
-        if (customerId) {
-          const fmtId = customerId.replace(/-/g, "");
-          mod.mapper.accountId = fmtId;
+      if (mod.module && isGoogleAdsModule(mod.module)) {
+        if (connectionId) {
+          const parsedConnectionId = parseInt(String(connectionId), 10);
+          if (!Number.isNaN(parsedConnectionId)) {
+            if (!mod.metadata) mod.metadata = {};
+            if (!mod.parameters) mod.parameters = {};
+            mod.metadata.connection = { id: parsedConnectionId };
+            mod.parameters.__IMTCONN__ = parsedConnectionId;
+            console.log(`Patched scenario ${scenarioId} connection to ${parsedConnectionId}`);
+          }
         }
-        // Set date range using the format the runCampaignReport module expects
-        const formatForMake = (ds: string) => {
-          const d = new Date(ds);
-          return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
-        };
-        mod.mapper.startDate = formatForMake(startDate);
-        mod.mapper.endDate = formatForMake(endDate);
-        // Remove fields that don't belong in runCampaignReport
-        delete mod.mapper.dateRangeType;
-        delete mod.mapper.start_date;
-        delete mod.mapper.end_date;
-        delete mod.mapper.dateFrom;
-        delete mod.mapper.dateTo;
-        delete mod.mapper.customerId;
-        delete mod.mapper.customer_id;
-        delete mod.mapper.metrics;
-        delete mod.mapper.segments;
-        delete mod.mapper.attributes;
+
+        if (mod.mapper) {
+          if (customerId) {
+            const fmtId = customerId.replace(/-/g, "");
+            mod.mapper.accountId = fmtId;
+          }
+
+          // Set date range using the format the runCampaignReport module expects
+          const formatForMake = (ds: string) => {
+            const d = new Date(ds);
+            return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+          };
+          mod.mapper.startDate = formatForMake(startDate);
+          mod.mapper.endDate = formatForMake(endDate);
+
+          // Remove fields that don't belong in runCampaignReport
+          delete mod.mapper.dateRangeType;
+          delete mod.mapper.start_date;
+          delete mod.mapper.end_date;
+          delete mod.mapper.dateFrom;
+          delete mod.mapper.dateTo;
+          delete mod.mapper.customerId;
+          delete mod.mapper.customer_id;
+          delete mod.mapper.metrics;
+          delete mod.mapper.segments;
+          delete mod.mapper.attributes;
+        }
       }
 
       if (mod.module && isHttpModule(mod.module) && mod.mapper) {
@@ -193,6 +209,7 @@ Deno.serve(async (req) => {
         const scenarioId = intSettings?.make_scenario_id;
         const customerId = intSettings?.customer_id;
         const campaignType = intSettings?.campaign_type || "leads";
+        const connectionId = intSettings?.make_connection_id;
 
         if (!scenarioId) {
           results.push({ table: table.name, status: "skipped", reason: "No scenario ID" });
@@ -211,7 +228,19 @@ Deno.serve(async (req) => {
             const dayStr = current.toISOString().slice(0, 10);
             try {
               console.log(`Backfill ${table.name}: ${dayStr}`);
-              await patchAndRunScenario(apiToken, region, sid, table.id, tenantId, customerId ? String(customerId) : undefined, campaignType, dayStr, dayStr, webhookUrl);
+              await patchAndRunScenario(
+                apiToken,
+                region,
+                sid,
+                table.id,
+                tenantId,
+                customerId ? String(customerId) : undefined,
+                campaignType,
+                connectionId ? String(connectionId) : undefined,
+                dayStr,
+                dayStr,
+                webhookUrl
+              );
               dayCount++;
               // Wait 5 seconds between days to avoid rate limits
               await new Promise((r) => setTimeout(r, 5000));
@@ -225,7 +254,19 @@ Deno.serve(async (req) => {
         } else {
           // Daily sync: single date
           try {
-            await patchAndRunScenario(apiToken, region, sid, table.id, tenantId, customerId ? String(customerId) : undefined, campaignType, startDate, endDate, webhookUrl);
+            await patchAndRunScenario(
+              apiToken,
+              region,
+              sid,
+              table.id,
+              tenantId,
+              customerId ? String(customerId) : undefined,
+              campaignType,
+              connectionId ? String(connectionId) : undefined,
+              startDate,
+              endDate,
+              webhookUrl
+            );
             results.push({ table: table.name, status: "triggered", date: startDate });
           } catch (err) {
             console.error(`Sync error ${table.name}:`, err instanceof Error ? err.message : err);
@@ -234,6 +275,8 @@ Deno.serve(async (req) => {
           // Wait between tables
           await new Promise((r) => setTimeout(r, 2000));
         }
+      }
+    }
       }
     }
 
