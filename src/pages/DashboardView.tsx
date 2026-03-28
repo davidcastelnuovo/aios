@@ -777,6 +777,12 @@ export default function DashboardView() {
                     Analytics
                   </TabsTrigger>
                 )}
+                {availablePlatforms.includes('seo') && (
+                  <TabsTrigger value="seo" className="flex items-center gap-2">
+                    <Globe className="h-4 w-4 text-green-600" />
+                    SEO
+                  </TabsTrigger>
+                )}
               </TabsList>
             </Tabs>
           )}
