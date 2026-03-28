@@ -45,7 +45,7 @@ const PLATFORM_CONFIG: Record<string, { name: string; color: string; bgColor: st
 };
 
 type CampaignType = 'leads' | 'ecommerce';
-type PlatformFilter = 'all' | 'facebook' | 'google_ads' | 'google_analytics';
+type PlatformFilter = 'all' | 'facebook' | 'google_ads' | 'google_analytics' | 'seo';
 
 const getCampaignType = (integrationType?: string | null, integrationSettings?: any): CampaignType => {
   if (integrationType === 'facebook_ecommerce') return 'ecommerce';
