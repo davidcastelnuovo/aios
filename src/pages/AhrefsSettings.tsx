@@ -31,9 +31,57 @@ const REPORT_TYPE_LABELS: Record<string, string> = {
 
 export default function AhrefsSettings() {
   const queryClient = useQueryClient();
+  const { tenantId } = useCurrentTenant();
   const [isConnecting, setIsConnecting] = useState(false);
   const [filterReportType, setFilterReportType] = useState<string>("all");
   const [selectedReport, setSelectedReport] = useState<AhrefsReport | null>(null);
+  const [clientSearchOpen, setClientSearchOpen] = useState<string | null>(null);
+  const [clientSearch, setClientSearch] = useState("");
+
+  // Fetch clients for association
+  const { data: clients = [] } = useQuery({
+    queryKey: ['clients-for-ahrefs', tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data } = await supabase
+        .from('clients')
+        .select('id, name, website, agency_id')
+        .eq('tenant_id', tenantId)
+        .order('name');
+      return data || [];
+    },
+    enabled: !!tenantId,
+  });
+
+  // Link report to client mutation
+  const linkClientMutation = useMutation({
+    mutationFn: async ({ reportId, clientId, domain }: { reportId: string; clientId: string; domain: string }) => {
+      // Update report with client_id
+      const { error: reportError } = await supabase
+        .from('ahrefs_reports' as any)
+        .update({ client_id: clientId })
+        .eq('id', reportId);
+      if (reportError) throw reportError;
+
+      // Update client website if not set
+      const client = clients.find(c => c.id === clientId);
+      if (client && !client.website) {
+        const websiteUrl = domain.startsWith('http') ? domain : `https://${domain}`;
+        await supabase
+          .from('clients')
+          .update({ website: websiteUrl })
+          .eq('id', clientId);
+      }
+    },
+    onSuccess: () => {
+      toast.success('הדוח שויך ללקוח בהצלחה');
+      queryClient.invalidateQueries({ queryKey: ['ahrefs-reports'] });
+      queryClient.invalidateQueries({ queryKey: ['clients-for-ahrefs'] });
+      setClientSearchOpen(null);
+      setClientSearch("");
+    },
+    onError: () => toast.error('שגיאה בשיוך הדוח'),
+  });
 
   const { data: connectionStatus, isLoading } = useQuery({
     queryKey: ['ahrefs-status'],
