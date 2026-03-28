@@ -44,6 +44,9 @@ const ALL_TOOLS = [
   { name: 'send_message', description: 'שליחת הודעת WhatsApp ללקוח או ליד', parameters: { type: 'object', properties: { contact_type: { type: 'string', enum: ['lead', 'client'] }, contact_id: { type: 'string' }, message_text: { type: 'string' } }, required: ['contact_type', 'contact_id', 'message_text'] } },
   // SEARCH
   { name: 'search_entities', description: 'חיפוש סוכנויות, לקוחות, קמפיינרים או לידים לפי שם', parameters: { type: 'object', properties: { entity_type: { type: 'string', enum: ['agency', 'client', 'campaigner', 'lead'] }, search_term: { type: 'string' } }, required: ['entity_type', 'search_term'] } },
+  // MANUS AI - Complex task delegation
+  { name: 'delegate_to_manus', description: 'שליחת משימה מורכבת ל-Manus AI לביצוע ברקע (מחקר שוק, ניתוח קמפיינים, יצירת תוכן, ניתוח נתונים). המשימה רצה ברקע ועשויה לקחת דקות עד שעות.', parameters: { type: 'object', properties: { prompt: { type: 'string', description: 'תיאור מפורט של המשימה לביצוע' }, context_data: { type: 'string', description: 'נתוני הקשר רלוונטיים (למשל נתוני קמפיינים)' } }, required: ['prompt'] } },
+  { name: 'get_facebook_campaign_data', description: 'שליפת נתוני קמפיינים מפייסבוק לצורך ניתוח', parameters: { type: 'object', properties: { client_id: { type: 'string' }, days: { type: 'integer', description: 'מספר ימים אחורה (ברירת מחדל 30)' } } } },
 ]
 
 // ===========================
@@ -145,6 +148,62 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const { data, error } = await supabase.from(table).select('id, ' + nameField).eq('tenant_id', tenantId).ilike(nameField, `%${args.search_term}%`).limit(10)
       if (error) throw error
       return { count: data.length, results: data }
+    }
+    case 'delegate_to_manus': {
+      // Call the existing manus-api edge function
+      const manusBody: any = {
+        action: 'create_task',
+        tenantId,
+        prompt: args.prompt,
+      }
+      if (args.context_data) {
+        manusBody.prompt = `${args.prompt}\n\nנתוני הקשר:\n${args.context_data}`
+      }
+
+      const manusRes = await fetch(`${SUPABASE_URL}/functions/v1/manus-api`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+        body: JSON.stringify(manusBody),
+      })
+
+      if (!manusRes.ok) {
+        const errText = await manusRes.text()
+        throw new Error(`Manus API error: ${errText}`)
+      }
+
+      const manusData = await manusRes.json()
+      return {
+        success: true,
+        task_id: manusData.task_id,
+        task_url: manusData.task_url,
+        share_url: manusData.share_url,
+        message: 'המשימה נשלחה ל-Manus AI ורצה ברקע. תוכל לעקוב אחריה בהגדרות Manus.',
+      }
+    }
+    case 'get_facebook_campaign_data': {
+      const daysBack = args.days || 30
+      const sinceDate = new Date()
+      sinceDate.setDate(sinceDate.getDate() - daysBack)
+      const sinceDateStr = sinceDate.toISOString().split('T')[0]
+
+      let query = supabase
+        .from('facebook_insights')
+        .select('campaign_name, date, impressions, clicks, spend, leads_count, reach, cpc, cpm, ctr, cost_per_lead, campaign_status')
+        .eq('tenant_id', tenantId)
+        .gte('date', sinceDateStr)
+        .order('date', { ascending: false })
+        .limit(500)
+
+      if (args.client_id) {
+        query = query.eq('client_id', args.client_id)
+      }
+
+      const { data, error } = await query
+      if (error) throw error
+      return { count: data?.length || 0, campaigns: data || [], period: `${daysBack} days` }
     }
     default:
       throw new Error(`Unknown tool: ${name}`)
