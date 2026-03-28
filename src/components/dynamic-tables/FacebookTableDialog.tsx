@@ -226,7 +226,7 @@ export function FacebookTableDialog({ open, onOpenChange, assignedClientIds }: F
     onOpenChange(false);
   };
 
-  const isFacebookConfigured = facebookIntegration?.is_active && facebookIntegration?.api_key;
+  const isFacebookConfigured = !!facebookIntegration?.is_active;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
