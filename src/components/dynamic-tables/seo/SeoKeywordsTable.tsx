@@ -86,16 +86,10 @@ function KeywordTable({ keywords, title, icon, showCampaignStart, showPrevMonth 
               <th className="text-right p-3 font-medium">ביטוי</th>
               <th className="text-center p-3 font-medium">מיקום</th>
               {showPrevMonth && (
-                <>
-                  <th className="text-center p-3 font-medium">שינוי מיקום (חודש)</th>
-                  <th className="text-center p-3 font-medium">שינוי תנועה (חודש)</th>
-                </>
+                <th className="text-center p-3 font-medium">שינוי מיקום (חודש)</th>
               )}
               {showCampaignStart && (
-                <>
-                  <th className="text-center p-3 font-medium">שינוי מיקום (קמפיין)</th>
-                  <th className="text-center p-3 font-medium">שינוי תנועה (קמפיין)</th>
-                </>
+                <th className="text-center p-3 font-medium">שינוי מיקום (קמפיין)</th>
               )}
               <th className="text-center p-3 font-medium">תנועה</th>
               <th className="text-center p-3 font-medium">נפח חיפוש</th>
