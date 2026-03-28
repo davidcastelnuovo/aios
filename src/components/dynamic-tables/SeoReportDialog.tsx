@@ -2,23 +2,84 @@ import { useState, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
 import { useToast } from "@/hooks/use-toast";
-import { TrendingUp, Globe, FileText, Calendar, ArrowUp, ArrowDown, Loader2, PlusCircle } from "lucide-react";
+import { TrendingUp, Globe, FileText, Calendar, ArrowUp, ArrowDown, Loader2, PlusCircle, Search, ChevronsUpDown, Check } from "lucide-react";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { cn } from "@/lib/utils";
 
 interface SeoReportDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   assignedClientIds?: string[];
+}
+
+function ClientSearchSelect({ clients, selectedClient, onSelect }: {
+  clients: { id: string; name: string; is_seo_client?: boolean | null }[];
+  selectedClient: string;
+  onSelect: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return clients;
+    const q = search.trim().toLowerCase();
+    return clients.filter(c => c.name.toLowerCase().includes(q));
+  }, [clients, search]);
+
+  const selectedName = clients.find(c => c.id === selectedClient)?.name;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between font-normal">
+          {selectedName || "בחר לקוח..."}
+          <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+        <div className="flex items-center gap-2 border-b px-3 py-2">
+          <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+          <Input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="חפש לקוח..."
+            className="border-0 p-0 h-8 focus-visible:ring-0 shadow-none"
+          />
+        </div>
+        <div className="max-h-60 overflow-y-auto p-1">
+          {filtered.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">לא נמצאו לקוחות</p>
+          ) : (
+            filtered.map(client => (
+              <button
+                key={client.id}
+                onClick={() => { onSelect(client.id); setOpen(false); setSearch(""); }}
+                className={cn(
+                  "flex items-center gap-2 w-full rounded-sm px-2 py-1.5 text-sm hover:bg-accent cursor-pointer text-right",
+                  selectedClient === client.id && "bg-accent"
+                )}
+              >
+                <Check className={cn("h-4 w-4 shrink-0", selectedClient === client.id ? "opacity-100" : "opacity-0")} />
+                {client.name}
+                {client.is_seo_client && <Badge variant="secondary" className="text-xs mr-auto">SEO</Badge>}
+              </button>
+            ))
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoReportDialogProps) {
@@ -144,23 +205,11 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
           {/* Client Selection */}
           <div className="space-y-2">
             <Label>בחר לקוח</Label>
-            <Select value={selectedClient} onValueChange={setSelectedClient}>
-              <SelectTrigger>
-                <SelectValue placeholder="בחר לקוח..." />
-              </SelectTrigger>
-              <SelectContent className="bg-background z-50">
-                {clients.map(client => (
-                  <SelectItem key={client.id} value={client.id}>
-                    <div className="flex items-center gap-2">
-                      {client.name}
-                      {client.is_seo_client && (
-                        <Badge variant="secondary" className="text-xs">SEO</Badge>
-                      )}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <ClientSearchSelect
+              clients={clients}
+              selectedClient={selectedClient}
+              onSelect={setSelectedClient}
+            />
           </div>
 
           {/* Reports Display */}
