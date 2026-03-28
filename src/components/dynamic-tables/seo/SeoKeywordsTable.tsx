@@ -36,20 +36,10 @@ function KeywordRow({ kw, showCampaignStart, showPrevMonth }: { kw: any; showCam
         ) : <span className="text-muted-foreground">—</span>}
       </td>
       {showPrevMonth && (
-        <>
-          <td className="p-3 text-center"><PositionChange value={posChangeMonth} /></td>
-          <td className="p-3 text-center">
-            <TrafficChange current={kw.traffic} previous={kw.traffic_prev_month} />
-          </td>
-        </>
+        <td className="p-3 text-center"><PositionChange value={posChangeMonth} /></td>
       )}
       {showCampaignStart && (
-        <>
-          <td className="p-3 text-center"><PositionChange value={posChangeCampaign} /></td>
-          <td className="p-3 text-center">
-            <TrafficChange current={kw.traffic} previous={kw.traffic_campaign_start} />
-          </td>
-        </>
+        <td className="p-3 text-center"><PositionChange value={posChangeCampaign} /></td>
       )}
       <td className="p-3 text-center">{kw.traffic != null ? Number(kw.traffic).toLocaleString() : '-'}</td>
       <td className="p-3 text-center">{kw.volume != null ? Number(kw.volume).toLocaleString() : '-'}</td>
@@ -71,7 +61,6 @@ function KeywordRow({ kw, showCampaignStart, showPrevMonth }: { kw: any; showCam
     </tr>
   );
 }
-
 function KeywordTable({ keywords, title, icon, showCampaignStart, showPrevMonth }: {
   keywords: any[];
   title: string;
