@@ -71,7 +71,7 @@ function KeywordTable({ keywords, title, icon, showCampaignStart, showPrevMonth 
   if (keywords.length === 0) return null;
 
   return (
-    <div>
+    <div dir="rtl">
       <div className="flex items-center justify-between px-3 py-2 bg-muted/30 border-b">
         <div className="flex items-center gap-2 text-sm font-medium">
           {icon}
