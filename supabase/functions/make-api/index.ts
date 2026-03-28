@@ -691,28 +691,34 @@ serve(async (req) => {
             const selectedMetrics = campaign_type === "ecommerce" ? metricsForEcommerce : metricsForLeads;
             
             for (const module of blueprintData.flow) {
-              // Check if this is a Google Ads module - update customer_id, accountId and metrics
-              if (customer_id && module.module && isGoogleAdsModule(module.module)) {
-                console.log(`Found Google Ads module (${module.module}), updating customer_id, accountId and metrics for ${campaign_type}`);
-                if (module.mapper) {
-                  // Format customer ID without dashes
-                  const formattedCustomerId = customer_id.replace(/-/g, '');
-                  module.mapper.customerId = formattedCustomerId;
-                  module.mapper.customer_id = formattedCustomerId;
-                  module.mapper.accountId = formattedCustomerId; // Some templates use accountId
-                  // Update metrics based on campaign type
-                  module.mapper.metrics = selectedMetrics;
-                  // Ensure segments.date is included for daily breakdown
-                  if (!module.mapper.segments || !Array.isArray(module.mapper.segments)) {
-                    module.mapper.segments = ["segments.date"];
-                  } else if (!module.mapper.segments.includes("segments.date")) {
-                    module.mapper.segments.push("segments.date");
+              // Check if this is a Google Ads module - update customer_id, accountId, metrics AND connection
+              if (module.module && isGoogleAdsModule(module.module)) {
+                // Update connection_id if provided
+                if (connection_id) {
+                  if (!module.metadata) module.metadata = {};
+                  module.metadata.connection = { id: parseInt(connection_id) };
+                  console.log(`Updated Google Ads module connection to ${connection_id}`);
+                }
+                
+                if (customer_id) {
+                  console.log(`Found Google Ads module (${module.module}), updating customer_id, accountId and metrics for ${campaign_type}`);
+                  if (module.mapper) {
+                    // Format customer ID without dashes
+                    const formattedCustomerId = customer_id.replace(/-/g, '');
+                    module.mapper.customerId = formattedCustomerId;
+                    module.mapper.customer_id = formattedCustomerId;
+                    module.mapper.accountId = formattedCustomerId;
+                    module.mapper.metrics = selectedMetrics;
+                    if (!module.mapper.segments || !Array.isArray(module.mapper.segments)) {
+                      module.mapper.segments = ["segments.date"];
+                    } else if (!module.mapper.segments.includes("segments.date")) {
+                      module.mapper.segments.push("segments.date");
+                    }
+                    if (!module.mapper.attributes || !Array.isArray(module.mapper.attributes)) {
+                      module.mapper.attributes = ["campaign.id", "campaign.name"];
+                    }
+                    console.log(`Ensured segments.date and campaign attributes in Google Ads module`);
                   }
-                  // Ensure campaign attributes are included
-                  if (!module.mapper.attributes || !Array.isArray(module.mapper.attributes)) {
-                    module.mapper.attributes = ["campaign.id", "campaign.name"];
-                  }
-                  console.log(`Ensured segments.date and campaign attributes in Google Ads module`);
                 }
               }
               
