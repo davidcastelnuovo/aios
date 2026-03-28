@@ -22,6 +22,7 @@ import { GoogleAdsTableDialog } from "@/components/dynamic-tables/GoogleAdsTable
 import { GoogleAnalyticsTableDialog } from "@/components/dynamic-tables/GoogleAnalyticsTableDialog";
 import { GoogleSearchConsoleTableDialog } from "@/components/dynamic-tables/GoogleSearchConsoleTableDialog";
 import { AhrefsTableDialog } from "@/components/dynamic-tables/AhrefsTableDialog";
+import { SeoReportDialog } from "@/components/dynamic-tables/SeoReportDialog";
 import { TableCardAlerts } from "@/components/dynamic-tables/TableCardAlerts";
 import { CreateDashboardDialog } from "@/components/dynamic-tables/CreateDashboardDialog";
 import { Badge } from "@/components/ui/badge";
