@@ -84,9 +84,10 @@ function ClientSearchSelect({ clients, selectedClient, onSelect }: {
 }
 
 export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoReportDialogProps) {
-  const { currentTenantId } = useTenant();
+  const { currentTenantId, currentTenant } = useTenant();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [selectedClient, setSelectedClient] = useState("");
   const [isCreatingTable, setIsCreatingTable] = useState(false);
 
