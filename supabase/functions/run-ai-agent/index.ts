@@ -149,6 +149,62 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (error) throw error
       return { count: data.length, results: data }
     }
+    case 'delegate_to_manus': {
+      // Call the existing manus-api edge function
+      const manusBody: any = {
+        action: 'create_task',
+        tenantId,
+        prompt: args.prompt,
+      }
+      if (args.context_data) {
+        manusBody.prompt = `${args.prompt}\n\nנתוני הקשר:\n${args.context_data}`
+      }
+
+      const manusRes = await fetch(`${SUPABASE_URL}/functions/v1/manus-api`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+        body: JSON.stringify(manusBody),
+      })
+
+      if (!manusRes.ok) {
+        const errText = await manusRes.text()
+        throw new Error(`Manus API error: ${errText}`)
+      }
+
+      const manusData = await manusRes.json()
+      return {
+        success: true,
+        task_id: manusData.task_id,
+        task_url: manusData.task_url,
+        share_url: manusData.share_url,
+        message: 'המשימה נשלחה ל-Manus AI ורצה ברקע. תוכל לעקוב אחריה בהגדרות Manus.',
+      }
+    }
+    case 'get_facebook_campaign_data': {
+      const daysBack = args.days || 30
+      const sinceDate = new Date()
+      sinceDate.setDate(sinceDate.getDate() - daysBack)
+      const sinceDateStr = sinceDate.toISOString().split('T')[0]
+
+      let query = supabase
+        .from('facebook_insights')
+        .select('campaign_name, date, impressions, clicks, spend, leads_count, reach, cpc, cpm, ctr, cost_per_lead, campaign_status')
+        .eq('tenant_id', tenantId)
+        .gte('date', sinceDateStr)
+        .order('date', { ascending: false })
+        .limit(500)
+
+      if (args.client_id) {
+        query = query.eq('client_id', args.client_id)
+      }
+
+      const { data, error } = await query
+      if (error) throw error
+      return { count: data?.length || 0, campaigns: data || [], period: `${daysBack} days` }
+    }
     default:
       throw new Error(`Unknown tool: ${name}`)
   }
