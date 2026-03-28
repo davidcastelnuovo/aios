@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -83,9 +84,10 @@ function ClientSearchSelect({ clients, selectedClient, onSelect }: {
 }
 
 export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoReportDialogProps) {
-  const { currentTenantId } = useTenant();
+  const { currentTenantId, currentTenant } = useTenant();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [selectedClient, setSelectedClient] = useState("");
   const [isCreatingTable, setIsCreatingTable] = useState(false);
 
@@ -180,8 +182,14 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
 
       if (error) throw error;
 
-      toast({ title: "טבלת דוח SEO נוצרה בהצלחה!", description: "כעת ניתן לשתף אותה." });
+      toast({ title: "טבלת דוח SEO נוצרה בהצלחה!" });
       queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      onOpenChange(false);
+      // Navigate to the new table
+      const tenantSlug = currentTenant?.slug || '';
+      if (tenantSlug) {
+        navigate(`/t/${tenantSlug}/table/${slug}`);
+      }
     } catch (error: any) {
       toast({ title: "שגיאה ביצירת הטבלה", description: error.message, variant: "destructive" });
     } finally {

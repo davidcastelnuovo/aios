@@ -42,6 +42,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnalyticsDashboard";
 import { SearchConsoleDashboard } from "@/components/dynamic-tables/SearchConsoleDashboard";
+import { SeoDashboardView } from "@/components/dynamic-tables/SeoDashboardView";
 import { AlertsManagementDialog } from "@/components/dynamic-tables/AlertsManagementDialog";
 import { ActiveAlerts } from "@/components/dynamic-tables/ActiveAlerts";
 import { ShareTableDialog } from "@/components/dynamic-tables/ShareTableDialog";
@@ -2486,7 +2487,15 @@ export default function DynamicTableView() {
         <SearchConsoleDashboard tableId={table.id} />
       )}
 
-      {isLoading ? (
+      {/* SEO (Ahrefs) Dashboard */}
+      {hasAhrefs && table?.integration_settings?.data_source === 'ahrefs_reports' && table?.integration_settings?.clientId && table?.tenant_id && (
+        <SeoDashboardView 
+          tenantId={table.tenant_id} 
+          clientId={table.integration_settings.clientId} 
+        />
+      )}
+
+      {hasAhrefs && table?.integration_settings?.data_source === 'ahrefs_reports' ? null : isLoading ? (
         <Skeleton className="h-96 w-full" />
       ) : (
         <div className="border rounded-lg overflow-hidden bg-background shadow-sm">
