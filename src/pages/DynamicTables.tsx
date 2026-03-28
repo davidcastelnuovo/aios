@@ -391,7 +391,7 @@ export default function DynamicTables() {
   }, [categories, selectedCategory]);
 
   return (
-    <div className="container mx-auto py-8 px-4">
+    <div className="container mx-auto py-8 px-4" dir="rtl">
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-bold">ניהול דוחות ודשבורדים</h1>
