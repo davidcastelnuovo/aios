@@ -1,84 +1,44 @@
 
 
-# תוכנית: Webhook לקליטת נתוני Ahrefs + תיקון שגיאות Build
+## תיקון: חיבור Connection של Google Ads בסנריו המשוכפל
 
-## סקירה
+### הבעיה
+כשהמערכת משכפלת סנריו מ-Make.com, היא מעדכנת את ה-Customer ID, Metrics ו-Webhook URL, אבל **לא מחליפה את ה-Connection** (החיבור ל-Google Ads) במודול. לכן הסנריו החדש נשאר עם החיבור הישן מה-Template.
 
-הפרויקט צריך שני דברים:
-1. **תיקון שגיאות Build קיימות** (3 שגיאות ב-Edge Functions + שגיאות ב-useAiDetection.ts)
-2. **יצירת מערכת Webhook לקליטת דוחות Ahrefs** — Edge Function שמקבלת נתונים מ-Ahrefs, שומרת אותם מקוטלגים בטבלה ייעודית, ומאפשרת למשוך אותם לדוחות SEO
+### הפתרון
+צריך לעדכן את ה-`connection` בכל מודול Google Ads בתוך ה-blueprint בעת השכפול, ולהעביר את ה-`connection_id` שהמשתמש בחר בדיאלוג יצירת הטבלה.
 
-## שלב 1: תיקון שגיאות Build
+### שינויים נדרשים
 
-### Edge Functions (3 תיקונים קטנים)
-- `make-paycall-call/index.ts` שורה 120: `error.message` → `(error as Error).message`
-- `paycall-webhook/index.ts` שורה 66: אותו תיקון
-- `manus-webhook/index.ts` שורה 54: Cast של `Uint8Array` — `new Uint8Array(await crypto.subtle.digest('SHA-256', body)) as unknown as Uint8Array<ArrayBuffer>`
+**1. Edge Function `make-api/index.ts` - עדכון `clone_scenario`**
+- בלולאה שעוברת על מודולי ה-flow (שורה ~693), כשמוצאים מודול Google Ads, לעדכן גם את `module.metadata.connection` (או הפרופרטי המתאים) ל-connection_id שהתקבל מהבקשה
+- הפרמטר `connection_id` כבר קיים ב-interface של הבקשה (שורה 29)
 
-### useAiDetection.ts
-- פונקציית `safeQuery` לא עושה `await` — חסר `await` לפני הקריאה ל-`queryFn()`. צריך להוסיף `.then()` או לשנות ל-await כדי שהחזרה תהיה Promise תקין
+**2. `GoogleAdsTableDialog.tsx` - העברת connection_id בשכפול**
+- בקריאת clone_scenario (שורה ~308), להוסיף `connection_id: selectedMakeConnection` לגוף הבקשה
 
-## שלב 2: טבלת אחסון דוחות Ahrefs
+**3. `DynamicTableView.tsx` - העברת connection_id בשכפול חוזר**
+- בקריאות clone_scenario מתוך DynamicTableView, להוסיף את ה-connection_id מהגדרות הטבלה (`make_connection_id`)
 
-### Migration חדשה — טבלת `ahrefs_reports`
+### פרטים טכניים
+
+בבלופרינט של Make.com, כל מודול נראה כך:
 ```text
-ahrefs_reports
-├── id (uuid, PK)
-├── tenant_id (uuid, FK → tenants)
-├── client_id (uuid, FK → clients, nullable)
-├── agency_id (uuid, FK → agencies, nullable)
-├── domain (text) — הדומיין שנסרק
-├── report_type (text) — organic_keywords / backlinks / referring_domains / site_explorer / domain_rating
-├── report_data (jsonb) — הנתונים המלאים
-├── metadata (jsonb) — מטאדאטה נוספת (מקור, גרסה, וכו')
-├── report_date (date) — התאריך שהדוח מייצג
-├── received_at (timestamptz, default now())
-├── created_at (timestamptz)
+{
+  "id": 3,
+  "module": "google-ads:runCampaignReport",
+  "mapper": { ... },
+  "metadata": {
+    "connection": { "id": 12345 }  ← זה מה שצריך לעדכן
+  }
+}
 ```
 
-RLS: גישה לפי tenant_id + super_admin
-
-## שלב 3: Edge Function — `ahrefs-webhook`
-
-פונקציה חדשה שמקבלת POST עם נתוני דוח:
-
-- **אימות**: API key (secret) בכותרת `x-api-key` או `Authorization`
-- **קלט**: JSON עם `domain`, `report_type`, `report_data`, `client_id` (אופציונלי), `agency_id` (אופציונלי), `tenant_id`
-- **שמירה**: מוסיפה רשומה ל-`ahrefs_reports`
-- **אופציונלי**: אם יש `table_id` — גם מעדכנת את טבלת ה-CRM המתאימה (כמו sync-ahrefs-data עושה היום)
-- **תמיכה ב-batch**: אפשרות לשלוח מערך של דוחות בפעם אחת
-
-כתובת ה-Webhook:
-`https://jnzguisakdtcollxmgzd.supabase.co/functions/v1/ahrefs-webhook`
-
-## שלב 4: ממשק צפייה בדוחות
-
-### עדכון דף Ahrefs Settings
-- הוספת סקשן שמציג את כתובת ה-Webhook להעתקה
-- הוספת סקשן "דוחות שהתקבלו" — טבלה שמציגה את כל הדוחות שנקלטו, מסוננים לפי דומיין/סוג/תאריך
-- אפשרות לצפות בדוח ספציפי
-
-### הוספת hook — `useAhrefsReports`
-- שליפת דוחות מ-`ahrefs_reports` לפי tenant, client, domain
-- שימוש ב-React Query
-
-## שלב 5: אינטגרציה עם דוח SEO
-
-- הוספת אפשרות למשוך נתוני Ahrefs מהדוחות השמורים לדשבורד/טבלאות קיימות
-- כפתור "ייבא מדוח Ahrefs" בטבלאות SEO
-
-## פרטים טכניים
-
-### Secret נדרש
-- `AHREFS_WEBHOOK_SECRET` — מפתח אימות לוובהוק (המשתמש יגדיר ערך ויספק אותו למערכת החיצונית)
-
-### קבצים שישתנו/ייווצרו
-1. `supabase/functions/make-paycall-call/index.ts` — תיקון type error
-2. `supabase/functions/paycall-webhook/index.ts` — תיקון type error
-3. `supabase/functions/manus-webhook/index.ts` — תיקון type error
-4. `src/hooks/useAiDetection.ts` — תיקון await חסר
-5. **חדש**: Migration ליצירת טבלת `ahrefs_reports`
-6. **חדש**: `supabase/functions/ahrefs-webhook/index.ts`
-7. `src/pages/AhrefsSettings.tsx` — הוספת תצוגת webhook URL + דוחות שהתקבלו
-8. **חדש**: `src/hooks/useAhrefsReports.ts`
+הקוד יעדכן את ה-connection בצורה הבאה:
+```typescript
+if (connection_id && module.module && isGoogleAdsModule(module.module)) {
+  if (!module.metadata) module.metadata = {};
+  module.metadata.connection = { id: parseInt(connection_id) };
+}
+```
 
