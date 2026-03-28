@@ -424,6 +424,10 @@ export default function DynamicTables() {
                   </svg>
                   דוח Google Analytics
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setShowSeoReportDialog(true)}>
+                  <TrendingUp className="ml-2 h-4 w-4" />
+                  דוח SEO
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           ) : canManageTables && mainTab === 'dashboards' ? (
