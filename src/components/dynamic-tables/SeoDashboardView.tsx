@@ -4,13 +4,12 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Globe, FileText, Calendar, ArrowUp, ArrowDown } from "lucide-react";
+import { Globe, FileText, Calendar } from "lucide-react";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { SeoSnapshotCards } from "./seo/SeoSnapshotCards";
 import { SeoTrafficChart } from "./seo/SeoTrafficChart";
 import { SeoKeywordsTable } from "./seo/SeoKeywordsTable";
-import { SeoTrackedKeywords } from "./seo/SeoTrackedKeywords";
 
 interface SeoDashboardViewProps {
   tenantId: string;
@@ -102,15 +101,11 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
       {/* Traffic History Chart */}
       <SeoTrafficChart trafficHistory={trafficHistory} />
 
-      {/* Tracked Keywords */}
-      {trackedKeywords.length > 0 && (
-        <SeoTrackedKeywords keywords={trackedKeywords} />
-      )}
-
-      {/* Organic Keywords Table */}
-      {organicKeywords.length > 0 && (
-        <SeoKeywordsTable keywords={organicKeywords} />
-      )}
+      {/* Keywords — unified view with tabs */}
+      <SeoKeywordsTable
+        keywords={organicKeywords}
+        trackedKeywords={trackedKeywords}
+      />
 
       {/* HTML content fallback */}
       {reportData?.html && (
