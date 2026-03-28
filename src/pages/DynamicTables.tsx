@@ -102,6 +102,7 @@ export default function DynamicTables() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showCreateDashboardDialog, setShowCreateDashboardDialog] = useState(false);
   const [mainTab, setMainTab] = useState<string>("tables");
+  const [editAdAccountId, setEditAdAccountId] = useState<string>("");
 
   // For campaigners: fetch their assigned client IDs
   const { data: assignedClientIds } = useQuery({
@@ -148,11 +149,24 @@ export default function DynamicTables() {
     enabled: !!tenantId,
   });
 
+  // Fetch ad accounts for edit dialog (Facebook tables)
+  const isEditingFacebook = editingTable?.integration_type === 'facebook_insights' || editingTable?.integration_type === 'facebook_ecommerce';
+  
+  const { data: editAdAccountsData } = useQuery({
+    queryKey: ['facebook-ad-accounts-edit'],
+    queryFn: async () => {
+      const response = await supabase.functions.invoke('get-facebook-ad-accounts', { method: 'GET' });
+      if (response.error) throw response.error;
+      return response.data;
+    },
+    enabled: !!editingTable && isEditingFacebook,
+  });
+  const editAdAccounts: { id: string; name: string; currency: string }[] = editAdAccountsData?.ad_accounts || [];
+
   // Filter clients by selected agency in edit dialog
   const editFilteredClients = useMemo(() => {
     if (!editAgencyId) return [];
     let filtered = clients.filter(c => c.agency_id === editAgencyId);
-    // Campaigners can only see their assigned clients
     if (isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin && assignedClientIds) {
       filtered = filtered.filter(c => assignedClientIds.includes(c.id));
     }
@@ -268,10 +282,13 @@ export default function DynamicTables() {
   });
 
   const updateTableMutation = useMutation({
-    mutationFn: async ({ tableId, name, agency_id, client_id }: { tableId: string; name: string; agency_id: string | null; client_id: string | null }) => {
+    mutationFn: async ({ tableId, name, agency_id, client_id, integration_settings }: { tableId: string; name: string; agency_id: string | null; client_id: string | null; integration_settings?: any }) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
       
+      const body: any = { table_id: tableId, name, agency_id, client_id };
+      if (integration_settings !== undefined) body.integration_settings = integration_settings;
+
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/crm-tables`,
         {
@@ -281,7 +298,7 @@ export default function DynamicTables() {
             'Authorization': `Bearer ${session.access_token}`,
             'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
           },
-          body: JSON.stringify({ table_id: tableId, name, agency_id, client_id }),
+          body: JSON.stringify(body),
         }
       );
       
@@ -308,6 +325,7 @@ export default function DynamicTables() {
     setEditName(table.name);
     setEditAgencyId(table.agency_id || "");
     setEditClientId(table.client_id || "");
+    setEditAdAccountId(table.integration_settings?.ad_account_id || "");
   };
 
   const handleDelete = (table: CrmTable, e: React.MouseEvent) => {
@@ -317,11 +335,19 @@ export default function DynamicTables() {
 
   const handleSaveEdit = () => {
     if (!editingTable || !editName.trim()) return;
+    const isFacebook = editingTable.integration_type === 'facebook_insights' || editingTable.integration_type === 'facebook_ecommerce';
+    const updatedSettings = isFacebook && editAdAccountId ? {
+      ...editingTable.integration_settings,
+      ad_account_id: editAdAccountId,
+      ad_account_name: editAdAccounts.find(a => a.id === editAdAccountId)?.name || editingTable.integration_settings?.ad_account_name || '',
+    } : undefined;
+
     updateTableMutation.mutate({ 
       tableId: editingTable.id, 
       name: editName,
       agency_id: editAgencyId || null,
       client_id: editClientId || null,
+      integration_settings: updatedSettings,
     });
   };
 
@@ -862,6 +888,36 @@ export default function DynamicTables() {
                     </Button>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* Facebook Ad Account Selection */}
+            {isEditingFacebook && (
+              <div className="space-y-2">
+                <Label>חשבון מודעות Facebook</Label>
+                <Select value={editAdAccountId || "__none__"} onValueChange={(val) => setEditAdAccountId(val === "__none__" ? "" : val)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="בחר חשבון מודעות..." />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background z-50">
+                    <SelectItem value="__none__">ללא חיבור</SelectItem>
+                    {editAdAccounts.map((acc) => (
+                      <SelectItem key={acc.id} value={acc.id}>
+                        {acc.name} ({acc.id})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {editingTable?.integration_settings?.ad_account_id && (
+                  <p className="text-xs text-muted-foreground">
+                    חשבון נוכחי: {editingTable.integration_settings.ad_account_name || editingTable.integration_settings.ad_account_id}
+                  </p>
+                )}
+                {!editingTable?.integration_settings?.ad_account_id && (
+                  <p className="text-xs text-orange-500">
+                    ⚠️ הדוח לא מחובר לחשבון מודעות — בחר חשבון כדי להתחיל לקבל נתונים
+                  </p>
+                )}
               </div>
             )}
           </div>

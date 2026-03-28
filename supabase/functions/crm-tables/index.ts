@@ -152,7 +152,7 @@ serve(async (req) => {
 
       case 'PATCH': {
         const body = await req.json();
-        const { table_id, name, slug, description, icon, category, agency_id, client_id } = body;
+        const { table_id, name, slug, description, icon, category, agency_id, client_id, integration_settings } = body;
 
         if (!table_id) {
           return new Response(JSON.stringify({ error: 'Table ID required' }), {
@@ -169,6 +169,7 @@ serve(async (req) => {
         if (category !== undefined) updateData.category = category;
         if (agency_id !== undefined) updateData.agency_id = agency_id || null;
         if (client_id !== undefined) updateData.client_id = client_id || null;
+        if (integration_settings !== undefined) updateData.integration_settings = integration_settings;
 
         const { data: table, error } = await supabase
           .from('crm_tables')
