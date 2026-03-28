@@ -146,23 +146,11 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
           {/* Client Selection */}
           <div className="space-y-2">
             <Label>בחר לקוח</Label>
-            <Select value={selectedClient} onValueChange={setSelectedClient}>
-              <SelectTrigger>
-                <SelectValue placeholder="בחר לקוח..." />
-              </SelectTrigger>
-              <SelectContent className="bg-background z-50">
-                {clients.map(client => (
-                  <SelectItem key={client.id} value={client.id}>
-                    <div className="flex items-center gap-2">
-                      {client.name}
-                      {client.is_seo_client && (
-                        <Badge variant="secondary" className="text-xs">SEO</Badge>
-                      )}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <ClientSearchSelect
+              clients={clients}
+              selectedClient={selectedClient}
+              onSelect={setSelectedClient}
+            />
           </div>
 
           {/* Reports Display */}
