@@ -14,6 +14,7 @@ interface MakeAPIRequest {
     | "run_scenario" 
     | "get_connection_details"
     | "list_google_ads_connections"
+    | "list_google_ads_accounts"
     | "list_google_ads_scenarios"
     | "run_google_ads_sync"
     | "create_google_ads_scenario"
