@@ -296,7 +296,7 @@ export default function DynamicTables() {
       toast.success('הדוח עודכן בהצלחה');
     },
     onError: (error: any) => {
-      toast.error('שגיאה בעדכון הטבלה: ' + error.message);
+      toast.error('שגיאה בעדכון הדוח: ' + error.message);
     },
   });
 
