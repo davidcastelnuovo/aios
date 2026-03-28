@@ -829,14 +829,25 @@ export function GoogleAnalyticsDashboard({
                     strokeWidth={2}
                     dot={false}
                   />
-                  <Line 
-                    type="monotone" 
-                    dataKey="purchases" 
-                    name="רכישות"
-                    stroke="#EF4444" 
-                    strokeWidth={2}
-                    dot={false}
-                  />
+                  {reportMode === 'ecommerce' ? (
+                    <Line 
+                      type="monotone" 
+                      dataKey="purchases" 
+                      name="רכישות"
+                      stroke="#EF4444" 
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                  ) : (
+                    <Line 
+                      type="monotone" 
+                      dataKey="conversions" 
+                      name="המרות (לידים)"
+                      stroke="#8B5CF6" 
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                  )}
                 </LineChart>
               </ResponsiveContainer>
             </div>
