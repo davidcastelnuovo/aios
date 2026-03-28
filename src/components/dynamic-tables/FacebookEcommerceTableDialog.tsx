@@ -116,7 +116,7 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
 
       const { data } = await supabase
         .from('tenant_integrations')
-        .select('id, is_active, api_key')
+        .select('id, is_active')
         .eq('tenant_id', tenantId)
         .in('integration_type', ['facebook', 'facebook_lead_ads'])
         .eq('is_active', true)
