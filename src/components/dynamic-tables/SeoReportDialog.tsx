@@ -23,7 +23,10 @@ interface SeoReportDialogProps {
 
 export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoReportDialogProps) {
   const { currentTenantId } = useTenant();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [selectedClient, setSelectedClient] = useState("");
+  const [isCreatingTable, setIsCreatingTable] = useState(false);
 
   const { data: clients = [] } = useQuery({
     queryKey: ['seo-report-clients', currentTenantId],
