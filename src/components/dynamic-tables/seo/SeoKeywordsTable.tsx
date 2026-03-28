@@ -19,19 +19,6 @@ function PositionChange({ value }: { value: number | null }) {
   );
 }
 
-function TrafficChange({ current, previous, label }: { current?: number; previous?: number; label?: string }) {
-  if (current == null || previous == null) return <span className="text-xs text-muted-foreground">—</span>;
-  const diff = current - previous;
-  if (diff === 0) return <span className="text-xs text-muted-foreground">ללא שינוי</span>;
-  const pct = previous > 0 ? Math.round((diff / previous) * 100) : (diff > 0 ? 100 : -100);
-  return (
-    <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${diff > 0 ? 'text-green-600' : 'text-red-500'}`}>
-      {diff > 0 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
-      {Math.abs(diff).toLocaleString()} ({pct > 0 ? '+' : ''}{pct}%)
-    </span>
-  );
-}
-
 function KeywordRow({ kw, showCampaignStart, showPrevMonth }: { kw: any; showCampaignStart?: boolean; showPrevMonth?: boolean }) {
   const posChangeMonth = kw.position_prev_month != null && kw.position != null
     ? kw.position_prev_month - kw.position : null;
@@ -49,20 +36,10 @@ function KeywordRow({ kw, showCampaignStart, showPrevMonth }: { kw: any; showCam
         ) : <span className="text-muted-foreground">—</span>}
       </td>
       {showPrevMonth && (
-        <>
-          <td className="p-3 text-center"><PositionChange value={posChangeMonth} /></td>
-          <td className="p-3 text-center">
-            <TrafficChange current={kw.traffic} previous={kw.traffic_prev_month} />
-          </td>
-        </>
+        <td className="p-3 text-center"><PositionChange value={posChangeMonth} /></td>
       )}
       {showCampaignStart && (
-        <>
-          <td className="p-3 text-center"><PositionChange value={posChangeCampaign} /></td>
-          <td className="p-3 text-center">
-            <TrafficChange current={kw.traffic} previous={kw.traffic_campaign_start} />
-          </td>
-        </>
+        <td className="p-3 text-center"><PositionChange value={posChangeCampaign} /></td>
       )}
       <td className="p-3 text-center">{kw.traffic != null ? Number(kw.traffic).toLocaleString() : '-'}</td>
       <td className="p-3 text-center">{kw.volume != null ? Number(kw.volume).toLocaleString() : '-'}</td>
@@ -84,7 +61,6 @@ function KeywordRow({ kw, showCampaignStart, showPrevMonth }: { kw: any; showCam
     </tr>
   );
 }
-
 function KeywordTable({ keywords, title, icon, showCampaignStart, showPrevMonth }: {
   keywords: any[];
   title: string;
@@ -110,16 +86,10 @@ function KeywordTable({ keywords, title, icon, showCampaignStart, showPrevMonth 
               <th className="text-right p-3 font-medium">ביטוי</th>
               <th className="text-center p-3 font-medium">מיקום</th>
               {showPrevMonth && (
-                <>
-                  <th className="text-center p-3 font-medium">שינוי מיקום (חודש)</th>
-                  <th className="text-center p-3 font-medium">שינוי תנועה (חודש)</th>
-                </>
+                <th className="text-center p-3 font-medium">שינוי מיקום (חודש)</th>
               )}
               {showCampaignStart && (
-                <>
-                  <th className="text-center p-3 font-medium">שינוי מיקום (קמפיין)</th>
-                  <th className="text-center p-3 font-medium">שינוי תנועה (קמפיין)</th>
-                </>
+                <th className="text-center p-3 font-medium">שינוי מיקום (קמפיין)</th>
               )}
               <th className="text-center p-3 font-medium">תנועה</th>
               <th className="text-center p-3 font-medium">נפח חיפוש</th>
