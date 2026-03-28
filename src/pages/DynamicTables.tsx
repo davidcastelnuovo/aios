@@ -258,7 +258,7 @@ export default function DynamicTables() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
       setDeletingTable(null);
-      toast.success('הטבלה נמחקה בהצלחה');
+      toast.success('הדוח נמחק בהצלחה');
     },
     onError: (error: any) => {
       toast.error('שגיאה במחיקת הטבלה: ' + error.message);
