@@ -171,7 +171,7 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [] }: SeoKeywords
               📅 שינוי חודשי
             </TabsTrigger>
             <TabsTrigger value="all" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
-              📋 כל הביטויים
+              📋 טופ 50 אורגניות
             </TabsTrigger>
           </TabsList>
 
