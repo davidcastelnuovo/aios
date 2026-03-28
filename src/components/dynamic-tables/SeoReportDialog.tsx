@@ -2,18 +2,20 @@ import { useState, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
 import { useToast } from "@/hooks/use-toast";
-import { TrendingUp, Globe, FileText, Calendar, ArrowUp, ArrowDown, Loader2, PlusCircle } from "lucide-react";
+import { TrendingUp, Globe, FileText, Calendar, ArrowUp, ArrowDown, Loader2, PlusCircle, Search, ChevronsUpDown, Check } from "lucide-react";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { cn } from "@/lib/utils";
 
 interface SeoReportDialogProps {
   open: boolean;
