@@ -169,7 +169,19 @@ serve(async (req) => {
         if (category !== undefined) updateData.category = category;
         if (agency_id !== undefined) updateData.agency_id = agency_id || null;
         if (client_id !== undefined) updateData.client_id = client_id || null;
-        if (integration_settings !== undefined) updateData.integration_settings = integration_settings;
+        if (integration_settings !== undefined) {
+          // Merge with existing integration_settings to avoid overwriting
+          const { data: existingTable } = await supabase
+            .from('crm_tables')
+            .select('integration_settings')
+            .eq('id', table_id)
+            .single();
+          
+          updateData.integration_settings = {
+            ...(existingTable?.integration_settings as Record<string, unknown> || {}),
+            ...integration_settings,
+          };
+        }
 
         const { data: table, error } = await supabase
           .from('crm_tables')

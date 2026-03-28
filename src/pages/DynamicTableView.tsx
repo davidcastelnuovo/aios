@@ -2484,6 +2484,8 @@ export default function DynamicTableView() {
           records={filteredRecords}
           externalDateFilter={dateFilter}
           externalCustomDateRange={customDateRange}
+          tableId={table?.id}
+          defaultReportMode={table?.integration_settings?.default_report_mode}
         />
       )}
 
