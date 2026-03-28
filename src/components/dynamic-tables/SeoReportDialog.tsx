@@ -194,10 +194,22 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
                         <Badge variant="outline">{reportData.project_name}</Badge>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Calendar className="h-4 w-4" />
-                      {latestReport && format(new Date(latestReport.received_at), 'dd MMMM yyyy', { locale: he })}
-                      <Badge variant="secondary">{reports.length} דוחות</Badge>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleCreateTable}
+                        disabled={isCreatingTable}
+                        className="gap-1.5"
+                      >
+                        {isCreatingTable ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />}
+                        צור כטבלה
+                      </Button>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Calendar className="h-4 w-4" />
+                        {latestReport && format(new Date(latestReport.received_at), 'dd MMMM yyyy', { locale: he })}
+                        <Badge variant="secondary">{reports.length} דוחות</Badge>
+                      </div>
                     </div>
                   </div>
 
