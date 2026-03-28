@@ -22,6 +22,7 @@ import { GoogleAdsTableDialog } from "@/components/dynamic-tables/GoogleAdsTable
 import { GoogleAnalyticsTableDialog } from "@/components/dynamic-tables/GoogleAnalyticsTableDialog";
 import { GoogleSearchConsoleTableDialog } from "@/components/dynamic-tables/GoogleSearchConsoleTableDialog";
 import { AhrefsTableDialog } from "@/components/dynamic-tables/AhrefsTableDialog";
+import { SeoReportDialog } from "@/components/dynamic-tables/SeoReportDialog";
 import { TableCardAlerts } from "@/components/dynamic-tables/TableCardAlerts";
 import { CreateDashboardDialog } from "@/components/dynamic-tables/CreateDashboardDialog";
 import { Badge } from "@/components/ui/badge";
@@ -91,6 +92,7 @@ export default function DynamicTables() {
   const [showGADialog, setShowGADialog] = useState(false);
   const [showGSCDialog, setShowGSCDialog] = useState(false);
   const [showAhrefsDialog, setShowAhrefsDialog] = useState(false);
+  const [showSeoReportDialog, setShowSeoReportDialog] = useState(false);
   const [editingTable, setEditingTable] = useState<CrmTable | null>(null);
   const [deletingTable, setDeletingTable] = useState<CrmTable | null>(null);
   const [editName, setEditName] = useState("");
@@ -421,6 +423,10 @@ export default function DynamicTables() {
                     <path d="M12.84 20.998l-5-9h10l-5 9z" fill="#E37400"/>
                   </svg>
                   דוח Google Analytics
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setShowSeoReportDialog(true)}>
+                  <TrendingUp className="ml-2 h-4 w-4" />
+                  דוח SEO
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -909,6 +915,12 @@ export default function DynamicTables() {
       <CreateDashboardDialog
         open={showCreateDashboardDialog}
         onOpenChange={setShowCreateDashboardDialog}
+        assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
+      />
+
+      <SeoReportDialog
+        open={showSeoReportDialog}
+        onOpenChange={setShowSeoReportDialog}
         assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
       />
     </div>
