@@ -48,6 +48,7 @@ interface GoogleAnalyticsDashboardProps {
   externalDateFilter?: string;
   externalCustomDateRange?: { from: Date | undefined; to: Date | undefined };
   tableId?: string;
+  dashboardId?: string;
   defaultReportMode?: 'ecommerce' | 'leads';
 }
 
@@ -91,6 +92,7 @@ export function GoogleAnalyticsDashboard({
   externalDateFilter,
   externalCustomDateRange,
   tableId,
+  dashboardId,
   defaultReportMode,
 }: GoogleAnalyticsDashboardProps) {
   const mapExternalPreset = (ext?: string): DateRangePreset => {
@@ -622,6 +624,21 @@ export function GoogleAnalyticsDashboard({
                 method: 'PATCH',
                 body: { table_id: tableId, integration_settings: { default_report_mode: newMode } },
               }).catch(console.error);
+            }
+            if (dashboardId) {
+              supabase
+                .from('crm_dashboards')
+                .select('settings')
+                .eq('id', dashboardId)
+                .single()
+                .then(({ data }) => {
+                  const currentSettings = (data?.settings as Record<string, unknown>) || {};
+                  supabase
+                    .from('crm_dashboards')
+                    .update({ settings: { ...currentSettings, default_report_mode: newMode } })
+                    .eq('id', dashboardId)
+                    .then(() => {});
+                });
             }
           }
         }}>

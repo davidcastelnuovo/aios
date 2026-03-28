@@ -807,6 +807,8 @@ export default function DashboardView() {
             <GoogleAnalyticsDashboard
               records={allAnalyticsRecords}
               externalDateFilter={dateFilter}
+              dashboardId={dashboardId}
+              defaultReportMode={(dashboard?.settings as any)?.default_report_mode}
             />
           ) : (
             <>

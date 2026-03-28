@@ -524,6 +524,7 @@ export default function SharedDashboard() {
         <GoogleAnalyticsDashboard
           records={allAnalyticsRecords}
           externalDateFilter={dateFilter}
+          defaultReportMode={(dashboard?.settings as any)?.default_report_mode}
         />
       ) : (
         <>
