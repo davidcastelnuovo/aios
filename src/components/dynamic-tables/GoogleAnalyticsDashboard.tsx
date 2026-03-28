@@ -625,6 +625,21 @@ export function GoogleAnalyticsDashboard({
                 body: { table_id: tableId, integration_settings: { default_report_mode: newMode } },
               }).catch(console.error);
             }
+            if (dashboardId) {
+              supabase
+                .from('crm_dashboards')
+                .select('settings')
+                .eq('id', dashboardId)
+                .single()
+                .then(({ data }) => {
+                  const currentSettings = (data?.settings as Record<string, unknown>) || {};
+                  supabase
+                    .from('crm_dashboards')
+                    .update({ settings: { ...currentSettings, default_report_mode: newMode } })
+                    .eq('id', dashboardId)
+                    .then(() => {});
+                });
+            }
           }
         }}>
           <ToggleGroupItem value="ecommerce" className="gap-2 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
