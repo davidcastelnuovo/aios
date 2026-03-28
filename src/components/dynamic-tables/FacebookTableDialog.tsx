@@ -116,7 +116,7 @@ export function FacebookTableDialog({ open, onOpenChange, assignedClientIds }: F
 
       const { data } = await supabase
         .from('tenant_integrations')
-        .select('id, is_active, api_key')
+        .select('id, is_active')
         .eq('tenant_id', tenantId)
         .in('integration_type', ['facebook', 'facebook_lead_ads'])
         .eq('is_active', true)
@@ -128,7 +128,7 @@ export function FacebookTableDialog({ open, onOpenChange, assignedClientIds }: F
     enabled: open,
   });
 
-  // Fetch ad accounts
+  // Fetch ad accounts - the edge function handles token retrieval server-side
   const { data: adAccountsData, isLoading: loadingAdAccounts, error: adAccountsError } = useQuery({
     queryKey: ['facebook-ad-accounts'],
     queryFn: async () => {
@@ -138,7 +138,7 @@ export function FacebookTableDialog({ open, onOpenChange, assignedClientIds }: F
       if (response.error) throw response.error;
       return response.data;
     },
-    enabled: open && !!facebookIntegration?.is_active && !!facebookIntegration?.api_key,
+    enabled: open && !!facebookIntegration?.is_active,
   });
 
   const adAccounts: AdAccount[] = adAccountsData?.ad_accounts || [];
@@ -226,7 +226,7 @@ export function FacebookTableDialog({ open, onOpenChange, assignedClientIds }: F
     onOpenChange(false);
   };
 
-  const isFacebookConfigured = facebookIntegration?.is_active && facebookIntegration?.api_key;
+  const isFacebookConfigured = !!facebookIntegration?.is_active;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
