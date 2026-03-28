@@ -5,13 +5,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Check, X, Loader2, Link2, ExternalLink, TrendingUp, Search, Link as LinkIcon, BarChart3, Copy, Webhook, FileText, Calendar, Globe } from "lucide-react";
+import { Check, X, Loader2, Link2, ExternalLink, TrendingUp, Search, Link as LinkIcon, BarChart3, Copy, Webhook, FileText, Calendar, Globe, UserPlus } from "lucide-react";
 import { useAhrefsReports, AhrefsReport } from "@/hooks/useAhrefsReports";
 import { format } from "date-fns";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Input } from "@/components/ui/input";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 const WEBHOOK_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ahrefs-webhook`;
 
