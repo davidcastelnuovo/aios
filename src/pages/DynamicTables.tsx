@@ -748,8 +748,8 @@ export default function DynamicTables() {
       <Dialog open={!!editingTable} onOpenChange={(open) => !open && setEditingTable(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>עריכת טבלה</DialogTitle>
-            <DialogDescription>ערוך את פרטי הטבלה</DialogDescription>
+            <DialogTitle>עריכת דוח</DialogTitle>
+            <DialogDescription>ערוך את פרטי הדוח</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
