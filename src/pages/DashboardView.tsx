@@ -653,7 +653,7 @@ export default function DashboardView() {
           <h3 className="text-lg font-semibold mb-2">הדשבורד לא נמצא</h3>
           <Button onClick={() => navigate(buildPath('/dynamic-tables'))}>
             <ArrowRight className="ml-2 h-4 w-4" />
-            חזרה לניהול טבלאות
+            חזרה לניהול דוחות
           </Button>
         </Card>
       </div>
