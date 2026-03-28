@@ -427,7 +427,7 @@ export default function DynamicTables() {
                     <circle cx="12" cy="12" r="10" stroke="#4285F4" strokeWidth="2" fill="none"/>
                     <path d="M12 6v6l4 2" stroke="#4285F4" strokeWidth="2" strokeLinecap="round"/>
                   </svg>
-                  טבלת Search Console
+                  דוח Search Console
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setShowAhrefsDialog(true)}>
                   <TrendingUp className="ml-2 h-4 w-4" />
