@@ -403,7 +403,7 @@ export default function DynamicTables() {
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setShowFacebookDialog(true)}>
                   <Facebook className="ml-2 h-4 w-4" />
-                  טבלת Facebook Insights (לידים)
+                  דוח Facebook Insights (לידים)
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setShowFacebookEcommerceDialog(true)}>
                   <ShoppingCart className="ml-2 h-4 w-4" />
