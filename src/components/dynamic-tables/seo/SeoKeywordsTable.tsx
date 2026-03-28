@@ -205,8 +205,8 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [] }: SeoKeywords
 
           <TabsContent value="all" className="mt-0">
             <KeywordTable
-              keywords={allKeywords.sort((a, b) => (a.position || 999) - (b.position || 999))}
-              title="כל הביטויים (tracked + אורגניים)"
+              keywords={[...keywords].sort((a, b) => (a.position || 999) - (b.position || 999)).slice(0, 50)}
+              title="טופ 50 ביטויים אורגניים"
               icon={<span>📋</span>}
               showCampaignStart
               showPrevMonth
