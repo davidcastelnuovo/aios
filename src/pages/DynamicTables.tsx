@@ -103,6 +103,7 @@ export default function DynamicTables() {
   const [showCreateDashboardDialog, setShowCreateDashboardDialog] = useState(false);
   const [mainTab, setMainTab] = useState<string>("tables");
   const [editAdAccountId, setEditAdAccountId] = useState<string>("");
+  const [clientSearch, setClientSearch] = useState<string>("");
 
   // For campaigners: fetch their assigned client IDs
   const { data: assignedClientIds } = useQuery({
@@ -225,8 +226,18 @@ export default function DynamicTables() {
       );
     }
     
+    // Filter by client name search
+    if (clientSearch.trim()) {
+      const search = clientSearch.trim().toLowerCase();
+      result = result.filter(table => {
+        if (!table.client_id) return false;
+        const client = clients.find(c => c.id === table.client_id);
+        return client?.name?.toLowerCase().includes(search);
+      });
+    }
+
     return result;
-  }, [tables, selectedAgency, isCampaigner, isOwner, isTeamManager, isSuperAdmin, assignedClientIds]);
+  }, [tables, selectedAgency, isCampaigner, isOwner, isTeamManager, isSuperAdmin, assignedClientIds, clientSearch, clients]);
 
   // Delete dashboard mutation
   const deleteDashboardMutation = useMutation({
@@ -466,6 +477,15 @@ export default function DynamicTables() {
 
         {/* Tables Tab Content */}
         <TabsContent value="tables">
+          {/* Client name search */}
+          <div className="mb-4 max-w-sm">
+            <Input
+              placeholder="חיפוש לפי שם לקוח..."
+              value={clientSearch}
+              onChange={(e) => setClientSearch(e.target.value)}
+              className="text-right"
+            />
+          </div>
           {isLoading ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {[1, 2, 3].map((i) => (
