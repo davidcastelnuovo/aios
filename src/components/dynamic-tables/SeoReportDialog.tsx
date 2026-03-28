@@ -9,9 +9,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
-import { TrendingUp, Globe, FileText, Calendar, ArrowUpRight, ArrowDownRight, Minus, ExternalLink } from "lucide-react";
+import { TrendingUp, Globe, FileText, Calendar, ArrowUp, ArrowDown } from "lucide-react";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 
 interface SeoReportDialogProps {
   open: boolean;
@@ -23,17 +24,14 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
   const { currentTenantId } = useTenant();
   const [selectedClient, setSelectedClient] = useState("");
 
-  // Fetch clients
   const { data: clients = [] } = useQuery({
     queryKey: ['seo-report-clients', currentTenantId],
     queryFn: async () => {
-      let query = supabase
+      const { data, error } = await supabase
         .from('clients')
         .select('id, name, agency_id, website, is_seo_client')
         .eq('tenant_id', currentTenantId!)
         .order('name');
-      
-      const { data, error } = await query;
       if (error) throw error;
       let result = data || [];
       if (assignedClientIds) {
@@ -44,7 +42,6 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
     enabled: !!currentTenantId && open,
   });
 
-  // Fetch ahrefs reports for selected client
   const { data: reports = [], isLoading: reportsLoading } = useQuery({
     queryKey: ['seo-reports', currentTenantId, selectedClient],
     queryFn: async () => {
@@ -60,90 +57,33 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
     enabled: !!currentTenantId && !!selectedClient,
   });
 
-  // Group reports by type
-  const groupedReports = useMemo(() => {
-    const groups: Record<string, typeof reports> = {};
-    reports.forEach(r => {
-      const type = r.report_type || 'general';
-      if (!groups[type]) groups[type] = [];
-      groups[type].push(r);
-    });
-    return groups;
-  }, [reports]);
+  // Extract structured data from the latest report
+  const latestReport = reports[0];
+  const reportData = latestReport?.report_data as any;
 
-  // Extract key metrics from report_data
-  const extractMetrics = (reportData: any): { label: string; value: string | number; change?: number }[] => {
-    if (!reportData || typeof reportData !== 'object') return [];
-    const metrics: { label: string; value: string | number; change?: number }[] = [];
-    
-    const metricLabels: Record<string, string> = {
-      organic_traffic: 'תנועה אורגנית',
-      organic_keywords: 'מילות מפתח',
-      backlinks: 'קישורים נכנסים',
-      referring_domains: 'דומיינים מפנים',
-      domain_rating: 'דירוג דומיין',
-      url_rating: 'דירוג URL',
-      ahrefs_rank: 'דירוג Ahrefs',
-      traffic_value: 'ערך תנועה',
-      pages_crawled: 'דפים שנסרקו',
-      health_score: 'ציון בריאות',
-      total_issues: 'בעיות',
-      errors: 'שגיאות',
-      warnings: 'אזהרות',
-      notices: 'הערות',
-    };
+  const snapshot = reportData?.snapshot || {};
+  const trafficHistory = Array.isArray(reportData?.traffic_history) ? reportData.traffic_history : [];
+  const organicKeywords = Array.isArray(reportData?.organic_keywords) ? reportData.organic_keywords : [];
 
-    // Try flat keys
-    for (const [key, label] of Object.entries(metricLabels)) {
-      if (reportData[key] !== undefined && reportData[key] !== null) {
-        metrics.push({ label, value: reportData[key] });
-      }
-    }
+  const snapshotMetrics = [
+    { label: 'דירוג דומיין (DR)', value: snapshot.dr, icon: '🏆' },
+    { label: 'תנועה אורגנית', value: snapshot.org_traffic?.toLocaleString(), icon: '📈' },
+    { label: 'מילות מפתח (Top 3)', value: snapshot.org_keywords_top3, icon: '🥇' },
+    { label: 'מילות מפתח (Top 10)', value: snapshot.org_keywords_top10, icon: '🔟' },
+    { label: 'סה״כ מילות מפתח', value: snapshot.org_keywords_total, icon: '🔑' },
+    { label: 'דומיינים מפנים', value: snapshot.referring_domains, icon: '🔗' },
+    { label: 'קישורים נכנסים (פעילים)', value: snapshot.backlinks_live?.toLocaleString(), icon: '🌐' },
+    { label: 'קישורים נכנסים (כולל)', value: snapshot.backlinks_all_time?.toLocaleString(), icon: '📊' },
+  ].filter(m => m.value !== undefined && m.value !== null);
 
-    // Try nested metrics object
-    if (reportData.metrics && typeof reportData.metrics === 'object') {
-      for (const [key, label] of Object.entries(metricLabels)) {
-        if (reportData.metrics[key] !== undefined && reportData.metrics[key] !== null && !metrics.find(m => m.label === label)) {
-          metrics.push({ label, value: reportData.metrics[key] as string | number });
-        }
-      }
-    }
-
-    // If no known keys found, show top-level numeric/string values
-    if (metrics.length === 0) {
-      for (const [key, val] of Object.entries(reportData)) {
-        if ((typeof val === 'number' || typeof val === 'string') && key !== 'html' && key !== 'raw_html') {
-          metrics.push({ label: key, value: val });
-        }
-        if (metrics.length >= 8) break;
-      }
-    }
-
-    return metrics;
-  };
-
-  const reportTypeLabels: Record<string, string> = {
-    site_explorer: 'סייט אקספלורר',
-    site_audit: 'ביקורת אתר',
-    keywords_explorer: 'מילות מפתח',
-    backlinks: 'קישורים נכנסים',
-    organic_search: 'חיפוש אורגני',
-    content_explorer: 'תוכן',
-    rank_tracker: 'מעקב דירוגים',
-    general: 'כללי',
-  };
-
-  const hasHtmlContent = (reportData: any): string | null => {
-    if (!reportData) return null;
-    if (typeof reportData === 'string' && reportData.includes('<')) return reportData;
-    if (reportData.html) return reportData.html;
-    if (reportData.raw_html) return reportData.raw_html;
-    return null;
-  };
+  const chartData = trafficHistory.map((item: any) => ({
+    date: item.date ? format(new Date(item.date), 'MM/yy') : '',
+    traffic: item.traffic || 0,
+  }));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto" dir="rtl">
+      <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto" dir="rtl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-primary" />
@@ -179,17 +119,13 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
 
           {/* Reports Display */}
           {selectedClient && (
-            <div className="space-y-4">
+            <div className="space-y-5">
               {reportsLoading ? (
                 <div className="grid gap-4 md:grid-cols-2">
                   {[1, 2, 3, 4].map(i => (
                     <Card key={i}>
-                      <CardHeader>
-                        <Skeleton className="h-5 w-32" />
-                      </CardHeader>
-                      <CardContent>
-                        <Skeleton className="h-16 w-full" />
-                      </CardContent>
+                      <CardHeader><Skeleton className="h-5 w-32" /></CardHeader>
+                      <CardContent><Skeleton className="h-16 w-full" /></CardContent>
                     </Card>
                   ))}
                 </div>
@@ -203,107 +139,145 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
                 </Card>
               ) : (
                 <>
-                  {/* Summary Stats */}
-                  <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
-                    <Card className="bg-primary/5 border-primary/20">
-                      <CardContent className="p-4 text-center">
-                        <p className="text-xs text-muted-foreground mb-1">סה״כ דוחות</p>
-                        <p className="text-2xl font-bold text-primary">{reports.length}</p>
-                      </CardContent>
-                    </Card>
-                    <Card className="bg-primary/5 border-primary/20">
-                      <CardContent className="p-4 text-center">
-                        <p className="text-xs text-muted-foreground mb-1">סוגי דוחות</p>
-                        <p className="text-2xl font-bold text-primary">{Object.keys(groupedReports).length}</p>
-                      </CardContent>
-                    </Card>
-                    <Card className="bg-primary/5 border-primary/20">
-                      <CardContent className="p-4 text-center">
-                        <p className="text-xs text-muted-foreground mb-1">דוח אחרון</p>
-                        <p className="text-sm font-semibold text-primary">
-                          {reports[0] ? format(new Date(reports[0].received_at), 'dd/MM/yyyy', { locale: he }) : '-'}
-                        </p>
-                      </CardContent>
-                    </Card>
-                    <Card className="bg-primary/5 border-primary/20">
-                      <CardContent className="p-4 text-center">
-                        <p className="text-xs text-muted-foreground mb-1">דומיין</p>
-                        <p className="text-sm font-semibold text-primary truncate">
-                          {reports[0]?.domain || '-'}
-                        </p>
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  {/* Reports by Type */}
-                  {Object.entries(groupedReports).map(([type, typeReports]) => (
-                    <div key={type} className="space-y-3">
-                      <h3 className="font-semibold text-lg flex items-center gap-2">
-                        <Globe className="h-4 w-4" />
-                        {reportTypeLabels[type] || type}
-                        <Badge variant="outline" className="text-xs">{typeReports.length}</Badge>
-                      </h3>
-
-                      {typeReports.slice(0, 3).map((report) => {
-                        const metrics = extractMetrics(report.report_data);
-                        const htmlContent = hasHtmlContent(report.report_data);
-
-                        return (
-                          <Card key={report.id} className="overflow-hidden">
-                            <CardHeader className="pb-2">
-                              <div className="flex items-center justify-between">
-                                <CardTitle className="text-sm flex items-center gap-2">
-                                  <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                                  {format(new Date(report.received_at), 'dd MMMM yyyy, HH:mm', { locale: he })}
-                                </CardTitle>
-                                <Badge variant="secondary" className="text-xs">
-                                  {report.domain}
-                                </Badge>
-                              </div>
-                            </CardHeader>
-                            <CardContent className="pt-0">
-                              {/* Metrics Grid */}
-                              {metrics.length > 0 && (
-                                <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
-                                  {metrics.map((metric, idx) => (
-                                    <div key={idx} className="bg-muted/50 rounded-lg p-3 text-center">
-                                      <p className="text-xs text-muted-foreground mb-1">{metric.label}</p>
-                                      <p className="text-lg font-bold">
-                                        {typeof metric.value === 'number' 
-                                          ? metric.value.toLocaleString() 
-                                          : metric.value}
-                                      </p>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-
-                              {/* HTML Content */}
-                              {htmlContent && (
-                                <div 
-                                  className="mt-3 prose prose-sm dark:prose-invert max-w-none text-right"
-                                  dangerouslySetInnerHTML={{ __html: htmlContent }}
-                                />
-                              )}
-
-                              {/* Fallback: show raw data summary if no metrics or html */}
-                              {metrics.length === 0 && !htmlContent && (
-                                <p className="text-sm text-muted-foreground">
-                                  נתוני הדוח זמינים אך לא בפורמט מוכר להצגה ויזואלית
-                                </p>
-                              )}
-                            </CardContent>
-                          </Card>
-                        );
-                      })}
-                      
-                      {typeReports.length > 3 && (
-                        <p className="text-sm text-muted-foreground text-center">
-                          +{typeReports.length - 3} דוחות נוספים
-                        </p>
+                  {/* Report Header */}
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-3">
+                      <Globe className="h-5 w-5 text-primary" />
+                      <span className="font-semibold text-lg">{reportData?.domain || latestReport?.domain}</span>
+                      {reportData?.project_name && (
+                        <Badge variant="outline">{reportData.project_name}</Badge>
                       )}
                     </div>
-                  ))}
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Calendar className="h-4 w-4" />
+                      {latestReport && format(new Date(latestReport.received_at), 'dd MMMM yyyy', { locale: he })}
+                      <Badge variant="secondary">{reports.length} דוחות</Badge>
+                    </div>
+                  </div>
+
+                  {/* Snapshot Metrics */}
+                  {snapshotMetrics.length > 0 && (
+                    <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
+                      {snapshotMetrics.map((metric, idx) => (
+                        <Card key={idx} className="border-primary/10">
+                          <CardContent className="p-4 text-center">
+                            <span className="text-xl mb-1 block">{metric.icon}</span>
+                            <p className="text-xs text-muted-foreground mb-1">{metric.label}</p>
+                            <p className="text-2xl font-bold text-primary">{metric.value}</p>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Traffic History Chart */}
+                  {chartData.length > 0 && (
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-base">היסטוריית תנועה אורגנית</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ResponsiveContainer width="100%" height={250}>
+                          <LineChart data={chartData}>
+                            <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                            <XAxis dataKey="date" fontSize={12} />
+                            <YAxis fontSize={12} />
+                            <Tooltip 
+                              formatter={(value: number) => [value.toLocaleString(), 'תנועה']}
+                              labelFormatter={(label) => `תאריך: ${label}`}
+                            />
+                            <Line 
+                              type="monotone" 
+                              dataKey="traffic" 
+                              stroke="hsl(var(--primary))" 
+                              strokeWidth={2.5}
+                              dot={{ fill: "hsl(var(--primary))", r: 4 }}
+                              activeDot={{ r: 6 }}
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Organic Keywords Table */}
+                  {organicKeywords.length > 0 && (
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-base flex items-center justify-between">
+                          <span>מילות מפתח אורגניות</span>
+                          <Badge variant="outline">{organicKeywords.length} מילים</Badge>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-0">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b bg-muted/50">
+                                <th className="text-right p-3 font-medium">מילת מפתח</th>
+                                <th className="text-center p-3 font-medium">מיקום</th>
+                                <th className="text-center p-3 font-medium">שינוי</th>
+                                <th className="text-center p-3 font-medium">תנועה</th>
+                                <th className="text-center p-3 font-medium">נפח חיפוש</th>
+                                <th className="text-center p-3 font-medium">KD</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {organicKeywords.slice(0, 20).map((kw: any, idx: number) => {
+                                const posChange = kw.position_prev_month != null 
+                                  ? kw.position_prev_month - (kw.position || 0) 
+                                  : null;
+                                return (
+                                  <tr key={idx} className="border-b last:border-0 hover:bg-muted/30">
+                                    <td className="p-3 font-medium">{String(kw.keyword || '')}</td>
+                                    <td className="p-3 text-center">
+                                      <Badge variant="secondary" className="font-mono">
+                                        {kw.position ?? '-'}
+                                      </Badge>
+                                    </td>
+                                    <td className="p-3 text-center">
+                                      {posChange !== null && posChange !== 0 ? (
+                                        <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${posChange > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                          {posChange > 0 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+                                          {Math.abs(posChange)}
+                                        </span>
+                                      ) : (
+                                        <span className="text-xs text-muted-foreground">—</span>
+                                      )}
+                                    </td>
+                                    <td className="p-3 text-center">{kw.traffic != null ? Number(kw.traffic).toLocaleString() : '-'}</td>
+                                    <td className="p-3 text-center">{kw.volume != null ? Number(kw.volume).toLocaleString() : '-'}</td>
+                                    <td className="p-3 text-center">
+                                      <Badge variant={kw.kd <= 20 ? 'default' : kw.kd <= 50 ? 'secondary' : 'destructive'} className="text-xs">
+                                        {kw.kd ?? '-'}
+                                      </Badge>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                          {organicKeywords.length > 20 && (
+                            <p className="text-center text-sm text-muted-foreground py-3">
+                              +{organicKeywords.length - 20} מילות מפתח נוספות
+                            </p>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* HTML content fallback */}
+                  {reportData?.html && (
+                    <Card>
+                      <CardContent className="p-4">
+                        <div 
+                          className="prose prose-sm dark:prose-invert max-w-none text-right"
+                          dangerouslySetInnerHTML={{ __html: reportData.html }}
+                        />
+                      </CardContent>
+                    </Card>
+                  )}
                 </>
               )}
             </div>
