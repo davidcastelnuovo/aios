@@ -19,6 +19,7 @@ import { ClientUpdatesTab } from "@/components/clients/ClientUpdatesTab";
 import { ClientTablesTab } from "@/components/clients/ClientTablesTab";
 import { ClientLinkedFiles } from "@/components/clients/ClientLinkedFiles";
 import { ClientCredentialsTab } from "@/components/clients/ClientCredentialsTab";
+import { ClientDocsEditor } from "@/components/clients/ClientDocsEditor";
 import { FolderLinksField } from "@/components/forms/FolderLinksField";
 import { AttachmentsField } from "@/components/forms/AttachmentsField";
 import { useFolderLinksAndAttachments } from "@/hooks/useFolderLinksAndAttachments";
