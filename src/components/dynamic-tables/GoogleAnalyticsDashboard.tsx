@@ -32,7 +32,8 @@ import {
   Line,
   Legend,
 } from "recharts";
-import { Users, Eye, MousePointerClick, Clock, TrendingUp, Globe, CalendarIcon, ArrowUp, ArrowDown, ShoppingCart, CreditCard } from "lucide-react";
+import { Users, Eye, MousePointerClick, Clock, TrendingUp, Globe, CalendarIcon, ArrowUp, ArrowDown, ShoppingCart, CreditCard, UserCheck, Target } from "lucide-react";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths, isWithinInterval, parseISO } from "date-fns";
 import { he } from "date-fns/locale";
 
