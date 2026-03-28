@@ -917,6 +917,12 @@ export default function DynamicTables() {
         onOpenChange={setShowCreateDashboardDialog}
         assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
       />
+
+      <SeoReportDialog
+        open={showSeoReportDialog}
+        onOpenChange={setShowSeoReportDialog}
+        assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
+      />
     </div>
   );
 }
