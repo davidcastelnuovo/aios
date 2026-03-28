@@ -92,6 +92,7 @@ export default function DynamicTables() {
   const [showGADialog, setShowGADialog] = useState(false);
   const [showGSCDialog, setShowGSCDialog] = useState(false);
   const [showAhrefsDialog, setShowAhrefsDialog] = useState(false);
+  const [showSeoReportDialog, setShowSeoReportDialog] = useState(false);
   const [editingTable, setEditingTable] = useState<CrmTable | null>(null);
   const [deletingTable, setDeletingTable] = useState<CrmTable | null>(null);
   const [editName, setEditName] = useState("");
