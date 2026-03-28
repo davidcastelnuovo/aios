@@ -228,7 +228,7 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [] }: SeoKeywords
             <KeywordTable
               keywords={byMonthlyChange}
               title="כל הביטויים — שינוי חודשי"
-              icon={<Calendar className="h-4 w-4 text-blue-500" />}
+              icon={<Calendar className="h-4 w-4 text-primary" />}
               showPrevMonth
             />
           </TabsContent>
