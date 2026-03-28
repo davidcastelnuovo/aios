@@ -176,7 +176,7 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [] }: SeoKeywords
   if (allKeywords.length === 0) return null;
 
   return (
-    <Card>
+    <Card dir="rtl">
       <CardHeader className="pb-2">
         <CardTitle className="text-base flex items-center justify-between">
           <span>ניתוח מילות מפתח</span>
