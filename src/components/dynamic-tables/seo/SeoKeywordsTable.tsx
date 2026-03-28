@@ -89,7 +89,7 @@ function KeywordTable({ keywords, title, icon, showCampaignStart, showPrevMonth 
                 <th className="text-center p-3 font-medium">שינוי מיקום (חודש)</th>
               )}
               {showCampaignStart && (
-                <th className="text-center p-3 font-medium">שינוי מיקום (קמפיין)</th>
+                <th className="text-center p-3 font-medium">שינוי מיקום (קידום)</th>
               )}
               <th className="text-center p-3 font-medium">תנועה</th>
               <th className="text-center p-3 font-medium">נפח חיפוש</th>
@@ -165,7 +165,7 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [] }: SeoKeywords
               🏆 Top 10 מקודמים
             </TabsTrigger>
             <TabsTrigger value="campaign" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
-              📈 שינוי מתחילת קמפיין
+              📈 שינוי מתחילת קידום
             </TabsTrigger>
             <TabsTrigger value="monthly" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
               📅 שינוי חודשי
@@ -188,7 +188,7 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [] }: SeoKeywords
           <TabsContent value="campaign" className="mt-0">
             <KeywordTable
               keywords={byCampaignChange}
-              title="כל הביטויים — שינוי מתחילת קמפיין"
+              title="כל הביטויים — שינוי מתחילת קידום"
               icon={<TrendingUp className="h-4 w-4 text-primary" />}
               showCampaignStart
             />
