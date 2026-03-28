@@ -89,6 +89,8 @@ export function GoogleAnalyticsDashboard({
   records,
   externalDateFilter,
   externalCustomDateRange,
+  tableId,
+  defaultReportMode,
 }: GoogleAnalyticsDashboardProps) {
   const mapExternalPreset = (ext?: string): DateRangePreset => {
     if (!ext) return 'last_30_days';
