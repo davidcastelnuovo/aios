@@ -198,16 +198,16 @@ export default function DynamicTableView() {
     }
   };
 
-  const { data: tables, isLoading: tablesLoading } = useQuery({
+  const { data: tables, isLoading: tablesLoading, isFetching: tablesFetching } = useQuery({
     queryKey: ['crm-tables'],
     queryFn: async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
       const response = await supabase.functions.invoke('crm-tables', { method: 'GET' });
       if (response.error) throw response.error;
-      // Ensure we always return an array
       return Array.isArray(response.data) ? response.data as CrmTable[] : [];
     },
+    refetchOnMount: 'always',
   });
 
   const table = tables?.find((t) => t.slug === tableSlug);
