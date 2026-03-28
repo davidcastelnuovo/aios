@@ -399,7 +399,7 @@ export default function DynamicTables() {
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={() => setShowCreateDialog(true)}>
                   <Table2 className="ml-2 h-4 w-4" />
-                  טבלה רגילה
+                  דוח רגיל
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setShowFacebookDialog(true)}>
                   <Facebook className="ml-2 h-4 w-4" />
