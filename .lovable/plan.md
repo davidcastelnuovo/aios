@@ -1,44 +1,35 @@
 
 
-## תיקון: חיבור Connection של Google Ads בסנריו המשוכפל
+## תוספת: בחירת חשבון לקוח Google Ads אוטומטית מתוך Make.com
 
-### הבעיה
-כשהמערכת משכפלת סנריו מ-Make.com, היא מעדכנת את ה-Customer ID, Metrics ו-Webhook URL, אבל **לא מחליפה את ה-Connection** (החיבור ל-Google Ads) במודול. לכן הסנריו החדש נשאר עם החיבור הישן מה-Template.
+### מה ישתנה
+במקום שהמשתמש יקליד ידנית Customer ID, המערכת תשלוף את רשימת חשבונות הלקוח מתוך החיבור שנבחר ב-Make.com ותציג אותם בדרופדאון לבחירה.
 
-### הפתרון
-צריך לעדכן את ה-`connection` בכל מודול Google Ads בתוך ה-blueprint בעת השכפול, ולהעביר את ה-`connection_id` שהמשתמש בחר בדיאלוג יצירת הטבלה.
+### שלבים
 
-### שינויים נדרשים
+**1. Edge Function `make-api/index.ts` — פעולה חדשה `list_google_ads_accounts`**
+- קריאה ל-Make.com RPC API: `POST /rpcs/google-ads/1/listCustomers`
+- הפרמטרים: `connection` (ה-ID של החיבור שנבחר)
+- מסנן החוצה חשבונות Manager (MCC) ומחזיר רק חשבונות לקוח
+- מחזיר מערך של `{ id, name, currency, manager }` לדרופדאון
 
-**1. Edge Function `make-api/index.ts` - עדכון `clone_scenario`**
-- בלולאה שעוברת על מודולי ה-flow (שורה ~693), כשמוצאים מודול Google Ads, לעדכן גם את `module.metadata.connection` (או הפרופרטי המתאים) ל-connection_id שהתקבל מהבקשה
-- הפרמטר `connection_id` כבר קיים ב-interface של הבקשה (שורה 29)
-
-**2. `GoogleAdsTableDialog.tsx` - העברת connection_id בשכפול**
-- בקריאת clone_scenario (שורה ~308), להוסיף `connection_id: selectedMakeConnection` לגוף הבקשה
-
-**3. `DynamicTableView.tsx` - העברת connection_id בשכפול חוזר**
-- בקריאות clone_scenario מתוך DynamicTableView, להוסיף את ה-connection_id מהגדרות הטבלה (`make_connection_id`)
+**2. `GoogleAdsTableDialog.tsx` — דרופדאון חשבונות במקום שדה טקסט**
+- אחרי בחירת חיבור (`selectedMakeConnection`), קריאת `list_google_ads_accounts` עם ה-connection ID
+- הצגת דרופדאון עם חיפוש (כמו שיש כרגע ב-direct_api) במקום שדה הקלדה ידני
+- שמירת ה-Customer ID שנבחר ב-`customerIdInput`
+- שמירת fallback — אם ה-RPC נכשל, חזרה לשדה טקסט ידני
 
 ### פרטים טכניים
 
-בבלופרינט של Make.com, כל מודול נראה כך:
+Make.com RPC endpoint:
 ```text
-{
-  "id": 3,
-  "module": "google-ads:runCampaignReport",
-  "mapper": { ... },
-  "metadata": {
-    "connection": { "id": 12345 }  ← זה מה שצריך לעדכן
-  }
-}
+POST https://{region}.make.com/api/v2/rpcs/google-ads/1/listCustomers
+Body: { "data": {}, "scope": { "connectionId": 12345 } }
+Headers: { "Authorization": "Token {api_token}" }
 ```
 
-הקוד יעדכן את ה-connection בצורה הבאה:
-```typescript
-if (connection_id && module.module && isGoogleAdsModule(module.module)) {
-  if (!module.metadata) module.metadata = {};
-  module.metadata.connection = { id: parseInt(connection_id) };
-}
+הדרופדאון יציג:
+```text
+שם החשבון (XXX-XXX-XXXX) — לא יציג חשבונות MCC
 ```
 
