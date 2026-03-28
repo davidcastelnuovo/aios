@@ -120,6 +120,7 @@ export function GoogleAnalyticsDashboard({
     }
   }, [externalDateFilter]);
   const [showComparison, setShowComparison] = useState(false);
+  const [reportMode, setReportMode] = useState<'ecommerce' | 'leads'>('ecommerce');
   const [calendarOpen, setCalendarOpen] = useState(false);
 
   const toNumber = (value: unknown): number => {
