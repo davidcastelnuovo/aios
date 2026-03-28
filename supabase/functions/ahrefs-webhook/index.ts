@@ -68,14 +68,25 @@ Deno.serve(async (req) => {
         if (existingReport?.tenant_id) {
           tenant_id = existingReport.tenant_id;
         } else {
-          // Fallback: use the first (and likely only) tenant
-          const { data: tenants } = await supabase
+          // Fallback: use the marketingcaptain tenant
+          const { data: mcTenant } = await supabase
             .from("tenants")
             .select("id")
+            .eq("slug", "marketingcaptain")
             .limit(1)
             .single();
-          if (tenants?.id) {
-            tenant_id = tenants.id;
+          if (mcTenant?.id) {
+            tenant_id = mcTenant.id;
+          } else {
+            // Last fallback: first tenant
+            const { data: tenants } = await supabase
+              .from("tenants")
+              .select("id")
+              .limit(1)
+              .single();
+            if (tenants?.id) {
+              tenant_id = tenants.id;
+            }
           }
         }
       }
