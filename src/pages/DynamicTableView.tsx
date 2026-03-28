@@ -1356,7 +1356,7 @@ export default function DynamicTableView() {
     },
   });
 
-  if (tablesLoading) {
+  if (tablesLoading || tablesFetching) {
     return (
       <div className="container mx-auto py-8 px-4">
         <Skeleton className="h-8 w-48 mb-4" />
@@ -1366,11 +1366,6 @@ export default function DynamicTableView() {
   }
 
   if (!table) {
-    // If tables were just loaded from cache and table not found,
-    // refetch once before showing "not found" (handles navigation right after creation)
-    if (!tablesLoading && tables !== undefined) {
-      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
-    }
     return (
       <div className="container mx-auto py-8 px-4">
         <Card className="p-12 text-center">
