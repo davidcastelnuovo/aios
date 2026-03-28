@@ -22,6 +22,7 @@ import { AgencyDashboardContent } from "@/components/dynamic-tables/AgencyDashbo
 import { ShareDashboardDialog } from "@/components/dynamic-tables/ShareDashboardDialog";
 import { useTenant } from "@/contexts/TenantContext";
 import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnalyticsDashboard";
+import { SeoDashboardView } from "@/components/dynamic-tables/SeoDashboardView";
 import {
   LineChart, Line, BarChart, Bar, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts";
