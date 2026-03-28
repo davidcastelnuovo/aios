@@ -398,38 +398,65 @@ export default function AhrefsSettings() {
           </DialogHeader>
           <ScrollArea className="max-h-[70vh]">
             {selectedReport && (() => {
-              const data = selectedReport.report_data;
-              // Check if report_data contains HTML string
+              const data = selectedReport.report_data as Record<string, unknown>;
+              // Check for HTML in various possible fields
               const htmlContent = typeof data === 'string' ? data 
-                : typeof data === 'object' && data !== null && 'html' in data && typeof (data as any).html === 'string' ? (data as any).html
-                : null;
+                : typeof data === 'object' && data !== null ? (
+                  typeof data.report_html === 'string' ? data.report_html
+                  : typeof data.html === 'string' ? data.html
+                  : null
+                ) : null;
               
-              if (htmlContent) {
+              // Extract summary metrics if available
+              const summary = typeof data === 'object' && data !== null && typeof data.summary === 'object' && data.summary !== null
+                ? data.summary as Record<string, unknown> : null;
+              const projectName = typeof data === 'object' && data !== null ? String(data.project_name || '') : '';
+
+              if (htmlContent || summary) {
                 return (
                   <div className="space-y-4">
-                    {/* Render project name if exists */}
-                    {typeof data === 'object' && data !== null && 'project_name' in data && (
+                    {projectName && (
                       <Badge variant="outline" className="text-sm">
-                        פרויקט: {String((data as any).project_name)}
+                        פרויקט: {projectName}
                       </Badge>
                     )}
-                    <div 
-                      className="prose prose-sm max-w-none dark:prose-invert
-                        [&_table]:w-full [&_table]:border-collapse [&_table]:rounded-lg [&_table]:overflow-hidden
-                        [&_th]:bg-primary [&_th]:text-primary-foreground [&_th]:px-4 [&_th]:py-2.5 [&_th]:text-right [&_th]:text-sm [&_th]:font-medium
-                        [&_td]:px-4 [&_td]:py-2.5 [&_td]:border-b [&_td]:border-border [&_td]:text-sm
-                        [&_tr:hover_td]:bg-muted/50
-                        [&_.metrics-grid]:grid [&_.metrics-grid]:grid-cols-2 [&_.metrics-grid]:md:grid-cols-4 [&_.metrics-grid]:gap-3 [&_.metrics-grid]:mb-6
-                        [&_.metric-card]:bg-card [&_.metric-card]:border [&_.metric-card]:border-border [&_.metric-card]:rounded-lg [&_.metric-card]:p-4 [&_.metric-card]:shadow-sm
-                        [&_.metric-value]:text-2xl [&_.metric-value]:font-bold [&_.metric-value]:text-primary
-                        [&_h1]:text-xl [&_h1]:font-bold [&_h1]:mb-4
-                        [&_h2]:text-lg [&_h2]:font-semibold [&_h2]:mt-6 [&_h2]:mb-3
-                        [&_h3]:text-sm [&_h3]:font-medium [&_h3]:text-muted-foreground [&_h3]:mb-1
-                        [&_.header]:bg-gradient-to-l [&_.header]:from-primary/80 [&_.header]:to-primary [&_.header]:text-primary-foreground [&_.header]:p-6 [&_.header]:rounded-lg [&_.header]:mb-6
-                      "
-                      dir="rtl"
-                      dangerouslySetInnerHTML={{ __html: htmlContent }}
-                    />
+                    
+                    {/* Render summary metrics cards */}
+                    {summary && (
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                        {Object.entries(summary).map(([key, value]) => (
+                          <div key={key} className="bg-card border border-border rounded-lg p-4 shadow-sm">
+                            <h3 className="text-xs font-medium text-muted-foreground mb-1">
+                              {key.replace(/_/g, ' ')}
+                            </h3>
+                            <div className="text-2xl font-bold text-primary">
+                              {String(value)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Render HTML report */}
+                    {htmlContent && (
+                      <div 
+                        className="prose prose-sm max-w-none dark:prose-invert
+                          [&_table]:w-full [&_table]:border-collapse [&_table]:rounded-lg [&_table]:overflow-hidden
+                          [&_th]:bg-primary [&_th]:text-primary-foreground [&_th]:px-4 [&_th]:py-2.5 [&_th]:text-right [&_th]:text-sm [&_th]:font-medium
+                          [&_td]:px-4 [&_td]:py-2.5 [&_td]:border-b [&_td]:border-border [&_td]:text-sm
+                          [&_tr:hover_td]:bg-muted/50
+                          [&_.metrics-grid]:grid [&_.metrics-grid]:grid-cols-2 [&_.metrics-grid]:md:grid-cols-4 [&_.metrics-grid]:gap-3 [&_.metrics-grid]:mb-6
+                          [&_.metric-card]:bg-card [&_.metric-card]:border [&_.metric-card]:border-border [&_.metric-card]:rounded-lg [&_.metric-card]:p-4 [&_.metric-card]:shadow-sm
+                          [&_.metric-value]:text-2xl [&_.metric-value]:font-bold [&_.metric-value]:text-primary
+                          [&_h1]:text-xl [&_h1]:font-bold [&_h1]:mb-4
+                          [&_h2]:text-lg [&_h2]:font-semibold [&_h2]:mt-6 [&_h2]:mb-3
+                          [&_h3]:text-sm [&_h3]:font-medium [&_h3]:text-muted-foreground [&_h3]:mb-1
+                          [&_.header]:bg-gradient-to-l [&_.header]:from-primary/80 [&_.header]:to-primary [&_.header]:text-primary-foreground [&_.header]:p-6 [&_.header]:rounded-lg [&_.header]:mb-6
+                        "
+                        dir="rtl"
+                        dangerouslySetInnerHTML={{ __html: htmlContent }}
+                      />
+                    )}
                   </div>
                 );
               }
