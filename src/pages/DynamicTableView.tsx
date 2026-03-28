@@ -42,6 +42,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnalyticsDashboard";
 import { SearchConsoleDashboard } from "@/components/dynamic-tables/SearchConsoleDashboard";
+import { SeoDashboardView } from "@/components/dynamic-tables/SeoDashboardView";
 import { AlertsManagementDialog } from "@/components/dynamic-tables/AlertsManagementDialog";
 import { ActiveAlerts } from "@/components/dynamic-tables/ActiveAlerts";
 import { ShareTableDialog } from "@/components/dynamic-tables/ShareTableDialog";
