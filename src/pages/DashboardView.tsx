@@ -15,13 +15,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowRight, Facebook, ShoppingCart, FileSpreadsheet, TrendingUp, TrendingDown, Minus, RefreshCw, Building2 } from "lucide-react";
+import { ArrowRight, Facebook, ShoppingCart, FileSpreadsheet, TrendingUp, TrendingDown, Minus, RefreshCw, Building2, Globe } from "lucide-react";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { toast } from "sonner";
 import { AgencyDashboardContent } from "@/components/dynamic-tables/AgencyDashboardContent";
 import { ShareDashboardDialog } from "@/components/dynamic-tables/ShareDashboardDialog";
 import { useTenant } from "@/contexts/TenantContext";
 import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnalyticsDashboard";
+import { SeoDashboardView } from "@/components/dynamic-tables/SeoDashboardView";
 import {
   LineChart, Line, BarChart, Bar, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts";
@@ -45,7 +46,7 @@ const PLATFORM_CONFIG: Record<string, { name: string; color: string; bgColor: st
 };
 
 type CampaignType = 'leads' | 'ecommerce';
-type PlatformFilter = 'all' | 'facebook' | 'google_ads' | 'google_analytics';
+type PlatformFilter = 'all' | 'facebook' | 'google_ads' | 'google_analytics' | 'seo';
 
 const getCampaignType = (integrationType?: string | null, integrationSettings?: any): CampaignType => {
   if (integrationType === 'facebook_ecommerce') return 'ecommerce';
@@ -219,6 +220,23 @@ export default function DashboardView() {
     enabled: tables.length > 0,
   });
 
+  // Check if client has SEO (Ahrefs) reports
+  const { data: hasSeoReports = false } = useQuery({
+    queryKey: ['has-seo-reports', dashboard?.client_id],
+    queryFn: async () => {
+      if (!dashboard?.client_id || !currentTenantId) return false;
+      const { count, error } = await supabase
+        .from('ahrefs_reports')
+        .select('id', { count: 'exact', head: true })
+        .eq('client_id', dashboard.client_id)
+        .eq('tenant_id', currentTenantId)
+        .limit(1);
+      if (error) return false;
+      return (count || 0) > 0;
+    },
+    enabled: !!dashboard?.client_id && !!currentTenantId,
+  });
+
   // Available platforms for tab rendering
   const availablePlatforms = useMemo(() => {
     const set = new Set<string>();
@@ -229,8 +247,9 @@ export default function DashboardView() {
     if (set.has('facebook_insights') || set.has('facebook_ecommerce')) platforms.push('facebook');
     if (set.has('google_ads')) platforms.push('google_ads');
     if (set.has('google_analytics')) platforms.push('google_analytics');
+    if (hasSeoReports) platforms.push('seo');
     return platforms;
-  }, [tables]);
+  }, [tables, hasSeoReports]);
 
   // Filter records by platform tab AND only use daily aggregate records for Analytics
   // IMPORTANT: Use only report_type='daily' for aggregation (KPI, charts).
@@ -758,6 +777,12 @@ export default function DashboardView() {
                     Analytics
                   </TabsTrigger>
                 )}
+                {availablePlatforms.includes('seo') && (
+                  <TabsTrigger value="seo" className="flex items-center gap-2">
+                    <Globe className="h-4 w-4 text-green-600" />
+                    SEO
+                  </TabsTrigger>
+                )}
               </TabsList>
             </Tabs>
           )}
@@ -772,6 +797,11 @@ export default function DashboardView() {
               <p className="text-muted-foreground mb-4">צור טבלאות ושייך אותן ללקוח כדי לראות נתונים בדשבורד</p>
               <Button onClick={() => navigate(buildPath('/dynamic-tables'))}>עבור לניהול דוחות</Button>
             </Card>
+          ) : platformFilter === 'seo' ? (
+            /* SEO tab: render SeoDashboardView with Ahrefs data */
+            dashboard?.client_id && currentTenantId ? (
+              <SeoDashboardView tenantId={currentTenantId} clientId={dashboard.client_id} />
+            ) : null
           ) : platformFilter === 'google_analytics' ? (
             /* Analytics tab: render the same GoogleAnalyticsDashboard used in standalone table view */
             <GoogleAnalyticsDashboard
