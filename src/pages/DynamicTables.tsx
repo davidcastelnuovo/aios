@@ -888,9 +888,9 @@ export default function DynamicTables() {
       <AlertDialog open={!!deletingTable} onOpenChange={(open) => !open && setDeletingTable(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>האם למחוק את הטבלה?</AlertDialogTitle>
+            <AlertDialogTitle>האם למחוק את הדוח?</AlertDialogTitle>
             <AlertDialogDescription>
-              פעולה זו תמחק את הטבלה "{deletingTable?.name}" וכל הנתונים שבה. לא ניתן לשחזר את הנתונים לאחר המחיקה.
+              פעולה זו תמחק את הדוח "{deletingTable?.name}" וכל הנתונים שבו. לא ניתן לשחזר את הנתונים לאחר המחיקה.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
