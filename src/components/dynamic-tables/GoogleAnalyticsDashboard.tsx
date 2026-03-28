@@ -858,7 +858,9 @@ export function GoogleAnalyticsDashboard({
       {/* Traffic Sources Bar Chart */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">מקורות תנועה - סשנים ושווי רכישות</CardTitle>
+          <CardTitle className="text-lg">
+            {reportMode === 'ecommerce' ? 'מקורות תנועה - סשנים ושווי רכישות' : 'מקורות תנועה - סשנים והמרות'}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="h-[400px]" dir="ltr">
@@ -888,11 +890,19 @@ export function GoogleAnalyticsDashboard({
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Bar>
-                <Bar dataKey="purchaseValue" name="שווי רכישות" radius={[0, 4, 4, 0]} opacity={0.6}>
-                  {trafficSources.slice(0, 10).map((_, index) => (
-                    <Cell key={`cell-pv-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Bar>
+                {reportMode === 'ecommerce' ? (
+                  <Bar dataKey="purchaseValue" name="שווי רכישות" radius={[0, 4, 4, 0]} opacity={0.6}>
+                    {trafficSources.slice(0, 10).map((_, index) => (
+                      <Cell key={`cell-pv-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Bar>
+                ) : (
+                  <Bar dataKey="conversions" name="המרות" radius={[0, 4, 4, 0]} opacity={0.6}>
+                    {trafficSources.slice(0, 10).map((_, index) => (
+                      <Cell key={`cell-cv-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Bar>
+                )}
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -917,9 +927,17 @@ export function GoogleAnalyticsDashboard({
                   <th className="text-center py-2 px-3 font-medium">Bounce</th>
                   <th className="text-center py-2 px-3 font-medium">זמן ממוצע</th>
                   <th className="text-center py-2 px-3 font-medium">המרות</th>
-                  <th className="text-center py-2 px-3 font-medium">הוספה לעגלה</th>
-                  <th className="text-center py-2 px-3 font-medium">רכישות</th>
-                  <th className="text-center py-2 px-3 font-medium">שווי רכישות</th>
+                  {reportMode === 'ecommerce' ? (
+                    <>
+                      <th className="text-center py-2 px-3 font-medium">הוספה לעגלה</th>
+                      <th className="text-center py-2 px-3 font-medium">רכישות</th>
+                      <th className="text-center py-2 px-3 font-medium">שווי רכישות</th>
+                    </>
+                  ) : (
+                    <>
+                      <th className="text-center py-2 px-3 font-medium">שיעור המרה</th>
+                    </>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -941,19 +959,28 @@ export function GoogleAnalyticsDashboard({
                     <td className="text-center py-2 px-3">{Number(source.bounceRate).toFixed(1)}%</td>
                     <td className="text-center py-2 px-3">{Number(source.avgDuration).toFixed(1)}s</td>
                     <td className="text-center py-2 px-3">
-                      {source.conversions > 0 && (
+                      {source.conversions > 0 ? (
                         <Badge variant="secondary">{source.conversions}</Badge>
-                      )}
-                      {source.conversions === 0 && '-'}
+                      ) : '-'}
                     </td>
-                    <td className="text-center py-2 px-3">{formatNumber(source.addToCart)}</td>
-                    <td className="text-center py-2 px-3">{formatNumber(source.purchases)}</td>
-                    <td className="text-center py-2 px-3">{formatCurrency(source.purchaseValue)}</td>
+                    {reportMode === 'ecommerce' ? (
+                      <>
+                        <td className="text-center py-2 px-3">{formatNumber(source.addToCart)}</td>
+                        <td className="text-center py-2 px-3">{formatNumber(source.purchases)}</td>
+                        <td className="text-center py-2 px-3">{formatCurrency(source.purchaseValue)}</td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="text-center py-2 px-3">
+                          {source.sessions > 0 ? ((source.conversions / source.sessions) * 100).toFixed(2) + '%' : '-'}
+                        </td>
+                      </>
+                    )}
                   </tr>
                 ))}
                 {trafficSources.length === 0 && (
                   <tr>
-                    <td colSpan={11} className="text-center py-8 text-muted-foreground">
+                    <td colSpan={reportMode === 'ecommerce' ? 11 : 9} className="text-center py-8 text-muted-foreground">
                       אין נתוני מקורות תנועה להצגה בטווח הנוכחי
                     </td>
                   </tr>
