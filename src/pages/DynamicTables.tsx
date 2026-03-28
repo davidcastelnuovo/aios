@@ -261,7 +261,7 @@ export default function DynamicTables() {
       toast.success('הדוח נמחק בהצלחה');
     },
     onError: (error: any) => {
-      toast.error('שגיאה במחיקת הטבלה: ' + error.message);
+      toast.error('שגיאה במחיקת הדוח: ' + error.message);
     },
   });
 
