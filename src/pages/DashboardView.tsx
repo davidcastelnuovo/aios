@@ -653,7 +653,7 @@ export default function DashboardView() {
           <h3 className="text-lg font-semibold mb-2">הדשבורד לא נמצא</h3>
           <Button onClick={() => navigate(buildPath('/dynamic-tables'))}>
             <ArrowRight className="ml-2 h-4 w-4" />
-            חזרה לניהול טבלאות
+            חזרה לניהול דוחות
           </Button>
         </Card>
       </div>
@@ -770,7 +770,7 @@ export default function DashboardView() {
             <Card className="p-12 text-center">
               <h3 className="text-lg font-semibold mb-2">אין טבלאות משויכות ללקוח זה</h3>
               <p className="text-muted-foreground mb-4">צור טבלאות ושייך אותן ללקוח כדי לראות נתונים בדשבורד</p>
-              <Button onClick={() => navigate(buildPath('/dynamic-tables'))}>עבור לניהול טבלאות</Button>
+              <Button onClick={() => navigate(buildPath('/dynamic-tables'))}>עבור לניהול דוחות</Button>
             </Card>
           ) : platformFilter === 'google_analytics' ? (
             /* Analytics tab: render the same GoogleAnalyticsDashboard used in standalone table view */
