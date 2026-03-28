@@ -366,9 +366,9 @@ export default function DynamicTables() {
     <div className="container mx-auto py-8 px-4">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-3xl font-bold">ניהול טבלאות ודשבורדים</h1>
+          <h1 className="text-3xl font-bold">ניהול דוחות ודשבורדים</h1>
           <p className="text-muted-foreground mt-1">
-            צור וערוך טבלאות נתונים ודשבורדים מאוחדים
+            צור וערוך דוחות נתונים ודשבורדים מאוחדים
           </p>
         </div>
       </div>
