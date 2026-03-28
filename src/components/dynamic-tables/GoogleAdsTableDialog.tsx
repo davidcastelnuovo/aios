@@ -317,6 +317,7 @@ export function GoogleAdsTableDialog({ open, onOpenChange, assignedClientIds }: 
               scenario_name: `חיבור לגוגל - ${tableName}`,
               customer_id: formattedCustomerId,
               campaign_type: campaignType,
+              connection_id: selectedMakeConnection || undefined,
             },
           });
           

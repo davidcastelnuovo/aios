@@ -1281,6 +1281,7 @@ export default function DynamicTableView() {
           scenario_name: `חיבור לגוגל - ${table.name}`,
           customer_id: integrationSettings.customer_id,
           campaign_type: integrationSettings.campaign_type || 'leads',
+          connection_id: integrationSettings.make_connection_id || undefined,
         },
       });
 
