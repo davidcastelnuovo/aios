@@ -182,14 +182,35 @@ export function GoogleAdsTableDialog({ open, onOpenChange, assignedClientIds }: 
         },
       });
 
-      // Never throw here to avoid crashing the dialog on permission issues.
-      if (error || data?.error) {
-        return [];
-      }
-
+      if (error || data?.error) return [];
       return data?.connections || [];
     },
     enabled: open && !!isMakeApiConnected && dataSource === 'make_api',
+  });
+
+  // Fetch Google Ads client accounts from selected Make connection
+  const { data: makeAccountsList = [], isLoading: loadingMakeAccounts } = useQuery({
+    queryKey: ['make-google-ads-accounts', tenantId, selectedMakeConnection],
+    queryFn: async () => {
+      if (!makeApiSettings?.api_token || !makeApiSettings?.team_id || !selectedMakeConnection) return [];
+      
+      const { data, error } = await supabase.functions.invoke('make-api', {
+        body: {
+          action: 'list_google_ads_accounts',
+          api_token: makeApiSettings.api_token,
+          team_id: makeApiSettings.team_id,
+          region: makeApiSettings.region || 'eu1',
+          connection_id: selectedMakeConnection,
+        },
+      });
+
+      if (error || data?.error) {
+        console.warn('Failed to fetch Google Ads accounts:', data?.error || error);
+        return [];
+      }
+      return data?.accounts || [];
+    },
+    enabled: open && !!isMakeApiConnected && !!selectedMakeConnection && dataSource === 'make_api',
   });
 
   // Pre-select Make connection if already saved
