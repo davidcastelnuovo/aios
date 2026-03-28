@@ -32,7 +32,8 @@ import {
   Line,
   Legend,
 } from "recharts";
-import { Users, Eye, MousePointerClick, Clock, TrendingUp, Globe, CalendarIcon, ArrowUp, ArrowDown, ShoppingCart, CreditCard } from "lucide-react";
+import { Users, Eye, MousePointerClick, Clock, TrendingUp, Globe, CalendarIcon, ArrowUp, ArrowDown, ShoppingCart, CreditCard, UserCheck, Target } from "lucide-react";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths, isWithinInterval, parseISO } from "date-fns";
 import { he } from "date-fns/locale";
 
@@ -119,6 +120,7 @@ export function GoogleAnalyticsDashboard({
     }
   }, [externalDateFilter]);
   const [showComparison, setShowComparison] = useState(false);
+  const [reportMode, setReportMode] = useState<'ecommerce' | 'leads'>('ecommerce');
   const [calendarOpen, setCalendarOpen] = useState(false);
 
   const toNumber = (value: unknown): number => {
@@ -585,7 +587,7 @@ export function GoogleAnalyticsDashboard({
           </Popover>
         )}
 
-        <div className="flex items-center gap-2 mr-auto">
+        <div className="flex items-center gap-2">
           <Switch
             id="comparison-toggle"
             checked={showComparison}
@@ -603,8 +605,23 @@ export function GoogleAnalyticsDashboard({
         )}
       </div>
 
+      {/* Report Mode Toggle */}
+      <div className="flex items-center gap-3">
+        <Label className="text-sm font-medium">סוג דוח:</Label>
+        <ToggleGroup type="single" value={reportMode} onValueChange={(v) => { if (v) setReportMode(v as 'ecommerce' | 'leads'); }}>
+          <ToggleGroupItem value="ecommerce" className="gap-2 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+            <ShoppingCart className="h-4 w-4" />
+            איקומרס
+          </ToggleGroupItem>
+          <ToggleGroupItem value="leads" className="gap-2 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+            <UserCheck className="h-4 w-4" />
+            לידים
+          </ToggleGroupItem>
+        </ToggleGroup>
+      </div>
+
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 2xl:grid-cols-9 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
         <Card>
           <CardContent className="pt-4">
             <div className="flex items-center gap-2">
@@ -636,38 +653,75 @@ export function GoogleAnalyticsDashboard({
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-2">
-              <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">הוספה לעגלה</span>
-            </div>
-            <p className="text-2xl font-bold mt-1">{formatNumber(totals.addToCart)}</p>
-            <ChangeIndicator current={totals.addToCart} previous={prevTotals?.addToCart} />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-2">
-              <CreditCard className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">רכישות</span>
-            </div>
-            <p className="text-2xl font-bold mt-1">{formatNumber(totals.purchases)}</p>
-            <ChangeIndicator current={totals.purchases} previous={prevTotals?.purchases} />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">שווי רכישות</span>
-            </div>
-            <p className="text-2xl font-bold mt-1">{formatCurrency(totals.purchaseValue)}</p>
-            <ChangeIndicator current={totals.purchaseValue} previous={prevTotals?.purchaseValue} />
-          </CardContent>
-        </Card>
+        {reportMode === 'ecommerce' ? (
+          <>
+            <Card>
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-2">
+                  <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">הוספה לעגלה</span>
+                </div>
+                <p className="text-2xl font-bold mt-1">{formatNumber(totals.addToCart)}</p>
+                <ChangeIndicator current={totals.addToCart} previous={prevTotals?.addToCart} />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">רכישות</span>
+                </div>
+                <p className="text-2xl font-bold mt-1">{formatNumber(totals.purchases)}</p>
+                <ChangeIndicator current={totals.purchases} previous={prevTotals?.purchases} />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">שווי רכישות</span>
+                </div>
+                <p className="text-2xl font-bold mt-1">{formatCurrency(totals.purchaseValue)}</p>
+                <ChangeIndicator current={totals.purchaseValue} previous={prevTotals?.purchaseValue} />
+              </CardContent>
+            </Card>
+          </>
+        ) : (
+          <>
+            <Card>
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-2">
+                  <Target className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">המרות (לידים)</span>
+                </div>
+                <p className="text-2xl font-bold mt-1">{formatNumber(totals.conversions)}</p>
+                <ChangeIndicator current={totals.conversions} previous={prevTotals?.conversions} />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">שיעור המרה</span>
+                </div>
+                <p className="text-2xl font-bold mt-1">
+                  {totals.sessions > 0 ? ((totals.conversions / totals.sessions) * 100).toFixed(2) : '0'}%
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-2">
+                  <UserCheck className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">המרות למשתמש</span>
+                </div>
+                <p className="text-2xl font-bold mt-1">
+                  {totals.users > 0 ? ((totals.conversions / totals.users) * 100).toFixed(2) : '0'}%
+                </p>
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
 
       {/* Charts Row */}
@@ -775,14 +829,25 @@ export function GoogleAnalyticsDashboard({
                     strokeWidth={2}
                     dot={false}
                   />
-                  <Line 
-                    type="monotone" 
-                    dataKey="purchases" 
-                    name="רכישות"
-                    stroke="#EF4444" 
-                    strokeWidth={2}
-                    dot={false}
-                  />
+                  {reportMode === 'ecommerce' ? (
+                    <Line 
+                      type="monotone" 
+                      dataKey="purchases" 
+                      name="רכישות"
+                      stroke="#EF4444" 
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                  ) : (
+                    <Line 
+                      type="monotone" 
+                      dataKey="conversions" 
+                      name="המרות (לידים)"
+                      stroke="#8B5CF6" 
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                  )}
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -793,7 +858,9 @@ export function GoogleAnalyticsDashboard({
       {/* Traffic Sources Bar Chart */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">מקורות תנועה - סשנים ושווי רכישות</CardTitle>
+          <CardTitle className="text-lg">
+            {reportMode === 'ecommerce' ? 'מקורות תנועה - סשנים ושווי רכישות' : 'מקורות תנועה - סשנים והמרות'}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="h-[400px]" dir="ltr">
@@ -823,11 +890,19 @@ export function GoogleAnalyticsDashboard({
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Bar>
-                <Bar dataKey="purchaseValue" name="שווי רכישות" radius={[0, 4, 4, 0]} opacity={0.6}>
-                  {trafficSources.slice(0, 10).map((_, index) => (
-                    <Cell key={`cell-pv-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Bar>
+                {reportMode === 'ecommerce' ? (
+                  <Bar dataKey="purchaseValue" name="שווי רכישות" radius={[0, 4, 4, 0]} opacity={0.6}>
+                    {trafficSources.slice(0, 10).map((_, index) => (
+                      <Cell key={`cell-pv-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Bar>
+                ) : (
+                  <Bar dataKey="conversions" name="המרות" radius={[0, 4, 4, 0]} opacity={0.6}>
+                    {trafficSources.slice(0, 10).map((_, index) => (
+                      <Cell key={`cell-cv-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Bar>
+                )}
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -852,9 +927,17 @@ export function GoogleAnalyticsDashboard({
                   <th className="text-center py-2 px-3 font-medium">Bounce</th>
                   <th className="text-center py-2 px-3 font-medium">זמן ממוצע</th>
                   <th className="text-center py-2 px-3 font-medium">המרות</th>
-                  <th className="text-center py-2 px-3 font-medium">הוספה לעגלה</th>
-                  <th className="text-center py-2 px-3 font-medium">רכישות</th>
-                  <th className="text-center py-2 px-3 font-medium">שווי רכישות</th>
+                  {reportMode === 'ecommerce' ? (
+                    <>
+                      <th className="text-center py-2 px-3 font-medium">הוספה לעגלה</th>
+                      <th className="text-center py-2 px-3 font-medium">רכישות</th>
+                      <th className="text-center py-2 px-3 font-medium">שווי רכישות</th>
+                    </>
+                  ) : (
+                    <>
+                      <th className="text-center py-2 px-3 font-medium">שיעור המרה</th>
+                    </>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -876,19 +959,28 @@ export function GoogleAnalyticsDashboard({
                     <td className="text-center py-2 px-3">{Number(source.bounceRate).toFixed(1)}%</td>
                     <td className="text-center py-2 px-3">{Number(source.avgDuration).toFixed(1)}s</td>
                     <td className="text-center py-2 px-3">
-                      {source.conversions > 0 && (
+                      {source.conversions > 0 ? (
                         <Badge variant="secondary">{source.conversions}</Badge>
-                      )}
-                      {source.conversions === 0 && '-'}
+                      ) : '-'}
                     </td>
-                    <td className="text-center py-2 px-3">{formatNumber(source.addToCart)}</td>
-                    <td className="text-center py-2 px-3">{formatNumber(source.purchases)}</td>
-                    <td className="text-center py-2 px-3">{formatCurrency(source.purchaseValue)}</td>
+                    {reportMode === 'ecommerce' ? (
+                      <>
+                        <td className="text-center py-2 px-3">{formatNumber(source.addToCart)}</td>
+                        <td className="text-center py-2 px-3">{formatNumber(source.purchases)}</td>
+                        <td className="text-center py-2 px-3">{formatCurrency(source.purchaseValue)}</td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="text-center py-2 px-3">
+                          {source.sessions > 0 ? ((source.conversions / source.sessions) * 100).toFixed(2) + '%' : '-'}
+                        </td>
+                      </>
+                    )}
                   </tr>
                 ))}
                 {trafficSources.length === 0 && (
                   <tr>
-                    <td colSpan={11} className="text-center py-8 text-muted-foreground">
+                    <td colSpan={reportMode === 'ecommerce' ? 11 : 9} className="text-center py-8 text-muted-foreground">
                       אין נתוני מקורות תנועה להצגה בטווח הנוכחי
                     </td>
                   </tr>
