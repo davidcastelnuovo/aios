@@ -80,6 +80,8 @@ export function GoogleAdsTableDialog({ open, onOpenChange, assignedClientIds }: 
   const [accountSearch, setAccountSearch] = useState("");
   const [agencyId, setAgencyId] = useState<string>("");
   const [clientId, setClientId] = useState<string>("");
+  const [clientSearch, setClientSearch] = useState("");
+  const [clientPopoverOpen, setClientPopoverOpen] = useState(false);
   const [dataSource, setDataSource] = useState<"make_api" | "direct_api" | "webhook">("make_api");
   const [selectedMakeConnection, setSelectedMakeConnection] = useState("");
   const [customerIdInput, setCustomerIdInput] = useState("");
