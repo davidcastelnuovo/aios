@@ -226,8 +226,18 @@ export default function DynamicTables() {
       );
     }
     
+    // Filter by client name search
+    if (clientSearch.trim()) {
+      const search = clientSearch.trim().toLowerCase();
+      result = result.filter(table => {
+        if (!table.client_id) return false;
+        const client = clients.find(c => c.id === table.client_id);
+        return client?.name?.toLowerCase().includes(search);
+      });
+    }
+
     return result;
-  }, [tables, selectedAgency, isCampaigner, isOwner, isTeamManager, isSuperAdmin, assignedClientIds]);
+  }, [tables, selectedAgency, isCampaigner, isOwner, isTeamManager, isSuperAdmin, assignedClientIds, clientSearch, clients]);
 
   // Delete dashboard mutation
   const deleteDashboardMutation = useMutation({
