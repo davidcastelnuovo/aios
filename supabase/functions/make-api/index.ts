@@ -376,6 +376,59 @@ serve(async (req) => {
         break;
       }
 
+      case "list_google_ads_accounts": {
+        // Fetch Google Ads client accounts via Make.com RPC API
+        if (!connection_id) {
+          return new Response(
+            JSON.stringify({ error: "Connection ID is required" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        const baseUrl = MAKE_API_REGIONS[region] || MAKE_API_REGIONS.eu1;
+        const rpcUrl = `${baseUrl}/rpcs/google-ads/1/listCustomers`;
+        
+        console.log(`Fetching Google Ads accounts via RPC: ${rpcUrl}, connection: ${connection_id}`);
+
+        try {
+          const rpcResponse = await fetch(rpcUrl, {
+            method: "POST",
+            headers: {
+              "Authorization": `Token ${api_token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              data: {},
+              scope: { connectionId: parseInt(connection_id) },
+            }),
+          });
+
+          if (!rpcResponse.ok) {
+            const errorText = await rpcResponse.text();
+            console.error(`RPC error: ${rpcResponse.status} - ${errorText}`);
+            result = { accounts: [], error: `RPC failed: ${rpcResponse.status}`, fallback: true };
+            break;
+          }
+
+          const rpcData = await rpcResponse.json();
+          console.log(`RPC returned ${Array.isArray(rpcData) ? rpcData.length : 'non-array'} items`);
+
+          // Make.com RPC returns an array of { label, value } or similar structure
+          // Filter out manager/MCC accounts
+          const accounts = (Array.isArray(rpcData) ? rpcData : []).map((item: any) => ({
+            id: String(item.value || item.id || item.customerId || ''),
+            name: String(item.label || item.name || item.descriptiveName || ''),
+            manager: item.manager === true || item.isManager === true,
+          })).filter((acc: any) => acc.id && !acc.manager);
+
+          result = { accounts, total: accounts.length };
+        } catch (rpcError) {
+          console.error(`RPC call failed:`, rpcError);
+          result = { accounts: [], error: String(rpcError), fallback: true };
+        }
+        break;
+      }
+
       case "list_google_ads_scenarios": {
         // Get all scenarios that use Google Ads modules
         // Make.com API uses query parameter for teamId
