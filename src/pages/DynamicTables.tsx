@@ -477,6 +477,15 @@ export default function DynamicTables() {
 
         {/* Tables Tab Content */}
         <TabsContent value="tables">
+          {/* Client name search */}
+          <div className="mb-4 max-w-sm">
+            <Input
+              placeholder="חיפוש לפי שם לקוח..."
+              value={clientSearch}
+              onChange={(e) => setClientSearch(e.target.value)}
+              className="text-right"
+            />
+          </div>
           {isLoading ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {[1, 2, 3].map((i) => (
