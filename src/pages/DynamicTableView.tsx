@@ -1717,7 +1717,11 @@ export default function DynamicTableView() {
               >
                 <TrendingUp className="h-4 w-4" />
                 <RefreshCw className={`h-4 w-4 ${syncAhrefsMutation.isPending ? 'animate-spin' : ''}`} />
-                {syncAhrefsMutation.isPending ? 'מסנכרן Ahrefs...' : 'סנכרן Ahrefs'}
+                {syncAhrefsMutation.isPending 
+                  ? 'מסנכרן...' 
+                  : table?.integration_settings?.data_source === 'ahrefs_reports' 
+                    ? 'סנכרן מדוחות SEO' 
+                    : 'סנכרן Ahrefs'}
               </Button>
             </div>
           )}
