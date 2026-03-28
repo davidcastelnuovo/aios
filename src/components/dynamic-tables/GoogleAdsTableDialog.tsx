@@ -600,23 +600,48 @@ export function GoogleAdsTableDialog({ open, onOpenChange, assignedClientIds }: 
                   
                   {selectedMakeConnection && (
                     <div className="space-y-2">
-                      <Label htmlFor="customer-id">Google Ads Customer ID</Label>
-                      <Input
-                        id="customer-id"
-                        value={customerIdInput}
-                        onChange={(e) => {
-                          // Allow only numbers and dashes, format as XXX-XXX-XXXX
-                          const value = e.target.value.replace(/[^0-9-]/g, '');
-                          setCustomerIdInput(value);
-                        }}
-                        placeholder="123-456-7890"
-                        dir="ltr"
-                        className="text-left"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        ניתן למצוא ב-Google Ads: לחץ על האייקון בפינה הימנית העליונה או גש ל-
-                        <span className="font-medium"> הגדרות &gt; הגדרות חשבון</span>
-                      </p>
+                      <Label>חשבון Google Ads (Customer ID)</Label>
+                      {loadingMakeAccounts ? (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          טוען חשבונות לקוח...
+                        </div>
+                      ) : makeAccountsList.length > 0 ? (
+                        <>
+                          <Select value={customerIdInput} onValueChange={setCustomerIdInput}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="בחר חשבון לקוח..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {(makeAccountsList as { id: string; name: string; manager: boolean }[]).map((acc) => (
+                                <SelectItem key={acc.id} value={acc.id}>
+                                  {acc.name || acc.id} ({acc.id.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3')})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground">
+                            מוצגים רק חשבונות לקוח (ללא MCC)
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <Input
+                            id="customer-id"
+                            value={customerIdInput}
+                            onChange={(e) => {
+                              const value = e.target.value.replace(/[^0-9-]/g, '');
+                              setCustomerIdInput(value);
+                            }}
+                            placeholder="123-456-7890"
+                            dir="ltr"
+                            className="text-left"
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            לא ניתן לשלוף חשבונות אוטומטית. הזן Customer ID ידנית — ניתן למצוא ב-Google Ads בהגדרות החשבון.
+                          </p>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
