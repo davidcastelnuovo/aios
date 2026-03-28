@@ -824,6 +824,7 @@ export default function DynamicTableView() {
             webhook_url: webhookUrl,
             customer_id: customerId,
             campaign_type: integrationSettings.campaign_type || 'leads',
+            connection_id: connectionId || undefined,
             start_date: cloneStartDate,
             end_date: cloneEndDate,
           },
