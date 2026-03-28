@@ -92,6 +92,7 @@ export function GoogleAnalyticsDashboard({
   externalDateFilter,
   externalCustomDateRange,
   tableId,
+  dashboardId,
   defaultReportMode,
 }: GoogleAnalyticsDashboardProps) {
   const mapExternalPreset = (ext?: string): DateRangePreset => {
