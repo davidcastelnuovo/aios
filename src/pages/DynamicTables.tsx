@@ -753,12 +753,12 @@ export default function DynamicTables() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="table-name">שם הטבלה</Label>
+              <Label htmlFor="table-name">שם הדוח</Label>
               <Input
                 id="table-name"
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
-                placeholder="שם הטבלה"
+                placeholder="שם הדוח"
               />
             </div>
             <div className="space-y-2">
