@@ -1,4 +1,5 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,8 @@ interface GoogleAnalyticsDashboardProps {
   records: CrmRecord[];
   externalDateFilter?: string;
   externalCustomDateRange?: { from: Date | undefined; to: Date | undefined };
+  tableId?: string;
+  defaultReportMode?: 'ecommerce' | 'leads';
 }
 
 // Explicit colorful chart colors
@@ -87,6 +90,8 @@ export function GoogleAnalyticsDashboard({
   records,
   externalDateFilter,
   externalCustomDateRange,
+  tableId,
+  defaultReportMode,
 }: GoogleAnalyticsDashboardProps) {
   const mapExternalPreset = (ext?: string): DateRangePreset => {
     if (!ext) return 'last_30_days';
@@ -120,7 +125,7 @@ export function GoogleAnalyticsDashboard({
     }
   }, [externalDateFilter]);
   const [showComparison, setShowComparison] = useState(false);
-  const [reportMode, setReportMode] = useState<'ecommerce' | 'leads'>('ecommerce');
+  const [reportMode, setReportMode] = useState<'ecommerce' | 'leads'>(defaultReportMode || 'ecommerce');
   const [calendarOpen, setCalendarOpen] = useState(false);
 
   const toNumber = (value: unknown): number => {
@@ -608,7 +613,18 @@ export function GoogleAnalyticsDashboard({
       {/* Report Mode Toggle */}
       <div className="flex items-center gap-3">
         <Label className="text-sm font-medium">סוג דוח:</Label>
-        <ToggleGroup type="single" value={reportMode} onValueChange={(v) => { if (v) setReportMode(v as 'ecommerce' | 'leads'); }}>
+        <ToggleGroup type="single" value={reportMode} onValueChange={(v) => { 
+          if (v) {
+            const newMode = v as 'ecommerce' | 'leads';
+            setReportMode(newMode);
+            if (tableId) {
+              supabase.functions.invoke('crm-tables', {
+                method: 'PATCH',
+                body: { table_id: tableId, integration_settings: { default_report_mode: newMode } },
+              }).catch(console.error);
+            }
+          }
+        }}>
           <ToggleGroupItem value="ecommerce" className="gap-2 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
             <ShoppingCart className="h-4 w-4" />
             איקומרס
