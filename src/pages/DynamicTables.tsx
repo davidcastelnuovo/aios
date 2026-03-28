@@ -149,11 +149,24 @@ export default function DynamicTables() {
     enabled: !!tenantId,
   });
 
+  // Fetch ad accounts for edit dialog (Facebook tables)
+  const isEditingFacebook = editingTable?.integration_type === 'facebook_insights' || editingTable?.integration_type === 'facebook_ecommerce';
+  
+  const { data: editAdAccountsData } = useQuery({
+    queryKey: ['facebook-ad-accounts-edit'],
+    queryFn: async () => {
+      const response = await supabase.functions.invoke('get-facebook-ad-accounts', { method: 'GET' });
+      if (response.error) throw response.error;
+      return response.data;
+    },
+    enabled: !!editingTable && isEditingFacebook,
+  });
+  const editAdAccounts: { id: string; name: string; currency: string }[] = editAdAccountsData?.ad_accounts || [];
+
   // Filter clients by selected agency in edit dialog
   const editFilteredClients = useMemo(() => {
     if (!editAgencyId) return [];
     let filtered = clients.filter(c => c.agency_id === editAgencyId);
-    // Campaigners can only see their assigned clients
     if (isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin && assignedClientIds) {
       filtered = filtered.filter(c => assignedClientIds.includes(c.id));
     }
