@@ -7,9 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
-import { TrendingUp, Globe, FileText, Calendar, ArrowUp, ArrowDown } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { TrendingUp, Globe, FileText, Calendar, ArrowUp, ArrowDown, Loader2, PlusCircle } from "lucide-react";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
@@ -22,7 +23,10 @@ interface SeoReportDialogProps {
 
 export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoReportDialogProps) {
   const { currentTenantId } = useTenant();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [selectedClient, setSelectedClient] = useState("");
+  const [isCreatingTable, setIsCreatingTable] = useState(false);
 
   const { data: clients = [] } = useQuery({
     queryKey: ['seo-report-clients', currentTenantId],
@@ -80,6 +84,48 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
     date: item.date ? format(new Date(item.date), 'MM/yy') : '',
     traffic: item.traffic || 0,
   }));
+
+  const selectedClientObj = clients.find(c => c.id === selectedClient);
+
+  const handleCreateTable = async () => {
+    if (!selectedClient || !latestReport) return;
+    setIsCreatingTable(true);
+    try {
+      const domain = reportData?.domain || latestReport?.domain || '';
+      const clientName = selectedClientObj?.name || '';
+      const tableName = `דוח SEO - ${clientName}`;
+      const slug = `seo-report-${selectedClient}-${Date.now()}`;
+
+      const { error } = await supabase.functions.invoke('crm-tables', {
+        body: {
+          action: 'create',
+          tenantId: currentTenantId,
+          name: tableName,
+          slug,
+          description: `דוח SEO עבור ${domain}`,
+          category: 'seo',
+          icon: 'TrendingUp',
+          agencyId: selectedClientObj?.agency_id || null,
+          clientId: selectedClient,
+          integration_type: 'ahrefs',
+          integration_settings: {
+            targetDomain: domain,
+            reportType: 'site_explorer',
+            clientId: selectedClient,
+          },
+        }
+      });
+
+      if (error) throw error;
+
+      toast({ title: "טבלת דוח SEO נוצרה בהצלחה!", description: "כעת ניתן לשתף אותה." });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+    } catch (error: any) {
+      toast({ title: "שגיאה ביצירת הטבלה", description: error.message, variant: "destructive" });
+    } finally {
+      setIsCreatingTable(false);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -148,10 +194,22 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
                         <Badge variant="outline">{reportData.project_name}</Badge>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Calendar className="h-4 w-4" />
-                      {latestReport && format(new Date(latestReport.received_at), 'dd MMMM yyyy', { locale: he })}
-                      <Badge variant="secondary">{reports.length} דוחות</Badge>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleCreateTable}
+                        disabled={isCreatingTable}
+                        className="gap-1.5"
+                      >
+                        {isCreatingTable ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />}
+                        צור כטבלה
+                      </Button>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Calendar className="h-4 w-4" />
+                        {latestReport && format(new Date(latestReport.received_at), 'dd MMMM yyyy', { locale: he })}
+                        <Badge variant="secondary">{reports.length} דוחות</Badge>
+                      </div>
                     </div>
                   </div>
 
