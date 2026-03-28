@@ -734,7 +734,7 @@ export function AppSidebar() {
                   <div className="flex items-center justify-between">
                     <CollapsibleTrigger className="flex items-center gap-2 flex-1 hover:bg-accent rounded-md px-2 py-1">
                       <Table2 className="h-4 w-4" />
-                      {!isCollapsed && <span>ניהול טבלאות</span>}
+                      {!isCollapsed && <span>ניהול דוחות</span>}
                       <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180 mr-auto" />
                     </CollapsibleTrigger>
                     {!isCollapsed && (
