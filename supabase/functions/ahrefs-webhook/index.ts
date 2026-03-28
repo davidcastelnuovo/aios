@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
 
     for (const report of reports) {
       // Be flexible: extract fields from wherever they are in the payload
-      const tenant_id = report.tenant_id || report.tenantId || null;
+      let tenant_id = report.tenant_id || report.tenantId || null;
       const client_id = report.client_id || report.clientId || null;
       const agency_id = report.agency_id || report.agencyId || null;
       const domain = report.domain || report.target || report.url || report.site || null;
@@ -55,18 +55,40 @@ Deno.serve(async (req) => {
         continue;
       }
 
+      // If no tenant_id provided, try to find one by looking up existing reports for this domain
+      if (!tenant_id) {
+        const { data: existingReport } = await supabase
+          .from("ahrefs_reports")
+          .select("tenant_id")
+          .eq("domain", domain)
+          .not("tenant_id", "is", null)
+          .limit(1)
+          .single();
+        
+        if (existingReport?.tenant_id) {
+          tenant_id = existingReport.tenant_id;
+        } else {
+          // Fallback: use the first (and likely only) tenant
+          const { data: tenants } = await supabase
+            .from("tenants")
+            .select("id")
+            .limit(1)
+            .single();
+          if (tenants?.id) {
+            tenant_id = tenants.id;
+          }
+        }
+      }
+
       const insertPayload: Record<string, unknown> = {
         domain,
         report_type,
         report_data,
         metadata: typeof metadata === "object" ? metadata : { raw: metadata },
         report_date: report_date || null,
+        tenant_id: tenant_id || null,
       };
 
-      // Only add tenant_id if provided (otherwise let it be handled later)
-      if (tenant_id) {
-        insertPayload.tenant_id = tenant_id;
-      }
       if (client_id) {
         insertPayload.client_id = client_id;
       }
