@@ -947,8 +947,21 @@ serve(async (req) => {
           // Step 2: Update HTTP modules and Google Ads modules in the flow
           if (blueprintData.flow && Array.isArray(blueprintData.flow)) {
             for (const module of blueprintData.flow) {
-              // Update Google Ads module if customer_id is provided
+              // Update Google Ads module (connection + customer + metrics)
               if (module.module && isGoogleAdsModule(module.module)) {
+                if (connection_id) {
+                  const parsedConnectionId = parseInt(connection_id, 10);
+                  if (!Number.isNaN(parsedConnectionId)) {
+                    if (!module.metadata) module.metadata = {};
+                    if (!module.parameters) module.parameters = {};
+                    module.metadata.connection = { id: parsedConnectionId };
+                    module.parameters.__IMTCONN__ = parsedConnectionId;
+                    console.log(`Patched Google Ads connection to ${parsedConnectionId}`);
+                  } else {
+                    console.warn(`Invalid connection_id provided: ${connection_id}`);
+                  }
+                }
+
                 if (customer_id && module.mapper) {
                   console.log(`Patching Google Ads module (${module.module}) with accountId and metrics for ${campaign_type}`);
                   const formattedCustomerId = customer_id.replace(/-/g, '');

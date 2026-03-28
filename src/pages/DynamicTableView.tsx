@@ -1408,6 +1408,7 @@ export default function DynamicTableView() {
           webhook_url: webhookUrl,
           customer_id: integrationSettings.customer_id || integrationSettings.google_ads_customer_id,
           campaign_type: integrationSettings.campaign_type || 'leads',
+          connection_id: integrationSettings.make_connection_id || undefined,
           start_date: startDate,
           end_date: endDate,
         },
