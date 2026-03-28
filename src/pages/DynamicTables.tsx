@@ -890,6 +890,36 @@ export default function DynamicTables() {
                 </div>
               </div>
             )}
+
+            {/* Facebook Ad Account Selection */}
+            {isEditingFacebook && (
+              <div className="space-y-2">
+                <Label>חשבון מודעות Facebook</Label>
+                <Select value={editAdAccountId || "__none__"} onValueChange={(val) => setEditAdAccountId(val === "__none__" ? "" : val)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="בחר חשבון מודעות..." />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background z-50">
+                    <SelectItem value="__none__">ללא חיבור</SelectItem>
+                    {editAdAccounts.map((acc) => (
+                      <SelectItem key={acc.id} value={acc.id}>
+                        {acc.name} ({acc.id})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {editingTable?.integration_settings?.ad_account_id && (
+                  <p className="text-xs text-muted-foreground">
+                    חשבון נוכחי: {editingTable.integration_settings.ad_account_name || editingTable.integration_settings.ad_account_id}
+                  </p>
+                )}
+                {!editingTable?.integration_settings?.ad_account_id && (
+                  <p className="text-xs text-orange-500">
+                    ⚠️ הדוח לא מחובר לחשבון מודעות — בחר חשבון כדי להתחיל לקבל נתונים
+                  </p>
+                )}
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingTable(null)}>
