@@ -138,7 +138,7 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
       if (response.error) throw response.error;
       return response.data;
     },
-    enabled: open && !!facebookIntegration?.is_active && !!facebookIntegration?.api_key,
+    enabled: open && !!facebookIntegration?.is_active,
   });
 
   const adAccounts: AdAccount[] = adAccountsData?.ad_accounts || [];
