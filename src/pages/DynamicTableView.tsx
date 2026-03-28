@@ -775,6 +775,7 @@ export default function DynamicTableView() {
           scenario_name: `Google Ads Sync - ${table.name}`,
           customer_id: customerId,
           campaign_type: integrationSettings.campaign_type || 'leads',
+          connection_id: integrationSettings.make_connection_id || undefined,
         },
       });
       
