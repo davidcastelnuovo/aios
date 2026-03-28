@@ -12,10 +12,10 @@ import {
   Check,
   X,
   RefreshCw,
-  Image,
   Wand2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import type { SocialPost } from "@/pages/SocialGantt";
 
 interface CreativeAgentProps {
@@ -26,8 +26,10 @@ interface CreativeAgentProps {
 }
 
 interface GeneratedCreative {
-  url: string;
-  prompt: string;
+  brief: string;
+  colors: string[];
+  headline_text: string;
+  style_label: string;
 }
 
 export function CreativeAgent({ post, onUpdatePost, onBack, tenantId }: CreativeAgentProps) {
@@ -49,27 +51,32 @@ export function CreativeAgent({ post, onUpdatePost, onBack, tenantId }: Creative
     setSelectedIndex(null);
 
     try {
-      // Simulate AI creative generation - in production this would call an AI image generation API
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      const { data, error } = await supabase.functions.invoke("social-gantt-generate", {
+        body: {
+          action: "generate_creative_prompt",
+          post_id: post.id,
+          tenant_id: tenantId,
+          prompt,
+          style,
+          additional_notes: additionalNotes,
+        },
+      });
 
-      // Generate placeholder options for demo
-      const options: GeneratedCreative[] = [
-        {
-          url: `https://placehold.co/1080x1080/6366f1/white?text=${encodeURIComponent(post.topic)}&font=heebo`,
-          prompt: `${prompt} - Style: ${style} - Option A`,
-        },
-        {
-          url: `https://placehold.co/1080x1080/ec4899/white?text=${encodeURIComponent(post.topic)}&font=heebo`,
-          prompt: `${prompt} - Style: ${style} - Option B`,
-        },
-        {
-          url: `https://placehold.co/1080x1080/f59e0b/white?text=${encodeURIComponent(post.topic)}&font=heebo`,
-          prompt: `${prompt} - Style: ${style} - Option C`,
-        },
-      ];
+      if (error) throw error;
+
+      const options: GeneratedCreative[] = (data.options || []).map(
+        (opt: { brief: string; colors?: string[]; headline_text?: string; style_label?: string }) => ({
+          brief: opt.brief,
+          colors: opt.colors || ["#6366f1", "#ec4899", "#f59e0b"],
+          headline_text: opt.headline_text || post.topic,
+          style_label: opt.style_label || style,
+        })
+      );
+
+      if (options.length === 0) throw new Error("No options generated");
 
       setGeneratedOptions(options);
-      toast.success("3 אפשרויות קריאייטיב נוצרו!");
+      toast.success(`${options.length} בריפים לקריאייטיב נוצרו!`);
     } catch {
       toast.error("שגיאה ביצירת הקריאייטיב");
     } finally {
@@ -79,17 +86,20 @@ export function CreativeAgent({ post, onUpdatePost, onBack, tenantId }: Creative
 
   const handleApprove = () => {
     if (selectedIndex === null) {
-      toast.error("נא לבחור קריאייטיב");
+      toast.error("נא לבחור בריף קריאייטיב");
       return;
     }
 
     const selected = generatedOptions[selectedIndex];
+    // Save the brief as the creative prompt, and generate a preview URL with the selected colors
+    const mainColor = selected.colors[0]?.replace("#", "") || "6366f1";
+    const previewUrl = `https://placehold.co/1080x1080/${mainColor}/white?text=${encodeURIComponent(selected.headline_text)}&font=heebo`;
     onUpdatePost({
       id: post.id,
-      creative_url: selected.url,
-      creative_prompt: selected.prompt,
+      creative_url: previewUrl,
+      creative_prompt: selected.brief,
     });
-    toast.success("הקריאייטיב אושר ונשמר!");
+    toast.success("הבריף אושר ונשמר!");
     onBack();
   };
 
@@ -221,37 +231,63 @@ export function CreativeAgent({ post, onUpdatePost, onBack, tenantId }: Creative
               </CardTitle>
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-3 gap-3">
-              {generatedOptions.map((option, index) => (
-                <button
-                  key={index}
-                  onClick={() => setSelectedIndex(index)}
-                  className={`relative rounded-lg overflow-hidden border-2 transition-all ${
-                    selectedIndex === index
-                      ? "border-primary ring-2 ring-primary/20"
-                      : "border-border hover:border-primary/50"
-                  }`}
-                >
-                  <img
-                    src={option.url}
-                    alt={`Option ${index + 1}`}
-                    className="w-full aspect-square object-cover"
-                  />
-                  {selectedIndex === index && (
-                    <div className="absolute top-2 left-2 bg-primary text-primary-foreground rounded-full p-1">
-                      <Check className="h-3 w-3" />
-                    </div>
-                  )}
-                  <Badge
-                    variant="secondary"
-                    className="absolute bottom-2 right-2 text-[10px]"
+          <CardContent className="space-y-3">
+            {generatedOptions.map((option, index) => (
+              <button
+                key={index}
+                onClick={() => setSelectedIndex(index)}
+                className={`w-full text-right rounded-lg border-2 p-4 transition-all ${
+                  selectedIndex === index
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-primary/50"
+                }`}
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    {selectedIndex === index && (
+                      <div className="bg-primary text-primary-foreground rounded-full p-1">
+                        <Check className="h-3 w-3" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="text-[10px]">
+                      בריף {String.fromCharCode(65 + index)}
+                    </Badge>
+                    <Badge variant="outline" className="text-[10px]">
+                      {option.style_label}
+                    </Badge>
+                  </div>
+                </div>
+
+                {/* Color palette preview */}
+                <div className="flex gap-1.5 mb-3 justify-end">
+                  {option.colors.map((color, i) => (
+                    <div
+                      key={i}
+                      className="w-8 h-8 rounded-md border shadow-sm"
+                      style={{ backgroundColor: color }}
+                      title={color}
+                    />
+                  ))}
+                </div>
+
+                {/* Headline preview */}
+                {option.headline_text && (
+                  <div
+                    className="rounded-lg p-3 mb-3 text-center font-bold text-white"
+                    style={{ backgroundColor: option.colors[0] || "#6366f1" }}
                   >
-                    אפשרות {String.fromCharCode(65 + index)}
-                  </Badge>
-                </button>
-              ))}
-            </div>
+                    {option.headline_text}
+                  </div>
+                )}
+
+                {/* Brief text */}
+                <div className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground" dir="rtl">
+                  {option.brief}
+                </div>
+              </button>
+            ))}
           </CardContent>
         </Card>
       )}

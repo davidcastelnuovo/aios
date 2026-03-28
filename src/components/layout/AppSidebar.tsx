@@ -40,6 +40,7 @@ import {
   Plug,
   Cpu,
   Share2,
+  CalendarRange,
 } from "lucide-react";
 import {
   Sidebar,
@@ -118,6 +119,7 @@ const iconMap: Record<string, any> = {
   Plug,
   Cpu,
   Share2,
+  CalendarRange,
 };
 
 export function AppSidebar() {
@@ -327,6 +329,7 @@ export function AppSidebar() {
       'ai-detection': 'dashboard', // ניטור נראות AI - נגיש לכל מי שיש לו גישה לדשבורד
       'agents': 'dashboard', // סוכני AI - נגיש לכל מי שיש לו גישה לדשבורד
       'social-media': 'dashboard', // מתזמן מדיה חברתית - נגיש לכל מי שיש לו גישה לדשבורד
+      'social-gantt': 'dashboard', // גאנט סושיאל - נגיש לכל מי שיש לו גישה לדשבורד
     };
 
     // פריטים שאינם דורשים הרשאה מיוחדת (נגישים לכולם)

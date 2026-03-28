@@ -17,6 +17,7 @@ import {
   Copy,
 } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import type { SocialPost } from "@/pages/SocialGantt";
 
 interface CopyAgentProps {
@@ -51,37 +52,31 @@ export function CopyAgent({ post, onUpdatePost, onBack, tenantId }: CopyAgentPro
     setSelectedIndex(null);
 
     try {
-      // Simulate AI copy generation - in production this calls an LLM
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-
-      const toneLabels: Record<string, string> = {
-        professional: "מקצועי",
-        casual: "קז׳ואל",
-        bold: "נועז",
-        emotional: "רגשי",
-        humorous: "הומוריסטי",
-      };
-
-      const ctaText = callToAction ? `\n\n${callToAction}` : "";
-      const audienceNote = targetAudience ? ` (קהל יעד: ${targetAudience})` : "";
-
-      const options: GeneratedCopy[] = [
-        {
-          text: `🔥 ${post.topic}\n\nזה הזמן לדבר על מה שחשוב באמת. אנחנו כאן כדי להביא לכם את הערך הכי גבוה בתחום.${audienceNote}\n\nמה אתם חושבים? ספרו לנו בתגובות 👇${ctaText}\n\n#${post.topic.replace(/\s+/g, "")} #socialmedia #content`,
-          tone: toneLabels[tone] || tone,
+      const { data, error } = await supabase.functions.invoke("social-gantt-generate", {
+        body: {
+          action: "generate_copy",
+          post_id: post.id,
+          tenant_id: tenantId,
+          prompt,
+          tone,
+          target_audience: targetAudience,
+          call_to_action: callToAction,
         },
-        {
-          text: `✨ ${post.topic}\n\nהגיע הזמן לשינוי. כל יום הוא הזדמנות חדשה ליצור משהו מדהים.\n\nאנחנו מאמינים שכל אחד יכול להגיע לשם - וזה מתחיל עכשיו.${ctaText}\n\n#${post.topic.replace(/\s+/g, "")} #inspiration #growth`,
-          tone: toneLabels[tone] || tone,
-        },
-        {
-          text: `💡 ${post.topic}\n\nידעתם ש-80% מהעסקים שמשקיעים בתוכן סושיאל רואים עלייה במכירות?\n\nאנחנו לא מפתיעים. תוכן טוב = תוצאות טובות. נקודה.${ctaText}\n\n#${post.topic.replace(/\s+/g, "")} #marketing #results`,
-          tone: toneLabels[tone] || tone,
-        },
-      ];
+      });
+
+      if (error) throw error;
+
+      const options: GeneratedCopy[] = (data.options || []).map(
+        (opt: { text: string; tone_label?: string }) => ({
+          text: opt.text,
+          tone: opt.tone_label || tone,
+        })
+      );
+
+      if (options.length === 0) throw new Error("No options generated");
 
       setGeneratedOptions(options);
-      toast.success("3 אפשרויות קופי נוצרו!");
+      toast.success(`${options.length} אפשרויות קופי נוצרו!`);
     } catch {
       toast.error("שגיאה ביצירת הקופי");
     } finally {
