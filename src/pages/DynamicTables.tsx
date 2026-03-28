@@ -431,7 +431,7 @@ export default function DynamicTables() {
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setShowAhrefsDialog(true)}>
                   <TrendingUp className="ml-2 h-4 w-4" />
-                  טבלת Ahrefs
+                  דוח Ahrefs
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
