@@ -407,7 +407,7 @@ export default function DynamicTables() {
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setShowFacebookEcommerceDialog(true)}>
                   <ShoppingCart className="ml-2 h-4 w-4" />
-                  טבלת Facebook Ecommerce (מכירות)
+                  דוח Facebook Ecommerce (מכירות)
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setShowGoogleAdsDialog(true)}>
                   <svg className="ml-2 h-4 w-4" viewBox="0 0 24 24" fill="none">
