@@ -182,8 +182,14 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
 
       if (error) throw error;
 
-      toast({ title: "טבלת דוח SEO נוצרה בהצלחה!", description: "כעת ניתן לשתף אותה." });
+      toast({ title: "טבלת דוח SEO נוצרה בהצלחה!" });
       queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      onOpenChange(false);
+      // Navigate to the new table
+      const tenantSlug = currentTenant?.slug || '';
+      if (tenantSlug) {
+        navigate(`/t/${tenantSlug}/table/${slug}`);
+      }
     } catch (error: any) {
       toast({ title: "שגיאה ביצירת הטבלה", description: error.message, variant: "destructive" });
     } finally {
