@@ -764,7 +764,7 @@ export function AppSidebar() {
                             }
                           >
                             <Settings className="h-4 w-4" />
-                            {!isCollapsed && <span>ניהול טבלאות</span>}
+                            {!isCollapsed && <span>ניהול דוחות</span>}
                           </NavLink>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
