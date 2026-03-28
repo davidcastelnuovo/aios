@@ -587,7 +587,7 @@ export function GoogleAnalyticsDashboard({
           </Popover>
         )}
 
-        <div className="flex items-center gap-2 mr-auto">
+        <div className="flex items-center gap-2">
           <Switch
             id="comparison-toggle"
             checked={showComparison}
@@ -603,6 +603,21 @@ export function GoogleAnalyticsDashboard({
             תקופה קודמת: {format(previousRange.start, 'dd/MM', { locale: he })} - {format(previousRange.end, 'dd/MM', { locale: he })}
           </Badge>
         )}
+      </div>
+
+      {/* Report Mode Toggle */}
+      <div className="flex items-center gap-3">
+        <Label className="text-sm font-medium">סוג דוח:</Label>
+        <ToggleGroup type="single" value={reportMode} onValueChange={(v) => { if (v) setReportMode(v as 'ecommerce' | 'leads'); }}>
+          <ToggleGroupItem value="ecommerce" className="gap-2 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+            <ShoppingCart className="h-4 w-4" />
+            איקומרס
+          </ToggleGroupItem>
+          <ToggleGroupItem value="leads" className="gap-2 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+            <UserCheck className="h-4 w-4" />
+            לידים
+          </ToggleGroupItem>
+        </ToggleGroup>
       </div>
 
       {/* KPI Cards */}
