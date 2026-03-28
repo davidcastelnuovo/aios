@@ -46,6 +46,8 @@ interface GoogleAnalyticsDashboardProps {
   records: CrmRecord[];
   externalDateFilter?: string;
   externalCustomDateRange?: { from: Date | undefined; to: Date | undefined };
+  tableId?: string;
+  defaultReportMode?: 'ecommerce' | 'leads';
 }
 
 // Explicit colorful chart colors
