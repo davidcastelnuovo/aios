@@ -50,11 +50,6 @@ export function SeoSnapshotCards({ snapshot, prevMonth, campaignStart }: SeoSnap
                 previous={prevMonth[metric.key]}
                 label="מחודש קודם"
               />
-              <ChangeIndicator
-                current={snapshot[metric.key]}
-                previous={campaignStart[metric.key]}
-                label="מתחילת קמפיין"
-              />
             </div>
           </CardContent>
         </Card>
