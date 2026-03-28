@@ -171,7 +171,7 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [] }: SeoKeywords
               📅 שינוי חודשי
             </TabsTrigger>
             <TabsTrigger value="all" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
-              📋 כל הביטויים
+              📋 טופ 50 אורגניות
             </TabsTrigger>
           </TabsList>
 
@@ -205,8 +205,8 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [] }: SeoKeywords
 
           <TabsContent value="all" className="mt-0">
             <KeywordTable
-              keywords={allKeywords.sort((a, b) => (a.position || 999) - (b.position || 999))}
-              title="כל הביטויים (tracked + אורגניים)"
+              keywords={[...keywords].sort((a, b) => (a.position || 999) - (b.position || 999)).slice(0, 50)}
+              title="טופ 50 ביטויים אורגניים"
               icon={<span>📋</span>}
               showCampaignStart
               showPrevMonth
