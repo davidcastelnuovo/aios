@@ -220,6 +220,23 @@ export default function DashboardView() {
     enabled: tables.length > 0,
   });
 
+  // Check if client has SEO (Ahrefs) reports
+  const { data: hasSeoReports = false } = useQuery({
+    queryKey: ['has-seo-reports', dashboard?.client_id],
+    queryFn: async () => {
+      if (!dashboard?.client_id || !currentTenantId) return false;
+      const { count, error } = await supabase
+        .from('ahrefs_reports')
+        .select('id', { count: 'exact', head: true })
+        .eq('client_id', dashboard.client_id)
+        .eq('tenant_id', currentTenantId)
+        .limit(1);
+      if (error) return false;
+      return (count || 0) > 0;
+    },
+    enabled: !!dashboard?.client_id && !!currentTenantId,
+  });
+
   // Available platforms for tab rendering
   const availablePlatforms = useMemo(() => {
     const set = new Set<string>();
@@ -230,8 +247,9 @@ export default function DashboardView() {
     if (set.has('facebook_insights') || set.has('facebook_ecommerce')) platforms.push('facebook');
     if (set.has('google_ads')) platforms.push('google_ads');
     if (set.has('google_analytics')) platforms.push('google_analytics');
+    if (hasSeoReports) platforms.push('seo');
     return platforms;
-  }, [tables]);
+  }, [tables, hasSeoReports]);
 
   // Filter records by platform tab AND only use daily aggregate records for Analytics
   // IMPORTANT: Use only report_type='daily' for aggregation (KPI, charts).
