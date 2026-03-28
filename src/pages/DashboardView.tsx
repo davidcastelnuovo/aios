@@ -797,6 +797,11 @@ export default function DashboardView() {
               <p className="text-muted-foreground mb-4">צור טבלאות ושייך אותן ללקוח כדי לראות נתונים בדשבורד</p>
               <Button onClick={() => navigate(buildPath('/dynamic-tables'))}>עבור לניהול דוחות</Button>
             </Card>
+          ) : platformFilter === 'seo' ? (
+            /* SEO tab: render SeoDashboardView with Ahrefs data */
+            dashboard?.client_id && currentTenantId ? (
+              <SeoDashboardView tenantId={currentTenantId} clientId={dashboard.client_id} />
+            ) : null
           ) : platformFilter === 'google_analytics' ? (
             /* Analytics tab: render the same GoogleAnalyticsDashboard used in standalone table view */
             <GoogleAnalyticsDashboard
