@@ -613,7 +613,18 @@ export function GoogleAnalyticsDashboard({
       {/* Report Mode Toggle */}
       <div className="flex items-center gap-3">
         <Label className="text-sm font-medium">סוג דוח:</Label>
-        <ToggleGroup type="single" value={reportMode} onValueChange={(v) => { if (v) setReportMode(v as 'ecommerce' | 'leads'); }}>
+        <ToggleGroup type="single" value={reportMode} onValueChange={(v) => { 
+          if (v) {
+            const newMode = v as 'ecommerce' | 'leads';
+            setReportMode(newMode);
+            if (tableId) {
+              supabase.functions.invoke('crm-tables', {
+                method: 'PATCH',
+                body: { table_id: tableId, integration_settings: { default_report_mode: newMode } },
+              }).catch(console.error);
+            }
+          }
+        }}>
           <ToggleGroupItem value="ecommerce" className="gap-2 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
             <ShoppingCart className="h-4 w-4" />
             איקומרס
