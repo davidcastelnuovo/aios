@@ -105,8 +105,10 @@ const getIntegrationIcon = (type: string | null) => {
 
 export default function SharedDashboard() {
   const { shareToken } = useParams();
+  const queryClient = useQueryClient();
   const [dateFilter, setDateFilter] = useState('last_7_days');
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all');
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['shared-dashboard', shareToken, dateFilter],
