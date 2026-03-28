@@ -219,7 +219,7 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [] }: SeoKeywords
             <KeywordTable
               keywords={byCampaignChange}
               title="כל הביטויים — שינוי מתחילת קמפיין"
-              icon={<TrendingUp className="h-4 w-4 text-green-500" />}
+              icon={<TrendingUp className="h-4 w-4 text-primary" />}
               showCampaignStart
             />
           </TabsContent>
