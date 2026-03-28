@@ -160,7 +160,7 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [] }: SeoKeywords
       </CardHeader>
       <CardContent className="p-0">
         <Tabs defaultValue="top10" className="w-full">
-          <TabsList className="w-full justify-start rounded-none border-b bg-transparent h-auto p-0 gap-0">
+          <TabsList dir="rtl" className="w-full justify-start rounded-none border-b bg-transparent h-auto p-0 gap-0">
             <TabsTrigger value="top10" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
               🏆 Top 10 מקודמים
             </TabsTrigger>
