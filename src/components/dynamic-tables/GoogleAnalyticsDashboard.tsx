@@ -48,6 +48,7 @@ interface GoogleAnalyticsDashboardProps {
   externalDateFilter?: string;
   externalCustomDateRange?: { from: Date | undefined; to: Date | undefined };
   tableId?: string;
+  dashboardId?: string;
   defaultReportMode?: 'ecommerce' | 'leads';
 }
 
