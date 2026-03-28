@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -24,8 +24,10 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
-import { Loader2, AlertCircle, Webhook, Plug } from "lucide-react";
+import { Loader2, AlertCircle, Webhook, Plug, Check, ChevronsUpDown, Search } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 interface GoogleAdsTableDialogProps {
   open: boolean;
@@ -78,6 +80,8 @@ export function GoogleAdsTableDialog({ open, onOpenChange, assignedClientIds }: 
   const [accountSearch, setAccountSearch] = useState("");
   const [agencyId, setAgencyId] = useState<string>("");
   const [clientId, setClientId] = useState<string>("");
+  const [clientSearch, setClientSearch] = useState("");
+  const [clientPopoverOpen, setClientPopoverOpen] = useState(false);
   const [dataSource, setDataSource] = useState<"make_api" | "direct_api" | "webhook">("make_api");
   const [selectedMakeConnection, setSelectedMakeConnection] = useState("");
   const [customerIdInput, setCustomerIdInput] = useState("");
@@ -742,19 +746,63 @@ export function GoogleAdsTableDialog({ open, onOpenChange, assignedClientIds }: 
           {agencyId && (
             <div className="space-y-2">
               <Label>שיוך ללקוח (אופציונלי)</Label>
-              <Select value={clientId || "__none__"} onValueChange={(v) => setClientId(v === "__none__" ? "" : v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="ללא שיוך - כל הלקוחות" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">ללא שיוך - כל הלקוחות</SelectItem>
-                  {clients.map((client) => (
-                    <SelectItem key={client.id} value={client.id}>
-                      {client.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={clientPopoverOpen} onOpenChange={setClientPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between font-normal"
+                  >
+                    {clientId
+                      ? clients.find(c => c.id === clientId)?.name || "לקוח נבחר"
+                      : "ללא שיוך - כל הלקוחות"}
+                    <ChevronsUpDown className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <div className="flex items-center border-b px-3 py-2">
+                    <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    <Input
+                      placeholder="חפש לקוח..."
+                      value={clientSearch}
+                      onChange={(e) => setClientSearch(e.target.value)}
+                      className="border-0 shadow-none focus-visible:ring-0 h-8"
+                    />
+                  </div>
+                  <div className="max-h-[200px] overflow-y-auto p-1">
+                    <button
+                      type="button"
+                      className={cn(
+                        "relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent",
+                        !clientId && "bg-accent"
+                      )}
+                      onClick={() => { setClientId(""); setClientPopoverOpen(false); setClientSearch(""); }}
+                    >
+                      <Check className={cn("ml-2 h-4 w-4", !clientId ? "opacity-100" : "opacity-0")} />
+                      ללא שיוך - כל הלקוחות
+                    </button>
+                    {clients
+                      .filter(c => c.name.toLowerCase().includes(clientSearch.toLowerCase()))
+                      .map((client) => (
+                        <button
+                          type="button"
+                          key={client.id}
+                          className={cn(
+                            "relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent",
+                            clientId === client.id && "bg-accent"
+                          )}
+                          onClick={() => { setClientId(client.id); setClientPopoverOpen(false); setClientSearch(""); }}
+                        >
+                          <Check className={cn("ml-2 h-4 w-4", clientId === client.id ? "opacity-100" : "opacity-0")} />
+                          {client.name}
+                        </button>
+                      ))}
+                    {clients.filter(c => c.name.toLowerCase().includes(clientSearch.toLowerCase())).length === 0 && (
+                      <p className="text-center text-sm text-muted-foreground py-4">לא נמצאו לקוחות</p>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
           )}
 
