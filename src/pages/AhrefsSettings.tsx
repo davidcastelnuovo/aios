@@ -5,13 +5,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Check, X, Loader2, Link2, ExternalLink, TrendingUp, Search, Link as LinkIcon, BarChart3, Copy, Webhook, FileText, Calendar, Globe } from "lucide-react";
+import { Check, X, Loader2, Link2, ExternalLink, TrendingUp, Search, Link as LinkIcon, BarChart3, Copy, Webhook, FileText, Calendar, Globe, UserPlus } from "lucide-react";
 import { useAhrefsReports, AhrefsReport } from "@/hooks/useAhrefsReports";
 import { format } from "date-fns";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Input } from "@/components/ui/input";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 const WEBHOOK_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ahrefs-webhook`;
 
@@ -28,9 +31,57 @@ const REPORT_TYPE_LABELS: Record<string, string> = {
 
 export default function AhrefsSettings() {
   const queryClient = useQueryClient();
+  const { tenantId } = useCurrentTenant();
   const [isConnecting, setIsConnecting] = useState(false);
   const [filterReportType, setFilterReportType] = useState<string>("all");
   const [selectedReport, setSelectedReport] = useState<AhrefsReport | null>(null);
+  const [clientSearchOpen, setClientSearchOpen] = useState<string | null>(null);
+  const [clientSearch, setClientSearch] = useState("");
+
+  // Fetch clients for association
+  const { data: clients = [] } = useQuery({
+    queryKey: ['clients-for-ahrefs', tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data } = await supabase
+        .from('clients')
+        .select('id, name, website, agency_id')
+        .eq('tenant_id', tenantId)
+        .order('name');
+      return data || [];
+    },
+    enabled: !!tenantId,
+  });
+
+  // Link report to client mutation
+  const linkClientMutation = useMutation({
+    mutationFn: async ({ reportId, clientId, domain }: { reportId: string; clientId: string; domain: string }) => {
+      // Update report with client_id
+      const { error: reportError } = await supabase
+        .from('ahrefs_reports' as any)
+        .update({ client_id: clientId })
+        .eq('id', reportId);
+      if (reportError) throw reportError;
+
+      // Update client website if not set
+      const client = clients.find(c => c.id === clientId);
+      if (client && !client.website) {
+        const websiteUrl = domain.startsWith('http') ? domain : `https://${domain}`;
+        await supabase
+          .from('clients')
+          .update({ website: websiteUrl })
+          .eq('id', clientId);
+      }
+    },
+    onSuccess: () => {
+      toast.success('הדוח שויך ללקוח בהצלחה');
+      queryClient.invalidateQueries({ queryKey: ['ahrefs-reports'] });
+      queryClient.invalidateQueries({ queryKey: ['clients-for-ahrefs'] });
+      setClientSearchOpen(null);
+      setClientSearch("");
+    },
+    onError: () => toast.error('שגיאה בשיוך הדוח'),
+  });
 
   const { data: connectionStatus, isLoading } = useQuery({
     queryKey: ['ahrefs-status'],
@@ -331,42 +382,103 @@ export default function AhrefsSettings() {
                   <TableHead>דומיין</TableHead>
                   <TableHead>סוג דוח</TableHead>
                   <TableHead>תאריך דוח</TableHead>
+                  <TableHead>לקוח</TableHead>
                   <TableHead>התקבל</TableHead>
                   <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {reports.map((report) => (
-                  <TableRow key={report.id}>
-                    <TableCell className="font-medium flex items-center gap-1">
-                      <Globe className="h-3 w-3 text-muted-foreground" />
-                      {report.domain}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">
-                        {REPORT_TYPE_LABELS[report.report_type] || report.report_type}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {report.report_date ? (
-                        <span className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3 text-muted-foreground" />
-                          {format(new Date(report.report_date), "dd/MM/yyyy")}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
-                      {format(new Date(report.received_at), "dd/MM/yyyy HH:mm")}
-                    </TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="sm" onClick={() => setSelectedReport(report)}>
-                        צפה
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {reports.map((report) => {
+                  const linkedClient = clients.find(c => c.id === report.client_id);
+                  const filteredClients = clients.filter(c =>
+                    c.name.toLowerCase().includes(clientSearch.toLowerCase())
+                  );
+
+                  return (
+                    <TableRow key={report.id}>
+                      <TableCell className="font-medium flex items-center gap-1">
+                        <Globe className="h-3 w-3 text-muted-foreground" />
+                        {report.domain}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">
+                          {REPORT_TYPE_LABELS[report.report_type] || report.report_type}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {report.report_date ? (
+                          <span className="flex items-center gap-1">
+                            <Calendar className="h-3 w-3 text-muted-foreground" />
+                            {format(new Date(report.report_date), "dd/MM/yyyy")}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {linkedClient ? (
+                          <Badge variant="outline" className="bg-primary/10">
+                            {linkedClient.name}
+                          </Badge>
+                        ) : (
+                          <Popover 
+                            open={clientSearchOpen === report.id} 
+                            onOpenChange={(open) => {
+                              setClientSearchOpen(open ? report.id : null);
+                              if (!open) setClientSearch("");
+                            }}
+                          >
+                            <PopoverTrigger asChild>
+                              <Button variant="ghost" size="sm" className="text-muted-foreground">
+                                <UserPlus className="h-3 w-3 ml-1" />
+                                שייך ללקוח
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-64 p-2" align="start">
+                              <Input
+                                placeholder="חפש לקוח..."
+                                value={clientSearch}
+                                onChange={(e) => setClientSearch(e.target.value)}
+                                className="mb-2"
+                                autoFocus
+                              />
+                              <ScrollArea className="max-h-48">
+                                {filteredClients.length === 0 ? (
+                                  <p className="text-sm text-muted-foreground p-2">לא נמצאו לקוחות</p>
+                                ) : (
+                                  filteredClients.map((client) => (
+                                    <button
+                                      key={client.id}
+                                      className="w-full text-right px-2 py-1.5 text-sm rounded hover:bg-accent transition-colors"
+                                      onClick={() => linkClientMutation.mutate({
+                                        reportId: report.id,
+                                        clientId: client.id,
+                                        domain: report.domain,
+                                      })}
+                                    >
+                                      {client.name}
+                                      {!client.website && (
+                                        <span className="text-xs text-muted-foreground mr-1">(ללא אתר)</span>
+                                      )}
+                                    </button>
+                                  ))
+                                )}
+                              </ScrollArea>
+                            </PopoverContent>
+                          </Popover>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {format(new Date(report.received_at), "dd/MM/yyyy HH:mm")}
+                      </TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="sm" onClick={() => setSelectedReport(report)}>
+                          צפה
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}
