@@ -258,10 +258,10 @@ export default function DynamicTables() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
       setDeletingTable(null);
-      toast.success('הטבלה נמחקה בהצלחה');
+      toast.success('הדוח נמחק בהצלחה');
     },
     onError: (error: any) => {
-      toast.error('שגיאה במחיקת הטבלה: ' + error.message);
+      toast.error('שגיאה במחיקת הדוח: ' + error.message);
     },
   });
 
@@ -293,10 +293,10 @@ export default function DynamicTables() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
       setEditingTable(null);
-      toast.success('הטבלה עודכנה בהצלחה');
+      toast.success('הדוח עודכן בהצלחה');
     },
     onError: (error: any) => {
-      toast.error('שגיאה בעדכון הטבלה: ' + error.message);
+      toast.error('שגיאה בעדכון הדוח: ' + error.message);
     },
   });
 
@@ -366,9 +366,9 @@ export default function DynamicTables() {
     <div className="container mx-auto py-8 px-4">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-3xl font-bold">ניהול טבלאות ודשבורדים</h1>
+          <h1 className="text-3xl font-bold">ניהול דוחות ודשבורדים</h1>
           <p className="text-muted-foreground mt-1">
-            צור וערוך טבלאות נתונים ודשבורדים מאוחדים
+            צור וערוך דוחות נתונים ודשבורדים מאוחדים
           </p>
         </div>
       </div>
@@ -379,7 +379,7 @@ export default function DynamicTables() {
           <TabsList>
             <TabsTrigger value="tables" className="gap-2">
               <Table2 className="h-4 w-4" />
-              טבלאות
+              דוחות
             </TabsTrigger>
             <TabsTrigger value="dashboards" className="gap-2">
               <LayoutDashboard className="h-4 w-4" />
@@ -393,45 +393,45 @@ export default function DynamicTables() {
               <DropdownMenuTrigger asChild>
                 <Button>
                   <Plus className="ml-2 h-4 w-4" />
-                  טבלה חדשה
+                  דוח חדש
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={() => setShowCreateDialog(true)}>
                   <Table2 className="ml-2 h-4 w-4" />
-                  טבלה רגילה
+                  דוח רגיל
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setShowFacebookDialog(true)}>
                   <Facebook className="ml-2 h-4 w-4" />
-                  טבלת Facebook Insights (לידים)
+                  דוח Facebook Insights (לידים)
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setShowFacebookEcommerceDialog(true)}>
                   <ShoppingCart className="ml-2 h-4 w-4" />
-                  טבלת Facebook Ecommerce (מכירות)
+                  דוח Facebook Ecommerce (מכירות)
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setShowGoogleAdsDialog(true)}>
                   <svg className="ml-2 h-4 w-4" viewBox="0 0 24 24" fill="none">
                     <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" fill="#4285F4"/>
                   </svg>
-                  טבלת Google Ads
+                  דוח Google Ads
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setShowGADialog(true)}>
                   <svg className="ml-2 h-4 w-4" viewBox="0 0 24 24" fill="none">
                     <path d="M22.84 2.998L12.842 20.998 2.84 2.998h20z" fill="#F9AB00"/>
                     <path d="M12.84 20.998l-5-9h10l-5 9z" fill="#E37400"/>
                   </svg>
-                  טבלת Google Analytics
+                  דוח Google Analytics
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setShowGSCDialog(true)}>
                   <svg className="ml-2 h-4 w-4" viewBox="0 0 24 24" fill="none">
                     <circle cx="12" cy="12" r="10" stroke="#4285F4" strokeWidth="2" fill="none"/>
                     <path d="M12 6v6l4 2" stroke="#4285F4" strokeWidth="2" strokeLinecap="round"/>
                   </svg>
-                  טבלת Search Console
+                  דוח Search Console
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setShowAhrefsDialog(true)}>
                   <TrendingUp className="ml-2 h-4 w-4" />
-                  טבלת Ahrefs
+                  דוח Ahrefs
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -459,13 +459,13 @@ export default function DynamicTables() {
           ) : !filteredTables || filteredTables.length === 0 ? (
             <Card className="p-12 text-center">
               <Table2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">אין טבלאות עדיין</h3>
+              <h3 className="text-lg font-semibold mb-2">אין דוחות עדיין</h3>
               <p className="text-muted-foreground mb-4">
-                צור את הטבלה הראשונה שלך כדי להתחיל
+                צור את הדוח הראשון שלך כדי להתחיל
               </p>
               <Button onClick={() => setShowCreateDialog(true)}>
                 <Plus className="ml-2 h-4 w-4" />
-                צור טבלה ראשונה
+                צור דוח ראשון
               </Button>
             </Card>
           ) : (
@@ -748,17 +748,17 @@ export default function DynamicTables() {
       <Dialog open={!!editingTable} onOpenChange={(open) => !open && setEditingTable(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>עריכת טבלה</DialogTitle>
-            <DialogDescription>ערוך את פרטי הטבלה</DialogDescription>
+            <DialogTitle>עריכת דוח</DialogTitle>
+            <DialogDescription>ערוך את פרטי הדוח</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="table-name">שם הטבלה</Label>
+              <Label htmlFor="table-name">שם הדוח</Label>
               <Input
                 id="table-name"
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
-                placeholder="שם הטבלה"
+                placeholder="שם הדוח"
               />
             </div>
             <div className="space-y-2">
@@ -888,9 +888,9 @@ export default function DynamicTables() {
       <AlertDialog open={!!deletingTable} onOpenChange={(open) => !open && setDeletingTable(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>האם למחוק את הטבלה?</AlertDialogTitle>
+            <AlertDialogTitle>האם למחוק את הדוח?</AlertDialogTitle>
             <AlertDialogDescription>
-              פעולה זו תמחק את הטבלה "{deletingTable?.name}" וכל הנתונים שבה. לא ניתן לשחזר את הנתונים לאחר המחיקה.
+              פעולה זו תמחק את הדוח "{deletingTable?.name}" וכל הנתונים שבו. לא ניתן לשחזר את הנתונים לאחר המחיקה.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
