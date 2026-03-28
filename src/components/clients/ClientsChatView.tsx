@@ -19,6 +19,10 @@ import { ClientUpdatesTab } from "@/components/clients/ClientUpdatesTab";
 import { ClientTablesTab } from "@/components/clients/ClientTablesTab";
 import { ClientLinkedFiles } from "@/components/clients/ClientLinkedFiles";
 import { ClientCredentialsTab } from "@/components/clients/ClientCredentialsTab";
+import { ClientDocsEditor } from "@/components/clients/ClientDocsEditor";
+import { FolderLinksField } from "@/components/forms/FolderLinksField";
+import { AttachmentsField } from "@/components/forms/AttachmentsField";
+import { useFolderLinksAndAttachments } from "@/hooks/useFolderLinksAndAttachments";
 import { ClientMeetingTab } from "@/components/clients/ClientMeetingTab";
 import AddTaskForm from "@/components/forms/AddTaskForm";
 import { supabase } from "@/integrations/supabase/client";
@@ -947,40 +951,7 @@ export function ClientsChatView({
                 </TabsContent>
 
                 <TabsContent value="docs" className="mt-0 space-y-4" dir="rtl">
-                  {/* Folder links */}
-                  {(() => {
-                    const folderLinks = Array.isArray(selectedClient.folder_links) ? selectedClient.folder_links : [];
-                    const mainFolderLink = selectedClient.folder_link;
-                    return (
-                      <div className="space-y-4">
-                        <h3 className="font-semibold text-sm flex items-center gap-2 justify-end">
-                          קישורים
-                          <Link className="h-4 w-4 text-primary" />
-                        </h3>
-                        {mainFolderLink && (
-                          <a href={mainFolderLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-primary hover:underline justify-end">
-                            {mainFolderLink}
-                            <FolderOpen className="h-3.5 w-3.5 shrink-0" />
-                          </a>
-                        )}
-                        {folderLinks.length > 0 && folderLinks.map((link: any, i: number) => (
-                          <a key={i} href={link.url || link} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-primary hover:underline justify-end">
-                            {link.label || link.url || link}
-                            <FolderOpen className="h-3.5 w-3.5 shrink-0" />
-                          </a>
-                        ))}
-                        {!mainFolderLink && folderLinks.length === 0 && (
-                          <p className="text-sm text-muted-foreground text-right">אין קישורים</p>
-                        )}
-
-                        <h3 className="font-semibold text-sm flex items-center gap-2 justify-end pt-2">
-                          קבצים משויכים
-                          <FileText className="h-4 w-4 text-primary" />
-                        </h3>
-                        <ClientLinkedFiles clientId={selectedClient.id} tenantId={tenantId || ""} />
-                      </div>
-                    );
-                  })()}
+                  <ClientDocsEditor client={selectedClient} tenantId={tenantId || ""} />
                 </TabsContent>
 
                 <TabsContent value="credentials" className="mt-0">
