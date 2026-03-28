@@ -4,10 +4,13 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Globe, FileText, Calendar, ArrowUp, ArrowDown, TrendingUp } from "lucide-react";
+import { Globe, FileText, Calendar, ArrowUp, ArrowDown } from "lucide-react";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { SeoSnapshotCards } from "./seo/SeoSnapshotCards";
+import { SeoTrafficChart } from "./seo/SeoTrafficChart";
+import { SeoKeywordsTable } from "./seo/SeoKeywordsTable";
+import { SeoTrackedKeywords } from "./seo/SeoTrackedKeywords";
 
 interface SeoDashboardViewProps {
   tenantId: string;
@@ -34,24 +37,12 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
   const reportData = latestReport?.report_data as any;
 
   const snapshot = reportData?.snapshot || {};
+  const snapshotPrevMonth = reportData?.snapshot_prev_month || {};
+  const snapshotCampaignStart = reportData?.snapshot_campaign_start || {};
+  const campaignStartDate = reportData?.campaign_start_date;
   const trafficHistory = Array.isArray(reportData?.traffic_history) ? reportData.traffic_history : [];
   const organicKeywords = Array.isArray(reportData?.organic_keywords) ? reportData.organic_keywords : [];
-
-  const snapshotMetrics = [
-    { label: 'דירוג דומיין (DR)', value: snapshot.dr, icon: '🏆' },
-    { label: 'תנועה אורגנית', value: snapshot.org_traffic?.toLocaleString(), icon: '📈' },
-    { label: 'מילות מפתח (Top 3)', value: snapshot.org_keywords_top3, icon: '🥇' },
-    { label: 'מילות מפתח (Top 10)', value: snapshot.org_keywords_top10, icon: '🔟' },
-    { label: 'סה״כ מילות מפתח', value: snapshot.org_keywords_total, icon: '🔑' },
-    { label: 'דומיינים מפנים', value: snapshot.referring_domains, icon: '🔗' },
-    { label: 'קישורים נכנסים (פעילים)', value: snapshot.backlinks_live?.toLocaleString(), icon: '🌐' },
-    { label: 'קישורים נכנסים (כולל)', value: snapshot.backlinks_all_time?.toLocaleString(), icon: '📊' },
-  ].filter(m => m.value !== undefined && m.value !== null);
-
-  const chartData = trafficHistory.map((item: any) => ({
-    date: item.date ? format(new Date(item.date), 'MM/yy') : '',
-    traffic: item.traffic || 0,
-  }));
+  const trackedKeywords = Array.isArray(reportData?.tracked_keywords) ? reportData.tracked_keywords : [];
 
   if (isLoading) {
     return (
@@ -92,120 +83,33 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Calendar className="h-4 w-4" />
           {latestReport && format(new Date(latestReport.received_at), 'dd MMMM yyyy', { locale: he })}
+          {campaignStartDate && (
+            <Badge variant="secondary">
+              תחילת קמפיין: {format(new Date(campaignStartDate), 'dd/MM/yyyy')}
+            </Badge>
+          )}
           <Badge variant="secondary">{reports.length} דוחות</Badge>
         </div>
       </div>
 
-      {/* Snapshot Metrics */}
-      {snapshotMetrics.length > 0 && (
-        <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
-          {snapshotMetrics.map((metric, idx) => (
-            <Card key={idx} className="border-primary/10">
-              <CardContent className="p-4 text-center">
-                <span className="text-xl mb-1 block">{metric.icon}</span>
-                <p className="text-xs text-muted-foreground mb-1">{metric.label}</p>
-                <p className="text-2xl font-bold text-primary">{metric.value}</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+      {/* Snapshot Metrics with Comparisons */}
+      <SeoSnapshotCards
+        snapshot={snapshot}
+        prevMonth={snapshotPrevMonth}
+        campaignStart={snapshotCampaignStart}
+      />
 
       {/* Traffic History Chart */}
-      {chartData.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">היסטוריית תנועה אורגנית</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={250}>
-              <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                <XAxis dataKey="date" fontSize={12} />
-                <YAxis fontSize={12} />
-                <Tooltip 
-                  formatter={(value: number) => [value.toLocaleString(), 'תנועה']}
-                  labelFormatter={(label) => `תאריך: ${label}`}
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="traffic" 
-                  stroke="hsl(var(--primary))" 
-                  strokeWidth={2.5}
-                  dot={{ fill: "hsl(var(--primary))", r: 4 }}
-                  activeDot={{ r: 6 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+      <SeoTrafficChart trafficHistory={trafficHistory} />
+
+      {/* Tracked Keywords */}
+      {trackedKeywords.length > 0 && (
+        <SeoTrackedKeywords keywords={trackedKeywords} />
       )}
 
       {/* Organic Keywords Table */}
       {organicKeywords.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center justify-between">
-              <span>מילות מפתח אורגניות</span>
-              <Badge variant="outline">{organicKeywords.length} מילים</Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/50">
-                    <th className="text-right p-3 font-medium">מילת מפתח</th>
-                    <th className="text-center p-3 font-medium">מיקום</th>
-                    <th className="text-center p-3 font-medium">שינוי</th>
-                    <th className="text-center p-3 font-medium">תנועה</th>
-                    <th className="text-center p-3 font-medium">נפח חיפוש</th>
-                    <th className="text-center p-3 font-medium">KD</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {organicKeywords.slice(0, 30).map((kw: any, idx: number) => {
-                    const posChange = kw.position_prev_month != null 
-                      ? kw.position_prev_month - (kw.position || 0) 
-                      : null;
-                    return (
-                      <tr key={idx} className="border-b last:border-0 hover:bg-muted/30">
-                        <td className="p-3 font-medium">{String(kw.keyword || '')}</td>
-                        <td className="p-3 text-center">
-                          <Badge variant="secondary" className="font-mono">
-                            {kw.position ?? '-'}
-                          </Badge>
-                        </td>
-                        <td className="p-3 text-center">
-                          {posChange !== null && posChange !== 0 ? (
-                            <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${posChange > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                              {posChange > 0 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
-                              {Math.abs(posChange)}
-                            </span>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          )}
-                        </td>
-                        <td className="p-3 text-center">{kw.traffic != null ? Number(kw.traffic).toLocaleString() : '-'}</td>
-                        <td className="p-3 text-center">{kw.volume != null ? Number(kw.volume).toLocaleString() : '-'}</td>
-                        <td className="p-3 text-center">
-                          <Badge variant={kw.kd <= 20 ? 'default' : kw.kd <= 50 ? 'secondary' : 'destructive'} className="text-xs">
-                            {kw.kd ?? '-'}
-                          </Badge>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              {organicKeywords.length > 30 && (
-                <p className="text-center text-sm text-muted-foreground py-3">
-                  +{organicKeywords.length - 30} מילות מפתח נוספות
-                </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        <SeoKeywordsTable keywords={organicKeywords} />
       )}
 
       {/* HTML content fallback */}
