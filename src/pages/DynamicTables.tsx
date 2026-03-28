@@ -420,7 +420,7 @@ export default function DynamicTables() {
                     <path d="M22.84 2.998L12.842 20.998 2.84 2.998h20z" fill="#F9AB00"/>
                     <path d="M12.84 20.998l-5-9h10l-5 9z" fill="#E37400"/>
                   </svg>
-                  טבלת Google Analytics
+                  דוח Google Analytics
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setShowGSCDialog(true)}>
                   <svg className="ml-2 h-4 w-4" viewBox="0 0 24 24" fill="none">
