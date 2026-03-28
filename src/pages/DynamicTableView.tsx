@@ -1025,7 +1025,7 @@ export default function DynamicTableView() {
 
         const { error: insertError } = await supabase
           .from('crm_records')
-          .insert(recordsToInsert);
+          .insert(recordsToInsert as any[]);
         if (insertError) throw insertError;
 
         // Auto-create fields if none exist
