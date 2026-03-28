@@ -228,6 +228,11 @@ export function GoogleAdsTableDialog({ open, onOpenChange, assignedClientIds }: 
     setClientId("");
   }, [agencyId]);
 
+  // Reset customer ID when Make connection changes
+  useEffect(() => {
+    setCustomerIdInput("");
+  }, [selectedMakeConnection]);
+
   // Check if Google Ads is connected (direct API)
   const { data: googleAdsStatus, isLoading: checkingConnection } = useQuery({
     queryKey: ['google-ads-connection-status'],
