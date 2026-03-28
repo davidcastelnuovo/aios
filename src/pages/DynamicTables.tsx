@@ -393,7 +393,7 @@ export default function DynamicTables() {
               <DropdownMenuTrigger asChild>
                 <Button>
                   <Plus className="ml-2 h-4 w-4" />
-                  טבלה חדשה
+                  דוח חדש
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
