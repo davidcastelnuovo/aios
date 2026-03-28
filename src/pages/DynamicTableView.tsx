@@ -950,13 +950,77 @@ export default function DynamicTableView() {
     },
   });
 
-  // Ahrefs sync mutation (Site Explorer endpoints only - standard plans)
+  // Ahrefs sync mutation
   const syncAhrefsMutation = useMutation({
     mutationFn: async () => {
       if (!table?.id) throw new Error('No table');
 
       const settings = table.integration_settings || {};
 
+      // If data_source is ahrefs_reports, pull from DB instead of API
+      if (settings.data_source === 'ahrefs_reports') {
+        const clientId = settings.clientId as string;
+        if (!clientId) throw new Error('Missing client ID for SEO report');
+
+        const { data: reports, error } = await supabase
+          .from('ahrefs_reports')
+          .select('*')
+          .eq('tenant_id', table.tenant_id)
+          .eq('client_id', clientId)
+          .order('received_at', { ascending: false });
+
+        if (error) throw error;
+        if (!reports || reports.length === 0) throw new Error('לא נמצאו דוחות SEO עבור לקוח זה');
+
+        // Convert ahrefs_reports into crm_records
+        const recordsToInsert = reports.map((report: any) => {
+          const rd = report.report_data as any || {};
+          const snapshot = rd.snapshot || {};
+          return {
+            table_id: table.id,
+            tenant_id: table.tenant_id,
+            data: {
+              domain: report.domain,
+              report_type: report.report_type,
+              received_at: report.received_at,
+              dr: snapshot.dr,
+              org_traffic: snapshot.org_traffic,
+              org_keywords_top3: snapshot.org_keywords_top3,
+              org_keywords_top10: snapshot.org_keywords_top10,
+              org_keywords_total: snapshot.org_keywords_total,
+              referring_domains: snapshot.referring_domains,
+              backlinks_live: snapshot.backlinks_live,
+              backlinks_all_time: snapshot.backlinks_all_time,
+              ...rd,
+            },
+          };
+        });
+
+        // Delete old records first, then insert
+        await supabase.from('crm_records').delete().eq('table_id', table.id);
+
+        const { error: insertError } = await supabase
+          .from('crm_records')
+          .insert(recordsToInsert);
+        if (insertError) throw insertError;
+
+        // Update last_sync_at
+        await supabase.functions.invoke('crm-tables', {
+          body: {
+            action: 'update',
+            tableId: table.id,
+            tenantId: table.tenant_id,
+            integration_settings: {
+              ...settings,
+              last_sync_at: new Date().toISOString(),
+            },
+          },
+        });
+
+        return { recordsCount: recordsToInsert.length };
+      }
+
+      // Regular Ahrefs API sync
       const mapDataType = (reportType: string): 'site_explorer' | 'backlinks' | 'organic_traffic' | 'referring_domains' => {
         switch (reportType) {
           case 'backlinks':
@@ -996,10 +1060,10 @@ export default function DynamicTableView() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
       queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
-      toast.success(`נתוני Ahrefs סונכרנו בהצלחה (${data?.recordsCount || 0} שורות)`);
+      toast.success(`נתוני SEO סונכרנו בהצלחה (${data?.recordsCount || 0} שורות)`);
     },
     onError: (error: any) => {
-      toast.error('שגיאה בסנכרון מ-Ahrefs: ' + (error?.message || 'Unknown error'));
+      toast.error('שגיאה בסנכרון: ' + (error?.message || 'Unknown error'));
     },
   });
 
@@ -1653,7 +1717,11 @@ export default function DynamicTableView() {
               >
                 <TrendingUp className="h-4 w-4" />
                 <RefreshCw className={`h-4 w-4 ${syncAhrefsMutation.isPending ? 'animate-spin' : ''}`} />
-                {syncAhrefsMutation.isPending ? 'מסנכרן Ahrefs...' : 'סנכרן Ahrefs'}
+                {syncAhrefsMutation.isPending 
+                  ? 'מסנכרן...' 
+                  : table?.integration_settings?.data_source === 'ahrefs_reports' 
+                    ? 'סנכרן מדוחות SEO' 
+                    : 'סנכרן Ahrefs'}
               </Button>
             </div>
           )}

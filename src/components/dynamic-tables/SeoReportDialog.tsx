@@ -170,6 +170,7 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
           clientId: selectedClient,
           integration_type: 'ahrefs',
           integration_settings: {
+            data_source: 'ahrefs_reports',
             targetDomain: domain,
             reportType: 'site_explorer',
             clientId: selectedClient,
