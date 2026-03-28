@@ -85,6 +85,48 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
     traffic: item.traffic || 0,
   }));
 
+  const selectedClientObj = clients.find(c => c.id === selectedClient);
+
+  const handleCreateTable = async () => {
+    if (!selectedClient || !latestReport) return;
+    setIsCreatingTable(true);
+    try {
+      const domain = reportData?.domain || latestReport?.domain || '';
+      const clientName = selectedClientObj?.name || '';
+      const tableName = `דוח SEO - ${clientName}`;
+      const slug = `seo-report-${selectedClient}-${Date.now()}`;
+
+      const { error } = await supabase.functions.invoke('crm-tables', {
+        body: {
+          action: 'create',
+          tenantId: currentTenantId,
+          name: tableName,
+          slug,
+          description: `דוח SEO עבור ${domain}`,
+          category: 'seo',
+          icon: 'TrendingUp',
+          agencyId: selectedClientObj?.agency_id || null,
+          clientId: selectedClient,
+          integration_type: 'ahrefs',
+          integration_settings: {
+            targetDomain: domain,
+            reportType: 'site_explorer',
+            clientId: selectedClient,
+          },
+        }
+      });
+
+      if (error) throw error;
+
+      toast({ title: "טבלת דוח SEO נוצרה בהצלחה!", description: "כעת ניתן לשתף אותה." });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+    } catch (error: any) {
+      toast({ title: "שגיאה ביצירת הטבלה", description: error.message, variant: "destructive" });
+    } finally {
+      setIsCreatingTable(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto" dir="rtl">
