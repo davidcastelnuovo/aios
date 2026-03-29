@@ -15,6 +15,22 @@ import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { toast } from "sonner";
 
+import agentGeneral from "@/assets/agents/agent-general.png";
+import agentCreative from "@/assets/agents/agent-creative.png";
+import agentCeo from "@/assets/agents/agent-ceo.png";
+import agentSeo from "@/assets/agents/agent-seo.png";
+import agentGithub from "@/assets/agents/agent-github.png";
+
+const AGENT_AVATARS: Record<string, string> = {
+  "סוכן כללי": agentGeneral,
+  "סוכן קריאייטיב": agentCreative,
+  "ceo": agentCeo,
+  "CEO": agentCeo,
+  "SEO": agentSeo,
+  "seo": agentSeo,
+};
+const DEFAULT_AVATAR = agentGeneral;
+
 const ALL_TOOLS = [
   { name: "create_lead", label: "יצירת ליד", group: "לידים" },
   { name: "list_leads", label: "צפייה בלידים", group: "לידים" },
@@ -464,21 +480,19 @@ function GithubAgentCard() {
 
   return (
     <div
-      className="border rounded-xl p-5 cursor-pointer hover:shadow-md hover:border-primary/50 transition-all bg-gradient-to-br from-gray-50 to-white dark:from-gray-900 dark:to-gray-800"
+      className="bg-white dark:bg-gray-900 border border-border/60 rounded-2xl p-5 cursor-pointer hover:shadow-lg hover:border-primary/40 transition-all"
       onClick={() => navigate(buildPath("github-agent"))}
     >
-      <div className="flex items-start justify-between mb-3">
-        <Badge className="bg-purple-500 text-white text-xs">מובנה</Badge>
-        <div className="p-2 rounded-lg bg-gray-900 text-white">
-          <Github className="h-5 w-5" />
-        </div>
+      <div className="flex items-start justify-between mb-4">
+        <Badge className="bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-800 text-xs">מובנה</Badge>
+        <img src={agentGithub} alt="GitHub Agent" className="w-12 h-12 rounded-xl object-cover" loading="lazy" />
       </div>
-      <h3 className="font-bold text-lg mb-1">GitHub Agent</h3>
-      <p className="text-sm text-muted-foreground mb-3">סוכן אוטומטי לניתוח שגיאות, תיקון קוד ותמיכה טכנית עם אישורים</p>
-      <div className="flex gap-1 flex-wrap">
-        <Badge variant="outline" className="text-xs">תיקון קוד</Badge>
-        <Badge variant="outline" className="text-xs">ניתוח שגיאות</Badge>
-        <Badge variant="outline" className="text-xs">PR אוטומטי</Badge>
+      <h3 className="font-bold text-base mb-1">GitHub Agent</h3>
+      <p className="text-xs text-muted-foreground mb-3 line-clamp-2">סוכן אוטומטי לניתוח שגיאות, תיקון קוד ותמיכה טכנית עם אישורים</p>
+      <div className="flex gap-1.5 flex-wrap">
+        <Badge variant="outline" className="text-[10px] font-normal">תיקון קוד</Badge>
+        <Badge variant="outline" className="text-[10px] font-normal">ניתוח שגיאות</Badge>
+        <Badge variant="outline" className="text-[10px] font-normal">PR אוטומטי</Badge>
       </div>
     </div>
   );
@@ -491,45 +505,41 @@ function AgentCard({ agent, onEdit, onToggleActive, inactive = false }: {
   inactive?: boolean;
 }) {
   const toolCount = (agent.allowed_tools || []).length;
+  const avatarSrc = AGENT_AVATARS[agent.name] || DEFAULT_AVATAR;
 
   return (
     <div
-      className={`border rounded-xl p-4 transition-all hover:shadow-md cursor-pointer group ${
-        inactive ? "border-border/40" : "border-border hover:border-[#36d399]/40"
+      className={`bg-white dark:bg-gray-900 border rounded-2xl p-5 transition-all hover:shadow-lg cursor-pointer group ${
+        inactive ? "border-border/30 opacity-60" : "border-border/60 hover:border-primary/40"
       }`}
       onClick={onEdit}
     >
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl ${
-            inactive ? "bg-muted/50" : "bg-[#36d399]/10"
-          }`}>
-            🤖
-          </div>
-          <div>
-            <div className="font-semibold text-sm">{agent.name}</div>
-            {agent.description && (
-              <div className="text-xs text-muted-foreground line-clamp-1">{agent.description}</div>
-            )}
-          </div>
-        </div>
+      <div className="flex items-start justify-between mb-4">
         <button
           onClick={e => { e.stopPropagation(); onToggleActive(); }}
-          className={`text-xs px-2 py-0.5 rounded-full transition-colors ${
+          className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
             inactive
-              ? "bg-muted text-muted-foreground hover:bg-[#36d399]/20 hover:text-[#36d399]"
-              : "bg-[#36d399]/10 text-[#36d399] hover:bg-red-500/10 hover:text-red-500"
+              ? "bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary"
+              : "bg-primary/10 text-primary hover:bg-destructive/10 hover:text-destructive"
           }`}
         >
           {inactive ? "הפעל" : "השהה"}
         </button>
+        <img
+          src={avatarSrc}
+          alt={agent.name}
+          className="w-12 h-12 rounded-xl object-cover"
+          loading="lazy"
+        />
       </div>
 
+      <h3 className="font-bold text-base mb-1">{agent.name}</h3>
+
       {/* Layers preview */}
-      <div className="space-y-1 mb-3">
+      <div className="space-y-1.5 mb-3">
         {agent.talent && (
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Zap className="h-3 w-3 text-yellow-400 shrink-0" />
+            <Sparkles className="h-3 w-3 text-yellow-500 shrink-0" />
             <span className="line-clamp-1">{agent.talent}</span>
           </div>
         )}
@@ -548,7 +558,7 @@ function AgentCard({ agent, onEdit, onToggleActive, inactive = false }: {
       </div>
 
       {/* Footer */}
-      <div className="flex items-center justify-between text-xs text-muted-foreground border-t pt-2">
+      <div className="flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/40 pt-2.5 mt-auto">
         <span>{toolCount === 0 ? "כל הכלים" : `${toolCount} כלים`}</span>
         <span className="opacity-60">{agent.engine?.replace("gemini-", "G").replace("gpt-", "GPT-").replace("claude-", "C-")}</span>
       </div>
