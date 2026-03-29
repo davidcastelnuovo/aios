@@ -99,7 +99,7 @@ ${memoryContext}
 - התייחס למשתמש בשמו (${userName})
 - היה פרו-אקטיבי - הצע דברים שיכולים לעזור
 - תמיד הסבר מה עשית אחרי ביצוע פעולה
-- **כשמבקשים לקוחות/לידים של סוכנות ספציפית** — חפש קודם את הסוכנות ב-search_entities כדי לקבל את ה-agency_id, ואז השתמש ב-agency_id לסנן ב-list_clients או list_leads
+- **כשמבקשים לקוחות/לידים של סוכנות ספציפית** — השתמש ישירות ב-list_clients או list_leads עם הפרמטר agency_name. **אין צורך** לחפש קודם ב-search_entities — הכלי מחפש את הסוכנות אוטומטית
 - אם משהו לא ברור, שאל במקום לנחש
 - השתמש ב-markdown לעיצוב התשובות
 
@@ -594,7 +594,7 @@ async function executeTool(
       }
 
       case 'list_leads': {
-        const { status, limit = 20, source, agency_id: leadsAgencyId, agency_name: leadsAgencyName } = toolCall.args;
+        const { status, limit = 100, source, agency_id: leadsAgencyId, agency_name: leadsAgencyName } = toolCall.args;
         
         let resolvedAgencyId = leadsAgencyId;
         if (!resolvedAgencyId && leadsAgencyName) {
@@ -612,7 +612,7 @@ async function executeTool(
       }
 
       case 'list_clients': {
-        const { status, limit = 20, agency_id: clientsAgencyId, agency_name: clientsAgencyName } = toolCall.args;
+        const { status, limit = 100, agency_id: clientsAgencyId, agency_name: clientsAgencyName } = toolCall.args;
         
         let resolvedClientAgencyId = clientsAgencyId;
         if (!resolvedClientAgencyId && clientsAgencyName) {
@@ -1457,7 +1457,7 @@ const tools = [
           source: { type: 'string', description: 'סינון לפי מקור' },
           agency_id: { type: 'string', description: 'סינון לפי סוכנות (UUID)' },
           agency_name: { type: 'string', description: 'סינון לפי שם סוכנות (חיפוש חלקי)' },
-          limit: { type: 'integer', description: 'מספר מקסימלי (ברירת מחדל: 20)' },
+          limit: { type: 'integer', description: 'מספר מקסימלי (ברירת מחדל: 100)' },
         },
       },
     },
@@ -1473,7 +1473,7 @@ const tools = [
           status: { type: 'string', description: 'סינון לפי סטטוס' },
           agency_id: { type: 'string', description: 'סינון לפי סוכנות (UUID)' },
           agency_name: { type: 'string', description: 'סינון לפי שם סוכנות (חיפוש חלקי)' },
-          limit: { type: 'integer', description: 'מספר מקסימלי (ברירת מחדל: 20)' },
+          limit: { type: 'integer', description: 'מספר מקסימלי (ברירת מחדל: 100)' },
         },
       },
     },
@@ -1906,7 +1906,7 @@ serve(async (req) => {
           }
           
           // Execute accumulated tool calls with recursive support (up to 3 rounds)
-          const MAX_TOOL_ROUNDS = 3;
+          const MAX_TOOL_ROUNDS = 5;
           let toolRound = 0;
           let currentToolCalls = { ...toolCallAccumulators };
           let currentFinishReason = finishReason;
