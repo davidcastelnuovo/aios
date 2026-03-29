@@ -1316,12 +1316,6 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
     }
   }
 
-    tenantId,
-    contactType,
-    contactRecordId: contactRecord?.id,
-    contactPhone,
-    existingSubscriberId: subscriberId,
-  })
   
   // If no subscriber ID, try to find by phone number
   if (!subscriberId && contactPhone) {
@@ -2337,11 +2331,6 @@ async function executeGreenApiToCampaigner(supabase: any, config: any, data: any
   }
   
   // Replace template variables
-    task_title: data.task_title,
-    client_name: data.client_name,
-    priority: data.priority,
-    due_date: data.due_date,
-  })
   const message = replaceTemplateVariables(message_template, data, tenantSlug)
   
   // Send message via Green API
