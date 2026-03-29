@@ -675,66 +675,17 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
         </TabsList>
       </Tabs>
 
-      {/* Summary Cards */}
+      {/* Summary Cards - ads platforms only (no analytics, no combined totals) */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {showAdsMetrics && (
-          <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900">
-            <CardContent className="p-6">
-              <p className="text-sm text-muted-foreground">הוצאת פרסום</p>
-              <p className="text-3xl font-bold mt-2">{formatCurrency(overallTotals.adsSpend)}</p>
-            </CardContent>
-          </Card>
-        )}
-
-        {showAnalyticsMetrics && hasAnalyticsData && (
           <>
-            <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
+            <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900">
               <CardContent className="p-6">
-                <p className="text-sm text-muted-foreground">הכנסות (Analytics)</p>
-                <p className="text-3xl font-bold mt-2">{formatCurrency(overallTotals.analyticsRevenue)}</p>
+                <p className="text-sm text-muted-foreground">הוצאת פרסום</p>
+                <p className="text-3xl font-bold mt-2">{formatCurrency(overallTotals.adsSpend)}</p>
               </CardContent>
             </Card>
 
-            <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">רכישות</p>
-                    <p className="text-3xl font-bold mt-2">{formatNumber(overallTotals.analyticsPurchases)}</p>
-                  </div>
-                  <div className="text-left">
-                    <p className="text-sm text-muted-foreground flex items-center gap-1">
-                      <ShoppingCart className="h-3 w-3" /> הוספות לעגלה
-                    </p>
-                    <p className="text-xl font-bold mt-2">{formatNumber(overallTotals.analyticsAddToCart)}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </>
-        )}
-
-        {showAdsMetrics && showAnalyticsMetrics && hasAnalyticsData && (
-          <Card className={`bg-gradient-to-br ${combinedRoas >= 1 ? 'from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900' : 'from-red-50 to-red-100 dark:from-red-950 dark:to-red-900'}`}>
-            <CardContent className="p-6">
-              <p className="text-sm text-muted-foreground">ROAS כולל</p>
-              <div className="flex items-center gap-2 mt-2">
-                <p className="text-3xl font-bold">{combinedRoas.toFixed(2)}</p>
-                {combinedRoas > 1 ? (
-                  <TrendingUp className="h-6 w-6 text-green-600" />
-                ) : combinedRoas < 1 && combinedRoas > 0 ? (
-                  <TrendingDown className="h-6 w-6 text-red-600" />
-                ) : (
-                  <Minus className="h-6 w-6 text-muted-foreground" />
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">הכנסות Analytics / הוצאות פרסום</p>
-            </CardContent>
-          </Card>
-        )}
-
-        {showAdsMetrics && !hasAnalyticsData && (
-          <>
             <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
               <CardContent className="p-6">
                 <p className="text-sm text-muted-foreground">לידים</p>
@@ -760,12 +711,36 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
 
         {/* Analytics-only view: show sessions */}
         {platformFilter === 'google_analytics' && (
-          <Card className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-950 dark:to-orange-900">
-            <CardContent className="p-6">
-              <p className="text-sm text-muted-foreground">סשנים</p>
-              <p className="text-3xl font-bold mt-2">{formatNumber(overallTotals.analyticsSessions)}</p>
-            </CardContent>
-          </Card>
+          <>
+            <Card className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-950 dark:to-orange-900">
+              <CardContent className="p-6">
+                <p className="text-sm text-muted-foreground">סשנים</p>
+                <p className="text-3xl font-bold mt-2">{formatNumber(overallTotals.analyticsSessions)}</p>
+              </CardContent>
+            </Card>
+            <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
+              <CardContent className="p-6">
+                <p className="text-sm text-muted-foreground">הכנסות (Analytics)</p>
+                <p className="text-3xl font-bold mt-2">{formatCurrency(overallTotals.analyticsRevenue)}</p>
+              </CardContent>
+            </Card>
+            <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">רכישות</p>
+                    <p className="text-3xl font-bold mt-2">{formatNumber(overallTotals.analyticsPurchases)}</p>
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm text-muted-foreground flex items-center gap-1">
+                      <ShoppingCart className="h-3 w-3" /> הוספות לעגלה
+                    </p>
+                    <p className="text-xl font-bold mt-2">{formatNumber(overallTotals.analyticsAddToCart)}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </>
         )}
       </div>
 
@@ -909,8 +884,8 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
         </>
       )}
 
-      {/* Platform Breakdown Table - only show in "all" view */}
-      {platformFilter === 'all' && clientTableDataList.length > 0 && (
+      {/* Platform Breakdown Table - ads only, no analytics, no combined totals */}
+      {platformFilter === 'all' && clientTableDataList.filter(d => !isAnalyticsPlatform(d.integrationType)).length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">פירוט לפי פלטפורמה</CardTitle>
@@ -922,75 +897,48 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
                   <TableRow>
                     <TableHead className="text-right">פלטפורמה</TableHead>
                     <TableHead className="text-right">הוצאה</TableHead>
-                    <TableHead className="text-right">סשנים / חשיפות</TableHead>
-                    <TableHead className="text-right">הוספות לעגלה</TableHead>
+                    <TableHead className="text-right">חשיפות</TableHead>
+                    <TableHead className="text-right">קליקים</TableHead>
+                    <TableHead className="text-right">לידים</TableHead>
                     <TableHead className="text-right">רכישות</TableHead>
-                    <TableHead className="text-right">הכנסות</TableHead>
-                    <TableHead className="text-right">ROAS</TableHead>
+                    <TableHead className="text-right">עלות לליד</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {(() => {
-                    const platformTotals: Record<string, { spend: number; impressions: number; addToCart: number; purchases: number; revenue: number }> = {};
+                    const platformTotals: Record<string, { spend: number; impressions: number; clicks: number; leads: number; purchases: number }> = {};
                     clientTableDataList.forEach(d => {
-                      const key = d.integrationType;
-                      if (!platformTotals[key]) platformTotals[key] = { spend: 0, impressions: 0, addToCart: 0, purchases: 0, revenue: 0 };
+                      if (isAnalyticsPlatform(d.integrationType)) return;
+                      const key = isFacebookPlatform(d.integrationType) ? 'facebook' : d.integrationType;
+                      if (!platformTotals[key]) platformTotals[key] = { spend: 0, impressions: 0, clicks: 0, leads: 0, purchases: 0 };
+                      platformTotals[key].spend += d.totals.spend;
                       platformTotals[key].impressions += d.totals.impressions;
-                      platformTotals[key].addToCart += (d.totals.addToCart || 0);
+                      platformTotals[key].clicks += d.totals.clicks;
+                      platformTotals[key].leads += d.totals.leads;
                       platformTotals[key].purchases += d.totals.purchases;
-                      platformTotals[key].revenue += d.totals.revenue;
-                      if (!isAnalyticsPlatform(key)) {
-                        platformTotals[key].spend += d.totals.spend;
-                      }
                     });
                     return Object.entries(platformTotals).map(([platform, metrics]) => {
-                      const config = PLATFORM_CONFIG[platform] || { name: platform, color: 'text-muted-foreground' };
-                      const isAnalytics = isAnalyticsPlatform(platform);
-                      const roas = metrics.spend > 0 ? metrics.revenue / metrics.spend : 0;
+                      const configKey = platform === 'facebook' ? 'facebook_insights' : platform;
+                      const config = PLATFORM_CONFIG[configKey] || { name: platform, color: 'text-muted-foreground' };
+                      const cpl = metrics.leads > 0 ? metrics.spend / metrics.leads : 0;
                       return (
                         <TableRow key={platform}>
                           <TableCell className="font-medium">
                             <div className="flex items-center gap-2">
-                              {getIntegrationIcon(platform)}
+                              {getIntegrationIcon(configKey)}
                               <span className={config.color}>{config.name}</span>
                             </div>
                           </TableCell>
-                          <TableCell>{isAnalytics ? '-' : formatCurrency(metrics.spend)}</TableCell>
+                          <TableCell>{formatCurrency(metrics.spend)}</TableCell>
                           <TableCell>{formatNumber(metrics.impressions)}</TableCell>
-                          <TableCell>{isAnalytics ? formatNumber(metrics.addToCart) : '-'}</TableCell>
+                          <TableCell>{formatNumber(metrics.clicks)}</TableCell>
+                          <TableCell>{formatNumber(metrics.leads)}</TableCell>
                           <TableCell>{formatNumber(metrics.purchases)}</TableCell>
-                          <TableCell>{formatCurrency(metrics.revenue)}</TableCell>
-                          <TableCell>
-                            {isAnalytics ? '-' : (
-                              <span className={roas >= 1 ? 'text-green-600 font-semibold' : 'text-red-600'}>
-                                {roas.toFixed(2)}
-                              </span>
-                            )}
-                          </TableCell>
+                          <TableCell>{formatCurrency(cpl)}</TableCell>
                         </TableRow>
                       );
                     });
                   })()}
-                  <TableRow className="bg-muted/50 font-bold border-t-2">
-                    <TableCell>
-                      סה"כ
-                      {hasAnalyticsData && (
-                        <span className="text-xs font-normal text-muted-foreground block">
-                          ROAS = הכנסות Analytics / הוצאות פרסום
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell>{formatCurrency(overallTotals.adsSpend)}</TableCell>
-                    <TableCell>{formatNumber(overallTotals.analyticsSessions || 0)}</TableCell>
-                    <TableCell>{formatNumber(overallTotals.analyticsAddToCart)}</TableCell>
-                    <TableCell>{formatNumber(overallTotals.analyticsPurchases || overallTotals.adsPurchases)}</TableCell>
-                    <TableCell>{formatCurrency(overallTotals.analyticsRevenue)}</TableCell>
-                    <TableCell>
-                      <span className={combinedRoas >= 1 ? 'text-green-600 font-semibold' : 'text-red-600'}>
-                        {combinedRoas.toFixed(2)}
-                      </span>
-                    </TableCell>
-                  </TableRow>
                 </TableBody>
               </Table>
             </div>
