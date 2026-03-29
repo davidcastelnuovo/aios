@@ -70,9 +70,6 @@ serve(async (req: Request) => {
       );
     }
 
-      email: payload.email,
-      organizationName: payload.organizationName,
-    });
 
     // Step 1: Create or reuse the user account
     let userId: string;
