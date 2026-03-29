@@ -20,37 +20,68 @@ Deno.serve(async (req) => {
       });
     }
 
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { 
-        global: { 
-          headers: { Authorization: authHeader } 
-        },
-        auth: {
-          persistSession: false,
-          autoRefreshToken: false,
-        }
-      }
-    );
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
+    const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+    const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
     const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token);
-    if (userError || !user) {
-      console.error('❌ Authentication failed:', userError);
-      console.log('📋 Authorization header:', req.headers.get('Authorization') ? 'Present' : 'Missing');
-      return new Response(JSON.stringify({ 
-        error: 'Unauthorized',
-        details: userError?.message 
-      }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-    
-    console.log('✅ User authenticated:', user.id);
+    const isServiceRole = token === SERVICE_ROLE_KEY;
 
-    const { clientId, leadId, groupId, message, phoneNumber, tenantId: providedTenantId, quotedMessageId } = await req.json();
+    let userId: string;
+
+    if (isServiceRole) {
+      // Internal call from another edge function (e.g. ai-support-chat)
+      // We'll read senderUserId from the body later
+      console.log('🔑 Service role call detected');
+      userId = ''; // will be set from body
+    } else {
+      const supabaseClient = createClient(
+        SUPABASE_URL,
+        SUPABASE_ANON_KEY,
+        { 
+          global: { headers: { Authorization: authHeader } },
+          auth: { persistSession: false, autoRefreshToken: false }
+        }
+      );
+      const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token);
+      if (userError || !user) {
+        console.error('❌ Authentication failed:', userError);
+        return new Response(JSON.stringify({ 
+          error: 'Unauthorized',
+          details: userError?.message 
+        }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      userId = user.id;
+      console.log('✅ User authenticated:', userId);
+    }
+
+    // Create supabase client - use service role for internal calls, user token for direct calls
+    const supabaseClient = createClient(
+      SUPABASE_URL,
+      isServiceRole ? SERVICE_ROLE_KEY : SUPABASE_ANON_KEY,
+      isServiceRole ? {
+        auth: { persistSession: false, autoRefreshToken: false }
+      } : { 
+        global: { headers: { Authorization: authHeader } },
+        auth: { persistSession: false, autoRefreshToken: false }
+      }
+    );
+    const { clientId, leadId, groupId, message, phoneNumber, tenantId: providedTenantId, quotedMessageId, senderUserId } = await req.json();
+
+    // For service role calls, use senderUserId from the body
+    if (isServiceRole) {
+      if (!senderUserId) {
+        return new Response(JSON.stringify({ error: 'senderUserId is required for service role calls' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      userId = senderUserId;
+      console.log('🔑 Using senderUserId:', userId);
+    }
     
     if (!message) {
       return new Response(JSON.stringify({ error: 'Missing message' }), {
@@ -100,13 +131,13 @@ Deno.serve(async (req) => {
       const { data: activeTenant } = await supabaseClient
         .from('user_active_tenant')
         .select('tenant_id')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .single();
       tenantId = activeTenant?.tenant_id;
     }
 
     if (!tenantId) {
-      console.error('❌ Could not determine tenant for user:', user.id);
+      console.error('❌ Could not determine tenant for user:', userId);
       return new Response(JSON.stringify({ error: 'Tenant not found' }), {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -120,13 +151,13 @@ Deno.serve(async (req) => {
       .from('tenant_integrations')
       .select('*')
       .eq('tenant_id', tenantId)
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .eq('integration_type', 'green_api')
       .eq('is_active', true)
       .maybeSingle();
 
     if (!integration?.api_key || !integration?.settings?.instance_id) {
-      console.error('Green API integration not configured for user:', user.id);
+      console.error('Green API integration not configured for user:', userId);
       return new Response(JSON.stringify({ error: 'Green API not configured for your account. Please set up your connection in Settings.' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -208,12 +239,12 @@ Deno.serve(async (req) => {
         lead_id: leadId || null,
         group_id: groupId || null,
         tenant_id: tenantId,
-        connection_user_id: user.id,
+        connection_user_id: userId,
         message_text: message,
         direction: 'outbound',
         channel: 'whatsapp',
         provider: 'green_api',
-        sent_by_user_id: user.id,
+        sent_by_user_id: userId,
         raw_provider_data: responseData,
         sender_phone: senderPhoneForDb,
       });

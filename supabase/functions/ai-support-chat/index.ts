@@ -725,10 +725,11 @@ async function executeTool(
               'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
             },
             body: JSON.stringify({
-              phone,
+              phoneNumber: phone,
               message: fullMessage,
               tenantId,
-              [`${contact_type}_id`]: contact_id,
+              senderUserId: userId,
+              [`${contact_type}Id`]: contact_id,
             }),
           });
 
