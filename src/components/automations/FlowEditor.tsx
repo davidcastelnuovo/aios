@@ -197,7 +197,7 @@ export default function FlowEditor() {
 
   // Add step
   const addStep = useCallback(
-    (stepType: "action" | "condition" | "delay" | "agent") => {
+    (stepType: "action" | "condition" | "delay" | "agent" | "whatsapp_session") => {
       const lastNode = nodes[nodes.length - 1];
       const newNode: FlowNodeData = {
         id: crypto.randomUUID(),

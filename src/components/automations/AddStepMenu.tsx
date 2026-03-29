@@ -5,10 +5,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, Play, GitBranch, Timer, Bot } from "lucide-react";
+import { Plus, Play, GitBranch, Timer, Bot, MessageSquare } from "lucide-react";
 
 interface AddStepMenuProps {
-  onAdd: (stepType: "action" | "condition" | "delay" | "agent") => void;
+  onAdd: (stepType: "action" | "condition" | "delay" | "agent" | "whatsapp_session") => void;
 }
 
 export function AddStepMenu({ onAdd }: AddStepMenuProps) {
@@ -39,6 +39,10 @@ export function AddStepMenu({ onAdd }: AddStepMenuProps) {
         <DropdownMenuItem onClick={() => onAdd("agent")}>
           <Bot className="h-4 w-4 ml-2 text-orange-500" />
           סוכן AI
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onAdd("whatsapp_session")}>
+          <MessageSquare className="h-4 w-4 ml-2 text-green-600" />
+          שמור סשן שיחה
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

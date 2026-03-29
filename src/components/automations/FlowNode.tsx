@@ -1,11 +1,11 @@
 import { memo } from "react";
-import { Zap, Play, GitBranch, Timer, Bot, GripVertical, Trash2 } from "lucide-react";
+import { Zap, Play, GitBranch, Timer, Bot, GripVertical, Trash2, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
 export interface FlowNodeData {
   id: string;
-  step_type: "trigger" | "action" | "condition" | "delay" | "agent";
+  step_type: "trigger" | "action" | "condition" | "delay" | "agent" | "whatsapp_session";
   action_type?: string;
   label?: string;
   configuration: Record<string, any>;
@@ -52,9 +52,17 @@ const STEP_TYPE_CONFIG = {
     iconClass: "text-orange-500",
     headerClass: "bg-orange-500/20",
   },
+  whatsapp_session: {
+    icon: MessageSquare,
+    label: "סשן שיחה",
+    bgClass: "bg-green-600/10 border-green-600/40",
+    iconClass: "text-green-600",
+    headerClass: "bg-green-600/20",
+  },
 };
 
 const ACTION_TYPE_LABELS: Record<string, string> = {
+  whatsapp_session: "שמור סשן שיחה",
   send_whatsapp: "שלח WhatsApp (ManyChat)",
   send_greenapi_message: "שלח WhatsApp (Green API)",
   create_task: "צור משימה",
@@ -95,7 +103,7 @@ export const FlowNode = memo(function FlowNode({
   onDelete,
   isDragging,
 }: FlowNodeProps) {
-  const config = STEP_TYPE_CONFIG[node.step_type];
+  const config = STEP_TYPE_CONFIG[node.step_type] || STEP_TYPE_CONFIG.action;
   const Icon = config.icon;
 
   return (
@@ -132,11 +140,11 @@ export const FlowNode = memo(function FlowNode({
       {/* Body */}
       <div className="px-3 py-2.5">
         <p className="text-sm font-medium truncate">
-          {node.label || ACTION_TYPE_LABELS[node.action_type || ""] || "הגדר צעד"}
+          {node.label || ACTION_TYPE_LABELS[node.action_type || ""] || ACTION_TYPE_LABELS[node.step_type] || "הגדר צעד"}
         </p>
-        {node.action_type && !node.label && (
-          <p className="text-xs text-muted-foreground mt-0.5 truncate">
-            {ACTION_TYPE_LABELS[node.action_type]}
+        {node.step_type === "whatsapp_session" && (
+          <p className="text-xs text-muted-foreground mt-0.5">
+            שומר היסטוריית שיחה לפי chat_id
           </p>
         )}
       </div>

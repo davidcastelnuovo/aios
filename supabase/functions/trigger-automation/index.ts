@@ -636,8 +636,26 @@ Deno.serve(async (req) => {
                     }
 
                     const agentUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/run-ai-agent`
-                    // Build conversation history for Carmen sessions
-                    const carmenHistory: any[] = payloadData?._carmen_history || []
+                    // Build conversation history — load from whatsapp_sessions by chat_id
+                    let carmenHistory: any[] = payloadData?._carmen_history || []
+                    if (carmenHistory.length === 0) {
+                      const sessionChatId = payloadData?.chat_id || payloadData?.sender_phone || ''
+                      if (sessionChatId) {
+                        const { data: sessionRow } = await supabase
+                          .from('whatsapp_sessions')
+                          .select('conversation_history')
+                          .eq('tenant_id', tenantId)
+                          .eq('chat_id', sessionChatId)
+                          .eq('status', 'active')
+                          .order('last_message_at', { ascending: false })
+                          .limit(1)
+                          .maybeSingle()
+                        if (sessionRow?.conversation_history?.length > 0) {
+                          carmenHistory = sessionRow.conversation_history
+                          payloadData._session_chat_id = sessionChatId
+                        }
+                      }
+                    }
                     const agentBody: any = {
                       agent_id: agentId,
                       command_text: commandText,
@@ -675,20 +693,25 @@ Deno.serve(async (req) => {
                     })
                     stepResponse = await agentRes.json()
                     previousStepOutput = stepResponse
-                    // CARMEN SESSION: save updated history after agent responds
-                    if (payloadData?._carmen_session_id && stepResponse?.output) {
+                    // SESSION: save updated history after agent responds (for whatsapp_session step)
+                    if (stepResponse?.output) {
                       const updatedHistory = [
                         ...carmenHistory,
-                        { role: 'user', content: commandText },
-                        { role: 'assistant', content: stepResponse.output },
+                        { role: 'user', content: commandText, ts: new Date().toISOString() },
+                        { role: 'assistant', content: stepResponse.output, ts: new Date().toISOString() },
                       ]
-                      await supabase
-                        .from('carmen_whatsapp_sessions')
-                        .update({
-                          conversation_history: updatedHistory,
-                          last_message_at: new Date().toISOString(),
-                        })
-                        .eq('id', payloadData._carmen_session_id)
+                      // Store in payloadData so the whatsapp_session step can use it
+                      payloadData._pending_session_history = updatedHistory
+                      // Also update carmen_whatsapp_sessions if applicable
+                      if (payloadData?._carmen_session_id) {
+                        await supabase
+                          .from('carmen_whatsapp_sessions')
+                          .update({
+                            conversation_history: updatedHistory,
+                            last_message_at: new Date().toISOString(),
+                          })
+                          .eq('id', payloadData._carmen_session_id)
+                      }
                     }
                   }
                 } else if (effectiveActionType === 'send_greenapi_message') {
@@ -737,6 +760,52 @@ Deno.serve(async (req) => {
                 } else if (effectiveActionType === 'send_greenapi_to_campaigner') {
                   stepResponse = await executeGreenApiToCampaigner(supabase, stepConfig, stepData, tenantId)
                   previousStepOutput = stepResponse
+                } else if (step.step_type === 'whatsapp_session') {
+                  // WHATSAPP SESSION STEP: save/update conversation history by chat_id
+                  const chatId = payloadData?.chat_id || payloadData?.sender_phone || ''
+                  const agentOutput = previousStepOutput?.output || ''
+                  const userMsg = payloadData?.message_text || payloadData?.text || ''
+                  // Use pre-built history from agent step if available
+                  const pendingHistory = payloadData?._pending_session_history
+                  if (chatId && (agentOutput || pendingHistory)) {
+                    // Load existing session
+                    const { data: existingSession } = await supabase
+                      .from('whatsapp_sessions')
+                      .select('id, conversation_history')
+                      .eq('tenant_id', tenantId)
+                      .eq('chat_id', chatId)
+                      .eq('status', 'active')
+                      .order('created_at', { ascending: false })
+                      .limit(1)
+                      .maybeSingle()
+                    // Use pre-built history from agent step if available, otherwise build from scratch
+                    const prevHistory: any[] = existingSession?.conversation_history || []
+                    const updatedHistory = pendingHistory || [
+                      ...prevHistory,
+                      { role: 'user', content: userMsg, ts: new Date().toISOString() },
+                      { role: 'assistant', content: agentOutput, ts: new Date().toISOString() },
+                    ]
+                    if (existingSession) {
+                      await supabase
+                        .from('whatsapp_sessions')
+                        .update({ conversation_history: updatedHistory, last_message_at: new Date().toISOString() })
+                        .eq('id', existingSession.id)
+                    } else {
+                      await supabase
+                        .from('whatsapp_sessions')
+                        .insert({
+                          tenant_id: tenantId,
+                          chat_id: chatId,
+                          conversation_history: updatedHistory,
+                          status: 'active',
+                          last_message_at: new Date().toISOString(),
+                        })
+                    }
+                    // Inject history into payloadData for subsequent steps in same run
+                    payloadData._session_history = updatedHistory
+                    stepResponse = { saved: true, turns: updatedHistory.length / 2 }
+                    previousStepOutput = stepResponse
+                  }
                 } else {
                 }
 
