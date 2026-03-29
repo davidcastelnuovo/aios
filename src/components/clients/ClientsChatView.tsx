@@ -485,7 +485,7 @@ export function ClientsChatView({
                     >
                       {(displayName || "?")[0]}
                     </div>
-                    <div className="flex-1 overflow-hidden">
+                    <div className="flex-1 overflow-hidden text-right">
                     {multiSelectMode && (
                       <div className="pt-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                         <Checkbox
@@ -494,18 +494,18 @@ export function ClientsChatView({
                         />
                       </div>
                     )}
-                      <div className="flex items-center gap-1">
-                        <span className="font-semibold text-sm text-foreground block truncate">
-                          {displayName}
-                        </span>
+                      <div className="flex items-center gap-1 justify-end">
                         <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
                           {moodInfo.emoji}
                         </span>
+                        <span className="font-semibold text-sm text-foreground block truncate">
+                          {displayName}
+                        </span>
                       </div>
-                      {client.agencies?.name && (
-                        <p className="text-xs text-muted-foreground truncate">{client.agencies.name}</p>
-                      )}
-                      <div className="flex items-center gap-1 mt-1 flex-wrap">
+                      <div className="flex items-center gap-1 mt-1 justify-end flex-wrap">
+                        {client.agencies?.name && (
+                          <span className="text-xs text-muted-foreground truncate">{client.agencies.name}</span>
+                        )}
                         <Badge
                           variant="outline"
                           className="text-[10px] px-1.5 py-0 h-4 border-0 text-white"
