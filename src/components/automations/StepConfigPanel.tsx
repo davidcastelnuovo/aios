@@ -37,6 +37,7 @@ const TRIGGER_OPTIONS = [
   { value: "inbound_webhook_task", label: "Webhook נכנס" },
   { value: "manual_command", label: "פקודה ידנית (צ'אט)" },
   { value: "whatsapp_message_received", label: "הודעת WhatsApp נכנסת" },
+  { value: "carmen_whatsapp_session", label: "שיחת כרמן ב-WhatsApp" },
 ];
 
 const ACTION_OPTIONS = [
@@ -281,6 +282,15 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [] }
           {/* WhatsApp message received trigger config */}
           {node.step_type === "trigger" && node.action_type === "whatsapp_message_received" && (
             <WhatsAppTriggerConfig
+              tenantId={tenantId}
+              configuration={node.configuration}
+              onConfigChange={handleConfigChange}
+            />
+          )}
+
+          {/* Carmen WhatsApp Session trigger config */}
+          {node.step_type === "trigger" && node.action_type === "carmen_whatsapp_session" && (
+            <CarmenSessionConfig
               tenantId={tenantId}
               configuration={node.configuration}
               onConfigChange={handleConfigChange}
@@ -1201,6 +1211,118 @@ function CreateAgentDialog({
 }
 
 // Sub-component for WhatsApp message received trigger configuration
+// ===========================
+// CARMEN SESSION CONFIG COMPONENT
+// ===========================
+function CarmenSessionConfig({
+  tenantId,
+  configuration,
+  onConfigChange,
+}: {
+  tenantId: string | undefined;
+  configuration: Record<string, any>;
+  onConfigChange: (key: string, value: any) => void;
+}) {
+  // Fetch Carmen agents for this tenant
+  const { data: carmenAgents } = useQuery({
+    queryKey: ["carmen-agents", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from("ai_agents")
+        .select("id, name")
+        .eq("tenant_id", tenantId)
+        .or("name.ilike.%carmen%,name.ilike.%כרמן%")
+        .eq("active", true);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenantId,
+  });
+
+  return (
+    <div className="space-y-4">
+      {/* Info banner */}
+      <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3 space-y-1">
+        <p className="text-sm font-semibold text-purple-400 text-right">שיחת כרמן ב-WhatsApp</p>
+        <p className="text-xs text-muted-foreground text-right">
+          כשמשתמש שולח את מילת ההפעלה (ברירת מחדל: "כרמן"), כרמן תפתח שיחה אינטראקטיבית ב-WhatsApp. השיחה נמשכת עד שהמשתמש כותב את מילת הסיום.
+        </p>
+      </div>
+
+      {/* Trigger keyword */}
+      <div className="space-y-2">
+        <Label className="text-right block">מילת הפעלה</Label>
+        <Input
+          value={configuration?.trigger_keyword || "כרמן"}
+          onChange={(e) => onConfigChange("trigger_keyword", e.target.value)}
+          placeholder="כרמן"
+          className="text-right"
+          dir="rtl"
+        />
+        <p className="text-xs text-muted-foreground text-right">
+          כשהודעה מכילה מילה זו — כרמן תפעל
+        </p>
+      </div>
+
+      {/* End keyword */}
+      <div className="space-y-2">
+        <Label className="text-right block">מילת סיום שיחה</Label>
+        <Input
+          value={configuration?.end_keyword || "סיימנו כרמן"}
+          onChange={(e) => onConfigChange("end_keyword", e.target.value)}
+          placeholder="סיימנו כרמן"
+          className="text-right"
+          dir="rtl"
+        />
+        <p className="text-xs text-muted-foreground text-right">
+          כשהמשתמש כותב מילה זו — השיחה נסגרת
+        </p>
+      </div>
+
+      {/* Carmen agent selector */}
+      <div className="space-y-2">
+        <Label className="text-right block">סוכן כרמן</Label>
+        {carmenAgents && carmenAgents.length > 0 ? (
+          <Select
+            value={configuration?.agent_id || ""}
+            onValueChange={(v) => onConfigChange("agent_id", v)}
+          >
+            <SelectTrigger className="text-right">
+              <SelectValue placeholder="בחר סוכן..." />
+            </SelectTrigger>
+            <SelectContent>
+              {carmenAgents.map((agent) => (
+                <SelectItem key={agent.id} value={agent.id}>
+                  {agent.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <div className="text-xs text-muted-foreground text-right p-2 border rounded-md bg-muted/30">
+            לא נמצא סוכן כרמן פעיל. צור סוכן AI בשם כרמן במודול ה-AI.
+          </div>
+        )}
+        <p className="text-xs text-muted-foreground text-right">
+          אם לא נבחר, המערכת תחפש אוטומטית סוכן בשם כרמן
+        </p>
+      </div>
+
+      {/* Status info */}
+      <div className="bg-muted/30 rounded-lg p-3 space-y-1">
+        <p className="text-xs font-medium text-right">איך זה עובד?</p>
+        <ul className="text-xs text-muted-foreground space-y-1 text-right list-none">
+          <li>• משתמש שולח הודעה שמכילה "כרמן" → כרמן מקבלת את השליטה</li>
+          <li>• כל הודעה באותו צ'AT מועברת ישירות לכרמן</li>
+          <li>• כרמן זוכרת את כל השיחה (היסטוריית שיחה מלאה)</li>
+          <li>• "סיימנו כרמן" → השיחה נסגרת</li>
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 function WhatsAppTriggerConfig({
   tenantId,
   configuration,

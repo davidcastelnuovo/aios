@@ -77,6 +77,7 @@ const ACTION_TYPE_LABELS: Record<string, string> = {
   inbound_webhook_task: "Webhook נכנס",
   manual_command: "פקודה ידנית (צ'אט)",
   whatsapp_message_received: "הודעת WhatsApp נכנסת",
+  carmen_whatsapp_session: "שיחת כרמן ב-WhatsApp",
 };
 
 interface FlowNodeProps {

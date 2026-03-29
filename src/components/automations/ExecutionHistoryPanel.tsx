@@ -50,6 +50,7 @@ const ACTION_ICONS: Record<string, any> = {
   create_lead: UserPlus,
   create_manychat_subscriber: UserPlus,
   update_status: ArrowLeftRight,
+  carmen_whatsapp_session: Bot,
 };
 
 const ACTION_LABELS: Record<string, string> = {
@@ -63,9 +64,9 @@ const ACTION_LABELS: Record<string, string> = {
   create_task: "יצירת משימה",
   create_lead: "יצירת ליד",
   create_manychat_subscriber: "יצירת מנוי ManyChat",
-  update_status: "עדכון סטטוס",
+  update_status: "עדכון סטאטוס",
+  carmen_whatsapp_session: "שיחת כרמן ב-WhatsApp",
 };
-
 export function ExecutionHistoryPanel({
   open,
   onClose,

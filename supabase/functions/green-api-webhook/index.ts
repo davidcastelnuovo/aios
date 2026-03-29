@@ -230,6 +230,131 @@ async function forwardToTeamChannels(
   }
 }
 
+// ===========================
+// CARMEN WHATSAPP SESSION LOGIC
+// ===========================
+
+// Send a WhatsApp message via Green API
+async function sendGreenApiMessage(
+  instanceId: string,
+  apiToken: string,
+  chatId: string,
+  message: string
+): Promise<boolean> {
+  try {
+    const url = `https://api.green-api.com/waInstance${instanceId}/sendMessage/${apiToken}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chatId, message }),
+    });
+    return res.ok;
+  } catch (e) {
+    console.error('❌ sendGreenApiMessage error:', e);
+    return false;
+  }
+}
+
+// Find an active Carmen session for a given chat
+async function findActiveCarmenSession(
+  supabase: any,
+  tenantId: string,
+  chatId: string
+): Promise<any | null> {
+  const { data } = await supabase
+    .from('carmen_whatsapp_sessions')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .eq('chat_id', chatId)
+    .eq('status', 'active')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data || null;
+}
+
+// Find the Carmen agent for a tenant (looks for agent named כרמן/Carmen)
+async function findCarmenAgent(
+  supabase: any,
+  tenantId: string
+): Promise<any | null> {
+  const { data } = await supabase
+    .from('ai_agents')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .or('name.ilike.%carmen%,name.ilike.%כרמן%')
+    .eq('active', true)
+    .limit(1)
+    .maybeSingle();
+  return data || null;
+}
+
+// Check if any automation has a Carmen WhatsApp session trigger configured
+async function findCarmenSessionAutomation(
+  supabase: any,
+  tenantId: string
+): Promise<any | null> {
+  // Look for automations with trigger_type whatsapp_message_received and carmen_session_mode enabled
+  const { data } = await supabase
+    .from('automations')
+    .select('id, name, configuration')
+    .eq('tenant_id', tenantId)
+    .eq('trigger_type', 'whatsapp_message_received')
+    .eq('active', true)
+    .filter('configuration->>carmen_session_mode', 'eq', 'true')
+    .limit(1)
+    .maybeSingle();
+  return data || null;
+}
+
+// Run Carmen AI and return her response
+async function runCarmenAI(
+  supabase: any,
+  agentId: string,
+  tenantId: string,
+  userMessage: string,
+  conversationHistory: any[]
+): Promise<string> {
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    
+    // Build messages array with history
+    const historyContext = conversationHistory.length > 0
+      ? `\n\n=== היסטוריית שיחה ===\n${conversationHistory.slice(-10).map((m: any) => `${m.role === 'user' ? 'משתמש' : 'כרמן'}: ${m.content}`).join('\n')}`
+      : '';
+    
+    const commandWithHistory = historyContext
+      ? `${userMessage}${historyContext}`
+      : userMessage;
+    
+    const res = await fetch(`${supabaseUrl}/functions/v1/run-ai-agent`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${serviceKey}`,
+      },
+      body: JSON.stringify({
+        agent_id: agentId,
+        command_text: commandWithHistory,
+        tenant_id: tenantId,
+        user_name: 'WhatsApp',
+      }),
+    });
+    
+    if (!res.ok) {
+      console.error('❌ run-ai-agent failed:', res.status);
+      return 'מצטערת, אירעה שגיאה. נסה שוב.';
+    }
+    
+    const data = await res.json();
+    return data.output || 'לא הצלחתי לעבד את הבקשה.';
+  } catch (e) {
+    console.error('❌ runCarmenAI error:', e);
+    return 'מצטערת, אירעה שגיאה טכנית.';
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -1387,8 +1512,158 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ===========================
+    // CARMEN WHATSAPP SESSION HANDLER
+    // Only for incoming individual (non-group) messages
+    // ===========================
+    if (isIncoming && !isGroup) {
+      const chatId = senderData.chatId;
+      const normalizedMsg = messageText.trim().toLowerCase();
+      
+      // Check for active Carmen session
+      const activeSession = await findActiveCarmenSession(supabaseClient, tenantId, chatId);
+      
+      if (activeSession) {
+        // === SESSION IS ACTIVE: route message to Carmen ===
+        
+        // Check for end keyword
+        const endKeyword = (activeSession.end_keyword || 'סיימנו כרמן').toLowerCase();
+        if (normalizedMsg.includes(endKeyword)) {
+          // End the session
+          await supabaseClient
+            .from('carmen_whatsapp_sessions')
+            .update({ status: 'ended', ended_at: new Date().toISOString() })
+            .eq('id', activeSession.id);
+          
+          await sendGreenApiMessage(
+            instanceId,
+            apiToken,
+            chatId,
+            'השיחה עם כרמן הסתיימה. תמיד כאן בשבילך! להתראות!'
+          );
+          
+          return new Response(JSON.stringify({ success: true, carmen_session: 'ended' }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        
+        // Continue session - send message to Carmen
+        const history = activeSession.conversation_history || [];
+        
+        // Add user message to history
+        const updatedHistory = [
+          ...history,
+          { role: 'user', content: messageText, timestamp: new Date().toISOString() }
+        ];
+        
+        // Get Carmen's response
+        const carmenResponse = await runCarmenAI(
+          supabaseClient,
+          activeSession.agent_id,
+          tenantId,
+          messageText,
+          history
+        );
+        
+        // Add Carmen's response to history
+        updatedHistory.push({
+          role: 'assistant',
+          content: carmenResponse,
+          timestamp: new Date().toISOString()
+        });
+        
+        // Update session with new history and last_message_at
+        await supabaseClient
+          .from('carmen_whatsapp_sessions')
+          .update({
+            conversation_history: updatedHistory,
+            last_message_at: new Date().toISOString(),
+          })
+          .eq('id', activeSession.id);
+        
+        // Send Carmen's response back via WhatsApp
+        await sendGreenApiMessage(instanceId, apiToken, chatId, carmenResponse);
+        
+        return new Response(JSON.stringify({ success: true, carmen_session: 'active', response_sent: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      } else {
+        // === NO ACTIVE SESSION: check if message triggers Carmen ===
+        const triggerKeywords = ['כרמן', 'carmen'];
+        const hasTriggerKeyword = triggerKeywords.some(kw => normalizedMsg.includes(kw));
+        
+        if (hasTriggerKeyword) {
+          // Find Carmen agent for this tenant
+          const carmenAgent = await findCarmenAgent(supabaseClient, tenantId);
+          
+          if (carmenAgent) {
+            // Create new Carmen session
+            const { data: newSession, error: sessionError } = await supabaseClient
+              .from('carmen_whatsapp_sessions')
+              .insert({
+                tenant_id: tenantId,
+                chat_id: chatId,
+                phone: phoneNumber,
+                sender_name: senderData.senderName || null,
+                agent_id: carmenAgent.id,
+                connection_user_id: connectionUserId,
+                conversation_history: [],
+                status: 'active',
+                started_by_keyword: messageText,
+              })
+              .select()
+              .single();
+            
+            if (sessionError) {
+              console.error('Failed to create Carmen session:', sessionError);
+            } else {
+              // Send greeting
+              const greeting = 'שלום! אני כרמן, המנהלת ה-AI שלך במערכת ה-CRM. אפשר לשאול אותי כל שאלה ולבצע פעולות במערכת. מה אפשר לעזור לך? (כדי לסיים את השיחה, כתוב "סיימנו כרמן")';
+              
+              await sendGreenApiMessage(instanceId, apiToken, chatId, greeting);
+              
+              // If there's additional content after the trigger keyword, process it immediately
+              const contentAfterKeyword = messageText.replace(/כרמן|carmen/gi, '').trim();
+              if (contentAfterKeyword.length > 2) {
+                const carmenResponse = await runCarmenAI(
+                  supabaseClient,
+                  carmenAgent.id,
+                  tenantId,
+                  contentAfterKeyword,
+                  []
+                );
+                
+                await supabaseClient
+                  .from('carmen_whatsapp_sessions')
+                  .update({
+                    conversation_history: [
+                      { role: 'user', content: contentAfterKeyword, timestamp: new Date().toISOString() },
+                      { role: 'assistant', content: carmenResponse, timestamp: new Date().toISOString() }
+                    ],
+                    last_message_at: new Date().toISOString(),
+                  })
+                  .eq('id', newSession.id);
+                
+                await sendGreenApiMessage(instanceId, apiToken, chatId, carmenResponse);
+              }
+              
+              return new Response(JSON.stringify({ success: true, carmen_session: 'started' }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              });
+            }
+          } else {
+            console.warn('Carmen keyword detected but no Carmen agent found for tenant:', tenantId);
+          }
+        }
+      }
+    }
+    // ===========================
+    // END CARMEN SESSION HANDLER
+    // ===========================
+
     // Trigger automations for incoming/outgoing WhatsApp messages
     if (isIncoming || isManualOutgoing) {
+
       try {
         
         // Fetch contact tags for the sender
