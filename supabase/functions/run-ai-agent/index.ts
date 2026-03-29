@@ -208,6 +208,88 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (error) throw error
       return { count: data?.length || 0, campaigns: data || [], period: `${daysBack} days` }
     }
+    case 'create_social_post': {
+      const { data, error } = await supabase.from('social_media_posts').insert({
+        tenant_id: tenantId,
+        title: args.title,
+        content: args.content,
+        post_type: args.post_type || 'image',
+        media_urls: args.media_urls || [],
+        status: 'draft',
+        created_by: userId !== 'system' ? userId : null,
+      }).select('id, title, content, post_type, media_urls, status').single()
+      if (error) throw error
+      return { success: true, post_id: data.id, title: data.title, content: data.content, media_urls: data.media_urls, status: 'draft', message: 'הפוסט נוצר בהצלחה כטיוטה במודול סושיאל מדיה' }
+    }
+    case 'generate_ad_image': {
+      const imagePrompt = args.prompt
+      const model = 'google/gemini-3.1-flash-image-preview'
+      
+      const imageRes = await fetch(AI_GATEWAY_URL, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'user', content: `Generate an image: ${imagePrompt}. Make it professional, high quality, suitable for a social media advertisement.` }
+          ],
+        }),
+      })
+      
+      if (!imageRes.ok) {
+        const errText = await imageRes.text()
+        throw new Error(`Image generation error: ${errText}`)
+      }
+      
+      const imageData = await imageRes.json()
+      const content = imageData.choices?.[0]?.message?.content || ''
+      
+      // Check for inline_data (base64 image) in parts
+      const parts = imageData.choices?.[0]?.message?.parts || []
+      let imageUrl = ''
+      
+      for (const part of parts) {
+        if (part.inline_data) {
+          // Upload base64 to Supabase Storage
+          const base64 = part.inline_data.data
+          const mimeType = part.inline_data.mime_type || 'image/png'
+          const ext = mimeType.includes('jpeg') ? 'jpg' : 'png'
+          const fileName = `agent-generated/${tenantId}/${crypto.randomUUID()}.${ext}`
+          
+          const binaryData = Uint8Array.from(atob(base64), c => c.charCodeAt(0))
+          
+          const { error: uploadError } = await supabase.storage
+            .from('social-media')
+            .upload(fileName, binaryData, { contentType: mimeType, upsert: true })
+          
+          if (uploadError) {
+            console.error('Upload error:', uploadError)
+            // Try creating the bucket first
+            await supabase.storage.createBucket('social-media', { public: true })
+            const { error: retryError } = await supabase.storage
+              .from('social-media')
+              .upload(fileName, binaryData, { contentType: mimeType, upsert: true })
+            if (retryError) throw retryError
+          }
+          
+          const { data: urlData } = supabase.storage.from('social-media').getPublicUrl(fileName)
+          imageUrl = urlData.publicUrl
+          break
+        }
+      }
+      
+      // If no inline_data, check if there's a URL in the content
+      if (!imageUrl && content) {
+        const urlMatch = content.match(/https?:\/\/[^\s)]+\.(png|jpg|jpeg|webp)/i)
+        if (urlMatch) imageUrl = urlMatch[0]
+      }
+      
+      if (!imageUrl) {
+        return { success: false, error: 'לא הצלחתי ליצור תמונה. נסה שוב עם תיאור אחר.', raw_content: content }
+      }
+      
+      return { success: true, image_url: imageUrl, message: 'התמונה נוצרה בהצלחה. השתמש בה ביצירת הפוסט.' }
+    }
     default:
       throw new Error(`Unknown tool: ${name}`)
   }
