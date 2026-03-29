@@ -1,34 +1,14 @@
 
 
-## Analysis: Why Carmen Conversations Get Stuck
+## Fix: Remove orphaned code in `trigger-automation/index.ts`
 
-### Root Cause Identified
+Same pattern as the previous fixes in `signup-tenant` and `test-facebook-lead-webhook` — lines 1319-1324 contain orphaned object properties from a deleted `console.log` call, causing a parse error that blocks deployment.
 
-There are **two problems** working together:
+### Plan
 
-1. **Build Error in `signup-tenant/index.ts`** — Lines 73-75 have orphaned code (object properties without a surrounding statement):
-   ```
-   email: payload.email,
-   organizationName: payload.organizationName,
-   });
-   ```
-   This is broken syntax — it looks like the start of a `console.log()` or object was accidentally deleted. This build error **blocks deployment of ALL Edge Functions**, meaning the latest version of `green-api-webhook` (with Carmen logic) was never deployed.
+**Step 1: Remove orphaned lines 1319-1324** in `supabase/functions/trigger-automation/index.ts`
+Delete the dangling object literal (lines 1319-1324: `tenantId, contactType, contactRecordId...`). These are leftover debug code without a wrapping statement.
 
-2. **Evidence from logs** — The Edge Function logs show only "booted" and "shutdown" messages with **zero request processing output**. This confirms the deployed version either doesn't have the Carmen code or is crashing silently.
-
-### Database Status (Verified ✅)
-- **Carmen agent exists** — `כרמן` (id: `8cdb9373...`, active, engine: gpt-4o, tenant: MarketingCaptain)
-- **Carmen automation exists** — `שיחת כרמן ב-WhatsApp` (active, trigger: `whatsapp_message_received`, `carmen_session_mode: true`)
-- **Sessions table is empty** — confirms the Carmen code never actually runs
-
-### Fix Plan
-
-**Step 1: Fix `signup-tenant/index.ts` syntax error**
-Remove the orphaned lines 73-75 (the dangling object properties). These appear to be leftovers from a deleted `console.log` call.
-
-**Step 2: Re-deploy `green-api-webhook`**
-After fixing the build error, deploy the Edge Function so the Carmen session logic goes live.
-
-**Step 3: Verify**
-Send "כרמן" via WhatsApp and confirm a session record appears in `carmen_whatsapp_sessions`.
+**Step 2: Deploy `trigger-automation`**
+Re-deploy the edge function after the fix.
 
