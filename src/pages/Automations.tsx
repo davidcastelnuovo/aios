@@ -167,9 +167,10 @@ export default function Automations() {
           name: "שיחת כרמן ב-WhatsApp",
           description: "שיחה אינטראקטיבית עם כרמן ב-WhatsApp - מתחילה במילת \"כרמן\", מסתיימת ב\"סיימנו כרמן\"",
           tenant_id: tenantId,
-          trigger_type: "carmen_whatsapp_session",
-          action_type: "carmen_whatsapp_session",
+          trigger_type: "whatsapp_message_received",
+          action_type: "send_greenapi_message",
           configuration: {
+            carmen_session_mode: true,
             trigger_keyword: "כרמן",
             end_keyword: "סיימנו כרמן",
           },
@@ -261,7 +262,7 @@ export default function Automations() {
       </div>
 
       {/* Carmen WhatsApp Session Banner - shown when no carmen automation exists */}
-      {!automations?.some((a: any) => a.trigger_type === "carmen_whatsapp_session") && (
+      {!automations?.some((a: any) => a.configuration?.carmen_session_mode === true) && (
         <div className="rounded-xl border border-purple-500/30 bg-gradient-to-l from-purple-500/5 to-transparent p-4 flex flex-col md:flex-row items-start md:items-center gap-4">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-full bg-purple-500/15 flex items-center justify-center shrink-0">
@@ -292,7 +293,7 @@ export default function Automations() {
             className={cn(
               automation.active ? "" : "opacity-60",
               (automation as any).is_flow && "cursor-pointer hover:border-primary/50 transition-colors",
-              (automation.trigger_type as string) === "carmen_whatsapp_session" && "border-purple-500/40 bg-purple-500/5"
+                          (automation as any).configuration?.carmen_session_mode === true && "border-purple-500/40 bg-purple-500/5"
             )}
             onClick={() => (automation as any).is_flow && navigate(buildPath(`automations/flow/${automation.id}`))}
           >
@@ -300,7 +301,7 @@ export default function Automations() {
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <CardTitle className="text-base md:text-lg truncate flex items-center gap-2">
-                    {(automation.trigger_type as string) === "carmen_whatsapp_session" ? (
+                     {(automation as any).configuration?.carmen_session_mode === true ? (
                       <Bot className="h-4 w-4 shrink-0 text-purple-400" />
                     ) : (automation as any).is_flow ? (
                       <Workflow className="h-4 w-4 shrink-0 text-primary" />

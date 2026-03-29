@@ -294,13 +294,15 @@ async function findCarmenSessionAutomation(
   supabase: any,
   tenantId: string
 ): Promise<any | null> {
-  // Look for active automations with trigger_type = carmen_whatsapp_session
+  // Look for active automations with trigger_type = whatsapp_message_received
+  // and carmen_session_mode = true in configuration
   const { data } = await supabase
     .from('automations')
     .select('id, name, configuration')
     .eq('tenant_id', tenantId)
-    .eq('trigger_type', 'carmen_whatsapp_session')
+    .eq('trigger_type', 'whatsapp_message_received')
     .eq('active', true)
+    .filter('configuration->>carmen_session_mode', 'eq', 'true')
     .limit(1)
     .maybeSingle();
   return data || null;
