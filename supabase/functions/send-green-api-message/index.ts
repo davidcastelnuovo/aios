@@ -131,7 +131,7 @@ Deno.serve(async (req) => {
       const { data: activeTenant } = await supabaseClient
         .from('user_active_tenant')
         .select('tenant_id')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .single();
       tenantId = activeTenant?.tenant_id;
     }
