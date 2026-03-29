@@ -714,13 +714,6 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
               </CardContent>
             </Card>
 
-            <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900">
-              <CardContent className="p-6">
-                <p className="text-sm text-muted-foreground">רכישות</p>
-                <p className="text-3xl font-bold mt-2">{formatNumber(overallTotals.adsPurchases)}</p>
-              </CardContent>
-            </Card>
-
             <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900">
               <CardContent className="p-6">
                 <p className="text-sm text-muted-foreground">עלות לליד (CPL)</p>
