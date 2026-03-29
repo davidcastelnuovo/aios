@@ -1177,6 +1177,57 @@ export type Database = {
           },
         ]
       }
+      carmen_whatsapp_sessions: {
+        Row: {
+          agent_id: string | null
+          chat_id: string
+          connection_user_id: string | null
+          conversation_history: Json | null
+          created_at: string | null
+          end_keyword: string | null
+          ended_at: string | null
+          id: string
+          last_message_at: string | null
+          phone: string | null
+          sender_name: string | null
+          started_by_keyword: string | null
+          status: string | null
+          tenant_id: string
+        }
+        Insert: {
+          agent_id?: string | null
+          chat_id: string
+          connection_user_id?: string | null
+          conversation_history?: Json | null
+          created_at?: string | null
+          end_keyword?: string | null
+          ended_at?: string | null
+          id?: string
+          last_message_at?: string | null
+          phone?: string | null
+          sender_name?: string | null
+          started_by_keyword?: string | null
+          status?: string | null
+          tenant_id: string
+        }
+        Update: {
+          agent_id?: string | null
+          chat_id?: string
+          connection_user_id?: string | null
+          conversation_history?: Json | null
+          created_at?: string | null
+          end_keyword?: string | null
+          ended_at?: string | null
+          id?: string
+          last_message_at?: string | null
+          phone?: string | null
+          sender_name?: string | null
+          started_by_keyword?: string | null
+          status?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
       chat_contact_tags: {
         Row: {
           client_id: string | null
