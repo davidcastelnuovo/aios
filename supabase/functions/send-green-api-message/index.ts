@@ -57,6 +57,18 @@ Deno.serve(async (req) => {
       userId = user.id;
       console.log('✅ User authenticated:', userId);
     }
+
+    // Create supabase client - use service role for internal calls, user token for direct calls
+    const supabaseClient = createClient(
+      SUPABASE_URL,
+      isServiceRole ? SERVICE_ROLE_KEY : SUPABASE_ANON_KEY,
+      isServiceRole ? {
+        auth: { persistSession: false, autoRefreshToken: false }
+      } : { 
+        global: { headers: { Authorization: authHeader } },
+        auth: { persistSession: false, autoRefreshToken: false }
+      }
+    );
     const { clientId, leadId, groupId, message, phoneNumber, tenantId: providedTenantId, quotedMessageId, senderUserId } = await req.json();
 
     // For service role calls, use senderUserId from the body
