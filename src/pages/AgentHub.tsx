@@ -309,20 +309,21 @@ export default function AgentHub() {
       </div>
 
       {/* ─── CARMEN CARD ─────────────────────────────────────────── */}
-      <div className="relative mb-10 rounded-2xl overflow-hidden border border-red-500/30 bg-gradient-to-l from-red-950/40 via-gray-900/60 to-gray-900/80 shadow-xl">
-        {/* Background glow */}
-        <div className="absolute inset-0 bg-gradient-to-l from-red-900/20 to-transparent pointer-events-none" />
+      <div className="relative mb-10 rounded-2xl overflow-hidden border border-red-500/40 shadow-2xl" style={{background: 'linear-gradient(135deg, #1a0a0a 0%, #2d0f0f 30%, #1a1a2e 100%)'}}>
+        {/* Subtle red glow overlay */}
+        <div className="absolute inset-0 bg-gradient-to-l from-red-900/30 via-transparent to-transparent pointer-events-none" />
+        <div className="absolute top-0 right-0 w-64 h-64 bg-red-500/10 rounded-full blur-3xl pointer-events-none" />
 
         <div className="relative flex items-stretch gap-0">
           {/* Avatar section */}
-          <div className="relative w-48 shrink-0 hidden md:block">
+          <div className="relative w-52 shrink-0 hidden md:block">
             <img
               src={CARMEN_AVATAR}
               alt="Carmen"
               className="w-full h-full object-cover object-top"
               style={{ minHeight: "200px", maxHeight: "240px" }}
             />
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent to-gray-900/60" />
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-[#1a0a0a]/80" />
           </div>
 
           {/* Content */}
@@ -330,14 +331,14 @@ export default function AgentHub() {
             <div className="flex items-start justify-between mb-3">
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <Badge className="bg-red-500/20 text-red-400 border-red-500/40 text-xs">מנהלת ראשית</Badge>
-                  <span className="flex items-center gap-1 text-xs text-emerald-400">
+                  <Badge className="bg-red-500/30 text-red-300 border-red-400/50 text-xs font-semibold">מנהלת ראשית</Badge>
+                  <span className="flex items-center gap-1 text-xs text-emerald-300 font-medium">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block" />
                     פעילה
                   </span>
                 </div>
-                <h2 className="text-2xl font-bold text-white">כרמן</h2>
-                <p className="text-sm text-gray-400 mt-0.5">עוזרת AI ראשית — מנהלת ומתאמת את כל הסוכנים</p>
+                <h2 className="text-3xl font-bold text-white tracking-wide">כרמן</h2>
+                <p className="text-sm text-gray-300 mt-1">עוזרת AI ראשית — מנהלת ומתאמת את כל הסוכנים</p>
               </div>
               <div className="flex gap-2">
                 <Button
@@ -364,19 +365,19 @@ export default function AgentHub() {
             <div className="flex gap-6 mt-4">
               <div className="text-center">
                 <div className="text-xl font-bold text-white">{agents.length + 3}</div>
-                <div className="text-xs text-gray-500">סוכנים תחתיה</div>
+                <div className="text-xs text-gray-400 mt-0.5">סוכנים תחתיה</div>
               </div>
               <div className="text-center">
                 <div className="text-xl font-bold text-white">{MODULE_PERMISSIONS.length}</div>
-                <div className="text-xs text-gray-500">מודולים בגישה</div>
+                <div className="text-xs text-gray-400 mt-0.5">מודולים בגישה</div>
               </div>
               <div className="text-center">
                 <div className="text-xl font-bold text-white">{ALL_TOOLS.length}</div>
-                <div className="text-xs text-gray-500">כלים זמינים</div>
+                <div className="text-xs text-gray-400 mt-0.5">כלים זמינים</div>
               </div>
               <div className="text-center">
-                <div className="text-sm font-semibold text-red-400">🧠 Manus 1.6</div>
-                <div className="text-xs text-gray-500">מנוע ברירת מחדל</div>
+                <div className="text-sm font-bold text-red-300">🧠 Manus 1.6</div>
+                <div className="text-xs text-gray-400 mt-0.5">מנוע ברירת מחדל</div>
               </div>
             </div>
           </div>
