@@ -612,9 +612,17 @@ async function executeTool(
       }
 
       case 'list_clients': {
-        const { status, limit = 20 } = toolCall.args;
-        let query = supabaseClient.from('clients').select('id, name, contact_name, phone, email, status, agencies(name)').eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(limit);
+        const { status, limit = 20, agency_id: clientsAgencyId, agency_name: clientsAgencyName } = toolCall.args;
+        
+        let resolvedClientAgencyId = clientsAgencyId;
+        if (!resolvedClientAgencyId && clientsAgencyName) {
+          const { data: agencyMatch } = await supabaseClient.from('agencies').select('id').eq('tenant_id', tenantId).ilike('name', `%${clientsAgencyName}%`).limit(1).single();
+          if (agencyMatch) resolvedClientAgencyId = agencyMatch.id;
+        }
+        
+        let query = supabaseClient.from('clients').select('id, name, contact_name, phone, email, status, agency_id, agencies(name)').eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(limit);
         if (status) query = query.eq('status', status);
+        if (resolvedClientAgencyId) query = query.eq('agency_id', resolvedClientAgencyId);
         const { data, error } = await query;
         if (error) throw error;
         return { success: true, result: { count: data.length, clients: data.map((c: any) => ({ id: c.id, name: c.name, contact_name: c.contact_name, phone: c.phone, email: c.email, status: c.status, agency_name: c.agencies?.name })) } };
