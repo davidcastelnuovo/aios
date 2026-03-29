@@ -233,6 +233,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
           messages: [
             { role: 'user', content: `Generate an image: ${imagePrompt}. Make it professional, high quality, suitable for a social media advertisement.` }
           ],
+          modalities: ['image', 'text'],
         }),
       })
       
@@ -244,44 +245,56 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const imageData = await imageRes.json()
       const content = imageData.choices?.[0]?.message?.content || ''
       
-      // Check for inline_data (base64 image) in parts
-      const parts = imageData.choices?.[0]?.message?.parts || []
+      // Check for images array in response (Lovable AI Gateway format)
+      const images = imageData.choices?.[0]?.message?.images || []
       let imageUrl = ''
       
-      for (const part of parts) {
-        if (part.inline_data) {
-          // Upload base64 to Supabase Storage
-          const base64 = part.inline_data.data
-          const mimeType = part.inline_data.mime_type || 'image/png'
-          const ext = mimeType.includes('jpeg') ? 'jpg' : 'png'
+      if (images.length > 0 && images[0]?.image_url?.url) {
+        const dataUrl = images[0].image_url.url
+        // Extract base64 data from data URL
+        const base64Match = dataUrl.match(/^data:image\/(png|jpeg|jpg|webp);base64,(.+)$/)
+        if (base64Match) {
+          const mimeType = `image/${base64Match[1]}`
+          const base64 = base64Match[2]
+          const ext = base64Match[1] === 'jpeg' ? 'jpg' : base64Match[1]
           const fileName = `agent-generated/${tenantId}/${crypto.randomUUID()}.${ext}`
           
           const binaryData = Uint8Array.from(atob(base64), c => c.charCodeAt(0))
+          
+          // Ensure bucket exists
+          await supabase.storage.createBucket('social-media', { public: true }).catch(() => {})
           
           const { error: uploadError } = await supabase.storage
             .from('social-media')
             .upload(fileName, binaryData, { contentType: mimeType, upsert: true })
           
-          if (uploadError) {
-            console.error('Upload error:', uploadError)
-            // Try creating the bucket first
-            await supabase.storage.createBucket('social-media', { public: true })
-            const { error: retryError } = await supabase.storage
-              .from('social-media')
-              .upload(fileName, binaryData, { contentType: mimeType, upsert: true })
-            if (retryError) throw retryError
-          }
+          if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`)
           
           const { data: urlData } = supabase.storage.from('social-media').getPublicUrl(fileName)
           imageUrl = urlData.publicUrl
-          break
         }
       }
       
-      // If no inline_data, check if there's a URL in the content
-      if (!imageUrl && content) {
-        const urlMatch = content.match(/https?:\/\/[^\s)]+\.(png|jpg|jpeg|webp)/i)
-        if (urlMatch) imageUrl = urlMatch[0]
+      // Fallback: check inline_data in parts
+      if (!imageUrl) {
+        const parts = imageData.choices?.[0]?.message?.parts || []
+        for (const part of parts) {
+          if (part.inline_data) {
+            const base64 = part.inline_data.data
+            const mimeType = part.inline_data.mime_type || 'image/png'
+            const ext = mimeType.includes('jpeg') ? 'jpg' : 'png'
+            const fileName = `agent-generated/${tenantId}/${crypto.randomUUID()}.${ext}`
+            const binaryData = Uint8Array.from(atob(base64), c => c.charCodeAt(0))
+            await supabase.storage.createBucket('social-media', { public: true }).catch(() => {})
+            const { error: uploadError } = await supabase.storage
+              .from('social-media')
+              .upload(fileName, binaryData, { contentType: mimeType, upsert: true })
+            if (uploadError) throw uploadError
+            const { data: urlData } = supabase.storage.from('social-media').getPublicUrl(fileName)
+            imageUrl = urlData.publicUrl
+            break
+          }
+        }
       }
       
       if (!imageUrl) {

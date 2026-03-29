@@ -87,11 +87,23 @@ function TaskResultDisplay({ result }: { result: any }) {
         <div className="space-y-2">
           {socialPosts.map((post, i) => (
             <div key={i} className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
-              <div className="flex items-center gap-2 mb-1.5">
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                <span className="text-xs font-medium text-emerald-800">פוסט נוצר במודול סושיאל</span>
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                  <span className="text-xs font-medium text-emerald-800">פוסט נוצר במודול סושיאל</span>
+                </div>
+                <a href={`/t/marketingcaptain/social-media`} className="text-xs text-primary hover:underline flex items-center gap-1">
+                  צפה בפוסטים <ExternalLink className="h-3 w-3" />
+                </a>
               </div>
               {post.title && <p className="text-sm font-semibold text-emerald-900 mb-1">{post.title}</p>}
+              {post.media_urls && post.media_urls.length > 0 && (
+                <div className="flex gap-2 mb-2">
+                  {post.media_urls.map((url: string, idx: number) => (
+                    <img key={idx} src={url} alt="" className="h-32 rounded-lg object-cover border" />
+                  ))}
+                </div>
+              )}
               <p className="text-xs text-emerald-800 whitespace-pre-wrap line-clamp-4">{post.content}</p>
             </div>
           ))}
