@@ -36,6 +36,7 @@ serve(async (req) => {
 
     integrations?.forEach((i, idx) => {
       const settings = i.settings as any;
+      console.log('Integration:', {
         id: i.id,
         tenant_id: i.tenant_id,
         page_id: settings?.page_id,
