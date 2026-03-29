@@ -25,7 +25,9 @@ export function AIOSProvider({ children }: { children: React.ReactNode }) {
   const [statusText, setStatusText] = useState("");
   const [dataPanels, setDataPanels] = useState<DisplayData[]>([]);
   const [history, setHistory] = useState<{ role: string; content: string }[]>([]);
-  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(() => {
+    try { return localStorage.getItem("aios_conversation_id"); } catch { return null; }
+  });
   const activeRef = useRef(false);
 
   const send = useCallback(async (text: string) => {
@@ -92,6 +94,7 @@ export function AIOSProvider({ children }: { children: React.ReactNode }) {
 
             if (parsed.type === "conversation_id" && parsed.id) {
               setConversationId(parsed.id);
+              try { localStorage.setItem("aios_conversation_id", parsed.id); } catch {}
               continue;
             }
 
@@ -131,6 +134,7 @@ export function AIOSProvider({ children }: { children: React.ReactNode }) {
     setHistory([]);
     setStatusText("");
     setDataPanels([]);
+    try { localStorage.removeItem("aios_conversation_id"); } catch {}
   }, []);
 
   return (
