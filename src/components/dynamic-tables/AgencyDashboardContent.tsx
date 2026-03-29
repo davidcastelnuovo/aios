@@ -324,7 +324,7 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
       const clientIds = clients.map(c => c.id);
       return allTables.filter((t: any) => 
         t.client_id && clientIds.includes(t.client_id) &&
-        ['facebook_insights', 'facebook_ecommerce', 'google_ads', 'google_analytics'].includes(t.integration_type)
+        ['facebook_insights', 'facebook_ecommerce', 'google_ads'].includes(t.integration_type)
       );
     },
     enabled: clients.length > 0,
@@ -683,16 +683,6 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
               Google Ads
             </TabsTrigger>
           )}
-          {availablePlatforms.hasAnalytics && (
-            <TabsTrigger value="google_analytics" className="gap-2">
-              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none">
-                <path d="M20.5 18.5v-13c0-1.1-.9-2-2-2h-1c-1.1 0-2 .9-2 2v13c0 1.1.9 2 2 2h1c1.1 0 2-.9 2-2z" fill="#F9AB00"/>
-                <path d="M13.5 18.5v-7c0-1.1-.9-2-2-2h-1c-1.1 0-2 .9-2 2v7c0 1.1.9 2 2 2h1c1.1 0 2-.9 2-2z" fill="#E37400"/>
-                <circle cx="5" cy="18.5" r="2.5" fill="#E37400"/>
-              </svg>
-              Analytics
-            </TabsTrigger>
-          )}
         </TabsList>
       </Tabs>
 
@@ -723,90 +713,11 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
           </>
         )}
 
-        {/* Analytics-only view: show sessions */}
-        {platformFilter === 'google_analytics' && (
-          <>
-            <Card className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-950 dark:to-orange-900">
-              <CardContent className="p-6">
-                <p className="text-sm text-muted-foreground">סשנים</p>
-                <p className="text-3xl font-bold mt-2">{formatNumber(overallTotals.analyticsSessions)}</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
-              <CardContent className="p-6">
-                <p className="text-sm text-muted-foreground">הכנסות (Analytics)</p>
-                <p className="text-3xl font-bold mt-2">{formatCurrency(overallTotals.analyticsRevenue)}</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">רכישות</p>
-                    <p className="text-3xl font-bold mt-2">{formatNumber(overallTotals.analyticsPurchases)}</p>
-                  </div>
-                  <div className="text-left">
-                    <p className="text-sm text-muted-foreground flex items-center gap-1">
-                      <ShoppingCart className="h-3 w-3" /> הוספות לעגלה
-                    </p>
-                    <p className="text-xl font-bold mt-2">{formatNumber(overallTotals.analyticsAddToCart)}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </>
-        )}
       </div>
 
       {/* Daily Charts */}
       {dailyChartData.length > 0 && (
         <>
-          {/* Analytics-only charts */}
-          {platformFilter === 'google_analytics' && hasAnalyticsData && (
-            <>
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">הכנסות (Analytics) - יומי</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <ComposedChart data={dailyChartData}>
-                      <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                      <XAxis dataKey="dateLabel" tick={{ fontSize: 12 }} />
-                      <YAxis tick={{ fontSize: 12 }} />
-                      <Tooltip 
-                        formatter={(value: number) => [formatCurrency(value), 'הכנסות']}
-                        labelFormatter={(label) => `תאריך: ${label}`}
-                      />
-                      <Area type="monotone" dataKey="analyticsRevenue" fill="#22c55e" fillOpacity={0.15} stroke="#22c55e" strokeWidth={2} />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-
-
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">סשנים יומיים (Analytics)</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <BarChart data={dailyChartData}>
-                      <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                      <XAxis dataKey="dateLabel" tick={{ fontSize: 12 }} />
-                      <YAxis tick={{ fontSize: 12 }} />
-                      <Tooltip 
-                        formatter={(value: number) => [formatNumber(value), 'סשנים']}
-                        labelFormatter={(label) => `תאריך: ${label}`}
-                      />
-                      <Bar dataKey="analyticsSessions" fill="#f97316" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-            </>
-          )}
 
           {/* Ads spend chart - for ads platform tabs or "all" */}
           {(platformFilter === 'facebook' || platformFilter === 'google_ads') && (
