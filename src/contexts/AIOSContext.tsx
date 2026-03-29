@@ -12,6 +12,7 @@ interface AIOSState {
   history: { role: string; content: string }[];
   send: (text: string) => void;
   removePanel: (index: number) => void;
+  resetConversation: () => void;
 }
 
 const AIOSContext = createContext<AIOSState | null>(null);
