@@ -73,6 +73,12 @@ Deno.serve(async (req) => {
     
     while (nextUrl) {
       const response = await fetch(nextUrl);
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error('Facebook returned non-JSON response:', text.substring(0, 200));
+        throw new Error('Facebook API returned an unexpected response. The token may need to be refreshed.');
+      }
       const data = await response.json();
       
       if (data.error) {
