@@ -962,7 +962,7 @@ Deno.serve(async (req) => {
     if (isGroup) {
       const groupChatId = senderData.chatId;
       
-        'chatName from API (unreliable):', senderData.chatName,
+      console.log('chatName from API (unreliable):', senderData.chatName,
         'Direction:', isOutgoing ? 'outgoing' : 'incoming');
 
       // Check if group exists, if not create it
