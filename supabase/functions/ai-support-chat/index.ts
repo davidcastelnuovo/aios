@@ -594,7 +594,7 @@ async function executeTool(
       }
 
       case 'list_leads': {
-        const { status, limit = 20, source, agency_id: leadsAgencyId, agency_name: leadsAgencyName } = toolCall.args;
+        const { status, limit = 100, source, agency_id: leadsAgencyId, agency_name: leadsAgencyName } = toolCall.args;
         
         let resolvedAgencyId = leadsAgencyId;
         if (!resolvedAgencyId && leadsAgencyName) {
