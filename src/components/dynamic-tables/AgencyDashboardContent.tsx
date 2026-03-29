@@ -747,120 +747,81 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
       {/* Daily Charts */}
       {dailyChartData.length > 0 && (
         <>
-          {/* Revenue vs Spend Chart - show when both ads and analytics visible */}
-          {(platformFilter === 'all' || platformFilter === 'google_analytics') && hasAnalyticsData && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">הכנסות מול הוצאות - יומי</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <ComposedChart data={dailyChartData}>
-                    <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                    <XAxis dataKey="dateLabel" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} />
-                    <Tooltip 
-                      formatter={(value: number, name: string) => [
-                        formatCurrency(value), 
-                        name === 'analyticsRevenue' ? 'הכנסות' : name === 'adsSpend' ? 'הוצאות' : name
-                      ]}
-                      labelFormatter={(label) => `תאריך: ${label}`}
-                    />
-                    <Legend formatter={(value) => value === 'analyticsRevenue' ? 'הכנסות (Analytics)' : value === 'adsSpend' ? 'הוצאות פרסום' : value} />
-                    <Area type="monotone" dataKey="analyticsRevenue" fill="#22c55e" fillOpacity={0.15} stroke="#22c55e" strokeWidth={2} />
-                    {platformFilter === 'all' && <Bar dataKey="adsSpend" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={20} />}
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
+          {/* Analytics-only charts */}
+          {platformFilter === 'google_analytics' && hasAnalyticsData && (
+            <>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">הכנסות (Analytics) - יומי</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <ComposedChart data={dailyChartData}>
+                      <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                      <XAxis dataKey="dateLabel" tick={{ fontSize: 12 }} />
+                      <YAxis tick={{ fontSize: 12 }} />
+                      <Tooltip 
+                        formatter={(value: number) => [formatCurrency(value), 'הכנסות']}
+                        labelFormatter={(label) => `תאריך: ${label}`}
+                      />
+                      <Area type="monotone" dataKey="analyticsRevenue" fill="#22c55e" fillOpacity={0.15} stroke="#22c55e" strokeWidth={2} />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <ShoppingCart className="h-5 w-5" />
+                    רכישות והוספות לעגלה - יומי
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={250}>
+                    <BarChart data={dailyChartData}>
+                      <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                      <XAxis dataKey="dateLabel" tick={{ fontSize: 12 }} />
+                      <YAxis tick={{ fontSize: 12 }} />
+                      <Tooltip 
+                        formatter={(value: number, name: string) => [
+                          formatNumber(value), 
+                          name === 'analyticsPurchases' ? 'רכישות' : name === 'analyticsAddToCart' ? 'הוספות לעגלה' : name
+                        ]}
+                        labelFormatter={(label) => `תאריך: ${label}`}
+                      />
+                      <Legend formatter={(value) => value === 'analyticsPurchases' ? 'רכישות' : value === 'analyticsAddToCart' ? 'הוספות לעגלה' : value} />
+                      <Bar dataKey="analyticsAddToCart" fill="#f59e0b" radius={[4, 4, 0, 0]} name="analyticsAddToCart" />
+                      <Bar dataKey="analyticsPurchases" fill="#22c55e" radius={[4, 4, 0, 0]} name="analyticsPurchases" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">סשנים יומיים (Analytics)</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <BarChart data={dailyChartData}>
+                      <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                      <XAxis dataKey="dateLabel" tick={{ fontSize: 12 }} />
+                      <YAxis tick={{ fontSize: 12 }} />
+                      <Tooltip 
+                        formatter={(value: number) => [formatNumber(value), 'סשנים']}
+                        labelFormatter={(label) => `תאריך: ${label}`}
+                      />
+                      <Bar dataKey="analyticsSessions" fill="#f97316" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </>
           )}
 
-          {/* ROAS Daily Chart */}
-          {platformFilter === 'all' && hasAnalyticsData && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">ROAS יומי</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={250}>
-                  <LineChart data={dailyChartData}>
-                    <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                    <XAxis dataKey="dateLabel" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} />
-                    <Tooltip 
-                      formatter={(value: number) => [value.toFixed(2), 'ROAS']}
-                      labelFormatter={(label) => `תאריך: ${label}`}
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="roas" 
-                      stroke="#8b5cf6" 
-                      strokeWidth={2} 
-                      dot={{ r: 3 }}
-                      name="ROAS"
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Purchases & Add to Cart Chart */}
-          {(platformFilter === 'all' || platformFilter === 'google_analytics') && hasAnalyticsData && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <ShoppingCart className="h-5 w-5" />
-                  רכישות והוספות לעגלה - יומי
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={250}>
-                  <BarChart data={dailyChartData}>
-                    <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                    <XAxis dataKey="dateLabel" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} />
-                    <Tooltip 
-                      formatter={(value: number, name: string) => [
-                        formatNumber(value), 
-                        name === 'analyticsPurchases' ? 'רכישות' : name === 'analyticsAddToCart' ? 'הוספות לעגלה' : name
-                      ]}
-                      labelFormatter={(label) => `תאריך: ${label}`}
-                    />
-                    <Legend formatter={(value) => value === 'analyticsPurchases' ? 'רכישות' : value === 'analyticsAddToCart' ? 'הוספות לעגלה' : value} />
-                    <Bar dataKey="analyticsAddToCart" fill="#f59e0b" radius={[4, 4, 0, 0]} name="analyticsAddToCart" />
-                    <Bar dataKey="analyticsPurchases" fill="#22c55e" radius={[4, 4, 0, 0]} name="analyticsPurchases" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Sessions Chart */}
-          {(platformFilter === 'all' || platformFilter === 'google_analytics') && hasAnalyticsData && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">סשנים יומיים (Analytics)</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={dailyChartData}>
-                    <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                    <XAxis dataKey="dateLabel" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} />
-                    <Tooltip 
-                      formatter={(value: number) => [formatNumber(value), 'סשנים']}
-                      labelFormatter={(label) => `תאריך: ${label}`}
-                    />
-                    <Bar dataKey="analyticsSessions" fill="#f97316" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Ads spend chart - when viewing only ads platforms */}
-          {(platformFilter === 'facebook' || platformFilter === 'google_ads') && (
+          {/* Ads spend chart - for ads platform tabs or "all" */}
+          {(platformFilter === 'all' || platformFilter === 'facebook' || platformFilter === 'google_ads') && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">הוצאות פרסום - יומי</CardTitle>
