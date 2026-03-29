@@ -1,7 +1,9 @@
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Calendar } from "lucide-react";
+import { Plus, Calendar, Bot } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { useNavigate } from "react-router-dom";
+import { useTenantPath } from "@/hooks/useTenantPath";
 
 interface SocialGanttHeaderProps {
   onNewPost: () => void;
@@ -38,12 +40,24 @@ export function SocialGanttHeader({
   onFilterStatus,
   totalPosts,
 }: SocialGanttHeaderProps) {
+  const navigate = useNavigate();
+  const { buildPath } = useTenantPath();
+
   return (
     <div className="border-b p-4 flex items-center justify-between gap-4 flex-wrap">
       <div className="flex items-center gap-3">
         <Calendar className="h-6 w-6 text-primary" />
         <h1 className="text-xl font-bold">גאנט סושיאל</h1>
         <Badge variant="secondary">{totalPosts} פוסטים</Badge>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-muted-foreground text-xs gap-1"
+          onClick={() => navigate(buildPath("agents"))}
+        >
+          <Bot className="h-3.5 w-3.5" />
+          סוכנים
+        </Button>
       </div>
 
       <div className="flex items-center gap-3">

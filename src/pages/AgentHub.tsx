@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Bot, Zap, Brain, Heart, Sparkles, ChevronDown, ChevronUp, Github } from "lucide-react";
+import { Plus, Bot, Zap, Brain, Heart, Sparkles, ChevronDown, ChevronUp, Github, CalendarRange, PenLine, Image } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { toast } from "sonner";
@@ -247,8 +247,10 @@ export default function AgentHub() {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {/* GitHub Agent - built-in */}
+                {/* Built-in agents */}
                 <GithubAgentCard />
+                <SocialCreativeAgentCard />
+                <SocialCopyAgentCard />
                 {activeAgents.map(agent => (
                   <AgentCard
                     key={agent.id}
@@ -478,6 +480,58 @@ export default function AgentHub() {
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function SocialCreativeAgentCard() {
+  const { buildPath } = useTenantPath();
+  const navigate = useNavigate();
+
+  return (
+    <div
+      className="border rounded-xl p-5 cursor-pointer hover:shadow-md hover:border-primary/50 transition-all bg-gradient-to-br from-pink-50 to-white dark:from-pink-950 dark:to-gray-800"
+      onClick={() => navigate(buildPath("social-gantt"))}
+    >
+      <div className="flex items-start justify-between mb-3">
+        <Badge className="bg-pink-500 text-white text-xs">מובנה</Badge>
+        <div className="p-2 rounded-lg bg-gradient-to-br from-pink-500 to-purple-600 text-white">
+          <Image className="h-5 w-5" />
+        </div>
+      </div>
+      <h3 className="font-bold text-lg mb-1">סוכן קריאייטיב</h3>
+      <p className="text-sm text-muted-foreground mb-3">מייצר בריפים עיצוביים, פלטות צבעים וכותרות לקריאייטיב סושיאל</p>
+      <div className="flex gap-1 flex-wrap">
+        <Badge variant="outline" className="text-xs">בריפים</Badge>
+        <Badge variant="outline" className="text-xs">פלטת צבעים</Badge>
+        <Badge variant="outline" className="text-xs">סגנונות</Badge>
+      </div>
+    </div>
+  );
+}
+
+function SocialCopyAgentCard() {
+  const { buildPath } = useTenantPath();
+  const navigate = useNavigate();
+
+  return (
+    <div
+      className="border rounded-xl p-5 cursor-pointer hover:shadow-md hover:border-primary/50 transition-all bg-gradient-to-br from-blue-50 to-white dark:from-blue-950 dark:to-gray-800"
+      onClick={() => navigate(buildPath("social-gantt"))}
+    >
+      <div className="flex items-start justify-between mb-3">
+        <Badge className="bg-blue-500 text-white text-xs">מובנה</Badge>
+        <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
+          <PenLine className="h-5 w-5" />
+        </div>
+      </div>
+      <h3 className="font-bold text-lg mb-1">סוכן קופי</h3>
+      <p className="text-sm text-muted-foreground mb-3">כותב קופי לסושיאל מדיה עם התאמת טון, קהל יעד וקריאה לפעולה</p>
+      <div className="flex gap-1 flex-wrap">
+        <Badge variant="outline" className="text-xs">קופי סושיאל</Badge>
+        <Badge variant="outline" className="text-xs">טונים</Badge>
+        <Badge variant="outline" className="text-xs">האשטגים</Badge>
+      </div>
     </div>
   );
 }
