@@ -54,13 +54,23 @@ serve(async (req: Request) => {
     }
 
     const isSuperAdmin = roles?.some(r => r.role === "super_admin" && r.tenant_id === null);
-    const isOwnerInAnyTenant = roles?.some(r => r.role === "owner");
 
-    if (!isSuperAdmin && !isOwnerInAnyTenant) {
+    if (!isSuperAdmin && !roles?.some(r => r.role === "owner")) {
       throw new Error("Only owners or super admins can manage user roles");
     }
 
     const { userId, role, tenantId, action }: ManageRolesRequest = await req.json();
+
+    // SECURITY: Verify the requester is owner of the SPECIFIC tenant being managed
+    // (not just any tenant). Super admins bypass this check.
+    if (!isSuperAdmin) {
+      const isOwnerOfTargetTenant = roles?.some(
+        r => r.role === "owner" && r.tenant_id === tenantId
+      );
+      if (!isOwnerOfTargetTenant) {
+        throw new Error("You are not an owner of the specified tenant");
+      }
+    }
 
     if (!userId || !role || !tenantId || !action) {
       throw new Error("User ID, role, tenant ID, and action are required");

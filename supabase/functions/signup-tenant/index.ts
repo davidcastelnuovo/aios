@@ -45,31 +45,13 @@ serve(async (req: Request) => {
     let authenticatedUser: any = null;
 
     if (authHeader && authHeader !== "" && authHeader !== "Bearer ") {
-      const authClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
-      const { data: authData, error: authCheckError } = await authClient.auth.getUser();
+      // Use service role client to verify token (validates token is not revoked)
+      const token = authHeader.replace(/^Bearer\s+/i, "");
+      const { data: authData, error: authCheckError } = await supabase.auth.getUser(token);
       if (!authCheckError && authData?.user) {
         authenticatedUser = authData.user;
       } else {
-        console.warn("⚠️ getUser did not return a user. Falling back to JWT decode.", authCheckError?.message);
-        // Fallback: decode JWT directly to extract user id/email
-        const match = authHeader.match(/^Bearer\s+(.+)/i);
-        const token = match?.[1];
-        const decodeJwt = (t: string) => {
-          try {
-            const payload = t.split(".")[1];
-            const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
-            const json = atob(base64.padEnd(base64.length + (4 - (base64.length % 4)) % 4, "="));
-            return JSON.parse(json);
-          } catch (_) {
-            return null;
-          }
-        };
-        const decoded = token ? decodeJwt(token) : null;
-        if (decoded?.sub) {
-          authenticatedUser = { id: decoded.sub, email: decoded.email ?? null };
-        } else {
-          console.warn("❌ Could not extract user from Authorization header");
-        }
+        console.warn("⚠️ getUser did not return a valid user:", authCheckError?.message);
       }
     }
     

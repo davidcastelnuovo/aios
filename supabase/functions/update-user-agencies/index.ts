@@ -28,23 +28,18 @@ serve(async (req: Request) => {
       },
     });
 
-    // Verify requesting user by decoding the JWT from the Authorization header
+    // Verify requesting user via Supabase Auth (validates token is not revoked)
     const authHeader = req.headers.get("authorization");
     if (!authHeader) {
       throw new Error("Missing authorization header");
     }
 
     const token = authHeader.replace("Bearer ", "");
-    const payloadBase64 = token.split(".")[1];
-    if (!payloadBase64) {
+    const { data: { user: requesterUser }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    if (authError || !requesterUser) {
       throw new Error("Unauthorized");
     }
-    const payload = JSON.parse(atob(payloadBase64));
-    const requesterId: string | undefined = payload?.sub;
-
-    if (!requesterId) {
-      throw new Error("Unauthorized");
-    }
+    const requesterId = requesterUser.id;
 
     // Check if the user is an owner or agency_owner
     const { data: roles, error: rolesError } = await supabaseAdmin
