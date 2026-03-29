@@ -6785,6 +6785,36 @@ export type Database = {
           },
         ]
       }
+      whatsapp_sessions: {
+        Row: {
+          chat_id: string
+          conversation_history: Json | null
+          created_at: string | null
+          id: string
+          last_message_at: string | null
+          status: string | null
+          tenant_id: string
+        }
+        Insert: {
+          chat_id: string
+          conversation_history?: Json | null
+          created_at?: string | null
+          id?: string
+          last_message_at?: string | null
+          status?: string | null
+          tenant_id: string
+        }
+        Update: {
+          chat_id?: string
+          conversation_history?: Json | null
+          created_at?: string | null
+          id?: string
+          last_message_at?: string | null
+          status?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
       zoom_recordings: {
         Row: {
           client_id: string | null
