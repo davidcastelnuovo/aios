@@ -134,6 +134,7 @@ export function AIOSProvider({ children }: { children: React.ReactNode }) {
     setHistory([]);
     setStatusText("");
     setDataPanels([]);
+    try { localStorage.removeItem("aios_conversation_id"); } catch {}
   }, []);
 
   return (
