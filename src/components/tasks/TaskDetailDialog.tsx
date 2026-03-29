@@ -103,19 +103,29 @@ export function TaskDetailDialog({
   // Reset form when task changes or dialog opens
   useEffect(() => {
     if (task && open) {
-      setTitle(task.title);
-      setNotes(task.notes || "");
-      setPriority(task.priority);
-      setStatus((task.status as "open" | "in_progress" | "done") || "open");
-      setDueDate(task.due_date ? new Date(task.due_date) : undefined);
-      setClientId(task.client_id || "");
-      setLeadId(task.lead_id || "");
-      setDueTime(task.due_time ? task.due_time.substring(0, 5) : null);
-      setDurationMinutes((task as any).duration_minutes || 30);
-      setAssignedCampaignerId(task.campaigner_id || "");
-      setClientSearch("");
-      setCampaignerSearch("");
-      setLeadSearch("");
+      // Refetch fresh task data from DB to ensure we have latest
+      const loadFreshTask = async () => {
+        const { data: freshTask } = await supabase
+          .from("tasks")
+          .select("*")
+          .eq("id", task.id)
+          .single();
+        const t = freshTask || task;
+        setTitle(t.title);
+        setNotes(t.notes || "");
+        setPriority(t.priority);
+        setStatus((t.status as "open" | "in_progress" | "done") || "open");
+        setDueDate(t.due_date ? new Date(t.due_date) : undefined);
+        setClientId(t.client_id || "");
+        setLeadId(t.lead_id || "");
+        setDueTime(t.due_time ? (t.due_time as string).substring(0, 5) : null);
+        setDurationMinutes((t as any).duration_minutes || 30);
+        setAssignedCampaignerId(t.campaigner_id || "");
+        setClientSearch("");
+        setCampaignerSearch("");
+        setLeadSearch("");
+      };
+      loadFreshTask();
     }
   }, [task, open]);
 
