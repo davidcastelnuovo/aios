@@ -11,7 +11,7 @@ interface AIOSCommandBarProps {
   onReset?: () => void;
 }
 
-export function AIOSCommandBar({ onSend, isLoading, statusText }: AIOSCommandBarProps) {
+export function AIOSCommandBar({ onSend, isLoading, statusText, onReset }: AIOSCommandBarProps) {
   const [input, setInput] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
