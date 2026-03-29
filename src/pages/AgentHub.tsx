@@ -15,6 +15,22 @@ import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { toast } from "sonner";
 
+import agentGeneral from "@/assets/agents/agent-general.png";
+import agentCreative from "@/assets/agents/agent-creative.png";
+import agentCeo from "@/assets/agents/agent-ceo.png";
+import agentSeo from "@/assets/agents/agent-seo.png";
+import agentGithub from "@/assets/agents/agent-github.png";
+
+const AGENT_AVATARS: Record<string, string> = {
+  "סוכן כללי": agentGeneral,
+  "סוכן קריאייטיב": agentCreative,
+  "ceo": agentCeo,
+  "CEO": agentCeo,
+  "SEO": agentSeo,
+  "seo": agentSeo,
+};
+const DEFAULT_AVATAR = agentGeneral;
+
 const ALL_TOOLS = [
   { name: "create_lead", label: "יצירת ליד", group: "לידים" },
   { name: "list_leads", label: "צפייה בלידים", group: "לידים" },
