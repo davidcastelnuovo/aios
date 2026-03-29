@@ -151,7 +151,7 @@ Deno.serve(async (req) => {
       .from('tenant_integrations')
       .select('*')
       .eq('tenant_id', tenantId)
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .eq('integration_type', 'green_api')
       .eq('is_active', true)
       .maybeSingle();
