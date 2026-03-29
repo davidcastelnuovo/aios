@@ -98,6 +98,8 @@ const defaultForm: AgentFormData = {
 export default function AgentHub() {
   const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const { buildPath } = useTenantPath();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
   const [form, setForm] = useState<AgentFormData>(defaultForm);
