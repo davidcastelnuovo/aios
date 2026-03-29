@@ -162,7 +162,7 @@ export default function Clients() {
   });
 
   const { data: clients, isLoading } = useQuery({
-    queryKey: ["clients", tenantId, campaignerId, isCampaigner, isTeamManager, isOwner, isSuperAdmin, selectedAgency, (agencies?.length || 0), (superAdminTenantIds?.length || 0)],
+    queryKey: ["clients", tenantId, campaignerId, isCampaigner, isTeamManager, isOwner, isSuperAdmin, selectedAgency, (agencies?.length || 0)],
     queryFn: async () => {
       if (!tenantId) return [] as any[];
       const selectStr = `
@@ -182,14 +182,8 @@ export default function Clients() {
         .select(selectStr)
         .order("created_at", { ascending: false });
 
-      // 🔒 Super admins: show clients from all their owned tenants
-      if (isSuperAdmin && superAdminTenantIds && superAdminTenantIds.length > 0) {
-        if (selectedAgency && selectedAgency !== "all") {
-          query = query.or(`tenant_id.in.(${superAdminTenantIds.join(',')}),agency_id.eq.${selectedAgency}`);
-        } else {
-          query = query.in("tenant_id", superAdminTenantIds);
-        }
-      } else if (selectedAgency && selectedAgency !== "all") {
+      // 🔒 Always scope to current tenant — cross-tenant only via shared agencies
+      if (selectedAgency && selectedAgency !== "all") {
         query = query.or(`tenant_id.eq.${tenantId},agency_id.eq.${selectedAgency}`);
       } else if (agencies && agencies.length > 0) {
         const ids = agencies.map((a: any) => a.id);
@@ -202,30 +196,20 @@ export default function Clients() {
       if (error) throw error;
       return data;
     },
-    enabled: (!(isCampaigner && !isTeamManager && !isOwner) || !!campaignerId) && !!tenantId && (!!agencies || (selectedAgency && selectedAgency !== "all") || isSuperAdmin),
+    enabled: (!(isCampaigner && !isTeamManager && !isOwner) || !!campaignerId) && !!tenantId && !!agencies,
   });
 
   // 🔒 SECURITY GUARD: Filter clients by current tenant and accessible agencies
   const secureFilteredClients = useMemo(() => {
     if (!clients || !tenantId) return [];
     
-    // Super admins see all fetched clients (query already scopes to their owned tenants)
-    if (isSuperAdmin) return clients;
-    
+    // 🔒 Strict tenant isolation: current tenant OR shared agency only
     return clients.filter(client => {
-      // ALWAYS check tenant match first - strict isolation
       const isTenantMatch = client.tenant_id === tenantId;
-      
-      // For owners: only show clients from CURRENT tenant
-      if (isOwner) {
-        return isTenantMatch;
-      }
-      
-      // For non-owners: allow tenant match OR accessible agency
       if (isTenantMatch) return true;
-      if (client.agency_id && userAgencyIds?.includes(client.agency_id)) return true;
-      
-      // Block everything else
+      // Allow cross-tenant only if agency is explicitly shared with this tenant
+      const agencyIds = (agencies || []).map((a: any) => a.id);
+      if (client.agency_id && agencyIds.includes(client.agency_id)) return true;
       return false;
     });
   }, [clients, tenantId, userAgencyIds, isOwner, isSuperAdmin]);
