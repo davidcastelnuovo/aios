@@ -678,6 +678,12 @@ export default function DynamicTables() {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {dashboards
                 .filter((dashboard: any) => {
+                  // Filter by selected agency
+                  if (selectedAgency && selectedAgency !== 'all') {
+                    if (dashboard.agency_id && dashboard.agency_id !== selectedAgency) {
+                      return false;
+                    }
+                  }
                   // Campaigners can only see dashboards linked to their assigned clients
                   if (isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin && assignedClientIds) {
                     return dashboard.client_id && assignedClientIds.includes(dashboard.client_id);
