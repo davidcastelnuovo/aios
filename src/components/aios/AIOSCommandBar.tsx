@@ -34,6 +34,18 @@ export function AIOSCommandBar({ onSend, isLoading, statusText, onReset }: AIOSC
   return (
     <div className="border-b bg-card px-4 py-3 space-y-2">
       <div className="flex items-center gap-2 max-w-3xl mx-auto">
+        {onReset && (
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={onReset}
+            disabled={isLoading}
+            title="שיחה חדשה"
+            className="h-10 w-10 shrink-0"
+          >
+            <RotateCcw className="h-4 w-4" />
+          </Button>
+        )}
         <Input
           ref={inputRef}
           value={input}
