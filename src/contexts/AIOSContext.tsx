@@ -90,6 +90,11 @@ export function AIOSProvider({ children }: { children: React.ReactNode }) {
               continue;
             }
 
+            if (parsed.type === "conversation_id" && parsed.id) {
+              setConversationId(parsed.id);
+              continue;
+            }
+
             if (parsed.type === "invalidate" && parsed.entity) {
               queryClient.invalidateQueries({ queryKey: [parsed.entity] });
               continue;
