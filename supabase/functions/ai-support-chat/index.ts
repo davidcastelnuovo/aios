@@ -594,10 +594,18 @@ async function executeTool(
       }
 
       case 'list_leads': {
-        const { status, limit = 20, source } = toolCall.args;
-        let query = supabaseClient.from('leads').select('id, company_name, contact_name, phone, email, status, source, created_at, agencies(name)').eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(limit);
+        const { status, limit = 20, source, agency_id: leadsAgencyId, agency_name: leadsAgencyName } = toolCall.args;
+        
+        let resolvedAgencyId = leadsAgencyId;
+        if (!resolvedAgencyId && leadsAgencyName) {
+          const { data: agencyMatch } = await supabaseClient.from('agencies').select('id').eq('tenant_id', tenantId).ilike('name', `%${leadsAgencyName}%`).limit(1).single();
+          if (agencyMatch) resolvedAgencyId = agencyMatch.id;
+        }
+        
+        let query = supabaseClient.from('leads').select('id, company_name, contact_name, phone, email, status, source, created_at, agency_id, agencies(name)').eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(limit);
         if (status) query = query.eq('status', status);
         if (source) query = query.eq('source', source);
+        if (resolvedAgencyId) query = query.eq('agency_id', resolvedAgencyId);
         const { data, error } = await query;
         if (error) throw error;
         return { success: true, result: { count: data.length, leads: data.map((l: any) => ({ id: l.id, company_name: l.company_name, contact_name: l.contact_name, phone: l.phone, email: l.email, status: l.status, source: l.source, agency_name: l.agencies?.name, created_at: l.created_at })) } };
