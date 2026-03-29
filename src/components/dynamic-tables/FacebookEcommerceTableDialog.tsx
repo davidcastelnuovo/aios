@@ -62,6 +62,7 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
   const [adAccountSearch, setAdAccountSearch] = useState("");
   const [agencyId, setAgencyId] = useState<string>("");
   const [clientId, setClientId] = useState<string>("");
+  const [clientSearch, setClientSearch] = useState("");
 
   // Fetch agencies
   const { data: agencies = [] } = useQuery({
@@ -102,6 +103,7 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
   // Reset client when agency changes
   useEffect(() => {
     setClientId("");
+    setClientSearch("");
   }, [agencyId]);
 
   // Check if Facebook is connected
@@ -370,17 +372,27 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
             {agencyId && (
               <div className="space-y-2">
                 <Label>שיוך ללקוח (אופציונלי)</Label>
+                <Input
+                  placeholder="חפש לקוח..."
+                  value={clientSearch}
+                  onChange={(e) => setClientSearch(e.target.value)}
+                  className="mb-2"
+                />
                 <Select value={clientId || "__none__"} onValueChange={(v) => setClientId(v === "__none__" ? "" : v)}>
                   <SelectTrigger>
                     <SelectValue placeholder="ללא שיוך - כל הלקוחות" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">ללא שיוך - כל הלקוחות</SelectItem>
-                    {clients.map((client) => (
-                      <SelectItem key={client.id} value={client.id}>
-                        {client.name}
-                      </SelectItem>
-                    ))}
+                    {clients
+                      .filter((client) =>
+                        client.name?.toLowerCase().includes(clientSearch.toLowerCase())
+                      )
+                      .map((client) => (
+                        <SelectItem key={client.id} value={client.id}>
+                          {client.name}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>
