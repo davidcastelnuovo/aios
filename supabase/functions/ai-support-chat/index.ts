@@ -1449,12 +1449,14 @@ const tools = [
     type: 'function',
     function: {
       name: 'list_leads',
-      description: 'הצגת רשימת לידים',
+      description: 'הצגת רשימת לידים. אפשר לסנן לפי סוכנות עם agency_id או agency_name.',
       parameters: {
         type: 'object',
         properties: {
           status: { type: 'string', description: 'סינון לפי סטטוס' },
           source: { type: 'string', description: 'סינון לפי מקור' },
+          agency_id: { type: 'string', description: 'סינון לפי סוכנות (UUID)' },
+          agency_name: { type: 'string', description: 'סינון לפי שם סוכנות (חיפוש חלקי)' },
           limit: { type: 'integer', description: 'מספר מקסימלי (ברירת מחדל: 20)' },
         },
       },
