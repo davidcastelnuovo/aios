@@ -845,67 +845,6 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
         </>
       )}
 
-      {/* Platform Breakdown Table - ads only, no analytics, no combined totals */}
-      {platformFilter === 'all' && clientTableDataList.filter(d => !isAnalyticsPlatform(d.integrationType)).length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">פירוט לפי פלטפורמה</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-right">פלטפורמה</TableHead>
-                    <TableHead className="text-right">הוצאה</TableHead>
-                    <TableHead className="text-right">חשיפות</TableHead>
-                    <TableHead className="text-right">קליקים</TableHead>
-                    <TableHead className="text-right">לידים</TableHead>
-                    <TableHead className="text-right">רכישות</TableHead>
-                    <TableHead className="text-right">עלות לליד</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {(() => {
-                    const platformTotals: Record<string, { spend: number; impressions: number; clicks: number; leads: number; purchases: number }> = {};
-                    clientTableDataList.forEach(d => {
-                      if (isAnalyticsPlatform(d.integrationType)) return;
-                      const key = isFacebookPlatform(d.integrationType) ? 'facebook' : d.integrationType;
-                      if (!platformTotals[key]) platformTotals[key] = { spend: 0, impressions: 0, clicks: 0, leads: 0, purchases: 0 };
-                      platformTotals[key].spend += d.totals.spend;
-                      platformTotals[key].impressions += d.totals.impressions;
-                      platformTotals[key].clicks += d.totals.clicks;
-                      platformTotals[key].leads += d.totals.leads;
-                      platformTotals[key].purchases += d.totals.purchases;
-                    });
-                    return Object.entries(platformTotals).map(([platform, metrics]) => {
-                      const configKey = platform === 'facebook' ? 'facebook_insights' : platform;
-                      const config = PLATFORM_CONFIG[configKey] || { name: platform, color: 'text-muted-foreground' };
-                      const cpl = metrics.leads > 0 ? metrics.spend / metrics.leads : 0;
-                      return (
-                        <TableRow key={platform}>
-                          <TableCell className="font-medium">
-                            <div className="flex items-center gap-2">
-                              {getIntegrationIcon(configKey)}
-                              <span className={config.color}>{config.name}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell>{formatCurrency(metrics.spend)}</TableCell>
-                          <TableCell>{formatNumber(metrics.impressions)}</TableCell>
-                          <TableCell>{formatNumber(metrics.clicks)}</TableCell>
-                          <TableCell>{formatNumber(metrics.leads)}</TableCell>
-                          <TableCell>{formatNumber(metrics.purchases)}</TableCell>
-                          <TableCell>{formatCurrency(cpl)}</TableCell>
-                        </TableRow>
-                      );
-                    });
-                  })()}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Client Cards */}
       {clientTableDataList.length === 0 ? (
