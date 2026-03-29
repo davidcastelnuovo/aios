@@ -480,21 +480,19 @@ function GithubAgentCard() {
 
   return (
     <div
-      className="border rounded-xl p-5 cursor-pointer hover:shadow-md hover:border-primary/50 transition-all bg-gradient-to-br from-gray-50 to-white dark:from-gray-900 dark:to-gray-800"
+      className="bg-white dark:bg-gray-900 border border-border/60 rounded-2xl p-5 cursor-pointer hover:shadow-lg hover:border-primary/40 transition-all"
       onClick={() => navigate(buildPath("github-agent"))}
     >
-      <div className="flex items-start justify-between mb-3">
-        <Badge className="bg-purple-500 text-white text-xs">מובנה</Badge>
-        <div className="p-2 rounded-lg bg-gray-900 text-white">
-          <Github className="h-5 w-5" />
-        </div>
+      <div className="flex items-start justify-between mb-4">
+        <Badge className="bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-800 text-xs">מובנה</Badge>
+        <img src={agentGithub} alt="GitHub Agent" className="w-12 h-12 rounded-xl object-cover" loading="lazy" />
       </div>
-      <h3 className="font-bold text-lg mb-1">GitHub Agent</h3>
-      <p className="text-sm text-muted-foreground mb-3">סוכן אוטומטי לניתוח שגיאות, תיקון קוד ותמיכה טכנית עם אישורים</p>
-      <div className="flex gap-1 flex-wrap">
-        <Badge variant="outline" className="text-xs">תיקון קוד</Badge>
-        <Badge variant="outline" className="text-xs">ניתוח שגיאות</Badge>
-        <Badge variant="outline" className="text-xs">PR אוטומטי</Badge>
+      <h3 className="font-bold text-base mb-1">GitHub Agent</h3>
+      <p className="text-xs text-muted-foreground mb-3 line-clamp-2">סוכן אוטומטי לניתוח שגיאות, תיקון קוד ותמיכה טכנית עם אישורים</p>
+      <div className="flex gap-1.5 flex-wrap">
+        <Badge variant="outline" className="text-[10px] font-normal">תיקון קוד</Badge>
+        <Badge variant="outline" className="text-[10px] font-normal">ניתוח שגיאות</Badge>
+        <Badge variant="outline" className="text-[10px] font-normal">PR אוטומטי</Badge>
       </div>
     </div>
   );
