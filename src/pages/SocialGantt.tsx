@@ -83,7 +83,7 @@ export default function SocialGantt() {
 
   const deletePost = useMutation({
     mutationFn: async (postId: string) => {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from("social_gantt_posts")
         .delete()
         .eq("id", postId);
