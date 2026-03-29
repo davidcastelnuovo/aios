@@ -540,15 +540,19 @@ async function executeTool(
       }
 
       case 'search_entities': {
-        const { entity_type, search_term } = toolCall.args;
+        const { entity_type, search_term, agency_id: searchAgencyId } = toolCall.args;
         let tableName = '', selectFields = '*', nameField = 'name';
         if (entity_type === 'agency') { tableName = 'agencies'; selectFields = 'id, name, status'; }
-        else if (entity_type === 'client') { tableName = 'clients'; selectFields = 'id, name, status, email, phone, agencies(name)'; }
+        else if (entity_type === 'client') { tableName = 'clients'; selectFields = 'id, name, status, email, phone, agency_id, agencies(name)'; }
         else if (entity_type === 'campaigner') { tableName = 'campaigners'; selectFields = 'id, full_name, email, phone, role, active'; nameField = 'full_name'; }
-        else if (entity_type === 'lead') { tableName = 'leads'; selectFields = 'id, company_name, contact_name, email, phone, status, source'; nameField = 'company_name'; }
+        else if (entity_type === 'lead') { tableName = 'leads'; selectFields = 'id, company_name, contact_name, email, phone, status, source, agency_id, agencies(name)'; nameField = 'company_name'; }
         else throw new Error(`Unknown entity type: ${entity_type}`);
 
-        const { data, error } = await supabaseClient.from(tableName).select(selectFields).eq('tenant_id', tenantId).ilike(nameField, `%${search_term}%`).limit(10);
+        let query = supabaseClient.from(tableName).select(selectFields).eq('tenant_id', tenantId).ilike(nameField, `%${search_term}%`).limit(10);
+        if (searchAgencyId && (entity_type === 'client' || entity_type === 'lead')) {
+          query = query.eq('agency_id', searchAgencyId);
+        }
+        const { data, error } = await query;
         if (error) throw error;
         return { success: true, result: { entity_type, count: data.length, results: data } };
       }
