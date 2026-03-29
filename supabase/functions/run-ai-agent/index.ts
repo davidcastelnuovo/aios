@@ -12,15 +12,23 @@ const AI_GATEWAY_URL = 'https://ai.gateway.lovable.dev/v1/chat/completions'
 
 function resolveModel(engine: string): string {
   const map: Record<string, string> = {
+    // Manus models (default for Carmen)
+    'manus-1.6': 'manus/manus-1.6',
+    'manus-1.6-max': 'manus/manus-1.6-max',
+    'manus-1.6-lite': 'manus/manus-1.6-lite',
+    // Gemini models
     'gemini-2.5-flash': 'google/gemini-2.5-flash',
     'gemini-2.5-pro': 'google/gemini-2.5-pro',
     'gemini-3-flash': 'google/gemini-3-flash-preview',
     'gemini-3-pro': 'google/gemini-3-pro-preview',
+    // OpenAI models
     'gpt-5': 'openai/gpt-5',
     'gpt-5-mini': 'openai/gpt-5-mini',
+    // Anthropic / Claude models
     'claude-sonnet': 'anthropic/claude-sonnet-4-6',
+    'claude-opus': 'anthropic/claude-opus-4-6',
   }
-  return map[engine] || 'google/gemini-3-flash-preview'
+  return map[engine] || 'manus/manus-1.6'
 }
 
 // ===========================
