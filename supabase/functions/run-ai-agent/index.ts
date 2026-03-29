@@ -55,6 +55,41 @@ const ALL_TOOLS = [
   // MANUS AI - Complex task delegation
   { name: 'delegate_to_manus', description: 'שליחת משימה מורכבת ל-Manus AI לביצוע ברקע (מחקר שוק, ניתוח קמפיינים, יצירת תוכן, ניתוח נתונים). המשימה רצה ברקע ועשויה לקחת דקות עד שעות.', parameters: { type: 'object', properties: { prompt: { type: 'string', description: 'תיאור מפורט של המשימה לביצוע' }, context_data: { type: 'string', description: 'נתוני הקשר רלוונטיים (למשל נתוני קמפיינים)' } }, required: ['prompt'] } },
   { name: 'get_facebook_campaign_data', description: 'שליפת נתוני קמפיינים מפייסבוק לצורך ניתוח', parameters: { type: 'object', properties: { client_id: { type: 'string' }, days: { type: 'integer', description: 'מספר ימים אחורה (ברירת מחדל 30)' } } } },
+  // CLIENTS - full CRUD
+  { name: 'create_client', description: 'יצירת לקוח חדש במערכת', parameters: { type: 'object', properties: { name: { type: 'string', description: 'שם העסק/לקוח' }, contact_name: { type: 'string' }, phone: { type: 'string' }, email: { type: 'string' }, agency_id: { type: 'string', description: 'מזהה סוכנות (אופציונלי)' }, notes: { type: 'string' } }, required: ['name'] } },
+  { name: 'update_client', description: 'עדכון פרטי לקוח קיים', parameters: { type: 'object', properties: { client_id: { type: 'string' }, name: { type: 'string' }, contact_name: { type: 'string' }, phone: { type: 'string' }, email: { type: 'string' }, status: { type: 'string', enum: ['active', 'inactive', 'lead'] }, notes: { type: 'string' } }, required: ['client_id'] } },
+  { name: 'update_client_status', description: 'עדכון סטטוס לקוח', parameters: { type: 'object', properties: { client_id: { type: 'string' }, status: { type: 'string', enum: ['active', 'inactive', 'lead'] } }, required: ['client_id', 'status'] } },
+  // LEADS - full CRUD
+  { name: 'update_lead', description: 'עדכון פרטי ליד קיים (שם, טלפון, אימייל, מקור, הערות)', parameters: { type: 'object', properties: { lead_id: { type: 'string' }, company_name: { type: 'string' }, contact_name: { type: 'string' }, phone: { type: 'string' }, email: { type: 'string' }, source: { type: 'string' }, notes: { type: 'string' }, follow_up_date: { type: 'string', description: 'תאריך מעקב בפורמט YYYY-MM-DD' } }, required: ['lead_id'] } },
+  { name: 'delete_lead', description: 'מחיקת ליד מהמערכת', parameters: { type: 'object', properties: { lead_id: { type: 'string' } }, required: ['lead_id'] } },
+  // TASKS - full CRUD
+  { name: 'update_task', description: 'עדכון פרטי משימה (כותרת, תאריך, עדיפות, הערות)', parameters: { type: 'object', properties: { task_id: { type: 'string' }, title: { type: 'string' }, due_date: { type: 'string' }, due_time: { type: 'string' }, priority: { type: 'integer', description: '1-10' }, notes: { type: 'string' }, client_id: { type: 'string' } }, required: ['task_id'] } },
+  { name: 'delete_task', description: 'מחיקת משימה', parameters: { type: 'object', properties: { task_id: { type: 'string' } }, required: ['task_id'] } },
+  { name: 'add_task_update', description: 'הוספת הערה/עדכון למשימה', parameters: { type: 'object', properties: { task_id: { type: 'string' }, content: { type: 'string' } }, required: ['task_id', 'content'] } },
+  // CLIENT ONBOARDING
+  { name: 'create_onboarding', description: 'יצירת תהליך קליטת לקוח חדש', parameters: { type: 'object', properties: { title: { type: 'string' }, client_id: { type: 'string' }, campaigner_id: { type: 'string' }, notes: { type: 'string' } }, required: ['title', 'client_id'] } },
+  { name: 'list_onboarding', description: 'רשימת תהליכי קליטת לקוחות', parameters: { type: 'object', properties: { status: { type: 'string' }, limit: { type: 'integer' } } } },
+  { name: 'update_onboarding_status', description: 'עדכון סטטוס קליטת לקוח', parameters: { type: 'object', properties: { onboarding_id: { type: 'string' }, status: { type: 'string', enum: ['pending', 'in_progress', 'completed', 'cancelled'] } }, required: ['onboarding_id', 'status'] } },
+  // CAMPAIGNERS
+  { name: 'list_campaigners', description: 'רשימת קמפיינרים בטננט', parameters: { type: 'object', properties: { limit: { type: 'integer' } } } },
+  { name: 'create_campaigner', description: 'יצירת קמפיינר חדש', parameters: { type: 'object', properties: { full_name: { type: 'string' }, phone: { type: 'string' }, email: { type: 'string' }, role: { type: 'array', items: { type: 'string' } } }, required: ['full_name'] } },
+  // SALES PEOPLE
+  { name: 'list_sales_people', description: 'רשימת אנשי מכירות', parameters: { type: 'object', properties: { limit: { type: 'integer' } } } },
+  { name: 'create_sales_person', description: 'יצירת איש מכירות חדש', parameters: { type: 'object', properties: { full_name: { type: 'string' }, phone: { type: 'string' }, email: { type: 'string' } }, required: ['full_name'] } },
+  // AGENCIES
+  { name: 'list_agencies', description: 'רשימת סוכנויות בטננט', parameters: { type: 'object', properties: { limit: { type: 'integer' } } } },
+  { name: 'create_agency', description: 'יצירת סוכנות חדשה', parameters: { type: 'object', properties: { name: { type: 'string' }, contact_name: { type: 'string' }, phone: { type: 'string' }, email: { type: 'string' } }, required: ['name'] } },
+  // SUPPLIERS
+  { name: 'list_suppliers', description: 'רשימת ספקים', parameters: { type: 'object', properties: { limit: { type: 'integer' } } } },
+  { name: 'create_supplier', description: 'יצירת ספק חדש', parameters: { type: 'object', properties: { name: { type: 'string' }, type: { type: 'string' }, phone: { type: 'string' }, email: { type: 'string' } }, required: ['name'] } },
+  // PRODUCTS
+  { name: 'list_products', description: 'רשימת מוצרים/שירותים', parameters: { type: 'object', properties: { limit: { type: 'integer' } } } },
+  { name: 'create_product', description: 'יצירת מוצר/שירות חדש', parameters: { type: 'object', properties: { name: { type: 'string' }, description: { type: 'string' }, price: { type: 'number' } }, required: ['name', 'price'] } },
+  // AUTOMATIONS
+  { name: 'list_automations', description: 'רשימת אוטומציות', parameters: { type: 'object', properties: { limit: { type: 'integer' } } } },
+  { name: 'toggle_automation', description: 'הפעלה/כיבוי אוטומציה', parameters: { type: 'object', properties: { automation_id: { type: 'string' }, active: { type: 'boolean' } }, required: ['automation_id', 'active'] } },
+  // REPORTS & ANALYTICS
+  { name: 'get_dashboard_stats', description: 'שליפת נתוני דשבורד: כמה לידים, לקוחות, משימות פתוחות, ועוד', parameters: { type: 'object', properties: {} } },
   // SOCIAL MEDIA
   { name: 'create_social_post', description: 'יצירת פוסט/מודעה חדשה במודול ניהול סושיאל מדיה. השתמש בכלי הזה כדי ליצור פוסטים עם תוכן טקסטואלי ותמונות. הפוסט יישמר כטיוטה במערכת.', parameters: { type: 'object', properties: { title: { type: 'string', description: 'כותרת הפוסט/מודעה' }, content: { type: 'string', description: 'תוכן הפוסט - הקופי של המודעה' }, post_type: { type: 'string', enum: ['text', 'image', 'video', 'carousel'], description: 'סוג הפוסט' }, media_urls: { type: 'array', items: { type: 'string' }, description: 'קישורי מדיה (תמונות/וידאו)' } }, required: ['title', 'content'] } },
   { name: 'generate_ad_image', description: 'יצירת תמונה למודעה/פוסט באמצעות AI. מחזיר URL של התמונה שנוצרה. השתמש בכלי הזה כדי ליצור ויזואל למודעות ופוסטים ואז השתמש ב-create_social_post כדי לשמור את הפוסט.', parameters: { type: 'object', properties: { prompt: { type: 'string', description: 'תיאור מפורט של התמונה הרצויה באנגלית' }, aspect_ratio: { type: 'string', enum: ['1:1', '16:9', '9:16', '4:5'], description: 'יחס גובה-רוחב' } }, required: ['prompt'] } },
@@ -311,6 +346,193 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       
       return { success: true, image_url: imageUrl, message: 'התמונה נוצרה בהצלחה. השתמש בה ביצירת הפוסט.' }
     }
+    // CLIENTS - full CRUD
+    case 'create_client': {
+      const { data: defaultAgency } = await supabase.from('agencies').select('id').eq('tenant_id', tenantId).limit(1).single()
+      const { data, error } = await supabase.from('clients').insert({
+        name: args.name, contact_name: args.contact_name || null, phone: args.phone || null,
+        email: args.email || null, notes: args.notes || null, tenant_id: tenantId,
+        agency_id: args.agency_id || defaultAgency?.id, status: 'active',
+      }).select('id, name, status').single()
+      if (error) throw error
+      return { client_id: data.id, name: data.name, status: data.status }
+    }
+    case 'update_client': {
+      const updates: Record<string, any> = {}
+      if (args.name) updates.name = args.name
+      if (args.contact_name !== undefined) updates.contact_name = args.contact_name
+      if (args.phone !== undefined) updates.phone = args.phone
+      if (args.email !== undefined) updates.email = args.email
+      if (args.status) updates.status = args.status
+      if (args.notes !== undefined) updates.notes = args.notes
+      const { data, error } = await supabase.from('clients').update(updates).eq('id', args.client_id).eq('tenant_id', tenantId).select('id, name, status').single()
+      if (error) throw error
+      return data
+    }
+    case 'update_client_status': {
+      const { data, error } = await supabase.from('clients').update({ status: args.status }).eq('id', args.client_id).eq('tenant_id', tenantId).select('id, name, status').single()
+      if (error) throw error
+      return data
+    }
+    // LEADS - full CRUD
+    case 'update_lead': {
+      const updates: Record<string, any> = {}
+      if (args.company_name) updates.company_name = args.company_name
+      if (args.contact_name !== undefined) updates.contact_name = args.contact_name
+      if (args.phone !== undefined) updates.phone = args.phone
+      if (args.email !== undefined) updates.email = args.email
+      if (args.source !== undefined) updates.source = args.source
+      if (args.notes !== undefined) updates.notes = args.notes
+      if (args.follow_up_date !== undefined) updates.follow_up_date = args.follow_up_date
+      const { data, error } = await supabase.from('leads').update(updates).eq('id', args.lead_id).eq('tenant_id', tenantId).select('id, company_name, status').single()
+      if (error) throw error
+      return data
+    }
+    case 'delete_lead': {
+      const { error } = await supabase.from('leads').delete().eq('id', args.lead_id).eq('tenant_id', tenantId)
+      if (error) throw error
+      return { success: true, deleted_id: args.lead_id }
+    }
+    // TASKS - full CRUD
+    case 'update_task': {
+      const updates: Record<string, any> = {}
+      if (args.title) updates.title = args.title
+      if (args.due_date !== undefined) updates.due_date = args.due_date
+      if (args.due_time !== undefined) updates.due_time = args.due_time
+      if (args.priority !== undefined) updates.priority = args.priority
+      if (args.notes !== undefined) updates.notes = args.notes
+      if (args.client_id !== undefined) updates.client_id = args.client_id
+      const { data, error } = await supabase.from('tasks').update(updates).eq('id', args.task_id).eq('tenant_id', tenantId).select('id, title, status').single()
+      if (error) throw error
+      return data
+    }
+    case 'delete_task': {
+      const { error } = await supabase.from('tasks').delete().eq('id', args.task_id).eq('tenant_id', tenantId)
+      if (error) throw error
+      return { success: true, deleted_id: args.task_id }
+    }
+    case 'add_task_update': {
+      const { data, error } = await supabase.from('task_updates').insert({ task_id: args.task_id, user_id: userId, tenant_id: tenantId, content: args.content }).select('id').single()
+      if (error) throw error
+      return { update_id: data.id }
+    }
+    // CLIENT ONBOARDING
+    case 'create_onboarding': {
+      const { data, error } = await supabase.from('client_onboarding').insert({
+        title: args.title, client_id: args.client_id, campaigner_id: args.campaigner_id || null,
+        notes: args.notes || null, tenant_id: tenantId, status: 'pending',
+      }).select('id, title, status').single()
+      if (error) throw error
+      return { onboarding_id: data.id, title: data.title, status: data.status }
+    }
+    case 'list_onboarding': {
+      let query = supabase.from('client_onboarding').select('id, title, status, clients(name)').eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(args.limit || 20)
+      if (args.status) query = query.eq('status', args.status)
+      const { data, error } = await query
+      if (error) throw error
+      return { count: data.length, onboarding: data.map((o: any) => ({ ...o, client_name: o.clients?.name })) }
+    }
+    case 'update_onboarding_status': {
+      const { data, error } = await supabase.from('client_onboarding').update({ status: args.status }).eq('id', args.onboarding_id).eq('tenant_id', tenantId).select('id, title, status').single()
+      if (error) throw error
+      return data
+    }
+    // CAMPAIGNERS
+    case 'list_campaigners': {
+      const { data, error } = await supabase.from('campaigners').select('id, full_name, phone, email, role').eq('tenant_id', tenantId).order('full_name').limit(args.limit || 50)
+      if (error) throw error
+      return { count: data.length, campaigners: data }
+    }
+    case 'create_campaigner': {
+      const { data, error } = await supabase.from('campaigners').insert({
+        full_name: args.full_name, phone: args.phone || null, email: args.email || null,
+        role: args.role || null, tenant_id: tenantId,
+      }).select('id, full_name').single()
+      if (error) throw error
+      return { campaigner_id: data.id, full_name: data.full_name }
+    }
+    // SALES PEOPLE
+    case 'list_sales_people': {
+      const { data, error } = await supabase.from('sales_people').select('id, full_name, phone, email').eq('tenant_id', tenantId).order('full_name').limit(args.limit || 50)
+      if (error) throw error
+      return { count: data.length, sales_people: data }
+    }
+    case 'create_sales_person': {
+      const { data, error } = await supabase.from('sales_people').insert({
+        full_name: args.full_name, phone: args.phone || null, email: args.email || null, tenant_id: tenantId,
+      }).select('id, full_name').single()
+      if (error) throw error
+      return { sales_person_id: data.id, full_name: data.full_name }
+    }
+    // AGENCIES
+    case 'list_agencies': {
+      const { data, error } = await supabase.from('agencies').select('id, name, contact_name, phone, email').eq('tenant_id', tenantId).order('name').limit(args.limit || 50)
+      if (error) throw error
+      return { count: data.length, agencies: data }
+    }
+    case 'create_agency': {
+      const { data, error } = await supabase.from('agencies').insert({
+        name: args.name, contact_name: args.contact_name || null, phone: args.phone || null,
+        email: args.email || null, tenant_id: tenantId,
+      }).select('id, name').single()
+      if (error) throw error
+      return { agency_id: data.id, name: data.name }
+    }
+    // SUPPLIERS
+    case 'list_suppliers': {
+      const { data, error } = await supabase.from('suppliers').select('id, name, type, phone, email').eq('tenant_id', tenantId).order('name').limit(args.limit || 50)
+      if (error) throw error
+      return { count: data.length, suppliers: data }
+    }
+    case 'create_supplier': {
+      const { data, error } = await supabase.from('suppliers').insert({
+        name: args.name, type: args.type || 'other', phone: args.phone || null,
+        email: args.email || null, tenant_id: tenantId,
+      }).select('id, name').single()
+      if (error) throw error
+      return { supplier_id: data.id, name: data.name }
+    }
+    // PRODUCTS
+    case 'list_products': {
+      const { data, error } = await supabase.from('products').select('id, name, description, price, active').eq('tenant_id', tenantId).order('name').limit(args.limit || 50)
+      if (error) throw error
+      return { count: data.length, products: data }
+    }
+    case 'create_product': {
+      const { data, error } = await supabase.from('products').insert({
+        name: args.name, description: args.description || null, price: args.price, active: true, tenant_id: tenantId,
+      }).select('id, name, price').single()
+      if (error) throw error
+      return { product_id: data.id, name: data.name, price: data.price }
+    }
+    // AUTOMATIONS
+    case 'list_automations': {
+      const { data, error } = await supabase.from('automations').select('id, name, active, trigger_type').eq('tenant_id', tenantId).order('name').limit(args.limit || 50)
+      if (error) throw error
+      return { count: data.length, automations: data }
+    }
+    case 'toggle_automation': {
+      const { data, error } = await supabase.from('automations').update({ active: args.active }).eq('id', args.automation_id).eq('tenant_id', tenantId).select('id, name, active').single()
+      if (error) throw error
+      return { automation_id: data.id, name: data.name, active: data.active }
+    }
+    // DASHBOARD STATS
+    case 'get_dashboard_stats': {
+      const [leadsRes, clientsRes, tasksRes, onboardingRes] = await Promise.all([
+        supabase.from('leads').select('status', { count: 'exact', head: false }).eq('tenant_id', tenantId),
+        supabase.from('clients').select('status', { count: 'exact', head: false }).eq('tenant_id', tenantId),
+        supabase.from('tasks').select('status', { count: 'exact', head: false }).eq('tenant_id', tenantId).eq('status', 'open'),
+        supabase.from('client_onboarding').select('status', { count: 'exact', head: false }).eq('tenant_id', tenantId).eq('status', 'in_progress'),
+      ])
+      const leadsByStatus = (leadsRes.data || []).reduce((acc: any, l: any) => { acc[l.status] = (acc[l.status] || 0) + 1; return acc }, {})
+      const clientsByStatus = (clientsRes.data || []).reduce((acc: any, c: any) => { acc[c.status] = (acc[c.status] || 0) + 1; return acc }, {})
+      return {
+        leads: { total: leadsRes.data?.length || 0, by_status: leadsByStatus },
+        clients: { total: clientsRes.data?.length || 0, by_status: clientsByStatus },
+        open_tasks: tasksRes.data?.length || 0,
+        active_onboarding: onboardingRes.data?.length || 0,
+      }
+    }
     default:
       throw new Error(`Unknown tool: ${name}`)
   }
@@ -339,17 +561,50 @@ Deno.serve(async (req) => {
     let resolvedTenantId = tenant_id || agent.tenant_id
     let resolvedUserId = user_id || 'system'
 
-    // 3. Build system prompt
+    // 3. Build system prompt with full tenant context
+    // Fetch tenant context for Carmen and all agents
+    const [tenantRes, agenciesRes, statsRes] = await Promise.all([
+      supabase.from('tenants').select('name, type').eq('id', resolvedTenantId).single(),
+      supabase.from('agencies').select('id, name').eq('tenant_id', resolvedTenantId).order('name').limit(20),
+      Promise.all([
+        supabase.from('leads').select('status', { count: 'exact', head: false }).eq('tenant_id', resolvedTenantId),
+        supabase.from('clients').select('id', { count: 'exact', head: false }).eq('tenant_id', resolvedTenantId),
+        supabase.from('tasks').select('id', { count: 'exact', head: false }).eq('tenant_id', resolvedTenantId).eq('status', 'open'),
+      ])
+    ])
+    const tenantName = tenantRes.data?.name || 'הארגון'
+    const agencyList = (agenciesRes.data || []).map((a: any) => `${a.name} (${a.id})`).join(', ')
+    const [leadsData, clientsData, tasksData] = statsRes
+    const leadsByStatus = (leadsData.data || []).reduce((acc: any, l: any) => { acc[l.status] = (acc[l.status] || 0) + 1; return acc }, {})
+    const tenantContext = [
+      `ארגון: ${tenantName} (tenant_id: ${resolvedTenantId})`,
+      agencyList ? `סוכנויות: ${agencyList}` : '',
+      `לידים: ${leadsData.data?.length || 0} (${Object.entries(leadsByStatus).map(([k,v]) => `${k}: ${v}`).join(', ')})`,
+      `לקוחות פעילים: ${clientsData.data?.length || 0}`,
+      `משימות פתוחות: ${tasksData.data?.length || 0}`,
+    ].filter(Boolean).join('\n')
     let systemPrompt = agent.system_prompt || ''
+    const isCarmen = agent.name?.toLowerCase().includes('carmen') || agent.name?.includes('כרמן')
     if (!systemPrompt) {
-      const parts = [`אתה ${agent.name}.`]
-      if (agent.personality) parts.push(`אופי: ${agent.personality}.`)
-      if (agent.soul) parts.push(`נשמה: ${agent.soul}.`)
-      if (agent.talent) parts.push(`טלנט: ${agent.talent}.`)
-      parts.push('ענה בעברית. היה תמציתי ומקצועי.')
+      const parts = isCarmen
+        ? [
+            `אתה כרמן, מנהלת AI ראשית של ${tenantName}. את עוזרת אישית חכמה, יעילה ומקצועית.`,
+            'יש לך גישה מלאה לכל מודולי המערכת: לידים, לקוחות, משימות, קמפיינרים, אנשי מכירות, סוכנויות, ספקים, מוצרים, אוטומציות, ועוד.',
+            'את יכולה לבצע כל פעולה שמשתמש יכול לבצע ידנית במערכת.',
+            'ענה בעברית. היי תמציתית, מקצועית, ויעילה. כשמבצעים פעולה — אשרי את הביצוע עם פרטים.',
+          ]
+        : [
+            `אתה ${agent.name}.`,
+            agent.personality ? `אופי: ${agent.personality}.` : '',
+            agent.soul ? `נשמה: ${agent.soul}.` : '',
+            agent.talent ? `טלנט: ${agent.talent}.` : '',
+            'ענה בעברית. היה תמציתי ומקצועי.',
+          ]
       parts.push('כשמבקשים ממך ליצור מודעה או פוסט לסושיאל: 1) קודם צור תמונה עם generate_ad_image עם תיאור מפורט באנגלית 2) אז צור פוסט עם create_social_post והכנס את ה-image_url שקיבלת ל-media_urls. תמיד צור גם ויזואל וגם טקסט.')
-      systemPrompt = parts.join(' ')
+      systemPrompt = parts.filter(Boolean).join(' ')
     }
+    // Always inject tenant context
+    systemPrompt += `\n\n=== הקשר ארגוני ===\n${tenantContext}`
 
     // Inject lead context
     if (lead_data) {
