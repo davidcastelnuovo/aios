@@ -4807,62 +4807,6 @@ export type Database = {
           },
         ]
       }
-      social_gantt_posts: {
-        Row: {
-          id: string
-          tenant_id: string
-          topic: string
-          scheduled_date: string
-          platform: string
-          status: string
-          copy_text: string | null
-          creative_url: string | null
-          creative_prompt: string | null
-          copy_prompt: string | null
-          notes: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          tenant_id: string
-          topic: string
-          scheduled_date: string
-          platform: string
-          status?: string
-          copy_text?: string | null
-          creative_url?: string | null
-          creative_prompt?: string | null
-          copy_prompt?: string | null
-          notes?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          tenant_id?: string
-          topic?: string
-          scheduled_date?: string
-          platform?: string
-          status?: string
-          copy_text?: string | null
-          creative_url?: string | null
-          creative_prompt?: string | null
-          copy_prompt?: string | null
-          notes?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "social_gantt_posts_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       supplier_invoices: {
         Row: {
           ai_extracted: boolean
