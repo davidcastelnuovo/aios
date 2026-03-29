@@ -108,6 +108,7 @@ function TaskResultDisplay({ result }: { result: any }) {
   );
 }
 
+export default function AgentTasksPage() {
   const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
