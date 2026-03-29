@@ -157,7 +157,7 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (!integration?.api_key || !integration?.settings?.instance_id) {
-      console.error('Green API integration not configured for user:', user.id);
+      console.error('Green API integration not configured for user:', userId);
       return new Response(JSON.stringify({ error: 'Green API not configured for your account. Please set up your connection in Settings.' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
