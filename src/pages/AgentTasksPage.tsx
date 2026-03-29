@@ -230,10 +230,8 @@ export default function AgentTasksPage() {
                                     </>
                                   )}
                                 </div>
-                                {task.status === "completed" && task.result?.output && (
-                                  <div className="mt-2 p-2 bg-green-50 rounded-lg text-xs text-green-900 line-clamp-3 whitespace-pre-wrap">
-                                    {task.result.output}
-                                  </div>
+                                {task.status === "completed" && task.result && (
+                                  <TaskResultDisplay result={task.result} />
                                 )}
                                 {task.status === "failed" && task.result?.error && (
                                   <div className="mt-2 p-2 bg-red-50 rounded-lg text-xs text-red-900">
