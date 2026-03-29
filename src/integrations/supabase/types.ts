@@ -125,6 +125,69 @@ export type Database = {
           },
         ]
       }
+      agent_tasks: {
+        Row: {
+          agent_id: string
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          priority: number
+          result: Json | null
+          started_at: string | null
+          status: string
+          tenant_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          agent_id: string
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          priority?: number
+          result?: Json | null
+          started_at?: string | null
+          status?: string
+          tenant_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          priority?: number
+          result?: Json | null
+          started_at?: string | null
+          status?: string
+          tenant_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_tasks_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_tasks_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ahrefs_reports: {
         Row: {
           agency_id: string | null
