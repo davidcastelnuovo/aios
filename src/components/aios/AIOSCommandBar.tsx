@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { Send, Loader2, Brain } from "lucide-react";
+import { Send, Loader2, Brain, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import ReactMarkdown from "react-markdown";
@@ -8,6 +8,7 @@ interface AIOSCommandBarProps {
   onSend: (message: string) => void;
   isLoading: boolean;
   statusText: string;
+  onReset?: () => void;
 }
 
 export function AIOSCommandBar({ onSend, isLoading, statusText }: AIOSCommandBarProps) {
