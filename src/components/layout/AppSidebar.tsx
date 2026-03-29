@@ -48,6 +48,7 @@ import {
   Briefcase,
   Wrench,
   Megaphone as MegaphoneIcon,
+  ClipboardList,
 } from "lucide-react";
 import {
   Sidebar,
@@ -113,6 +114,28 @@ type MenuTab = {
 
 const MENU_TABS: MenuTab[] = [
   {
+    id: "daily",
+    label: "ניהול שוטף",
+    icon: ClipboardList,
+    sections: [
+      {
+        label: "לקוחות",
+        items: [
+          { key: "clients", label: "לקוחות", route: "/clients", icon: Users },
+          { key: "client-onboarding", label: "לקוחות בקליטה", route: "/client-onboarding", icon: UserPlus },
+          { key: "tasks", label: "משימות", route: "/tasks", icon: CheckSquare },
+        ],
+      },
+      {
+        label: "תקשורת",
+        items: [
+          { key: "chat", label: "צ'אט", route: "/chat", icon: MessageSquare },
+          { key: "team-chat", label: "צ'אט צוות", route: "/team-chat", icon: MessagesSquare },
+        ],
+      },
+    ],
+  },
+  {
     id: "sales",
     label: "מכירות",
     icon: TrendingUp,
@@ -122,14 +145,6 @@ const MENU_TABS: MenuTab[] = [
         items: [
           { key: "sales-dashboard", label: "דשבורד מכירות", route: "/sales-dashboard", icon: TrendingUp },
           { key: "leads", label: "לידים", route: "/leads", icon: Target },
-        ],
-      },
-      {
-        label: "לקוחות",
-        items: [
-          { key: "clients", label: "לקוחות", route: "/clients", icon: Users },
-          { key: "client-onboarding", label: "לקוחות בקליטה", route: "/client-onboarding", icon: UserPlus },
-          { key: "tasks", label: "משימות", route: "/tasks", icon: CheckSquare },
         ],
       },
       {
@@ -174,10 +189,8 @@ const MENU_TABS: MenuTab[] = [
       {
         label: "תקשורת",
         items: [
-          { key: "chat", label: "צ'אט", route: "/chat", icon: MessageSquare },
           { key: "gmail", label: "Gmail", route: "/gmail", icon: Mail },
           { key: "signatures", label: "חתימות", route: "/signatures", icon: PenLine },
-          { key: "team-chat", label: "צ'אט צוות", route: "/team-chat", icon: MessagesSquare },
         ],
       },
       {
@@ -259,7 +272,7 @@ export function AppSidebar() {
   const { buildPath } = useTenantPath();
   const { menuItems: dbMenuItems, isLoading: isLoadingMenuItems } = useMenuItems();
   const isCollapsed = state === "collapsed";
-  const [activeTab, setActiveTab] = useState<string>("sales");
+  const [activeTab, setActiveTab] = useState<string>("daily");
   const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
 
   const { userId } = useCurrentUser();
@@ -432,13 +445,17 @@ export function AppSidebar() {
             <div className="flex gap-1 bg-sidebar-accent/40 rounded-lg p-1">
               {MENU_TABS.map(tab => {
                 const TabIcon = tab.icon;
+                const isActive = activeTab === tab.id;
+                const isDaily = tab.id === "daily";
                 return (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
                     className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2 rounded-md text-xs font-medium transition-all ${
-                      activeTab === tab.id
-                        ? "bg-primary text-primary-foreground shadow-sm"
+                      isActive
+                        ? isDaily
+                          ? "bg-emerald-500 text-white shadow-sm"
+                          : "bg-primary text-primary-foreground shadow-sm"
                         : "text-sidebar-foreground hover:bg-sidebar-accent"
                     }`}
                   >
