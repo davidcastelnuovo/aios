@@ -770,33 +770,7 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <ShoppingCart className="h-5 w-5" />
-                    רכישות והוספות לעגלה - יומי
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={250}>
-                    <BarChart data={dailyChartData}>
-                      <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                      <XAxis dataKey="dateLabel" tick={{ fontSize: 12 }} />
-                      <YAxis tick={{ fontSize: 12 }} />
-                      <Tooltip 
-                        formatter={(value: number, name: string) => [
-                          formatNumber(value), 
-                          name === 'analyticsPurchases' ? 'רכישות' : name === 'analyticsAddToCart' ? 'הוספות לעגלה' : name
-                        ]}
-                        labelFormatter={(label) => `תאריך: ${label}`}
-                      />
-                      <Legend formatter={(value) => value === 'analyticsPurchases' ? 'רכישות' : value === 'analyticsAddToCart' ? 'הוספות לעגלה' : value} />
-                      <Bar dataKey="analyticsAddToCart" fill="#f59e0b" radius={[4, 4, 0, 0]} name="analyticsAddToCart" />
-                      <Bar dataKey="analyticsPurchases" fill="#22c55e" radius={[4, 4, 0, 0]} name="analyticsPurchases" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
+
 
               <Card>
                 <CardHeader>
