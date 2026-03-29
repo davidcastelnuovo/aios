@@ -81,6 +81,7 @@ const SignDocument = lazy(() => import("./pages/SignDocument"));
 const ManusSettings = lazy(() => import("./pages/ManusSettings"));
 const ManusTasksPage = lazy(() => import("./pages/ManusTasksPage"));
 const AgentHub = lazy(() => import("./pages/AgentHub"));
+const AgentTasksPage = lazy(() => import("./pages/AgentTasksPage"));
 const SharedDashboard = lazy(() => import("./pages/SharedDashboard"));
 const SharedTable = lazy(() => import("./pages/SharedTable"));
 const AiDetection = lazy(() => import("./pages/AiDetection"));

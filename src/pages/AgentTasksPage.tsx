@@ -151,7 +151,7 @@ export default function AgentTasksPage() {
       {/* Header */}
       <div className="flex items-center justify-between p-4 pb-2 shrink-0">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => navigate(makePath("/agents"))}>
+          <Button variant="ghost" size="sm" onClick={() => navigate(buildPath("agents"))}>
             <ArrowRight className="h-4 w-4" />
           </Button>
           <h1 className="text-xl font-bold">ניהול משימות סוכנים</h1>
