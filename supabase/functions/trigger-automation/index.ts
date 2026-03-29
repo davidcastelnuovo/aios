@@ -804,7 +804,8 @@ Deno.serve(async (req) => {
                     // Inject history into payloadData for subsequent steps in same run
                     payloadData._session_history = updatedHistory
                     stepResponse = { saved: true, turns: updatedHistory.length / 2 }
-                    previousStepOutput = stepResponse
+                    // IMPORTANT: do NOT overwrite previousStepOutput — keep agent output for send step
+                    // previousStepOutput stays as the agent's output so send_greenapi_message uses it
                   }
                 } else {
                 }
