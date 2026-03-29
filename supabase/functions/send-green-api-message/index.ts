@@ -20,36 +20,43 @@ Deno.serve(async (req) => {
       });
     }
 
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { 
-        global: { 
-          headers: { Authorization: authHeader } 
-        },
-        auth: {
-          persistSession: false,
-          autoRefreshToken: false,
-        }
-      }
-    );
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
+    const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+    const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
     const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token);
-    if (userError || !user) {
-      console.error('❌ Authentication failed:', userError);
-      console.log('📋 Authorization header:', req.headers.get('Authorization') ? 'Present' : 'Missing');
-      return new Response(JSON.stringify({ 
-        error: 'Unauthorized',
-        details: userError?.message 
-      }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-    
-    console.log('✅ User authenticated:', user.id);
+    const isServiceRole = token === SERVICE_ROLE_KEY;
 
+    let userId: string;
+
+    if (isServiceRole) {
+      // Internal call from another edge function (e.g. ai-support-chat)
+      // We'll read senderUserId from the body later
+      console.log('🔑 Service role call detected');
+      userId = ''; // will be set from body
+    } else {
+      const supabaseClient = createClient(
+        SUPABASE_URL,
+        SUPABASE_ANON_KEY,
+        { 
+          global: { headers: { Authorization: authHeader } },
+          auth: { persistSession: false, autoRefreshToken: false }
+        }
+      );
+      const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token);
+      if (userError || !user) {
+        console.error('❌ Authentication failed:', userError);
+        return new Response(JSON.stringify({ 
+          error: 'Unauthorized',
+          details: userError?.message 
+        }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      userId = user.id;
+      console.log('✅ User authenticated:', userId);
+    }
     const { clientId, leadId, groupId, message, phoneNumber, tenantId: providedTenantId, quotedMessageId } = await req.json();
     
     if (!message) {
