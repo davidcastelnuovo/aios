@@ -63,12 +63,6 @@ const [eventEnd, setEventEnd] = useState("");
         body: { action: 'init' }
       });
 
-        data, 
-        error,
-        hasAuthUrl: !!data?.authUrl,
-        authUrlLength: data?.authUrl?.length 
-      });
-
       if (error) {
         console.error('Error from edge function:', error);
         popup.close();
