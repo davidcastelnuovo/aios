@@ -327,6 +327,7 @@ Deno.serve(async (req) => {
       if (agent.soul) parts.push(`נשמה: ${agent.soul}.`)
       if (agent.talent) parts.push(`טלנט: ${agent.talent}.`)
       parts.push('ענה בעברית. היה תמציתי ומקצועי.')
+      parts.push('כשמבקשים ממך ליצור מודעה או פוסט לסושיאל: 1) קודם צור תמונה עם generate_ad_image עם תיאור מפורט באנגלית 2) אז צור פוסט עם create_social_post והכנס את ה-image_url שקיבלת ל-media_urls. תמיד צור גם ויזואל וגם טקסט.')
       systemPrompt = parts.join(' ')
     }
 
