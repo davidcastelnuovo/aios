@@ -53,6 +53,7 @@ export function AIOSProvider({ children }: { children: React.ReactNode }) {
           body: JSON.stringify({
             message: text,
             tenant_id: tenantId,
+            conversation_id: conversationId,
           }),
         }
       );
