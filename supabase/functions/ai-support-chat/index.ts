@@ -1399,12 +1399,13 @@ const tools = [
     type: 'function',
     function: {
       name: 'search_entities',
-      description: 'חיפוש סוכנויות, לקוחות, קמפיינרים או לידים לפי שם',
+      description: 'חיפוש סוכנויות, לקוחות, קמפיינרים או לידים לפי שם. אפשר לסנן לקוחות/לידים גם לפי agency_id.',
       parameters: {
         type: 'object',
         properties: {
           entity_type: { type: 'string', enum: ['agency', 'client', 'campaigner', 'lead'], description: 'סוג הישות' },
           search_term: { type: 'string', description: 'מונח החיפוש' },
+          agency_id: { type: 'string', description: 'סינון לפי סוכנות (UUID) - רלוונטי רק ל-client ו-lead' },
         },
         required: ['entity_type', 'search_term'],
       },
