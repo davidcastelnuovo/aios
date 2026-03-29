@@ -22,6 +22,7 @@ import Setup from "./pages/Setup";
 import Landing from "./pages/Landing";
 import NotFound from "./pages/NotFound";
 const AIOSDashboard = lazy(() => import("./pages/AIOSDashboard"));
+const Home = lazy(() => import("./pages/Home"));
 
 // Lazily loaded pages
 const Branding = lazy(() => import("./pages/Branding"));
@@ -149,7 +150,8 @@ const App = () => (
                   <Route path="/terms" element={<Terms />} />
                   
                   {/* Tenant-scoped routes */}
-                  <Route path="/t/:tenantSlug" element={<ProtectedRoute requiredPermission="dashboard" redirectTo="/my-profile"><AppLayout><DashboardRouter /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug" element={<ProtectedRoute requiredPermission="dashboard" redirectTo="/my-profile"><AppLayout><Home /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/home" element={<ProtectedRoute><AppLayout><Home /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/dashboard" element={<ProtectedRoute requiredPermission="dashboard" redirectTo="/my-profile"><AppLayout><DashboardRouter /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/agencies" element={<ProtectedRoute requiredPermission="agencies"><AppLayout><Agencies /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/clients" element={<ProtectedRoute requiredPermission="clients"><AppLayout><Clients /></AppLayout></ProtectedRoute>} />

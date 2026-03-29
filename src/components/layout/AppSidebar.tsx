@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useEffect } from "react";
+import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
   LayoutDashboard,
   Building2,
@@ -41,6 +41,13 @@ import {
   Cpu,
   Share2,
   CalendarRange,
+  ShoppingCart,
+  BarChart2,
+  Globe,
+  Home,
+  Briefcase,
+  Wrench,
+  Megaphone as MegaphoneIcon,
 } from "lucide-react";
 import {
   Sidebar,
@@ -65,7 +72,6 @@ import { useUserTenants } from "@/hooks/useUserTenants";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useTenant } from "@/contexts/TenantContext";
-
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -79,68 +85,192 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+// ─── Icon map ────────────────────────────────────────────────────────────────
 const iconMap: Record<string, any> = {
-  LayoutDashboard,
-  Users,
-  Building2,
-  CheckSquare,
-  FileText: Target,
-  UserPlus,
-  Calendar: Clock,
-  Package,
-  Settings,
-  Briefcase: Building,
-  TrendingUp,
-  DollarSign,
-  BarChart3,
-  Clock,
-  Megaphone,
-  Target,
-  ShieldCheck,
-  User,
-  UserCheck,
-  Truck,
-  Zap,
-  Building,
-  Palette,
-  Bot,
-  Menu,
-  ListTree,
-  Table,
-  Table2,
-  MessageSquare,
-  MessagesSquare,
-  FolderKanban: Table,
-  Database: Table,
-  Layers: Table,
-  FileSignature: PenLine,
-  Mail,
-  Radar,
-  Plug,
-  Cpu,
-  Share2,
-  CalendarRange,
+  LayoutDashboard, Users, Building2, CheckSquare,
+  FileText: Target, UserPlus, Calendar: Clock, Package,
+  Settings, Briefcase: Building, TrendingUp, DollarSign,
+  BarChart3, Clock, Megaphone, Target, ShieldCheck, User,
+  UserCheck, Truck, Zap, Building, Palette, Bot, Menu,
+  ListTree, Table, Table2, MessageSquare, MessagesSquare,
+  FolderKanban: Table, Database: Table, Layers: Table,
+  FileSignature: PenLine, Mail, Radar, Plug, Cpu, Share2,
+  CalendarRange, Home, Globe, BarChart2, Wrench,
 };
 
+// ─── Menu structure ───────────────────────────────────────────────────────────
+type MenuSection = {
+  label: string;
+  items: { key: string; label: string; route: string; icon: any }[];
+};
+
+type MenuTab = {
+  id: string;
+  label: string;
+  icon: any;
+  sections: MenuSection[];
+};
+
+const MENU_TABS: MenuTab[] = [
+  {
+    id: "sales",
+    label: "מכירות",
+    icon: TrendingUp,
+    sections: [
+      {
+        label: "מכירות",
+        items: [
+          { key: "sales-dashboard", label: "דשבורד מכירות", route: "/sales-dashboard", icon: TrendingUp },
+          { key: "leads", label: "לידים", route: "/leads", icon: Target },
+          { key: "clients", label: "לקוחות", route: "/clients", icon: Users },
+          { key: "tasks", label: "משימות", route: "/tasks", icon: CheckSquare },
+        ],
+      },
+      {
+        label: "צוות מכירות",
+        items: [
+          { key: "sales-people", label: "אנשי מכירות", route: "/sales-people", icon: UserCheck },
+          { key: "campaigners", label: "קמפיינרים", route: "/campaigners", icon: Megaphone },
+        ],
+      },
+      {
+        label: "כלים",
+        items: [
+          { key: "products", label: "מוצרים ושירותים", route: "/products", icon: Package },
+          { key: "client-onboarding", label: "הכנסת לקוח", route: "/client-onboarding", icon: UserPlus },
+          { key: "time-tracking", label: "מעקב זמן", route: "/time-tracking", icon: Clock },
+          { key: "lead-integrations", label: "אינטגרציות לידים", route: "/lead-integrations", icon: Plug },
+        ],
+      },
+    ],
+  },
+  {
+    id: "marketing",
+    label: "שיווק",
+    icon: Share2,
+    sections: [
+      {
+        label: "קמפיינים",
+        items: [
+          { key: "social-media", label: "ניהול סושיאל", route: "/social-media", icon: Share2 },
+          { key: "recordings", label: "הקלטות", route: "/recordings", icon: Cpu },
+        ],
+      },
+      {
+        label: "אנליטיקס",
+        items: [
+          { key: "site_analytics", label: "אנליטיקס אתרים", route: "/site-analytics", icon: BarChart3 },
+          { key: "rank_tracking", label: "מעקב מיקומים", route: "/rank-tracking", icon: Radar },
+          { key: "reports", label: "דוחות", route: "/reports", icon: BarChart2 },
+          { key: "dynamic-tables", label: "דשבורדים ודוחות", route: "/dynamic-tables", icon: Table2 },
+          { key: "ai-detection", label: "ניטור נראות AI", route: "/ai-detection", icon: Bot },
+        ],
+      },
+      {
+        label: "תקשורת",
+        items: [
+          { key: "chat", label: "צ'אט", route: "/chat", icon: MessageSquare },
+          { key: "gmail", label: "Gmail", route: "/gmail", icon: Mail },
+          { key: "signatures", label: "חתימות", route: "/signatures", icon: PenLine },
+          { key: "team-chat", label: "צ'אט צוות", route: "/team-chat", icon: MessagesSquare },
+        ],
+      },
+      {
+        label: "אינטגרציות",
+        items: [
+          { key: "integrations", label: "אינטגרציות", route: "/integrations", icon: Plug },
+          { key: "chat-integrations", label: "אינטגרציות צ'אט", route: "/chat-integrations", icon: MessageSquare },
+        ],
+      },
+    ],
+  },
+  {
+    id: "admin",
+    label: "ניהול",
+    icon: Settings,
+    sections: [
+      {
+        label: "ניהול",
+        items: [
+          { key: "dashboard", label: "דשבורד", route: "/dashboard", icon: LayoutDashboard },
+          { key: "tenants", label: "ניהול ארגונים", route: "/tenants", icon: Building },
+          { key: "agencies", label: "סוכנויות", route: "/agencies", icon: Building2 },
+          { key: "users", label: "משתמשים", route: "/users", icon: Users },
+          { key: "suppliers", label: "ספקים", route: "/suppliers", icon: Truck },
+        ],
+      },
+      {
+        label: "כספים",
+        items: [
+          { key: "finance", label: "כספים", route: "/finance", icon: DollarSign },
+          { key: "accounting-integrations", label: "הנהלת חשבונות", route: "/accounting-integrations", icon: BarChart3 },
+        ],
+      },
+      {
+        label: "אוטומציה ו-AI",
+        items: [
+          { key: "automations", label: "אוטומציות", route: "/automations", icon: Zap },
+          { key: "agents", label: "סוכני AI", route: "/agents", icon: Bot },
+        ],
+      },
+      {
+        label: "הגדרות",
+        items: [
+          { key: "branding", label: "התאמת מערכת", route: "/branding", icon: Palette },
+          { key: "menu-management", label: "ניהול תפריטים", route: "/menu-management", icon: Menu },
+          { key: "fields-management", label: "ניהול שדות", route: "/fields-management", icon: ListTree },
+          { key: "ai-support", label: "תמיכה טכנית AI", route: "/ai-support", icon: ShieldCheck },
+        ],
+      },
+    ],
+  },
+];
+
+// Permission map
+const modulePermissions: Record<string, string> = {
+  users: "users", agencies: "agencies", leads: "leads", clients: "clients",
+  tasks: "tasks", "client-onboarding": "client_onboarding", products: "products",
+  finance: "finance", "sales-dashboard": "sales_dashboard", reports: "reports",
+  "time-tracking": "time_tracking", campaigners: "campaigners",
+  "sales-people": "sales_people", dashboard: "dashboard", suppliers: "suppliers",
+  automations: "automations", tenants: "tenants", branding: "branding",
+  "accounting-integrations": "accounting_integrations", "ai-support": "ai_support",
+  "menu-management": "menu_management", "fields-management": "fields_management",
+  "lead-integrations": "lead_integrations", integrations: "lead_integrations",
+  "manychat-settings": "manychat_settings", "green-api-settings": "green_api_settings",
+  "chat-integrations": "chat_integrations", chat: "chat",
+  "dynamic-tables": "dynamic_tables", recordings: "recordings",
+  "team-chat": "team_chat", signatures: "signatures", gmail: "gmail",
+  site_analytics: "clients", rank_tracking: "clients",
+  "ai-detection": "dashboard", agents: "dashboard",
+  "social-media": "dashboard", "social-gantt": "dashboard",
+};
+
+// ─── Component ────────────────────────────────────────────────────────────────
 export function AppSidebar() {
   const { state, setOpenMobile, isMobile, toggleSidebar } = useSidebar();
   const { hasPermission, isLoading } = useUserPermissions();
   const { logoUrl } = useTheme();
   const { buildPath } = useTenantPath();
-  const { menuItems: dbMenuItems, menuItemsMap, isLoading: isLoadingMenuItems, orgType, isPremium } = useMenuItems();
+  const { menuItems: dbMenuItems, isLoading: isLoadingMenuItems } = useMenuItems();
   const isCollapsed = state === "collapsed";
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<string>("sales");
   const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
 
   const { userId } = useCurrentUser();
-  const { currentTenantId, setCurrentTenantId } = useTenant();
+  const { currentTenantId } = useTenant();
   const { selectedAgency } = useAgency();
-  const tenantPath = useTenantPath();
-  
-  // After TenantContext fix, currentTenantId always matches URL
-  const displayTenantId = currentTenantId;
-  
+
+  // Build a set of visible menu_keys from DB
+  const visibleKeys = new Set<string>(
+    dbMenuItems.filter(m => m.is_visible).map(m => m.menu_key)
+  );
+
+  // Custom labels from DB
+  const customLabels = new Map<string, string>(
+    dbMenuItems.filter(m => m.custom_label).map(m => [m.menu_key, m.custom_label!])
+  );
+
   const { data: userTenants, isLoading: isLoadingTenants } = useQuery({
     queryKey: ["user-tenants", userId],
     queryFn: async () => {
@@ -149,415 +279,80 @@ export function AppSidebar() {
         .from("tenant_users")
         .select("tenant_id, tenants(id, name)")
         .eq("user_id", userId);
-      
       if (error) throw error;
-      return data?.map(tu => tu.tenants).filter(Boolean) as Array<{id: string, name: string}>;
+      return data?.map(tu => tu.tenants).filter(Boolean) as Array<{ id: string; name: string }>;
     },
     enabled: !!userId,
   });
 
   // Fetch dynamic CRM tables
-  const { data: crmTables, isLoading: isLoadingCrmTables } = useQuery({
-    queryKey: ['crm-tables', currentTenantId],
+  const { data: crmTables } = useQuery({
+    queryKey: ["crm-tables", currentTenantId],
     queryFn: async () => {
       if (!currentTenantId) return [];
-      
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return [];
-
-      const response = await supabase.functions.invoke('crm-tables', {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
+      const response = await supabase.functions.invoke("crm-tables", {
+        method: "GET",
+        headers: { Authorization: `Bearer ${session.access_token}` },
       });
-
-      if (response.error) {
-        console.error('Error fetching CRM tables:', response.error);
-        return [];
-      }
-      
-      // Ensure we always return an array
+      if (response.error) return [];
       return Array.isArray(response.data) ? response.data : [];
     },
     enabled: !!currentTenantId,
   });
 
   const handleTenantChange = async (newTenantId: string) => {
-    
-    if (!userId) {
-      console.error("❌ No userId available");
-      return;
-    }
-
+    if (!userId) return;
     try {
-      // First, get the new tenant slug before any state changes
-      const { data: newTenant, error: slugError } = await supabase
-        .from("tenants")
-        .select("slug")
-        .eq("id", newTenantId)
-        .single();
-
-      if (slugError) {
-        console.error("❌ Error fetching tenant slug:", slugError);
-      }
-
-      // Ensure user has a role in the new tenant
-      const { data: tenantUser } = await supabase
-        .from("tenant_users")
-        .select("role")
-        .eq("tenant_id", newTenantId)
-        .eq("user_id", userId)
-        .single();
-
-      if (tenantUser) {
-        const { data: existingRole } = await supabase
-          .from("user_roles")
-          .select("id")
-          .eq("user_id", userId)
-          .eq("tenant_id", newTenantId)
-          .single();
-
-        if (!existingRole) {
-          await supabase.from("user_roles").insert([{
-            user_id: userId,
-            role: tenantUser.role as any,
-            tenant_id: newTenantId,
-          }]);
-        }
-      }
-
-      // Update user_active_tenant in DB BEFORE redirect
-      const { error } = await supabase
-        .from("user_active_tenant")
-        .upsert(
-          {
-            user_id: userId,
-            tenant_id: newTenantId,
-            updated_at: new Date().toISOString(),
-          },
-          {
-            onConflict: "user_id",
-          }
-        );
-
-      if (error) {
-        console.error("❌ Error upserting user_active_tenant:", error);
-        throw error;
-      }
-
-      // CRITICAL: Full page reload ensures complete data refresh
-      // React Router navigation can leave stale cached data
+      const { data: newTenant } = await supabase
+        .from("tenants").select("slug").eq("id", newTenantId).single();
+      await supabase.from("user_active_tenant").upsert(
+        { user_id: userId, tenant_id: newTenantId, updated_at: new Date().toISOString() },
+        { onConflict: "user_id" }
+      );
       if (newTenant?.slug) {
         const currentPath = window.location.pathname;
         const pathMatch = currentPath.match(/^\/t\/[^/]+\/(.+)$/);
-        const currentModule = pathMatch ? pathMatch[1] : 'dashboard';
-        
-        const newUrl = `/t/${newTenant.slug}/${currentModule}`;
-        
-        // Force full page reload to ensure clean state
-        window.location.href = newUrl;
-        return;
+        const currentModule = pathMatch ? pathMatch[1] : "dashboard";
+        window.location.href = `/t/${newTenant.slug}/${currentModule}`;
       } else {
-        window.location.href = '/';
-        return;
+        window.location.href = "/";
       }
     } catch (error) {
-      console.error("❌ Error changing tenant:", error);
+      console.error("Error changing tenant:", error);
     }
   };
 
   const handleLinkClick = () => {
-    if (isMobile && setOpenMobile) {
-      setOpenMobile(false);
-    }
+    if (isMobile && setOpenMobile) setOpenMobile(false);
   };
 
-  const getMenuItemLabel = (item: MenuItem) => {
-    return item.custom_label || item.original_label;
+  const canAccess = (key: string) => {
+    if (key === "my-profile") return true;
+    const perm = modulePermissions[key];
+    if (!perm) return false;
+    return hasPermission(perm as any);
   };
 
-  const getMenuItemBadge = (item: MenuItem) => {
-    if (item.badge === 'premium' && !isPremium) return 'premium';
-    if (item.badge === 'coming_soon') return 'coming_soon';
-    return null;
-  };
+  const getLabel = (key: string, fallback: string) =>
+    customLabels.get(key) || fallback;
 
-  const canAccessMenuItem = (item: MenuItem) => {
-    // מיפוי בין menu_key לבין permission module
-    const modulePermissions: Record<string, string> = {
-      'users': 'users',
-      'agencies': 'agencies',
-      'leads': 'leads',
-      'clients': 'clients',
-      'tasks': 'tasks',
-      'client-onboarding': 'client_onboarding',
-      'products': 'products',
-      'finance': 'finance',
-      'sales-dashboard': 'sales_dashboard',
-      'reports': 'reports',
-      'time-tracking': 'time_tracking',
-      'campaigners': 'campaigners',
-      'sales-people': 'sales_people',
-      'dashboard': 'dashboard',
-      'suppliers': 'suppliers',
-      'automations': 'automations',
-      'tenants': 'tenants',
-      'branding': 'branding',
-      'accounting-integrations': 'accounting_integrations',
-      'ai-support': 'ai_support',
-      'menu-management': 'menu_management',
-      'fields-management': 'fields_management',
-      'lead-integrations': 'lead_integrations',
-      'integrations': 'lead_integrations',
-      'manychat-settings': 'manychat_settings',
-      'green-api-settings': 'green_api_settings',
-      'chat-integrations': 'chat_integrations',
-      'chat': 'chat',
-      'dynamic-tables': 'dynamic_tables',
-      'recordings': 'recordings',
-      'team-chat': 'team_chat',
-      'signatures': 'signatures',
-      'gmail': 'gmail',
-      'site_analytics': 'clients', // אנליטיקס אתרים - מי שיש לו גישה ללקוחות יכול לראות
-      'rank_tracking': 'clients', // מעקב מיקומים - מי שיש לו גישה ללקוחות יכול לראות
-      'ai-detection': 'dashboard', // ניטור נראות AI - נגיש לכל מי שיש לו גישה לדשבורד
-      'agents': 'dashboard', // סוכני AI - נגיש לכל מי שיש לו גישה לדשבורד
-      'social-media': 'dashboard', // מתזמן מדיה חברתית - נגיש לכל מי שיש לו גישה לדשבורד
-      'social-gantt': 'dashboard', // גאנט סושיאל - נגיש לכל מי שיש לו גישה לדשבורד
-    };
+  // Filter items in a section to only those the user can access and are visible
+  const filterItems = (items: MenuSection["items"]) =>
+    items.filter(item => {
+      // If DB has this key and it's hidden, skip
+      if (dbMenuItems.some(m => m.menu_key === item.key) && !visibleKeys.has(item.key)) return false;
+      return canAccess(item.key);
+    });
 
-    // פריטים שאינם דורשים הרשאה מיוחדת (נגישים לכולם)
-    const publicMenuKeys = ['my-profile'];
-    
-    if (publicMenuKeys.includes(item.menu_key)) {
-      return true;
-    }
+  const activeMenuTab = MENU_TABS.find(t => t.id === activeTab) || MENU_TABS[0];
 
-    // אם זה פריט קבוצה (parent) ללא route, הוא נגיש אם יש לו ילדים נגישים
-    if (item.route === '#' && !item.parent_menu_key) {
-      return true; // הבדיקה של ילדים נעשית אחר כך
-    }
-
-    const permission = modulePermissions[item.menu_key];
-    if (!permission) {
-      // אם אין permission מוגדר, בודקים אם זה sub-item של קבוצה
-      // במקרה כזה, מניחים שצריך הרשאה
-      return false;
-    }
-    
-    return hasPermission(permission as any);
-  };
-
-  const getIcon = (iconName: string | null) => {
-    if (!iconName) return LayoutDashboard;
-    return iconMap[iconName] || LayoutDashboard;
-  };
-
-  // Get menu items ordered by sort_order, inject hardcoded items if missing from DB
-  const ensuredMenuItems = [...dbMenuItems];
-  const hardcodedItems: MenuItem[] = [
-    {
-      id: 'hardcoded-social-media',
-      menu_key: 'social-media',
-      custom_label: null,
-      original_label: 'ניהול סושיאל',
-      is_visible: true,
-      sort_order: 999,
-      icon: 'Share2',
-      route: '/social-media',
-      parent_menu_key: null,
-    },
-  ];
-  for (const item of hardcodedItems) {
-    if (!ensuredMenuItems.some(m => m.menu_key === item.menu_key)) {
-      ensuredMenuItems.push(item);
-    }
-  }
-  const allMenuItems = ensuredMenuItems.sort((a, b) => a.sort_order - b.sort_order);
-  
-  // Separate parent items from child items, filtering by visibility and permissions
-  const childItemsMap = new Map<string, MenuItem[]>();
-  
-  // First, collect all children with access
-  allMenuItems.forEach(item => {
-    if (item.parent_menu_key && item.is_visible && canAccessMenuItem(item)) {
-      if (!childItemsMap.has(item.parent_menu_key)) {
-        childItemsMap.set(item.parent_menu_key, []);
-      }
-      childItemsMap.get(item.parent_menu_key)?.push(item);
-    }
-  });
-  
-  // Filter parent items: show only if user has access AND (it's not a group OR has accessible children)
-  // EXCLUDE 'management' group - it will be shown as a dropdown in the header
-  const parentItems = allMenuItems.filter(item => {
-    if (item.parent_menu_key || !item.is_visible) return false;
-    if (!canAccessMenuItem(item)) return false;
-    
-    // Exclude management group - will be rendered in header dropdown
-    if (item.menu_key === 'management') return false;
-    
-    // If it's a group (has children), only show if it has accessible children
-    const children = childItemsMap.get(item.menu_key) || [];
-    if (item.route === '#') {
-      return children.length > 0;
-    }
-    
-    return true;
-  });
-
-  // Get management menu items for the dropdown
-  const managementItems = childItemsMap.get('management') || [];
-
-  const renderMenuItem = (item: MenuItem) => {
-    const Icon = getIcon(item.icon);
-    const label = getMenuItemLabel(item);
-    const badge = getMenuItemBadge(item);
-    const isDisabled = badge === 'premium' || badge === 'coming_soon';
-    const children = childItemsMap.get(item.menu_key) || [];
-    const hasChildren = children.length > 0;
-
-    if (hasChildren) {
-      // Parent item with children - render as collapsible
-      return (
-        <Collapsible key={item.menu_key} defaultOpen className="group/collapsible">
-          <SidebarMenuItem>
-            <CollapsibleTrigger asChild>
-              <SidebarMenuButton tooltip={label} dir="rtl">
-                {!isCollapsed && <span className="flex-1 text-right">{label}</span>}
-                <Icon className="h-4 w-4" />
-                {!isCollapsed && (
-                  <ChevronDown className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
-                )}
-              </SidebarMenuButton>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <SidebarMenuSub>
-                {children.map(child => {
-                  const ChildIcon = getIcon(child.icon);
-                  const childLabel = getMenuItemLabel(child);
-                  const childBadge = getMenuItemBadge(child);
-                  const childIsDisabled = childBadge === 'premium' || childBadge === 'coming_soon';
-
-                  if (childIsDisabled) {
-                    return (
-                      <SidebarMenuSubItem key={child.menu_key}>
-                        <div className="flex items-center gap-2 w-full px-3 py-2 opacity-50 cursor-not-allowed">
-                          <ChildIcon className="h-4 w-4" />
-                          <span className="flex-1">{childLabel}</span>
-                          {childBadge === 'premium' && (
-                            <Badge variant="secondary" className="text-[10px] px-1 py-0">
-                              Premium
-                            </Badge>
-                          )}
-                          {childBadge === 'coming_soon' && (
-                            <Badge variant="outline" className="text-[10px] px-1 py-0">
-                              בקרוב
-                            </Badge>
-                          )}
-                        </div>
-                      </SidebarMenuSubItem>
-                    );
-                  }
-
-                  return (
-                    <SidebarMenuSubItem key={child.menu_key}>
-                      <SidebarMenuSubButton asChild>
-                        <NavLink
-                          to={buildPath(child.route)}
-                          onClick={handleLinkClick}
-                          className={({ isActive }) =>
-                            isActive
-                              ? "flex items-center gap-2 w-full bg-sidebar-accent text-sidebar-accent-foreground"
-                              : "flex items-center gap-2 w-full hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                          }
-                          dir="rtl"
-                        >
-                          <span className="flex-1 text-right">{childLabel}</span>
-                          <ChildIcon className="h-4 w-4" />
-                          {childBadge === 'premium' && (
-                            <Badge variant="secondary" className="text-[10px] px-1 py-0">
-                              Premium
-                            </Badge>
-                          )}
-                          {childBadge === 'coming_soon' && (
-                            <Badge variant="outline" className="text-[10px] px-1 py-0">
-                              בקרוב
-                            </Badge>
-                          )}
-                        </NavLink>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                  );
-                })}
-              </SidebarMenuSub>
-            </CollapsibleContent>
-          </SidebarMenuItem>
-        </Collapsible>
-      );
-    }
-
-    // Regular menu item without children
-    return (
-      <SidebarMenuItem key={item.menu_key}>
-        <SidebarMenuButton
-          asChild={!isDisabled}
-          disabled={isDisabled}
-          className={isDisabled ? "opacity-50 cursor-not-allowed" : ""}
-          tooltip={isCollapsed ? label : undefined}
-        >
-              {isDisabled ? (
-                <div className="flex items-center gap-2 w-full" dir="rtl">
-                  {!isCollapsed && <span className="flex-1 text-right">{label}</span>}
-                  <Icon className="h-4 w-4" />
-              {!isCollapsed && badge === 'premium' && (
-                <Badge variant="secondary" className="text-[10px] px-1 py-0">
-                  Premium
-                </Badge>
-              )}
-              {!isCollapsed && badge === 'coming_soon' && (
-                <Badge variant="outline" className="text-[10px] px-1 py-0">
-                  בקרוב
-                </Badge>
-              )}
-            </div>
-          ) : (
-                <NavLink
-                  to={buildPath(item.route)}
-                  onClick={handleLinkClick}
-                  className={({ isActive }) =>
-                    isActive
-                      ? "flex items-center gap-2 w-full bg-sidebar-accent text-sidebar-accent-foreground"
-                      : "flex items-center gap-2 w-full hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                  }
-                  dir="rtl"
-                >
-                  {!isCollapsed && <span className="flex-1 text-right">{label}</span>}
-                  <Icon className="h-4 w-4" />
-              {!isCollapsed && badge === 'premium' && (
-                <Badge variant="secondary" className="text-[10px] px-1 py-0">
-                  Premium
-                </Badge>
-              )}
-              {!isCollapsed && badge === 'coming_soon' && (
-                <Badge variant="outline" className="text-[10px] px-1 py-0">
-                  בקרוב
-                </Badge>
-              )}
-            </NavLink>
-          )}
-        </SidebarMenuButton>
-      </SidebarMenuItem>
-    );
-  };
-
-  if (isLoadingMenuItems || isLoading || isLoadingTenants) {
-    return null;
-  }
+  if (isLoadingMenuItems || isLoading) return null;
 
   return (
     <Sidebar collapsible="icon" side="right">
+      {/* ── Header ── */}
       <SidebarHeader className="border-b border-sidebar-border">
         {isCollapsed ? (
           <div className="flex flex-col items-center gap-2 py-2">
@@ -566,62 +361,27 @@ export function AppSidebar() {
             ) : (
               <Building2 className="h-8 w-8" />
             )}
-            {/* Management dropdown in collapsed mode */}
-            {managementItems.length > 0 && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    className="p-2 hover:bg-sidebar-accent rounded-md transition-colors"
-                    title="ניהול"
-                  >
-                    <Settings className="h-4 w-4" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent 
-                  align="end" 
-                  side="left"
-                  className="w-56 bg-popover z-50"
-                >
-                  {managementItems.map(item => {
-                    const Icon = getIcon(item.icon);
-                    const label = getMenuItemLabel(item);
-                    const badge = getMenuItemBadge(item);
-                    const isDisabled = badge === 'premium' || badge === 'coming_soon';
-                    
-                    return (
-                      <DropdownMenuItem
-                        key={item.menu_key}
-                        disabled={isDisabled}
-                        className={isDisabled ? "opacity-50" : ""}
-                        asChild={!isDisabled}
-                      >
-                        {isDisabled ? (
-                          <div className="flex items-center gap-2 w-full">
-                            <Icon className="h-4 w-4" />
-                            <span className="flex-1">{label}</span>
-                            {badge === 'premium' && (
-                              <Badge variant="secondary" className="text-[10px] px-1 py-0">Premium</Badge>
-                            )}
-                            {badge === 'coming_soon' && (
-                              <Badge variant="outline" className="text-[10px] px-1 py-0">בקרוב</Badge>
-                            )}
-                          </div>
-                        ) : (
-                          <NavLink
-                            to={buildPath(item.route)}
-                            onClick={handleLinkClick}
-                            className="flex items-center gap-2 w-full"
-                          >
-                            <Icon className="h-4 w-4" />
-                            <span className="flex-1">{label}</span>
-                          </NavLink>
-                        )}
-                      </DropdownMenuItem>
-                    );
-                  })}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
+            {/* Tab icons in collapsed mode */}
+            {MENU_TABS.map(tab => {
+              const TabIcon = tab.icon;
+              return (
+                <Tooltip key={tab.id}>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => { setActiveTab(tab.id); if (isCollapsed) toggleSidebar(); }}
+                      className={`p-2 rounded-md transition-colors ${
+                        activeTab === tab.id
+                          ? "bg-primary text-primary-foreground"
+                          : "hover:bg-sidebar-accent"
+                      }`}
+                    >
+                      <TabIcon className="h-4 w-4" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="left">{tab.label}</TooltipContent>
+                </Tooltip>
+              );
+            })}
             <button
               onClick={toggleSidebar}
               className="p-2 hover:bg-sidebar-accent rounded-md transition-colors"
@@ -630,132 +390,154 @@ export function AppSidebar() {
             </button>
           </div>
         ) : (
-          <div className="flex items-center justify-between px-2 py-2" dir="rtl">
-            <div className="flex items-center gap-1">
+          <div className="flex flex-col gap-2 px-2 py-2" dir="rtl">
+            {/* Top row: logo + tenant + collapse */}
+            <div className="flex items-center justify-between">
               <button
                 onClick={toggleSidebar}
-                className="flex-shrink-0 p-2 hover:bg-sidebar-accent rounded-md transition-colors"
+                className="flex-shrink-0 p-1.5 hover:bg-sidebar-accent rounded-md transition-colors"
               >
                 <PanelRightClose className="h-4 w-4" />
               </button>
-              {/* Management dropdown */}
-              {managementItems.length > 0 && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      className="flex-shrink-0 p-2 hover:bg-sidebar-accent rounded-md transition-colors"
-                      title="ניהול"
-                    >
-                      <Settings className="h-4 w-4" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent 
-                    align="start" 
-                    side="bottom"
-                    className="w-56 bg-popover z-50"
-                  >
-                    {managementItems.map(item => {
-                      const Icon = getIcon(item.icon);
-                      const label = getMenuItemLabel(item);
-                      const badge = getMenuItemBadge(item);
-                      const isDisabled = badge === 'premium' || badge === 'coming_soon';
-                      
-                      return (
-                        <DropdownMenuItem
-                          key={item.menu_key}
-                          disabled={isDisabled}
-                          className={isDisabled ? "opacity-50" : ""}
-                          asChild={!isDisabled}
-                        >
-                          {isDisabled ? (
-                            <div className="flex items-center gap-2 w-full">
-                              <Icon className="h-4 w-4" />
-                              <span className="flex-1">{label}</span>
-                              {badge === 'premium' && (
-                                <Badge variant="secondary" className="text-[10px] px-1 py-0">Premium</Badge>
-                              )}
-                              {badge === 'coming_soon' && (
-                                <Badge variant="outline" className="text-[10px] px-1 py-0">בקרוב</Badge>
-                              )}
-                            </div>
-                          ) : (
-                            <NavLink
-                              to={buildPath(item.route)}
-                              onClick={handleLinkClick}
-                              className="flex items-center gap-2 w-full"
-                            >
-                              <Icon className="h-4 w-4" />
-                              <span className="flex-1">{label}</span>
-                            </NavLink>
-                          )}
-                        </DropdownMenuItem>
-                      );
-                    })}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
+              <div className="flex items-center gap-2 min-w-0 flex-1 justify-end">
+                {userTenants && userTenants.length > 1 && (
+                  <Select value={currentTenantId || undefined} onValueChange={handleTenantChange}>
+                    <SelectTrigger className="h-7 border-0 shadow-none focus:ring-0 min-w-0 bg-sidebar-background text-xs">
+                      <SelectValue placeholder="בחר ארגון" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-popover border border-border shadow-lg z-[9999]" position="popper" sideOffset={4} align="start" side="bottom">
+                      {userTenants.filter(t => t.id).map(t => (
+                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                {userTenants && userTenants.length === 1 && (
+                  <span className="text-sm font-semibold truncate">{userTenants[0].name}</span>
+                )}
+                {logoUrl ? (
+                  <img src={logoUrl} alt="Logo" className="h-8 w-8 object-contain flex-shrink-0" />
+                ) : (
+                  <Building2 className="h-8 w-8 flex-shrink-0" />
+                )}
+              </div>
             </div>
-            <div className="flex items-center gap-2 min-w-0 flex-1 justify-end">
-              {userTenants && userTenants.length > 1 && (
-                <Select value={displayTenantId || undefined} onValueChange={handleTenantChange}>
-                  <SelectTrigger className="h-8 border-0 shadow-none focus:ring-0 min-w-0 bg-sidebar-background">
-                    <SelectValue placeholder="בחר ארגון" />
-                  </SelectTrigger>
-                  <SelectContent 
-                    className="bg-popover border border-border shadow-lg z-[9999]" 
-                    position="popper" 
-                    sideOffset={4}
-                    align="start"
-                    side="bottom"
+
+            {/* Tab switcher */}
+            <div className="flex gap-1 bg-sidebar-accent/40 rounded-lg p-1">
+              {MENU_TABS.map(tab => {
+                const TabIcon = tab.icon;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2 rounded-md text-xs font-medium transition-all ${
+                      activeTab === tab.id
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "text-sidebar-foreground hover:bg-sidebar-accent"
+                    }`}
                   >
-                    {userTenants.filter(tenant => tenant.id).map((tenant) => (
-                      <SelectItem key={tenant.id} value={tenant.id}>
-                        {tenant.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              {userTenants && userTenants.length === 1 && (
-                <span className="text-sm font-semibold truncate">{userTenants[0].name}</span>
-              )}
-              {logoUrl ? (
-                <img src={logoUrl} alt="Logo" className="h-8 w-8 object-contain flex-shrink-0" />
-              ) : (
-                <Building2 className="h-8 w-8 flex-shrink-0" />
-              )}
+                    <TabIcon className="h-3.5 w-3.5" />
+                    <span>{tab.label}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
       </SidebarHeader>
 
+      {/* ── Content ── */}
       <SidebarContent>
+        {/* Home link */}
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {parentItems.map(item => renderMenuItem(item))}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip={isCollapsed ? "בית" : undefined}>
+                  <NavLink
+                    to={buildPath("home")}
+                    onClick={handleLinkClick}
+                    className={({ isActive }) =>
+                      isActive
+                        ? "flex items-center gap-2 w-full bg-sidebar-accent text-sidebar-accent-foreground"
+                        : "flex items-center gap-2 w-full hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    }
+                    dir="rtl"
+                  >
+                    {!isCollapsed && <span className="flex-1 text-right">בית</span>}
+                    <Home className="h-4 w-4" />
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Dynamic CRM Tables Section */}
-        {hasPermission('dynamic_tables') && (() => {
-          // Filter tables by selected agency
+        {/* Active tab sections */}
+        {activeMenuTab.sections.map(section => {
+          const visibleItems = filterItems(section.items);
+          if (visibleItems.length === 0) return null;
+          return (
+            <Collapsible key={section.label} defaultOpen className="group/collapsible">
+              <SidebarGroup>
+                {!isCollapsed && (
+                  <SidebarGroupLabel asChild>
+                    <CollapsibleTrigger className="flex items-center gap-2 w-full hover:bg-accent/50 rounded-md px-2 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wide" dir="rtl">
+                      <ChevronDown className="h-3.5 w-3.5 transition-transform group-data-[state=open]/collapsible:rotate-180 ml-auto" />
+                      <span className="flex-1 text-right">{section.label}</span>
+                    </CollapsibleTrigger>
+                  </SidebarGroupLabel>
+                )}
+                <CollapsibleContent>
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {visibleItems.map(item => {
+                        const Icon = item.icon;
+                        const label = getLabel(item.key, item.label);
+                        return (
+                          <SidebarMenuItem key={item.key}>
+                            <SidebarMenuButton asChild tooltip={isCollapsed ? label : undefined}>
+                              <NavLink
+                                to={buildPath(item.route)}
+                                onClick={handleLinkClick}
+                                className={({ isActive }) =>
+                                  isActive
+                                    ? "flex items-center gap-2 w-full bg-sidebar-accent text-sidebar-accent-foreground"
+                                    : "flex items-center gap-2 w-full hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                                }
+                                dir="rtl"
+                              >
+                                {!isCollapsed && <span className="flex-1 text-right">{label}</span>}
+                                <Icon className="h-4 w-4" />
+                              </NavLink>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        );
+                      })}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </CollapsibleContent>
+              </SidebarGroup>
+            </Collapsible>
+          );
+        })}
+
+        {/* Dynamic CRM Tables — shown in marketing tab */}
+        {activeTab === "marketing" && hasPermission("dynamic_tables") && (() => {
           const filteredCrmTables = (crmTables || []).filter((table: any) => {
-            if (!selectedAgency || selectedAgency === 'all') return true;
-            // Show general tables (no agency_id) and tables matching selected agency
+            if (!selectedAgency || selectedAgency === "all") return true;
             return table.agency_id === null || table.agency_id === selectedAgency;
           });
-          
           return (
             <Collapsible defaultOpen className="group/collapsible">
               <SidebarGroup>
                 <SidebarGroupLabel asChild>
                   <div className="flex items-center justify-between">
-                    <CollapsibleTrigger className="flex items-center gap-2 flex-1 hover:bg-accent rounded-md px-2 py-1">
+                    <CollapsibleTrigger className="flex items-center gap-2 flex-1 hover:bg-accent rounded-md px-2 py-1" dir="rtl">
+                      <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180 ml-auto" />
+                      {!isCollapsed && <span className="flex-1 text-right">טבלאות דינמיות</span>}
                       <Table2 className="h-4 w-4" />
-                      {!isCollapsed && <span>ניהול דוחות</span>}
-                      <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180 mr-auto" />
                     </CollapsibleTrigger>
                     {!isCollapsed && (
                       <button
@@ -771,11 +553,10 @@ export function AppSidebar() {
                 <CollapsibleContent>
                   <SidebarGroupContent>
                     <SidebarMenu>
-                      {/* Management Link */}
                       <SidebarMenuItem>
                         <SidebarMenuButton asChild>
                           <NavLink
-                            to={buildPath('dynamic-tables')}
+                            to={buildPath("dynamic-tables")}
                             onClick={handleLinkClick}
                             className={({ isActive }) =>
                               isActive
@@ -788,8 +569,6 @@ export function AppSidebar() {
                           </NavLink>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
-
-                      {/* Individual Tables */}
                       {filteredCrmTables.map((table: any) => {
                         const Icon = iconMap[table.icon] || Table;
                         return (
@@ -824,62 +603,42 @@ export function AppSidebar() {
       <InstallAppButton isCollapsed={isCollapsed} />
 
       {/* Quick Create Table Dialog */}
-      <SimpleTableDialog 
-        open={isQuickCreateOpen}
-        onOpenChange={setIsQuickCreateOpen}
-      />
+      <SimpleTableDialog open={isQuickCreateOpen} onOpenChange={setIsQuickCreateOpen} />
     </Sidebar>
   );
 }
 
+// ─── PWA Install Button ───────────────────────────────────────────────────────
 function InstallAppButton({ isCollapsed }: { isCollapsed: boolean }) {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstalled, setIsInstalled] = useState(false);
 
-  useEffect(() => {
+  useState(() => {
     const handler = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e);
     };
-    window.addEventListener('beforeinstallprompt', handler);
+    window.addEventListener("beforeinstallprompt", handler);
+    if (window.matchMedia("(display-mode: standalone)").matches) setIsInstalled(true);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  });
 
-    // Check if already installed
-    if (window.matchMedia('(display-mode: standalone)').matches) {
-      setIsInstalled(true);
-    }
-
-    return () => window.removeEventListener('beforeinstallprompt', handler);
-  }, []);
-
-  const handleInstall = async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const result = await deferredPrompt.userChoice;
-      if (result.outcome === 'accepted') {
-        setIsInstalled(true);
-      }
-      setDeferredPrompt(null);
-    } else {
-      // Fallback for iOS / browsers that don't support beforeinstallprompt
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-      if (isIOS) {
-        alert('להתקנה באייפון:\n1. לחץ על כפתור השיתוף (⬆️)\n2. בחר "Add to Home Screen"');
-      } else {
-        alert('פתח את התפריט של הדפדפן ובחר "התקן אפליקציה" או "הוסף למסך הבית"');
-      }
-    }
-  };
-
-  if (isInstalled) return null;
+  if (isInstalled || !deferredPrompt) return null;
 
   return (
     <div className="p-2 border-t border-sidebar-border">
       <button
-        onClick={handleInstall}
-        className="flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+        onClick={async () => {
+          deferredPrompt.prompt();
+          const { outcome } = await deferredPrompt.userChoice;
+          if (outcome === "accepted") setIsInstalled(true);
+          setDeferredPrompt(null);
+        }}
+        className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-sidebar-accent transition-colors"
+        dir="rtl"
       >
-        <Download className="h-4 w-4 shrink-0" />
-        {!isCollapsed && <span>התקן אפליקציה</span>}
+        {!isCollapsed && <span className="flex-1 text-right">התקן אפליקציה</span>}
+        <Download className="h-4 w-4" />
       </button>
     </div>
   );
