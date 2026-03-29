@@ -196,7 +196,17 @@ export default function DashboardView() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
 
-      const recordsPromises = tables.map(async (table: any) => {
+      // Deduplicate Facebook tables: if both facebook_insights AND facebook_ecommerce exist,
+      // skip facebook_insights to avoid double-counting spend/impressions/clicks
+      const hasFbEcommerce = tables.some((t: any) => t.integration_type === 'facebook_ecommerce');
+      const hasFbInsights = tables.some((t: any) => t.integration_type === 'facebook_insights');
+      const skipFbInsights = hasFbEcommerce && hasFbInsights;
+
+      const tablesToFetch = skipFbInsights
+        ? tables.filter((t: any) => t.integration_type !== 'facebook_insights')
+        : tables;
+
+      const recordsPromises = tablesToFetch.map(async (table: any) => {
         const params = new URLSearchParams({ table_id: table.id, date_filter: dateFilter });
         const response = await supabase.functions.invoke(`crm-records?${params.toString()}`, { method: 'GET' });
         if (response.error) {

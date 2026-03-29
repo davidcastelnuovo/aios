@@ -128,7 +128,18 @@ export default function SharedDashboard() {
   });
 
   const tables = data?.tables || [];
-  const records = data?.records || [];
+  const rawRecords = data?.records || [];
+
+  // Deduplicate Facebook: if both facebook_insights AND facebook_ecommerce exist,
+  // skip facebook_insights records to avoid double-counting spend/impressions/clicks
+  const records = useMemo(() => {
+    const hasFbEcommerce = tables.some((t: any) => t.integration_type === 'facebook_ecommerce');
+    const hasFbInsights = tables.some((t: any) => t.integration_type === 'facebook_insights');
+    if (hasFbEcommerce && hasFbInsights) {
+      return rawRecords.filter((r: any) => r._source !== 'facebook_insights');
+    }
+    return rawRecords;
+  }, [rawRecords, tables]);
 
   // Available platforms
   const availablePlatforms = useMemo(() => {

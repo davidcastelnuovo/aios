@@ -116,7 +116,17 @@ Deno.serve(async (req) => {
     // Fetch records for each table WITH PAGINATION (bypass 1000-row default limit)
     const allRecords: any[] = [];
 
-    for (const table of allTables) {
+    // Deduplicate Facebook: if both facebook_insights AND facebook_ecommerce exist,
+    // skip facebook_insights to avoid double-counting spend/impressions/clicks
+    const hasFbEcommerce = allTables.some((t: any) => t.integration_type === 'facebook_ecommerce');
+    const hasFbInsights = allTables.some((t: any) => t.integration_type === 'facebook_insights');
+    const skipFbInsights = hasFbEcommerce && hasFbInsights;
+
+    const tablesToProcess = skipFbInsights
+      ? allTables.filter((t: any) => t.integration_type !== 'facebook_insights')
+      : allTables;
+
+    for (const table of tablesToProcess) {
       const pageSize = 1000;
       const tableRecords: any[] = [];
 
