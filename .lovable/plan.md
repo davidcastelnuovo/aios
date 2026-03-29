@@ -1,35 +1,32 @@
 
 
-## תוספת: בחירת חשבון לקוח Google Ads אוטומטית מתוך Make.com
+# תיקון היסטוריית שיחות ב-AIOS — מנוס לא זוכר שיחות קודמות
 
-### מה ישתנה
-במקום שהמשתמש יקליד ידנית Customer ID, המערכת תשלוף את רשימת חשבונות הלקוח מתוך החיבור שנבחר ב-Make.com ותציג אותם בדרופדאון לבחירה.
+## הבעיה
 
-### שלבים
+יש **שני מקומות** שמדברים עם ה-AI:
 
-**1. Edge Function `make-api/index.ts` — פעולה חדשה `list_google_ads_accounts`**
-- קריאה ל-Make.com RPC API: `POST /rpcs/google-ads/1/listCustomers`
-- הפרמטרים: `connection` (ה-ID של החיבור שנבחר)
-- מסנן החוצה חשבונות Manager (MCC) ומחזיר רק חשבונות לקוח
-- מחזיר מערך של `{ id, name, currency, manager }` לדרופדאון
+1. **AIOSDialog** (דיאלוג הצ'אט המלא) — **כן שומר** `conversation_id` ושולח היסטוריה מלאה לשרת
+2. **AIOSContext / Command Bar** (הפס התחתון) — **לא שומר** `conversation_id` כלל. כל הודעה נשלחת כשיחה חדשה
 
-**2. `GoogleAdsTableDialog.tsx` — דרופדאון חשבונות במקום שדה טקסט**
-- אחרי בחירת חיבור (`selectedMakeConnection`), קריאת `list_google_ads_accounts` עם ה-connection ID
-- הצגת דרופדאון עם חיפוש (כמו שיש כרגע ב-direct_api) במקום שדה הקלדה ידני
-- שמירת ה-Customer ID שנבחר ב-`customerIdInput`
-- שמירת fallback — אם ה-RPC נכשל, חזרה לשדה טקסט ידני
+בשרת, הלוגיקה כבר קיימת: אם מגיע `conversation_id`, הוא טוען את כל ההודעות הקודמות ושולח אותן ל-AI. אבל ה-Command Bar לא שולח את ה-ID, אז ה-AI מתחיל כל פעם מאפס.
 
-### פרטים טכניים
+בנוסף, כש-Manus מקבל משימה דרך `create_manus_task`, הוא לא מקבל שום הקשר מהשיחה — רק את ה-prompt הנוכחי.
 
-Make.com RPC endpoint:
-```text
-POST https://{region}.make.com/api/v2/rpcs/google-ads/1/listCustomers
-Body: { "data": {}, "scope": { "connectionId": 12345 } }
-Headers: { "Authorization": "Token {api_token}" }
-```
+## מה צריך לתקן
 
-הדרופדאון יציג:
-```text
-שם החשבון (XXX-XXX-XXXX) — לא יציג חשבונות MCC
-```
+### 1. שמירת `conversation_id` ב-AIOSContext
+- להוסיף state של `conversationId` ב-AIOSContext
+- לשלוח `conversation_id` בכל קריאה לשרת
+- לקלוט את ה-`conversation_id` שחוזר מהשרת (event type `conversation_id`) ולשמור אותו
+- כך השרת יטען את כל ההיסטוריה ויעביר אותה ל-AI — והוא יזכור שיחות קודמות
+
+### 2. הוספת אפשרות לאפס שיחה
+- כפתור "שיחה חדשה" שמאפס את ה-`conversationId` וההיסטוריה
+
+### קבצים שישתנו
+- `src/contexts/AIOSContext.tsx` — הוספת `conversationId` state, שליחתו לשרת, קליטת ה-ID מהתגובה, פונקציית reset
+
+### הערה לגבי Manus
+Manus הוא סוכן חיצוני שמקבל משימות חד-פעמיות — הוא לא "זוכר" שיחות קודמות כי הוא עובד על task isolation. אבל כש-AIOS יזכור את השיחה, הוא יוכל לתת ל-Manus הקשר נכון מהשיחות הקודמות כחלק מה-prompt.
 
