@@ -331,20 +331,25 @@ Deno.serve(async (req) => {
       const hasEcommerceSignal =
         purchases > 0 ||
         purchaseValue > 0 ||
-        addToCart > 0 ||
-        purchaseActionTypes.some((type) => actionTypeSet.has(type)) ||
-        addToCartActionTypes.some((type) => actionTypeSet.has(type));
+        purchaseActionTypes.some((type) => actionTypeSet.has(type));
+      // add_to_cart alone is NOT enough to classify as ecommerce —
+      // lead campaigns can have incidental add-to-cart events.
+      const hasStrongEcommerceSignal = hasEcommerceSignal || isEcommerceObjective;
       const hasLeadSignal =
         leads > 0 ||
         leadActionTypes.some((type) => actionTypeSet.has(type)) ||
         Array.from(actionTypeSet).some((type) => type.startsWith('offsite_conversion.custom'));
 
+      // If a campaign has leads but no actual purchases/revenue, classify as lead
+      // even if it has add_to_cart events
       const campaignType: 'lead' | 'ecommerce' | 'other' =
-        hasEcommerceSignal || isEcommerceObjective
+        hasStrongEcommerceSignal && !(hasLeadSignal && purchases === 0 && purchaseValue === 0)
           ? 'ecommerce'
           : hasLeadSignal || isLeadObjective
             ? 'lead'
-            : 'other';
+            : addToCart > 0 || addToCartActionTypes.some((type) => actionTypeSet.has(type))
+              ? 'ecommerce'
+              : 'other';
 
       return {
         date: insight.date_start, // Use date_start as the single date field

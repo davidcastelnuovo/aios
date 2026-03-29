@@ -166,8 +166,14 @@ export default function SharedTable() {
     });
     const allCampaigns = Object.values(map).sort((a: any, b: any) => b.spend - a.spend);
     // Classify each campaign
-    const ecommerceCampaigns = allCampaigns.filter((c: any) => c.purchases > 0 || c.revenue > 0 || c.addToCart > 0);
-    const leadCampaigns = allCampaigns.filter((c: any) => c.leads > 0 && c.purchases === 0 && c.revenue === 0 && c.addToCart === 0);
+    const ecommerceCampaigns = allCampaigns.filter((c: any) =>
+      (c.purchases > 0 || c.revenue > 0) ||
+      (c.addToCart > 0 && !(c.leads > 0 && c.purchases === 0 && c.revenue === 0))
+    );
+    const leadCampaigns = allCampaigns.filter((c: any) =>
+      (c.leads > 0 && c.purchases === 0 && c.revenue === 0) ||
+      (c.leads === 0 && c.purchases === 0 && c.revenue === 0 && c.addToCart === 0)
+    );
     // If no clear separation, show all as-is
     if (ecommerceCampaigns.length === 0 && leadCampaigns.length === 0) {
       return { ecommerce: [], leads: allCampaigns, all: allCampaigns };
