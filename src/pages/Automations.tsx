@@ -292,7 +292,7 @@ export default function Automations() {
             className={cn(
               automation.active ? "" : "opacity-60",
               (automation as any).is_flow && "cursor-pointer hover:border-primary/50 transition-colors",
-              automation.trigger_type === "carmen_whatsapp_session" && "border-purple-500/40 bg-purple-500/5"
+              (automation.trigger_type as string) === "carmen_whatsapp_session" && "border-purple-500/40 bg-purple-500/5"
             )}
             onClick={() => (automation as any).is_flow && navigate(buildPath(`automations/flow/${automation.id}`))}
           >
