@@ -315,13 +315,7 @@ serve(async (req: Request) => {
     
 
     // TODO: Send actual email using your email service
-    // For now, we'll just log the invitation URL
-      📧 Invitation Details:
-      - Email: ${payload.contact_email}
-      - Name: ${payload.contact_name}
-      - Organization: ${payload.tenant_name}
-      - URL: ${invitationUrl}
-    `);
+    console.log(`Invitation Details: Email=${payload.contact_email}, Name=${payload.contact_name}, Org=${payload.tenant_name}, URL=${invitationUrl}`);
 
     return new Response(
       JSON.stringify({
