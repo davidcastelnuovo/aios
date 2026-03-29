@@ -41,7 +41,73 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.
   failed: { label: "נכשל", color: "bg-red-100 text-red-800 border-red-200", icon: <XCircle className="h-3.5 w-3.5" /> },
 };
 
-export default function AgentTasksPage() {
+// Extract images and social posts from tool_log
+function TaskResultDisplay({ result }: { result: any }) {
+  const toolLog = result?.tool_log || [];
+  const output = result?.output || "";
+  
+  // Find generated images
+  const images: string[] = [];
+  const socialPosts: any[] = [];
+  
+  for (const log of toolLog) {
+    if (log.tool === "generate_ad_image" && log.result?.image_url) {
+      images.push(log.result.image_url);
+    }
+    if (log.tool === "create_social_post" && log.result?.success) {
+      socialPosts.push(log.result);
+    }
+  }
+
+  const hasVisualContent = images.length > 0 || socialPosts.length > 0;
+
+  return (
+    <div className="mt-3 space-y-3">
+      {/* Generated images */}
+      {images.length > 0 && (
+        <div className="space-y-2">
+          {images.map((url, i) => (
+            <div key={i} className="rounded-xl overflow-hidden border shadow-sm">
+              <img src={url} alt="תמונה שנוצרה" className="w-full max-h-64 object-cover" />
+              <div className="p-2 bg-muted/30 flex items-center justify-between">
+                <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                  <Image className="h-3 w-3" /> נוצר ע״י AI
+                </span>
+                <a href={url} target="_blank" rel="noopener noreferrer" className="text-[11px] text-primary flex items-center gap-1 hover:underline">
+                  פתח <ExternalLink className="h-3 w-3" />
+                </a>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Social posts created */}
+      {socialPosts.length > 0 && (
+        <div className="space-y-2">
+          {socialPosts.map((post, i) => (
+            <div key={i} className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+              <div className="flex items-center gap-2 mb-1.5">
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                <span className="text-xs font-medium text-emerald-800">פוסט נוצר במודול סושיאל</span>
+              </div>
+              {post.title && <p className="text-sm font-semibold text-emerald-900 mb-1">{post.title}</p>}
+              <p className="text-xs text-emerald-800 whitespace-pre-wrap line-clamp-4">{post.content}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Text output */}
+      {output && (
+        <div className={`p-3 rounded-xl text-xs whitespace-pre-wrap ${hasVisualContent ? "bg-muted/40 text-foreground" : "bg-green-50 text-green-900"}`}>
+          <ReactMarkdown className="prose prose-xs prose-green max-w-none">{output}</ReactMarkdown>
+        </div>
+      )}
+    </div>
+  );
+}
+
   const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
