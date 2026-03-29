@@ -441,21 +441,18 @@ export function AppSidebar() {
               </div>
             </div>
 
-            {/* Tab switcher */}
+            {/* Tab switcher — 3 main tabs */}
             <div className="flex gap-1 bg-sidebar-accent/40 rounded-lg p-1">
-              {MENU_TABS.map(tab => {
+              {MENU_TABS.filter(t => t.id !== "daily").map(tab => {
                 const TabIcon = tab.icon;
                 const isActive = activeTab === tab.id;
-                const isDaily = tab.id === "daily";
                 return (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
                     className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2 rounded-md text-xs font-medium transition-all ${
                       isActive
-                        ? isDaily
-                          ? "bg-emerald-500 text-white shadow-sm"
-                          : "bg-primary text-primary-foreground shadow-sm"
+                        ? "bg-primary text-primary-foreground shadow-sm"
                         : "text-sidebar-foreground hover:bg-sidebar-accent"
                     }`}
                   >
@@ -465,6 +462,26 @@ export function AppSidebar() {
                 );
               })}
             </div>
+
+            {/* Daily tab — separate row */}
+            {(() => {
+              const dailyTab = MENU_TABS.find(t => t.id === "daily")!;
+              const DailyIcon = dailyTab.icon;
+              const isActive = activeTab === "daily";
+              return (
+                <button
+                  onClick={() => setActiveTab("daily")}
+                  className={`w-full flex items-center justify-center gap-2 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all ${
+                    isActive
+                      ? "bg-emerald-500 text-white shadow-sm"
+                      : "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20"
+                  }`}
+                >
+                  <DailyIcon className="h-3.5 w-3.5" />
+                  <span>{dailyTab.label}</span>
+                </button>
+              );
+            })()}
           </div>
         )}
       </SidebarHeader>
