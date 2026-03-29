@@ -137,7 +137,7 @@ Deno.serve(async (req) => {
     }
 
     if (!tenantId) {
-      console.error('❌ Could not determine tenant for user:', user.id);
+      console.error('❌ Could not determine tenant for user:', userId);
       return new Response(JSON.stringify({ error: 'Tenant not found' }), {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
