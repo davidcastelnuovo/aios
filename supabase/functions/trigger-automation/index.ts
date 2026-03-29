@@ -254,9 +254,22 @@ Deno.serve(async (req) => {
     let payloadData: any
     let tenantId: string
 
-    const validateFlowTriggerConfig = (config: any, data: any): { matches: boolean; reason?: string } => {
+    const validateFlowTriggerConfig = (config: any, data: any, hasActiveCarmenSession?: boolean): { matches: boolean; reason?: string } => {
       const safeConfig = config || {}
       const safeData = data || {}
+
+      // CARMEN SESSION MODE: if there's an active session, bypass keyword check entirely
+      if (safeConfig.carmen_session_mode && hasActiveCarmenSession) {
+        // But still close session if end keyword is sent
+        if (safeConfig.end_keyword && safeData.message_text) {
+          const endKw = String(safeConfig.end_keyword).toLowerCase()
+          const msgText = String(safeData.message_text).toLowerCase()
+          if (msgText.includes(endKw)) {
+            return { matches: false, reason: 'carmen_session_ended' }
+          }
+        }
+        return { matches: true }
+      }
 
       if (safeConfig.facebook_form_id && safeConfig.facebook_form_id !== safeData.facebook_form_id) {
         return { matches: false, reason: 'facebook_form_id_mismatch' }
@@ -363,6 +376,44 @@ Deno.serve(async (req) => {
       // 2. Also find flow automations — BUT ONLY if source is NOT 'crm'
       // When source === 'crm', we skip flow lookup entirely to prevent CRM leads from triggering flows
       if (payload.source !== 'crm') {
+        // CARMEN SESSION CHECK: before keyword filtering, check if there's an active Carmen session
+        // for this sender. If yes, bypass keyword requirement so mid-session messages are routed.
+        let hasActiveCarmenSession = false
+        const senderPhone = payloadData?.sender_phone || payloadData?.phone || ''
+        const chatId = payloadData?.chat_id || ''
+        if (senderPhone || chatId) {
+          const { data: activeSession } = await supabase
+            .from('carmen_whatsapp_sessions')
+            .select('id, agent_id, conversation_history, end_keyword')
+            .eq('tenant_id', payload.tenant_id)
+            .eq('status', 'active')
+            .or(`phone.eq.${senderPhone},chat_id.eq.${chatId}`)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+          if (activeSession) {
+            hasActiveCarmenSession = true
+            // Check if this message is the end keyword — if so, close session
+            const msgText = (payloadData?.message_text || '').toLowerCase()
+            const endKw = (activeSession.end_keyword || 'סיימנו כרמן').toLowerCase()
+            if (msgText.includes(endKw)) {
+              // Close the session
+              await supabase
+                .from('carmen_whatsapp_sessions')
+                .update({ status: 'ended', ended_at: new Date().toISOString() })
+                .eq('id', activeSession.id)
+              hasActiveCarmenSession = false
+              // Inject end signal so the flow can handle it (or just skip)
+              payloadData._carmen_session_ended = true
+            } else {
+              // Inject session context into payload for the AI agent
+              payloadData._carmen_session_id = activeSession.id
+              payloadData._carmen_agent_id = activeSession.agent_id
+              payloadData._carmen_history = activeSession.conversation_history || []
+            }
+          }
+        }
+
         const { data: flowTriggerSteps, error: flowError } = await supabase
           .from('automation_flow_steps')
           .select('automation_id, configuration')
@@ -378,7 +429,7 @@ Deno.serve(async (req) => {
           // Filter by trigger configuration BEFORE fetching automations
           const matchingSteps = flowTriggerSteps.filter((step: any) => {
             const config = step.configuration || {}
-            const validation = validateFlowTriggerConfig(config, payloadData)
+            const validation = validateFlowTriggerConfig(config, payloadData, hasActiveCarmenSession)
             return validation.matches
           })
           const flowAutomationIds = matchingSteps.map((s: any) => s.automation_id)
@@ -529,6 +580,35 @@ Deno.serve(async (req) => {
                 if (effectiveActionType === 'agent') {
                   const agentId = stepConfig.agent_id
                   if (agentId) {
+                    // CARMEN SESSION: if this is a carmen_session_mode flow, manage session
+                    const isCarmenFlow = (automation as any).configuration?.carmen_session_mode
+                    if (isCarmenFlow) {
+                      const sPhone = payloadData?.sender_phone || payloadData?.phone || ''
+                      const cId = payloadData?.chat_id || ''
+                      if (!payloadData._carmen_session_id) {
+                        // First message — create new session
+                        const { data: newSession } = await supabase
+                          .from('carmen_whatsapp_sessions')
+                          .insert({
+                            tenant_id: tenantId,
+                            chat_id: cId,
+                            phone: sPhone,
+                            sender_name: payloadData?.sender_name || payloadData?.contact_name || '',
+                            agent_id: agentId,
+                            conversation_history: [],
+                            status: 'active',
+                            started_by_keyword: (automation as any).configuration?.trigger_keyword || 'כרמן',
+                            end_keyword: (automation as any).configuration?.end_keyword || 'סיימנו כרמן',
+                          })
+                          .select('id')
+                          .single()
+                        if (newSession) {
+                          payloadData._carmen_session_id = newSession.id
+                          payloadData._carmen_history = []
+                        }
+                      }
+                    }
+
                     // Build command_text from step_instruction with variable replacement
                     let commandText = stepConfig.step_instruction || payloadData?.command_text || payloadData?.text || 'הפעל את האוטומציה'
                     
@@ -556,39 +636,60 @@ Deno.serve(async (req) => {
                     }
 
                     const agentUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/run-ai-agent`
+                    // Build conversation history for Carmen sessions
+                    const carmenHistory: any[] = payloadData?._carmen_history || []
+                    const agentBody: any = {
+                      agent_id: agentId,
+                      command_text: commandText,
+                      temperature: agentTemperature,
+                      automation_id: automation.id,
+                      user_name: payloadData?.user_name || 'מערכת',
+                      lead_data: {
+                        lead_id: stepData.lead_id,
+                        contact_name: stepData.contact_name,
+                        phone: stepData.phone,
+                        email: stepData.email,
+                        company_name: stepData.company_name,
+                        source: stepData.source,
+                        notes: stepData.notes,
+                        status: stepData.status,
+                        pipeline_stage: stepData.pipeline_stage,
+                        agency_name: stepData.agency_name,
+                        ...Object.fromEntries(
+                          Object.entries(stepData)
+                            .filter(([k]) => k.startsWith('fb_'))
+                        ),
+                      },
+                    }
+                    // Pass conversation history for Carmen sessions
+                    if (carmenHistory.length > 0) {
+                      agentBody.conversation_history = carmenHistory
+                    }
                     const agentRes = await fetch(agentUrl, {
                       method: 'POST',
                       headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
                       },
-                      body: JSON.stringify({
-                        agent_id: agentId,
-                        command_text: commandText,
-                        temperature: agentTemperature,
-                        automation_id: automation.id,
-                        user_name: payloadData?.user_name || 'מערכת',
-                        lead_data: {
-                          lead_id: stepData.lead_id,
-                          contact_name: stepData.contact_name,
-                          phone: stepData.phone,
-                          email: stepData.email,
-                          company_name: stepData.company_name,
-                          source: stepData.source,
-                          notes: stepData.notes,
-                          status: stepData.status,
-                          pipeline_stage: stepData.pipeline_stage,
-                          agency_name: stepData.agency_name,
-                          // Include all fb_ prefixed fields from payload
-                          ...Object.fromEntries(
-                            Object.entries(stepData)
-                              .filter(([k]) => k.startsWith('fb_'))
-                          ),
-                        },
-                      }),
+                      body: JSON.stringify(agentBody),
                     })
                     stepResponse = await agentRes.json()
                     previousStepOutput = stepResponse
+                    // CARMEN SESSION: save updated history after agent responds
+                    if (payloadData?._carmen_session_id && stepResponse?.output) {
+                      const updatedHistory = [
+                        ...carmenHistory,
+                        { role: 'user', content: commandText },
+                        { role: 'assistant', content: stepResponse.output },
+                      ]
+                      await supabase
+                        .from('carmen_whatsapp_sessions')
+                        .update({
+                          conversation_history: updatedHistory,
+                          last_message_at: new Date().toISOString(),
+                        })
+                        .eq('id', payloadData._carmen_session_id)
+                    }
                   }
                 } else if (effectiveActionType === 'send_greenapi_message') {
                   // If message_template contains {{agent_output}}, replace it
