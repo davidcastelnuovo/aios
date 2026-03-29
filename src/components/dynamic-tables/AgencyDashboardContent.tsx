@@ -809,7 +809,7 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
           )}
 
           {/* Ads spend chart - for ads platform tabs or "all" */}
-          {(platformFilter === 'all' || platformFilter === 'facebook' || platformFilter === 'google_ads') && (
+          {(platformFilter === 'facebook' || platformFilter === 'google_ads') && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">הוצאות פרסום - יומי</CardTitle>
