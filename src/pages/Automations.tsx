@@ -292,7 +292,7 @@ export default function Automations() {
             className={cn(
               automation.active ? "" : "opacity-60",
               (automation as any).is_flow && "cursor-pointer hover:border-primary/50 transition-colors",
-              automation.trigger_type === "carmen_whatsapp_session" && "border-purple-500/40 bg-purple-500/5"
+              (automation.trigger_type as string) === "carmen_whatsapp_session" && "border-purple-500/40 bg-purple-500/5"
             )}
             onClick={() => (automation as any).is_flow && navigate(buildPath(`automations/flow/${automation.id}`))}
           >
@@ -300,7 +300,7 @@ export default function Automations() {
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <CardTitle className="text-base md:text-lg truncate flex items-center gap-2">
-                    {automation.trigger_type === "carmen_whatsapp_session" ? (
+                    {(automation.trigger_type as string) === "carmen_whatsapp_session" ? (
                       <Bot className="h-4 w-4 shrink-0 text-purple-400" />
                     ) : (automation as any).is_flow ? (
                       <Workflow className="h-4 w-4 shrink-0 text-primary" />

@@ -102,7 +102,7 @@ interface Agent {
   talent?: string;
   engine: string;
   active: boolean;
-  allowed_tools: string[];
+  allowed_tools?: string[];
   created_at: string;
 }
 
