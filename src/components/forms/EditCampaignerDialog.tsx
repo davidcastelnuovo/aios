@@ -230,7 +230,6 @@ export function EditCampaignerDialog({ campaigner, open: externalOpen, onOpenCha
                     </label>
                   </div>
                 ))}
-              </div>
             </div>
           )}
 
