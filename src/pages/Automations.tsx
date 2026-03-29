@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Zap, Activity, Trash2, Edit, TestTube, Workflow } from "lucide-react";
+import { Plus, Zap, Activity, Trash2, Edit, TestTube, Workflow, MessageCircle, Bot } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AddAutomationForm } from "@/components/forms/AddAutomationForm";
 import { EditAutomationDialog } from "@/components/forms/EditAutomationDialog";
@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/table";
 
 const TRIGGER_LABELS: Record<string, string> = {
+  carmen_whatsapp_session: "שיחת כרמן ב-WhatsApp",
   task_assigned: "משימה שוייכה",
   task_status_changed: "סטטוס משימה השתנה",
   lead_status_changed: "סטטוס ליד השתנה",
@@ -156,6 +157,37 @@ export default function Automations() {
     },
   });
 
+  // Create new Carmen WhatsApp session automation
+  const createCarmenFlowMutation = useMutation({
+    mutationFn: async () => {
+      if (!tenantId) throw new Error("No tenant");
+      const { data, error } = await supabase
+        .from("automations")
+        .insert({
+          name: "שיחת כרמן ב-WhatsApp",
+          description: "שיחה אינטראקטיבית עם כרמן ב-WhatsApp - מתחילה במילת \"כרמן\", מסתיימת ב\"סיימנו כרמן\"",
+          tenant_id: tenantId,
+          trigger_type: "carmen_whatsapp_session",
+          action_type: "carmen_whatsapp_session",
+          configuration: {
+            trigger_keyword: "כרמן",
+            end_keyword: "סיימנו כרמן",
+          },
+          is_flow: true,
+        } as any)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      navigate(buildPath(`automations/flow/${data.id}`));
+    },
+    onError: (err: any) => {
+      toast({ title: "שגיאה", description: err.message, variant: "destructive" });
+    },
+  });
+
   // Create new flow automation
   const createFlowMutation = useMutation({
     mutationFn: async () => {
@@ -228,19 +260,51 @@ export default function Automations() {
         </div>
       </div>
 
+      {/* Carmen WhatsApp Session Banner - shown when no carmen automation exists */}
+      {!automations?.some((a: any) => a.trigger_type === "carmen_whatsapp_session") && (
+        <div className="rounded-xl border border-purple-500/30 bg-gradient-to-l from-purple-500/5 to-transparent p-4 flex flex-col md:flex-row items-start md:items-center gap-4">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-purple-500/15 flex items-center justify-center shrink-0">
+              <Bot className="h-5 w-5 text-purple-400" />
+            </div>
+            <div>
+              <p className="font-semibold text-sm">שיחת כרמן ב-WhatsApp</p>
+              <p className="text-xs text-muted-foreground">אפשר למשתמשים לשוחר עם כרמן ישירות ב-WhatsApp עם הקלדת מילת "כרמן"</p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            className="md:mr-auto bg-purple-600 hover:bg-purple-700 text-white shrink-0"
+            onClick={() => createCarmenFlowMutation.mutate()}
+            disabled={createCarmenFlowMutation.isPending}
+          >
+            <MessageCircle className="h-4 w-4 ml-2" />
+            צור שיחת כרמן
+          </Button>
+        </div>
+      )}
+
       {/* Automations Grid */}
       <div className="grid gap-3 md:gap-4 grid-cols-1 lg:grid-cols-2">
         {automations?.map((automation) => (
           <Card
             key={automation.id}
-            className={cn(automation.active ? "" : "opacity-60", (automation as any).is_flow && "cursor-pointer hover:border-primary/50 transition-colors")}
+            className={cn(
+              automation.active ? "" : "opacity-60",
+              (automation as any).is_flow && "cursor-pointer hover:border-primary/50 transition-colors",
+              automation.trigger_type === "carmen_whatsapp_session" && "border-purple-500/40 bg-purple-500/5"
+            )}
             onClick={() => (automation as any).is_flow && navigate(buildPath(`automations/flow/${automation.id}`))}
           >
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <CardTitle className="text-base md:text-lg truncate flex items-center gap-2">
-                    {(automation as any).is_flow && <Workflow className="h-4 w-4 shrink-0 text-primary" />}
+                    {automation.trigger_type === "carmen_whatsapp_session" ? (
+                      <Bot className="h-4 w-4 shrink-0 text-purple-400" />
+                    ) : (automation as any).is_flow ? (
+                      <Workflow className="h-4 w-4 shrink-0 text-primary" />
+                    ) : null}
                     {automation.name}
                   </CardTitle>
                   {automation.description && (
