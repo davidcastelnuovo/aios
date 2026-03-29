@@ -612,7 +612,7 @@ async function executeTool(
       }
 
       case 'list_clients': {
-        const { status, limit = 20, agency_id: clientsAgencyId, agency_name: clientsAgencyName } = toolCall.args;
+        const { status, limit = 100, agency_id: clientsAgencyId, agency_name: clientsAgencyName } = toolCall.args;
         
         let resolvedClientAgencyId = clientsAgencyId;
         if (!resolvedClientAgencyId && clientsAgencyName) {
