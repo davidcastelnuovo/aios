@@ -625,7 +625,7 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
 
   const hasAnalyticsData = availablePlatforms.hasAnalytics;
   const showAnalyticsMetrics = platformFilter === 'all' || platformFilter === 'google_analytics';
-  const showAdsMetrics = platformFilter === 'all' || platformFilter === 'facebook' || platformFilter === 'google_ads';
+  const showAdsMetrics = platformFilter === 'facebook' || platformFilter === 'google_ads';
   
   const combinedRoas = overallTotals.adsSpend > 0 ? overallTotals.analyticsRevenue / overallTotals.adsSpend : 0;
   const totalCPL = overallTotals.adsLeads > 0 ? overallTotals.adsSpend / overallTotals.adsLeads : 0;
