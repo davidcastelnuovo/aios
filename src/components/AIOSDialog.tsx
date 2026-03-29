@@ -279,7 +279,7 @@ export function AIOSDialog({ open, onOpenChange }: AIOSDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl w-[95vw] h-[80vh] p-0 gap-0 overflow-hidden flex flex-col" dir="rtl">
-        <DialogTitle className="sr-only">AIOS - עוזר AI</DialogTitle>
+        <DialogTitle className="sr-only">כרמן — עוזרת AI</DialogTitle>
         
         {/* Header */}
         <div className="border-b border-border p-3 bg-card flex items-center gap-3 flex-shrink-0">
@@ -299,12 +299,14 @@ export function AIOSDialog({ open, onOpenChange }: AIOSDialogProps) {
             </SheetContent>
           </Sheet>
 
-          <div className="h-9 w-9 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center flex-shrink-0">
-            <Sparkles className="h-5 w-5 text-primary-foreground" />
-          </div>
+          <img
+            src="https://d2xsxph8kpxj0f.cloudfront.net/310419663030948028/XGJWpzb5zh76ZdoV37Q3K8/carmen-icon-CyF3DNNJ8Z9Uhfz7EpYJcQ.webp"
+            alt="כרמן"
+            className="h-9 w-9 rounded-full object-cover flex-shrink-0 border-2 border-red-600/40"
+          />
           <div className="min-w-0 flex-1">
-            <h2 className="text-sm font-bold">AIOS</h2>
-            <p className="text-[11px] text-muted-foreground">עוזר AI חכם - ניהול, אוטומציות, הודעות ועוד</p>
+            <h2 className="text-sm font-bold">כרמן</h2>
+            <p className="text-[11px] text-muted-foreground">עוזרת AI חכמה — ניהול, אוטומציות, הודעות ועוד</p>
           </div>
         </div>
 
@@ -313,12 +315,14 @@ export function AIOSDialog({ open, onOpenChange }: AIOSDialogProps) {
           {messages.length === 0 && !streamingMessage ? (
             <div className="h-full flex items-center justify-center">
               <div className="text-center max-w-sm">
-                <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center mx-auto mb-4">
-                  <Sparkles className="h-8 w-8 text-primary-foreground" />
-                </div>
-                <h3 className="text-lg font-bold mb-2">AIOS</h3>
+                <img
+                  src="https://d2xsxph8kpxj0f.cloudfront.net/310419663030948028/XGJWpzb5zh76ZdoV37Q3K8/carmen-icon-CyF3DNNJ8Z9Uhfz7EpYJcQ.webp"
+                  alt="כרמן"
+                  className="h-20 w-20 rounded-full object-cover mx-auto mb-4 border-2 border-red-600/40 shadow-lg"
+                />
+                <h3 className="text-lg font-bold mb-1">שלום! אני כרמן 👋</h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  העוזר האישי שלך. אני יכול לבצע פעולות במערכת בשבילך:
+                  העוזרת האישית שלך. אני יכולה לבצע פעולות במערכת בשבילך:
                 </p>
                 <div className="grid grid-cols-2 gap-2 text-right">
                   {[

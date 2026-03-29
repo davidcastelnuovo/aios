@@ -1,8 +1,7 @@
-import { useState, lazy, Suspense } from "react";
-const AIOSDashboard = lazy(() => import("@/pages/AIOSDashboard"));
+import { useState } from "react";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
-import { LogOut, Building2, Sparkles, Monitor, Bot } from "lucide-react";
+import { LogOut, Building2 } from "lucide-react";
 import { AIOSDialog } from "@/components/AIOSDialog";
 import logo from "@/assets/logo.png";
 import { Button } from "@/components/ui/button";
@@ -16,8 +15,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
 import { ViewAsProvider } from "@/contexts/ViewAsContext";
 import { ViewAsBanner } from "@/components/ViewAsBanner";
-import { useUIMode } from "@/contexts/UIModeContext";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,6 +29,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+const CARMEN_ICON = "https://d2xsxph8kpxj0f.cloudfront.net/310419663030948028/XGJWpzb5zh76ZdoV37Q3K8/carmen-icon-CyF3DNNJ8Z9Uhfz7EpYJcQ.webp";
+
 interface AppLayoutProps {
   children: React.ReactNode;
 }
@@ -42,8 +41,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { selectedAgency, setSelectedAgency, agencies } = useAgency();
   const { userId } = useCurrentUser();
   const { currentTenantId, setCurrentTenantId, currentTenant } = useTenant();
-  const [aiosOpen, setAiosOpen] = useState(false);
-  const { mode, toggleMode } = useUIMode();
+  const [carmenOpen, setCarmenOpen] = useState(false);
 
   // Fetch available tenants for the user
   const { data: userTenants } = useQuery({
@@ -63,7 +61,6 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const handleTenantChange = async (tenantId: string) => {
     try {
-      // Update user_active_tenant in the database
       await (supabase as any)
         .from("user_active_tenant")
         .upsert({
@@ -74,7 +71,6 @@ export function AppLayout({ children }: AppLayoutProps) {
           onConflict: "user_id"
         });
 
-      // Get the slug of the new tenant directly from database
       const { data: tenantData } = await supabase
         .from("tenants")
         .select("slug")
@@ -84,7 +80,6 @@ export function AppLayout({ children }: AppLayoutProps) {
       const newSlug = tenantData?.slug;
       
       if (newSlug) {
-        // Extract current module from URL
         const pathParts = window.location.pathname.split('/');
         const currentModule = pathParts.length > 3 ? pathParts.slice(3).join('/') : 'dashboard';
         
@@ -93,10 +88,8 @@ export function AppLayout({ children }: AppLayoutProps) {
           description: "המערכת עוברת לארגון החדש",
         });
 
-        // Force full page reload to ensure URL and all queries update correctly
         window.location.replace(`/t/${newSlug}/${currentModule}`);
       } else {
-        // Fallback if no slug found
         window.location.reload();
       }
     } catch (error) {
@@ -109,7 +102,6 @@ export function AppLayout({ children }: AppLayoutProps) {
     }
   };
 
-  // Check user status and process invitation if pending
   const { data: userProfile } = useQuery({
     queryKey: ["user-profile", userId],
     queryFn: async () => {
@@ -124,14 +116,13 @@ export function AppLayout({ children }: AppLayoutProps) {
       return data;
     },
     enabled: !!userId,
-    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
-    refetchOnWindowFocus: false, // Don't refetch when window regains focus
-    refetchInterval: false, // Don't auto-refetch
+    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
+    refetchInterval: false,
   });
 
   useEffect(() => {
     const processInvitation = async () => {
-      // Only process invitation if user has 'pending' status
       if (!userId || !userProfile || userProfile.status !== 'pending') {
         return;
       }
@@ -149,7 +140,6 @@ export function AppLayout({ children }: AppLayoutProps) {
         if (error) {
           console.error("Error processing invitation:", error);
         } else if (data?.success) {
-          // Reload the page to refresh all data
           window.location.reload();
         }
       } catch (error) {
@@ -162,22 +152,18 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const handleLogout = async () => {
     try {
-      // Try to revoke tokens server-side (global)
       const { error } = await supabase.auth.signOut({ scope: 'global' });
       if (error) throw error;
     } catch (err) {
-      // If server rejects (e.g., session_not_found), clear locally as fallback
       try {
         await supabase.auth.signOut({ scope: 'local' });
       } catch (_) {}
-      // Hard-clear any lingering auth tokens in localStorage
       try {
         Object.keys(localStorage).forEach((k) => {
           if (/^sb-.*-auth-token$/.test(k)) localStorage.removeItem(k);
         });
       } catch (_) {}
     } finally {
-      // Ensure redirect to auth regardless
       navigate('/auth', { replace: true });
       toast({
         title: 'התנתקת בהצלחה',
@@ -188,51 +174,19 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <ViewAsProvider>
-      <SidebarProvider defaultOpen={mode === "classic"}>
+      <SidebarProvider defaultOpen={true}>
         <div className="min-h-screen flex w-full overflow-x-hidden" dir="rtl">
-          {mode === "classic" && <AppSidebar />}
+          <AppSidebar />
           <div className="flex-1 flex flex-col overflow-x-hidden">
             <ViewAsBanner />
             <header className="sticky top-0 z-50 h-16 border-b bg-card flex items-center justify-between px-4 md:px-6 gap-2 md:gap-4 flex-shrink-0">
               <div className="flex items-center gap-2 md:gap-4 min-w-0">
-                {mode === "classic" && <SidebarTrigger className="md:hidden" />}
+                <SidebarTrigger className="md:hidden" />
                 <h1 className="text-sm md:text-xl font-bold bg-gradient-primary bg-clip-text text-transparent truncate">
-                  {mode === "aios" ? "AIOS" : "מערכת ניהול סוכנויות"}
+                  מערכת ניהול סוכנויות
                 </h1>
               </div>
               <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
-                {/* Mode Toggle */}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="rounded-full"
-                      onClick={toggleMode}
-                    >
-                      {mode === "aios" ? (
-                        <Monitor className="h-5 w-5 text-muted-foreground" />
-                      ) : (
-                        <Bot className="h-5 w-5 text-primary" />
-                      )}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {mode === "aios" ? "עבור למוד קלאסי" : "עבור למוד AIOS"}
-                  </TooltipContent>
-                </Tooltip>
-                {mode === "classic" && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="rounded-full relative group"
-                    onClick={() => setAiosOpen(true)}
-                    title="AIOS - עוזר AI"
-                  >
-                    <Sparkles className="h-5 w-5 text-primary group-hover:scale-110 transition-transform" />
-                    <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-primary animate-pulse" />
-                  </Button>
-                )}
                 {agencies && agencies.length > 0 && (
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-muted-foreground hidden sm:inline">סוכנות:</span>
@@ -269,13 +223,37 @@ export function AppLayout({ children }: AppLayoutProps) {
                 </DropdownMenu>
               </div>
             </header>
-          <main className="flex-1 min-h-0 overflow-hidden md:overflow-hidden overflow-y-auto">
-            {mode === "aios" ? (
-              <Suspense fallback={null}><AIOSDashboard /></Suspense>
-            ) : children}
-          </main>
+            <main className="flex-1 min-h-0 overflow-hidden md:overflow-hidden overflow-y-auto">
+              {children}
+            </main>
           </div>
-          <AIOSDialog open={aiosOpen} onOpenChange={setAiosOpen} />
+
+          {/* Carmen floating button — bottom left */}
+          <button
+            onClick={() => setCarmenOpen(true)}
+            className="fixed bottom-6 left-6 z-50 group"
+            title="כרמן — עוזרת AI"
+            aria-label="פתח את כרמן"
+          >
+            <div className="relative">
+              {/* Glow ring */}
+              <div className="absolute inset-0 rounded-full bg-red-600/30 blur-md scale-110 group-hover:scale-125 transition-transform duration-300" />
+              {/* Pulse dot */}
+              <span className="absolute -top-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-400 border-2 border-background animate-pulse z-10" />
+              {/* Avatar */}
+              <img
+                src={CARMEN_ICON}
+                alt="כרמן"
+                className="relative h-14 w-14 rounded-full object-cover shadow-lg border-2 border-red-600/60 group-hover:scale-105 transition-transform duration-200"
+              />
+            </div>
+            {/* Tooltip label */}
+            <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-background border text-xs font-medium px-2 py-0.5 rounded-full shadow opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+              כרמן
+            </span>
+          </button>
+
+          <AIOSDialog open={carmenOpen} onOpenChange={setCarmenOpen} />
         </div>
       </SidebarProvider>
     </ViewAsProvider>
