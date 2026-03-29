@@ -294,14 +294,13 @@ async function findCarmenSessionAutomation(
   supabase: any,
   tenantId: string
 ): Promise<any | null> {
-  // Look for automations with trigger_type whatsapp_message_received and carmen_session_mode enabled
+  // Look for active automations with trigger_type = carmen_whatsapp_session
   const { data } = await supabase
     .from('automations')
     .select('id, name, configuration')
     .eq('tenant_id', tenantId)
-    .eq('trigger_type', 'whatsapp_message_received')
+    .eq('trigger_type', 'carmen_whatsapp_session')
     .eq('active', true)
-    .filter('configuration->>carmen_session_mode', 'eq', 'true')
     .limit(1)
     .maybeSingle();
   return data || null;
@@ -1589,70 +1588,102 @@ Deno.serve(async (req) => {
         });
       } else {
         // === NO ACTIVE SESSION: check if message triggers Carmen ===
-        const triggerKeywords = ['כרמן', 'carmen'];
-        const hasTriggerKeyword = triggerKeywords.some(kw => normalizedMsg.includes(kw));
         
-        if (hasTriggerKeyword) {
-          // Find Carmen agent for this tenant
-          const carmenAgent = await findCarmenAgent(supabaseClient, tenantId);
+        // Step 1: Find active Carmen automation for this tenant
+        const carmenAutomation = await findCarmenSessionAutomation(supabaseClient, tenantId);
+        
+        if (!carmenAutomation) {
+          // No Carmen automation configured — skip silently
+        } else {
+          // Get trigger keyword from automation config (default: 'כרמן')
+          const triggerKeyword = (carmenAutomation.configuration?.trigger_keyword || 'כרמן').toLowerCase();
+          const endKeywordConfig = carmenAutomation.configuration?.end_keyword || 'סיימנו כרמן';
+          const hasTriggerKeyword = normalizedMsg.includes(triggerKeyword);
           
-          if (carmenAgent) {
-            // Create new Carmen session
-            const { data: newSession, error: sessionError } = await supabaseClient
-              .from('carmen_whatsapp_sessions')
-              .insert({
-                tenant_id: tenantId,
-                chat_id: chatId,
-                phone: phoneNumber,
-                sender_name: senderData.senderName || null,
-                agent_id: carmenAgent.id,
-                connection_user_id: connectionUserId,
-                conversation_history: [],
-                status: 'active',
-                started_by_keyword: messageText,
-              })
-              .select()
-              .single();
+          if (hasTriggerKeyword) {
+            // Step 2: Get agent — prefer agent_id from automation config, fallback to name search
+            let agentId = carmenAutomation.configuration?.agent_id || null;
+            let agentName = 'כרמן';
             
-            if (sessionError) {
-              console.error('Failed to create Carmen session:', sessionError);
-            } else {
-              // Send greeting
-              const greeting = 'שלום! אני כרמן, המנהלת ה-AI שלך במערכת ה-CRM. אפשר לשאול אותי כל שאלה ולבצע פעולות במערכת. מה אפשר לעזור לך? (כדי לסיים את השיחה, כתוב "סיימנו כרמן")';
-              
-              await sendGreenApiMessage(instanceId, apiToken, chatId, greeting);
-              
-              // If there's additional content after the trigger keyword, process it immediately
-              const contentAfterKeyword = messageText.replace(/כרמן|carmen/gi, '').trim();
-              if (contentAfterKeyword.length > 2) {
-                const carmenResponse = await runCarmenAI(
-                  supabaseClient,
-                  carmenAgent.id,
-                  tenantId,
-                  contentAfterKeyword,
-                  []
-                );
-                
-                await supabaseClient
-                  .from('carmen_whatsapp_sessions')
-                  .update({
-                    conversation_history: [
-                      { role: 'user', content: contentAfterKeyword, timestamp: new Date().toISOString() },
-                      { role: 'assistant', content: carmenResponse, timestamp: new Date().toISOString() }
-                    ],
-                    last_message_at: new Date().toISOString(),
-                  })
-                  .eq('id', newSession.id);
-                
-                await sendGreenApiMessage(instanceId, apiToken, chatId, carmenResponse);
+            if (!agentId) {
+              // Fallback: search by name
+              const carmenAgent = await findCarmenAgent(supabaseClient, tenantId);
+              if (carmenAgent) {
+                agentId = carmenAgent.id;
+                agentName = carmenAgent.name;
               }
-              
-              return new Response(JSON.stringify({ success: true, carmen_session: 'started' }), {
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-              });
+            } else {
+              // Fetch agent name for greeting
+              const { data: agentRow } = await supabaseClient
+                .from('ai_agents')
+                .select('name')
+                .eq('id', agentId)
+                .maybeSingle();
+              if (agentRow) agentName = agentRow.name;
             }
-          } else {
-            console.warn('Carmen keyword detected but no Carmen agent found for tenant:', tenantId);
+            
+            if (!agentId) {
+              // No agent found — send a clear error message to the user
+              console.error('Carmen keyword detected but no agent configured for tenant:', tenantId);
+              await sendGreenApiMessage(
+                instanceId, apiToken, chatId,
+                'שלום! זיהיתי שרצית לדבר עם כרמן, אך עדיין לא הוגדר סוכן AI. אנא פנה למנהל המערכת להגדרת סוכן כרמן.'
+              );
+            } else {
+              // Step 3: Create new Carmen session
+              const { data: newSession, error: sessionError } = await supabaseClient
+                .from('carmen_whatsapp_sessions')
+                .insert({
+                  tenant_id: tenantId,
+                  chat_id: chatId,
+                  phone: phoneNumber,
+                  sender_name: senderData.senderName || null,
+                  agent_id: agentId,
+                  connection_user_id: connectionUserId,
+                  conversation_history: [],
+                  status: 'active',
+                  started_by_keyword: messageText,
+                  end_keyword: endKeywordConfig,
+                })
+                .select()
+                .single();
+              
+              if (sessionError) {
+                console.error('Failed to create Carmen session:', sessionError);
+                // Send error to user so they know something went wrong
+                await sendGreenApiMessage(
+                  instanceId, apiToken, chatId,
+                  'מצטערת, אירעה שגיאה בהפעלת השיחה. נסה שוב בעוד מספר שניות.'
+                );
+              } else {
+                // Step 4: Send greeting
+                const greeting = `שלום! אני ${agentName}, המנהלת ה-AI שלך במערכת. אפשר לשאול אותי כל שאלה ולבצע פעולות במערכת. מה אפשר לעזור לך? (כדי לסיים את השיחה, כתוב "${endKeywordConfig}")`;
+                await sendGreenApiMessage(instanceId, apiToken, chatId, greeting);
+                
+                // Step 5: If there's additional content after the trigger keyword, process it immediately
+                const contentAfterKeyword = messageText.replace(new RegExp(triggerKeyword, 'gi'), '').trim();
+                if (contentAfterKeyword.length > 2) {
+                  const carmenResponse = await runCarmenAI(
+                    supabaseClient, agentId, tenantId, contentAfterKeyword, []
+                  );
+                  await supabaseClient
+                    .from('carmen_whatsapp_sessions')
+                    .update({
+                      conversation_history: [
+                        { role: 'user', content: contentAfterKeyword, timestamp: new Date().toISOString() },
+                        { role: 'assistant', content: carmenResponse, timestamp: new Date().toISOString() }
+                      ],
+                      last_message_at: new Date().toISOString(),
+                    })
+                    .eq('id', newSession.id);
+                  await sendGreenApiMessage(instanceId, apiToken, chatId, carmenResponse);
+                }
+                
+                return new Response(JSON.stringify({ success: true, carmen_session: 'started' }), {
+                  headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                });
+              }
+            }
           }
         }
       }
