@@ -687,70 +687,9 @@ export function ClientsChatView({
               <ScrollArea className={cn("flex-1 p-4", (activeTab === "whatsapp" || activeTab === "calls") && "hidden")}>
                 <TabsContent value="details" className="mt-0 space-y-6">
                   <div className="grid grid-cols-2 gap-4">
-                    {/* Contact info */}
-                    <div className="border rounded-lg p-4 space-y-3 text-right">
-                      <h3 className="font-semibold text-sm flex items-center gap-2 justify-end">
-                        פרטי קשר ראשי
-                        <User className="h-4 w-4 text-primary" />
-                      </h3>
-                      <div className="space-y-2 text-sm">
-                        <EditableField label=":איש קשר" value={selectedClient.contact_name} field="contact_name" clientId={selectedClient.id} />
-                        <EditableField label=":טלפון" value={selectedClient.phone} field="phone" clientId={selectedClient.id} isLink linkPrefix="tel:" />
-                        <EditableField label=":אימייל" value={selectedClient.email} field="email" clientId={selectedClient.id} isLink linkPrefix="mailto:" />
-                        <EditableField label=":אתר" value={selectedClient.website} field="website" clientId={selectedClient.id} isLink />
-                        <div className="flex flex-col items-end gap-1">
-                          <span className="text-muted-foreground text-sm flex items-center gap-1">
-                            <Users className="h-3.5 w-3.5" />
-                            :קבוצת WhatsApp
-                          </span>
-                          <div className="relative w-full">
-                            {selectedClient.whatsapp_group_id && !showGroupDropdown ? (
-                              <div className="flex items-center gap-1 h-7 px-2 border rounded-md bg-muted/30">
-                                <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0" onClick={() => updateClientField(selectedClient.id, "whatsapp_group_id", null)}>
-                                  <X className="h-3 w-3" />
-                                </Button>
-                                <span className="flex-1 text-xs font-medium truncate text-right cursor-pointer" onClick={() => setShowGroupDropdown(true)}>
-                                  {whatsappGroups.find((g: any) => g.id === selectedClient.whatsapp_group_id)?.group_name || "קבוצה מקושרת"}
-                                </span>
-                              </div>
-                            ) : (
-                              <Input
-                                placeholder="חפש קבוצה..."
-                                value={groupSearch}
-                                onChange={(e) => { setGroupSearch(e.target.value); setShowGroupDropdown(true); }}
-                                onFocus={() => setShowGroupDropdown(true)}
-                                onBlur={() => setTimeout(() => setShowGroupDropdown(false), 200)}
-                                className="h-7 text-xs text-right"
-                                dir="rtl"
-                                autoFocus={showGroupDropdown && !!selectedClient.whatsapp_group_id}
-                              />
-                            )}
-                            {showGroupDropdown && (
-                              <div className="absolute z-50 top-full mt-1 w-full bg-popover border rounded-md shadow-md max-h-[200px] overflow-y-auto">
-                                {filteredGroups.length > 0 ? filteredGroups.map((g: any) => (
-                                  <button
-                                    key={g.id}
-                                    className="w-full text-right px-3 py-1.5 text-xs hover:bg-accent transition-colors"
-                                    onClick={() => {
-                                      updateClientField(selectedClient.id, "whatsapp_group_id", g.id);
-                                      setGroupSearch("");
-                                      setShowGroupDropdown(false);
-                                    }}
-                                  >
-                                    {g.group_name}
-                                  </button>
-                                )) : (
-                                  <div className="px-3 py-2 text-xs text-muted-foreground text-center">לא נמצאו קבוצות</div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="border rounded-lg p-4 space-y-3 text-right">
-                      <h3 className="font-semibold text-sm flex items-center gap-2 justify-end">
+                    {/* Timeline - shown first in DOM but appears on LEFT in RTL layout */}
+                    <div className="bg-card border border-border/60 rounded-xl p-4 space-y-3 text-right shadow-sm">
+                      <h3 className="font-semibold text-sm flex items-center gap-2 justify-end text-foreground">
                         ציר זמן
                         <Clock className="h-4 w-4 text-primary" />
                       </h3>
@@ -819,10 +758,72 @@ export function ClientsChatView({
                         </div>
                       </div>
                     </div>
+
+                    {/* Contact info - shown second in DOM but appears on RIGHT in RTL layout */}
+                    <div className="bg-card border border-border/60 rounded-xl p-4 space-y-3 text-right shadow-sm">
+                      <h3 className="font-semibold text-sm flex items-center gap-2 justify-end text-foreground">
+                        פרטי קשר ראשי
+                        <User className="h-4 w-4 text-primary" />
+                      </h3>
+                      <div className="space-y-2 text-sm">
+                        <EditableField label=":איש קשר" value={selectedClient.contact_name} field="contact_name" clientId={selectedClient.id} />
+                        <EditableField label=":טלפון" value={selectedClient.phone} field="phone" clientId={selectedClient.id} isLink linkPrefix="tel:" />
+                        <EditableField label=":אימייל" value={selectedClient.email} field="email" clientId={selectedClient.id} isLink linkPrefix="mailto:" />
+                        <EditableField label=":אתר" value={selectedClient.website} field="website" clientId={selectedClient.id} isLink />
+                        <div className="flex flex-col items-end gap-1">
+                          <span className="text-muted-foreground text-sm flex items-center gap-1">
+                            <Users className="h-3.5 w-3.5" />
+                            :קבוצת WhatsApp
+                          </span>
+                          <div className="relative w-full">
+                            {selectedClient.whatsapp_group_id && !showGroupDropdown ? (
+                              <div className="flex items-center gap-1 h-7 px-2 border rounded-md bg-muted/30">
+                                <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0" onClick={() => updateClientField(selectedClient.id, "whatsapp_group_id", null)}>
+                                  <X className="h-3 w-3" />
+                                </Button>
+                                <span className="flex-1 text-xs font-medium truncate text-right cursor-pointer" onClick={() => setShowGroupDropdown(true)}>
+                                  {whatsappGroups.find((g: any) => g.id === selectedClient.whatsapp_group_id)?.group_name || "קבוצה מקושרת"}
+                                </span>
+                              </div>
+                            ) : (
+                              <Input
+                                placeholder="חפש קבוצה..."
+                                value={groupSearch}
+                                onChange={(e) => { setGroupSearch(e.target.value); setShowGroupDropdown(true); }}
+                                onFocus={() => setShowGroupDropdown(true)}
+                                onBlur={() => setTimeout(() => setShowGroupDropdown(false), 200)}
+                                className="h-7 text-xs text-right"
+                                dir="rtl"
+                                autoFocus={showGroupDropdown && !!selectedClient.whatsapp_group_id}
+                              />
+                            )}
+                            {showGroupDropdown && (
+                              <div className="absolute z-50 top-full mt-1 w-full bg-popover border rounded-md shadow-md max-h-[200px] overflow-y-auto">
+                                {filteredGroups.length > 0 ? filteredGroups.map((g: any) => (
+                                  <button
+                                    key={g.id}
+                                    className="w-full text-right px-3 py-1.5 text-xs hover:bg-accent transition-colors"
+                                    onClick={() => {
+                                      updateClientField(selectedClient.id, "whatsapp_group_id", g.id);
+                                      setGroupSearch("");
+                                      setShowGroupDropdown(false);
+                                    }}
+                                  >
+                                    {g.group_name}
+                                  </button>
+                                )) : (
+                                  <div className="px-3 py-2 text-xs text-muted-foreground text-center">לא נמצאו קבוצות</div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Additional contacts */}
-                  <div className="border rounded-lg p-4 text-right space-y-3">
+                  <div className="bg-card border border-border/60 rounded-xl p-4 text-right space-y-3 shadow-sm">
                     <div className="flex items-center justify-between">
                       <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => setAddingContact(true)}>
                         <UserPlus className="h-3.5 w-3.5" />
@@ -835,7 +836,7 @@ export function ClientsChatView({
                     </div>
 
                     {addingContact && (
-                      <div className="border rounded-md p-3 space-y-2 bg-muted/30">
+                      <div className="border border-border/60 rounded-lg p-3 space-y-2 bg-muted/30">
                         <div className="grid grid-cols-2 gap-2">
                           <Input placeholder="שם" value={newContact.contact_name} onChange={e => setNewContact(p => ({ ...p, contact_name: e.target.value }))} className="text-sm h-8 text-right" dir="rtl" />
                           <Input placeholder="תפקיד" value={newContact.role} onChange={e => setNewContact(p => ({ ...p, role: e.target.value }))} className="text-sm h-8 text-right" dir="rtl" />
@@ -869,7 +870,7 @@ export function ClientsChatView({
                     {clientContacts.length > 0 ? (
                       <div className="space-y-2">
                         {clientContacts.map((contact: any) => (
-                          <div key={contact.id} className="border rounded-md p-3 flex items-start justify-between gap-2 group">
+                          <div key={contact.id} className="border border-border/60 rounded-lg p-3 flex items-start justify-between gap-2 group bg-muted/20 hover:bg-muted/40 transition-colors">
                             <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 text-destructive shrink-0"
                               onClick={async () => {
                                 try {
@@ -909,7 +910,7 @@ export function ClientsChatView({
 
                   {/* Team */}
                   {selectedClient.client_team && selectedClient.client_team.length > 0 && (
-                    <div className="border rounded-lg p-4 text-right">
+                    <div className="bg-card border border-border/60 rounded-xl p-4 text-right shadow-sm">
                       <h3 className="font-semibold text-sm mb-2">קמפיינרים משויכים</h3>
                       <div className="flex flex-wrap gap-2">
                         {selectedClient.client_team.map((ct: any, i: number) => (
@@ -922,14 +923,14 @@ export function ClientsChatView({
                   )}
 
                   {/* Notes */}
-                  <div className="border rounded-lg p-4 text-right">
+                  <div className="bg-card border border-border/60 rounded-xl p-4 text-right shadow-sm">
                     <h3 className="font-semibold text-sm mb-2">הערות</h3>
                     <EditableField label="" value={selectedClient.notes} field="notes" clientId={selectedClient.id} type="textarea" />
                   </div>
                 </TabsContent>
 
                 <TabsContent value="business" className="mt-0 space-y-6">
-                  <div className="border rounded-lg p-4 space-y-3 text-right">
+                  <div className="bg-card border border-border/60 rounded-xl p-4 space-y-3 text-right shadow-sm">
                     <h3 className="font-semibold text-sm flex items-center gap-2 justify-end">
                       מידע עסקי
                       <DollarSign className="h-4 w-4 text-primary" />
