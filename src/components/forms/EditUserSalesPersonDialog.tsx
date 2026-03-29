@@ -173,7 +173,7 @@ export function EditUserSalesPersonDialog({
 
   return (
     <Dialog open={!!userId} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent dir="rtl" className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {showCreateForm ? "צור איש מכירות חדש" : "עריכת איש מכירות"}

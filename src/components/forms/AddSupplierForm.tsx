@@ -99,7 +99,7 @@ export function AddSupplierForm() {
           הוסף ספק
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent dir="rtl" className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>הוסף ספק חדש</DialogTitle>
         </DialogHeader>

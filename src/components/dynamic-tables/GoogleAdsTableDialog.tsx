@@ -448,7 +448,7 @@ export function GoogleAdsTableDialog({ open, onOpenChange, assignedClientIds }: 
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
+      <DialogContent dir="rtl" className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none">

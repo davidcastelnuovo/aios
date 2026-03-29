@@ -727,7 +727,7 @@ export default function RankTrackingProject() {
                     <TableHead className="text-center w-20">Worst</TableHead>
                     <TableHead className="text-right">URL</TableHead>
                     <TableHead className="text-center w-36">נבדק</TableHead>
-                    <TableHead className="w-16 text-left"></TableHead>
+                    <TableHead className="w-16 text-right"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -759,7 +759,7 @@ export default function RankTrackingProject() {
                           ? format(new Date(keyword.last_checked_at), "dd/MM HH:mm", { locale: he })
                           : "-"}
                       </TableCell>
-                      <TableCell className="text-left">
+                      <TableCell className="text-right">
                         <Button
                           variant="ghost"
                           size="icon"

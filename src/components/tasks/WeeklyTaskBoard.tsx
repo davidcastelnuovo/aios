@@ -1446,7 +1446,7 @@ export function WeeklyTaskBoard() {
 
       {/* Quick Add Task Dialog (double-click on slot) */}
       <Dialog open={!!quickAddSlot} onOpenChange={(open) => !open && setQuickAddSlot(null)}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent dir="rtl" className="sm:max-w-[400px]">
           <DialogHeader>
             <DialogTitle className="text-right">
               הוספת משימה ל-{quickAddSlot?.time}

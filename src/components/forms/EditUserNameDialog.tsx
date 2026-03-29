@@ -60,7 +60,7 @@ export function EditUserNameDialog({
 
   return (
     <Dialog open={!!userId} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
+      <DialogContent dir="rtl">
         <DialogHeader>
           <DialogTitle>ערוך שם משתמש</DialogTitle>
         </DialogHeader>

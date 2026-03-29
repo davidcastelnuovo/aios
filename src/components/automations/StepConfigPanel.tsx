@@ -555,7 +555,7 @@ function GreenAPIActionConfig({
               onChange={(e) => onConfigChange("external_instance_id", e.target.value)}
               placeholder="למשל: 7103..."
               dir="ltr"
-              className="text-left"
+              className="text-right"
             />
           </div>
           <div className="space-y-2">
@@ -565,7 +565,7 @@ function GreenAPIActionConfig({
               onChange={(e) => onConfigChange("external_api_token", e.target.value)}
               placeholder="למשל: abc123..."
               dir="ltr"
-              className="text-left"
+              className="text-right"
               type="password"
             />
           </div>
@@ -638,7 +638,7 @@ function GreenAPIActionConfig({
             onChange={(e) => onConfigChange("manual_phone", e.target.value)}
             placeholder="050-1234567"
             dir="ltr"
-            className="text-left"
+            className="text-right"
           />
           <p className="text-xs text-muted-foreground text-right">
             הזן מספר טלפון קבוע שאליו תישלח ההודעה
@@ -748,7 +748,7 @@ function GreenAPIActionConfig({
               onChange={(e) => onConfigChange("media_url", e.target.value)}
               placeholder="https://youtube.com/watch?v=... או קישור לקובץ"
               dir="ltr"
-              className="text-left"
+              className="text-right"
             />
             <p className="text-xs text-muted-foreground text-right">
               {configuration?.media_type === "link"
@@ -763,7 +763,7 @@ function GreenAPIActionConfig({
                   onChange={(e) => onConfigChange("media_filename", e.target.value)}
                   placeholder="video.mp4"
                   dir="ltr"
-                  className="text-left"
+                  className="text-right"
                 />
               </div>
             )}

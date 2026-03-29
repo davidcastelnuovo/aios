@@ -418,7 +418,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent dir="rtl" className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>עריכת לקוח: {client.name}</DialogTitle>
           <DialogDescription>

@@ -298,7 +298,7 @@ export default function RankTracking() {
                 פרויקט חדש
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent dir="rtl">
               <DialogHeader>
                 <DialogTitle>יצירת פרויקט Rank Tracking</DialogTitle>
               </DialogHeader>

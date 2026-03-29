@@ -43,7 +43,7 @@ const DemoRequestDialog = ({ open, onOpenChange }: DemoRequestDialogProps) => {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md bg-[#0A1526] border-white/10 text-white">
+      <DialogContent dir="rtl" className="sm:max-w-md bg-[#0A1526] border-white/10 text-white">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold text-center flex items-center justify-center gap-2">
             <Calendar className="h-6 w-6 text-[#36d399]" />

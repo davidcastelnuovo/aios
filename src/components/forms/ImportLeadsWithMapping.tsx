@@ -1409,7 +1409,7 @@ export function ImportLeadsWithMapping() {
           ייבוא לידים
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl w-[95vw] max-h-[90vh] flex flex-col overflow-hidden">
+      <DialogContent dir="rtl" className="max-w-2xl w-[95vw] max-h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle>
             {step === "upload" && "ייבוא לידים מקובץ"}

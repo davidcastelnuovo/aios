@@ -27,6 +27,7 @@ export default function EditManagedAgenciesDialog({
   onOpenChange,
   user,
 }: EditManagedAgenciesDialogProps) {
+  const [agencySearchEM, setAgencySearchEM] = useState("");
   const [selectedAgencies, setSelectedAgencies] = useState<string[]>(
     user.managed_agencies.map((a) => a.id)
   );
@@ -85,13 +86,13 @@ export default function EditManagedAgenciesDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent dir="rtl">
         <DialogHeader>
           <DialogTitle>ערוך סוכנויות מנוהלות - {user.full_name}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div className="max-h-96 overflow-y-auto space-y-3 border rounded-md p-4">
-            {agencies?.map((agency) => (
+            {agencies?.filter(a => a.name.toLowerCase().includes(agencySearchEM.toLowerCase())).map((agency) => (
               <div key={agency.id} className="flex items-center space-x-2 space-x-reverse">
                 <Checkbox
                   id={agency.id}

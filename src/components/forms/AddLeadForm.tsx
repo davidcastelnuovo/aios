@@ -12,6 +12,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Check, ChevronsUpDown } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
@@ -56,6 +58,8 @@ export function AddLeadForm() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [isTagsPopoverOpen, setIsTagsPopoverOpen] = useState(false);
   const [isTagsManagerOpen, setIsTagsManagerOpen] = useState(false);
+  const [agencyPopoverOpen, setAgencyPopoverOpen] = useState(false);
+  const [salesPersonPopoverOpen, setSalesPersonPopoverOpen] = useState(false);
   const [tagSearchQuery, setTagSearchQuery] = useState('');
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -308,20 +312,32 @@ export function AddLeadForm() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="text-sm font-medium">{getFieldLabel('agency_id', 'סוכנות')}</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger className="rounded-lg border-2 h-11">
-                        <SelectValue placeholder="בחר סוכנות" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {agencies?.map((agency) => (
-                        <SelectItem key={agency.id} value={agency.id}>
-                          {agency.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover open={agencyPopoverOpen} onOpenChange={setAgencyPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <FormControl>
+                        <Button variant="outline" role="combobox" className={cn("w-full justify-between rounded-lg border-2 h-11", !field.value && "text-muted-foreground")}>
+                          <span className="text-right flex-1">{field.value ? agencies?.find(a => a.id === field.value)?.name : "בחר סוכנות"}</span>
+                          <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </FormControl>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-full p-0 bg-background" align="end" dir="rtl">
+                      <Command>
+                        <CommandInput placeholder="חפש סוכנות..." />
+                        <CommandList>
+                          <CommandEmpty>לא נמצאו סוכנויות</CommandEmpty>
+                          <CommandGroup>
+                            {agencies?.map((agency) => (
+                              <CommandItem key={agency.id} value={agency.name} onSelect={() => { field.onChange(agency.id); setAgencyPopoverOpen(false); }}>
+                                <Check className={cn("mr-2 h-4 w-4", field.value === agency.id ? "opacity-100" : "opacity-0")} />
+                                {agency.name}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                   <FormMessage />
                 </FormItem>
               )}
@@ -333,20 +349,32 @@ export function AddLeadForm() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="text-sm font-medium">{getFieldLabel('sales_person_id', 'איש מכירות')}</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger className="rounded-lg border-2 h-11">
-                        <SelectValue placeholder="בחר איש מכירות" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {salesPeople?.map((person) => (
-                        <SelectItem key={person.id} value={person.id}>
-                          {person.full_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover open={salesPersonPopoverOpen} onOpenChange={setSalesPersonPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <FormControl>
+                        <Button variant="outline" role="combobox" className={cn("w-full justify-between rounded-lg border-2 h-11", !field.value && "text-muted-foreground")}>
+                          <span className="text-right flex-1">{field.value ? salesPeople?.find(p => p.id === field.value)?.full_name : "בחר איש מכירות"}</span>
+                          <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </FormControl>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-full p-0 bg-background" align="end" dir="rtl">
+                      <Command>
+                        <CommandInput placeholder="חפש איש מכירות..." />
+                        <CommandList>
+                          <CommandEmpty>לא נמצאו אנשי מכירות</CommandEmpty>
+                          <CommandGroup>
+                            {salesPeople?.map((person) => (
+                              <CommandItem key={person.id} value={person.full_name} onSelect={() => { field.onChange(person.id); setSalesPersonPopoverOpen(false); }}>
+                                <Check className={cn("mr-2 h-4 w-4", field.value === person.id ? "opacity-100" : "opacity-0")} />
+                                {person.full_name}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                   <FormMessage />
                 </FormItem>
               )}

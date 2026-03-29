@@ -76,7 +76,7 @@ export function ImportClientsSheet() {
           ייבוא מגוגל שיטס
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl">
+      <DialogContent dir="rtl" className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>ייבוא לקוחות מגוגל שיטס</DialogTitle>
           <DialogDescription>

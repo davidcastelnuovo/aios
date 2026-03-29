@@ -130,7 +130,7 @@ export default function EditProductDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent dir="rtl" className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>עריכת מוצר</DialogTitle>
         </DialogHeader>

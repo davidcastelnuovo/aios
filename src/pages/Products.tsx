@@ -157,7 +157,7 @@ export default function Products() {
                 <TableHead>תיאור</TableHead>
                 <TableHead>מחיר</TableHead>
                 <TableHead>סטטוס</TableHead>
-                <TableHead className="text-left">פעולות</TableHead>
+                <TableHead className="text-right">פעולות</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

@@ -505,7 +505,7 @@ export default function SalesDashboard() {
                           {product.count} הצעות • {product.closedCount} נסגרו
                         </p>
                       </div>
-                      <div className="text-left">
+                      <div className="text-right">
                         <div className="text-lg font-bold text-primary">
                           ₪{product.totalValue.toLocaleString()}
                         </div>

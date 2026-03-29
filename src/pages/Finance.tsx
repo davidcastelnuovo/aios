@@ -205,7 +205,7 @@ export default function Finance() {
                 <TableHead>לקוח</TableHead>
                 <TableHead>ספק</TableHead>
                 <TableHead>קטגוריה</TableHead>
-                <TableHead className="text-left">סכום</TableHead>
+                <TableHead className="text-right">סכום</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -258,7 +258,7 @@ export default function Finance() {
                       </Badge>
                     )}
                   </TableCell>
-                  <TableCell className="text-left font-medium">
+                  <TableCell className="text-right font-medium">
                     ₪{Number(record.amount).toLocaleString()}
                   </TableCell>
                 </TableRow>

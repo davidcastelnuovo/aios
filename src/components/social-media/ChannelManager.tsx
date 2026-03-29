@@ -55,7 +55,7 @@ export function ChannelManager() {
               הוסף ערוץ
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent dir="rtl">
             <DialogHeader>
               <DialogTitle>הוסף ערוץ חדש</DialogTitle>
             </DialogHeader>

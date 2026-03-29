@@ -211,7 +211,7 @@ export function ConvertContactDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent dir="rtl" className="max-w-md">
         <DialogHeader>
           <DialogTitle>
             {type === "client" ? `המר ל${terms?.client?.singular || "לקוח"}` : `המר ל${terms?.lead?.singular || "ליד"}`}

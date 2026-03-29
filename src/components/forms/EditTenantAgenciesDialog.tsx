@@ -33,6 +33,7 @@ export default function EditTenantAgenciesDialog({
 }: EditTenantAgenciesDialogProps) {
   const { tenantId: currentTenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
+  const [agencySearchETA, setAgencySearchETA] = useState("");
   const [selectedAgencies, setSelectedAgencies] = useState<string[]>([]);
 
   // שליפת הסוכנויות של הארגון הנוכחי
@@ -127,7 +128,7 @@ export default function EditTenantAgenciesDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent dir="rtl" className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>ניהול גישות לסוכנויות - {tenant.name}</DialogTitle>
           <DialogDescription>

@@ -117,7 +117,7 @@ export default function ManusTasksPage() {
               משימה חדשה
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-lg">
+          <DialogContent dir="rtl" className="max-w-lg">
             <DialogHeader>
               <DialogTitle>יצירת משימה חדשה ב-Manus</DialogTitle>
             </DialogHeader>
@@ -236,7 +236,7 @@ export default function ManusTasksPage() {
 
       {/* Results Dialog */}
       <Dialog open={!!selectedTask} onOpenChange={() => setSelectedTask(null)}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent dir="rtl" className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{selectedTask?.title || 'תוצאות משימה'}</DialogTitle>
           </DialogHeader>

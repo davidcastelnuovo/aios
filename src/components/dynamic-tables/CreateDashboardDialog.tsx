@@ -205,7 +205,7 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent dir="rtl" className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>יצירת דשבורד חדש</DialogTitle>
           <DialogDescription>

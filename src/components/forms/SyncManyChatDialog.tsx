@@ -76,7 +76,7 @@ export function SyncManyChatDialog() {
           סנכרן מ-ManyChat
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent dir="rtl" className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>סנכרון עם ManyChat</DialogTitle>
           <DialogDescription>

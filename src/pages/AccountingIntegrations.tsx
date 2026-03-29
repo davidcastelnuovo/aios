@@ -680,7 +680,7 @@ export default function AccountingIntegrations() {
 
       {/* Add One-Time Income Dialog */}
       <Dialog open={addOneTimeIncomeOpen} onOpenChange={setAddOneTimeIncomeOpen}>
-        <DialogContent>
+        <DialogContent dir="rtl">
           <DialogHeader>
             <DialogTitle>הוספת הכנסה חד פעמית</DialogTitle>
             <DialogDescription>הוסף מוצר או שירות חד פעמי ושייך ללקוח</DialogDescription>

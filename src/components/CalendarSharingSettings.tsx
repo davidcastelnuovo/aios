@@ -327,7 +327,7 @@ export function CalendarSharingSettings() {
                   הוסף משתמש
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent dir="rtl">
                 <DialogHeader>
                   <DialogTitle>שתף יומן עם משתמש</DialogTitle>
                   <DialogDescription>

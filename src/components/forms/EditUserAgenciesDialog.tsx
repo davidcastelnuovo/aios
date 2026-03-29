@@ -30,6 +30,7 @@ export function EditUserAgenciesDialog({
   const { isOwner, userId: currentUserId } = useUserRole();
   const { currentTenant } = useTenant();
   const queryClient = useQueryClient();
+  const [agencySearchEUA, setAgencySearchEUA] = useState("");
   const [selectedAgencies, setSelectedAgencies] = useState<string[]>([]);
 
   // Fetch available agencies - filtered by current tenant
@@ -197,7 +198,7 @@ export function EditUserAgenciesDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent dir="rtl">
         <DialogHeader>
           <DialogTitle>עריכת סוכנויות למשתמש</DialogTitle>
           <DialogDescription>
@@ -219,7 +220,7 @@ export function EditUserAgenciesDialog({
               {agencies?.length === 0 ? (
                 <p className="text-sm text-muted-foreground">אין סוכנויות זמינות</p>
               ) : (
-                agencies?.map((agency) => (
+                agencies?.filter(a => a.name.toLowerCase().includes(agencySearchEUA.toLowerCase())).map((agency) => (
                   <div key={agency.id} className="flex items-center space-x-2 space-x-reverse">
                     <input
                       type="checkbox"

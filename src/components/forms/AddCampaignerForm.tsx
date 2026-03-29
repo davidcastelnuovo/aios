@@ -24,13 +24,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus } from "lucide-react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useTeamRoles } from "@/hooks/useTeamRoles";
 
@@ -49,6 +42,7 @@ type FormValues = z.infer<typeof formSchema>;
 
 export function AddCampaignerForm() {
   const [open, setOpen] = useState(false);
+  const [agencySearch, setAgencySearch] = useState("");
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
   const { teamRoles, isLoading: rolesLoading } = useTeamRoles();
@@ -185,7 +179,7 @@ export function AddCampaignerForm() {
           הוסף איש צוות
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent dir="rtl" className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>הוסף איש צוות חדש</DialogTitle>
         </DialogHeader>
@@ -211,8 +205,9 @@ export function AddCampaignerForm() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>סוכנויות</FormLabel>
-                  <div className="space-y-2">
-                    {agencies?.map((agency) => (
+                  <Input placeholder="חפש סוכנות..." value={agencySearch} onChange={e => setAgencySearch(e.target.value)} className="mb-2 h-9" />
+                  <div className="space-y-2 max-h-40 overflow-y-auto border rounded p-2">
+                    {agencies?.filter(a => a.name.toLowerCase().includes(agencySearch.toLowerCase())).map((agency) => (
                       <div key={agency.id} className="flex items-center space-x-2 space-x-reverse">
                         <input
                           type="checkbox"

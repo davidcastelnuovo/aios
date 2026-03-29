@@ -10,8 +10,11 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { Pencil } from "lucide-react";
+import { Pencil, Check, ChevronsUpDown } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
 const formSchema = z.object({
@@ -32,6 +35,7 @@ interface EditSalesPersonDialogProps {
 
 export function EditSalesPersonDialog({ salesPerson }: EditSalesPersonDialogProps) {
   const [open, setOpen] = useState(false);
+  const [agencyPopoverOpen, setAgencyPopoverOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -100,7 +104,7 @@ export function EditSalesPersonDialog({ salesPerson }: EditSalesPersonDialogProp
           ערוך
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl">
+      <DialogContent dir="rtl" className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>ערוך איש מכירות</DialogTitle>
         </DialogHeader>
@@ -126,20 +130,32 @@ export function EditSalesPersonDialog({ salesPerson }: EditSalesPersonDialogProp
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>סוכנות *</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="בחר סוכנות" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {agencies?.map((agency) => (
-                        <SelectItem key={agency.id} value={agency.id}>
-                          {agency.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover open={agencyPopoverOpen} onOpenChange={setAgencyPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <FormControl>
+                        <Button variant="outline" role="combobox" className={cn("w-full justify-between h-10", !field.value && "text-muted-foreground")}>
+                          <span className="text-right flex-1">{field.value ? agencies?.find(a => a.id === field.value)?.name : "בחר סוכנות"}</span>
+                          <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </FormControl>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-full p-0 bg-background" align="end" dir="rtl">
+                      <Command>
+                        <CommandInput placeholder="חפש סוכנות..." />
+                        <CommandList>
+                          <CommandEmpty>לא נמצאו סוכנויות</CommandEmpty>
+                          <CommandGroup>
+                            {agencies?.map((agency) => (
+                              <CommandItem key={agency.id} value={agency.name} onSelect={() => { field.onChange(agency.id); setAgencyPopoverOpen(false); }}>
+                                <Check className={cn("mr-2 h-4 w-4", field.value === agency.id ? "opacity-100" : "opacity-0")} />
+                                {agency.name}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                   <FormMessage />
                 </FormItem>
               )}

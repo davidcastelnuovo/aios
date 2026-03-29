@@ -50,7 +50,7 @@ export function WordPressSettings() {
               הוסף אתר
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent dir="rtl">
             <DialogHeader>
               <DialogTitle>הוסף אתר וורדפרס</DialogTitle>
             </DialogHeader>

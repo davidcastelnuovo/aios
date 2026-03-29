@@ -411,7 +411,7 @@ export function AddAutomationForm() {
           אוטומציה חדשה
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+      <DialogContent dir="rtl" className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>יצירת אוטומציה חדשה</DialogTitle>
           <DialogDescription>

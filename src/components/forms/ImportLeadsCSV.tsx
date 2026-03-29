@@ -406,7 +406,7 @@ export function ImportLeadsCSV() {
           ייבוא מ-CSV
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent dir="rtl">
         <DialogHeader>
           <DialogTitle>ייבוא לידים מקובץ CSV</DialogTitle>
         </DialogHeader>

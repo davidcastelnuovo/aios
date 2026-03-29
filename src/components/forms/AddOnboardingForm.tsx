@@ -126,7 +126,7 @@ export default function AddOnboardingForm({ clientId, agencyId }: AddOnboardingF
           הוסף תהליך קליטה
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent dir="rtl" className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>הוסף תהליך קליטה חדש</DialogTitle>
         </DialogHeader>

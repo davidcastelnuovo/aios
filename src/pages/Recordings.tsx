@@ -323,7 +323,7 @@ export default function Recordings() {
                 העלאת הקלטה
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent dir="rtl">
               <DialogHeader>
                 <DialogTitle>העלאת הקלטה ידנית</DialogTitle>
               </DialogHeader>

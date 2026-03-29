@@ -71,7 +71,7 @@ export function DeleteTenantDialog({ tenant, open, onOpenChange }: DeleteTenantD
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent dir="rtl" className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-destructive">
             <AlertTriangle className="h-5 w-5" />

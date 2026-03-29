@@ -741,7 +741,7 @@ export function TestFlowWithLeadDialog({
                     <Input
                       placeholder="05X-XXXXXXX"
                       dir="ltr"
-                      className="text-left"
+                      className="text-right"
                       value={manualData.phone}
                       onChange={(e) => setManualData(prev => ({ ...prev, phone: e.target.value }))}
                     />
@@ -751,7 +751,7 @@ export function TestFlowWithLeadDialog({
                     <Input
                       placeholder="email@example.com"
                       dir="ltr"
-                      className="text-left"
+                      className="text-right"
                       type="email"
                       value={manualData.email}
                       onChange={(e) => setManualData(prev => ({ ...prev, email: e.target.value }))}

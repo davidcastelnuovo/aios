@@ -49,7 +49,7 @@ export function BrandSettings({ brandName, keywords, competitors, onSave }: Bran
           הגדרות מותג
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-lg">
+      <DialogContent dir="rtl" className="max-w-lg">
         <DialogHeader>
           <DialogTitle>הגדרות ניטור מותג</DialogTitle>
         </DialogHeader>

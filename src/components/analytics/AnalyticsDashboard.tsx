@@ -588,7 +588,7 @@ export function AnalyticsDashboard({ tenantId, clientId, dateRange, comparisonRa
                   <TableHead className="text-right">אירוע</TableHead>
                   <TableHead className="text-right">קטגוריה</TableHead>
                   <TableHead className="text-center">כמות</TableHead>
-                  <TableHead className="text-left">שווי כולל</TableHead>
+                  <TableHead className="text-right">שווי כולל</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -608,7 +608,7 @@ export function AnalyticsDashboard({ tenantId, clientId, dateRange, comparisonRa
                       </Badge>
                     </TableCell>
                     <TableCell className="text-center">{event.count}</TableCell>
-                    <TableCell className="text-left">
+                    <TableCell className="text-right">
                       {event.totalValue > 0 ? `₪${event.totalValue.toLocaleString()}` : "-"}
                     </TableCell>
                   </TableRow>

@@ -68,7 +68,7 @@ export function CreateProjectDialog({ trigger, initialData, onSave, title = "×¤×
   return (
     <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (v && initialData) { setBrandName(initialData.brandName); setUrl(initialData.url); setDescription(initialData.description); setKeywords(initialData.keywords); setCompetitors(initialData.competitors); } }}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent dir="rtl" className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>

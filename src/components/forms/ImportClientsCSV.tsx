@@ -553,7 +553,7 @@ export function ImportClientsCSV() {
           ייבוא מ-CSV
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent dir="rtl" className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>ייבוא לקוחות מקובץ CSV</DialogTitle>
           <DialogDescription>

@@ -103,7 +103,7 @@ export function PromptTracker({ prompts, onAddPrompt, onDeletePrompt, onEditProm
                   הוסף פרומפט
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent dir="rtl">
                 <DialogHeader>
                   <DialogTitle>הוסף פרומפט למעקב</DialogTitle>
                 </DialogHeader>
@@ -221,7 +221,7 @@ export function PromptTracker({ prompts, onAddPrompt, onDeletePrompt, onEditProm
 
       {/* Edit Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent>
+        <DialogContent dir="rtl">
           <DialogHeader>
             <DialogTitle>ערוך פרומפט</DialogTitle>
           </DialogHeader>

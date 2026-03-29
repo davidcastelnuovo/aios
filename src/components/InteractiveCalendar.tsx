@@ -266,7 +266,7 @@ export function InteractiveCalendar() {
       </div>
 
       <Dialog open={selectedEvent !== null && !isEditing} onOpenChange={() => setSelectedEvent(null)}>
-        <DialogContent>
+        <DialogContent dir="rtl">
           <DialogHeader>
             <DialogTitle>{selectedEvent?.title}</DialogTitle>
           </DialogHeader>
@@ -313,7 +313,7 @@ export function InteractiveCalendar() {
       </Dialog>
 
       <Dialog open={isEditing} onOpenChange={() => setIsEditing(false)}>
-        <DialogContent>
+        <DialogContent dir="rtl">
           <DialogHeader>
             <DialogTitle>עריכת אירוע</DialogTitle>
           </DialogHeader>
