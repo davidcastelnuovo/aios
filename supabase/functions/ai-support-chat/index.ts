@@ -99,6 +99,7 @@ ${memoryContext}
 - התייחס למשתמש בשמו (${userName})
 - היה פרו-אקטיבי - הצע דברים שיכולים לעזור
 - תמיד הסבר מה עשית אחרי ביצוע פעולה
+- **כשמבקשים לקוחות/לידים של סוכנות ספציפית** — חפש קודם את הסוכנות ב-search_entities כדי לקבל את ה-agency_id, ואז השתמש ב-agency_id לסנן ב-list_clients או list_leads
 - אם משהו לא ברור, שאל במקום לנחש
 - השתמש ב-markdown לעיצוב התשובות
 
@@ -539,15 +540,19 @@ async function executeTool(
       }
 
       case 'search_entities': {
-        const { entity_type, search_term } = toolCall.args;
+        const { entity_type, search_term, agency_id: searchAgencyId } = toolCall.args;
         let tableName = '', selectFields = '*', nameField = 'name';
         if (entity_type === 'agency') { tableName = 'agencies'; selectFields = 'id, name, status'; }
-        else if (entity_type === 'client') { tableName = 'clients'; selectFields = 'id, name, status, email, phone, agencies(name)'; }
+        else if (entity_type === 'client') { tableName = 'clients'; selectFields = 'id, name, status, email, phone, agency_id, agencies(name)'; }
         else if (entity_type === 'campaigner') { tableName = 'campaigners'; selectFields = 'id, full_name, email, phone, role, active'; nameField = 'full_name'; }
-        else if (entity_type === 'lead') { tableName = 'leads'; selectFields = 'id, company_name, contact_name, email, phone, status, source'; nameField = 'company_name'; }
+        else if (entity_type === 'lead') { tableName = 'leads'; selectFields = 'id, company_name, contact_name, email, phone, status, source, agency_id, agencies(name)'; nameField = 'company_name'; }
         else throw new Error(`Unknown entity type: ${entity_type}`);
 
-        const { data, error } = await supabaseClient.from(tableName).select(selectFields).eq('tenant_id', tenantId).ilike(nameField, `%${search_term}%`).limit(10);
+        let query = supabaseClient.from(tableName).select(selectFields).eq('tenant_id', tenantId).ilike(nameField, `%${search_term}%`).limit(10);
+        if (searchAgencyId && (entity_type === 'client' || entity_type === 'lead')) {
+          query = query.eq('agency_id', searchAgencyId);
+        }
+        const { data, error } = await query;
         if (error) throw error;
         return { success: true, result: { entity_type, count: data.length, results: data } };
       }
@@ -589,19 +594,35 @@ async function executeTool(
       }
 
       case 'list_leads': {
-        const { status, limit = 20, source } = toolCall.args;
-        let query = supabaseClient.from('leads').select('id, company_name, contact_name, phone, email, status, source, created_at, agencies(name)').eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(limit);
+        const { status, limit = 20, source, agency_id: leadsAgencyId, agency_name: leadsAgencyName } = toolCall.args;
+        
+        let resolvedAgencyId = leadsAgencyId;
+        if (!resolvedAgencyId && leadsAgencyName) {
+          const { data: agencyMatch } = await supabaseClient.from('agencies').select('id').eq('tenant_id', tenantId).ilike('name', `%${leadsAgencyName}%`).limit(1).single();
+          if (agencyMatch) resolvedAgencyId = agencyMatch.id;
+        }
+        
+        let query = supabaseClient.from('leads').select('id, company_name, contact_name, phone, email, status, source, created_at, agency_id, agencies(name)').eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(limit);
         if (status) query = query.eq('status', status);
         if (source) query = query.eq('source', source);
+        if (resolvedAgencyId) query = query.eq('agency_id', resolvedAgencyId);
         const { data, error } = await query;
         if (error) throw error;
         return { success: true, result: { count: data.length, leads: data.map((l: any) => ({ id: l.id, company_name: l.company_name, contact_name: l.contact_name, phone: l.phone, email: l.email, status: l.status, source: l.source, agency_name: l.agencies?.name, created_at: l.created_at })) } };
       }
 
       case 'list_clients': {
-        const { status, limit = 20 } = toolCall.args;
-        let query = supabaseClient.from('clients').select('id, name, contact_name, phone, email, status, agencies(name)').eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(limit);
+        const { status, limit = 20, agency_id: clientsAgencyId, agency_name: clientsAgencyName } = toolCall.args;
+        
+        let resolvedClientAgencyId = clientsAgencyId;
+        if (!resolvedClientAgencyId && clientsAgencyName) {
+          const { data: agencyMatch } = await supabaseClient.from('agencies').select('id').eq('tenant_id', tenantId).ilike('name', `%${clientsAgencyName}%`).limit(1).single();
+          if (agencyMatch) resolvedClientAgencyId = agencyMatch.id;
+        }
+        
+        let query = supabaseClient.from('clients').select('id, name, contact_name, phone, email, status, agency_id, agencies(name)').eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(limit);
         if (status) query = query.eq('status', status);
+        if (resolvedClientAgencyId) query = query.eq('agency_id', resolvedClientAgencyId);
         const { data, error } = await query;
         if (error) throw error;
         return { success: true, result: { count: data.length, clients: data.map((c: any) => ({ id: c.id, name: c.name, contact_name: c.contact_name, phone: c.phone, email: c.email, status: c.status, agency_name: c.agencies?.name })) } };
@@ -1378,12 +1399,13 @@ const tools = [
     type: 'function',
     function: {
       name: 'search_entities',
-      description: 'חיפוש סוכנויות, לקוחות, קמפיינרים או לידים לפי שם',
+      description: 'חיפוש סוכנויות, לקוחות, קמפיינרים או לידים לפי שם. אפשר לסנן לקוחות/לידים גם לפי agency_id.',
       parameters: {
         type: 'object',
         properties: {
           entity_type: { type: 'string', enum: ['agency', 'client', 'campaigner', 'lead'], description: 'סוג הישות' },
           search_term: { type: 'string', description: 'מונח החיפוש' },
+          agency_id: { type: 'string', description: 'סינון לפי סוכנות (UUID) - רלוונטי רק ל-client ו-lead' },
         },
         required: ['entity_type', 'search_term'],
       },
@@ -1427,12 +1449,14 @@ const tools = [
     type: 'function',
     function: {
       name: 'list_leads',
-      description: 'הצגת רשימת לידים',
+      description: 'הצגת רשימת לידים. אפשר לסנן לפי סוכנות עם agency_id או agency_name.',
       parameters: {
         type: 'object',
         properties: {
           status: { type: 'string', description: 'סינון לפי סטטוס' },
           source: { type: 'string', description: 'סינון לפי מקור' },
+          agency_id: { type: 'string', description: 'סינון לפי סוכנות (UUID)' },
+          agency_name: { type: 'string', description: 'סינון לפי שם סוכנות (חיפוש חלקי)' },
           limit: { type: 'integer', description: 'מספר מקסימלי (ברירת מחדל: 20)' },
         },
       },
@@ -1442,11 +1466,13 @@ const tools = [
     type: 'function',
     function: {
       name: 'list_clients',
-      description: 'הצגת רשימת לקוחות',
+      description: 'הצגת רשימת לקוחות. אפשר לסנן לפי סוכנות עם agency_id או agency_name.',
       parameters: {
         type: 'object',
         properties: {
           status: { type: 'string', description: 'סינון לפי סטטוס' },
+          agency_id: { type: 'string', description: 'סינון לפי סוכנות (UUID)' },
+          agency_name: { type: 'string', description: 'סינון לפי שם סוכנות (חיפוש חלקי)' },
           limit: { type: 'integer', description: 'מספר מקסימלי (ברירת מחדל: 20)' },
         },
       },
