@@ -7333,6 +7333,7 @@ export type Database = {
         | "inbound_webhook_lead"
         | "manual_command"
         | "whatsapp_message_received"
+        | "carmen_whatsapp_session"
       chat_provider: "manychat" | "green_api" | "internal"
       client_mood_status:
         | "happy"
@@ -7557,6 +7558,7 @@ export const Constants = {
         "inbound_webhook_lead",
         "manual_command",
         "whatsapp_message_received",
+        "carmen_whatsapp_session",
       ],
       chat_provider: ["manychat", "green_api", "internal"],
       client_mood_status: [
