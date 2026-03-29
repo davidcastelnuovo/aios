@@ -44,7 +44,7 @@ export default function AgentTasksPage() {
   const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const makePath = useTenantPath();
+  const { buildPath } = useTenantPath();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [filterAgent, setFilterAgent] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
