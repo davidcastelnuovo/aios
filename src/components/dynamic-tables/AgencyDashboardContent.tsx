@@ -339,7 +339,28 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
 
-      const recordsPromises = tables.map(async (table: any) => {
+      // Deduplicate Facebook: per client, if both facebook_insights AND facebook_ecommerce exist,
+      // skip facebook_insights to avoid double-counting spend/impressions/clicks
+      const clientFbTypes = new Map<string, Set<string>>();
+      tables.forEach((t: any) => {
+        if (isFacebookPlatform(t.integration_type) && t.client_id) {
+          if (!clientFbTypes.has(t.client_id)) clientFbTypes.set(t.client_id, new Set());
+          clientFbTypes.get(t.client_id)!.add(t.integration_type);
+        }
+      });
+      const skipTableIds = new Set<string>();
+      tables.forEach((t: any) => {
+        if (t.integration_type === 'facebook_insights' && t.client_id) {
+          const types = clientFbTypes.get(t.client_id);
+          if (types && types.has('facebook_ecommerce')) {
+            skipTableIds.add(t.id);
+          }
+        }
+      });
+
+      const tablesToFetch = tables.filter((t: any) => !skipTableIds.has(t.id));
+
+      const recordsPromises = tablesToFetch.map(async (table: any) => {
         const params = new URLSearchParams({
           table_id: table.id,
           date_filter: dateFilter,
