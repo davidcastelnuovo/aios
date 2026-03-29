@@ -62,6 +62,7 @@ export function FacebookTableDialog({ open, onOpenChange, assignedClientIds }: F
   const [adAccountSearch, setAdAccountSearch] = useState("");
   const [agencyId, setAgencyId] = useState<string>("");
   const [clientId, setClientId] = useState<string>("");
+  const [clientSearch, setClientSearch] = useState("");
 
   // Fetch agencies
   const { data: agencies = [] } = useQuery({
