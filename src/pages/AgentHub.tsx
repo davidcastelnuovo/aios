@@ -98,6 +98,8 @@ const defaultForm: AgentFormData = {
 export default function AgentHub() {
   const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const { buildPath } = useTenantPath();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
   const [form, setForm] = useState<AgentFormData>(defaultForm);
@@ -211,10 +213,16 @@ export default function AgentHub() {
             הגדר סוכני AI שפועלים בשמך בתוך המערכת
           </p>
         </div>
-        <Button onClick={openNew} className="gap-2 bg-[#36d399] hover:bg-[#2fbf87] text-black">
-          <Plus className="h-4 w-4" />
-          סוכן חדש
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => navigate(buildPath("agent-tasks"))} className="gap-2">
+            <Zap className="h-4 w-4" />
+            ניהול משימות
+          </Button>
+          <Button onClick={openNew} className="gap-2 bg-[#36d399] hover:bg-[#2fbf87] text-black">
+            <Plus className="h-4 w-4" />
+            סוכן חדש
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (
