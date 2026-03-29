@@ -122,7 +122,13 @@ const MENU_TABS: MenuTab[] = [
         items: [
           { key: "sales-dashboard", label: "דשבורד מכירות", route: "/sales-dashboard", icon: TrendingUp },
           { key: "leads", label: "לידים", route: "/leads", icon: Target },
+        ],
+      },
+      {
+        label: "לקוחות",
+        items: [
           { key: "clients", label: "לקוחות", route: "/clients", icon: Users },
+          { key: "client-onboarding", label: "לקוחות בקליטה", route: "/client-onboarding", icon: UserPlus },
           { key: "tasks", label: "משימות", route: "/tasks", icon: CheckSquare },
         ],
       },
@@ -137,7 +143,6 @@ const MENU_TABS: MenuTab[] = [
         label: "כלים",
         items: [
           { key: "products", label: "מוצרים ושירותים", route: "/products", icon: Package },
-          { key: "client-onboarding", label: "הכנסת לקוח", route: "/client-onboarding", icon: UserPlus },
           { key: "time-tracking", label: "מעקב זמן", route: "/time-tracking", icon: Clock },
           { key: "lead-integrations", label: "אינטגרציות לידים", route: "/lead-integrations", icon: Plug },
         ],

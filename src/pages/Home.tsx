@@ -38,12 +38,20 @@ const CATEGORIES: Category[] = [
     modules: [
       { key: "sales-dashboard", label: "דשבורד מכירות", description: "סקירה כללית של ביצועי המכירות", route: "/sales-dashboard", icon: TrendingUp, permission: "sales_dashboard", color: "bg-emerald-500/10 text-emerald-600" },
       { key: "leads", label: "לידים", description: "ניהול לידים ומעקב אחר תהליך המכירה", route: "/leads", icon: Target, permission: "leads", color: "bg-emerald-500/10 text-emerald-600" },
-      { key: "clients", label: "לקוחות", description: "ניהול לקוחות ופרטי קשר", route: "/clients", icon: Users, permission: "clients", color: "bg-emerald-500/10 text-emerald-600" },
-      { key: "tasks", label: "משימות", description: "ניהול משימות ומעקב התקדמות", route: "/tasks", icon: CheckSquare, permission: "tasks", color: "bg-emerald-500/10 text-emerald-600" },
       { key: "sales-people", label: "אנשי מכירות", description: "ניהול צוות המכירות", route: "/sales-people", icon: UserCheck, permission: "sales_people", color: "bg-emerald-500/10 text-emerald-600" },
       { key: "campaigners", label: "קמפיינרים", description: "ניהול קמפיינרים וסוכנויות", route: "/campaigners", icon: Megaphone, permission: "campaigners", color: "bg-emerald-500/10 text-emerald-600" },
       { key: "products", label: "מוצרים ושירותים", description: "קטלוג מוצרים ומחירים", route: "/products", icon: Package, permission: "leads", color: "bg-emerald-500/10 text-emerald-600" },
-      { key: "client-onboarding", label: "הכנסת לקוח", description: "תהליך קליטת לקוחות חדשים", route: "/client-onboarding", icon: UserPlus, permission: "client_onboarding", color: "bg-emerald-500/10 text-emerald-600" },
+    ],
+  },
+  {
+    id: "clients",
+    label: "לקוחות",
+    icon: Users,
+    color: "from-teal-500/20 to-teal-600/10 border-teal-500/30",
+    modules: [
+      { key: "clients", label: "לקוחות", description: "ניהול לקוחות ופרטי קשר", route: "/clients", icon: Users, permission: "clients", color: "bg-teal-500/10 text-teal-600" },
+      { key: "client-onboarding", label: "לקוחות בקליטה", description: "תהליך קליטת לקוחות חדשים", route: "/client-onboarding", icon: UserPlus, permission: "client_onboarding", color: "bg-teal-500/10 text-teal-600" },
+      { key: "tasks", label: "משימות", description: "ניהול משימות ומעקב התקדמות", route: "/tasks", icon: CheckSquare, permission: "tasks", color: "bg-teal-500/10 text-teal-600" },
     ],
   },
   {
