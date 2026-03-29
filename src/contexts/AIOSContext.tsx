@@ -12,6 +12,7 @@ interface AIOSState {
   history: { role: string; content: string }[];
   send: (text: string) => void;
   removePanel: (index: number) => void;
+  resetConversation: () => void;
 }
 
 const AIOSContext = createContext<AIOSState | null>(null);
@@ -24,6 +25,7 @@ export function AIOSProvider({ children }: { children: React.ReactNode }) {
   const [statusText, setStatusText] = useState("");
   const [dataPanels, setDataPanels] = useState<DisplayData[]>([]);
   const [history, setHistory] = useState<{ role: string; content: string }[]>([]);
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const activeRef = useRef(false);
 
   const send = useCallback(async (text: string) => {
@@ -51,6 +53,7 @@ export function AIOSProvider({ children }: { children: React.ReactNode }) {
           body: JSON.stringify({
             message: text,
             tenant_id: tenantId,
+            conversation_id: conversationId,
           }),
         }
       );
@@ -87,6 +90,11 @@ export function AIOSProvider({ children }: { children: React.ReactNode }) {
               continue;
             }
 
+            if (parsed.type === "conversation_id" && parsed.id) {
+              setConversationId(parsed.id);
+              continue;
+            }
+
             if (parsed.type === "invalidate" && parsed.entity) {
               queryClient.invalidateQueries({ queryKey: [parsed.entity] });
               continue;
@@ -112,14 +120,21 @@ export function AIOSProvider({ children }: { children: React.ReactNode }) {
       activeRef.current = false;
       setIsLoading(false);
     }
-  }, [userId, tenantId, history, queryClient]);
+  }, [userId, tenantId, history, conversationId, queryClient]);
 
   const removePanel = useCallback((index: number) => {
     setDataPanels((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
+  const resetConversation = useCallback(() => {
+    setConversationId(null);
+    setHistory([]);
+    setStatusText("");
+    setDataPanels([]);
+  }, []);
+
   return (
-    <AIOSContext.Provider value={{ isLoading, statusText, dataPanels, history, send, removePanel }}>
+    <AIOSContext.Provider value={{ isLoading, statusText, dataPanels, history, send, removePanel, resetConversation }}>
       {children}
     </AIOSContext.Provider>
   );

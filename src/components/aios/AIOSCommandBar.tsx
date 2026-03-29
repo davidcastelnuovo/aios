@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { Send, Loader2, Brain } from "lucide-react";
+import { Send, Loader2, Brain, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import ReactMarkdown from "react-markdown";
@@ -8,9 +8,10 @@ interface AIOSCommandBarProps {
   onSend: (message: string) => void;
   isLoading: boolean;
   statusText: string;
+  onReset?: () => void;
 }
 
-export function AIOSCommandBar({ onSend, isLoading, statusText }: AIOSCommandBarProps) {
+export function AIOSCommandBar({ onSend, isLoading, statusText, onReset }: AIOSCommandBarProps) {
   const [input, setInput] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -33,6 +34,18 @@ export function AIOSCommandBar({ onSend, isLoading, statusText }: AIOSCommandBar
   return (
     <div className="border-b bg-card px-4 py-3 space-y-2">
       <div className="flex items-center gap-2 max-w-3xl mx-auto">
+        {onReset && (
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={onReset}
+            disabled={isLoading}
+            title="שיחה חדשה"
+            className="h-10 w-10 shrink-0"
+          >
+            <RotateCcw className="h-4 w-4" />
+          </Button>
+        )}
         <Input
           ref={inputRef}
           value={input}
