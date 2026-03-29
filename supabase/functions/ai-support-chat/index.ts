@@ -111,8 +111,10 @@ ${memoryContext}
 - שאל לפרטים חסרים אם צריך
 
 ⚠️ **לפני שליחת הודעה:**
-- חפש קודם את איש הקשר כדי לקבל את ה-ID שלו
-- וודא שיש לו מספר טלפון
+- עדיפות: חפש קודם את איש הקשר כדי לקבל את ה-ID שלו
+- אם המשתמש נותן מספר טלפון מפורש, אפשר לשלוח ישירות עם send_message באמצעות phone (גם בלי contact_id)
+- וודא שיש מספר טלפון תקין
+- **אסור לטעון "שלחתי" או "נשלח" בלי קריאת send_message מוצלחת בפועל**; אם הכלי נכשל חובה לדווח את השגיאה כפי שהיא.
 - **חשוב מאוד:** כשאתה שולח הודעת WhatsApp, ההודעה תתחיל אוטומטית עם חתימה שמציגה אותך כעוזר AI שפועל בשם ${userName}. אל תוסיף הצגה עצמית בגוף ההודעה — זה כבר מובנה.
 
 💬 **שיחות WhatsApp:**
@@ -692,23 +694,51 @@ async function executeTool(
       }
 
       case 'send_message': {
-        const { contact_type, contact_id, message_text } = toolCall.args;
+        const { contact_type, contact_id, message_text, phone: directPhone, phoneNumber: directPhoneNumber } = toolCall.args;
+
+        if (!message_text || typeof message_text !== 'string') {
+          return { success: false, error: 'חסר message_text תקין לשליחה' };
+        }
         
         // Get the sender's name for the AI signature
         const { data: senderProfile } = await supabaseClient.from('profiles').select('full_name').eq('id', userId).single();
         const senderName = senderProfile?.full_name || 'המנהל';
         
-        let phone: string | null = null;
+        let phone: string | null = directPhoneNumber || directPhone || null;
         let contactName: string | null = null;
+        let resolvedContactType: 'lead' | 'client' | null = null;
+        let resolvedContactId: string | null = null;
         
-        if (contact_type === 'lead') {
-          const { data } = await supabaseClient.from('leads').select('phone, company_name, contact_name, active_chat_provider').eq('id', contact_id).single();
-          phone = data?.phone;
-          contactName = data?.contact_name || data?.company_name;
-        } else if (contact_type === 'client') {
-          const { data } = await supabaseClient.from('clients').select('phone, name, contact_name, active_chat_provider').eq('id', contact_id).single();
-          phone = data?.phone;
-          contactName = data?.contact_name || data?.name;
+        if (contact_type && contact_id) {
+          if (contact_type === 'lead') {
+            const { data } = await supabaseClient
+              .from('leads')
+              .select('phone, company_name, contact_name, active_chat_provider')
+              .eq('id', contact_id)
+              .single();
+
+            if (data) {
+              phone = phone || data.phone;
+              contactName = data?.contact_name || data?.company_name;
+              resolvedContactType = 'lead';
+              resolvedContactId = contact_id;
+            }
+          } else if (contact_type === 'client') {
+            const { data } = await supabaseClient
+              .from('clients')
+              .select('phone, name, contact_name, active_chat_provider')
+              .eq('id', contact_id)
+              .single();
+
+            if (data) {
+              phone = phone || data.phone;
+              contactName = data?.contact_name || data?.name;
+              resolvedContactType = 'client';
+              resolvedContactId = contact_id;
+            }
+          } else {
+            return { success: false, error: 'contact_type לא תקין. השתמש ב-lead או client' };
+          }
         }
 
         if (!phone) return { success: false, error: 'לא נמצא מספר טלפון עבור איש הקשר' };
@@ -718,27 +748,44 @@ async function executeTool(
         const fullMessage = aiSignature + message_text;
 
         try {
+          const payload: Record<string, any> = {
+            phoneNumber: phone,
+            message: fullMessage,
+            tenantId,
+            senderUserId: userId,
+          };
+
+          if (resolvedContactType && resolvedContactId) {
+            payload[`${resolvedContactType}Id`] = resolvedContactId;
+          }
+
           const sendResponse = await fetch(`${SUPABASE_URL}/functions/v1/send-green-api-message`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
             },
-            body: JSON.stringify({
-              phoneNumber: phone,
-              message: fullMessage,
-              tenantId,
-              senderUserId: userId,
-              [`${contact_type}Id`]: contact_id,
-            }),
+            body: JSON.stringify(payload),
           });
 
+          const sendResult = await sendResponse.json().catch(() => null);
+
           if (!sendResponse.ok) {
-            const errText = await sendResponse.text();
+            const errText = sendResult?.error || JSON.stringify(sendResult) || 'Send failed';
             throw new Error(errText);
           }
 
-          return { success: true, result: { sent_to: contactName, phone, message_preview: message_text.slice(0, 50), ai_signature_added: true } };
+          return {
+            success: true,
+            result: {
+              sent_to: contactName || phone,
+              phone,
+              message_preview: message_text.slice(0, 50),
+              ai_signature_added: true,
+              message_id: sendResult?.messageId || null,
+              send_mode: resolvedContactId ? 'crm_contact' : 'direct_phone',
+            },
+          };
         } catch (e: any) {
           return { success: false, error: `שגיאה בשליחת ההודעה: ${e.message}` };
         }
@@ -1446,15 +1493,17 @@ const tools = [
     type: 'function',
     function: {
       name: 'send_message',
-      description: 'שליחת הודעת WhatsApp ללקוח או ליד. ההודעה תכלול חתימה אוטומטית שמציגה אותך כעוזר דיגיטלי.',
+      description: 'שליחת הודעת WhatsApp ללקוח/ליד לפי contact_id, או ישירות לפי phone/phoneNumber. ההודעה תכלול חתימה אוטומטית.',
       parameters: {
         type: 'object',
         properties: {
-          contact_type: { type: 'string', enum: ['lead', 'client'], description: 'סוג איש הקשר' },
-          contact_id: { type: 'string', description: 'מזהה איש הקשר (UUID)' },
+          contact_type: { type: 'string', enum: ['lead', 'client'], description: 'סוג איש הקשר (אופציונלי אם שולחים לפי טלפון ישיר)' },
+          contact_id: { type: 'string', description: 'מזהה איש הקשר (UUID) - אופציונלי אם שולחים לפי טלפון ישיר' },
+          phone: { type: 'string', description: 'מספר טלפון ישיר לשליחה (ללא צורך ב-contact_id)' },
+          phoneNumber: { type: 'string', description: 'כמו phone - נתמך לתאימות' },
           message_text: { type: 'string', description: 'תוכן ההודעה (ללא הצגה עצמית - היא תתווסף אוטומטית)' },
         },
-        required: ['contact_type', 'contact_id', 'message_text'],
+        required: ['message_text'],
       },
     },
   },
@@ -1753,6 +1802,10 @@ serve(async (req) => {
     const aiMessages = messages.filter(m => m.role !== 'tool_call').map(m => ({ role: m.role, content: m.content }));
 
     // Call Lovable AI Gateway
+    const forceToolsForWhatsApp =
+      /(וואטסאפ|ווטסאפ|whatsapp|green api|גרין api|gery)/i.test(message || '') &&
+      /(שלח|שליחה|תשלח|תנסה לשלוח|לא קיבלתי|לא הגיע)/i.test(message || '');
+
     const response = await fetch(AI_GATEWAY_URL, {
       method: 'POST',
       headers: {
@@ -1766,6 +1819,7 @@ serve(async (req) => {
           ...aiMessages,
         ],
         tools,
+        ...(forceToolsForWhatsApp ? { tool_choice: 'required' } : {}),
         stream: true,
       }),
     });
