@@ -36,6 +36,7 @@ import { Plus, Trash2, Users, Check, ChevronsUpDown } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
+import { cn } from "@/lib/utils";
 
 const formSchema = z.object({
   name: z.string().min(1, "שם הלקוח הוא שדה חובה"),

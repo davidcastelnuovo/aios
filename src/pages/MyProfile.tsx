@@ -434,7 +434,7 @@ export default function MyProfile() {
                           </div>
 
                           {assignment.campaigner_payment && Number(assignment.campaigner_payment) > 0 && (
-                            <div class="text-right">
+                            <div className="text-right">
                               <Badge variant="outline" className="text-base font-semibold">
                                 ₪{Number(assignment.campaigner_payment).toLocaleString()}
                               </Badge>
