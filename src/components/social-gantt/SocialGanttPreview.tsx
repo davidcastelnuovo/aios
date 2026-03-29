@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 import { CreativeAgent } from "./CreativeAgent";
 import { CopyAgent } from "./CopyAgent";
-import type { SocialPost } from "@/pages/SocialGantt";
+import type { SocialPost } from "@/pages/SocialDashboard";
 
 interface SocialGanttPreviewProps {
   post: SocialPost | null;

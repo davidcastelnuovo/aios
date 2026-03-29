@@ -16,7 +16,7 @@ import { CalendarIcon, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { cn } from "@/lib/utils";
-import type { SocialPost } from "@/pages/SocialGantt";
+import type { SocialPost } from "@/pages/SocialDashboard";
 
 interface NewPostDialogProps {
   open: boolean;

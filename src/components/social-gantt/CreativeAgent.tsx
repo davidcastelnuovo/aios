@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import type { SocialPost } from "@/pages/SocialGantt";
+import type { SocialPost } from "@/pages/SocialDashboard";
 
 interface CreativeAgentProps {
   post: SocialPost;

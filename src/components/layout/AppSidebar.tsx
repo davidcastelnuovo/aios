@@ -363,14 +363,14 @@ export function AppSidebar() {
   const ensuredMenuItems = [...dbMenuItems];
   const hardcodedItems: MenuItem[] = [
     {
-      id: 'hardcoded-social-gantt',
-      menu_key: 'social-gantt',
+      id: 'hardcoded-social-media',
+      menu_key: 'social-media',
       custom_label: null,
-      original_label: 'גאנט סושיאל',
+      original_label: 'ניהול סושיאל',
       is_visible: true,
       sort_order: 999,
-      icon: 'CalendarRange',
-      route: '/social-gantt',
+      icon: 'Share2',
+      route: '/social-media',
       parent_menu_key: null,
     },
   ];

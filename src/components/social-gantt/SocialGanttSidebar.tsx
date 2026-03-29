@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import type { SocialPost } from "@/pages/SocialGantt";
+import type { SocialPost } from "@/pages/SocialDashboard";
 import { Instagram, Facebook, Linkedin, Twitter } from "lucide-react";
 
 interface SocialGanttSidebarProps {
