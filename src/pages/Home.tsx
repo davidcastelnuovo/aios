@@ -61,8 +61,7 @@ const CATEGORIES: Category[] = [
     color: "from-blue-500/20 to-blue-600/10 border-blue-500/30",
     modules: [
       { key: "social-media", label: "ניהול סושיאל", description: "תזמון פוסטים וניהול ערוצי סושיאל", route: "/social-media", icon: Share2, permission: "dashboard", color: "bg-blue-500/10 text-blue-600" },
-      { key: "site_analytics", label: "אנליטיקס אתרים", description: "נתוני ביצועים ותנועה לאתרים", route: "/site-analytics", icon: BarChart3, permission: "clients", color: "bg-blue-500/10 text-blue-600" },
-      { key: "rank_tracking", label: "מעקב מיקומים", description: "מעקב אחר דירוגי SEO", route: "/rank-tracking", icon: Radar, permission: "clients", color: "bg-blue-500/10 text-blue-600" },
+
       { key: "reports", label: "דוחות", description: "דוחות מותאמים אישית", route: "/reports", icon: BarChart2, permission: "reports", color: "bg-blue-500/10 text-blue-600" },
       { key: "dynamic-tables", label: "דשבורדים ודוחות", description: "בניית דשבורדים ודוחות דינמיים", route: "/dynamic-tables", icon: Table2, permission: "dynamic_tables", color: "bg-blue-500/10 text-blue-600" },
       { key: "ai-detection", label: "ניטור נראות AI", description: "ניטור נראות המותג במנועי AI", route: "/ai-detection", icon: Bot, permission: "dashboard", color: "bg-blue-500/10 text-blue-600" },

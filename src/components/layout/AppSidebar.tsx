@@ -179,8 +179,8 @@ const MENU_TABS: MenuTab[] = [
       {
         label: "אנליטיקס",
         items: [
-          { key: "site_analytics", label: "אנליטיקס אתרים", route: "/site-analytics", icon: BarChart3 },
-          { key: "rank_tracking", label: "מעקב מיקומים", route: "/rank-tracking", icon: Radar },
+          // { key: "site_analytics", label: "אנליטיקס אתרים", route: "/site-analytics", icon: BarChart3 }, // hidden
+          // { key: "rank_tracking", label: "מעקב מיקומים", route: "/rank-tracking", icon: Radar }, // hidden
           { key: "reports", label: "דוחות", route: "/reports", icon: BarChart2 },
           { key: "dynamic-tables", label: "דשבורדים ודוחות", route: "/dynamic-tables", icon: Table2 },
           { key: "ai-detection", label: "ניטור נראות AI", route: "/ai-detection", icon: Bot },
