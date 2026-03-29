@@ -36,7 +36,7 @@ export default function SocialGantt() {
     queryKey: ["social-gantt-posts", tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("social_gantt_posts")
         .select("*")
         .eq("tenant_id", tenantId)
@@ -51,7 +51,7 @@ export default function SocialGantt() {
   const updatePost = useMutation({
     mutationFn: async (updates: Partial<SocialPost> & { id: string }) => {
       const { id, ...rest } = updates;
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from("social_gantt_posts")
         .update({ ...rest, updated_at: new Date().toISOString() })
         .eq("id", id);
@@ -68,7 +68,7 @@ export default function SocialGantt() {
 
   const createPost = useMutation({
     mutationFn: async (newPost: Omit<SocialPost, "id" | "created_at" | "updated_at">) => {
-      const { error } = await supabase.from("social_gantt_posts").insert(newPost);
+      const { error } = await (supabase as any).from("social_gantt_posts").insert(newPost);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -83,7 +83,7 @@ export default function SocialGantt() {
 
   const deletePost = useMutation({
     mutationFn: async (postId: string) => {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from("social_gantt_posts")
         .delete()
         .eq("id", postId);
