@@ -57,7 +57,19 @@ Deno.serve(async (req) => {
       userId = user.id;
       console.log('✅ User authenticated:', userId);
     }
-    const { clientId, leadId, groupId, message, phoneNumber, tenantId: providedTenantId, quotedMessageId } = await req.json();
+    const { clientId, leadId, groupId, message, phoneNumber, tenantId: providedTenantId, quotedMessageId, senderUserId } = await req.json();
+
+    // For service role calls, use senderUserId from the body
+    if (isServiceRole) {
+      if (!senderUserId) {
+        return new Response(JSON.stringify({ error: 'senderUserId is required for service role calls' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      userId = senderUserId;
+      console.log('🔑 Using senderUserId:', userId);
+    }
     
     if (!message) {
       return new Response(JSON.stringify({ error: 'Missing message' }), {
