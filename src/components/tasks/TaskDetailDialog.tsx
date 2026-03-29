@@ -318,10 +318,11 @@ export function TaskDetailDialog({
   // Add update mutation
   const addUpdate = useMutation({
     mutationFn: async () => {
+      if (!user?.id) throw new Error("User not authenticated");
       const { error } = await supabase.from("task_updates").insert({
         task_id: task!.id,
         content: newUpdate,
-        user_id: user?.id,
+        user_id: user.id,
       });
       if (error) throw error;
     },
@@ -331,8 +332,9 @@ export function TaskDetailDialog({
       setNewUpdate("");
       toast.success("עדכון נוסף");
     },
-    onError: () => {
-      toast.error("שגיאה בהוספת עדכון");
+    onError: (error: any) => {
+      console.error("Error adding task update:", error);
+      toast.error("שגיאה בהוספת עדכון: " + (error?.message || ""));
     },
   });
 
