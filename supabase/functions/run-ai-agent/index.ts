@@ -47,6 +47,9 @@ const ALL_TOOLS = [
   // MANUS AI - Complex task delegation
   { name: 'delegate_to_manus', description: 'שליחת משימה מורכבת ל-Manus AI לביצוע ברקע (מחקר שוק, ניתוח קמפיינים, יצירת תוכן, ניתוח נתונים). המשימה רצה ברקע ועשויה לקחת דקות עד שעות.', parameters: { type: 'object', properties: { prompt: { type: 'string', description: 'תיאור מפורט של המשימה לביצוע' }, context_data: { type: 'string', description: 'נתוני הקשר רלוונטיים (למשל נתוני קמפיינים)' } }, required: ['prompt'] } },
   { name: 'get_facebook_campaign_data', description: 'שליפת נתוני קמפיינים מפייסבוק לצורך ניתוח', parameters: { type: 'object', properties: { client_id: { type: 'string' }, days: { type: 'integer', description: 'מספר ימים אחורה (ברירת מחדל 30)' } } } },
+  // SOCIAL MEDIA
+  { name: 'create_social_post', description: 'יצירת פוסט/מודעה חדשה במודול ניהול סושיאל מדיה. השתמש בכלי הזה כדי ליצור פוסטים עם תוכן טקסטואלי ותמונות. הפוסט יישמר כטיוטה במערכת.', parameters: { type: 'object', properties: { title: { type: 'string', description: 'כותרת הפוסט/מודעה' }, content: { type: 'string', description: 'תוכן הפוסט - הקופי של המודעה' }, post_type: { type: 'string', enum: ['text', 'image', 'video', 'carousel'], description: 'סוג הפוסט' }, media_urls: { type: 'array', items: { type: 'string' }, description: 'קישורי מדיה (תמונות/וידאו)' } }, required: ['title', 'content'] } },
+  { name: 'generate_ad_image', description: 'יצירת תמונה למודעה/פוסט באמצעות AI. מחזיר URL של התמונה שנוצרה. השתמש בכלי הזה כדי ליצור ויזואל למודעות ופוסטים ואז השתמש ב-create_social_post כדי לשמור את הפוסט.', parameters: { type: 'object', properties: { prompt: { type: 'string', description: 'תיאור מפורט של התמונה הרצויה באנגלית' }, aspect_ratio: { type: 'string', enum: ['1:1', '16:9', '9:16', '4:5'], description: 'יחס גובה-רוחב' } }, required: ['prompt'] } },
 ]
 
 // ===========================
