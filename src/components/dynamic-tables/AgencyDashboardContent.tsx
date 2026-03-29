@@ -718,52 +718,6 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
       {/* Daily Charts */}
       {dailyChartData.length > 0 && (
         <>
-          {/* Analytics-only charts */}
-          {platformFilter === 'google_analytics' && hasAnalyticsData && (
-            <>
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">הכנסות (Analytics) - יומי</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <ComposedChart data={dailyChartData}>
-                      <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                      <XAxis dataKey="dateLabel" tick={{ fontSize: 12 }} />
-                      <YAxis tick={{ fontSize: 12 }} />
-                      <Tooltip 
-                        formatter={(value: number) => [formatCurrency(value), 'הכנסות']}
-                        labelFormatter={(label) => `תאריך: ${label}`}
-                      />
-                      <Area type="monotone" dataKey="analyticsRevenue" fill="#22c55e" fillOpacity={0.15} stroke="#22c55e" strokeWidth={2} />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-
-
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">סשנים יומיים (Analytics)</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <BarChart data={dailyChartData}>
-                      <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                      <XAxis dataKey="dateLabel" tick={{ fontSize: 12 }} />
-                      <YAxis tick={{ fontSize: 12 }} />
-                      <Tooltip 
-                        formatter={(value: number) => [formatNumber(value), 'סשנים']}
-                        labelFormatter={(label) => `תאריך: ${label}`}
-                      />
-                      <Bar dataKey="analyticsSessions" fill="#f97316" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-            </>
-          )}
 
           {/* Ads spend chart - for ads platform tabs or "all" */}
           {(platformFilter === 'facebook' || platformFilter === 'google_ads') && (
