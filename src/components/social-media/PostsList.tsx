@@ -61,12 +61,24 @@ export function PostsList() {
                   key={post.id}
                   className="p-4 rounded-lg border space-y-2"
                 >
-                  <div className="flex items-start justify-between">
+                    {post.media_urls && post.media_urls.length > 0 && (
+                      <div className="flex gap-2 mb-3 overflow-x-auto">
+                        {post.media_urls.map((url, idx) => (
+                          <img
+                            key={idx}
+                            src={url}
+                            alt={`מדיה ${idx + 1}`}
+                            className="h-40 w-auto rounded-lg object-cover border"
+                          />
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
                       {post.title && (
                         <h4 className="font-medium truncate">{post.title}</h4>
                       )}
-                      <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
+                      <p className="text-sm text-muted-foreground line-clamp-3 mt-1 whitespace-pre-line">
                         {post.content}
                       </p>
                     </div>
