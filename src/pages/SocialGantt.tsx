@@ -36,7 +36,7 @@ export default function SocialGantt() {
     queryKey: ["social-gantt-posts", tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("social_gantt_posts")
         .select("*")
         .eq("tenant_id", tenantId)
