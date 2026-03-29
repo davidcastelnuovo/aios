@@ -1906,7 +1906,7 @@ serve(async (req) => {
           }
           
           // Execute accumulated tool calls with recursive support (up to 3 rounds)
-          const MAX_TOOL_ROUNDS = 3;
+          const MAX_TOOL_ROUNDS = 5;
           let toolRound = 0;
           let currentToolCalls = { ...toolCallAccumulators };
           let currentFinishReason = finishReason;
