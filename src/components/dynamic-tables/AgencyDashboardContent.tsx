@@ -713,39 +713,6 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
           </>
         )}
 
-        {/* Analytics-only view: show sessions */}
-        {platformFilter === 'google_analytics' && (
-          <>
-            <Card className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-950 dark:to-orange-900">
-              <CardContent className="p-6">
-                <p className="text-sm text-muted-foreground">סשנים</p>
-                <p className="text-3xl font-bold mt-2">{formatNumber(overallTotals.analyticsSessions)}</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
-              <CardContent className="p-6">
-                <p className="text-sm text-muted-foreground">הכנסות (Analytics)</p>
-                <p className="text-3xl font-bold mt-2">{formatCurrency(overallTotals.analyticsRevenue)}</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">רכישות</p>
-                    <p className="text-3xl font-bold mt-2">{formatNumber(overallTotals.analyticsPurchases)}</p>
-                  </div>
-                  <div className="text-left">
-                    <p className="text-sm text-muted-foreground flex items-center gap-1">
-                      <ShoppingCart className="h-3 w-3" /> הוספות לעגלה
-                    </p>
-                    <p className="text-xl font-bold mt-2">{formatNumber(overallTotals.analyticsAddToCart)}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </>
-        )}
       </div>
 
       {/* Daily Charts */}
