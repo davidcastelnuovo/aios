@@ -4807,6 +4807,222 @@ export type Database = {
           },
         ]
       }
+      social_media_channels: {
+        Row: {
+          access_token: string | null
+          avatar_url: string | null
+          channel_id: string | null
+          channel_name: string
+          created_at: string
+          id: string
+          is_active: boolean
+          metadata: Json
+          platform: string
+          refresh_token: string | null
+          tenant_id: string
+          token_expires_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_token?: string | null
+          avatar_url?: string | null
+          channel_id?: string | null
+          channel_name: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          metadata?: Json
+          platform: string
+          refresh_token?: string | null
+          tenant_id: string
+          token_expires_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string | null
+          avatar_url?: string | null
+          channel_id?: string | null
+          channel_name?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          metadata?: Json
+          platform?: string
+          refresh_token?: string | null
+          tenant_id?: string
+          token_expires_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_media_channels_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_media_post_channels: {
+        Row: {
+          channel_id: string
+          created_at: string
+          error_message: string | null
+          id: string
+          platform_post_id: string | null
+          post_id: string
+          published_at: string | null
+          status: string
+        }
+        Insert: {
+          channel_id: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          platform_post_id?: string | null
+          post_id: string
+          published_at?: string | null
+          status?: string
+        }
+        Update: {
+          channel_id?: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          platform_post_id?: string | null
+          post_id?: string
+          published_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_media_post_channels_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "social_media_channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_media_post_channels_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "social_media_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_media_posts: {
+        Row: {
+          content: string
+          created_at: string
+          created_by: string | null
+          error_message: string | null
+          id: string
+          media_urls: Json
+          metadata: Json
+          post_type: string
+          publish_to_wordpress: boolean
+          published_at: string | null
+          scheduled_at: string | null
+          status: string
+          tenant_id: string
+          title: string | null
+          updated_at: string
+          wordpress_post_id: string | null
+          wordpress_site_url: string | null
+        }
+        Insert: {
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          error_message?: string | null
+          id?: string
+          media_urls?: Json
+          metadata?: Json
+          post_type?: string
+          publish_to_wordpress?: boolean
+          published_at?: string | null
+          scheduled_at?: string | null
+          status?: string
+          tenant_id: string
+          title?: string | null
+          updated_at?: string
+          wordpress_post_id?: string | null
+          wordpress_site_url?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          error_message?: string | null
+          id?: string
+          media_urls?: Json
+          metadata?: Json
+          post_type?: string
+          publish_to_wordpress?: boolean
+          published_at?: string | null
+          scheduled_at?: string | null
+          status?: string
+          tenant_id?: string
+          title?: string | null
+          updated_at?: string
+          wordpress_post_id?: string | null
+          wordpress_site_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_media_posts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_media_wordpress_sites: {
+        Row: {
+          app_password: string
+          created_at: string
+          id: string
+          is_active: boolean
+          site_name: string | null
+          site_url: string
+          tenant_id: string
+          updated_at: string
+          username: string
+        }
+        Insert: {
+          app_password: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          site_name?: string | null
+          site_url: string
+          tenant_id: string
+          updated_at?: string
+          username: string
+        }
+        Update: {
+          app_password?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          site_name?: string | null
+          site_url?: string
+          tenant_id?: string
+          updated_at?: string
+          username?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_media_wordpress_sites_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       supplier_invoices: {
         Row: {
           ai_extracted: boolean
