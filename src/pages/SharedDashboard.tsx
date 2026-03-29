@@ -1023,43 +1023,6 @@ export default function SharedDashboard() {
                 </Card>
               )}
 
-              {/* Daily ROAS */}
-              {dashboardCampaignType === 'ecommerce' && (
-                <Card>
-                  <CardHeader><CardTitle>ROAS יומי</CardTitle></CardHeader>
-                  <CardContent>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <LineChart data={dailyChartData}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="dateLabel" fontSize={12} />
-                        <YAxis fontSize={12} />
-                        <Tooltip formatter={(v: number) => v.toFixed(2)} />
-                        <Line type="monotone" dataKey="roas" name="ROAS" stroke="#8b5cf6" strokeWidth={2} dot={false} />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Purchases & ATC */}
-              {dashboardCampaignType === 'ecommerce' && showAnalyticsCards && (
-                <Card>
-                  <CardHeader><CardTitle>רכישות והוספה לעגלה</CardTitle></CardHeader>
-                  <CardContent>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={dailyChartData}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="dateLabel" fontSize={12} />
-                        <YAxis fontSize={12} />
-                        <Tooltip />
-                        <Legend />
-                        <Bar dataKey="purchases" name="רכישות" fill="#22c55e" />
-                        <Bar dataKey="addToCart" name="הוספה לעגלה" fill="#f59e0b" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                </Card>
-              )}
 
               {/* Sessions */}
               {showAnalyticsCards && (
