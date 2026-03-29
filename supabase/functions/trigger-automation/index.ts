@@ -1316,12 +1316,6 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
     }
   }
 
-    tenantId,
-    contactType,
-    contactRecordId: contactRecord?.id,
-    contactPhone,
-    existingSubscriberId: subscriberId,
-  })
   
   // If no subscriber ID, try to find by phone number
   if (!subscriberId && contactPhone) {
