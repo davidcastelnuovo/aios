@@ -80,7 +80,6 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       const urlTenantId = tenantFromSlug.id;
       
       if (currentTenantId !== urlTenantId) {
-        console.log("🔄 URL tenant differs from state. Updating to:", urlTenantId, tenantSlug);
         setCurrentTenantId(urlTenantId);
         setIsActiveTenantSynced(false);
       }
@@ -102,7 +101,6 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        console.log("🔄 Syncing tenant to DB:", currentTenantId);
         
         const keysToRemove = [
           "tasks", "clients", "agencies", "agencies-filter", "user-agency-ids",
@@ -130,7 +128,6 @@ export function TenantProvider({ children }: { children: ReactNode }) {
           if (error) {
             console.error("Error updating active tenant in DB:", error);
           } else {
-            console.log("✅ Active tenant synced to DB:", currentTenantId);
           }
         }
       } catch (error) {

@@ -22,12 +22,10 @@ export function useSessionRefresh() {
         const fiveMinutes = 5 * 60;
 
         if (expiresAt && expiresAt - now < fiveMinutes) {
-          console.log("Session expiring soon, refreshing...");
           const { error: refreshError } = await supabase.auth.refreshSession();
           if (refreshError) {
             console.error("Session refresh error:", refreshError);
           } else {
-            console.log("Session refreshed successfully");
           }
         }
       }

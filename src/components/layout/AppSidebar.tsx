@@ -184,7 +184,6 @@ export function AppSidebar() {
   });
 
   const handleTenantChange = async (newTenantId: string) => {
-    console.log("🔄 handleTenantChange called with:", newTenantId);
     
     if (!userId) {
       console.error("❌ No userId available");
@@ -193,7 +192,6 @@ export function AppSidebar() {
 
     try {
       // First, get the new tenant slug before any state changes
-      console.log("📍 Fetching tenant slug for:", newTenantId);
       const { data: newTenant, error: slugError } = await supabase
         .from("tenants")
         .select("slug")
@@ -203,7 +201,6 @@ export function AppSidebar() {
       if (slugError) {
         console.error("❌ Error fetching tenant slug:", slugError);
       }
-      console.log("✅ Got tenant slug:", newTenant?.slug);
 
       // Ensure user has a role in the new tenant
       const { data: tenantUser } = await supabase
@@ -257,13 +254,11 @@ export function AppSidebar() {
         const currentModule = pathMatch ? pathMatch[1] : 'dashboard';
         
         const newUrl = `/t/${newTenant.slug}/${currentModule}`;
-        console.log("🚀 Redirecting to:", newUrl);
         
         // Force full page reload to ensure clean state
         window.location.href = newUrl;
         return;
       } else {
-        console.log("🚀 No slug found, redirecting to /");
         window.location.href = '/';
         return;
       }

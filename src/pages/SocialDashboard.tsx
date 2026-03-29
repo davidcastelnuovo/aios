@@ -15,6 +15,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   CalendarRange,
   ListChecks,
   Calendar,
@@ -23,6 +29,7 @@ import {
   Share2,
   Plus,
 } from "lucide-react";
+import { PostComposer } from "@/components/social-media/PostComposer";
 
 // Social Gantt components (content planning with AI)
 import { SocialGanttSidebar } from "@/components/social-gantt/SocialGanttSidebar";
@@ -83,6 +90,7 @@ export default function SocialDashboard() {
   // ─── Gantt state ───────────────────────────────────────────────
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [isNewPostOpen, setIsNewPostOpen] = useState(false);
+  const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [filterPlatform, setFilterPlatform] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
 
@@ -268,8 +276,25 @@ export default function SocialDashboard() {
         </TabsContent>
 
         {/* ── Posts Tab ──────────────────────────────────────────── */}
-        <TabsContent value="posts" className="flex-1 overflow-auto mt-0 p-6">
-          <PostsList />
+        <TabsContent value="posts" className="flex-1 overflow-auto mt-0">
+          <div className="flex items-center justify-between px-6 py-3 border-b shrink-0">
+            <h2 className="text-base font-semibold">פוסטים מוכנים לפרסום</h2>
+            <Button size="sm" onClick={() => setIsComposerOpen(true)}>
+              <Plus className="h-4 w-4 ml-1" />
+              פוסט חדש
+            </Button>
+          </div>
+          <div className="p-6">
+            <PostsList />
+          </div>
+          <Dialog open={isComposerOpen} onOpenChange={setIsComposerOpen}>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
+              <DialogHeader>
+                <DialogTitle>יצירת פוסט חדש</DialogTitle>
+              </DialogHeader>
+              <PostComposer onPostCreated={() => setIsComposerOpen(false)} />
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         {/* ── Calendar Tab ───────────────────────────────────────── */}

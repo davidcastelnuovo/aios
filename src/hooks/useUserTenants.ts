@@ -36,7 +36,6 @@ export function useUserTenants(userId?: string | null) {
     queryKey: ["user-tenants", userId, token, currentTenantId],
     enabled: !!userId && !!token,
     queryFn: async () => {
-      console.log("🔄 Fetching user tenants with scope:", currentTenantId);
       
       const { data, error } = await supabase.functions.invoke("list-user-tenants", {
         headers: {
@@ -59,7 +58,6 @@ export function useUserTenants(userId?: string | null) {
         return [] as any[];
       }
       
-      console.log(`✅ Received ${tenants.length} tenants from backend`);
       // sanitize
       return tenants.filter((t: any) => t && t.id && t.name);
     },

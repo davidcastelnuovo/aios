@@ -44,9 +44,15 @@ const ALL_TOOLS = [
   { name: "add_client_update", label: "הוספת עדכון ללקוח", group: "לקוחות" },
   { name: "send_message", label: "שליחת WhatsApp", group: "תקשורת" },
   { name: "search_entities", label: "חיפוש", group: "כללי" },
+  // סושיאל מדיה
+  { name: "create_social_post", label: "יצירת פוסט סושיאל", group: "סושיאל" },
+  { name: "generate_ad_image", label: "יצירת תמונה למודעה (AI)", group: "סושיאל" },
+  // AI & ניתוח
+  { name: "delegate_to_manus", label: "האצלת משימה ל-Manus AI", group: "AI" },
+  { name: "get_facebook_campaign_data", label: "נתוני קמפיינים פייסבוק", group: "AI" },
 ];
 
-const TOOL_GROUPS = ["לידים", "משימות", "לקוחות", "תקשורת", "כללי"];
+const TOOL_GROUPS = ["לידים", "משימות", "לקוחות", "תקשורת", "סושיאל", "AI", "כללי"];
 
 const ENGINES = [
   { value: "gemini-3-flash", label: "Gemini 3 Flash (מהיר)" },

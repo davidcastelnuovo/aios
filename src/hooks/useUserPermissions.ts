@@ -80,13 +80,11 @@ export function useUserPermissions() {
   const hasPermission = (module: ModulePermission): boolean => {
     // While loading or user unknown, do NOT allow (prevents leaks)
     if (isLoading) {
-      console.log(`[hasPermission] ${module}: LOADING - returning false`);
       return false;
     }
 
     // Super admins can access all modules in the UI
     if (isSuperAdmin) {
-      console.log(`[hasPermission] ${module}: isSuperAdmin - returning true`);
       return true;
     }
 
@@ -112,7 +110,6 @@ export function useUserPermissions() {
 
     // Owners always see these admin modules in the UI
     if ((module === "tenants" || module === "menu_management" || module === "fields_management" || module === "ai_support") && isOwner) {
-      console.log(`[hasPermission] ${module}: isOwner override - returning true`);
       return true;
     }
 

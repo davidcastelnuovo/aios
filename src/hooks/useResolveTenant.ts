@@ -27,7 +27,6 @@ export async function resolveTenantSlug(userId: string, retries = 3): Promise<st
 
       const activeSlug = (activeTenant as any)?.tenants?.slug as string | undefined;
       if (activeSlug) {
-        console.log("✅ Resolved tenant from active tenant:", activeSlug);
         return activeSlug;
       }
 
@@ -62,7 +61,6 @@ export async function resolveTenantSlug(userId: string, retries = 3): Promise<st
           .from("user_active_tenant")
           .upsert({ user_id: userId, tenant_id: candidateTenantId, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
         
-        console.log("✅ Resolved tenant from memberships:", candidateSlug);
         return candidateSlug;
       }
     } catch (err) {

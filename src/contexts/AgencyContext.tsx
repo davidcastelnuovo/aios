@@ -32,7 +32,6 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
   // Reset selection and refetch when tenant changes
   useEffect(() => {
     if (currentTenantId && prevTenantIdRef.current && currentTenantId !== prevTenantIdRef.current) {
-      console.log("🔄 AgencyContext: Tenant changed, resetting to 'all'");
       setSelectedAgency("all");
       didSetDefault.current = false;
       // Force refetch agencies for new tenant
@@ -47,7 +46,6 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
     queryFn: async () => {
       if (!currentTenantId) return [] as any[];
       
-      console.log("📋 Fetching agencies for tenant:", currentTenantId);
       
       // Get agencies owned by current tenant
       const { data: ownedAgencies, error: ownedError } = await supabase
@@ -87,7 +85,6 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
         a.name.localeCompare(b.name)
       );
       
-      console.log("✅ Loaded", result.length, "agencies for tenant:", currentTenantId);
       return result;
     },
     staleTime: 1000 * 60 * 5,
