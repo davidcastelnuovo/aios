@@ -103,6 +103,7 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
   // Reset client when agency changes
   useEffect(() => {
     setClientId("");
+    setClientSearch("");
   }, [agencyId]);
 
   // Check if Facebook is connected
