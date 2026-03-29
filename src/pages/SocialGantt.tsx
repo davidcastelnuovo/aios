@@ -68,7 +68,7 @@ export default function SocialGantt() {
 
   const createPost = useMutation({
     mutationFn: async (newPost: Omit<SocialPost, "id" | "created_at" | "updated_at">) => {
-      const { error } = await supabase.from("social_gantt_posts").insert(newPost);
+      const { error } = await (supabase as any).from("social_gantt_posts").insert(newPost);
       if (error) throw error;
     },
     onSuccess: () => {
