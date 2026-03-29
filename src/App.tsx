@@ -207,6 +207,7 @@ const App = () => (
                   <Route path="/t/:tenantSlug/manus-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><ManusSettings /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/manus-tasks" element={<ProtectedRoute><AppLayout><ManusTasksPage /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/agents" element={<ProtectedRoute><AppLayout><AgentHub /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/agent-tasks" element={<ProtectedRoute><AppLayout><AgentTasksPage /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/ai-detection" element={<ProtectedRoute><AppLayout><AiDetection /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/github-agent" element={<ProtectedRoute><AppLayout><GithubAgent /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/telephony-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><TelephonySettings /></AppLayout></ProtectedRoute>} />
