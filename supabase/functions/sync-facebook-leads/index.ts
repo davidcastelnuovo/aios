@@ -25,7 +25,6 @@ serve(async (req) => {
       );
     }
 
-    console.log('Syncing Facebook leads for tenant:', tenant_id, 'integration:', integration_id);
 
     // Get Facebook integrations for this tenant (both own and shared)
     let query = supabase
@@ -79,7 +78,6 @@ serve(async (req) => {
       }
 
       if (!accessToken) {
-        console.log('No access token for integration:', integration.id);
         errors.push(`Integration ${integration.id}: No access token`);
         continue;
       }
@@ -87,7 +85,6 @@ serve(async (req) => {
       const formMappings = settings?.form_mappings || {};
       
       if (Object.keys(formMappings).length === 0) {
-        console.log('No form mappings for integration:', integration.id);
         continue;
       }
 
@@ -96,7 +93,6 @@ serve(async (req) => {
         const formMapping = mapping as any;
         
         try {
-          console.log('Fetching leads for form:', formId);
           
           // Fetch leads from Facebook - get last 30 days
           const since = Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000);
@@ -112,7 +108,6 @@ serve(async (req) => {
           }
 
           const leads = leadsData.data || [];
-          console.log(`Found ${leads.length} leads for form ${formId}`);
 
           for (const lead of leads) {
             const leadgenId = lead.id;
@@ -135,7 +130,6 @@ serve(async (req) => {
               .maybeSingle();
 
             if (existingByLeadgenId) {
-              console.log('Skipping duplicate lead (by leadgen_id):', leadgenId);
               totalSkipped++;
               continue;
             }
@@ -156,7 +150,6 @@ serve(async (req) => {
                 });
                 
                 if (phoneMatch) {
-                  console.log('Skipping duplicate lead (by phone):', leadPhone, '-> existing lead:', phoneMatch.id);
                   totalSkipped++;
                   continue;
                 }
@@ -173,7 +166,6 @@ serve(async (req) => {
                 .maybeSingle();
 
               if (existingByEmail) {
-                console.log('Skipping duplicate lead (by email):', leadEmail);
                 totalSkipped++;
                 continue;
               }
@@ -237,7 +229,6 @@ serve(async (req) => {
               console.error('Error inserting lead:', insertError);
               errors.push(`Lead ${leadgenId}: ${insertError.message}`);
             } else {
-              console.log('Inserted lead:', leadgenId);
               totalSynced++;
 
               // Insert into lead_sales_people junction table for multi-salesperson support
@@ -255,7 +246,6 @@ serve(async (req) => {
                 if (junctionError) {
                   console.error('Error inserting lead_sales_people:', junctionError);
                 } else {
-                  console.log('Assigned lead to', salesPersonIds.length, 'salespeople');
                 }
               }
 
@@ -273,7 +263,6 @@ serve(async (req) => {
                 if (tagError) {
                   console.error('Error applying tag to lead:', tagError);
                 } else {
-                  console.log('Tag applied to lead:', formMapping.tag_id);
                 }
               }
             }

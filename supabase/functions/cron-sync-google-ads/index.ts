@@ -71,7 +71,6 @@ async function patchAndRunScenario(
             if (!mod.parameters) mod.parameters = {};
             mod.metadata.connection = { id: parsedConnectionId };
             mod.parameters.__IMTCONN__ = parsedConnectionId;
-            console.log(`Patched scenario ${scenarioId} connection to ${parsedConnectionId}`);
           }
         }
 
@@ -117,11 +116,9 @@ async function patchAndRunScenario(
   await makeAPICall(apiToken, region, `/scenarios/${scenarioId}`, "PATCH", {
     blueprint: JSON.stringify(bp),
   });
-  console.log(`Patched scenario ${scenarioId} for dates ${startDate} to ${endDate}`);
 
   // Step 4: Run scenario
   const runResult = await makeAPICall(apiToken, region, `/scenarios/${scenarioId}/run`, "POST", {});
-  console.log(`Ran scenario ${scenarioId}:`, JSON.stringify(runResult).slice(0, 200));
   return runResult;
 }
 
@@ -150,13 +147,11 @@ Deno.serve(async (req) => {
       startDate = backfill_from;
       endDate = backfill_to;
       isBackfill = true;
-      console.log(`BACKFILL mode: ${startDate} to ${endDate}`);
     } else {
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
       startDate = yesterday.toISOString().slice(0, 10);
       endDate = startDate;
-      console.log(`DAILY mode: syncing ${startDate}`);
     }
 
     // Get all Google Ads tables
@@ -171,7 +166,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    console.log(`Found ${tables.length} Google Ads tables`);
     const results: any[] = [];
     const webhookUrl = `${supabaseUrl}/functions/v1/webhook-google-ads-sync`;
 
@@ -227,7 +221,6 @@ Deno.serve(async (req) => {
           while (current <= end) {
             const dayStr = current.toISOString().slice(0, 10);
             try {
-              console.log(`Backfill ${table.name}: ${dayStr}`);
               await patchAndRunScenario(
                 apiToken,
                 region,
@@ -278,7 +271,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log("Sync complete:", JSON.stringify(results));
     return new Response(JSON.stringify({ success: true, results }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

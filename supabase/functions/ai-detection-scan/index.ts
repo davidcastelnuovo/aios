@@ -125,7 +125,6 @@ Deno.serve(async (req: Request) => {
 
           if (!aiResponse.ok) {
             if (aiResponse.status === 429) {
-              console.log(`Rate limited on ${platform.name}, skipping`);
               continue;
             }
             console.error(`AI error for ${platform.name}: ${aiResponse.status}`);

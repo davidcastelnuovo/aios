@@ -117,7 +117,6 @@ serve(async (req: Request) => {
       throw new Error("Failed to grant super_admin role: " + insertError.message);
     }
 
-    console.log(`✅ Granted super_admin to user: ${payload.user_email} (${foundUser.id})`);
 
     return new Response(
       JSON.stringify({

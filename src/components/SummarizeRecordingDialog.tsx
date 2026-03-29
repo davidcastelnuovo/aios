@@ -337,13 +337,11 @@ export default function SummarizeRecordingDialog({
         // Network timeout / "Failed to fetch" / non-2xx (server timeout) → try download+chunking
         const isTimeoutLike = errMsg.includes('Failed to fetch') || errMsg.includes('network') || errMsg.includes('timeout') || errMsg.includes('AbortError') || errMsg.includes('non-2xx');
         if (isTimeoutLike) {
-          console.log('⏳ Direct transcription failed/timed out, attempting download+chunking...');
           try {
             await attemptDownloadAndChunk(recording.id);
             return;
           } catch (chunkErr: any) {
             // If chunking also fails, fall back to polling
-            console.log('⏳ Chunking also failed, switching to polling mode...');
             setIsPolling(true);
             startPolling(recording.id);
             toast({ title: "התמלול רץ ברקע", description: "ניתן להמשיך לעבוד, התוצאה תופיע כשתהיה מוכנה" });

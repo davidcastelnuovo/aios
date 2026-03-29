@@ -16,11 +16,9 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    console.log('🔍 Checking for overdue tasks...')
 
     // Get today's date in YYYY-MM-DD format
     const today = new Date().toISOString().split('T')[0]
-    console.log(`📅 Today's date: ${today}`)
 
     // Find all tasks that:
     // 1. Have a due_date that has passed (before today)
@@ -54,7 +52,6 @@ Deno.serve(async (req) => {
       throw fetchError
     }
 
-    console.log(`📋 Found ${overdueTasks?.length || 0} overdue tasks to process`)
 
     if (!overdueTasks || overdueTasks.length === 0) {
       return new Response(
@@ -77,13 +74,11 @@ Deno.serve(async (req) => {
       tasksByTenant[task.tenant_id].push(task)
     }
 
-    console.log(`📊 Processing tasks for ${Object.keys(tasksByTenant).length} tenants`)
 
     // Trigger automation for each tenant's overdue tasks
     const results: any[] = []
     
     for (const [tenantId, tasks] of Object.entries(tasksByTenant)) {
-      console.log(`🏢 Processing ${tasks.length} overdue tasks for tenant ${tenantId}`)
       
       for (const task of tasks) {
         try {
@@ -92,7 +87,6 @@ Deno.serve(async (req) => {
           const todayDate = new Date(today)
           const daysOverdue = Math.floor((todayDate.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24))
           
-          console.log(`⏰ Task "${task.title}" is ${daysOverdue} days overdue`)
 
           // Prepare payload for automation
           const payload = {
@@ -129,7 +123,6 @@ Deno.serve(async (req) => {
           })
 
           const triggerResult = await triggerResponse.json()
-          console.log(`✅ Automation triggered for task ${task.id}:`, triggerResult)
 
           // Mark task as notified
           const { error: updateError } = await supabase
@@ -140,7 +133,6 @@ Deno.serve(async (req) => {
           if (updateError) {
             console.error(`❌ Error marking task ${task.id} as notified:`, updateError)
           } else {
-            console.log(`📝 Marked task ${task.id} as notified`)
           }
 
           results.push({
@@ -162,7 +154,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`🎉 Finished processing ${results.length} overdue tasks`)
 
     return new Response(
       JSON.stringify({

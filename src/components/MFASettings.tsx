@@ -50,7 +50,6 @@ export function MFASettings() {
           await supabase.auth.mfa.unenroll({ factorId: factor.id });
         } catch (e) {
           // Ignore errors when removing old factors
-          console.log("Could not remove old factor:", e);
         }
       }
 

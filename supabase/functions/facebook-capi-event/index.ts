@@ -36,7 +36,6 @@ serve(async (req) => {
       test_event_code, // For testing
     } = await req.json();
 
-    console.log('Sending CAPI event:', { tenant_id, event_name, lead_id, client_id });
 
     if (!tenant_id || !event_name) {
       return new Response(
@@ -55,7 +54,6 @@ serve(async (req) => {
       .single();
 
     if (intError || !integration) {
-      console.log('No active CAPI integration found for tenant:', tenant_id);
       return new Response(
         JSON.stringify({ error: 'No active CAPI integration found' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -129,7 +127,6 @@ serve(async (req) => {
       requestBody.test_event_code = effectiveTestCode;
     }
 
-    console.log('Sending to Facebook CAPI:', JSON.stringify(requestBody, null, 2));
 
     // Send to Facebook Conversions API
     const fbResponse = await fetch(
@@ -142,7 +139,6 @@ serve(async (req) => {
     );
 
     const fbResult = await fbResponse.json();
-    console.log('Facebook CAPI response:', JSON.stringify(fbResult, null, 2));
 
     if (!fbResponse.ok) {
       console.error('Facebook CAPI error:', fbResult);

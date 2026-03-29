@@ -39,7 +39,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    console.log('🔔 Webhook task intake received')
     
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -47,10 +46,8 @@ Deno.serve(async (req) => {
 
     // Parse incoming data
     const payload: TaskPayload = await req.json()
-    console.log('📦 Received payload:', JSON.stringify(payload, null, 2))
 
     const action = payload.action || 'create'
-    console.log(`📋 Action: ${action}`)
 
     // Handle UPDATE action
     if (action === 'update') {
@@ -67,7 +64,6 @@ Deno.serve(async (req) => {
         )
       }
 
-      console.log(`🔄 Updating task: ${payload.task_id}`)
       
       // Build update object with only provided fields
       const updateData: Record<string, any> = {}
@@ -95,7 +91,6 @@ Deno.serve(async (req) => {
         )
       }
 
-      console.log('📝 Update data:', JSON.stringify(updateData, null, 2))
 
       const { data: updatedTask, error: updateError } = await supabase
         .from('tasks')
@@ -120,12 +115,10 @@ Deno.serve(async (req) => {
         )
       }
 
-      console.log('✅ Task updated successfully:', updatedTask.id)
 
       // Trigger task_status_changed automation if status was updated
       if (payload.status && updatedTask.tenant_id) {
         try {
-          console.log('🔄 Triggering task_status_changed automation...')
           const supabaseUrl = Deno.env.get('SUPABASE_URL')!
           const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
           
@@ -152,7 +145,6 @@ Deno.serve(async (req) => {
           });
           
           if (automationResponse.ok) {
-            console.log('✅ task_status_changed automation triggered successfully');
           } else {
             console.error('⚠️ Failed to trigger automation:', await automationResponse.text());
           }
@@ -196,7 +188,6 @@ Deno.serve(async (req) => {
     
     // Resolve tenant from tenant_slug if provided
     if (!tenantId && payload.tenant_slug) {
-      console.log(`🔍 Resolving tenant from slug: "${payload.tenant_slug}"`)
       const { data: tenantData, error: tenantError } = await supabase
         .from('tenants')
         .select('id')
@@ -217,7 +208,6 @@ Deno.serve(async (req) => {
         )
       }
       tenantId = tenantData.id
-      console.log(`✅ Resolved tenant_id: ${tenantId}`)
     }
 
     // Validate tenant identification
@@ -236,7 +226,6 @@ Deno.serve(async (req) => {
 
     // Find agency if not provided
     if (!agencyId) {
-      console.log(`🔍 Finding default agency for tenant: ${tenantId}`)
       
       // Try to find the default agency
       const { data: defaultAgency } = await supabase
@@ -250,7 +239,6 @@ Deno.serve(async (req) => {
       
       if (defaultAgency) {
         agencyId = defaultAgency.id
-        console.log(`✅ Found default agency: ${defaultAgency.name}`)
       } else {
         // Fallback to first active agency
         const { data: firstAgency } = await supabase
@@ -264,7 +252,6 @@ Deno.serve(async (req) => {
         
         if (firstAgency) {
           agencyId = firstAgency.id
-          console.log(`✅ Found first active agency: ${firstAgency.name}`)
         }
       }
     }
@@ -272,7 +259,6 @@ Deno.serve(async (req) => {
     // Resolve campaigner by name if provided
     let campaignerId: string | null = payload.campaigner_id || null
     if (!campaignerId && payload.campaigner_name && tenantId) {
-      console.log(`🔍 Searching for campaigner: "${payload.campaigner_name}"`)
       const { data: campaignerData } = await supabase
         .from('campaigners')
         .select('id, full_name')
@@ -283,16 +269,13 @@ Deno.serve(async (req) => {
       
       if (campaignerData) {
         campaignerId = campaignerData.id
-        console.log(`✅ Found campaigner: ${campaignerData.full_name} (${campaignerId})`)
       } else {
-        console.log(`⚠️ Campaigner not found for name: "${payload.campaigner_name}"`)
       }
     }
 
     // Resolve client by name if provided
     let clientId: string | null = payload.client_id || null
     if (!clientId && payload.client_name && tenantId) {
-      console.log(`🔍 Searching for client: "${payload.client_name}"`)
       const { data: clientData } = await supabase
         .from('clients')
         .select('id, name')
@@ -303,16 +286,13 @@ Deno.serve(async (req) => {
       
       if (clientData) {
         clientId = clientData.id
-        console.log(`✅ Found client: ${clientData.name} (${clientId})`)
       } else {
-        console.log(`⚠️ Client not found for name: "${payload.client_name}"`)
       }
     }
 
     // Resolve lead by name if provided
     let leadId: string | null = payload.lead_id || null
     if (!leadId && payload.lead_name && tenantId) {
-      console.log(`🔍 Searching for lead: "${payload.lead_name}"`)
       const { data: leadData } = await supabase
         .from('leads')
         .select('id, company_name')
@@ -323,16 +303,13 @@ Deno.serve(async (req) => {
       
       if (leadData) {
         leadId = leadData.id
-        console.log(`✅ Found lead: ${leadData.company_name} (${leadId})`)
       } else {
-        console.log(`⚠️ Lead not found for name: "${payload.lead_name}"`)
       }
     }
 
     // Resolve sales person by name if provided
     let salesPersonId: string | null = payload.sales_person_id || null
     if (!salesPersonId && payload.sales_person_name && tenantId) {
-      console.log(`🔍 Searching for sales person: "${payload.sales_person_name}"`)
       const { data: salesPersonData } = await supabase
         .from('sales_people')
         .select('id, full_name')
@@ -343,9 +320,7 @@ Deno.serve(async (req) => {
       
       if (salesPersonData) {
         salesPersonId = salesPersonData.id
-        console.log(`✅ Found sales person: ${salesPersonData.full_name} (${salesPersonId})`)
       } else {
-        console.log(`⚠️ Sales person not found for name: "${payload.sales_person_name}"`)
       }
     }
 
@@ -365,7 +340,6 @@ Deno.serve(async (req) => {
       sales_person_id: salesPersonId,
     }
 
-    console.log('📝 Creating task:', JSON.stringify(taskRecord, null, 2))
 
     // Insert task
     const { data: task, error } = await supabase
@@ -390,12 +364,10 @@ Deno.serve(async (req) => {
       )
     }
 
-    console.log('✅ Task created successfully:', task.id)
 
     // Trigger inbound_webhook_task automation
     if (tenantId) {
       try {
-        console.log('🔄 Triggering inbound_webhook_task automation...')
         const automationResponse = await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
           method: 'POST',
           headers: {
@@ -429,7 +401,6 @@ Deno.serve(async (req) => {
         
         if (automationResponse.ok) {
           const automationResult = await automationResponse.json();
-          console.log('✅ inbound_webhook_task automation triggered successfully:', automationResult);
         } else {
           console.error('⚠️ Failed to trigger inbound_webhook_task automation:', await automationResponse.text());
         }
@@ -466,7 +437,6 @@ Deno.serve(async (req) => {
         });
         
         if (automationResponse.ok) {
-          console.log('✅ task_assigned automation triggered successfully');
         } else {
           console.error('⚠️ Failed to trigger task_assigned automation:', await automationResponse.text());
         }

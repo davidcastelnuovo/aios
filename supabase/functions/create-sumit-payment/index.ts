@@ -54,7 +54,6 @@ serve(async (req) => {
 
     const { clientId, amount, description, sendEmail, expirationDays = 30 }: PaymentRequest = await req.json();
 
-    console.log('Creating payment link for client:', clientId, 'amount:', amount);
 
     // Get user's tenant
     const { data: tenantUser, error: tenantError } = await supabase
@@ -143,7 +142,6 @@ serve(async (req) => {
       Currency: 'ILS'
     };
 
-    console.log('Calling Sumit API with payload:', JSON.stringify(sumitPayload, null, 2));
 
     // Call Sumit API
     const sumitResponse = await fetch('https://api.sumit.co.il/billing/payments/paymentpage/', {
@@ -155,7 +153,6 @@ serve(async (req) => {
     });
 
     const sumitResult = await sumitResponse.json();
-    console.log('Sumit API response:', JSON.stringify(sumitResult, null, 2));
 
     if (!sumitResponse.ok || sumitResult.Status === 'Error' || !sumitResult.Data?.PaymentPageUrl) {
       const errorMessage = sumitResult.UserErrorMessage || sumitResult.TechnicalErrorDetails || 'Unknown Sumit API error';
@@ -194,7 +191,6 @@ serve(async (req) => {
       // Still return success since Sumit payment was created
     }
 
-    console.log('Payment link created successfully:', paymentUrl);
 
     return new Response(
       JSON.stringify({

@@ -253,7 +253,6 @@ Deno.serve(async (req) => {
 
     // Check if job should run
     if (job.status === 'stopped' || job.status === 'completed' || job.status === 'failed') {
-      console.log(`Job ${jobId} is ${job.status}, skipping`);
       return new Response(
         JSON.stringify({ success: true, message: `Job is ${job.status}` }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -273,7 +272,6 @@ Deno.serve(async (req) => {
     const isInternalServiceCall = authHeader === `Bearer ${supabaseServiceKey}`;
 
     if (isFreshRunning && !isInternalServiceCall) {
-      console.log(`Job ${jobId} is already running (fresh heartbeat), skipping this trigger`);
       return new Response(
         JSON.stringify({ success: true, message: 'Job already running' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -335,13 +333,11 @@ Deno.serve(async (req) => {
      while (true) {
        // Stop if we are close to runtime limits
        if (Date.now() - startedAtMs > MAX_RUNTIME_MS) {
-         console.log(`Runtime limit reached for job ${jobId} - will continue in next invocation`);
          break;
        }
 
        // Stop if we processed enough in this run
        if (processedThisRun >= batchSize) {
-         console.log(`Batch limit reached for job ${jobId} (${batchSize}) - will continue in next invocation`);
          break;
        }
 
@@ -353,7 +349,6 @@ Deno.serve(async (req) => {
         .single();
 
       if (currentJob?.status === 'stopped' || currentJob?.status === 'failed') {
-        console.log(`Job ${jobId} was stopped/cancelled by user (status: ${currentJob?.status})`);
         break;
       }
 
@@ -368,7 +363,6 @@ Deno.serve(async (req) => {
 
       if (!leads || leads.length === 0) {
         // No more leads
-        console.log('No more leads to process');
         break;
       }
 
@@ -377,7 +371,6 @@ Deno.serve(async (req) => {
       const phoneCandidates = getPhoneLookupCandidates(lead.phone);
       const leadName = lead.contact_name || lead.company_name || 'Unknown';
 
-      console.log(`Processing lead ${lead.id}: ${leadName}`);
 
       let subscriberId: string | null = null;
       let wasSkipped = false;
@@ -527,7 +520,6 @@ Deno.serve(async (req) => {
       }
 
       // Throttle
-      console.log(`Waiting ${delayMs}ms before next lead...`);
       await new Promise((r) => setTimeout(r, delayMs));
     }
 
@@ -540,7 +532,6 @@ Deno.serve(async (req) => {
 
     // If job was stopped/failed by user, do NOT continue
     if (finalJobStatus?.status === 'stopped' || finalJobStatus?.status === 'failed') {
-      console.log(`Job ${jobId} was stopped by user, not continuing.`);
       return new Response(
         JSON.stringify({
           success: true,
@@ -561,7 +552,6 @@ Deno.serve(async (req) => {
       .not('phone', 'is', null);
 
     if (remainingAfter && remainingAfter > 0) {
-      console.log(`Job ${jobId} continuing. Remaining: ${remainingAfter}`);
       // Keep status running and schedule next chunk
       await supabase
         .from('sync_jobs')
@@ -592,7 +582,6 @@ Deno.serve(async (req) => {
       })
       .eq('id', jobId);
 
-    console.log(`Job ${jobId} completed. Processed: ${processedTotal}, Failed: ${failedTotal}`);
 
     return new Response(
       JSON.stringify({

@@ -39,7 +39,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log('🔄 Converting unknown contact:', { senderPhone, contactId, contactType, tenantId });
 
     // Update all messages from this sender_phone to the new contact
     const updateData: any = contactType === 'group'
@@ -64,7 +63,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    console.log('✅ Successfully updated', data?.length || 0, 'messages');
 
     return new Response(
       JSON.stringify({ 

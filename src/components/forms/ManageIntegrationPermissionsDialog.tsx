@@ -41,11 +41,9 @@ export function ManageIntegrationPermissionsDialog({
     queryKey: ['tenant-users', tenantId, open],
     queryFn: async () => {
       if (!tenantId) {
-        console.log('No tenantId available');
         return [];
       }
       
-      console.log('Fetching users for tenant:', tenantId);
       
       // First, fetch tenant_users to get user_ids
       const { data: tenantUsersData, error: tenantUsersError } = await supabase
@@ -83,7 +81,6 @@ export function ManageIntegrationPermissionsDialog({
         profiles: profilesData?.find(p => p.id === tu.user_id)
       }));
       
-      console.log('Fetched users:', combined);
       
       return combined;
     },

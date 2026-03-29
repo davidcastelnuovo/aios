@@ -91,7 +91,6 @@ serve(async (req: Request) => {
       throw new Error("Cannot demote an owner. Owner role cannot be changed to a different role.");
     }
 
-    console.log(`Updating user ${userId} to role: ${role} in tenant: ${tenantId}`);
 
     // Delete existing roles for this user IN THIS TENANT (don't touch super_admin or other tenants)
     const { error: deleteError } = await supabaseAdmin

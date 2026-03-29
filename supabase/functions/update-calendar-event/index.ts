@@ -24,7 +24,6 @@ serve(async (req) => {
     }
 
     const { eventId, summary, description, start, end } = await req.json();
-    console.log('Updating calendar event:', { eventId, summary, start, end, userId: user.id });
 
     if (!eventId || !start) {
       throw new Error('Missing required fields: eventId and start are required');
@@ -46,7 +45,6 @@ serve(async (req) => {
 
     // Refresh token if expired
     if (expiresAt <= new Date()) {
-      console.log('Token expired, refreshing...');
       
       const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
       const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET');
@@ -84,7 +82,6 @@ serve(async (req) => {
         })
         .eq('user_id', user.id);
 
-      console.log('Token refreshed successfully');
     }
 
     // First, get the existing event to preserve fields not being updated
@@ -119,7 +116,6 @@ serve(async (req) => {
       },
     };
 
-    console.log('Sending update to Google Calendar API...');
 
     const calendarResponse = await fetch(
       `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
@@ -140,7 +136,6 @@ serve(async (req) => {
       throw new Error(eventData.error?.message || 'Failed to update event');
     }
 
-    console.log('Event updated successfully:', eventData.id);
 
     return new Response(JSON.stringify({ 
       success: true, 

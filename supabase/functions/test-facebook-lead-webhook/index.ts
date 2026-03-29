@@ -18,8 +18,6 @@ serve(async (req) => {
   try {
     const { page_id, form_id, tenant_id } = await req.json();
 
-    console.log('=== TEST FACEBOOK LEAD WEBHOOK ===');
-    console.log('Input:', { page_id, form_id, tenant_id });
 
     // Step 1: Find the integration
     const { data: integrations, error: intError } = await supabase
@@ -36,10 +34,8 @@ serve(async (req) => {
       });
     }
 
-    console.log('Found integrations:', integrations?.length);
     integrations?.forEach((i, idx) => {
       const settings = i.settings as any;
-      console.log(`Integration ${idx}:`, {
         id: i.id,
         tenant_id: i.tenant_id,
         page_id: settings?.page_id,
@@ -57,7 +53,6 @@ serve(async (req) => {
     if (!integration && tenant_id) {
       // Try to find by tenant_id
       integration = integrations?.find(i => i.tenant_id === tenant_id);
-      console.log('Fallback to tenant_id match:', !!integration);
     }
 
     if (!integration) {
@@ -75,14 +70,12 @@ serve(async (req) => {
       });
     }
 
-    console.log('Selected integration:', integration.id);
 
     let accessToken = integration.api_key;
     const settings = integration.settings as any;
 
     // Check for shared connection
     if ((integration as any).shared_from_integration_id && !accessToken) {
-      console.log('Fetching token from shared integration:', integration.shared_from_integration_id);
       const { data: sourceIntegration } = await supabase
         .from('tenant_integrations')
         .select('api_key')
@@ -92,7 +85,6 @@ serve(async (req) => {
       
       if (sourceIntegration?.api_key) {
         accessToken = sourceIntegration.api_key;
-        console.log('Got token from shared integration');
       }
     }
 
@@ -105,10 +97,8 @@ serve(async (req) => {
 
     // Step 2: Check form mappings
     const formMappings = settings?.form_mappings || {};
-    console.log('Form mappings:', JSON.stringify(formMappings, null, 2));
 
     const specificFormMapping = form_id ? formMappings[form_id] : null;
-    console.log('Specific form mapping for', form_id, ':', specificFormMapping);
 
     // Step 3: Create a fake lead record
     // IMPORTANT: Use the tenant_id from the request, not from the integration
@@ -128,9 +118,7 @@ serve(async (req) => {
       notes: `Test Facebook Lead\nFake Leadgen ID: ${fakeLeadgenId}\nForm ID: ${form_id || 'not specified'}`,
     };
     
-    console.log('Creating lead record for tenant:', targetTenantId);
 
-    console.log('Creating lead record:', leadRecord);
 
     const { data: newLead, error: insertError } = await supabase
       .from('leads')
@@ -146,7 +134,6 @@ serve(async (req) => {
       });
     }
 
-    console.log('Lead created successfully:', newLead.id);
 
     // Update last_sync_at
     await supabase

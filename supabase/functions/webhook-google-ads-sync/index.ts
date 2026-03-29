@@ -18,9 +18,7 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { table_id, records } = body;
 
-    console.log("Received webhook for table:", table_id, "with", records?.length || 0, "records");
     if (records?.length > 0) {
-      console.log("FIRST RECORD SAMPLE:", JSON.stringify(records[0]).slice(0, 800));
     }
 
     if (!table_id) {
@@ -180,7 +178,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`Loaded ${existingMap.size} existing records for dedup`);
 
     // Process all records and split into inserts vs updates
     const toInsert: any[] = [];
@@ -196,7 +193,6 @@ Deno.serve(async (req) => {
       const campaignName = String(record.campaign_name ?? record.campaignName ?? record["campaign.name"] ?? record.name ?? "").trim();
 
       if (!campaignId || !normalizedDate) {
-        console.log("SKIPPED INVALID RECORD - campaignId:", campaignId, "date:", normalizedDate, "raw keys:", Object.keys(record).join(", "), "raw record:", JSON.stringify(record).slice(0, 500));
         skippedInvalidCount++;
         continue;
       }
@@ -290,7 +286,6 @@ Deno.serve(async (req) => {
       .update({ last_sync_at: new Date().toISOString() })
       .eq("id", table_id);
 
-    console.log(
       `Synced ${records.length} records: ${insertedCount} inserted, ${updatedCount} updated, ${skippedInvalidCount} skipped invalid, ${skippedOutOfRangeCount} skipped out-of-range`
     );
 

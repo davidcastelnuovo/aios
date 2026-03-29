@@ -19,7 +19,6 @@ export default function FacebookCallback() {
     const pagesCount = searchParams.get('pages_count');
     const error = searchParams.get('facebook_error');
 
-    console.log('FacebookCallback params:', { success, pagesCount, error });
 
     if (success === 'true') {
       setStatus('success');

@@ -209,11 +209,9 @@ export function AddAutomationForm() {
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        console.log('[GreenAPI] No user found');
         return [];
       }
       
-      console.log('[GreenAPI] Fetching integrations for user:', user.id, 'tenant:', tenantId);
       
       // Get tenant integrations
       const { data: tenantIntegrations, error: tenantError } = await supabase
@@ -223,7 +221,6 @@ export function AddAutomationForm() {
         .eq('integration_type', 'green_api')
         .eq('is_active', true);
       
-      console.log('[GreenAPI] Tenant integrations:', tenantIntegrations, 'error:', tenantError);
       
       if (tenantError) throw tenantError;
       
@@ -233,7 +230,6 @@ export function AddAutomationForm() {
         .select('integration_id')
         .eq('user_id', user.id);
       
-      console.log('[GreenAPI] User permissions:', permissions, 'error:', permError);
       
       const permittedIds = permissions?.map(p => p.integration_id) || [];
       
@@ -248,7 +244,6 @@ export function AddAutomationForm() {
           .eq('integration_type', 'green_api')
           .eq('is_active', true);
         
-        console.log('[GreenAPI] Permitted integrations:', permittedIntegrations, 'error:', permIntError);
         
         // Merge and deduplicate
         const existingIds = new Set(allIntegrations.map(i => i.id));
@@ -277,7 +272,6 @@ export function AddAutomationForm() {
         }
       }
       
-      console.log('[GreenAPI] Final integrations:', allIntegrations);
       
       return allIntegrations;
     },
@@ -403,8 +397,6 @@ export function AddAutomationForm() {
   });
 
   const onSubmit = (values: FormValues) => {
-    console.log('Form submitted with values:', values);
-    console.log('Form errors:', form.formState.errors);
     createAutomationMutation.mutate(values);
   };
 
@@ -1316,9 +1308,6 @@ export function AddAutomationForm() {
                 type="submit" 
                 disabled={createAutomationMutation.isPending}
                 onClick={() => {
-                  console.log('Button clicked');
-                  console.log('Form state:', form.formState);
-                  console.log('Form values:', form.getValues());
                 }}
               >
                 {createAutomationMutation.isPending ? "יוצר..." : "צור אוטומציה"}

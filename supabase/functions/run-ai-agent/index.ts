@@ -326,7 +326,6 @@ Deno.serve(async (req) => {
     const { data: agent, error: agentError } = await supabase.from('ai_agents').select('*').eq('id', agent_id).single()
     if (agentError || !agent) throw new Error(`Agent not found: ${agent_id}`)
 
-    console.log(`🤖 Agent: ${agent.name} | tools: ${(agent.allowed_tools || []).join(', ') || 'all'}`)
 
     // 2. Resolve tenant
     let resolvedTenantId = tenant_id || agent.tenant_id
@@ -412,7 +411,6 @@ Deno.serve(async (req) => {
         let toolArgs: Record<string, any> = {}
         try { toolArgs = JSON.parse(tc.function.arguments || '{}') } catch { /* ignore */ }
 
-        console.log(`🔧 Tool: ${toolName}`, toolArgs)
 
         let result: any
         try {
@@ -429,7 +427,6 @@ Deno.serve(async (req) => {
     }
 
     const executionTime = Date.now() - startTime
-    console.log(`✅ Done in ${executionTime}ms | tools used: ${toolLog.length}`)
 
     // 6. Log to automation_logs
     if (automation_id) {

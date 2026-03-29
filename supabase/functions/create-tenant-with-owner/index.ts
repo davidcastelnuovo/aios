@@ -146,7 +146,6 @@ serve(async (req: Request) => {
       }
     }
     
-    console.log(`Creating tenant with org_type: ${orgType}`);
     
     const { data: newTenant, error: tenantError } = await supabase
       .from("tenants")
@@ -169,12 +168,10 @@ serve(async (req: Request) => {
       throw new Error("Failed to create tenant: " + tenantError?.message);
     }
 
-    console.log("✅ Tenant created:", newTenant.id);
 
     // Step 1.5: Initialize configuration based on template or defaults
     if (payload.template_id) {
       // Use template - copy configuration from source tenant
-      console.log("📋 Applying template from tenant:", payload.template_id);
       const { error: templateError } = await supabase.rpc("copy_tenant_template", {
         _source_tenant_id: payload.template_id,
         _target_tenant_id: newTenant.id
@@ -184,7 +181,6 @@ serve(async (req: Request) => {
         console.error("Error applying template:", templateError);
         // Continue anyway - we can still create the tenant with defaults
       } else {
-        console.log("✅ Template applied successfully");
       }
     } else {
       // No template - use default initialization
@@ -195,7 +191,6 @@ serve(async (req: Request) => {
       if (menuItemsError) {
         console.error("Error initializing menu items:", menuItemsError);
       } else {
-        console.log("✅ Menu items initialized");
       }
 
       const { error: customFieldsError } = await supabase.rpc("initialize_default_custom_fields", {
@@ -205,7 +200,6 @@ serve(async (req: Request) => {
       if (customFieldsError) {
         console.error("Error initializing custom fields:", customFieldsError);
       } else {
-        console.log("✅ Custom fields initialized");
       }
 
       // Initialize terminology from preset if provided
@@ -218,7 +212,6 @@ serve(async (req: Request) => {
         if (terminologyError) {
           console.error("Error initializing terminology from preset:", terminologyError);
         } else {
-          console.log("✅ Terminology initialized from preset:", payload.terminology_preset_id);
         }
       } else {
         // Fallback to default marketing agency terminology
@@ -230,7 +223,6 @@ serve(async (req: Request) => {
         if (terminologyError) {
           console.error("Error initializing terminology:", terminologyError);
         } else {
-          console.log("✅ Terminology initialized with default");
         }
       }
     }
@@ -248,7 +240,6 @@ serve(async (req: Request) => {
       console.error("Error adding user to tenant_users:", tenantUserError);
       // Continue anyway - the user can still be added later
     } else {
-      console.log("✅ User added to tenant_users");
     }
 
     // Step 2.5: Add owner role to user_roles (tenant-specific)
@@ -266,7 +257,6 @@ serve(async (req: Request) => {
         console.error("Error adding owner role:", roleError);
       }
     } else {
-      console.log("✅ Owner role added to user_roles");
     }
 
     // Step 3: Create invitation token for owner
@@ -319,16 +309,13 @@ serve(async (req: Request) => {
       throw new Error("Failed to create invitation: " + invitationError?.message);
     }
 
-    console.log("✅ Invitation created:", invitation.id);
 
     // Step 4: Send invitation email
     const invitationUrl = `${req.headers.get("origin") || supabaseUrl}/auth?token=${invitationToken}`;
     
-    console.log("📧 Invitation URL:", invitationUrl);
 
     // TODO: Send actual email using your email service
     // For now, we'll just log the invitation URL
-    console.log(`
       📧 Invitation Details:
       - Email: ${payload.contact_email}
       - Name: ${payload.contact_name}

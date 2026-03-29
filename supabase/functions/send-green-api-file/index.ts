@@ -54,7 +54,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    console.log('📤 Sending file:', file.name, 'type:', file.type, 'size:', file.size);
 
     // Determine tenant_id
     let resolvedTenantId = tenantId;
@@ -139,7 +138,6 @@ Deno.serve(async (req) => {
       uploadFormData.append('file', file, fileName);
       if (caption) uploadFormData.append('caption', caption);
 
-      console.log('🎤 Sending voice message via sendFileByUpload');
       
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -147,7 +145,6 @@ Deno.serve(async (req) => {
       });
 
       const responseData = await response.json();
-      console.log('📥 Green API response:', responseData);
 
       if (!response.ok) {
         throw new Error(`Green API error: ${JSON.stringify(responseData)}`);
@@ -189,7 +186,6 @@ Deno.serve(async (req) => {
     uploadFormData.append('file', file, fileName);
     if (caption) uploadFormData.append('caption', caption);
 
-    console.log('📤 Sending file via Green API:', { endpoint, chatId, fileName });
 
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -197,7 +193,6 @@ Deno.serve(async (req) => {
     });
 
     const responseData = await response.json();
-    console.log('📥 Green API response:', responseData);
 
     if (!response.ok) {
       throw new Error(`Green API error: ${JSON.stringify(responseData)}`);

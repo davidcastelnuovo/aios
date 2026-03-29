@@ -18,7 +18,6 @@ async function fetchWhatsAppAvatar(
   chatId: string
 ): Promise<string | null> {
   try {
-    console.log('📸 Fetching WhatsApp avatar for:', chatId);
     
     // Use getAvatar endpoint which works for both contacts and groups
     const response = await fetch(
@@ -33,7 +32,6 @@ async function fetchWhatsAppAvatar(
     if (response.ok) {
       const data = await response.json();
       const avatarUrl = data.urlAvatar || data.avatar || null;
-      console.log('✅ Avatar URL:', avatarUrl ? 'Found' : 'Not found');
       return avatarUrl;
     } else {
       console.error('❌ Failed to fetch avatar:', response.status);
@@ -52,7 +50,6 @@ async function fetchContactName(
   chatId: string
 ): Promise<string | null> {
   try {
-    console.log('📇 Fetching contact name for:', chatId);
     
     const response = await fetch(
       `https://api.green-api.com/waInstance${instanceId}/getContactInfo/${apiToken}`,
@@ -66,10 +63,8 @@ async function fetchContactName(
     if (response.ok) {
       const data = await response.json();
       const contactName = data.name || data.pushname || null;
-      console.log('✅ Contact name from API:', contactName);
       return contactName;
     }
-    console.log('⚠️ Could not fetch contact name, status:', response.status);
     return null;
   } catch (e) {
     console.error('❌ Error fetching contact name:', e);
@@ -85,7 +80,6 @@ async function fetchMessageContent(
   idMessage: string
 ): Promise<any | null> {
   try {
-    console.log('📩 Fetching message content for idMessage:', idMessage);
     
     const response = await fetch(
       `https://api.green-api.com/waInstance${instanceId}/getMessage/${apiToken}`,
@@ -98,7 +92,6 @@ async function fetchMessageContent(
     
     if (response.ok) {
       const data = await response.json();
-      console.log('✅ Message content fetched:', JSON.stringify(data).substring(0, 200));
       return data;
     } else {
       console.error('❌ Failed to fetch message content:', response.status, await response.text());
@@ -170,7 +163,6 @@ async function forwardToTeamChannels(
   whatsappGroupId?: string | null
 ) {
   try {
-    console.log('🔗 forwardToTeamChannels called - tenantId:', tenantId, 'whatsappGroupId:', whatsappGroupId, 'chatId:', chatId);
     
     // Find linked team channels - by whatsapp_group_id or whatsapp_chat_id
     let query = supabaseClient
@@ -192,11 +184,9 @@ async function forwardToTeamChannels(
     }
     
     if (!links?.length) {
-      console.log('ℹ️ No team channel links found for this chat/group');
       return;
     }
 
-    console.log(`📨 Forwarding to ${links.length} linked team channel(s)`);
 
     // Extract file attachments from message data
     const attachments: any[] = [];
@@ -233,7 +223,6 @@ async function forwardToTeamChannels(
       if (insertErr) {
         console.error('❌ Failed to forward to team channel:', insertErr.message);
       } else {
-        console.log('✅ Forwarded to team channel:', link.channel_id);
       }
     }
   } catch (e) {
@@ -266,7 +255,6 @@ Deno.serve(async (req) => {
     }
 
     const webhookData = await req.json();
-    console.log('📨 Received Green API webhook:', JSON.stringify(webhookData, null, 2));
 
     // Extract instance ID from webhook to identify the tenant
     const instanceId = webhookData.instanceData?.idInstance;
@@ -278,7 +266,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    console.log('🔑 Instance ID:', instanceId);
 
     // Find the specific tenant and user for this instance
     // Use limit(1) and order by created_at desc to get the most recent if duplicates exist
@@ -318,8 +305,6 @@ Deno.serve(async (req) => {
       .eq('id', connectionUserId)
       .maybeSingle();
     const connectionDisplayName = connectionProfile?.full_name || null;
-    console.log('✅ Identified tenant:', tenantId);
-    console.log('✅ Connection owner (user_id):', connectionUserId);
 
     // Green API sends different types of webhooks
     const typeWebhook = webhookData.typeWebhook;
@@ -336,18 +321,15 @@ Deno.serve(async (req) => {
       const idMessage = webhookData.idMessage;
       const chatId = webhookData.chatId;
       
-      console.log('📤 Outgoing message status - sendByApi:', sendByApi, 'idMessage:', idMessage);
       
       // Only process if NOT sent by API (i.e., sent directly from WhatsApp)
       if (sendByApi === true) {
-        console.log('⏭️ Message was sent via API, already processed');
         return new Response(JSON.stringify({ received: true }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
       
       if (!idMessage || !chatId) {
-        console.log('⏭️ Missing idMessage or chatId in status webhook');
         return new Response(JSON.stringify({ received: true }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -363,7 +345,6 @@ Deno.serve(async (req) => {
         .maybeSingle();
       
       if (existingMessage) {
-        console.log('⏭️ Message already exists, skipping duplicate');
         return new Response(JSON.stringify({ received: true, duplicate: true }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -381,7 +362,6 @@ Deno.serve(async (req) => {
       const messageContent = await fetchMessageContent(instanceId, apiToken, chatId, idMessage);
       
       if (!messageContent) {
-        console.log('⚠️ Could not fetch message content, saving with minimal info');
         // Still save the message with minimal info
       }
       
@@ -396,7 +376,6 @@ Deno.serve(async (req) => {
       const normalizedPhone = normalizePhone(phoneNumber);
       const isGroup = chatId.endsWith('@g.us');
       
-      console.log('📱 Processing WhatsApp-sent message to:', phoneNumber, '(normalized:', normalizedPhone, ')');
       
       // Store combined webhook data
       const combinedRawData = {
@@ -420,7 +399,6 @@ Deno.serve(async (req) => {
         
         // If group doesn't exist, create it with a temporary name
         if (!groupId) {
-          console.log('📝 Group not found, creating new group record for:', groupChatId);
           
           // Fetch real group name and invite link from Green API
           let realGroupName: string | null = null;
@@ -439,11 +417,9 @@ Deno.serve(async (req) => {
                 const groupData = await response.json();
                 realGroupName = groupData.subject || null;
                 realInviteLink = groupData.groupInviteLink || null;
-                console.log('✅ Fetched real group name:', realGroupName, 'invite_link:', realInviteLink || 'none');
               }
             }
           } catch (e) {
-            console.log('⚠️ Could not fetch group data:', e);
           }
           
           const newGroupName = realGroupName || `קבוצה ${groupChatId.split('@')[0].slice(-4)}`;
@@ -469,7 +445,6 @@ Deno.serve(async (req) => {
           }
           
           groupId = newGroup.id;
-          console.log('✅ Created new group:', newGroupName, 'with ID:', groupId);
         }
         
         // Check if blocked
@@ -482,7 +457,6 @@ Deno.serve(async (req) => {
           .maybeSingle();
         
         if (blockedContact || existingGroup?.is_blocked) {
-          console.log('🚫 Group is blocked, ignoring');
           return new Response(JSON.stringify({ success: true, blocked: true }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
@@ -509,7 +483,6 @@ Deno.serve(async (req) => {
           throw insertError;
         }
         
-        console.log('✅ WhatsApp-sent group message saved successfully');
         // Do not forward from outgoingMessageStatus to avoid duplicate forwards.
         // Forwarding is handled by outgoingMessageReceived/incomingMessageReceived flow.
         return new Response(JSON.stringify({ success: true, contactType: 'group' }), {
@@ -531,7 +504,6 @@ Deno.serve(async (req) => {
       
       if (client) {
         clientId = client.id;
-        console.log(`✅ Found client ${clientId} by normalized phone`);
         
         // Check if blocked
         const { data: blockedClient } = await supabaseClient
@@ -543,7 +515,6 @@ Deno.serve(async (req) => {
           .maybeSingle();
         
         if (blockedClient) {
-          console.log('🚫 Client is blocked, ignoring');
           return new Response(JSON.stringify({ success: true, blocked: true }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
@@ -559,7 +530,6 @@ Deno.serve(async (req) => {
         
         if (lead) {
           leadId = lead.id;
-          console.log(`✅ Found lead ${leadId} by normalized phone`);
           
           // Check if blocked
           const { data: blockedLead } = await supabaseClient
@@ -571,13 +541,11 @@ Deno.serve(async (req) => {
             .maybeSingle();
           
           if (blockedLead) {
-            console.log('🚫 Lead is blocked, ignoring');
             return new Response(JSON.stringify({ success: true, blocked: true }), {
               headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             });
           }
         } else {
-          console.log(`⚠️ No contact found for phone ${phoneNumber} (normalized: ${normalizedPhone}), saving as unknown`);
         }
       }
       
@@ -592,7 +560,6 @@ Deno.serve(async (req) => {
           .maybeSingle();
         
         if (blockedByPhone) {
-          console.log('🚫 Phone is blocked, ignoring');
           return new Response(JSON.stringify({ success: true, blocked: true }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
@@ -629,7 +596,6 @@ Deno.serve(async (req) => {
         throw insertError;
       }
       
-      console.log('✅ WhatsApp-sent message saved successfully');
       return new Response(JSON.stringify({ 
         success: true,
         contactType: clientId ? 'client' : (leadId ? 'lead' : 'unknown'),
@@ -646,7 +612,6 @@ Deno.serve(async (req) => {
       const status = webhookData.status;
       const chatId = webhookData.chatId;
       
-      console.log('📖 Incoming message status:', status, 'for chat:', chatId);
       
       // Only process 'read' status
       if (status === 'read' && chatId) {
@@ -654,7 +619,6 @@ Deno.serve(async (req) => {
         const normalizedPhone = normalizePhone(phoneNumber);
         const isGroup = chatId.endsWith('@g.us');
         
-        console.log('✅ Syncing read status from WhatsApp for:', phoneNumber);
         
         if (isGroup) {
           // Find the group and mark messages as read
@@ -678,7 +642,6 @@ Deno.serve(async (req) => {
             if (error) {
               console.error('❌ Error updating group read status:', error);
             } else {
-              console.log('✅ Group messages marked as read');
             }
           }
         } else {
@@ -703,7 +666,6 @@ Deno.serve(async (req) => {
             if (error) {
               console.error('❌ Error updating client read status:', error);
             } else {
-              console.log('✅ Client messages marked as read');
             }
           } else {
             // Try lead
@@ -727,7 +689,6 @@ Deno.serve(async (req) => {
               if (error) {
                 console.error('❌ Error updating lead read status:', error);
               } else {
-                console.log('✅ Lead messages marked as read');
               }
             } else {
               // Try unknown contact by phone
@@ -746,7 +707,6 @@ Deno.serve(async (req) => {
               if (error) {
                 console.error('❌ Error updating unknown contact read status:', error);
               } else {
-                console.log('✅ Unknown contact messages marked as read');
               }
             }
           }
@@ -765,7 +725,6 @@ Deno.serve(async (req) => {
     
     // For non-message webhooks, ignore
     if (!isIncoming && !isOutgoing) {
-      console.log('⏭️ Ignoring non-message webhook:', typeWebhook);
       return new Response(JSON.stringify({ received: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -800,7 +759,6 @@ Deno.serve(async (req) => {
       
       if (downloadUrl && isIncoming) {
         try {
-          console.log('🎤 Attempting to transcribe voice message from:', downloadUrl);
           
           // Download the audio file
           const audioResponse = await fetch(downloadUrl);
@@ -826,7 +784,6 @@ Deno.serve(async (req) => {
               if (transcribeResponse.ok) {
                 const result = await transcribeResponse.json();
                 transcription = result.text || '';
-                console.log('✅ Transcription successful:', transcription.substring(0, 100));
               } else {
                 console.error('❌ Transcription failed:', await transcribeResponse.text());
               }
@@ -874,13 +831,11 @@ Deno.serve(async (req) => {
       messageText = `[${messageType}]`;
     }
 
-    console.log('📱 Processing message from:', isGroup ? 'Group ' + phoneNumber : phoneNumber, '(normalized:', normalizedPhone, ')');
 
     // Handle group messages differently
     if (isGroup) {
       const groupChatId = senderData.chatId;
       
-      console.log('👥 Group message detected. ChatId:', groupChatId, 
         'chatName from API (unreliable):', senderData.chatName,
         'Direction:', isOutgoing ? 'outgoing' : 'incoming');
 
@@ -899,11 +854,9 @@ Deno.serve(async (req) => {
       async function fetchGroupDataFromApi(groupChatId: string): Promise<{ name: string | null; inviteLink: string | null }> {
         try {
           if (!instanceId || !apiToken) {
-            console.log('⚠️ Missing credentials for Green API call');
             return { name: null, inviteLink: null };
           }
           
-          console.log('🔍 Fetching real group data using getGroupData for:', groupChatId);
           
           const response = await fetch(
             `https://api.green-api.com/waInstance${instanceId}/getGroupData/${apiToken}`,
@@ -916,7 +869,6 @@ Deno.serve(async (req) => {
           
           if (response.ok) {
             const groupData = await response.json();
-            console.log('📋 Green API getGroupData response (subject, inviteLink):', groupData.subject, groupData.groupInviteLink);
             return {
               name: groupData.subject || null,
               inviteLink: groupData.groupInviteLink || null,
@@ -957,14 +909,12 @@ Deno.serve(async (req) => {
         }
 
         groupId = newGroup.id;
-        console.log('✅ Created new group with real name:', newGroupName, 'invite_link:', groupApiData.inviteLink || 'none');
       } else if (existingGroup) {
         const currentName = existingGroup.group_name || '';
         const looksLikePlaceholder = currentName.startsWith('קבוצה ');
         const looksLikeSenderName = /🌴|📱|👤/.test(currentName) || currentName.split(' ').length <= 2;
         
         if (looksLikePlaceholder || looksLikeSenderName) {
-          console.log('🔄 Current group name might be incorrect, fetching real data...');
           const groupApiData = await fetchGroupDataFromApi(groupChatId);
           
           const updateFields: any = {};
@@ -980,7 +930,6 @@ Deno.serve(async (req) => {
               .from('whatsapp_groups')
               .update(updateFields)
               .eq('id', groupId);
-            console.log('📝 Updated group:', updateFields);
           }
         }
       }
@@ -995,7 +944,6 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       if (blockedContact || groupIsBlocked) {
-        console.log('🚫 Group is blocked, ignoring message');
         return new Response(JSON.stringify({ 
           success: true, 
           blocked: true,
@@ -1012,7 +960,6 @@ Deno.serve(async (req) => {
           .delete()
           .eq('tenant_id', tenantId)
           .eq('group_id', groupId);
-        console.log('👁️ Auto-unhiding group chat if hidden');
       }
 
       // Fetch and update group avatar if not already set
@@ -1029,7 +976,6 @@ Deno.serve(async (req) => {
             .from('whatsapp_groups')
             .update({ whatsapp_avatar_url: groupAvatarUrl })
             .eq('id', groupId);
-          console.log('📸 Updated group avatar');
         }
       }
 
@@ -1055,7 +1001,6 @@ Deno.serve(async (req) => {
         throw insertError;
       }
 
-      console.log('✅ Group message saved successfully');
 
       // Forward to linked team channels
       const forwardedSenderName = isOutgoing ? connectionDisplayName : senderData.senderName;
@@ -1063,7 +1008,6 @@ Deno.serve(async (req) => {
 
       // For incoming group messages, add "unread" tag automatically
       if (isIncoming) {
-        console.log('🏷️ Adding unread tag for incoming group message...');
         
         // Find the "unread" tag by name patterns
         const { data: unreadTag } = await supabaseClient
@@ -1090,19 +1034,15 @@ Deno.serve(async (req) => {
             });
           
           if (tagError) {
-            console.log('⚠️ Could not add unread tag to group (may already exist):', tagError.message);
           } else {
-            console.log('✅ Unread tag added to group successfully');
           }
         } else {
-          console.log('ℹ️ No unread tag found in tenant');
         }
       }
 
       // Trigger automations for incoming/outgoing group WhatsApp messages
       if (isIncoming || isManualOutgoing) {
         try {
-          console.log('🤖 Triggering automations for incoming group WhatsApp message...');
           
           // Fetch group tags
           let groupTags: string[] = [];
@@ -1130,16 +1070,13 @@ Deno.serve(async (req) => {
               const groupApiData = await fetchGroupDataFromApi(groupRecord.group_chat_id);
               if (groupApiData.inviteLink) {
                 groupInviteLink = groupApiData.inviteLink;
-                console.log('✅ Got invite link from getGroupData:', groupInviteLink);
               }
             } catch (e) {
-              console.log('⚠️ getGroupData failed for invite link:', e);
             }
 
             // Fallback: try dedicated getGroupInviteLink endpoint
             if (!groupInviteLink) {
               try {
-                console.log('🔗 Trying getGroupInviteLink for:', groupRecord.group_chat_id);
                 const inviteResponse = await fetch(
                   `https://api.green-api.com/waInstance${instanceId}/getGroupInviteLink/${apiToken}`,
                   {
@@ -1163,9 +1100,7 @@ Deno.serve(async (req) => {
                 .from('whatsapp_groups')
                 .update({ invite_link: groupInviteLink })
                 .eq('id', groupId);
-              console.log('✅ Saved group invite link:', groupInviteLink);
             } else {
-              console.log('⚠️ Could not obtain invite link — bot may not be group admin');
             }
           }
 
@@ -1198,7 +1133,6 @@ Deno.serve(async (req) => {
             body: JSON.stringify(automationPayload),
           }).catch(err => console.error('❌ Error triggering group automation:', err));
           
-          console.log('✅ Group automation trigger sent (fire-and-forget)');
         } catch (automationError) {
           console.error('❌ Error preparing group automation trigger:', automationError);
         }
@@ -1214,7 +1148,6 @@ Deno.serve(async (req) => {
     }
 
     // For individual messages, first check if sender is in blocked_contacts
-    console.log('🔍 Checking if sender is blocked:', phoneNumber);
     
     const { data: blockedByPhone } = await supabaseClient
       .from('blocked_contacts')
@@ -1225,7 +1158,6 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (blockedByPhone) {
-      console.log('🚫 Sender phone is blocked, ignoring message');
       return new Response(JSON.stringify({ 
         success: true, 
         blocked: true,
@@ -1236,7 +1168,6 @@ Deno.serve(async (req) => {
     }
 
     // Search for client or lead in THIS tenant only using normalized phone
-    console.log('👤 Individual message, searching for contact in tenant:', tenantId, 'with normalized phone:', normalizedPhone);
     
     let clientId: string | null = null;
     let leadId: string | null = null;
@@ -1257,7 +1188,6 @@ Deno.serve(async (req) => {
 
     if (client) {
       clientId = client.id;
-      console.log(`✅ Found client ${clientId} in tenant ${tenantId} by normalized phone`);
       
       // Check if client is in blocked_contacts
       const { data: blockedClient } = await supabaseClient
@@ -1269,7 +1199,6 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       if (blockedClient) {
-        console.log('🚫 Client is blocked, ignoring message');
         return new Response(JSON.stringify({ 
           success: true, 
           blocked: true,
@@ -1293,7 +1222,6 @@ Deno.serve(async (req) => {
             .from('clients')
             .update({ whatsapp_avatar_url: avatarUrl })
             .eq('id', clientId);
-          console.log('📸 Updated client avatar');
         }
       }
     } else {
@@ -1313,7 +1241,6 @@ Deno.serve(async (req) => {
 
       if (lead) {
         leadId = lead.id;
-        console.log(`✅ Found lead ${leadId} in tenant ${tenantId} by normalized phone`);
         
         // Check if lead is in blocked_contacts
         const { data: blockedLead } = await supabaseClient
@@ -1325,7 +1252,6 @@ Deno.serve(async (req) => {
           .maybeSingle();
 
         if (blockedLead) {
-          console.log('🚫 Lead is blocked, ignoring message');
           return new Response(JSON.stringify({ 
             success: true, 
             blocked: true,
@@ -1349,11 +1275,9 @@ Deno.serve(async (req) => {
               .from('leads')
               .update({ whatsapp_avatar_url: avatarUrl })
               .eq('id', leadId);
-            console.log('📸 Updated lead avatar');
           }
         }
       } else {
-        console.log(`⚠️ No contact found in tenant ${tenantId} for phone ${phoneNumber} (normalized: ${normalizedPhone})`);
       }
     }
 
@@ -1365,14 +1289,12 @@ Deno.serve(async (req) => {
           .delete()
           .eq('tenant_id', tenantId)
           .eq('client_id', clientId);
-        console.log('👁️ Auto-unhiding client chat if hidden');
       } else if (leadId) {
         await supabaseClient
           .from('hidden_chats')
           .delete()
           .eq('tenant_id', tenantId)
           .eq('lead_id', leadId);
-        console.log('👁️ Auto-unhiding lead chat if hidden');
       } else {
         // Unknown contact - unhide by phone
         await supabaseClient
@@ -1380,7 +1302,6 @@ Deno.serve(async (req) => {
           .delete()
           .eq('tenant_id', tenantId)
           .eq('sender_phone', phoneNumber);
-        console.log('👁️ Auto-unhiding unknown chat if hidden');
       }
     }
 
@@ -1389,11 +1310,9 @@ Deno.serve(async (req) => {
     if (!clientId && !leadId && apiToken) {
       senderProfileImage = await fetchWhatsAppAvatar(instanceId, apiToken, senderData.chatId);
       if (senderProfileImage) {
-        console.log('📸 Fetched avatar for unknown contact');
       }
     }
 
-    console.log('💾 Saving message...');
 
     // Save the message to THIS tenant only
     const rawDataWithAvatar = senderProfileImage 
@@ -1422,14 +1341,12 @@ Deno.serve(async (req) => {
       throw insertError;
     }
 
-    console.log('✅ Message saved successfully');
 
     // Forward to linked team channels (individual chats)
     await forwardToTeamChannels(supabaseClient, tenantId, connectionUserId, senderData.chatId, senderData.senderName, messageText, messageData);
 
     // For incoming messages, add "unread" tag automatically
     if (!isOutgoing) {
-      console.log('🏷️ Adding unread tag for incoming message...');
       
       // Find the "unread" tag by name patterns
       const { data: unreadTag } = await supabaseClient
@@ -1464,19 +1381,15 @@ Deno.serve(async (req) => {
           });
         
         if (tagError) {
-          console.log('⚠️ Could not add unread tag (may already exist):', tagError.message);
         } else {
-          console.log('✅ Unread tag added successfully');
         }
       } else {
-        console.log('ℹ️ No unread tag found in tenant');
       }
     }
 
     // Trigger automations for incoming/outgoing WhatsApp messages
     if (isIncoming || isManualOutgoing) {
       try {
-        console.log('🤖 Triggering automations for incoming WhatsApp message...');
         
         // Fetch contact tags for the sender
         let contactTags: string[] = [];
@@ -1533,7 +1446,6 @@ Deno.serve(async (req) => {
           body: JSON.stringify(automationPayload),
         }).catch(err => console.error('❌ Error triggering automation:', err));
         
-        console.log('✅ Automation trigger sent (fire-and-forget)');
       } catch (automationError) {
         console.error('❌ Error preparing automation trigger:', automationError);
       }

@@ -180,7 +180,6 @@ Deno.serve(async (req) => {
     const sinceStr = since.toISOString().split('T')[0];
     const untilStr = until.toISOString().split('T')[0];
 
-    console.log(`Syncing daily insights for ${adAccountId} from ${sinceStr} to ${untilStr}`);
 
     // First, fetch campaign statuses to detect real blocks
     const campaignsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/campaigns?fields=id,name,effective_status,configured_status,objective&limit=500&access_token=${accessToken}`;
@@ -198,7 +197,6 @@ Deno.serve(async (req) => {
           objective: campaign.objective || null,
         };
       }
-      console.log(`Fetched statuses for ${Object.keys(campaignStatuses).length} campaigns`);
     }
 
     // Also fetch ad account status
@@ -220,7 +218,6 @@ Deno.serve(async (req) => {
       };
       accountStatus = statusMap[accountData.account_status] || `unknown_${accountData.account_status}`;
       accountDisableReason = accountData.disable_reason || null;
-      console.log(`Account status: ${accountStatus}, disable_reason: ${accountDisableReason}`);
     }
 
     // Fetch insights from Facebook with time_increment=1 for daily breakdown
@@ -374,7 +371,6 @@ Deno.serve(async (req) => {
       };
     });
 
-    console.log(`Got ${insights.length} daily campaign insights`);
 
     // Make sure fields exist for Facebook Insights table
     const fieldKeys = ['date', 'campaign_name', 'campaign_id', 'impressions', 'clicks', 'lp_or_form_views', 'cpm', 'ctr', 'leads', 'cost_per_lead', 'spend', 'purchases', 'purchase_value', 'add_to_cart', 'roas', 'campaign_objective', 'campaign_type', 'effective_status', 'configured_status'];
@@ -436,7 +432,6 @@ Deno.serve(async (req) => {
       })
       .eq('id', table_id);
 
-    console.log(`Successfully synced ${insights.length} daily records`);
 
     return new Response(JSON.stringify({ 
       success: true,

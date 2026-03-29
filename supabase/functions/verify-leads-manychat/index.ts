@@ -110,7 +110,6 @@ async function findByCustomField(
     });
 
     if (res.status === 429) {
-      console.log('⏳ Rate limited, waiting 2s...');
       await new Promise((r) => setTimeout(r, 2000));
       continue;
     }
@@ -244,7 +243,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`🔍 Starting verification for tenant ${tenantId} with field_id=${phoneFieldId}`);
 
     // Fetch leads
     const { data: leads, error: leadsError } = await supabase
@@ -261,7 +259,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`📋 Checking ${leads?.length || 0} leads`);
 
     const results: LeadResult[] = [];
     let okCount = 0;
@@ -364,7 +361,6 @@ Deno.serve(async (req) => {
             fixedCount++;
             action = 'fixed';
             details += ` | FIXED: Updated to ${found.id}`;
-            console.log(`✅ Fixed lead ${lead.id}: ${savedId} → ${found.id}`);
           }
         }
 
@@ -391,7 +387,6 @@ Deno.serve(async (req) => {
       fixed: fixedCount,
     };
 
-    console.log('📊 Verification Summary:', summary);
 
     return new Response(
       JSON.stringify({

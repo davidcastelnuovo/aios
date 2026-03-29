@@ -47,7 +47,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log('Sending meeting notification:', { tenantId, leadId, clientId, contactName, meetingDate, meetingTime, meetingLocation });
 
     // Get ManyChat integration with settings
     const { data: integration, error: integrationError } = await supabase
@@ -66,7 +65,6 @@ Deno.serve(async (req) => {
     }
 
     if (!integration || !integration.is_active || !integration.api_key) {
-      console.log('ManyChat integration not active or API key missing');
       return new Response(
         JSON.stringify({ error: 'ManyChat integration not configured', skipped: true }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -93,14 +91,12 @@ Deno.serve(async (req) => {
     }
 
     if (!subscriberId) {
-      console.log('No ManyChat subscriber ID found for lead/client');
       return new Response(
         JSON.stringify({ error: 'No ManyChat subscriber ID found', skipped: true }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('Found subscriber ID:', subscriberId);
 
     // Get settings for custom field IDs and trigger name
     const settings = integration.settings as Record<string, any> || {};
@@ -142,7 +138,6 @@ Deno.serve(async (req) => {
 
     // Update custom fields in ManyChat
     for (const fieldUpdate of fieldUpdates) {
-      console.log('Setting custom field:', fieldUpdate);
       const fieldResponse = await fetch('https://api.manychat.com/fb/subscriber/setCustomField', {
         method: 'POST',
         headers: {
@@ -161,12 +156,10 @@ Deno.serve(async (req) => {
         console.error('Failed to set custom field:', errorText);
         // Continue with other fields even if one fails
       } else {
-        console.log('Custom field set successfully');
       }
     }
 
     // Step 2: Trigger the automation flow
-    console.log('Triggering automation:', triggerName);
     
     // Use the sendFlow endpoint with the trigger
     const triggerResponse = await fetch('https://api.manychat.com/fb/sending/sendFlow', {
@@ -186,7 +179,6 @@ Deno.serve(async (req) => {
       console.error('Failed to trigger automation:', errorText);
       
       // If flow not found, try with external trigger endpoint
-      console.log('Trying external trigger...');
       const externalTriggerResponse = await fetch(`https://api.manychat.com/fb/subscriber/triggerFlow`, {
         method: 'POST',
         headers: {
@@ -213,7 +205,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log('Meeting notification sent successfully');
 
     return new Response(
       JSON.stringify({ 

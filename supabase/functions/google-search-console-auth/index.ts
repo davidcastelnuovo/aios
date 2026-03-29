@@ -15,7 +15,6 @@ serve(async (req) => {
   const url = new URL(req.url);
   const action = url.searchParams.get('action');
 
-  console.log('Google Search Console Auth - Action:', action);
 
   // OAuth configuration
   const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
@@ -66,7 +65,6 @@ serve(async (req) => {
       authUrl.searchParams.set('prompt', 'consent');
       authUrl.searchParams.set('state', state);
 
-      console.log('Generated auth URL for Google Search Console');
 
       return new Response(
         JSON.stringify({ authUrl: authUrl.toString() }),
@@ -231,7 +229,6 @@ serve(async (req) => {
 
       // Check if token needs refresh
       if (settings?.expires_at && new Date(settings.expires_at) < new Date()) {
-        console.log('Token expired, refreshing...');
         
         const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
           method: 'POST',
@@ -269,7 +266,6 @@ serve(async (req) => {
       );
 
       const sitesData = await sitesResponse.json();
-      console.log('Search Console sites response:', JSON.stringify(sitesData));
 
       if (sitesData.error) {
         throw new Error(sitesData.error.message);

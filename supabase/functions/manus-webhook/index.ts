@@ -119,7 +119,6 @@ serve(async (req) => {
     }
 
     const payload = JSON.parse(bodyText);
-    console.log('Manus webhook received:', JSON.stringify(payload).substring(0, 500));
 
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -149,7 +148,6 @@ serve(async (req) => {
       if (updateError) {
         console.error('Failed to update manus task:', updateError);
       } else {
-        console.log(`Updated manus task ${taskId} with status: ${status}`);
       }
     }
 

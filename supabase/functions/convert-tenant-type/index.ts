@@ -40,7 +40,6 @@ Deno.serve(async (req) => {
       throw new Error('tenant_id and new_org_type are required');
     }
 
-    console.log(`Convert tenant request from user ${user.id} for tenant ${tenant_id} to ${new_org_type}`);
 
     // Check user permissions - only super_admin can convert
     const { data: userRoles, error: rolesError } = await supabase
@@ -121,7 +120,6 @@ Deno.serve(async (req) => {
 
     if (updateError) throw updateError;
 
-    console.log(`Successfully converted tenant ${tenant_id} from ${currentTenant.org_type} to ${new_org_type}`);
 
     return new Response(
       JSON.stringify({ 

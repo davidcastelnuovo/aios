@@ -32,12 +32,10 @@ Deno.serve(async (req) => {
       }
 
       if (!jobs || jobs.length === 0) {
-        console.log(`No more jobs to process after ${i} jobs`)
         break
       }
 
       const job = jobs[0]
-      console.log(`Processing job ${job.id} (type: ${job.job_type}, attempt: ${job.attempts}/${job.max_attempts})`)
 
       try {
         // Check circuit breaker for integration jobs
@@ -49,7 +47,6 @@ Deno.serve(async (req) => {
           })
 
           if (!circuitOk) {
-            console.log(`Circuit breaker OPEN for ${provider}, re-queuing job ${job.id}`)
             await supabase.rpc('complete_job', { p_job_id: job.id, p_success: false, p_error: 'Circuit breaker open' })
             results.push({ job_id: job.id, status: 'circuit_open' })
             continue

@@ -55,23 +55,19 @@ function normalizeForWhisper(
   headerBytes: Uint8Array,
 ): { blob: Blob; fileName: string; contentType: string } {
   let mime = rawContentType.split(';')[0].trim().toLowerCase();
-  console.log(`🔍 normalizeForWhisper — raw_content_type=${mime}, recording_type=${recordingType}`);
 
   if (!mime || mime === 'application/octet-stream' || !MIME_TO_EXT[mime]) {
     const detected = detectMimeFromBytes(headerBytes);
     if (detected) {
       mime = detected;
-      console.log(`  → detected via magic bytes: ${mime}`);
     } else {
       mime = mimeFromRecordingType(recordingType);
-      console.log(`  → inferred from recording_type: ${mime}`);
     }
   }
 
   const ext = MIME_TO_EXT[mime] || '.m4a';
   const fileName = `recording${ext}`;
   const normalizedBlob = new Blob([blob], { type: mime });
-  console.log(`  → final: mime=${mime}, fileName=${fileName}`);
   return { blob: normalizedBlob, fileName, contentType: mime };
 }
 
@@ -138,7 +134,6 @@ serve(async (req) => {
 
     // Case 1: Manual recording with file in Storage
     if (recording.file_path) {
-      console.log('📂 Downloading from Storage:', recording.file_path);
       const { data: fileData, error: dlError } = await supabase.storage
         .from('recordings')
         .download(recording.file_path);
@@ -158,7 +153,6 @@ serve(async (req) => {
       const knownSize = typeof recording.file_size === 'number' ? recording.file_size : null;
 
       if (knownSize && knownSize > MAX_EDGE_FILE_SIZE) {
-        console.log(`⚠️ Recording too large (${(knownSize / 1024 / 1024).toFixed(1)}MB). Searching for smaller audio-only alternative...`);
 
         const { data: alternatives } = await supabase
           .from('zoom_recordings')
@@ -174,12 +168,10 @@ serve(async (req) => {
         );
 
         if (smallAlt) {
-          console.log(`✅ Found smaller alternative: ${smallAlt.recording_type} (${(smallAlt.file_size / 1024 / 1024).toFixed(1)}MB)`);
           return await processZoomRecording(supabase, smallAlt, mode, true, recording_id);
         }
 
         // No small alternative — stream large file to Storage for client-side chunking
-        console.log(`📤 No small alternative. Streaming ${(knownSize / 1024 / 1024).toFixed(1)}MB to Storage for client-side chunking...`);
         const streamResult = await streamZoomToStorage(supabase, recording, recording_id);
         if (streamResult.error) {
           await setTranscriptionStatus(supabase, recording_id, 'failed', undefined, streamResult.error);
@@ -210,7 +202,6 @@ serve(async (req) => {
       contentType = result.contentType!;
 
       if (audioBlob.size > MAX_EDGE_FILE_SIZE) {
-        console.log(`⚠️ Downloaded file is ${(audioBlob.size / 1024 / 1024).toFixed(1)}MB — too large`);
         const { data: alternatives } = await supabase
           .from('zoom_recordings')
           .select('*')
@@ -229,7 +220,6 @@ serve(async (req) => {
         }
 
         // No small alternative — upload the already-downloaded blob to Storage for client-side chunking
-        console.log(`📤 No small alternative. Uploading ${(audioBlob.size / 1024 / 1024).toFixed(1)}MB to Storage for client-side chunking...`);
         const ext = (fileName.split('.').pop() || 'm4a').toLowerCase();
         const tempPath = `transcription-temp/${recording_id}-${Date.now()}.${ext}`;
 
@@ -407,13 +397,10 @@ async function downloadZoomMedia(supabase: any, recording: any): Promise<{
       if (tokenResp.ok) {
         const tokenData = await tokenResp.json();
         zoomAccessToken = tokenData?.access_token || null;
-        console.log('✅ Minted fresh Zoom access token');
       } else {
         const errText = await tokenResp.text();
-        console.log('⚠️ Failed to mint fresh Zoom token:', errText.slice(0, 180));
       }
     } catch (e) {
-      console.log('⚠️ Zoom token mint error:', e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -432,7 +419,6 @@ async function downloadZoomMedia(supabase: any, recording: any): Promise<{
     }
 
     for (const candidateUrl of [...new Set(candidateUrls)]) {
-      console.log('🔗 Trying Zoom URL:', candidateUrl.split('?')[0]);
       const zoomResp = await fetch(candidateUrl, { headers });
       const responseType = (zoomResp.headers.get('content-type') || '').toLowerCase();
 
@@ -469,7 +455,6 @@ async function downloadZoomMedia(supabase: any, recording: any): Promise<{
   // This endpoint works with existing scopes (no cloud_recording:read:list_recording_files needed)
   if (sawUnauthorized && zoomAccessToken && recording.meeting_id) {
     try {
-      console.log('🔄 Stored Zoom URL unauthorized, fetching fresh URLs via users/me/recordings...');
       
       // Calculate date range: ±2 days around the recording's start_time
       const startTime = recording.start_time ? new Date(recording.start_time) : new Date();
@@ -510,12 +495,10 @@ async function downloadZoomMedia(supabase: any, recording: any): Promise<{
               .filter(Boolean)
           )] as string[];
 
-          console.log(`  Found meeting with ${files.length} files, trying ${uniqueFreshUrls.length} fresh URLs...`);
 
           for (const freshUrl of uniqueFreshUrls) {
             const freshResult = await tryDownloadFromUrl(freshUrl);
             if (freshResult.blob) {
-              console.log('✅ Downloaded media using fresh URL from users/me/recordings');
               
               // Update the stored URL in DB for future use
               const bestUrl = freshUrl.split('?')[0];
@@ -530,7 +513,6 @@ async function downloadZoomMedia(supabase: any, recording: any): Promise<{
           lastError = 'Found meeting but all fresh download URLs failed';
         } else {
           lastError = `Meeting ${meetingIdStr} not found in recent recordings list (searched ${fromDate} to ${toDate})`;
-          console.log(`⚠️ ${lastError}. Available meetings: ${meetings.map((m: any) => m.id).join(', ')}`);
         }
       } else {
         const errText = await listResp.text();
@@ -561,7 +543,6 @@ async function streamZoomToStorage(supabase: any, recording: any, recordingId: s
   const ext = MIME_TO_EXT[detectedMime] || '.m4a';
   const tempPath = `transcription-temp/${recordingId}-${Date.now()}${ext}`;
 
-  console.log(`📤 Uploading ${(blob.size / 1024 / 1024).toFixed(1)}MB to Storage: ${tempPath}`);
 
   const { error: uploadError } = await supabase.storage
     .from('recordings')
@@ -589,12 +570,10 @@ async function streamZoomToStorage(supabase: any, recording: any, recordingId: s
 // ── Helper: transcribe a blob (shared logic) ─────────────────────────
 async function transcribeBlob(supabase: any, recordingId: string, audioBlob: Blob, fileName: string, contentType: string, mode: string | undefined, recordingType?: string | null) {
   const fileSizeMB = audioBlob.size / (1024 * 1024);
-  console.log(`📦 File size: ${fileSizeMB.toFixed(1)}MB, fileName: ${fileName}, contentType: ${contentType}`);
 
   // Mode: download - return audio reference for client-side chunking
   // For large files, avoid base64 conversion (can exceed edge memory); upload temp file and return signed URL.
   if (mode === 'download') {
-    console.log(`📥 Download mode — preparing ${fileSizeMB.toFixed(1)}MB for client-side chunking`);
 
     const ext = (fileName.split('.').pop() || 'm4a').toLowerCase();
     const tempPath = `transcription-temp/${recordingId}-${Date.now()}.${ext}`;
@@ -662,7 +641,6 @@ async function transcribeBlob(supabase: any, recordingId: string, audioBlob: Blo
     });
   }
 
-  console.log('🎤 Transcribing audio directly...');
 
   const whisperForm = new FormData();
   whisperForm.append('file', audioBlob, fileName);
@@ -705,12 +683,10 @@ async function transcribeBlob(supabase: any, recordingId: string, audioBlob: Blo
 
   const whisperResult = await whisperResp.json();
   let transcribedText = whisperResult.text;
-  console.log('✅ Transcription done, length:', transcribedText?.length);
 
   // Post-process with GPT to fix spelling
   if (transcribedText && transcribedText.length > 0) {
     try {
-      console.log('🔧 Fixing spelling with GPT...');
       const gptResp = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -734,7 +710,6 @@ async function transcribeBlob(supabase: any, recordingId: string, audioBlob: Blo
       if (gptResp.ok) {
         const gptResult = await gptResp.json();
         transcribedText = gptResult.choices?.[0]?.message?.content || transcribedText;
-        console.log('✅ Spelling correction done');
       }
     } catch (e) {
       console.error('⚠️ GPT correction failed, using raw:', e);
@@ -743,7 +718,6 @@ async function transcribeBlob(supabase: any, recordingId: string, audioBlob: Blo
 
   // ── PERSIST to DB ──
   await setTranscriptionStatus(supabase, recordingId, 'completed', transcribedText);
-  console.log('✅ Transcription saved to DB for recording:', recordingId);
 
   return new Response(JSON.stringify({ text: transcribedText }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },

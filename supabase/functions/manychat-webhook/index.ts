@@ -42,8 +42,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    console.log('📥 Webhook received - Method:', req.method);
-    console.log('📋 Headers:', JSON.stringify(Object.fromEntries(req.headers.entries())));
     
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -51,13 +49,11 @@ Deno.serve(async (req) => {
 
     // Get raw body text first
     const bodyText = await req.text();
-    console.log('📄 Raw body:', bodyText);
     
     // Try to parse as JSON
     let payload;
     try {
       payload = JSON.parse(bodyText);
-      console.log('✅ Parsed payload:', JSON.stringify(payload, null, 2));
     } catch (parseError) {
       console.error('❌ JSON parse error:', parseError);
       return new Response(
@@ -76,7 +72,6 @@ Deno.serve(async (req) => {
     const eventType = event_type || type || 'message_received';
     const isOutbound = ['message_sent', 'agent_reply', 'bot_reply', 'template_sent', 'automation_sent'].includes(eventType);
     
-    console.log('📨 Event type:', eventType, '| Direction:', isOutbound ? 'outbound' : 'inbound');
 
     if (!subscriber || !subscriber.id) {
       console.error('Invalid payload: missing subscriber.id');
@@ -89,7 +84,6 @@ Deno.serve(async (req) => {
     let client = null;
 
     // Try to find client by manychat_subscriber_id first
-    console.log('🔍 Looking for client with subscriber_id:', subscriber.id);
     const { data: existingClient } = await supabase
       .from('clients')
       .select('id, tenant_id, name, phone')
@@ -97,11 +91,9 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (existingClient) {
-      console.log('✅ Found existing client by subscriber_id:', existingClient.name);
       client = existingClient;
     } else {
       // Not found by subscriber_id, try to find by phone
-      console.log('🔍 Client not found by subscriber_id, trying phone matching...');
       
       const phone = subscriber.full_contact?.whatsapp_phone || 
                     subscriber.whatsapp_phone || 
@@ -110,7 +102,6 @@ Deno.serve(async (req) => {
       
       if (phone) {
         const phoneVariations = getPhoneVariations(phone);
-        console.log('📱 Generated phone variations:', phoneVariations);
         
         // Build OR query for all phone variations
         const phoneQuery = phoneVariations.map(p => `phone.eq.${p}`).join(',');
@@ -125,7 +116,6 @@ Deno.serve(async (req) => {
           .maybeSingle();
         
         if (clientByPhone) {
-          console.log('✅ Found client by phone:', clientByPhone.name, '- Updating subscriber_id');
           
           // Update the manychat_subscriber_id
           const { error: updateError } = await supabase
@@ -136,13 +126,11 @@ Deno.serve(async (req) => {
           if (updateError) {
             console.error('❌ Error updating client subscriber_id:', updateError);
           } else {
-            console.log('✅ Successfully updated client with subscriber_id');
           }
           
           client = clientByPhone;
         } else {
           // Try to find lead by phone
-          console.log('🔍 Client not found, trying leads...');
           const { data: leadByPhone } = await supabase
             .from('leads')
             .select('id, tenant_id, company_name, phone')
@@ -152,7 +140,6 @@ Deno.serve(async (req) => {
             .maybeSingle();
           
           if (leadByPhone) {
-            console.log('✅ Found lead by phone:', leadByPhone.company_name, '- Updating subscriber_id');
             
             // Update the manychat_subscriber_id
             const { error: updateError } = await supabase
@@ -163,7 +150,6 @@ Deno.serve(async (req) => {
             if (updateError) {
               console.error('❌ Error updating lead subscriber_id:', updateError);
             } else {
-              console.log('✅ Successfully updated lead with subscriber_id');
             }
           }
         }
@@ -214,7 +200,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`${isOutbound ? 'Outbound' : 'Inbound'} message saved for client ${client.name} (${client.id})`);
 
     return new Response(
       JSON.stringify({ received: true, direction: isOutbound ? 'outbound' : 'inbound' }),

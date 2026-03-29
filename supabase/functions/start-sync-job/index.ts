@@ -62,7 +62,6 @@ Deno.serve(async (req) => {
 
     // If resetFirst, reset all manychat_subscriber_id for this tenant (including conflicts)
     if (resetFirst) {
-      console.log('Resetting all manychat_subscriber_id for tenant', tenantId);
       // Reset NULL leads
       await supabase
         .from('leads')
@@ -84,7 +83,6 @@ Deno.serve(async (req) => {
         .eq('tenant_id', tenantId)
         .eq('manychat_subscriber_id', 'NEEDS_MANUAL_LINK');
         
-      console.log('Reset complete for tenant', tenantId);
     }
 
     // Count total leads to sync
@@ -133,7 +131,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log('Created sync job:', job.id);
 
     // Trigger run-sync-job in background (fire and forget)
     const runUrl = `${supabaseUrl}/functions/v1/run-sync-job`;

@@ -116,13 +116,11 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
     queryFn: async () => {
       if (!effectiveAccessToken) return { pages: [], pageTokens: {}, tokenExpired: false };
       
-      console.log('Fetching Facebook pages with token:', effectiveAccessToken?.substring(0, 20) + '...');
       
       const { data, error } = await supabase.functions.invoke('get-facebook-forms', {
         body: { tenant_id: tenantId, access_token: effectiveAccessToken },
       });
 
-      console.log('Facebook pages response:', data);
       
       // Check for token expiration error
       if (error || data?.error) {
@@ -131,7 +129,6 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
         
         // Check if it's a token expiration error (code 190, subcode 463)
         if (errorDetails.code === 190 || errorMessage.includes('Session has expired') || errorMessage.includes('access token')) {
-          console.log('Facebook token has expired');
           return { pages: [], pageTokens: {}, tokenExpired: true };
         }
         
@@ -170,8 +167,6 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
       // Use page-specific token from the effective tokens map
       const pageAccessToken = effectivePageTokens[selectedPageId] || manualPageToken || null;
       
-      console.log('Fetching forms for page:', selectedPageId);
-      console.log('Using page token:', pageAccessToken ? `yes (${pageAccessToken.substring(0, 20)}...)` : 'no (will use user token)');
       
       const { data, error } = await supabase.functions.invoke('get-facebook-forms', {
         body: { 
@@ -285,7 +280,6 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
 
       // Auto-subscribe the page to leadgen webhook
       if (selectedPageId) {
-        console.log('Subscribing page to leadgen webhook:', selectedPageId);
         const { data: subscribeResult, error: subscribeError } = await supabase.functions.invoke('facebook-auth', {
           body: {
             action: 'subscribe_page',
@@ -299,7 +293,6 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
           // Don't throw - mapping was saved successfully, just log the webhook issue
           toast.warning('המיפוי נשמר, אך ייתכן שיש בעיה ברישום לקבלת לידים אוטומטית');
         } else {
-          console.log('Page subscribed to webhook successfully:', subscribeResult);
         }
       }
     },
@@ -556,7 +549,6 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
                 variant="outline" 
                 size="sm" 
                 onClick={() => {
-                  console.log('Refresh pages clicked');
                   refetchPages();
                 }}
                 disabled={loadingPages || fetchingPages}

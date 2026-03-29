@@ -36,7 +36,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    console.log('🔔 Webhook lead intake received')
     
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -50,9 +49,7 @@ Deno.serve(async (req) => {
 
     // Parse incoming data
     const rawBody = await req.json()
-    console.log('📦 Received raw body:', JSON.stringify(rawBody, null, 2))
     if (queryTenantSlug || queryTenantId || queryAgencyId) {
-      console.log('🔗 Query params - tenant_slug:', queryTenantSlug, 'tenant_id:', queryTenantId, 'agency_id:', queryAgencyId)
     }
 
     // ========== WIX FORM PARSER ==========
@@ -60,7 +57,6 @@ Deno.serve(async (req) => {
     let payload: LeadPayload
     const wixSubmissions = rawBody?.data?.submissions
     if (wixSubmissions && Array.isArray(wixSubmissions)) {
-      console.log('🔷 Detected Wix form format, parsing submissions...')
       const parsed: Record<string, string> = {}
       
       for (const sub of wixSubmissions) {
@@ -87,7 +83,6 @@ Deno.serve(async (req) => {
           parsed.products = value
         } else {
           // Unknown fields go to notes
-          console.log(`📝 Unmapped Wix field "${sub.label}": "${value}" → adding to notes`)
           parsed.notes = (parsed.notes ? parsed.notes + '\n' : '') + `${sub.label}: ${value}`
         }
       }
@@ -109,7 +104,6 @@ Deno.serve(async (req) => {
         parsed.notes = (parsed.notes ? parsed.notes + '\n' : '') + `טופס: ${formName}`
       }
 
-      console.log('✅ Parsed Wix data:', JSON.stringify(parsed, null, 2))
 
       payload = {
         company_name: parsed.company_name || parsed.contact_name || '',
@@ -139,7 +133,6 @@ Deno.serve(async (req) => {
     
     // Resolve tenant from tenant_slug if provided
     if (!tenantId && effectiveTenantSlug) {
-      console.log(`🔍 Resolving tenant from slug: "${effectiveTenantSlug}"`)
       const { data: tenantData, error: tenantError } = await supabase
         .from('tenants')
         .select('id')
@@ -160,12 +153,10 @@ Deno.serve(async (req) => {
         )
       }
       tenantId = tenantData.id
-      console.log(`✅ Resolved tenant_id: ${tenantId}`)
     }
 
     // If agency_id is provided, use it and get tenant_id from it
     if (agencyId) {
-      console.log(`🔑 Agency ID provided: ${agencyId}`)
       
       const { data: agency, error: agencyError } = await supabase
         .from('agencies')
@@ -189,11 +180,9 @@ Deno.serve(async (req) => {
       }
       
       tenantId = agency.tenant_id
-      console.log(`✅ Found tenant_id from agency: ${tenantId}`)
     } 
     // If no agency_id but we have tenant_id, find the default or first agency
     else if (tenantId) {
-      console.log(`🔍 Finding agency for tenant: ${tenantId}`)
       
       // First, try to find the default agency for this tenant
       const { data: defaultAgency, error: defaultError } = await supabase
@@ -211,9 +200,7 @@ Deno.serve(async (req) => {
       
       if (defaultAgency) {
         agencyId = defaultAgency.id
-        console.log(`✅ Found default agency: ${defaultAgency.name} (${agencyId})`)
       } else {
-        console.log('⚠️ No default agency found, trying first active agency...')
         
         // Fallback to first active agency in this tenant
         const { data: firstAgency, error: firstError } = await supabase
@@ -231,9 +218,7 @@ Deno.serve(async (req) => {
         
         if (firstAgency) {
           agencyId = firstAgency.id
-          console.log(`✅ Found first active agency: ${firstAgency.name} (${agencyId})`)
         } else {
-          console.log('❌ No active agencies found for this tenant')
         }
       }
     } else {
@@ -251,7 +236,6 @@ Deno.serve(async (req) => {
       )
     }
     
-    console.log(`📍 Final - agencyId: ${agencyId}, tenantId: ${tenantId}`)
 
     if (!agencyId) {
       return new Response(
@@ -336,7 +320,6 @@ Deno.serve(async (req) => {
     let existingLead = null;
     
     if (normalizedPhone || normalizedEmail) {
-      console.log(`🔍 Checking for existing lead - phone: ${normalizedPhone}, email: ${normalizedEmail}`);
       
       // First try to find by phone
       if (normalizedPhone) {
@@ -372,7 +355,6 @@ Deno.serve(async (req) => {
         }
         
         if (existingLead) {
-          console.log(`📌 Found existing lead by phone: ${existingLead.id} (${existingLead.company_name})`);
         }
       }
       
@@ -388,14 +370,12 @@ Deno.serve(async (req) => {
         
         if (leadByEmail) {
           existingLead = leadByEmail;
-          console.log(`📌 Found existing lead by email: ${existingLead.id} (${existingLead.company_name})`);
         }
       }
     }
     
     // If existing lead found - update with new info if available
     if (existingLead) {
-      console.log(`🔄 Lead already exists, checking for new information to update...`);
       
       const updates: Record<string, any> = {};
       let hasUpdates = false;
@@ -456,17 +436,14 @@ Deno.serve(async (req) => {
         if (updateError) {
           console.error('❌ Error updating existing lead:', updateError);
         } else {
-          console.log(`✅ Updated existing lead with new info:`, Object.keys(updates));
         }
       } else {
-        console.log(`ℹ️ No new information to add, ignoring duplicate lead`);
       }
       
       // Handle tag_name for existing lead
       if (payload.tag_name && tenantId) {
         try {
           const tagName = payload.tag_name.trim();
-          console.log(`🏷️ Processing tag_name for existing lead: "${tagName}"`);
           
           const { data: existingTag } = await supabase
             .from('chat_tags')
@@ -508,7 +485,6 @@ Deno.serve(async (req) => {
                   lead_id: existingLead.id,
                   user_id: '00000000-0000-0000-0000-000000000000'
                 });
-              console.log(`✅ New tag applied to existing lead`);
             }
           }
         } catch (tagError) {
@@ -570,13 +546,11 @@ Deno.serve(async (req) => {
       )
     }
 
-    console.log('✅ Lead created successfully:', lead.id)
 
     // Handle tag_name - find or create tag and apply it
     if (payload.tag_name && tenantId) {
       try {
         const tagName = payload.tag_name.trim()
-        console.log(`🏷️ Processing tag_name: "${tagName}"`)
         
         // Check if tag exists
         const { data: existingTag, error: tagQueryError } = await supabase
@@ -593,7 +567,6 @@ Deno.serve(async (req) => {
           
           // Create tag if it doesn't exist
           if (!tagId) {
-            console.log(`🆕 Creating new tag: "${tagName}"`)
             const { data: newTag, error: createTagError } = await supabase
               .from('chat_tags')
               .insert({
@@ -608,10 +581,8 @@ Deno.serve(async (req) => {
               console.error('⚠️ Error creating tag:', createTagError)
             } else {
               tagId = newTag.id
-              console.log(`✅ Tag created with id: ${tagId}`)
             }
           } else {
-            console.log(`✅ Found existing tag with id: ${tagId}`)
           }
           
           // Apply tag to lead
@@ -628,7 +599,6 @@ Deno.serve(async (req) => {
             if (applyTagError) {
               console.error('⚠️ Error applying tag to lead:', applyTagError)
             } else {
-              console.log(`✅ Tag applied to lead ${lead.id}`)
             }
           }
         }
@@ -664,7 +634,6 @@ Deno.serve(async (req) => {
         }),
         signal: automationAbort.signal,
       }).then(r => {
-        if (r.ok) console.log('✅ lead_created automation triggered');
         else r.text().then(t => console.error('⚠️ Automation trigger failed:', t));
       }).catch(e => console.error('⚠️ Automation trigger error:', e.message));
     }

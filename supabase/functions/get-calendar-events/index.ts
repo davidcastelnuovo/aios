@@ -27,7 +27,6 @@ serve(async (req) => {
     
     // Determine which user's calendar to access
     const calendarOwnerId = target_user_id || user.id;
-    console.log('Fetching calendar events:', { timeMin, timeMax, requestingUserId: user.id, calendarOwnerId });
 
     // If accessing another user's calendar, verify permission
     if (target_user_id && target_user_id !== user.id) {
@@ -69,7 +68,6 @@ serve(async (req) => {
 
     // Refresh token if expired
     if (expiresAt <= new Date()) {
-      console.log('Token expired, refreshing...');
       
       const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
       const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET');
@@ -90,7 +88,6 @@ serve(async (req) => {
       });
 
       const refreshData = await refreshResponse.json();
-      console.log('Token refresh response:', refreshData);
       
       if (!refreshData.access_token) {
         console.error('Token refresh failed:', refreshData);
@@ -132,11 +129,9 @@ serve(async (req) => {
         })
         .eq('user_id', calendarOwnerId);
 
-      console.log('Token refreshed successfully');
     }
 
     // Fetch calendar list first
-    console.log('Fetching calendar list from Google...');
     const calendarListUrl = 'https://www.googleapis.com/calendar/v3/users/me/calendarList';
     
     const calendarListResponse = await fetch(calendarListUrl, {
@@ -154,10 +149,8 @@ serve(async (req) => {
 
     const calendarListData = await calendarListResponse.json();
     const calendars = calendarListData.items || [];
-    console.log(`Found ${calendars.length} calendars`);
 
     // Fetch events from all calendars
-    console.log('Fetching events from all calendars...');
     const allEvents: any[] = [];
     
     for (const calendar of calendars) {
@@ -185,7 +178,6 @@ serve(async (req) => {
             calendarColor: calendar.backgroundColor || calendar.foregroundColor,
           }));
           allEvents.push(...events);
-          console.log(`Fetched ${events.length} events from calendar: ${calendar.summary}`);
         } else {
           console.warn(`Failed to fetch events from calendar ${calendar.summary}`);
         }
@@ -201,7 +193,6 @@ serve(async (req) => {
       return aStart.getTime() - bStart.getTime();
     });
 
-    console.log(`Total events fetched: ${allEvents.length} from ${calendars.length} calendars`);
 
     return new Response(JSON.stringify({ 
       success: true, 

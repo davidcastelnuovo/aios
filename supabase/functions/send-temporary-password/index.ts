@@ -34,7 +34,6 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error("Email is required");
     }
 
-    console.log("Processing temporary password request for:", email);
 
     // Create Supabase admin client
     const supabaseAdmin = createClient(
@@ -59,7 +58,6 @@ const handler = async (req: Request): Promise<Response> => {
     const user = userData.users.find(u => u.email === email);
 
     if (!user) {
-      console.log("User not found:", email);
       // Return success even if user doesn't exist (security best practice)
       return new Response(
         JSON.stringify({ success: true, message: "If the email exists, a temporary password has been sent." }),
@@ -72,7 +70,6 @@ const handler = async (req: Request): Promise<Response> => {
 
     // Generate temporary password
     const temporaryPassword = generateTemporaryPassword();
-    console.log("Generated temporary password for user:", user.id);
 
     // Update user's password
     const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
@@ -118,7 +115,6 @@ const handler = async (req: Request): Promise<Response> => {
       `,
     });
 
-    console.log("Email sent successfully:", emailResponse);
 
     return new Response(
       JSON.stringify({ 

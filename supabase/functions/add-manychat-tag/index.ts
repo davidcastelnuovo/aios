@@ -39,7 +39,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log('Adding tag to subscriber:', { subscriberId, tagId, tenantId });
 
     // Get ManyChat API key from tenant_integrations
     const { data: integration, error: integrationError } = await supabase
@@ -58,7 +57,6 @@ Deno.serve(async (req) => {
     }
 
     if (!integration || !integration.is_active || !integration.api_key) {
-      console.log('ManyChat integration not active or API key missing');
       return new Response(
         JSON.stringify({ error: 'ManyChat integration not configured' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -66,7 +64,6 @@ Deno.serve(async (req) => {
     }
 
     // Add tag via ManyChat API
-    console.log('Calling ManyChat API to add tag');
     const manychatResponse = await fetch('https://api.manychat.com/fb/subscriber/addTag', {
       method: 'POST',
       headers: {
@@ -92,7 +89,6 @@ Deno.serve(async (req) => {
     }
 
     const result = await manychatResponse.json();
-    console.log('Successfully added tag:', result);
 
     return new Response(
       JSON.stringify({ success: true, data: result }),

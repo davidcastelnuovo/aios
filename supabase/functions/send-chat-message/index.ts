@@ -37,7 +37,6 @@ Deno.serve(async (req) => {
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     if (authError || !user) {
       console.error('❌ Authentication failed:', authError);
-      console.log('📋 Authorization header:', req.headers.get('Authorization') ? 'Present' : 'Missing');
       return new Response(JSON.stringify({ 
         error: 'Unauthorized',
         details: authError?.message 
@@ -47,7 +46,6 @@ Deno.serve(async (req) => {
       });
     }
     
-    console.log('✅ User authenticated:', user.id);
 
     const { clientId, leadId, message, channel = 'whatsapp', templateId, templateVariables } = await req.json();
 
@@ -123,7 +121,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log('📤 Sending message to subscriber:', contact.manychat_subscriber_id);
     
     // Get template if templateId provided
     let template = null;
@@ -203,8 +200,6 @@ Deno.serve(async (req) => {
       };
     }
 
-    console.log('📨 ManyChat request URL:', manychatUrl);
-    console.log('📨 ManyChat request payload:', JSON.stringify(manychatPayload, null, 2));
 
     const manychatResponse = await fetch(manychatUrl, {
       method: 'POST',
@@ -216,7 +211,6 @@ Deno.serve(async (req) => {
     });
 
     const manychatData = await manychatResponse.json();
-    console.log('📥 ManyChat response:', JSON.stringify(manychatData, null, 2));
 
     if (!manychatResponse.ok) {
       console.error('❌ ManyChat API error:', manychatData);

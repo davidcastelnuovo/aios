@@ -354,7 +354,6 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
   const { data: messagesData, isLoading: isLoadingMessages } = useQuery({
     queryKey: ["chat-messages", contactId, contactType, senderPhone, connectionUserId, messagePeriod],
     queryFn: async () => {
-      console.log("🔵 Fetching messages for:", { contactId, contactType, senderPhone, connectionUserId, messagePeriod });
       const dateFilter = getDateFilter();
       
       if (contactType === "unknown") {
@@ -378,7 +377,6 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
           throw error;
         }
 
-        console.log("✅ Fetched unknown messages:", data?.length);
         markAsReadMutation.mutate();
         return data?.reverse() || [];
       }
@@ -409,7 +407,6 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
         throw error;
       }
 
-      console.log("✅ Fetched messages:", data?.length);
       markAsReadMutation.mutate();
 
       return data?.reverse() || [];

@@ -184,7 +184,6 @@ async function executeTool(
   tenantId: string,
   userToken?: string
 ): Promise<{ success: boolean; result?: any; error?: string }> {
-  console.log('Executing tool:', toolCall.name, 'with args:', toolCall.args);
 
   try {
     switch (toolCall.name) {
@@ -295,7 +294,6 @@ async function executeTool(
                       .update({ google_calendar_event_id: calData.eventId })
                       .eq('id', data.id);
                     calendarSynced = true;
-                    console.log(`Calendar event created for task: ${title}`);
                   } else {
                     calendarSyncError = 'calendar_event_id_missing';
                   }
@@ -1919,7 +1917,6 @@ serve(async (req) => {
 
           while ((currentFinishReason === 'tool_calls' || Object.keys(currentToolCalls).length > 0) && toolRound < MAX_TOOL_ROUNDS) {
             toolRound++;
-            console.log(`Tool round ${toolRound}/${MAX_TOOL_ROUNDS}, tools:`, Object.values(currentToolCalls).map(t => t.name));
 
             // Build tool_calls array for the assistant message
             const toolCallsForMessage: any[] = [];

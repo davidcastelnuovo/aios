@@ -108,7 +108,6 @@ useEffect(() => {
   const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
     // Only handle SIGNED_IN events to avoid duplicate navigations
     if (event === 'SIGNED_IN' && session?.user) {
-      console.log("🔐 User signed in, resolving tenant...");
       
       // Try to process invitation if exists
       try {
@@ -146,7 +145,6 @@ useEffect(() => {
         // All users go to tasks page by default
         const landingPage = "tasks";
         
-        console.log("✅ Navigating to:", landingPage, "for tenant:", slug, "with roles:", roles);
         navigate(`/t/${slug}/${landingPage}`, { replace: true });
       } else {
         toast({

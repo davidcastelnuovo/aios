@@ -29,7 +29,6 @@ serve(async (req: Request) => {
       throw new Error("Unauthorized");
     }
 
-    console.log("Processing invitation for user:", user.email);
 
     // Check if user already has an active profile (status = 'active')
     const { data: profileData } = await supabase
@@ -40,7 +39,6 @@ serve(async (req: Request) => {
 
     // If user is already active, skip invitation processing
     if (profileData?.status === 'active') {
-      console.log("User already active, skipping invitation processing");
       return new Response(
         JSON.stringify({ success: true, message: "User already active" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
@@ -55,7 +53,6 @@ serve(async (req: Request) => {
       .maybeSingle();
 
     if (existingTenant) {
-      console.log("User already has a tenant, skipping");
       
       // Update profile status to active
       await supabase
@@ -80,7 +77,6 @@ serve(async (req: Request) => {
       .maybeSingle();
 
     if (!invitation) {
-      console.log("No valid invitation found for", user.email);
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -93,14 +89,12 @@ serve(async (req: Request) => {
 
     // If invitation was already used, skip processing
     if (invitation.used) {
-      console.log("Invitation already processed for", user.email);
       return new Response(
         JSON.stringify({ success: true, message: "ההזמנה כבר עובדה בעבר" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
       );
     }
 
-    console.log("Found invitation:", invitation.id);
 
     const metadata = invitation.metadata as any;
     const { fullName, role, agencyIds, modulePermissions, campaignerId, salesPersonId } = metadata;
@@ -108,7 +102,6 @@ serve(async (req: Request) => {
     // Auto-create sales_people record if role is sales_person, no salesPersonId provided, and fullName is available
     let effectiveSalesPersonId = salesPersonId;
     if (role === 'sales_person' && !salesPersonId && (fullName || user.email)) {
-      console.log("Auto-creating sales_people record for invitation user");
       const { data: newSalesPerson, error: spError } = await supabase
         .from("sales_people")
         .insert({
@@ -124,7 +117,6 @@ serve(async (req: Request) => {
         console.error("Error creating sales_people record:", spError);
       } else if (newSalesPerson) {
         effectiveSalesPersonId = newSalesPerson.id;
-        console.log("Created sales_people record with ID:", effectiveSalesPersonId);
         
         // Link to agencies if provided
         if (agencyIds && agencyIds.length > 0) {
@@ -254,7 +246,6 @@ serve(async (req: Request) => {
         updated_at: new Date().toISOString(),
       }, { onConflict: "user_id" });
 
-    console.log("Successfully processed invitation for", user.email);
 
     return new Response(
       JSON.stringify({ success: true, message: "ההזמנה עובדה בהצלחה" }),

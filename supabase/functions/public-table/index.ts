@@ -150,7 +150,6 @@ Deno.serve(async (req) => {
       return true;
     });
 
-    console.log(`📊 Public table: returning ${filteredRecords.length} records (total: ${allRecords.length})`);
 
     return new Response(
       JSON.stringify({

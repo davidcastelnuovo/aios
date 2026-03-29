@@ -91,7 +91,6 @@ serve(async (req) => {
           }
         }
 
-        console.log(`✅ Fetched ${allTables.length} tables (own: ${ownTables?.length || 0}, shared: ${allTables.length - (ownTables?.length || 0)})`);
 
         return new Response(JSON.stringify(allTables), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -143,7 +142,6 @@ serve(async (req) => {
 
         if (error) throw error;
 
-        console.log(`✅ Created table: ${name} (${table.id})${integration_type ? ` [${integration_type}]` : ''} agency_id: ${agency_id || 'none'} client_id: ${client_id || 'none'}`);
 
         return new Response(JSON.stringify(table), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -192,7 +190,6 @@ serve(async (req) => {
 
         if (error) throw error;
 
-        console.log(`✅ Updated table: ${table_id}`);
 
         return new Response(JSON.stringify({ table }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -217,7 +214,6 @@ serve(async (req) => {
 
         if (error) throw error;
 
-        console.log(`✅ Deleted table: ${table_id}`);
 
         return new Response(JSON.stringify({ success: true }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },

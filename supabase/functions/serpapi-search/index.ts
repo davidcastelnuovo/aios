@@ -386,7 +386,6 @@ Deno.serve(async (req) => {
             }));
           } else {
             // Use DataForSEO
-            console.log(`Searching for keyword: ${kw.keyword}`);
             
             const searchResponse = await fetch("https://api.dataforseo.com/v3/serp/google/organic/live/advanced", {
               method: "POST",
@@ -413,7 +412,6 @@ Deno.serve(async (req) => {
             }
 
             const searchData = await searchResponse.json();
-            console.log(`DataForSEO response for ${kw.keyword}: status=${searchData.status_code}`);
             
             if (searchData.status_code !== 20000) {
               console.error(`DataForSEO status error for ${kw.keyword}: ${searchData.status_message}`);

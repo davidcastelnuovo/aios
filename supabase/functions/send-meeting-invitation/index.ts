@@ -113,7 +113,6 @@ const handler = async (req: Request): Promise<Response> => {
       </html>
     `;
 
-    console.log("Sending meeting invitation to:", to_email);
 
     const emailResponse = await resend.emails.send({
       from: "Marketing Captain <onboarding@resend.dev>",
@@ -122,7 +121,6 @@ const handler = async (req: Request): Promise<Response> => {
       html: emailHtml,
     });
 
-    console.log("Email sent successfully:", emailResponse);
 
     return new Response(
       JSON.stringify({ success: true, data: emailResponse }),

@@ -47,7 +47,6 @@ serve(async (req: Request) => {
       throw new Error("tenant_id is required");
     }
 
-    console.log(`Starting duplicate merge for tenant: ${tenant_id}, dry_run: ${dry_run}`);
 
     // Step 1: Find all duplicate phone groups
     const { data: duplicatePhones, error: dupError } = await supabase.rpc('get_duplicate_lead_phones', {
@@ -56,7 +55,6 @@ serve(async (req: Request) => {
 
     if (dupError) {
       // If RPC doesn't exist, do it manually
-      console.log("RPC not found, running manual query...");
     }
 
     // Manual query to find duplicates - need to paginate to get all leads
@@ -78,7 +76,6 @@ serve(async (req: Request) => {
       if (!pageLeads || pageLeads.length === 0) break;
       
       allLeads = [...allLeads, ...pageLeads];
-      console.log(`Fetched ${pageLeads.length} leads, total: ${allLeads.length}`);
       
       if (pageLeads.length < pageSize) break;
       from += pageSize;
@@ -138,7 +135,6 @@ serve(async (req: Request) => {
       }
     }
 
-    console.log(`Found ${duplicateGroups.length} duplicate groups`);
 
     const results = {
       groups_processed: 0,
@@ -153,7 +149,6 @@ serve(async (req: Request) => {
 
     // Process each duplicate group
     for (const group of duplicateGroups) {
-      console.log(`Processing group: ${group.normalized_phone} with ${group.leads.length} leads`);
 
       // Sort leads to find master:
       // 1. Has updates/tasks/messages (more is better)
@@ -310,7 +305,6 @@ serve(async (req: Request) => {
       results.details.push(groupResult);
     }
 
-    console.log(`Merge complete. Processed ${results.groups_processed} groups, deleted ${results.leads_deleted} leads`);
 
     return new Response(JSON.stringify(results), {
       status: 200,

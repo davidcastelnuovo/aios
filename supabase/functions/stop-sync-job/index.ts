@@ -69,7 +69,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log('Stopped jobs:', data);
 
     return new Response(
       JSON.stringify({ success: true, stoppedJobs: data?.length || 0 }),

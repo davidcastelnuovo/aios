@@ -67,7 +67,6 @@ serve(async (req: Request) => {
       
       if (targetUser) {
         targetUserId = targetUser.id;
-        console.log(`Found user by email ${email}: ${targetUserId}`);
       } else {
         throw new Error(`User with email ${email} not found`);
       }
@@ -82,7 +81,6 @@ serve(async (req: Request) => {
       throw new Error("Cannot delete yourself");
     }
 
-    console.log(`Deleting user: ${targetUserId}`);
 
     // First, get the user's profile to check for campaigner_id
     const { data: profile } = await supabaseAdmin
@@ -147,13 +145,11 @@ serve(async (req: Request) => {
     if (deleteError) {
       // If user not found in auth, it's okay - we already cleaned up the database
       if (deleteError.message?.includes("User not found") || deleteError.status === 404) {
-        console.log("User not found in auth, but database records cleaned up");
       } else {
         console.error("Error deleting user from auth:", deleteError);
         throw deleteError;
       }
     } else {
-      console.log("User deleted successfully from auth");
     }
 
     return new Response(

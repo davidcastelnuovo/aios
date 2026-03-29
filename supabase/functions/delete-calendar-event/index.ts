@@ -24,7 +24,6 @@ serve(async (req) => {
     }
 
     const { eventId } = await req.json();
-    console.log('Deleting calendar event:', { eventId, userId: user.id });
 
     if (!eventId) {
       throw new Error('Missing required field: eventId');
@@ -46,7 +45,6 @@ serve(async (req) => {
 
     // Refresh token if expired
     if (expiresAt <= new Date()) {
-      console.log('Token expired, refreshing...');
       
       const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
       const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET');
@@ -84,11 +82,9 @@ serve(async (req) => {
         })
         .eq('user_id', user.id);
 
-      console.log('Token refreshed successfully');
     }
 
     // Delete event from Google Calendar
-    console.log('Sending delete request to Google Calendar API...');
 
     const calendarResponse = await fetch(
       `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
@@ -106,7 +102,6 @@ serve(async (req) => {
       throw new Error(errorData.error?.message || 'Failed to delete event');
     }
 
-    console.log('Event deleted successfully');
 
     return new Response(JSON.stringify({ 
       success: true

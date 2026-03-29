@@ -98,14 +98,10 @@ serve(async (req: Request) => {
       }
     }
 
-    console.log(`${resend ? 'Resending' : 'Inviting'} user: ${email}${role ? ` with role: ${role}` : ''}`);
-    console.log('Module permissions received:', modulePermissions);
-    console.log('Tenant ID:', tenantIdFinal);
 
     // Auto-create sales_people record if role is sales_person and no salesPersonId provided
     let effectiveSalesPersonId = salesPersonId;
     if (role === 'sales_person' && !salesPersonId && fullName) {
-      console.log("Auto-creating sales_people record for:", fullName);
       const { data: newSalesPerson, error: spError } = await supabaseAdmin
         .from("sales_people")
         .insert({
@@ -121,7 +117,6 @@ serve(async (req: Request) => {
         console.error("Error creating sales_people record:", spError);
       } else if (newSalesPerson) {
         effectiveSalesPersonId = newSalesPerson.id;
-        console.log("Created sales_people record with ID:", effectiveSalesPersonId);
         
         // Link to agencies if provided
         if (agencyIds && agencyIds.length > 0) {
@@ -141,7 +136,6 @@ serve(async (req: Request) => {
     const userExists = existingUser?.users?.some(u => u.email === email);
 
     if (userExists) {
-      console.log("User already exists - updating their details");
       
       // Get existing user ID
       const existingUserData = existingUser?.users?.find(u => u.email === email);
@@ -271,7 +265,6 @@ serve(async (req: Request) => {
             role: role || "member",
           });
         wasAddedToTenant = true;
-        console.log(`User ${email} was added to tenant ${tenantIdFinal}`);
       }
 
       // If user was added to a new tenant, return success
@@ -334,7 +327,6 @@ serve(async (req: Request) => {
       throw tokenError;
     }
 
-    console.log("Invitation token created:", invitation);
 
     // Build simple invitation link to auth page
     const baseUrlInput2 = baseUrl || "https://after-lead.lovable.app";
@@ -361,7 +353,6 @@ serve(async (req: Request) => {
         console.error("Error sending invitation email:", inviteError);
         throw new Error(inviteError.message || "Failed to send invitation email");
       } else {
-        console.log("Invitation email sent successfully via Supabase Auth to:", email);
         const newUserId = inviteData?.user?.id;
         if (newUserId) {
           // Create profile with pending status so the user appears in the org list immediately
@@ -390,7 +381,6 @@ serve(async (req: Request) => {
 
           // *** CRITICAL FIX: Insert module permissions immediately for new users ***
           if (modulePermissions && modulePermissions.length > 0) {
-            console.log("Inserting permissions for new user:", modulePermissions);
             const permissionsToInsert = modulePermissions.map((module) => ({
               user_id: newUserId,
               module: module,
@@ -404,7 +394,6 @@ serve(async (req: Request) => {
             if (permError) {
               console.error("Error inserting permissions:", permError);
             } else {
-              console.log("Successfully inserted permissions for new user");
             }
           }
 

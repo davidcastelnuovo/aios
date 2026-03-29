@@ -22,7 +22,6 @@ serve(async (req) => {
     const envAppSecret = Deno.env.get('FACEBOOK_APP_SECRET');
     
     if (envAppId && envAppSecret) {
-      console.log('Using Facebook Master App credentials');
       return { appId: envAppId, appSecret: envAppSecret };
     }
     
@@ -48,7 +47,6 @@ serve(async (req) => {
       }
     }
     
-    console.log('Facebook auth action:', action);
 
     // Generate OAuth URL
     if (action === 'get_auth_url') {
@@ -106,7 +104,6 @@ serve(async (req) => {
       authUrl.searchParams.set('state', `${tenant_id}:${state}`);
       authUrl.searchParams.set('response_type', 'code');
 
-      console.log('Generated auth URL with central callback:', centralCallbackUrl);
 
       return new Response(
         JSON.stringify({ auth_url: authUrl.toString() }),
@@ -228,7 +225,6 @@ serve(async (req) => {
         pagesUrl = pagesData.paging?.next || null;
       }
 
-      console.log(`User pages fetched: ${allPages.length} total - Page tokens are permanent!`);
 
       // Check if integration already exists
       const { data: existingInt } = await supabase
@@ -271,7 +267,6 @@ serve(async (req) => {
       redirectUrl.searchParams.set('facebook_success', 'true');
       redirectUrl.searchParams.set('pages_count', allPages.length.toString());
 
-      console.log('Redirecting user to:', redirectUrl.toString());
 
       return new Response(null, {
         status: 302,
@@ -367,7 +362,6 @@ serve(async (req) => {
       );
       const pagesData = await pagesResponse.json();
 
-      console.log('User pages:', pagesData);
 
       // Check if integration already exists
       const { data: existingInt } = await supabase
@@ -517,7 +511,6 @@ serve(async (req) => {
         
         if (sourceIntegration) {
           pagesSource = sourceIntegration;
-          console.log('Using source integration for page access token:', sourceIntegration.id);
         }
       }
 

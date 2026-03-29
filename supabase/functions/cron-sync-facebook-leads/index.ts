@@ -29,7 +29,6 @@ serve(async (req) => {
   const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const supabase = createClient(supabaseUrl, supabaseKey);
 
-  console.log('🔄 Starting scheduled Facebook leads sync...');
 
   try {
     // Get all active facebook_lead_ads integrations
@@ -45,7 +44,6 @@ serve(async (req) => {
     }
 
     if (!integrations || integrations.length === 0) {
-      console.log('No active Facebook Lead Ads integrations found');
       return new Response(JSON.stringify({ 
         success: true, 
         message: 'No active integrations',
@@ -54,14 +52,12 @@ serve(async (req) => {
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    console.log(`Found ${integrations.length} active integrations`);
 
     let totalSynced = 0;
     let totalSkipped = 0;
     const errors: string[] = [];
 
     for (const integration of integrations) {
-      console.log(`\n📦 Processing integration ${integration.id} for tenant ${integration.tenant_id}`);
 
       // Get access token - check shared integration if needed
       let accessToken = integration.api_key;
@@ -72,11 +68,9 @@ serve(async (req) => {
           .eq('id', integration.shared_from_integration_id)
           .single();
         accessToken = sourceInt?.api_key;
-        console.log('Using access token from shared integration');
       }
 
       if (!accessToken) {
-        console.log(`⚠️ No access token for integration ${integration.id}, skipping`);
         errors.push(`Integration ${integration.id}: No access token`);
         continue;
       }
@@ -86,11 +80,9 @@ serve(async (req) => {
       const formEntries = Object.entries(formMappings);
 
       if (formEntries.length === 0) {
-        console.log(`⚠️ No form mappings for integration ${integration.id}, skipping`);
         continue;
       }
 
-      console.log(`Found ${formEntries.length} mapped forms`);
 
       // Determine since timestamp: use last_sync_at if available, otherwise 24 hours ago
       const lastSyncAt = integration.last_sync_at 
@@ -98,11 +90,9 @@ serve(async (req) => {
         : null;
       const sinceDate = lastSyncAt || new Date(Date.now() - 24 * 60 * 60 * 1000);
       const sinceTimestamp = Math.floor(sinceDate.getTime() / 1000);
-      console.log(`Fetching leads since: ${sinceDate.toISOString()} (${lastSyncAt ? 'from last_sync_at' : 'default 24h'})`);
 
       // Process each mapped form
       for (const [formId, mapping] of formEntries) {
-        console.log(`\n📝 Syncing form: ${mapping.form_name || formId}`);
 
         try {
 
@@ -119,7 +109,6 @@ serve(async (req) => {
           const fbData = await fbResponse.json();
           const leads = fbData.data || [];
 
-          console.log(`Retrieved ${leads.length} leads from Facebook for form ${formId}`);
 
           for (const fbLead of leads) {
             const leadgenId = fbLead.id;
@@ -133,7 +122,6 @@ serve(async (req) => {
               .limit(1);
 
             if (existingLeads && existingLeads.length > 0) {
-              console.log(`⏭️ Lead ${leadgenId} already exists, skipping`);
               totalSkipped++;
               continue;
             }
@@ -147,7 +135,6 @@ serve(async (req) => {
               .limit(1);
 
             if (deletedLead && deletedLead.length > 0) {
-              console.log(`🗑️ Lead ${leadgenId} was previously deleted, skipping`);
               totalSkipped++;
               continue;
             }
@@ -201,7 +188,6 @@ serve(async (req) => {
               continue;
             }
 
-            console.log(`✅ Created new lead: ${newLead.id}`);
             totalSynced++;
 
             // Apply tag if configured
@@ -218,7 +204,6 @@ serve(async (req) => {
               if (tagError) {
                 console.error(`⚠️ Error applying tag to lead ${newLead.id}:`, tagError);
               } else {
-                console.log(`🏷️ Tag ${mapping.tag_id} applied to lead ${newLead.id}`);
               }
             }
 
@@ -249,7 +234,6 @@ serve(async (req) => {
               });
 
               if (automationResponse.ok) {
-                console.log(`✅ lead_created automation triggered for ${newLead.id}`);
               } else {
                 console.error(`⚠️ Failed to trigger automation:`, await automationResponse.text());
               }
@@ -261,7 +245,6 @@ serve(async (req) => {
           // Handle pagination if there are more leads
           let nextUrl = fbData.paging?.next;
           while (nextUrl) {
-            console.log('Fetching next page of leads...');
             const nextResponse = await fetch(nextUrl);
             if (!nextResponse.ok) break;
 
@@ -293,7 +276,6 @@ serve(async (req) => {
                 .limit(1);
 
               if (deletedLead && deletedLead.length > 0) {
-                console.log(`🗑️ Lead ${leadgenId} was previously deleted, skipping`);
                 totalSkipped++;
                 continue;
               }
@@ -357,7 +339,6 @@ serve(async (req) => {
                 if (tagError) {
                   console.error(`⚠️ Error applying tag to lead ${newLead.id}:`, tagError);
                 } else {
-                  console.log(`🏷️ Tag ${mapping.tag_id} applied to lead ${newLead.id}`);
                 }
               }
 
@@ -409,7 +390,6 @@ serve(async (req) => {
 
     // ========== PASS 2: Flow-based form scanning ==========
     // Find flow trigger steps that reference facebook_form_id not covered by any integration form_mappings
-    console.log('\n🔄 Pass 2: Checking flow trigger steps for unmapped forms...');
     
     const { data: allFlowSteps } = await supabase
       .from('automation_flow_steps')
@@ -439,7 +419,6 @@ serve(async (req) => {
         
         const key = `${step.tenant_id}:${formId}`;
         if (coveredFormIds.has(key)) {
-          console.log(`⏭️ Form ${formId} already covered by integration for tenant ${step.tenant_id}`);
           continue;
         }
         
@@ -463,10 +442,8 @@ serve(async (req) => {
         }
       }
       
-      console.log(`Found ${flowFormMap.size} unmapped flow form(s) to sync`);
       
       for (const [key, info] of flowFormMap) {
-        console.log(`\n📝 Flow-syncing form ${info.formId} for tenant ${info.tenantId}`);
         
         // Get access token from the referenced integration
         const { data: fbInt } = await supabase
@@ -487,7 +464,6 @@ serve(async (req) => {
         }
         
         if (!flowToken) {
-          console.log(`⚠️ No access token for flow integration ${info.integrationId}`);
           continue;
         }
         
@@ -520,7 +496,6 @@ serve(async (req) => {
           
           const fbData = await fbResponse.json();
           const leads = fbData.data || [];
-          console.log(`Retrieved ${leads.length} leads from Facebook for flow form ${info.formId}`);
           
           for (const fbLead of leads) {
             const leadgenId = fbLead.id;
@@ -625,7 +600,6 @@ serve(async (req) => {
               continue;
             }
             
-            console.log(`✅ Flow-synced lead created: ${newLead.id}`);
             totalSynced++;
             
             // Build fb_ fields for trigger payload
@@ -661,7 +635,6 @@ serve(async (req) => {
                   tenant_id: info.tenantId,
                 }),
               });
-              console.log(`✅ Flow automation ${info.automationId} triggered directly for ${newLead.id}`);
             } catch (e) {
               console.error('Flow automation trigger error:', e);
             }
@@ -682,7 +655,6 @@ serve(async (req) => {
     }
     // ========== END PASS 2 ==========
 
-    console.log(`\n✅ Sync completed: ${totalSynced} synced, ${totalSkipped} skipped, ${errors.length} errors`);
 
     return new Response(JSON.stringify({
       success: true,

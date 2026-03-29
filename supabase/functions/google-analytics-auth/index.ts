@@ -15,7 +15,6 @@ serve(async (req) => {
   const url = new URL(req.url);
   const action = url.searchParams.get('action');
 
-  console.log('Google Analytics Auth - Action:', action);
 
   // OAuth configuration
   const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
@@ -71,7 +70,6 @@ serve(async (req) => {
       }
       authUrl.searchParams.set('state', state);
 
-      console.log('Generated auth URL for Google Analytics');
 
       return new Response(
         JSON.stringify({ authUrl: authUrl.toString() }),
@@ -271,7 +269,6 @@ serve(async (req) => {
 
       // Check if token needs refresh
       if (settings?.expires_at && new Date(settings.expires_at) < new Date()) {
-        console.log('Token expired, refreshing...');
         
         const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
           method: 'POST',
@@ -309,7 +306,6 @@ serve(async (req) => {
       );
 
       const accountsData = await accountsResponse.json();
-      console.log('GA4 accounts response:', JSON.stringify(accountsData));
 
       if (accountsData.error) {
         throw new Error(accountsData.error.message);

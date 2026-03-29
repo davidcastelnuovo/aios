@@ -664,7 +664,6 @@ export default function DynamicTableView() {
       
       // If scenario is already selected in table settings, use it directly
       if (scenarioId) {
-        console.log('Patching dates and running existing Make.com scenario:', scenarioId);
         
         // Find the latest date in existing records to avoid fetching duplicates
         const now = new Date();
@@ -679,7 +678,6 @@ export default function DynamicTableView() {
           if (latestDate) {
             // Start from the latest date we have (will upsert, so no true duplicates)
             startDate = latestDate;
-            console.log('Starting from latest existing date:', startDate);
           } else {
             // Fallback to 30 days ago
             const thirtyDaysAgo = new Date(now);
@@ -716,7 +714,6 @@ export default function DynamicTableView() {
               end_date: endDate,
             },
           });
-          console.log(`Blueprint dates patched: ${startDate} → ${endDate}`);
         } catch (patchErr) {
           console.warn('Failed to patch dates, running scenario anyway:', patchErr);
         }
@@ -761,7 +758,6 @@ export default function DynamicTableView() {
       const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/webhook-google-ads-sync`;
       
       // Clone the template scenario
-      console.log('Cloning template scenario for Google Ads sync...');
       const cloneResponse = await supabase.functions.invoke('make-api', {
         body: {
           action: 'clone_scenario',
@@ -829,13 +825,11 @@ export default function DynamicTableView() {
             end_date: cloneEndDate,
           },
         });
-        console.log(`Blueprint dates patched after clone: ${cloneStartDate} → ${cloneEndDate}`);
       } catch (patchErr) {
         console.warn('Failed to patch dates after clone, running anyway:', patchErr);
       }
       
       // Run the scenario
-      console.log('Running Make.com scenario:', scenarioId);
       const runResponse = await supabase.functions.invoke('make-api', {
         body: {
           action: 'run_scenario',

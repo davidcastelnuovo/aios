@@ -33,12 +33,10 @@ serve(async (req) => {
       const token = url.searchParams.get('hub.verify_token');
       const challenge = url.searchParams.get('hub.challenge');
 
-      console.log('Facebook webhook verification request:', { mode, token, challenge });
 
       // The verify_token should be stored in tenant_integrations settings
       // For now, we accept any verification with mode = 'subscribe'
       if (mode === 'subscribe' && challenge) {
-        console.log('Webhook verified successfully');
         return new Response(challenge, { 
           status: 200,
           headers: { 'Content-Type': 'text/plain' }
@@ -51,14 +49,12 @@ serve(async (req) => {
     // Handle POST - Lead notification from Facebook
     if (req.method === 'POST') {
       const body = await req.json();
-      console.log('Received Facebook webhook:', JSON.stringify(body, null, 2));
 
       // Verify Facebook signature if app secret is configured
       if (facebookAppSecret) {
         const signature = req.headers.get('x-hub-signature-256');
         if (signature) {
           // In production, verify the signature
-          console.log('Signature present, verification would happen here');
         }
       }
 
@@ -71,7 +67,6 @@ serve(async (req) => {
               const formId = change.value.form_id;
               const pageId = change.value.page_id;
 
-              console.log('Processing lead:', { leadgenId, formId, pageId });
 
               // Find the integration for this page/form
               const { data: integrations, error: intError } = await supabase
@@ -85,14 +80,12 @@ serve(async (req) => {
                 continue;
               }
 
-              console.log('Found integrations:', integrations?.length);
 
               // Find matching integration by form_id in form_mappings first, then by page_id
               let integration = integrations?.find(i => {
                 const settings = i.settings as any;
                 // Check if form_id exists in form_mappings
                 if (settings?.form_mappings?.[formId]) {
-                  console.log('Found integration by form_id:', formId, 'tenant:', i.tenant_id);
                   return true;
                 }
                 return false;
@@ -100,7 +93,6 @@ serve(async (req) => {
 
               // If no integration mapping found, check flow trigger steps for this form_id
               if (!integration) {
-                console.log('No integration form mapping for form:', formId, '- checking flow trigger steps...');
                 
                 // Query automation_flow_steps for trigger steps referencing this form_id
                 const { data: flowSteps } = await supabase
@@ -110,11 +102,9 @@ serve(async (req) => {
                   .filter('configuration->>facebook_form_id', 'eq', formId);
                 
                 if (!flowSteps || flowSteps.length === 0) {
-                  console.log('No flow trigger steps reference form:', formId, '- skipping');
                   continue;
                 }
                 
-                console.log(`Found ${flowSteps.length} flow trigger step(s) for form ${formId}`);
                 
                 // Track which tenants we've already processed for this leadgen_id
                 const processedTenants = new Set<string>();
@@ -125,12 +115,10 @@ serve(async (req) => {
                   const fbIntegrationId = stepConfig?.facebook_integration_id;
                   
                   if (processedTenants.has(flowTenantId)) {
-                    console.log('Already processed tenant', flowTenantId, 'for this lead');
                     continue;
                   }
                   
                   if (!fbIntegrationId) {
-                    console.log('Flow step has no facebook_integration_id, skipping');
                     continue;
                   }
                   
@@ -143,7 +131,6 @@ serve(async (req) => {
                     .maybeSingle();
                   
                   if (!flowAutomation) {
-                    console.log('Flow automation not active:', flowStep.automation_id);
                     continue;
                   }
                   
@@ -166,7 +153,6 @@ serve(async (req) => {
                   }
                   
                   if (!flowAccessToken) {
-                    console.log('No access token for flow integration', fbIntegrationId);
                     continue;
                   }
                   
@@ -179,7 +165,6 @@ serve(async (req) => {
                     .limit(1);
                   
                   if (existingLeads && existingLeads.length > 0) {
-                    console.log('Lead already exists in tenant', flowTenantId, 'for leadgen', leadgenId);
                     processedTenants.add(flowTenantId);
                     continue;
                   }
@@ -252,7 +237,6 @@ serve(async (req) => {
                   }
                   
                   processedTenants.add(flowTenantId);
-                  console.log('✅ Flow-based lead created:', newFlowLead.id, 'in tenant', flowTenantId);
                   
                   // Trigger flow automation directly by automationId (source: 'flow')
                   try {
@@ -280,7 +264,6 @@ serve(async (req) => {
                         },
                       }),
                     });
-                    console.log('🚀 Flow automation', flowStep.automation_id, 'triggered directly for:', newFlowLead.id);
                   } catch (e) {
                     console.error('Error triggering flow automation:', e);
                   }
@@ -289,7 +272,6 @@ serve(async (req) => {
                 continue;
               }
               
-              console.log('Using integration for tenant:', integration.tenant_id);
 
               let accessToken = integration.api_key;
               const settings = integration.settings as any;
@@ -324,7 +306,6 @@ serve(async (req) => {
               }
 
               const leadData = await leadResponse.json();
-              console.log('Lead data from Facebook:', JSON.stringify(leadData, null, 2));
 
               // Parse lead fields
               const fieldData: Record<string, string> = {};
@@ -406,7 +387,6 @@ serve(async (req) => {
               let existingLead = null;
               
               if (normalizedPhone || normalizedEmail) {
-                console.log(`🔍 Checking for existing lead - phone: ${normalizedPhone}, email: ${normalizedEmail}`);
                 
                 // First try to find by phone
                 if (normalizedPhone) {
@@ -418,7 +398,6 @@ serve(async (req) => {
                   existingLead = leadsByPhone?.find(l => normalizePhone(l.phone) === normalizedPhone) || null;
                   
                   if (existingLead) {
-                    console.log(`📌 Found existing lead by phone: ${existingLead.id} (${existingLead.company_name})`);
                   }
                 }
                 
@@ -434,14 +413,12 @@ serve(async (req) => {
                   
                   if (leadByEmail) {
                     existingLead = leadByEmail;
-                    console.log(`📌 Found existing lead by email: ${existingLead.id} (${existingLead.company_name})`);
                   }
                 }
               }
               
               // If existing lead found - update with new info if available
               if (existingLead) {
-                console.log(`🔄 Lead already exists, checking for new information to update...`);
                 
                 const updates: Record<string, any> = {};
                 let hasUpdates = false;
@@ -483,10 +460,8 @@ serve(async (req) => {
                   if (updateError) {
                     console.error('❌ Error updating existing lead:', updateError);
                   } else {
-                    console.log(`✅ Updated existing lead with new info:`, Object.keys(updates));
                   }
                 } else {
-                  console.log(`ℹ️ No new information to add, ignoring duplicate lead`);
                 }
                 
                 // Apply tag to existing lead if configured
@@ -511,7 +486,6 @@ serve(async (req) => {
                     if (tagError) {
                       console.error('Error applying tag to existing lead:', tagError);
                     } else {
-                      console.log('New tag applied to existing lead:', formMappings.tag_id);
                     }
                   }
                 }
@@ -555,7 +529,6 @@ serve(async (req) => {
               if (insertError) {
                 console.error('Error inserting lead:', insertError);
               } else {
-                console.log('Lead created successfully:', newLead.id);
 
                 // Insert into lead_sales_people junction table for multi-salesperson support
                 if (salesPersonIds.length > 0) {
@@ -572,7 +545,6 @@ serve(async (req) => {
                   if (junctionError) {
                     console.error('Error inserting lead_sales_people:', junctionError);
                   } else {
-                    console.log('Assigned lead to', salesPersonIds.length, 'salespeople');
                   }
                 }
 
@@ -590,7 +562,6 @@ serve(async (req) => {
                   if (tagError) {
                     console.error('Error applying tag to lead:', tagError);
                   } else {
-                    console.log('Tag applied to lead:', formMappings.tag_id);
                   }
                 }
 
@@ -617,7 +588,6 @@ serve(async (req) => {
                     },
                   };
                   
-                  console.log('🚀 Triggering CRM automations for new Facebook lead:', newLead.id);
                   const triggerRes = await fetch(triggerUrl, {
                     method: 'POST',
                     headers: {
@@ -628,7 +598,6 @@ serve(async (req) => {
                   });
                   
                   const triggerResult = await triggerRes.json();
-                  console.log('CRM automation trigger result:', triggerResult);
                 } catch (triggerError) {
                   console.error('Error triggering CRM automations:', triggerError);
                 }
@@ -655,7 +624,6 @@ serve(async (req) => {
                     },
                   };
                   
-                  console.log('🚀 Triggering inbound_webhook_lead (CRM) for Facebook lead:', newLead.id);
                   const inboundRes = await fetch(inboundTriggerUrl, {
                     method: 'POST',
                     headers: {
@@ -666,7 +634,6 @@ serve(async (req) => {
                   });
                   
                   const inboundResult = await inboundRes.json();
-                  console.log('Inbound webhook lead trigger result:', inboundResult);
                 } catch (inboundError) {
                   console.error('Error triggering inbound_webhook_lead:', inboundError);
                 }

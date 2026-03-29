@@ -56,7 +56,6 @@ Deno.serve(async (req) => {
     const slug = tenantSlug || ''
     const chatLink = slug ? `${baseUrl}/t/${slug}/team-chat` : `${baseUrl}/team-chat`
 
-    console.log(`🔔 Notify request for channel ${channelId} by user ${user.id}`)
 
     // Get channel-level notification_group_link
     const { data: channelData } = await supabaseAdmin
@@ -75,7 +74,6 @@ Deno.serve(async (req) => {
       .neq('user_id', user.id)
 
     if (membersError || !members?.length) {
-      console.log('No other members to notify')
       return new Response(JSON.stringify({ success: true, notified: 0 }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -166,7 +164,6 @@ Deno.serve(async (req) => {
       })
     }
 
-    console.log(`📱 Sending to ${phonesToNotify.length} phones + ${groupsToNotify.size} groups`)
 
     // Find Green API integration
     let integration: any = null
@@ -222,7 +219,6 @@ Deno.serve(async (req) => {
         )
         if (response.ok) {
           sentCount++
-          console.log(`✅ Sent to ${label}`)
         } else {
           const errText = await response.text()
           console.error(`❌ Failed ${label}: ${errText}`)
@@ -236,7 +232,6 @@ Deno.serve(async (req) => {
 
     // If targetOverride is provided, skip normal priority logic and send only to specified target
     if (targetOverride) {
-      console.log(`🎯 Target override: ${JSON.stringify(targetOverride)}`)
       
       if (targetOverride.type === 'group') {
         // Find group link from all sources: channel > member override > profile
@@ -314,7 +309,6 @@ Deno.serve(async (req) => {
     }
 
     const totalTargets = phonesToNotify.length + groupsToNotify.size
-    console.log(`✅ Sent to ${sentCount}/${totalTargets} targets`)
 
     return new Response(JSON.stringify({
       success: true,

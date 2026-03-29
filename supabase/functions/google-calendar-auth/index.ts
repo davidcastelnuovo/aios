@@ -28,7 +28,6 @@ serve(async (req) => {
       );
 
       // Get user from state parameter if needed, or use service role to update
-      console.log('Exchanging code for tokens...');
 
       const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
       const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET');
@@ -49,7 +48,6 @@ serve(async (req) => {
       });
 
       const tokens = await tokenResponse.json();
-      console.log('Token response:', { hasAccessToken: !!tokens.access_token, hasRefreshToken: !!tokens.refresh_token });
 
       if (!tokens.access_token || !tokens.refresh_token) {
         throw new Error('Failed to get tokens from Google');
@@ -72,7 +70,6 @@ serve(async (req) => {
         if (userInfoResponse.ok) {
           const userInfo = await userInfoResponse.json();
           googleEmail = userInfo.email;
-          console.log('Google account email:', googleEmail);
         }
       } catch (e) {
         console.error('Failed to fetch Google user info:', e);
@@ -98,7 +95,6 @@ serve(async (req) => {
         throw dbError;
       }
 
-      console.log('Tokens stored successfully');
 
       // Redirect back to the app - return HTML that closes the popup
       return new Response(`
@@ -151,11 +147,9 @@ serve(async (req) => {
       throw new Error('Unauthorized - user not authenticated');
     }
     
-    console.log('Authenticated user:', user.id, user.email);
 
     // Handle disconnect (DELETE method or action: 'disconnect')
     if (req.method === 'DELETE') {
-      console.log('Disconnecting calendar for user:', user.id);
       
       // Use service role key to delete (bypasses RLS)
       const serviceClient = createClient(
@@ -173,7 +167,6 @@ serve(async (req) => {
         throw deleteError;
       }
 
-      console.log('Calendar disconnected successfully for user:', user.id);
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -187,7 +180,6 @@ serve(async (req) => {
 
     // Handle disconnect via action (for POST requests from supabase.functions.invoke)
     if (action === 'disconnect') {
-      console.log('Disconnecting calendar for user (via action):', user.id);
       
       const serviceClient = createClient(
         Deno.env.get('SUPABASE_URL') ?? '',
@@ -204,7 +196,6 @@ serve(async (req) => {
         throw deleteError;
       }
 
-      console.log('Calendar disconnected successfully for user:', user.id);
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -214,7 +205,6 @@ serve(async (req) => {
     const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET');
     const redirectUri = `${Deno.env.get('SUPABASE_URL')}/functions/v1/google-calendar-auth?action=callback`;
 
-    console.log('Calendar auth request:', { action, userId: user.id });
 
     // Initial auth request - redirect to Google
     if (action === 'init') {
@@ -223,7 +213,6 @@ serve(async (req) => {
         throw new Error('Missing GOOGLE_CLIENT_ID secret');
       }
       
-      console.log('Creating auth URL for user:', user.id, user.email);
       
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({
         client_id: clientId,
@@ -235,7 +224,6 @@ serve(async (req) => {
         state: user.id, // Pass user ID in state for callback
       })}`;
 
-      console.log('Auth URL created successfully, redirecting to Google auth...');
 
       return new Response(JSON.stringify({ authUrl }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

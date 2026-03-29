@@ -63,7 +63,6 @@ serve(async (req: Request) => {
       throw new Error("User ID is required");
     }
 
-    console.log(`Updating agencies for user ${userId}:`, agencyIds);
 
     // Get user profile to check if they have a campaigner
     const { data: profile, error: profileError } = await supabaseAdmin
@@ -81,7 +80,6 @@ serve(async (req: Request) => {
 
     // Only update agencies if user has a campaigner_id
     if (!campaignerId) {
-      console.log("User has no campaigner_id, cannot update agencies");
       return new Response(
         JSON.stringify({ 
           error: "User is not linked to a campaigner. Please link user to a campaigner first." 

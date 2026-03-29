@@ -98,7 +98,6 @@ Deno.serve(async (req) => {
       nextUrl = data.paging?.next || null;
     }
 
-    console.log(`Fetched ${allAdAccounts.length} ad accounts for tenant ${tenantId}`);
 
     return new Response(JSON.stringify({ 
       ad_accounts: allAdAccounts.map(acc => ({

@@ -148,7 +148,6 @@ export default function ManyChatSettings() {
           filter: `tenant_id=eq.${tenantId}`,
         },
         (payload) => {
-          console.log('Sync job update:', payload);
           if (payload.new) {
             const newJob = payload.new as any;
             setCurrentJob({

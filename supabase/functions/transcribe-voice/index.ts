@@ -29,7 +29,6 @@ serve(async (req) => {
       });
     }
 
-    console.log('🎤 Transcribing audio chunk:', audioFile.name, 'size:', audioFile.size);
 
     // Prepare form data for OpenAI
     const openaiFormData = new FormData();
@@ -75,7 +74,6 @@ serve(async (req) => {
 
     const result = await response.json();
     const text = result.text;
-    console.log('✅ Chunk transcription complete, length:', text?.length);
 
     // GPT spelling correction is DISABLED per-chunk to save time and reduce failure risk.
     // Spelling correction runs once on the full transcript in transcribe-recording.

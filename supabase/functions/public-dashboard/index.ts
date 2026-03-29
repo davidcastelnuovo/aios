@@ -171,7 +171,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    console.log(`📊 Public dashboard: returning ${allRecords.length} records from ${allTables.length} tables`);
 
     return new Response(
       JSON.stringify({

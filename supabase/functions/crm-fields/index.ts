@@ -57,7 +57,6 @@ serve(async (req) => {
 
         if (error) throw error;
 
-        console.log(`✅ Fetched ${fields?.length || 0} fields for table ${tableId}`);
 
         return new Response(JSON.stringify({ fields: fields || [] }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -140,7 +139,6 @@ serve(async (req) => {
           throw error;
         }
 
-        console.log(`✅ Created field: ${name} (${key}) for table ${table_id}`);
 
         return new Response(JSON.stringify({ field }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -184,7 +182,6 @@ serve(async (req) => {
 
         if (error) throw error;
 
-        console.log(`✅ Updated field: ${field_id}`);
 
         return new Response(JSON.stringify({ field }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -219,7 +216,6 @@ serve(async (req) => {
 
         if (error) throw error;
 
-        console.log(`✅ Deleted field: ${field_id}`);
 
         return new Response(JSON.stringify({ success: true }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },

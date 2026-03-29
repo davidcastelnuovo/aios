@@ -40,7 +40,6 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  console.log('🕐 Starting cron sync for Facebook Insights tables...');
 
   try {
     const supabase = createClient(
@@ -59,7 +58,6 @@ Deno.serve(async (req) => {
       throw tablesError;
     }
 
-    console.log(`📊 Found ${tables?.length || 0} Facebook Insights tables to sync`);
 
     const results = {
       total: tables?.length || 0,
@@ -70,14 +68,12 @@ Deno.serve(async (req) => {
 
     for (const table of tables || []) {
       try {
-        console.log(`\n📈 Syncing table: ${table.name} (ID: ${table.id})`);
         
         const settings = table.integration_settings || {};
         const adAccountId = settings.ad_account_id;
         const dateRange = settings.date_range || 'last_30_days';
 
         if (!adAccountId) {
-          console.log(`⏭️ Skipping ${table.name} - no ad account configured`);
           continue;
         }
 
@@ -106,7 +102,6 @@ Deno.serve(async (req) => {
         }
 
         if (!integration?.api_key) {
-          console.log(`⏭️ Skipping ${table.name} - no Facebook token`);
           continue;
         }
 
@@ -157,7 +152,6 @@ Deno.serve(async (req) => {
         const sinceStr = since.toISOString().split('T')[0];
         const untilStr = until.toISOString().split('T')[0];
 
-        console.log(`📅 Fetching data from ${sinceStr} to ${untilStr}`);
 
         // First, fetch campaign statuses to detect real blocks
         const campaignsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/campaigns?fields=id,name,effective_status,configured_status,objective&limit=500&access_token=${accessToken}`;
@@ -175,7 +169,6 @@ Deno.serve(async (req) => {
               objective: campaign.objective || null,
             };
           }
-          console.log(`📋 Fetched statuses for ${Object.keys(campaignStatuses).length} campaigns`);
         }
 
         // Also fetch ad account status
@@ -196,7 +189,6 @@ Deno.serve(async (req) => {
           };
           accountStatus = statusMap[accountData.account_status] || `unknown_${accountData.account_status}`;
           accountDisableReason = accountData.disable_reason || null;
-          console.log(`🏦 Account status: ${accountStatus}, disable_reason: ${accountDisableReason}`);
         }
 
         // Fetch insights from Facebook
@@ -342,7 +334,6 @@ Deno.serve(async (req) => {
           };
         });
 
-        console.log(`📊 Got ${insights.length} daily campaign insights`);
 
         // Ensure fields exist
         const fieldKeys = ['date', 'campaign_name', 'campaign_id', 'impressions', 'clicks', 'lp_or_form_views', 'cpm', 'ctr', 'leads', 'cost_per_lead', 'spend', 'purchases', 'purchase_value', 'add_to_cart', 'roas', 'campaign_objective', 'campaign_type', 'effective_status', 'configured_status'];
@@ -397,7 +388,6 @@ Deno.serve(async (req) => {
           })
           .eq('id', table.id);
 
-        console.log(`✅ Successfully synced ${insights.length} records for ${table.name}`);
         results.synced++;
 
         // === Check report_alerts and trigger automations ===
@@ -410,7 +400,6 @@ Deno.serve(async (req) => {
             .eq('is_active', true);
 
           if (alerts && alerts.length > 0) {
-            console.log(`🔔 Checking ${alerts.length} active alerts for ${table.name}`);
 
             // Aggregate campaign data for alert evaluation
             const campaignAggregates: Record<string, { spend: number; leads: number; cost_per_lead: number; impressions: number; clicks: number; effective_status: string; campaign_name: string }> = {};
@@ -437,7 +426,6 @@ Deno.serve(async (req) => {
                 const lastTriggered = new Date(alert.last_triggered_at);
                 const hoursSince = (Date.now() - lastTriggered.getTime()) / (1000 * 60 * 60);
                 if (hoursSince < 24) {
-                  console.log(`⏭️ Alert "${alert.name}" already triggered ${hoursSince.toFixed(1)}h ago, skipping`);
                   continue;
                 }
               }
@@ -464,7 +452,6 @@ Deno.serve(async (req) => {
                   if (!triggered) continue;
                 }
 
-                console.log(`🚨 Alert "${alert.name}" triggered for campaign "${agg.campaign_name}" (${metric}: ${currentValue})`);
 
                 // Get table name for context
                 const tableName = table.name;
@@ -532,7 +519,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`\n🏁 Cron sync complete: ${results.synced} synced, ${results.failed} failed`);
 
     return new Response(JSON.stringify({
       success: true,

@@ -15,7 +15,6 @@ serve(async (req) => {
   try {
     const { instanceId, apiToken } = await req.json();
     
-    console.log(`🔧 Configuring Green API webhooks for instance: ${instanceId}`);
 
     if (!instanceId || !apiToken) {
       console.error("❌ Missing instanceId or apiToken");
@@ -28,7 +27,6 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const webhookUrl = `${supabaseUrl}/functions/v1/green-api-webhook`;
 
-    console.log(`📡 Setting webhook URL to: ${webhookUrl}`);
 
     // Configure Green API settings via their API
     const settingsUrl = `https://api.green-api.com/waInstance${instanceId}/setSettings/${apiToken}`;
@@ -44,7 +42,6 @@ serve(async (req) => {
       deviceWebhook: "no",
     };
 
-    console.log(`📤 Sending settings to Green API:`, JSON.stringify(settingsPayload, null, 2));
 
     const response = await fetch(settingsUrl, {
       method: 'POST',
@@ -55,8 +52,6 @@ serve(async (req) => {
     });
 
     const responseText = await response.text();
-    console.log(`📥 Green API response status: ${response.status}`);
-    console.log(`📥 Green API response body: ${responseText}`);
 
     if (!response.ok) {
       console.error(`❌ Green API error: ${responseText}`);
@@ -76,7 +71,6 @@ serve(async (req) => {
       result = { raw: responseText };
     }
 
-    console.log(`✅ Green API configured successfully`);
 
     return new Response(
       JSON.stringify({ 

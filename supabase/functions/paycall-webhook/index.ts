@@ -17,7 +17,6 @@ Deno.serve(async (req) => {
     );
 
     const payload = await req.json();
-    console.log("Paycall webhook received:", JSON.stringify(payload));
 
     const {
       call_id,
@@ -54,7 +53,6 @@ Deno.serve(async (req) => {
         .update(updateData)
         .eq("id", existingLog.id);
     } else {
-      console.log("No matching call log found for provider_call_id:", call_id);
     }
 
     return new Response(JSON.stringify({ success: true }), {

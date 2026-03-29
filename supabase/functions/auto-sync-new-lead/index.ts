@@ -101,12 +101,10 @@ async function getPhoneNumberFieldId(apiKey: string, supabase: any, tenantId: st
 
   const settings = integration?.settings || {};
   if (settings.phone_number_field_id) {
-    console.log(`📋 Using cached field_id: ${settings.phone_number_field_id}`);
     return settings.phone_number_field_id;
   }
 
   // If not cached, fetch from ManyChat API
-  console.log('🔍 Fetching custom fields from ManyChat API...');
   try {
     const res = await fetch('https://api.manychat.com/fb/page/getCustomFields', {
       method: 'GET',
@@ -117,7 +115,6 @@ async function getPhoneNumberFieldId(apiKey: string, supabase: any, tenantId: st
     });
 
     const data = await safeJson(res);
-    console.log('📋 ManyChat custom fields response:', JSON.stringify(data));
 
     if (data?.status === 'success' && Array.isArray(data?.data)) {
       // Find the phone_number field
@@ -128,7 +125,6 @@ async function getPhoneNumberFieldId(apiKey: string, supabase: any, tenantId: st
 
       if (phoneField?.id) {
         const fieldId = parseInt(phoneField.id, 10);
-        console.log(`✅ Found field_id for ${PHONE_CUSTOM_FIELD_NAME}: ${fieldId}`);
 
         // Cache the field_id in tenant_integrations.settings
         await supabase
@@ -139,10 +135,8 @@ async function getPhoneNumberFieldId(apiKey: string, supabase: any, tenantId: st
           .eq('tenant_id', tenantId)
           .eq('integration_type', 'manychat');
 
-        console.log(`💾 Cached field_id in settings`);
         return fieldId;
       } else {
-        console.log(`⚠️ Custom field "${PHONE_CUSTOM_FIELD_NAME}" not found in ManyChat. Please create it.`);
       }
     }
   } catch (e) {
@@ -166,7 +160,6 @@ async function findSubscriberByPhone(apiKey: string, phoneCandidates: string[]):
       });
 
       const data = await safeJson(res);
-      console.log(`📱 Find subscriber (phone=${candidate}) response:`, JSON.stringify(data));
 
       if (data?.status === 'success' && data?.data?.id) {
         return String(data.data.id);
@@ -174,7 +167,6 @@ async function findSubscriberByPhone(apiKey: string, phoneCandidates: string[]):
       
       // If rate limited, wait and continue
       if (res.status === 429 || data?.message?.includes('max rps')) {
-        console.log('⏳ Rate limited, waiting 2 seconds...');
         await new Promise(r => setTimeout(r, 2000));
       }
     } catch (e) {
@@ -199,7 +191,6 @@ async function findSubscriberByEmail(apiKey: string, email?: string | null): Pro
     });
 
     const data = await safeJson(res);
-    console.log(`📧 Find subscriber (email=${email}) response:`, JSON.stringify(data));
 
     if (data?.status === 'success' && data?.data?.id) {
       return String(data.data.id);
@@ -230,7 +221,6 @@ async function findSubscriberByCustomField(
       });
 
       const data = await safeJson(res);
-      console.log(`🔍 Find subscriber by custom field (field_id=${fieldId}, value=${candidate}) response:`, JSON.stringify(data));
 
       if (data?.status === 'success' && data?.data?.id) {
         return String(data.data.id);
@@ -238,7 +228,6 @@ async function findSubscriberByCustomField(
       
       // If rate limited, wait and continue
       if (res.status === 429 || data?.message?.includes('max rps')) {
-        console.log('⏳ Rate limited, waiting 2 seconds...');
         await new Promise(r => setTimeout(r, 2000));
       }
     } catch (e) {
@@ -266,7 +255,6 @@ async function setPhoneCustomField(apiKey: string, subscriberId: string, phoneVa
     });
 
     const data = await safeJson(res);
-    console.log(`📝 Set custom field (${PHONE_CUSTOM_FIELD_NAME}=${phoneValue}) response:`, JSON.stringify(data));
 
     return data?.status === 'success';
   } catch (e) {
@@ -308,7 +296,6 @@ async function createManyChatSubscriber(
   });
 
   let createData = await safeJson(createRes);
-  console.log('🆕 Create subscriber response:', JSON.stringify(createData));
 
   // Check if first attempt SUCCEEDED (status=success with id) vs FAILED with permission error
   const createStr = JSON.stringify(createData);
@@ -316,7 +303,6 @@ async function createManyChatSubscriber(
   
   // Only retry WITHOUT phone if first attempt actually FAILED (not just warning on success)
   if (!isSuccess && createStr.includes('Permission denied to import phone')) {
-    console.log('Retrying createSubscriber WITHOUT phone field due to permission restriction...');
     const payloadNoPhone: any = {
       first_name: firstName,
       last_name: lastName,
@@ -335,16 +321,13 @@ async function createManyChatSubscriber(
       body: JSON.stringify(payloadNoPhone),
     });
     createData = await safeJson(createRes);
-    console.log('🆕 Create subscriber response (no phone):', JSON.stringify(createData));
   } else if (isSuccess && createStr.includes('Permission denied to import phone')) {
-    console.log('⚠️ Subscriber created successfully with warning (Permission denied to import phone) - NOT retrying');
   }
 
   if (createData.status === 'success' && createData.data?.id) {
     const subscriberId = String(createData.data.id);
     
     // IMPORTANT: Save phone to custom field for future lookups
-    console.log(`📝 Saving phone to custom field for new subscriber ${subscriberId}...`);
     await setPhoneCustomField(apiKey, subscriberId, `+${formattedPhone}`);
     
     return { id: subscriberId };
@@ -369,7 +352,6 @@ async function addTagToSubscriber(apiKey: string, subscriberId: string, tagId: n
     });
 
     const tagData = await safeJson(tagRes);
-    console.log('🏷️ Add tag response:', JSON.stringify(tagData));
 
     return tagData?.status === 'success';
   } catch (e) {
@@ -398,7 +380,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log('🔄 Auto-syncing lead:', lead_id);
 
     // Fetch the lead
     const { data: lead, error: leadError } = await supabase
@@ -417,7 +398,6 @@ Deno.serve(async (req) => {
 
     // Check if lead has a phone number
     if (!lead.phone) {
-      console.log('Lead has no phone number, skipping sync');
       return new Response(
         JSON.stringify({ message: 'Lead has no phone number', synced: false }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -433,7 +413,6 @@ Deno.serve(async (req) => {
       .single();
 
     if (integrationError || !integration) {
-      console.log('ManyChat integration not found for tenant:', lead.tenant_id);
       return new Response(
         JSON.stringify({ message: 'ManyChat integration not configured', synced: false }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -441,7 +420,6 @@ Deno.serve(async (req) => {
     }
 
     if (!integration.is_active) {
-      console.log('ManyChat integration is not active');
       return new Response(
         JSON.stringify({ message: 'ManyChat integration is not active', synced: false }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -456,7 +434,6 @@ Deno.serve(async (req) => {
     const formattedPhone = formatPhoneForManyChat(lead.phone);
     const leadName = lead.contact_name || lead.company_name || 'Unknown';
 
-    console.log(`📱 Searching for subscriber with phone candidates:`, phoneCandidates);
 
     // STEP 1: Try to find existing subscriber by phone (SEQUENTIAL)
     let subscriberId = await findSubscriberByPhone(apiKey, phoneCandidates);
@@ -464,7 +441,6 @@ Deno.serve(async (req) => {
 
     if (subscriberId) {
       wasExisting = true;
-      console.log(`✅ Found existing subscriber by phone: ${subscriberId}`);
     }
 
     // STEP 2: Try to find by email
@@ -472,13 +448,11 @@ Deno.serve(async (req) => {
       subscriberId = await findSubscriberByEmail(apiKey, lead.email);
       if (subscriberId) {
         wasExisting = true;
-        console.log(`✅ Found existing subscriber by email: ${subscriberId}`);
       }
     }
 
     // STEP 3: Try to find by Custom Field (phone_number) using field_id
     if (!subscriberId) {
-      console.log(`🔍 Trying to find by custom field "${PHONE_CUSTOM_FIELD_NAME}"...`);
       
       // Get the field_id (cached or from API)
       const fieldId = await getPhoneNumberFieldId(apiKey, supabase, lead.tenant_id);
@@ -488,16 +462,13 @@ Deno.serve(async (req) => {
         subscriberId = await findSubscriberByCustomField(apiKey, fieldId, customFieldCandidates);
         if (subscriberId) {
           wasExisting = true;
-          console.log(`✅ Found existing subscriber by custom field: ${subscriberId}`);
         }
       } else {
-        console.log(`⚠️ Cannot search by custom field - field_id not found. Please create "${PHONE_CUSTOM_FIELD_NAME}" field in ManyChat.`);
       }
     }
 
     // STEP 4: If not found, create new subscriber
     if (!subscriberId) {
-      console.log('🆕 No existing subscriber found, creating new one...');
       const newSubscriber = await createManyChatSubscriber(apiKey, {
         contact_name: lead.contact_name,
         company_name: lead.company_name,
@@ -507,19 +478,14 @@ Deno.serve(async (req) => {
 
       if (newSubscriber?.id) {
         subscriberId = newSubscriber.id;
-        console.log(`✅ Created new subscriber: ${subscriberId}`);
 
         // STEP 5: Add tag to trigger automation (only for new subscribers)
-        console.log(`🏷️ Adding tag ${defaultTagId} to new subscriber...`);
         const tagAdded = await addTagToSubscriber(apiKey, subscriberId, defaultTagId);
         if (tagAdded) {
-          console.log('✅ Tag added successfully');
         } else {
-          console.log('⚠️ Failed to add tag, but subscriber was created');
         }
       } else {
         // Check if creation failed due to "WhatsApp ID already exists"
-        console.log('⚠️ Create failed, checking if this is a WhatsApp ID conflict...');
         
         // Wait a bit to avoid rate limiting
         await new Promise(r => setTimeout(r, 2000));
@@ -543,20 +509,15 @@ Deno.serve(async (req) => {
         
         if (subscriberId) {
           wasExisting = true;
-          console.log(`✅ Found subscriber after create conflict: ${subscriberId}`);
         } else {
           // This is likely the "WhatsApp ID already exists" scenario
           // The subscriber exists but cannot be found via any API method
-          console.log('⚠️ Could not find subscriber after create conflict');
-          console.log('🔍 This likely means the subscriber was created via WhatsApp without phone field');
-          console.log('💡 Solution: Create a Flow in ManyChat to copy {{whatsapp_phone}} to phone_number custom field');
         }
       }
     }
 
     // STEP 5.5: If subscriber was found (not created), ensure phone_number custom field is set
     if (subscriberId && wasExisting) {
-      console.log(`📝 Ensuring phone_number custom field is set for existing subscriber ${subscriberId}...`);
       const formattedPhoneForCustomField = `+${formattedPhone}`;
       await setPhoneCustomField(apiKey, subscriberId, formattedPhoneForCustomField);
     }
@@ -576,7 +537,6 @@ Deno.serve(async (req) => {
         );
       }
 
-      console.log(`✅ Lead "${leadName}" synced successfully to ManyChat`);
       return new Response(
         JSON.stringify({ 
           message: 'Lead synced successfully', 
@@ -590,7 +550,6 @@ Deno.serve(async (req) => {
     } else {
       // Mark as EXISTING_WA_SUBSCRIBER to indicate the ManyChat limitation
       // This is more specific than NEEDS_MANUAL_LINK
-      console.log('❌ Could not find or create subscriber, marking as EXISTING_WA_SUBSCRIBER');
       await supabase
         .from('leads')
         .update({ manychat_subscriber_id: 'EXISTING_WA_SUBSCRIBER' })

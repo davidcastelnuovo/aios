@@ -156,13 +156,11 @@ Deno.serve(async (req) => {
       )
     }
 
-    console.log(`Processing sheet for tenant: ${tenantId}`)
 
     // Fetch data from Google Sheets
     const sheetRange = range || 'Sheet1!A:Z'
     const sheetsUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(sheetRange)}?key=${googleApiKey}`
     
-    console.log(`Fetching from Google Sheets: ${sheetId}, range: ${sheetRange}`)
     
     const sheetsResponse = await fetch(sheetsUrl)
     if (!sheetsResponse.ok) {
@@ -186,7 +184,6 @@ Deno.serve(async (req) => {
 
     // Parse headers
     const headers = rows[0].map((h: string) => String(h).trim())
-    console.log('Sheet headers:', headers)
 
     // If only fetching headers for mapping UI
     if (fetchHeadersOnly) {
@@ -241,7 +238,6 @@ Deno.serve(async (req) => {
         }
       })
     }
-    console.log('Header mapping:', headerMapping)
 
     // Use service role for inserts
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
@@ -260,7 +256,6 @@ Deno.serve(async (req) => {
         statusMappings[status.status_key.toLowerCase().trim()] = status.status_key
       }
     }
-    console.log(`Loaded ${Object.keys(statusMappings).length / 2} lead statuses for tenant`)
 
     let importedCount = 0
     let updatedCount = 0
@@ -431,9 +426,7 @@ Deno.serve(async (req) => {
               throw updateError
             }
             updatedCount++
-            console.log(`Updated lead ${existingLead.id} with fields:`, Object.keys(updates))
           } else {
-            console.log(`Skipping duplicate lead - no new information: ${existingLead.id}`)
           }
           leadId = existingLead.id
         } else {
@@ -449,7 +442,6 @@ Deno.serve(async (req) => {
           }
           leadId = newLead.id
           importedCount++
-          console.log(`Imported lead: ${leadId}`)
         }
 
         // Add notes as lead_update if enabled and notes exist
@@ -475,7 +467,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`Import complete: ${importedCount} imported, ${updatedCount} updated, ${updatesAddedCount} updates added`)
 
     return new Response(
       JSON.stringify({

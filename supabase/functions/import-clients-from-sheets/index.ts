@@ -69,7 +69,6 @@ Deno.serve(async (req) => {
     }
 
     const sheetRange = !range || String(range).trim() === '' ? 'Sheet1!A:I' : String(range).trim()
-    console.log('Fetching data from Google Sheets:', sheetId, sheetRange)
 
     // Fetch data from Google Sheets
     const sheetsUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetRange}?key=${googleApiKey}`
@@ -88,7 +87,6 @@ Deno.serve(async (req) => {
       throw new Error('No data found in the sheet')
     }
 
-    console.log('Found rows:', rows.length)
 
     // First row is headers
     const headers = rows[0].map((h: string) => h.toLowerCase().trim())
@@ -163,8 +161,6 @@ Deno.serve(async (req) => {
       clients.push(client)
     }
 
-    console.log('Valid clients to import:', clients.length)
-    console.log('Errors:', errors.length)
 
     // Insert clients into database with tenant_id
     const { data, error } = await serviceClient
@@ -187,7 +183,6 @@ Deno.serve(async (req) => {
       throw error
     }
 
-    console.log('Successfully imported:', data?.length || 0)
 
     return new Response(
       JSON.stringify({

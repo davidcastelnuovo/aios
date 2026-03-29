@@ -349,8 +349,6 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
   });
 
   const onSubmit = (values: FormValues) => {
-    console.log('Form submitted with values:', values);
-    console.log('Form errors:', form.formState.errors);
     updateAutomationMutation.mutate(values);
   };
 

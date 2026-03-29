@@ -72,7 +72,6 @@ serve(async (req: Request) => {
       throw new Error("Invalid role");
     }
 
-    console.log(`${action === "add" ? "Adding" : "Removing"} role ${role} for user ${userId} in tenant ${tenantId}`);
 
     let teamMemberCreated = false;
     let teamMemberType: string | null = null;
@@ -139,7 +138,6 @@ serve(async (req: Request) => {
               if (existingSalesPerson) {
                 salesPersonId = existingSalesPerson.id;
                 reusedExisting = true;
-                console.log(`Reusing existing sales_person ${salesPersonId} for user ${userId}`);
               }
             }
 
@@ -171,7 +169,6 @@ serve(async (req: Request) => {
               }
 
               const defaultAgencyId = agencies[0].id;
-              console.log(`Creating new sales_person with agency ${defaultAgencyId} for user ${userId}`);
 
               // Create sales_person
               const { data: newSalesPerson, error: createError } = await supabaseAdmin
@@ -192,7 +189,6 @@ serve(async (req: Request) => {
                 salesPersonId = newSalesPerson.id;
                 teamMemberCreated = true;
                 teamMemberType = "sales_person";
-                console.log(`Created sales_person ${salesPersonId} for user ${userId}`);
 
                 // Also add to sales_person_agencies junction table
                 await supabaseAdmin
@@ -214,7 +210,6 @@ serve(async (req: Request) => {
               if (linkError) {
                 console.error("Error linking sales_person to profile:", linkError);
               } else {
-                console.log(`Linked sales_person ${salesPersonId} to profile ${userId}`);
                 if (reusedExisting) {
                   teamMemberCreated = true;
                   teamMemberType = "sales_person";
@@ -237,13 +232,11 @@ serve(async (req: Request) => {
               if (existingCampaigner) {
                 campaignerId = existingCampaigner.id;
                 reusedExisting = true;
-                console.log(`Reusing existing campaigner ${campaignerId} for user ${userId}`);
               }
             }
 
             if (!campaignerId) {
               // Create new campaigner
-              console.log(`Creating new campaigner for user ${userId}`);
 
               const { data: newCampaigner, error: createError } = await supabaseAdmin
                 .from("campaigners")
@@ -262,7 +255,6 @@ serve(async (req: Request) => {
                 campaignerId = newCampaigner.id;
                 teamMemberCreated = true;
                 teamMemberType = "campaigner";
-                console.log(`Created campaigner ${campaignerId} for user ${userId}`);
               }
             }
 
@@ -276,7 +268,6 @@ serve(async (req: Request) => {
               if (linkError) {
                 console.error("Error linking campaigner to profile:", linkError);
               } else {
-                console.log(`Linked campaigner ${campaignerId} to profile ${userId}`);
                 if (reusedExisting) {
                   teamMemberCreated = true;
                   teamMemberType = "campaigner";
@@ -303,7 +294,6 @@ serve(async (req: Request) => {
       // Clean up related links based on the removed role
       if (role === "team_manager") {
         // Remove all managed agencies for this user in this tenant
-        console.log(`Cleaning up user_managed_agencies for user ${userId}`);
         const { error: cleanupError } = await supabaseAdmin
           .from("user_managed_agencies")
           .delete()
@@ -326,7 +316,6 @@ serve(async (req: Request) => {
 
         if (!otherCampaignerRoles || otherCampaignerRoles.length === 0) {
           // No other campaigner roles, unlink campaigner from profile
-          console.log(`Unlinking campaigner_id from profile for user ${userId}`);
           const { error: unlinkError } = await supabaseAdmin
             .from("profiles")
             .update({ campaigner_id: null })
@@ -349,7 +338,6 @@ serve(async (req: Request) => {
 
         if (!otherSalesRoles || otherSalesRoles.length === 0) {
           // No other sales_person roles, unlink sales_person from profile
-          console.log(`Unlinking sales_person_id from profile for user ${userId}`);
           const { error: unlinkError } = await supabaseAdmin
             .from("profiles")
             .update({ sales_person_id: null })

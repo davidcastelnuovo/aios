@@ -90,7 +90,6 @@ serve(async (req) => {
     const date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
     const target = normalizeTarget(config.target);
 
-    console.log(`Syncing Ahrefs data for table ${tableId}, type: ${config.dataType}, target: ${target}, date: ${date}`);
 
     let apiUrl = '';
     let selectFields: string[] = [];
@@ -123,7 +122,6 @@ serve(async (req) => {
         break;
     }
 
-    console.log(`Fetching from Ahrefs API: ${apiUrl}`);
 
     const response = await fetch(apiUrl, {
       headers: {
@@ -142,7 +140,6 @@ serve(async (req) => {
     }
 
     const apiData = await response.json();
-    console.log('Ahrefs API response keys:', Object.keys(apiData));
 
     // Determine the data array from response
     let records: any[] = [];
@@ -159,7 +156,6 @@ serve(async (req) => {
       records = [apiData];
     }
     
-    console.log(`Received ${records.length} records`);
 
     // Ensure fields exist for this table
     const { data: existingFields } = await supabase

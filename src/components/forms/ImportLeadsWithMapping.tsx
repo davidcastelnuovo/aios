@@ -699,7 +699,6 @@ export function ImportLeadsWithMapping() {
         tagIdMap[t.name.toLowerCase()] = t.id;
       });
       
-      console.log("[Import Debug] tagIdMap populated with", Object.keys(tagIdMap).length, "tags:", Object.keys(tagIdMap).slice(0, 10));
 
       // Build field map
       const fieldMap: Record<string, string> = {};
@@ -862,7 +861,6 @@ export function ImportLeadsWithMapping() {
       
       // Debug: How many leads have tags
       const leadsWithTags = validLeads.filter(v => v.tags?.length > 0);
-      console.log("[Import Debug] validLeads:", validLeads.length, "with tags:", leadsWithTags.length, "sample tags:", leadsWithTags.slice(0, 3).map(l => l.tags));
 
       // Save backup
       await supabase.from("import_history").insert({
@@ -948,7 +946,6 @@ export function ImportLeadsWithMapping() {
         }
       }
       
-      console.log("[Import Debug] Skipped duplicates (in-file):", skippedDuplicates);
 
       // Remove duplicates from leadUpdates - keep only the last entry for each existingId
       const uniqueUpdatesMap = new Map<string, typeof leadUpdates[0]>();
@@ -1028,7 +1025,6 @@ export function ImportLeadsWithMapping() {
         new Map(tagRecords.map(r => [`${r.lead_id}|${r.tag_id}`, r])).values()
       );
       
-      console.log("[Import Debug] Tag records: original=", tagRecords.length, "deduplicated=", uniqueTagRecords.length, "sample:", uniqueTagRecords.slice(0, 3));
       
       // Insert tag records
       if (uniqueTagRecords.length > 0) {
@@ -1040,7 +1036,6 @@ export function ImportLeadsWithMapping() {
         if (tagError) {
           console.error("[Import Debug] Error inserting tags:", tagError.message, tagError.details, tagError.hint);
         } else {
-          console.log("[Import Debug] Successfully inserted/upserted tags:", insertedTags?.length || 0);
         }
       }
 

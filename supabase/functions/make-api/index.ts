@@ -78,7 +78,6 @@ async function makeAPICall(
   const baseUrl = MAKE_API_REGIONS[region] || MAKE_API_REGIONS.eu1;
   const url = `${baseUrl}${endpoint}`;
   
-  console.log(`Making API call to: ${url}`);
   
   const headers: Record<string, string> = {
     "Authorization": `Token ${apiToken}`,
@@ -193,7 +192,6 @@ serve(async (req) => {
       end_date,
     } = body;
 
-    console.log(`Make API action: ${action}, team_id: ${team_id}, region: ${region}`);
 
     if (!api_token || !team_id) {
       return new Response(
@@ -305,7 +303,6 @@ serve(async (req) => {
         }
         // First, update the scenario scheduling to on-demand (no interval required), then activate
         try {
-          console.log(`Setting scheduling to on-demand for scenario ${scenario_id}...`);
           
           // Step 1: Update scenario with on-demand scheduling (avoids IM008 Invalid interval)
           await makeAPICall(
@@ -318,7 +315,6 @@ serve(async (req) => {
             }
           );
           
-          console.log(`Activating scenario ${scenario_id}...`);
           
           // Step 2: Now activate the scenario
           const activateResult = await makeAPICall(
@@ -333,7 +329,6 @@ serve(async (req) => {
             // IM306 means "Scenario is already running" - treat as success
             if (activateError.parsedBody?.code === "IM306" || 
                 (typeof activateError.rawBody === "string" && activateError.rawBody.includes("IM306"))) {
-              console.log(`Scenario ${scenario_id} is already running (IM306) - treating as success`);
               result = { success: true, message: "Scenario is already running", already_running: true };
               break;
             }
@@ -366,7 +361,6 @@ serve(async (req) => {
         const googleAdsConnections = (allConnections.connections || allConnections || [])
           .filter((conn: any) => isGoogleAdsConnection(conn));
         
-        console.log(`Found ${googleAdsConnections.length} Google Ads connections`);
         
         result = { 
           connections: googleAdsConnections,
@@ -388,7 +382,6 @@ serve(async (req) => {
         const baseUrl = MAKE_API_REGIONS[region] || MAKE_API_REGIONS.eu1;
         const rpcUrl = `${baseUrl}/rpcs/google-ads/1/listCustomers`;
         
-        console.log(`Fetching Google Ads accounts via RPC: ${rpcUrl}, connection: ${connection_id}`);
 
         try {
           const rpcResponse = await fetch(rpcUrl, {
@@ -411,7 +404,6 @@ serve(async (req) => {
           }
 
           const rpcData = await rpcResponse.json();
-          console.log(`RPC returned ${Array.isArray(rpcData) ? rpcData.length : 'non-array'} items`);
 
           // Make.com RPC returns an array of { label, value } or similar structure
           // Filter out manager/MCC accounts
@@ -588,7 +580,6 @@ serve(async (req) => {
           })
         };
 
-        console.log("Creating scenario with blueprint:", JSON.stringify(scenarioBlueprint).substring(0, 500));
 
         try {
           const createResult = await makeAPICall(
@@ -631,7 +622,6 @@ serve(async (req) => {
           );
         }
         
-        console.log(`Getting blueprint for scenario: ${scenario_id}`);
         
         try {
           const blueprint = await makeAPICall(
@@ -680,7 +670,6 @@ serve(async (req) => {
         // customer_id is already extracted from body at the top of the function
         // campaign_type is also extracted from body
         
-        console.log(`Cloning template scenario: ${template_scenario_id}, customer_id: ${customer_id}, campaign_type: ${campaign_type}`);
         
         try {
           // Step 1: Get the template scenario details
@@ -690,7 +679,6 @@ serve(async (req) => {
             `/scenarios/${template_scenario_id}`
           );
           
-          console.log("Template scenario:", JSON.stringify(templateScenario).substring(0, 300));
           
           // Step 2: Get the blueprint
           const blueprintResponse = await makeAPICall(
@@ -699,7 +687,6 @@ serve(async (req) => {
             `/scenarios/${template_scenario_id}/blueprint`
           );
           
-          console.log("Template blueprint:", JSON.stringify(blueprintResponse).substring(0, 500));
           
           // Step 3: Modify the blueprint
           // Parse the flow and update the HTTP module with new webhook URL and table_id
@@ -755,14 +742,12 @@ serve(async (req) => {
                     if (!module.parameters) module.parameters = {};
                     module.metadata.connection = { id: parsedConnectionId };
                     module.parameters.__IMTCONN__ = parsedConnectionId;
-                    console.log(`Updated Google Ads module connection to ${parsedConnectionId}`);
                   } else {
                     console.warn(`Invalid connection_id provided: ${connection_id}`);
                   }
                 }
                 
                 if (customer_id) {
-                  console.log(`Found Google Ads module (${module.module}), updating customer_id, accountId and metrics for ${campaign_type}`);
                   if (module.mapper) {
                     // Format customer ID without dashes
                     const formattedCustomerId = customer_id.replace(/-/g, '');
@@ -778,14 +763,12 @@ serve(async (req) => {
                     if (!module.mapper.attributes || !Array.isArray(module.mapper.attributes)) {
                       module.mapper.attributes = ["campaign.id", "campaign.name"];
                     }
-                    console.log(`Ensured segments.date and campaign attributes in Google Ads module`);
                   }
                 }
               }
               
               // Check if this is an HTTP module - update webhook URL and table_id
               if (module.module && isHttpModule(module.module)) {
-                console.log(`Found HTTP module (${module.module}), updating webhook URL and table_id`);
                 if (module.mapper) {
                   module.mapper.url = webhook_url;
                   
@@ -798,7 +781,6 @@ serve(async (req) => {
                     // Build body with direct Make.com variable references for each field
                     const bodyTemplate = `{"table_id":"${table_id}","campaign_type":"${campaign_type || 'leads'}"${tenant_id ? `,"tenant_id":"${tenant_id}"` : ''},"records":[{"date":"{{${gid}.dimensions.date}}","campaign_id":"{{${gid}.dimensions.campaignId}}","campaign_name":"{{${gid}.dimensions.campaignName}}","impressions":"{{${gid}.metrics.impressions}}","clicks":"{{${gid}.metrics.clicks}}","cost":"{{${gid}.metrics.cost}}","conversions":"{{${gid}.metrics.conversions}}","ctr":"{{${gid}.metrics.ctr}}","average_cpc":"{{${gid}.metrics.averageCpc}}","cost_micros":"{{${gid}.metrics.costMicros}}","conversions_value":"{{${gid}.metrics.conversionsValue}}","all_conversions":"{{${gid}.metrics.allConversions}}"}]}`;
                     module.mapper.jsonStringBodyContent = bodyTemplate;
-                    console.log("Replaced jsonStringBodyContent with direct field references using module id:", gid);
                   }
                   
                   // Update the body/data with new table_id (fallback for other template formats)
@@ -854,7 +836,6 @@ serve(async (req) => {
             blueprint: JSON.stringify(blueprintData),
           };
           
-          console.log("Creating new scenario with payload:", JSON.stringify(createPayload).substring(0, 300));
           
           const createResult = await makeAPICall(
             api_token,
@@ -865,19 +846,16 @@ serve(async (req) => {
           );
           
           const newScenarioId = createResult.scenario?.id || createResult.id;
-          console.log("Scenario created:", JSON.stringify(createResult).substring(0, 300));
           
           // Step 5: Activate the new scenario so it can be run
           if (newScenarioId) {
             try {
-              console.log(`Activating scenario ${newScenarioId}...`);
               await makeAPICall(
                 api_token,
                 region,
                 `/scenarios/${newScenarioId}/start`,
                 "POST"
               );
-              console.log(`Scenario ${newScenarioId} activated successfully`);
             } catch (activateError) {
               console.warn("Failed to activate scenario (may need manual activation):", activateError);
               // Don't fail the whole operation - scenario was created successfully
@@ -910,7 +888,6 @@ serve(async (req) => {
           );
         }
 
-        console.log(`Running Google Ads sync scenario: ${scenario_id}`);
 
         try {
           // Run the scenario
@@ -957,7 +934,6 @@ serve(async (req) => {
         
         const patchWebhookUrl = webhook_url || `${Deno.env.get("SUPABASE_URL")}/functions/v1/webhook-google-ads-sync`;
         
-        console.log(`Patching scenario ${scenario_id} to use table_id: ${table_id}`);
         
         try {
           // Step 1: Get the current blueprint
@@ -1017,14 +993,12 @@ serve(async (req) => {
                     if (!module.parameters) module.parameters = {};
                     module.metadata.connection = { id: parsedConnectionId };
                     module.parameters.__IMTCONN__ = parsedConnectionId;
-                    console.log(`Patched Google Ads connection to ${parsedConnectionId}`);
                   } else {
                     console.warn(`Invalid connection_id provided: ${connection_id}`);
                   }
                 }
 
                 if (customer_id && module.mapper) {
-                  console.log(`Patching Google Ads module (${module.module}) with accountId and metrics for ${campaign_type}`);
                   const formattedCustomerId = customer_id.replace(/-/g, '');
                   module.mapper.customerId = formattedCustomerId;
                   module.mapper.customer_id = formattedCustomerId;
@@ -1034,7 +1008,6 @@ serve(async (req) => {
                   if (campaign_type) {
                     const selectedMetrics = campaign_type === "ecommerce" ? metricsForEcommerce : metricsForLeads;
                     module.mapper.metrics = selectedMetrics;
-                    console.log(`Updated metrics for campaign_type: ${campaign_type}`);
                   }
                 }
                 
@@ -1049,7 +1022,6 @@ serve(async (req) => {
                   if (!module.mapper.attributes || !Array.isArray(module.mapper.attributes)) {
                     module.mapper.attributes = ["campaign.id", "campaign.name"];
                   }
-                  console.log("Ensured segments.date and campaign attributes in Google Ads module");
                 }
                 
                 // Update date range if start_date and end_date are provided
@@ -1077,12 +1049,10 @@ serve(async (req) => {
                   module.mapper.dateFrom = formattedStart;
                   module.mapper.dateTo = formattedEnd;
                   
-                  console.log(`Updated date range to CUSTOM: ${formattedStart} - ${formattedEnd}`);
                 }
               }
               
               if (module.module && isHttpModule(module.module)) {
-                console.log("Found HTTP module to patch");
                 if (module.mapper) {
                   module.mapper.url = patchWebhookUrl;
                   
@@ -1096,7 +1066,6 @@ serve(async (req) => {
                   
                   module.mapper.jsonStringBodyContent = bodyTemplate;
                   patchedHttpModule = true;
-                  console.log("Replaced jsonStringBodyContent with direct field references using module id:", gid);
                   
                   // Clear data field if it exists to avoid confusion
                   if (module.mapper.data) {
@@ -1122,7 +1091,6 @@ serve(async (req) => {
             }
           );
           
-          console.log(`Scenario ${scenario_id} blueprint patched successfully`);
           
           result = {
             success: true,
@@ -1147,7 +1115,6 @@ serve(async (req) => {
         );
     }
 
-    console.log(`Make API result for action ${action}:`, JSON.stringify(result).substring(0, 500));
 
     return new Response(
       JSON.stringify(result),

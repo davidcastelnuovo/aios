@@ -14,8 +14,6 @@ serve(async (req) => {
   try {
     const { tableId, startDate, endDate } = await req.json();
     
-    console.log('Syncing Google Analytics data for table:', tableId);
-    console.log('Date range:', startDate, 'to', endDate);
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -60,7 +58,6 @@ serve(async (req) => {
 
     // Refresh token if needed
     if (integrationSettings?.expires_at && new Date(integrationSettings.expires_at) < new Date()) {
-      console.log('Refreshing expired token...');
       
       const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
         method: 'POST',
@@ -132,7 +129,6 @@ serve(async (req) => {
     );
 
     const trafficData = await trafficResponse.json();
-    console.log('GA4 traffic source response:', JSON.stringify(trafficData).substring(0, 500));
 
     if (trafficData.error) {
       throw new Error(trafficData.error.message);
@@ -241,7 +237,6 @@ serve(async (req) => {
     const channelGroupData = await channelGroupResponse.json();
 
     if (channelGroupData.error) {
-      console.log('Channel group report error (non-fatal):', channelGroupData.error.message);
     }
 
     // ====== REPORT 4: Top pages ======
@@ -500,7 +495,6 @@ serve(async (req) => {
       })
       .eq('id', tableId);
 
-    console.log(`Successfully synced ${records.length} records`);
 
     return new Response(
       JSON.stringify({ success: true, records_synced: records.length }),

@@ -211,7 +211,6 @@ export function MakeScenarioSettings({ table, onSync, isSyncing }: MakeScenarioS
         dateRange = getDateRangeFromPreset(syncDateRange);
       }
 
-      console.log('Triggering webhook with date range:', dateRange);
 
       // Send POST request to the webhook URL
       const response = await fetch(webhookUrl, {

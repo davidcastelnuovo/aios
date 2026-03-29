@@ -126,7 +126,6 @@ async function getPhoneNumberFieldId(
   });
 
   const data = await safeJson(res);
-  console.log('getCustomFields response:', JSON.stringify(data));
 
   if (data?.status === 'success' && Array.isArray(data?.data)) {
     const phoneField = data.data.find(
@@ -161,7 +160,6 @@ async function findSubscriberByPhone(apiKey: string, candidates: string[]): Prom
 
     // Handle rate limit
     if (res.status === 429) {
-      console.log('Rate limited on phone lookup, waiting 2s...');
       await new Promise((r) => setTimeout(r, 2000));
       continue;
     }
@@ -185,7 +183,6 @@ async function findSubscriberByEmail(apiKey: string, email?: string | null): Pro
   });
 
   if (res.status === 429) {
-    console.log('Rate limited on email lookup, waiting 2s...');
     await new Promise((r) => setTimeout(r, 2000));
     return null;
   }
@@ -212,7 +209,6 @@ async function findSubscriberByCustomField(
     });
 
     if (res.status === 429) {
-      console.log('Rate limited on custom field lookup, waiting 2s...');
       await new Promise((r) => setTimeout(r, 2000));
       continue;
     }
@@ -245,7 +241,6 @@ async function setCustomField(
   });
 
   const data = await safeJson(res);
-  console.log('setCustomField response:', JSON.stringify(data));
   return data?.status === 'success';
 }
 
@@ -295,7 +290,6 @@ Deno.serve(async (req) => {
 
     // If resetFirst is true, reset all IDs for this tenant first
     if (resetFirst) {
-      console.log('Resetting all manychat_subscriber_id for tenant', tenantId);
       const { error: resetError } = await supabase
         .from('leads')
         .update({ manychat_subscriber_id: null })
@@ -332,7 +326,6 @@ Deno.serve(async (req) => {
 
     // Get phone_number field ID
     const phoneFieldId = await getPhoneNumberFieldId(apiKey, supabase, tenantId);
-    console.log('Using phone_number field ID:', phoneFieldId);
 
     // Fetch ONE lead without manychat_subscriber_id
     const { data: leads, error: leadsError } = await supabase
@@ -384,7 +377,6 @@ Deno.serve(async (req) => {
     const phoneCandidates = getPhoneLookupCandidates(lead.phone);
     leadName = lead.contact_name || lead.company_name || 'Unknown';
 
-    console.log(`Processing lead ${lead.id}: ${leadName}, phone: ${formattedPhone}`);
 
     // Step 1: Try to find existing subscriber (sequential to avoid rate limits)
     // 1a. By phone system field
@@ -425,7 +417,6 @@ Deno.serve(async (req) => {
       });
 
       const createData = await safeJson(createRes);
-      console.log('Create subscriber response:', JSON.stringify(createData));
 
       if (createData.status === 'success' && createData.data?.id) {
         subscriberId = createData.data.id;
@@ -441,7 +432,6 @@ Deno.serve(async (req) => {
       if (!subscriberId) {
         wasSkipped = true;
         errorMessage = `Could not create/find subscriber: ${JSON.stringify(createData)}`;
-        console.log(`Skipping lead ${lead.id}: ${errorMessage}`);
 
         await supabase
           .from('leads')
@@ -470,7 +460,6 @@ Deno.serve(async (req) => {
       });
 
       const tagData = await safeJson(tagRes);
-      console.log('Add tag response:', JSON.stringify(tagData));
 
       // Step 5: Update lead in database
       await supabase
@@ -495,7 +484,6 @@ Deno.serve(async (req) => {
 
     // Throttle
     if ((remainingCount || 0) > 0 && delayMs > 0) {
-      console.log(`Throttling: waiting ${delayMs}ms...`);
       await new Promise((r) => setTimeout(r, delayMs));
     }
 

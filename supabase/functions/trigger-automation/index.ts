@@ -40,12 +40,10 @@ async function getPhoneNumberFieldIdMC(apiKey: string, supabase: any, tenantId: 
 
   const settings = integration?.settings || {};
   if (settings.phone_number_field_id) {
-    console.log(`📋 Using cached field_id: ${settings.phone_number_field_id}`);
     return settings.phone_number_field_id;
   }
 
   // If not cached, fetch from ManyChat API
-  console.log('🔍 Fetching custom fields from ManyChat API...');
   try {
     const res = await fetch('https://api.manychat.com/fb/page/getCustomFields', {
       method: 'GET',
@@ -57,7 +55,6 @@ async function getPhoneNumberFieldIdMC(apiKey: string, supabase: any, tenantId: 
 
     if (res.ok) {
       const data = await res.json();
-      console.log('📋 ManyChat custom fields count:', data?.data?.length || 0);
 
       if (data?.status === 'success' && Array.isArray(data?.data)) {
         const phoneField = data.data.find((field: any) => 
@@ -67,7 +64,6 @@ async function getPhoneNumberFieldIdMC(apiKey: string, supabase: any, tenantId: 
 
         if (phoneField?.id) {
           const fieldId = parseInt(phoneField.id, 10);
-          console.log(`✅ Found field_id for ${PHONE_CUSTOM_FIELD_NAME}: ${fieldId}`);
 
           // Cache the field_id in tenant_integrations.settings
           await supabase
@@ -78,7 +74,6 @@ async function getPhoneNumberFieldIdMC(apiKey: string, supabase: any, tenantId: 
 
           return fieldId;
         } else {
-          console.log(`⚠️ Custom field "${PHONE_CUSTOM_FIELD_NAME}" not found in ManyChat`);
         }
       }
     }
@@ -105,7 +100,6 @@ async function findSubscriberByCustomFieldMC(apiKey: string, fieldId: number, ph
 
       if (res.ok) {
         const data = await res.json();
-        console.log(`🔍 Find subscriber by custom field (field_id=${fieldId}, value=${candidate}) response:`, data);
         if (data?.status === 'success' && data?.data) {
           // Handle both array and object responses from ManyChat API
           const subscribers = Array.isArray(data.data) ? data.data : [data.data];
@@ -113,14 +107,12 @@ async function findSubscriberByCustomFieldMC(apiKey: string, fieldId: number, ph
           // Prefer ACTIVE subscriber with whatsapp_phone (not deleted)
           const activeWithWA = subscribers.find((s: any) => s?.status !== 'deleted' && s?.whatsapp_phone && s?.id);
           if (activeWithWA?.id) {
-            console.log(`✅ Found active subscriber with WhatsApp: ${activeWithWA.id}`);
             return String(activeWithWA.id);
           }
 
           // Second priority: ACTIVE subscriber (no WA phone but not deleted)
           const activeSubscriber = subscribers.find((s: any) => s?.status !== 'deleted' && s?.id);
           if (activeSubscriber?.id) {
-            console.log(`⚠️ Found active subscriber but NO whatsapp_phone: ${activeSubscriber.id}. Will need to check further.`);
             return String(activeSubscriber.id);
           }
 
@@ -128,7 +120,6 @@ async function findSubscriberByCustomFieldMC(apiKey: string, fieldId: number, ph
           // or search via other methods. Using a deleted subscriber will fail silently.
           const deletedSubscriber = subscribers.find((s: any) => s?.id);
           if (deletedSubscriber?.id) {
-            console.log(`🚫 Found subscriber ${deletedSubscriber.id} but it is DELETED. NOT using it - will search via other methods.`);
             // Return null to trigger fallback logic
             return null;
           }
@@ -137,11 +128,9 @@ async function findSubscriberByCustomFieldMC(apiKey: string, fieldId: number, ph
       
       // If rate limited, wait
       if (res.status === 429) {
-        console.log('⏳ Rate limited, waiting 2 seconds...');
         await new Promise(r => setTimeout(r, 2000));
       }
     } catch (e) {
-      console.log(`Error finding subscriber by custom field ${candidate}:`, e);
     }
   }
   return null;
@@ -165,10 +154,8 @@ async function setPhoneCustomFieldMC(apiKey: string, subscriberId: string, phone
     });
 
     const data = await res.json();
-    console.log(`📝 Set custom field (${PHONE_CUSTOM_FIELD_NAME}=${phoneValue}) response:`, data);
     return data?.status === 'success';
   } catch (e) {
-    console.log(`Error setting custom field:`, e);
     return false;
   }
 }
@@ -196,7 +183,6 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey)
 
     const requestBody = await req.json()
-    console.log('Automation triggered:', requestBody)
 
     // ===== AUTOMATION SAFETY GUARDS =====
     const MAX_EXECUTION_DEPTH = 10
@@ -244,7 +230,6 @@ Deno.serve(async (req) => {
         .maybeSingle()
       
       if (recentExec) {
-        console.log(`🛑 SAFETY: Cooldown active - same trigger for entity "${entityKey}" ran within last 30s. Skipping.`)
         return new Response(
           JSON.stringify({ error: 'Cooldown active', entity: entityKey }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 429 }
@@ -263,7 +248,6 @@ Deno.serve(async (req) => {
       started_at: new Date().toISOString(),
     }).select('id').single()
 
-    console.log(`🔄 Execution ${executionId} depth=${executionDepth} chain=[${executionChain.join('→')}]`)
     // ===== END SAFETY GUARDS =====
 
     let automations: any[] = []
@@ -351,7 +335,6 @@ Deno.serve(async (req) => {
       // Support both 'payload' and 'data' field names for the actual data
       payloadData = requestBody.payload || requestBody.data || requestBody
       tenantId = automation.tenant_id
-      console.log(`Direct execution of automation: ${automation.name} (${automation.id})`)
     } else {
       // Standard trigger mode - find automations by trigger_type
       const payload = requestBody as AutomationPayload
@@ -376,7 +359,6 @@ Deno.serve(async (req) => {
       // (which validates group_id, keyword, source_filter etc.)
       // Without this, flows bypass their trigger step filters entirely.
       automations = (foundAutomations || []).filter((a: any) => !a.is_flow)
-      console.log(`Found ${automations.length} non-flow automation(s) by trigger_type (filtered out ${(foundAutomations || []).length - automations.length} flow(s))`)
 
       // 2. Also find flow automations — BUT ONLY if source is NOT 'crm'
       // When source === 'crm', we skip flow lookup entirely to prevent CRM leads from triggering flows
@@ -399,7 +381,6 @@ Deno.serve(async (req) => {
             const validation = validateFlowTriggerConfig(config, payloadData)
             return validation.matches
           })
-          console.log(`Filtered ${flowTriggerSteps.length} trigger steps down to ${matchingSteps.length} matching steps`)
           const flowAutomationIds = matchingSteps.map((s: any) => s.automation_id)
           // Filter out IDs already found
           const existingIds = new Set(automations.map((a: any) => a.id))
@@ -415,19 +396,16 @@ Deno.serve(async (req) => {
             if (flowAutoError) {
               console.error('Error fetching flow automations:', flowAutoError)
             } else if (flowAutomations) {
-              console.log(`Found ${flowAutomations.length} additional flow automation(s) via trigger steps`)
               automations = [...automations, ...flowAutomations]
             }
           }
         }
       } else {
-        console.log(`📌 Source is 'crm' — skipping flow trigger step lookup`)
         // When source is 'crm', also filter out any flow automations that were found in CRM automations
         automations = automations.filter((a: any) => !a.is_flow)
       }
     }
 
-    console.log(`Found ${automations.length} automation(s) to execute`)
 
     // Execute each matching automation
     const results = await Promise.allSettled(
@@ -439,7 +417,6 @@ Deno.serve(async (req) => {
           if (automation.conditions && Object.keys(automation.conditions).length > 0) {
             const conditionsMet = checkConditions(automation.conditions, payloadData, automation.trigger_type)
             if (!conditionsMet) {
-              console.log(`Conditions not met for automation ${automation.id}`)
               return
             }
           }
@@ -448,7 +425,6 @@ Deno.serve(async (req) => {
 
           // If this is a flow automation, execute flow steps sequentially
           if (automation.is_flow) {
-            console.log(`Executing flow automation: ${automation.id}`)
             const { data: flowSteps, error: stepsError } = await supabase
               .from('automation_flow_steps')
               .select('*')
@@ -460,7 +436,6 @@ Deno.serve(async (req) => {
               throw stepsError
             }
 
-            console.log(`Found ${flowSteps?.length || 0} flow steps`)
 
             // === CRITICAL: Validate trigger step matches incoming payload ===
             const triggerStep = flowSteps?.find((s: any) => s.step_type === 'trigger')
@@ -469,23 +444,19 @@ Deno.serve(async (req) => {
               const triggerActionType = triggerStep.action_type
               const incomingTriggerType = (requestBody as any).trigger_type || (requestBody as any).triggerType
               if (triggerActionType && incomingTriggerType && triggerActionType !== incomingTriggerType) {
-                console.log(`⛔ Flow trigger type mismatch: flow expects '${triggerActionType}' but got '${incomingTriggerType}' — skipping automation ${automation.id}`)
                 return { skipped: true, reason: 'trigger_type_mismatch' }
               }
               // Also validate trigger step filters (group_id, keyword, etc.)
               const config = triggerStep.configuration || {}
               const validation = validateFlowTriggerConfig(config, payloadData)
               if (!validation.matches) {
-                console.log(`⛔ Flow trigger config mismatch (${validation.reason}) — skipping automation ${automation.id}`)
                 return { skipped: true, reason: validation.reason || 'trigger_config_mismatch' }
               }
-              console.log(`✅ Flow trigger step validation passed for automation ${automation.id}`)
             }
 
             // === FB ENRICHMENT: Parse fb_ fields from notes (saved during sync) ===
             const hasFbFields = Object.keys(payloadData).some(k => k.startsWith('fb_'))
             if (payloadData.test && !hasFbFields && payloadData.notes) {
-              console.log('🔄 Test mode: parsing fb_ fields from notes')
               const lines = String(payloadData.notes).split('\n')
               let enrichedCount = 0
               let inFbSection = false
@@ -494,7 +465,6 @@ Deno.serve(async (req) => {
                 const fbMatch = line.match(/^(fb_[^:]+):\s*(.+)$/)
                 if (fbMatch) {
                   payloadData[fbMatch[1]] = fbMatch[2].trim()
-                  console.log(`  ✅ Enriched ${fbMatch[1]} = ${fbMatch[2].trim()}`)
                   enrichedCount++
                   continue
                 }
@@ -508,15 +478,12 @@ Deno.serve(async (req) => {
                   if (legacyMatch) {
                     const key = `fb_${legacyMatch[1].trim()}`
                     payloadData[key] = legacyMatch[2].trim()
-                    console.log(`  ✅ Enriched (legacy) ${key} = ${legacyMatch[2].trim()}`)
                     enrichedCount++
                   }
                 }
               }
               if (enrichedCount > 0) {
-                console.log(`🎉 Enriched ${enrichedCount} fb_ fields from notes`)
               } else {
-                console.log('⚠️ No fb_ fields found in notes')
               }
             }
             // === END FB ENRICHMENT ===
@@ -539,11 +506,9 @@ Deno.serve(async (req) => {
                 stepResults.push({ step_id: step.id, action_type: step.action_type, success: false, error: 'Max actions exceeded' })
                 break
               }
-              console.log(`Executing step: ${step.step_type}/${step.action_type} (${step.id})`)
               
               // Skip trigger steps
               if (step.step_type === 'trigger') {
-                console.log('Skipping trigger step')
                 continue
               }
 
@@ -624,7 +589,6 @@ Deno.serve(async (req) => {
                     })
                     stepResponse = await agentRes.json()
                     previousStepOutput = stepResponse
-                    console.log('Agent step output:', stepResponse?.output?.substring(0, 100))
                   }
                 } else if (effectiveActionType === 'send_greenapi_message') {
                   // If message_template contains {{agent_output}}, replace it
@@ -673,7 +637,6 @@ Deno.serve(async (req) => {
                   stepResponse = await executeGreenApiToCampaigner(supabase, stepConfig, stepData, tenantId)
                   previousStepOutput = stepResponse
                 } else {
-                  console.log(`Unknown action_type: ${step.action_type}, step_type: ${step.step_type}, skipping`)
                 }
 
                 actionCount++
@@ -809,7 +772,6 @@ function checkConditions(conditions: any, data: any, triggerType?: string): bool
       // Special handling for new_status - only relevant for status change triggers
       if (key === 'new_status') {
         if (triggerType && triggerType !== 'lead_status_changed' && triggerType !== 'task_status_changed') {
-          console.log(`⏭️ Skipping new_status condition for trigger: ${triggerType}`);
           continue;
         }
         const dataStatus = data.new_status || data.status;
@@ -842,7 +804,6 @@ function checkConditions(conditions: any, data: any, triggerType?: string): bool
         }
         if (key === 'group_id' && value) {
           if (data.group_id !== value) {
-            console.log(`⏭️ Group ID mismatch: expected ${value}, got ${data.group_id}`);
             return false;
           }
         }
@@ -850,20 +811,17 @@ function checkConditions(conditions: any, data: any, triggerType?: string): bool
           const keyword = String(value).toLowerCase();
           const msgText = (data.message_text || '').toLowerCase();
           if (!msgText.includes(keyword)) {
-            console.log(`⏭️ Keyword "${value}" not found in message`);
             return false;
           }
         }
         if (key === 'tag_id' && value) {
           const contactTags = data.tags || [];
           if (!contactTags.includes(value)) {
-            console.log(`⏭️ Tag ${value} not found on contact. Contact tags: ${contactTags}`);
             return false;
           }
         }
         if (key === 'connection_user_id' && value) {
           if (data.connection_user_id !== value) {
-            console.log(`⏭️ Connection user ID mismatch: expected ${value}, got ${data.connection_user_id}`);
             return false;
           }
         }
@@ -881,8 +839,6 @@ function checkConditions(conditions: any, data: any, triggerType?: string): bool
 
 // Execute webhook action
 async function executeWebhook(config: any, data: any) {
-  console.log('Executing webhook:', config.url)
-  console.log('Webhook data:', data)
   
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -893,7 +849,6 @@ async function executeWebhook(config: any, data: any) {
   // This makes it easy to map fields in Make.com
   const bodyData = JSON.stringify(data)
 
-  console.log('Webhook body:', bodyData)
 
   const response = await fetch(config.url, {
     method: config.method || 'POST',
@@ -902,7 +857,6 @@ async function executeWebhook(config: any, data: any) {
   })
 
   const responseText = await response.text()
-  console.log('Webhook response:', { status: response.status, body: responseText })
   
   return {
     status: response.status,
@@ -913,19 +867,16 @@ async function executeWebhook(config: any, data: any) {
 
 // Execute email action (placeholder)
 async function executeEmail(config: any, data: any) {
-  console.log('Email action not yet implemented')
   return { message: 'Email action not implemented' }
 }
 
 // Execute notification action (placeholder)
 async function executeNotification(config: any, data: any) {
-  console.log('Notification action not yet implemented')
   return { message: 'Notification action not implemented' }
 }
 
 // Execute status update action
 async function executeStatusUpdate(supabase: any, config: any, data: any) {
-  console.log('Executing status update:', config)
   
   const { entity, status, update_field, update_field_value } = config
   const recordId = data.id
@@ -937,7 +888,6 @@ async function executeStatusUpdate(supabase: any, config: any, data: any) {
   // Determine which table to update
   const table = entity === 'lead' ? 'leads' : 'tasks'
   
-  console.log(`Updating ${table} ${recordId}`)
   
   // Build update object
   const updateData: any = {}
@@ -951,16 +901,13 @@ async function executeStatusUpdate(supabase: any, config: any, data: any) {
   if (update_field && update_field !== 'none' && update_field_value === 'today') {
     const today = new Date().toISOString().split('T')[0] // Format: YYYY-MM-DD
     updateData[update_field] = today
-    console.log(`Setting ${update_field} to ${today}`)
   }
   
   // Ensure we have something to update
   if (Object.keys(updateData).length === 0) {
-    console.log('No updates to perform')
     return { success: true, message: 'No updates needed' }
   }
   
-  console.log('Update data:', updateData)
   
   const { data: updateResult, error } = await supabase
     .from(table)
@@ -974,7 +921,6 @@ async function executeStatusUpdate(supabase: any, config: any, data: any) {
     throw error
   }
   
-  console.log(`Successfully updated ${table}:`, updateResult)
   
   return {
     success: true,
@@ -987,8 +933,6 @@ async function executeStatusUpdate(supabase: any, config: any, data: any) {
 
 // Execute send WhatsApp action via ManyChat
 async function executeSendWhatsapp(supabase: any, config: any, data: any, tenantId: string) {
-  console.log('Executing send WhatsApp:', config)
-  console.log('Data:', data)
   
   const { manychat_tag_id, field_mapping } = config
   
@@ -1036,12 +980,10 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
     type: 'lead' | 'client',
     recordId: string
   ): Promise<string | null> => {
-    console.log(`🔍 verifyAndFixSubscriberId: phone=${phone}, savedId=${savedId}, type=${type}, recordId=${recordId}`);
     
     // Step 1: Get field_id for phone_number custom field
     const fieldId = await getPhoneNumberFieldIdMC(apiKey, supabase, tenantId);
     if (!fieldId) {
-      console.log('⚠️ Cannot verify - phone_number field_id not found in ManyChat');
       // Fall back to saved ID if we can't search
       return isValidSubscriberId(savedId) ? savedId : null;
     }
@@ -1055,13 +997,11 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
       `0${last9Digits}`,
       cleanPhone
     ])];
-    console.log(`🔍 Searching ManyChat by custom field (field_id=${fieldId}), candidates:`, phoneCandidates);
     
     // Step 3: Search for subscriber by custom field
     const foundId = await findSubscriberByCustomFieldMC(apiKey, fieldId, phoneCandidates);
     
     if (foundId) {
-      console.log(`✅ Found subscriber by phone_number custom field: ${foundId}`);
 
       // IMPORTANT:
       // If the subscriber we found via the custom field is NOT a valid WhatsApp subscriber
@@ -1071,7 +1011,6 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
       // to locate an active WA subscriber.
       const foundIsWhatsApp = await validateSubscriberHasWhatsApp(foundId);
       if (!foundIsWhatsApp) {
-        console.log(`⚠️ Subscriber ${foundId} was found by custom field but is not a valid WhatsApp subscriber. Falling back to phone system-field search.`);
         return null;
       }
       
@@ -1092,7 +1031,6 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
           console.error(`❌ CRITICAL: Failed to fix ${type} ${recordId}:`, updateError);
           throw new Error(`ID Mismatch detected for ${type} ${recordId}: Saved=${savedId}, Found=${foundId}. Fix failed: ${updateError.message}`);
         } else {
-          console.log(`✅ Successfully fixed ${type} ${recordId}: ${savedId} → ${foundId}`);
         }
       } else if (!savedId) {
         // No saved ID - save the found one
@@ -1101,15 +1039,12 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
           .from(table)
           .update({ manychat_subscriber_id: foundId })
           .eq('id', recordId);
-        console.log(`📝 Saved new subscriber ID ${foundId} to ${type} ${recordId}`);
       } else {
-        console.log(`✅ ID match confirmed: ${foundId}`);
       }
       
       return foundId;
     }
     
-    console.log(`⚠️ No subscriber found by custom field phone_number`);
     // Return null to trigger fallback searches or creation
     return null;
   };
@@ -1123,21 +1058,18 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
     // Priority 1: Active subscriber with whatsapp_phone
     const withWA = subscribers.find((s: any) => s?.status !== 'deleted' && s?.whatsapp_phone && s?.id);
     if (withWA?.id) {
-      console.log(`extractSubscriberId: found subscriber with WA phone: ${withWA.id}`)
       return String(withWA.id);
     }
     
     // Priority 2: Active subscriber (no WA phone but not deleted)
     const active = subscribers.find((s: any) => s?.status !== 'deleted' && s?.id);
     if (active?.id) {
-      console.log(`extractSubscriberId: found active subscriber (no WA phone): ${active.id}`)
       return String(active.id);
     }
     
     // Fallback: any subscriber with ID (including deleted)
     const anyWithId = subscribers.find((s: any) => s?.id);
     if (anyWithId?.id) {
-      console.log(`extractSubscriberId: fallback to subscriber: ${anyWithId.id}`)
       return String(anyWithId.id);
     }
     
@@ -1157,17 +1089,13 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
       const sub = info?.data
       // Valid if status != deleted AND whatsapp_phone is populated
       if (sub?.status === 'deleted') {
-        console.log(`Subscriber ${subId} is deleted, skipping`)
         return false
       }
       if (!sub?.whatsapp_phone) {
-        console.log(`Subscriber ${subId} has no whatsapp_phone, skipping`)
         return false
       }
-      console.log(`Subscriber ${subId} validated with whatsapp_phone: ${sub.whatsapp_phone}`)
       return true
     } catch (e) {
-      console.log(`Error validating subscriber ${subId}:`, e)
       return false
     }
   }
@@ -1189,13 +1117,11 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
     // NEW: If we have a phone, ALWAYS verify and potentially fix the subscriber ID
     if (contactPhone) {
       const savedId = isValidSubscriberId(lead?.manychat_subscriber_id) ? lead.manychat_subscriber_id : null;
-      console.log(`🔎 Lead ${lead?.id}: Verifying subscriber ID. Saved: ${savedId}, Phone: ${contactPhone}`);
       
       // This function searches by phone_number custom field and fixes mismatches
       const verifiedId = await verifyAndFixSubscriberId(contactPhone, savedId, 'lead', lead.id);
       if (verifiedId) {
         subscriberId = verifiedId;
-        console.log(`✅ Lead ${lead?.id}: Using verified subscriber ID: ${subscriberId}`);
       }
     }
   } else if (data.client_id) {
@@ -1211,18 +1137,15 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
     // NEW: If we have a phone, ALWAYS verify and potentially fix the subscriber ID
     if (contactPhone) {
       const savedId = isValidSubscriberId(client?.manychat_subscriber_id) ? client.manychat_subscriber_id : null;
-      console.log(`🔎 Client ${client?.id}: Verifying subscriber ID. Saved: ${savedId}, Phone: ${contactPhone}`);
       
       // This function searches by phone_number custom field and fixes mismatches
       const verifiedId = await verifyAndFixSubscriberId(contactPhone, savedId, 'client', client.id);
       if (verifiedId) {
         subscriberId = verifiedId;
-        console.log(`✅ Client ${client?.id}: Using verified subscriber ID: ${subscriberId}`);
       }
     }
   }
 
-  console.log('ManyChat subscriber context:', {
     tenantId,
     contactType,
     contactRecordId: contactRecord?.id,
@@ -1232,7 +1155,6 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
   
   // If no subscriber ID, try to find by phone number
   if (!subscriberId && contactPhone) {
-    console.log(`No subscriber ID found, trying to sync by phone: ${contactPhone}`)
     
     // Clean phone number - remove all non-digits
     const cleanPhone = contactPhone.replace(/\D/g, '')
@@ -1247,10 +1169,8 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
     
     // Remove duplicates
     const uniqueFormats = [...new Set(phoneFormats)]
-    console.log('Trying phone formats:', uniqueFormats)
     
     for (const phoneFormat of uniqueFormats) {
-      console.log(`Trying phone format: ${phoneFormat}`)
       
       // ManyChat API uses direct "phone" parameter (not field_name/field_value)
       const searchUrl = `${baseUrl}/subscriber/findBySystemField?phone=${encodeURIComponent(phoneFormat)}`
@@ -1262,16 +1182,13 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
         },
       })
       
-      console.log(`Search response status for ${phoneFormat}: ${searchResponse.status}`)
       
       if (searchResponse.ok) {
         const searchResult = await searchResponse.json()
-        console.log(`ManyChat findBySystemField response for ${phoneFormat}:`, searchResult)
         
         const foundId = extractSubscriberId(searchResult);
         if (foundId) {
           subscriberId = foundId;
-          console.log(`Found subscriber by phone ${phoneFormat}: ${subscriberId}`)
           
           // Update the contact record with the found subscriber ID
           if (contactType === 'lead' && contactRecord?.id) {
@@ -1279,19 +1196,16 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
               .from('leads')
               .update({ manychat_subscriber_id: subscriberId })
               .eq('id', contactRecord.id)
-            console.log(`Updated lead ${contactRecord.id} with subscriber ID ${subscriberId}`)
           } else if (contactType === 'client' && contactRecord?.id) {
             await supabase
               .from('clients')
               .update({ manychat_subscriber_id: subscriberId })
               .eq('id', contactRecord.id)
-            console.log(`Updated client ${contactRecord.id} with subscriber ID ${subscriberId}`)
           }
           break // Found subscriber, exit loop
         }
       } else {
         const errorText = await searchResponse.text()
-        console.log(`Search failed for ${phoneFormat}: ${searchResponse.status} - ${errorText}`)
       }
     }
   }
@@ -1300,7 +1214,6 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
   // These queries always return 400 errors. Skipping them.
   // Only phone and email are valid system fields for findBySystemField.
   if (!subscriberId && contactPhone) {
-    console.log('⚠️ Skipping wa_id/whatsapp_phone lookup - ManyChat API does not support these fields in findBySystemField')
   }
 
   // If still no subscriber, try Custom Field lookup (phone_number) using field_id
@@ -1308,14 +1221,12 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
     const cleanPhone = contactPhone.replace(/\D/g, '')
     const last9Digits = cleanPhone.slice(-9)
     const customFieldCandidates = [`+972${last9Digits}`, `972${last9Digits}`, `0${last9Digits}`]
-    console.log('No subscriber found by wa_id, trying custom field lookup:', customFieldCandidates)
 
     // Get field_id (cached or from API)
     const fieldId = await getPhoneNumberFieldIdMC(apiKey, supabase, tenantId)
     if (fieldId) {
       subscriberId = await findSubscriberByCustomFieldMC(apiKey, fieldId, customFieldCandidates)
       if (subscriberId) {
-        console.log(`Found subscriber by custom field: ${subscriberId}`)
         if (contactType === 'lead' && contactRecord?.id) {
           await supabase.from('leads').update({ manychat_subscriber_id: subscriberId }).eq('id', contactRecord.id)
         } else if (contactType === 'client' && contactRecord?.id) {
@@ -1323,20 +1234,17 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
         }
       }
     } else {
-      console.log('⚠️ Cannot search by custom field - field_id not found')
     }
   }
   
   // If still no subscriber found, try to create a new one in ManyChat
   if (!subscriberId && contactPhone) {
-    console.log('No subscriber found via search, attempting to create new subscriber in ManyChat')
     
     const cleanPhone = contactPhone.replace(/\D/g, '')
     // Format for WhatsApp: international format with + for whatsapp_phone
     const last9Digits = cleanPhone.slice(-9)
     const whatsappPhone = '+972' + last9Digits
     
-    console.log(`Creating subscriber with whatsapp_phone: ${whatsappPhone}`)
     
     try {
       const createResponse = await fetch(`${baseUrl}/subscriber/createSubscriber`, {
@@ -1356,14 +1264,11 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
       })
       
       const createResult = await createResponse.json()
-      console.log('ManyChat createSubscriber response:', createResult)
       
       if (createResult.status === 'success' && createResult.data?.id) {
         subscriberId = createResult.data.id.toString()
-        console.log(`Created new subscriber: ${subscriberId}`)
         
         // IMPORTANT: Save phone to custom field for future lookups
-        console.log(`📝 Saving phone to custom field for new subscriber ${subscriberId}...`)
         await setPhoneCustomFieldMC(apiKey, subscriberId!, whatsappPhone)
         
         // Save the new subscriber ID to the lead/client
@@ -1371,12 +1276,10 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
           await supabase.from('leads')
             .update({ manychat_subscriber_id: subscriberId })
             .eq('id', contactRecord.id)
-          console.log(`Updated lead ${contactRecord.id} with new subscriber ID ${subscriberId}`)
         } else if (contactType === 'client' && contactRecord?.id) {
           await supabase.from('clients')
             .update({ manychat_subscriber_id: subscriberId })
             .eq('id', contactRecord.id)
-          console.log(`Updated client ${contactRecord.id} with new subscriber ID ${subscriberId}`)
         }
       } else {
         // If creation failed due to existing wa_id conflict
@@ -1384,9 +1287,6 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
         console.error('Failed to create subscriber:', createResult)
 
         if (errStr.includes('wa_id') || errStr.includes('WhatsApp ID already exists')) {
-          console.log('⚠️ Create failed with "WhatsApp ID already exists" conflict')
-          console.log('🔍 This means the subscriber exists in ManyChat but was created via WhatsApp without a phone field.')
-          console.log('💡 Solution: Create a Flow in ManyChat to copy {{whatsapp_phone}} to phone_number custom field.')
           
           // Mark with special status to indicate this specific scenario
           const specialStatus = 'EXISTING_WA_SUBSCRIBER'
@@ -1394,12 +1294,10 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
             await supabase.from('leads')
               .update({ manychat_subscriber_id: specialStatus })
               .eq('id', contactRecord.id)
-            console.log(`📝 Marked lead ${contactRecord.id} as ${specialStatus}`)
           } else if (contactType === 'client' && contactRecord?.id) {
             await supabase.from('clients')
               .update({ manychat_subscriber_id: specialStatus })
               .eq('id', contactRecord.id)
-            console.log(`📝 Marked client ${contactRecord.id} as ${specialStatus}`)
           }
           
           // Don't throw - this is a known ManyChat limitation, not an error
@@ -1453,7 +1351,6 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
   
   // Update custom fields
   if (customFieldUpdates.length > 0) {
-    console.log('Updating ManyChat custom fields:', customFieldUpdates)
     
     for (const fieldUpdate of customFieldUpdates) {
       const fieldResponse = await fetch(`${baseUrl}/subscriber/setCustomField`, {
@@ -1483,8 +1380,6 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
       throw new Error(`Tag ID לא תקין (לא מספר): ${manychat_tag_id}`)
     }
 
-    console.log(`Adding ManyChat tag: ${manychat_tag_id}`)
-    console.log('ManyChat addTag request:', { subscriber_id: subscriberIdNum, tag_id: tagIdNum })
     
     const tagResponse = await fetch(`${baseUrl}/subscriber/addTag`, {
       method: 'POST',
@@ -1499,7 +1394,6 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
     })
     
     const tagResult = await tagResponse.json()
-    console.log('ManyChat addTag response:', tagResult)
     
     if (!tagResponse.ok) {
       throw new Error(`שגיאה בהוספת טאג ב-ManyChat: ${JSON.stringify(tagResult)}`)
@@ -1517,16 +1411,12 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
         },
       })
 
-      console.log('ManyChat getInfo status:', infoRes.status)
       if (infoRes.ok) {
         const info = await infoRes.json()
-        console.log('ManyChat getInfo response (post-tag):', info)
       } else {
         const err = await infoRes.text()
-        console.log('ManyChat getInfo error:', err)
       }
     } catch (e) {
-      console.log('ManyChat getInfo verification failed:', e)
     }
     
     return {
@@ -1548,8 +1438,6 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
 
 // Execute create ManyChat subscriber action
 async function executeCreateManychatSubscriber(supabase: any, config: any, data: any, tenantId: string) {
-  console.log('Executing create ManyChat subscriber:', config)
-  console.log('Data:', data)
   
   const { manychat_tag_id } = config
   
@@ -1600,11 +1488,9 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
   
   // If subscriber already exists with VALID ID, skip creation
   if (isValidSubscriberId(leadRecord.manychat_subscriber_id)) {
-    console.log(`Lead already has valid subscriber ID: ${leadRecord.manychat_subscriber_id}`)
     
     // Still add tag if configured
     if (manychat_tag_id && manychat_tag_id !== 'none') {
-      console.log(`Adding tag ${manychat_tag_id} to existing subscriber`)
       const tagResponse = await fetch(`${baseUrl}/subscriber/addTag`, {
         method: 'POST',
         headers: {
@@ -1617,7 +1503,6 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
         }),
       })
       const tagResult = await tagResponse.json()
-      console.log('ManyChat addTag response:', tagResult)
     }
     
     return {
@@ -1629,7 +1514,6 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
 
   // Log if subscriber has a conflict status
   if (leadRecord.manychat_subscriber_id) {
-    console.log(`Lead has sync conflict status: ${leadRecord.manychat_subscriber_id}, will attempt to find/create subscriber`)
   }
   
   // Prepare phone number for lookup/creation
@@ -1654,7 +1538,6 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
   ]
   
   // Step 1: Try to find existing subscriber by phone in ManyChat
-  console.log(`Searching for existing subscriber with phone candidates:`, phoneCandidates)
   let subscriberId: string | null = null
   
   for (const candidate of phoneCandidates) {
@@ -1670,16 +1553,13 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
         }
       )
       const findResult = await findResponse.json()
-      console.log(`Find subscriber (${candidate}) response:`, findResult)
 
       const foundId = extractSubscriberId(findResult)
       if (foundId) {
         subscriberId = foundId
-        console.log(`Found existing subscriber: ${subscriberId}`)
         break
       }
     } catch (e) {
-      console.log(`Error finding subscriber with ${candidate}:`, e)
     }
   }
 
@@ -1687,34 +1567,28 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
   // These queries always return 400 errors. Only phone and email are valid.
   // Skipping this step.
   if (!subscriberId) {
-    console.log('⚠️ Skipping whatsapp_phone lookup - ManyChat API does not support this field in findBySystemField')
   }
 
   // Step 1c: Try to find by Custom Field (phone_number) using field_id
   if (!subscriberId) {
-    console.log('No subscriber found by wa_id; trying custom field lookup:', phoneCandidates)
     
     // Get field_id (cached or from API)
     const fieldId = await getPhoneNumberFieldIdMC(apiKey, supabase, tenantId)
     if (fieldId) {
       subscriberId = await findSubscriberByCustomFieldMC(apiKey, fieldId, phoneCandidates)
       if (subscriberId) {
-        console.log(`Found existing subscriber by custom field: ${subscriberId}`)
       }
     } else {
-      console.log('⚠️ Cannot search by custom field - field_id not found')
     }
   }
   
   // Step 2: If found, update lead and add tag
   if (subscriberId) {
-    console.log(`Subscriber exists in ManyChat: ${subscriberId}, updating lead record`)
     await supabase.from('leads')
       .update({ manychat_subscriber_id: subscriberId })
       .eq('id', leadRecord.id)
     
     if (manychat_tag_id && manychat_tag_id !== 'none') {
-      console.log(`Adding tag ${manychat_tag_id} to existing subscriber`)
       const tagResponse = await fetch(`${baseUrl}/subscriber/addTag`, {
         method: 'POST',
         headers: {
@@ -1727,7 +1601,6 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
         }),
       })
       const tagResult = await tagResponse.json()
-      console.log('ManyChat addTag response:', tagResult)
     }
     
     return {
@@ -1738,7 +1611,6 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
   }
   
   // Step 3: Create new subscriber (only if not found)
-  console.log(`Creating NEW subscriber with whatsapp_phone: ${whatsappPhone}, name: ${contactName}`)
 
   const createBodyBase: any = {
     first_name: contactName,
@@ -1766,7 +1638,6 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
   })
 
   let createResult = await createResponse.json()
-  console.log('ManyChat createSubscriber response:', createResult)
 
   // If ManyChat denies importing phone, retry without "phone" field
   const createResultStr = JSON.stringify(createResult)
@@ -1774,7 +1645,6 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
     (createResultStr.includes('Permission denied to import phone') || createResultStr.includes('Permission denied')) &&
     (createResultStr.includes('phone') || createResultStr.includes('warning'))
   ) {
-    console.log('Retrying createSubscriber WITHOUT phone field due to permission restriction...')
     createResponse = await fetch(`${baseUrl}/subscriber/createSubscriber`, {
       method: 'POST',
       headers: {
@@ -1786,25 +1656,19 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
       }),
     })
     createResult = await createResponse.json()
-    console.log('ManyChat createSubscriber response (no phone):', createResult)
   }
   
   if (createResult.status !== 'success' || !createResult.data?.id) {
     // If creation failed, check if it's the "WhatsApp ID already exists" case
     const createResultStr = JSON.stringify(createResult)
-    console.log('Creation failed, checking error type...')
 
     if (createResultStr.includes('wa_id') || createResultStr.includes('WhatsApp ID already exists')) {
-      console.log('⚠️ Create failed with "WhatsApp ID already exists" conflict')
-      console.log('🔍 This means the subscriber exists in ManyChat but was created via WhatsApp without a phone field.')
-      console.log('💡 Solution: Create a Flow in ManyChat to copy {{whatsapp_phone}} to phone_number custom field.')
       
       // Mark with special status to indicate this specific scenario
       const specialStatus = 'EXISTING_WA_SUBSCRIBER'
       await supabase.from('leads')
         .update({ manychat_subscriber_id: specialStatus })
         .eq('id', leadRecord.id)
-      console.log(`📝 Marked lead ${leadRecord.id} as ${specialStatus}`)
       
       return {
         success: false,
@@ -1815,7 +1679,6 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
     }
 
     // Try one more lookup by phone (not wa_id/whatsapp_phone - those don't work)
-    console.log('Retrying lookup by phone system field:', phoneCandidates)
     for (const candidate of phoneCandidates) {
       try {
         const retryFind = await fetch(
@@ -1832,7 +1695,6 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
         const foundId = extractSubscriberId(retryResult)
         if (foundId) {
           subscriberId = foundId
-          console.log(`Found subscriber on retry: ${subscriberId}`)
           
           await supabase.from('leads')
             .update({ manychat_subscriber_id: subscriberId })
@@ -1872,21 +1734,17 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
   }
   
   subscriberId = createResult.data.id.toString()
-  console.log(`Created new subscriber: ${subscriberId}`)
   
   // IMPORTANT: Save phone to custom field for future lookups
-  console.log(`📝 Saving phone to custom field for new subscriber ${subscriberId}...`)
   await setPhoneCustomFieldMC(apiKey, subscriberId!, whatsappPhone)
   
   // Save subscriber ID to lead
   await supabase.from('leads')
     .update({ manychat_subscriber_id: subscriberId })
     .eq('id', leadRecord.id)
-  console.log(`Updated lead ${leadRecord.id} with subscriber ID ${subscriberId}`)
   
   // Add tag if configured
   if (manychat_tag_id && manychat_tag_id !== 'none') {
-    console.log(`Adding tag ${manychat_tag_id} to new subscriber`)
     const tagResponse = await fetch(`${baseUrl}/subscriber/addTag`, {
       method: 'POST',
       headers: {
@@ -1899,7 +1757,6 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
       }),
     })
     const tagResult = await tagResponse.json()
-    console.log('ManyChat addTag response:', tagResult)
     
     return {
       success: true,
@@ -2000,8 +1857,6 @@ function replaceTemplateVariables(template: string, data: any, tenantSlug?: stri
 
 // Execute Green API message action
 async function executeGreenApiMessage(supabase: any, config: any, data: any, tenantId: string) {
-  console.log('Executing Green API message:', config)
-  console.log('Data:', data)
   
   const { message_template, send_to_type, manual_phone, manual_group_id, phone_mode, green_api_mode, external_instance_id, external_api_token, phone_field } = config
   const integration_id = config.integration_id || config.green_api_integration_id
@@ -2027,23 +1882,19 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
     // Check if it's a group chat ID (contains @g.us)
     if (manual_phone.includes('@g.us')) {
       chatId = manual_phone
-      console.log(`Sending to manual group (phone_mode): ${chatId}`)
     } else {
       const cleanPhone = manual_phone.replace(/\D/g, '')
       const last9 = cleanPhone.slice(-9)
       chatId = `972${last9}@c.us`
-      console.log(`Sending to manual phone (phone_mode): ${chatId}`)
     }
   } else if (send_to_type === "manual_group" && manual_group_id) {
     // Send to manual group
     chatId = manual_group_id.includes("@g.us") ? manual_group_id : `${manual_group_id}@g.us`
-    console.log(`Sending to manual group: ${chatId}`)
   } else if (send_to_type === "manual_phone" && manual_phone) {
     // Legacy: Send to manual phone number
     const cleanPhone = manual_phone.replace(/\D/g, '')
     const last9 = cleanPhone.slice(-9)
     chatId = `972${last9}@c.us`
-    console.log(`Sending to manual phone: ${chatId}`)
   } else if ((phone_mode === "field" || (!phone_mode && phone_field)) && phone_field && data?.[phone_field]) {
     // Dynamic field mode - resolve destination from data field (supports both phone and group chat id)
     const fieldValue = String(data[phone_field]).trim()
@@ -2055,12 +1906,10 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
 
     if (shouldTreatAsGroup) {
       chatId = fieldValue.includes('@g.us') ? fieldValue : `${fieldValue}@g.us`
-      console.log(`Sending to dynamic group field (${phone_field}): ${chatId}`)
     } else {
       const cleanPhone = fieldValue.replace(/\D/g, '')
       const last9 = cleanPhone.slice(-9)
       chatId = `972${last9}@c.us`
-      console.log(`Sending to dynamic field phone (${phone_field}): ${chatId}`)
     }
   } else {
     // Default: send to contact (lead/client)
@@ -2088,7 +1937,6 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
     // Fallback: use phone directly from data (manual test / webhook)
     if (!contactPhone && data.phone) {
       contactPhone = data.phone
-      console.log(`Using phone from data directly: ${contactPhone}`)
     }
     
     if (!contactPhone) {
@@ -2110,11 +1958,9 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
     // External mode: use manually provided credentials
     idInstance = external_instance_id
     apiTokenInstance = external_api_token
-    console.log(`Using external Green API credentials, instance: ${idInstance}`)
   } else {
     // Tenant mode: look up from tenant_integrations
     if (integration_id) {
-      console.log(`Looking for specific integration: ${integration_id}`)
       const { data: specificIntegration, error } = await supabase
         .from('tenant_integrations')
         .select('id, api_key, settings, user_id')
@@ -2124,7 +1970,6 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
       
       if (!error && specificIntegration) {
         integration = specificIntegration
-        console.log(`Using specified integration: ${integration.id}`)
       }
     }
     
@@ -2143,7 +1988,6 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
         throw new Error('לא נמצא חיבור Green API פעיל')
       }
       integration = fallbackIntegration
-      console.log(`Using fallback integration: ${integration.id}`)
     }
     
     // Support both naming conventions
@@ -2151,7 +1995,6 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
     apiTokenInstance = integration.settings?.apiTokenInstance || integration.api_key
     
     if (!idInstance || !apiTokenInstance) {
-      console.log('Integration settings:', JSON.stringify(integration.settings))
       throw new Error('הגדרות Green API חסרות')
     }
   }
@@ -2185,7 +2028,6 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
   })
   
   const sendResult = await sendResponse.json()
-  console.log('Green API send response:', sendResult)
   
   if (!sendResponse.ok) {
     throw new Error(`שגיאה בשליחת הודעה: ${JSON.stringify(sendResult)}`)
@@ -2206,7 +2048,6 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
     const fileName = config.media_filename || resolvedMediaUrl.split('/').pop()?.split('?')[0] || 'file'
     const fileApiUrl = `https://api.green-api.com/waInstance${idInstance}/sendFileByUrl/${apiTokenInstance}`
 
-    console.log(`Sending file via Green API: ${resolvedMediaUrl}`)
     const fileResponse = await fetch(fileApiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2218,7 +2059,6 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
       }),
     })
     mediaResult = await fileResponse.json()
-    console.log('Green API file send response:', mediaResult)
   }
   
   return {
@@ -2232,8 +2072,6 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
 
 // Execute Green API message to campaigner action
 async function executeGreenApiToCampaigner(supabase: any, config: any, data: any, tenantId: string) {
-  console.log('Executing Green API message to campaigner:', config)
-  console.log('Data:', data)
   
   const { message_template, send_target, integration_id } = config
   
@@ -2273,12 +2111,10 @@ async function executeGreenApiToCampaigner(supabase: any, config: any, data: any
   
   if (send_target === 'group' && campaignerGroupId) {
     chatId = campaignerGroupId.includes('@g.us') ? campaignerGroupId : `${campaignerGroupId}@g.us`
-    console.log(`Sending to group: ${chatId}`)
   } else if (campaignerPhone) {
     const cleanPhone = campaignerPhone.replace(/\D/g, '')
     const last9 = cleanPhone.slice(-9)
     chatId = `972${last9}@c.us`
-    console.log(`Sending to phone: ${chatId}`)
   }
   
   if (!chatId) {
@@ -2292,7 +2128,6 @@ async function executeGreenApiToCampaigner(supabase: any, config: any, data: any
   let integration: any = null
   
   if (integration_id) {
-    console.log(`Looking for specific integration: ${integration_id}`)
     const { data: specificIntegration, error } = await supabase
       .from('tenant_integrations')
       .select('id, api_key, settings, user_id')
@@ -2302,7 +2137,6 @@ async function executeGreenApiToCampaigner(supabase: any, config: any, data: any
     
     if (!error && specificIntegration) {
       integration = specificIntegration
-      console.log(`Using specified integration: ${integration.id}`)
     }
   }
   
@@ -2321,7 +2155,6 @@ async function executeGreenApiToCampaigner(supabase: any, config: any, data: any
       throw new Error('לא נמצא חיבור Green API פעיל')
     }
     integration = fallbackIntegration
-    console.log(`Using fallback integration: ${integration.id}`)
   }
   
   // Support both naming conventions: idInstance/apiTokenInstance and instance_id/api_key
@@ -2330,20 +2163,16 @@ async function executeGreenApiToCampaigner(supabase: any, config: any, data: any
   const apiTokenInstance = integration.settings?.apiTokenInstance || integration.api_key
   
   if (!idInstance || !apiTokenInstance) {
-    console.log('Integration settings:', JSON.stringify(integration.settings))
-    console.log('api_key field:', integration.api_key ? 'exists' : 'missing')
     throw new Error('הגדרות Green API חסרות')
   }
   
   // Replace template variables
-  console.log('Template variables before replacement:', {
     task_title: data.task_title,
     client_name: data.client_name,
     priority: data.priority,
     due_date: data.due_date,
   })
   const message = replaceTemplateVariables(message_template, data, tenantSlug)
-  console.log('Final message after replacement:', message)
   
   // Send message via Green API
   const greenApiUrl = `https://api.green-api.com/waInstance${idInstance}/sendMessage/${apiTokenInstance}`
@@ -2358,7 +2187,6 @@ async function executeGreenApiToCampaigner(supabase: any, config: any, data: any
   })
   
   const sendResult = await sendResponse.json()
-  console.log('Green API send response:', sendResult)
   
   if (!sendResponse.ok) {
     throw new Error(`שגיאה בשליחת הודעה: ${JSON.stringify(sendResult)}`)
@@ -2417,7 +2245,6 @@ async function executeGreenApiToCampaigner(supabase: any, config: any, data: any
     if (chatError) {
       console.error('Error saving message to chat_messages:', chatError)
     } else {
-      console.log('Message saved to chat_messages successfully')
     }
   } catch (saveError) {
     console.error('Error saving to chat_messages:', saveError)
@@ -2435,8 +2262,6 @@ async function executeGreenApiToCampaigner(supabase: any, config: any, data: any
 
 // Execute add lead update action
 async function executeAddLeadUpdate(supabase: any, config: any, data: any, tenantId: string) {
-  console.log('Executing add lead update:', config)
-  console.log('Data:', data)
   
   const { update_template } = config
   
@@ -2506,7 +2331,6 @@ async function executeAddLeadUpdate(supabase: any, config: any, data: any, tenan
     throw new Error(`שגיאה בשמירת עדכון: ${insertError.message}`)
   }
   
-  console.log('Lead update inserted:', insertedUpdate)
   
   return {
     success: true,
@@ -2517,8 +2341,6 @@ async function executeAddLeadUpdate(supabase: any, config: any, data: any, tenan
 
 // Execute add client update action
 async function executeAddClientUpdate(supabase: any, config: any, data: any, tenantId: string) {
-  console.log('Executing add client update:', config)
-  console.log('Data:', data)
   
   const { update_template } = config
   
@@ -2589,7 +2411,6 @@ async function executeAddClientUpdate(supabase: any, config: any, data: any, ten
     throw new Error(`שגיאה בשמירת עדכון: ${insertError.message}`)
   }
   
-  console.log('Client update inserted:', insertedUpdate)
   
   return {
     success: true,
@@ -2602,7 +2423,6 @@ async function executeAddClientUpdate(supabase: any, config: any, data: any, ten
 async function executeCreateTask(supabase: any, config: any, data: any, tenantId: string) {
   const { task_title_template, task_notes_template, task_priority, task_due_days, default_campaigner_id, default_agency_id } = config
   
-  console.log('Executing create_task action:', { config, data, tenantId })
   
   // Get tenant slug for template variables
   const { data: tenant } = await supabase
@@ -2646,7 +2466,6 @@ async function executeCreateTask(supabase: any, config: any, data: any, tenantId
   
   // If campaigner_name provided in data, try to resolve it
   if (!campaignerId && data.campaigner_name) {
-    console.log(`Searching for campaigner by name: "${data.campaigner_name}"`)
     const { data: campaigner } = await supabase
       .from('campaigners')
       .select('id, full_name')
@@ -2657,7 +2476,6 @@ async function executeCreateTask(supabase: any, config: any, data: any, tenantId
     
     if (campaigner) {
       campaignerId = campaigner.id
-      console.log(`Found campaigner: ${campaigner.full_name} (${campaignerId})`)
     }
   }
   
@@ -2666,7 +2484,6 @@ async function executeCreateTask(supabase: any, config: any, data: any, tenantId
   
   // If sales_person_name provided in data, try to resolve it
   if (!salesPersonId && data.sales_person_name) {
-    console.log(`Searching for sales person by name: "${data.sales_person_name}"`)
     const { data: salesPerson } = await supabase
       .from('sales_people')
       .select('id, full_name')
@@ -2677,14 +2494,12 @@ async function executeCreateTask(supabase: any, config: any, data: any, tenantId
     
     if (salesPerson) {
       salesPersonId = salesPerson.id
-      console.log(`Found sales person: ${salesPerson.full_name} (${salesPersonId})`)
     }
   }
   
   // Resolve client by name if needed
   let clientId = data.client_id || null
   if (!clientId && data.client_name) {
-    console.log(`Searching for client by name: "${data.client_name}"`)
     const { data: client } = await supabase
       .from('clients')
       .select('id, name')
@@ -2695,14 +2510,12 @@ async function executeCreateTask(supabase: any, config: any, data: any, tenantId
     
     if (client) {
       clientId = client.id
-      console.log(`Found client: ${client.name} (${clientId})`)
     }
   }
   
   // Resolve lead by name if needed
   let leadId = data.lead_id || null
   if (!leadId && data.lead_name) {
-    console.log(`Searching for lead by name: "${data.lead_name}"`)
     const { data: lead } = await supabase
       .from('leads')
       .select('id, company_name')
@@ -2713,7 +2526,6 @@ async function executeCreateTask(supabase: any, config: any, data: any, tenantId
     
     if (lead) {
       leadId = lead.id
-      console.log(`Found lead: ${lead.company_name} (${leadId})`)
     }
   }
   
@@ -2731,7 +2543,6 @@ async function executeCreateTask(supabase: any, config: any, data: any, tenantId
     client_id: clientId,
   }
   
-  console.log('Creating task with record:', taskRecord)
   
   // Insert task
   const { data: newTask, error: insertError } = await supabase
@@ -2745,7 +2556,6 @@ async function executeCreateTask(supabase: any, config: any, data: any, tenantId
     throw new Error(`שגיאה ביצירת משימה: ${insertError.message}`)
   }
   
-  console.log('Task created:', newTask)
   
   return {
     success: true,
@@ -2756,8 +2566,6 @@ async function executeCreateTask(supabase: any, config: any, data: any, tenantId
 
 // Execute create lead action
 async function executeCreateLead(supabase: any, config: any, data: any, tenantId: string) {
-  console.log('Executing create lead:', config)
-  console.log('Data:', data)
   
   // Extract lead data from payload
   const companyName = data.company_name || data.name || data.full_name || data.phone || 'ליד חדש'
@@ -2771,7 +2579,6 @@ async function executeCreateLead(supabase: any, config: any, data: any, tenantId
   let agencyId = data.agency_id
   
   if (!agencyId) {
-    console.log(`Finding agency for tenant: ${tenantId}`)
     
     // First try to find default agency
     const { data: defaultAgency } = await supabase
@@ -2785,7 +2592,6 @@ async function executeCreateLead(supabase: any, config: any, data: any, tenantId
     
     if (defaultAgency) {
       agencyId = defaultAgency.id
-      console.log(`Found default agency: ${defaultAgency.name} (${agencyId})`)
     } else {
       // Fallback to first active agency
       const { data: firstAgency } = await supabase
@@ -2799,7 +2605,6 @@ async function executeCreateLead(supabase: any, config: any, data: any, tenantId
       
       if (firstAgency) {
         agencyId = firstAgency.id
-        console.log(`Found first active agency: ${firstAgency.name} (${agencyId})`)
       }
     }
   }
@@ -2824,7 +2629,6 @@ async function executeCreateLead(supabase: any, config: any, data: any, tenantId
     })
     
     if (duplicateLead) {
-      console.log(`Duplicate lead found by phone: ${duplicateLead.id} (${duplicateLead.company_name})`)
       return {
         success: true,
         lead_id: duplicateLead.id,
@@ -2868,7 +2672,6 @@ async function executeCreateLead(supabase: any, config: any, data: any, tenantId
     throw new Error(`שגיאה ביצירת ליד: ${insertError.message}`)
   }
   
-  console.log('Lead created:', newLead)
   
   return {
     success: true,

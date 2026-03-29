@@ -16,7 +16,6 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    console.log('Starting meeting reminders check...');
     
     const now = new Date();
     const today = now.toISOString().split('T')[0]; // YYYY-MM-DD format
@@ -38,8 +37,6 @@ Deno.serve(async (req) => {
     // Part 1: Day after meeting set reminders
     // Find leads where meeting was set yesterday and reminder not sent
     // IMPORTANT: Don't send day-after reminder if meeting is today (to avoid double reminders)
-    console.log('Checking for day-after reminders...');
-    console.log('Yesterday range:', yesterdayStart.toISOString(), 'to', yesterdayEnd.toISOString());
     
     const { data: dayAfterLeads, error: dayAfterError } = await supabase
       .from('leads')
@@ -53,7 +50,6 @@ Deno.serve(async (req) => {
       console.error('Error fetching day-after leads:', dayAfterError);
       results.errors.push(`Day-after query error: ${dayAfterError.message}`);
     } else if (dayAfterLeads && dayAfterLeads.length > 0) {
-      console.log(`Found ${dayAfterLeads.length} leads for day-after reminders`);
       
       // Group by tenant
       const leadsByTenant: Record<string, typeof dayAfterLeads> = {};
@@ -83,7 +79,6 @@ Deno.serve(async (req) => {
             })),
           };
 
-          console.log(`Triggering meeting_day_after for tenant ${tenantId} with ${tenantLeads.length} leads`);
 
           const triggerResponse = await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
             method: 'POST',
@@ -95,7 +90,6 @@ Deno.serve(async (req) => {
           });
 
           const triggerResult = await triggerResponse.json();
-          console.log('Trigger result:', triggerResult);
 
           // Mark as sent
           for (const lead of tenantLeads) {
@@ -120,13 +114,10 @@ Deno.serve(async (req) => {
         }
       }
     } else {
-      console.log('No leads found for day-after reminders');
     }
 
     // Part 2: Same day meeting reminders
     // Find leads where meeting is today and reminder not sent
-    console.log('Checking for same-day reminders...');
-    console.log('Today:', today);
     
     const { data: sameDayLeads, error: sameDayError } = await supabase
       .from('leads')
@@ -138,7 +129,6 @@ Deno.serve(async (req) => {
       console.error('Error fetching same-day leads:', sameDayError);
       results.errors.push(`Same-day query error: ${sameDayError.message}`);
     } else if (sameDayLeads && sameDayLeads.length > 0) {
-      console.log(`Found ${sameDayLeads.length} leads for same-day reminders`);
       
       // Group by tenant
       const leadsByTenant: Record<string, typeof sameDayLeads> = {};
@@ -168,7 +158,6 @@ Deno.serve(async (req) => {
             })),
           };
 
-          console.log(`Triggering meeting_same_day for tenant ${tenantId} with ${tenantLeads.length} leads`);
 
           const triggerResponse = await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
             method: 'POST',
@@ -180,7 +169,6 @@ Deno.serve(async (req) => {
           });
 
           const triggerResult = await triggerResponse.json();
-          console.log('Trigger result:', triggerResult);
 
           // Mark as sent
           for (const lead of tenantLeads) {
@@ -205,10 +193,8 @@ Deno.serve(async (req) => {
         }
       }
     } else {
-      console.log('No leads found for same-day reminders');
     }
 
-    console.log('Meeting reminders check completed:', results);
 
     return new Response(
       JSON.stringify({

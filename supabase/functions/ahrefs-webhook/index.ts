@@ -24,7 +24,6 @@ Deno.serve(async (req) => {
     );
 
     const body = await req.json();
-    console.log("Ahrefs webhook received:", JSON.stringify(body).substring(0, 500));
 
     // Support batch: if body is an array, process multiple reports
     const reports = Array.isArray(body) ? body : [body];
@@ -122,7 +121,6 @@ Deno.serve(async (req) => {
     }
 
     const allSuccess = results.every((r) => r.success);
-    console.log(`Ahrefs webhook: processed ${results.length} reports, ${results.filter(r => r.success).length} succeeded`);
 
     return new Response(
       JSON.stringify({

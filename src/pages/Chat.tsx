@@ -195,7 +195,6 @@ export default function Chat() {
           table: 'whatsapp_groups',
         },
         (payload) => {
-          console.log('📝 Group updated:', payload);
           // Invalidate queries to refresh the list with new group name
           queryClient.invalidateQueries({ queryKey: ['active-chats'] });
           queryClient.invalidateQueries({ queryKey: ['contact'] });

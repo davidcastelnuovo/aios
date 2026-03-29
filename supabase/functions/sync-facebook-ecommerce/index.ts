@@ -171,7 +171,6 @@ Deno.serve(async (req) => {
     const sinceStr = since.toISOString().split('T')[0];
     const untilStr = until.toISOString().split('T')[0];
 
-    console.log(`Syncing ecommerce insights for ${adAccountId} from ${sinceStr} to ${untilStr}`);
 
     // Fetch campaign statuses
     const campaignsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/campaigns?fields=id,name,effective_status,configured_status&limit=500&access_token=${accessToken}`;
@@ -188,7 +187,6 @@ Deno.serve(async (req) => {
           configured_status: campaign.configured_status,
         };
       }
-      console.log(`Fetched statuses for ${Object.keys(campaignStatuses).length} campaigns`);
     }
 
     // Fetch insights with actions and action_values for ecommerce data
@@ -273,7 +271,6 @@ Deno.serve(async (req) => {
       };
     });
 
-    console.log(`Got ${insights.length} daily ecommerce insights`);
 
     // Define fields for Facebook Ecommerce table
     const fieldKeys = [
@@ -343,7 +340,6 @@ Deno.serve(async (req) => {
       })
       .eq('id', table_id);
 
-    console.log(`Successfully synced ${insights.length} ecommerce records`);
 
     return new Response(JSON.stringify({ 
       success: true,

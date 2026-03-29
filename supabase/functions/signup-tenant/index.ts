@@ -45,12 +45,10 @@ serve(async (req: Request) => {
     let authenticatedUser: any = null;
 
     if (authHeader && authHeader !== "" && authHeader !== "Bearer ") {
-      console.log("🔍 Checking for authenticated user...");
       const authClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
       const { data: authData, error: authCheckError } = await authClient.auth.getUser();
       if (!authCheckError && authData?.user) {
         authenticatedUser = authData.user;
-        console.log("✅ Found authenticated user via getUser:", authenticatedUser.id, authenticatedUser.email);
       } else {
         console.warn("⚠️ getUser did not return a user. Falling back to JWT decode.", authCheckError?.message);
         // Fallback: decode JWT directly to extract user id/email
@@ -69,7 +67,6 @@ serve(async (req: Request) => {
         const decoded = token ? decodeJwt(token) : null;
         if (decoded?.sub) {
           authenticatedUser = { id: decoded.sub, email: decoded.email ?? null };
-          console.log("✅ Extracted authenticated user from JWT:", authenticatedUser.id, authenticatedUser.email);
         } else {
           console.warn("❌ Could not extract user from Authorization header");
         }
@@ -91,7 +88,6 @@ serve(async (req: Request) => {
       );
     }
 
-    console.log("📝 Creating new tenant and owner:", {
       email: payload.email,
       organizationName: payload.organizationName,
     });
@@ -106,7 +102,6 @@ serve(async (req: Request) => {
     // If a user is already authenticated, always use their account (ignore form email/password)
     if (authenticatedUser) {
       userId = authenticatedUser.id;
-      console.log("↩️ Using existing authenticated user:", userId);
     } else {
       // Try to reuse existing account by verifying provided credentials
       const authClient = createClient(supabaseUrl, anonKey);
@@ -116,7 +111,6 @@ serve(async (req: Request) => {
       });
       if (!signInError && signInData?.user) {
         userId = signInData.user.id;
-        console.log("↩️ Reusing existing account via credentials:", userId);
       } else {
         // Otherwise, create a new user for the provided email
         const { data: userData, error: userError }: any = await supabase.auth.admin.createUser({
@@ -150,7 +144,6 @@ serve(async (req: Request) => {
         } else {
           userId = userData.user.id;
           newUserCreated = true;
-          console.log("✅ User created:", userId);
         }
       }
     }
@@ -170,7 +163,6 @@ serve(async (req: Request) => {
       console.error("Error updating profile:", profileError);
       // Continue anyway - profile will be updated later
     } else {
-      console.log("✅ Profile updated");
     }
 
     // Step 3: Create the tenant/organization with slug
@@ -235,7 +227,6 @@ serve(async (req: Request) => {
       );
     }
 
-    console.log("✅ Tenant created:", newTenant.id);
 
     // Step 4: Add user to tenant_users with owner role
     const { error: tenantUserError } = await supabase
@@ -259,7 +250,6 @@ serve(async (req: Request) => {
       );
     }
 
-    console.log("✅ User added to tenant_users");
 
     // Step 5: Grant owner role
     const { error: roleError } = await supabase
@@ -273,7 +263,6 @@ serve(async (req: Request) => {
       console.error("Error granting owner role:", roleError);
       // Continue anyway - role can be added later
     } else {
-      console.log("✅ Owner role granted");
     }
 
     // Step 6: Grant all module permissions
@@ -312,7 +301,6 @@ serve(async (req: Request) => {
       console.error("Error granting permissions:", permissionsError);
       // Continue anyway - permissions can be added later
     } else {
-      console.log("✅ Permissions granted");
     }
 
     // Step 7: Set active tenant for user
@@ -327,10 +315,8 @@ serve(async (req: Request) => {
       console.error("Error setting active tenant:", activeTenantError);
       // Continue anyway
     } else {
-      console.log("✅ Active tenant set");
     }
 
-    console.log("🎉 Tenant and owner created successfully!");
 
     return new Response(
       JSON.stringify({

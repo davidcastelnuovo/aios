@@ -32,7 +32,6 @@ Deno.serve(async (req) => {
     if (isServiceRole) {
       // Internal call from another edge function (e.g. ai-support-chat)
       // We'll read senderUserId from the body later
-      console.log('🔑 Service role call detected');
       userId = ''; // will be set from body
     } else {
       const supabaseClient = createClient(
@@ -55,7 +54,6 @@ Deno.serve(async (req) => {
         });
       }
       userId = user.id;
-      console.log('✅ User authenticated:', userId);
     }
 
     // Create supabase client - use service role for internal calls, user token for direct calls
@@ -80,7 +78,6 @@ Deno.serve(async (req) => {
         });
       }
       userId = senderUserId;
-      console.log('🔑 Using senderUserId:', userId);
     }
     
     if (!message) {
@@ -144,7 +141,6 @@ Deno.serve(async (req) => {
       });
     }
     
-    console.log('✅ Using tenant:', tenantId);
 
     // Get Green API integration for current user
     const { data: integration } = await supabaseClient
@@ -198,7 +194,6 @@ Deno.serve(async (req) => {
       chatId = `${e164Digits}@c.us`;
     }
 
-    console.log('📤 Sending message via Green API:', { instanceId, chatId, message, quotedMessageId });
 
     // Send message via Green API
     const greenApiUrl = `https://api.green-api.com/waInstance${instanceId}/sendMessage/${apiToken}`;
@@ -222,7 +217,6 @@ Deno.serve(async (req) => {
     });
 
     const responseData = await response.json();
-    console.log('📥 Green API response:', responseData);
 
     if (!response.ok) {
       throw new Error(`Green API error: ${JSON.stringify(responseData)}`);

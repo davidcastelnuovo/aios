@@ -48,7 +48,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    console.log('📞 Maskyoo webhook received - method:', req.method)
     
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -61,7 +60,6 @@ Deno.serve(async (req) => {
       queryParams[key] = value
     })
     
-    console.log('🔗 Query params:', JSON.stringify(queryParams))
 
     // For POST, also try to parse body (could be form-data, JSON, or x-www-form-urlencoded)
     let bodyParams: Record<string, string> = {}
@@ -97,15 +95,12 @@ Deno.serve(async (req) => {
           }
         }
       } catch (e) {
-        console.log('⚠️ Could not parse body:', e)
       }
     }
     
-    console.log('📦 Body params:', JSON.stringify(bodyParams))
 
     // Merge query and body params (query takes precedence for conflict)
     const allParams = { ...bodyParams, ...queryParams }
-    console.log('📋 All params:', JSON.stringify(allParams))
 
     // Extract tenant_id (required) - clean up any query string artifacts
     let tenantId = allParams.tenant_id || allParams.tenantId || allParams.tid || ''
@@ -147,7 +142,6 @@ Deno.serve(async (req) => {
         }
       )
     }
-    console.log(`✅ Tenant verified: ${tenant.name}`)
 
     // Extract Maskyoo parameters
     // Phone: cli (standard Maskyoo param), caller, phone, caller_phone, callerid
@@ -167,7 +161,6 @@ Deno.serve(async (req) => {
         }
       )
     }
-    console.log(`📱 Phone extracted: ${rawPhone} -> normalized: ${phone}`)
 
     // Description: description, desc, source
     const description = allParams.description || allParams.desc || allParams.source || ''
@@ -190,7 +183,6 @@ Deno.serve(async (req) => {
       // Common values for answered calls
       const answeredStatuses = ['answered', 'success', 'completed', 'נענתה']
       if (answeredStatuses.some(s => callStatus.toLowerCase().includes(s))) {
-        console.log(`🔕 Skipping answered call (status: ${callStatus})`)
         return new Response(
           JSON.stringify({ 
             success: true, 
@@ -205,7 +197,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`📝 Extracted data:`, {
       phone,
       description,
       maskyooNumber,
@@ -229,7 +220,6 @@ Deno.serve(async (req) => {
     
     if (defaultAgency) {
       agencyId = defaultAgency.id
-      console.log(`✅ Found default agency: ${defaultAgency.name}`)
     } else {
       // Fallback to first active agency
       const { data: firstAgency } = await supabase
@@ -243,7 +233,6 @@ Deno.serve(async (req) => {
       
       if (firstAgency) {
         agencyId = firstAgency.id
-        console.log(`✅ Found first agency: ${firstAgency.name}`)
       }
     }
 
@@ -270,7 +259,6 @@ Deno.serve(async (req) => {
     const existingLead = existingLeads?.find(l => phonesMatch(l.phone, phone))
     
     if (existingLead) {
-      console.log(`📌 Found existing lead: ${existingLead.id} (${existingLead.company_name})`)
       
       // Optionally append note about new call
       const newNote = `[${new Date().toISOString()}] שיחה נכנסת מ-Maskyoo${maskyooNumber ? ` (${maskyooNumber})` : ''}${callStatus ? ` - סטטוס: ${callStatus}` : ''}${callDuration ? ` - משך: ${callDuration}` : ''}`
@@ -295,7 +283,6 @@ Deno.serve(async (req) => {
         .update(updates)
         .eq('id', existingLead.id)
       
-      console.log(`✅ Updated existing lead with new call info`)
       
       // Trigger automations for existing lead
       try {
@@ -391,7 +378,6 @@ Deno.serve(async (req) => {
       )
     }
 
-    console.log('✅ Lead created successfully:', lead.id)
 
     // Trigger automations for new lead - both inbound_webhook_lead and lead_created
     try {
@@ -408,7 +394,6 @@ Deno.serve(async (req) => {
           }
         }
       })
-      console.log('🤖 Automation triggered: inbound_webhook_lead')
       
       // Second trigger: lead_created (for general new lead automations like WhatsApp notifications)
       await supabase.functions.invoke('trigger-automation', {
@@ -428,7 +413,6 @@ Deno.serve(async (req) => {
           }
         }
       })
-      console.log('🤖 Automation triggered: lead_created')
     } catch (automationError) {
       console.error('⚠️ Failed to trigger automation:', automationError)
     }

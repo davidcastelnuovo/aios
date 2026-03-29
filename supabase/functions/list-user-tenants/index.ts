@@ -43,9 +43,7 @@ serve(async (req: Request) => {
     try {
       const body = await req.json();
       scopeTenantId = body?.scope_tenant_id || null;
-      console.log("📍 Received scope_tenant_id:", scopeTenantId);
     } catch (e) {
-      console.log("⚠️ No body or invalid JSON, proceeding without scope");
     }
 
     // Check if user is super admin
@@ -68,9 +66,7 @@ serve(async (req: Request) => {
       
       if (memberCheck) {
         effectiveTenantId = scopeTenantId;
-        console.log("✅ User is member of scope tenant, using:", effectiveTenantId);
       } else {
-        console.log("⚠️ User is NOT member of scope tenant, ignoring");
       }
     }
 
@@ -95,7 +91,6 @@ serve(async (req: Request) => {
         effectiveTenantId = firstTenant?.tenant_id || null;
       }
       
-      console.log("📌 Using fallback tenant:", effectiveTenantId);
     }
 
     // Get effective tenant details
@@ -108,7 +103,6 @@ serve(async (req: Request) => {
         .single();
       
       effectiveTenantSlug = tenantDetails?.slug || null;
-      console.log("🏢 Effective tenant slug:", effectiveTenantSlug);
     }
 
     // Special case: owners of MarketingCaptain can view all tenants
@@ -130,7 +124,6 @@ serve(async (req: Request) => {
 
     if (isSuperAdmin) {
       // Super admins see ALL tenants
-      console.log("👑 Super admin: showing all tenants");
       const { data: allTenants, error: allTenantsError } = await supabase
         .from("tenants")
         .select("id, name, slug, org_type, parent_tenant_id, subdomain, contact_name, contact_email, status, notes, trial_ends_at")
@@ -144,7 +137,6 @@ serve(async (req: Request) => {
       tenants = allTenants || [];
     } else if (isOwnerOfMarketingCaptain && effectiveTenantSlug === 'marketingcaptain') {
       // Only show all tenants when actively using MarketingCaptain
-      console.log("🎯 MC Owner in MC context: showing all tenants");
       const { data: allTenants, error: allTenantsError } = await supabase
         .from("tenants")
         .select("id, name, slug, org_type, parent_tenant_id, subdomain, contact_name, contact_email, status, notes, trial_ends_at")
@@ -171,11 +163,9 @@ serve(async (req: Request) => {
       let userTenants = (data || []).map((row: any) => row.tenants).filter((t: any) => t && t.id && t.name);
 
       // Always show ALL tenants the user is a member of so they can switch between them
-      console.log("📋 Showing all user's tenants (no filtering)");
       tenants = userTenants;
     }
 
-    console.log(`✅ Returning ${tenants.length} tenants for user ${user.id}`);
 
     return new Response(JSON.stringify({ tenants }), {
       status: 200,

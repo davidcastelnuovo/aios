@@ -38,7 +38,6 @@ Deno.serve(async (req) => {
       throw new Error('tenant_id is required');
     }
 
-    console.log(`Delete tenant request from user ${user.id} for tenant ${tenant_id}`);
 
     // Check user permissions
     const { data: userRoles, error: rolesError } = await supabase
@@ -74,7 +73,6 @@ Deno.serve(async (req) => {
       .eq('id', tenant_id)
       .single();
 
-    console.log(`Deleting tenant: ${tenant?.name} (${tenant?.org_type})`);
 
     // Start cascading deletion (order matters for foreign keys)
     
@@ -205,7 +203,6 @@ Deno.serve(async (req) => {
 
     if (deleteTenantError) throw deleteTenantError;
 
-    console.log(`Successfully deleted tenant ${tenant_id}`);
 
     return new Response(
       JSON.stringify({ 

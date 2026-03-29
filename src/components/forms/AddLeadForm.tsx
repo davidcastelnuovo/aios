@@ -231,7 +231,6 @@ export function AddLeadForm() {
               tenant_id: tenantId,
             },
           });
-          console.log('✅ lead_created automation triggered');
         } catch (automationError) {
           console.error('Error triggering lead_created automation:', automationError);
         }

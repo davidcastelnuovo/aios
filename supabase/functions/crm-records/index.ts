@@ -121,10 +121,8 @@ Deno.serve(async (req) => {
       });
     }
     
-    console.log('Found tenant:', tenantId, 'for user:', user.id);
 
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-    console.log('🔑 Service role key available:', !!serviceRoleKey);
     if (!serviceRoleKey) {
       return new Response(JSON.stringify({ error: 'Server misconfiguration: missing service role key' }), {
         status: 500,
@@ -197,11 +195,9 @@ Deno.serve(async (req) => {
 
       // Use the TABLE's tenant_id for filtering records, not the user's tenant_id
       const effectiveTenantId = tableInfo.tenant_id;
-      console.log(`📊 User tenant: ${tenantId}, Table tenant: ${effectiveTenantId}, Agency: ${tableInfo.agency_id}`);
 
       // Check if aggregated data is requested (for dashboards like Search Console)
       if (aggregated === 'search_console') {
-        console.log(`📊 Fetching aggregated Search Console data for table ${table_id}`);
         
         const pageSize = 1000;
         const allRecords: any[] = [];
@@ -220,7 +216,6 @@ Deno.serve(async (req) => {
           if (page.length < pageSize) break;
         }
 
-        console.log(`📊 Total records fetched: ${allRecords.length}`);
 
         // Aggregate by query
         const queryMap = new Map<string, { clicks: number; impressions: number; ctr: number; position: number; count: number }>();
@@ -260,7 +255,6 @@ Deno.serve(async (req) => {
           totalQueries: queryData.length,
         };
 
-        console.log(`📊 Aggregated ${queryData.length} unique queries, returning top 100. Totals: ${totals.clicks} clicks, ${totals.impressions} impressions`);
 
         return new Response(JSON.stringify({
           queries: topQueries,
@@ -296,7 +290,6 @@ Deno.serve(async (req) => {
 
       const records = allRecords;
 
-      console.log(`📊 Fetched ${records?.length || 0} records for table ${table_id}`);
 
       // Filter by date in data->'date' field if filter is provided
       let filteredRecords = records || [];
@@ -329,7 +322,6 @@ Deno.serve(async (req) => {
       // Calculate totals for logging
       const totalClicks = filteredRecords.reduce((sum: number, r: any) => sum + (Number(r.data?.clicks) || 0), 0);
       const totalImpressions = filteredRecords.reduce((sum: number, r: any) => sum + (Number(r.data?.impressions) || 0), 0);
-      console.log(`📈 Returning ${filteredRecords.length} records with ${totalClicks} clicks and ${totalImpressions} impressions`);
 
       return new Response(JSON.stringify(filteredRecords), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }

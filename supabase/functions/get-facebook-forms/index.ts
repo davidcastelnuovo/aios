@@ -20,7 +20,6 @@ serve(async (req) => {
     const body = await req.json();
     const { tenant_id, page_id, access_token, page_access_token } = body;
 
-    console.log('Fetching Facebook forms for page:', page_id);
 
     if (!access_token) {
       return new Response(JSON.stringify({ error: 'Access token is required' }), {
@@ -36,11 +35,9 @@ serve(async (req) => {
       
       // Paginate through all pages
       while (nextUrl) {
-        console.log('Fetching pages batch...');
         const pagesResponse: Response = await fetch(nextUrl);
         const pagesData: { data?: Array<{ id: string; name: string; access_token?: string }>; paging?: { next?: string }; error?: unknown } = await pagesResponse.json();
         
-        console.log('Facebook API response status:', pagesResponse.status);
 
         if (!pagesResponse.ok || pagesData.error) {
           console.error('Error fetching pages:', pagesData.error || pagesData);
@@ -60,12 +57,10 @@ serve(async (req) => {
         
         // Check if there's a next page
         nextUrl = pagesData.paging?.next || '';
-        console.log('Pages in batch:', pagesData.data?.length || 0, 'Total so far:', allPages.length, 'Has next:', !!nextUrl);
         
         if (!nextUrl) break;
       }
 
-      console.log('Total pages found:', allPages.length);
 
       // Return pages with their access tokens
       const pages = allPages.map((page) => ({
@@ -83,7 +78,6 @@ serve(async (req) => {
     const tokenToUse = page_access_token || access_token;
 
     // Fetch lead forms for the specified page using page access token
-    console.log('Fetching forms for page:', page_id, 'with token type:', page_access_token ? 'page token' : 'user token');
     
     const formsResponse = await fetch(
       `https://graph.facebook.com/v21.0/${page_id}/leadgen_forms?access_token=${tokenToUse}&fields=id,name,status,questions`
@@ -99,7 +93,6 @@ serve(async (req) => {
     }
 
     const formsData = await formsResponse.json();
-    console.log('Forms found:', formsData.data?.length);
 
     // Parse forms and their fields
     const forms = (formsData.data || []).map((form: any) => {

@@ -23,7 +23,6 @@ serve(async (req) => {
       throw new Error('Unauthorized');
     }
 
-    console.log('Starting bulk sync for user:', user.id);
 
     // Get user's calendar tokens
     const { data: tokenData, error: tokenError } = await supabaseClient
@@ -41,7 +40,6 @@ serve(async (req) => {
 
     // Refresh token if expired
     if (expiresAt <= new Date()) {
-      console.log('Token expired, refreshing...');
       
       const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
       const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET');
@@ -79,7 +77,6 @@ serve(async (req) => {
         })
         .eq('user_id', user.id);
 
-      console.log('Token refreshed successfully');
     }
 
     // Get user's profile to find their campaigner_id
@@ -93,7 +90,6 @@ serve(async (req) => {
       throw new Error('User is not linked to a campaigner. Please link your profile to a campaigner first.');
     }
 
-    console.log('User campaigner_id:', profile.campaigner_id);
 
     // Get ONLY tasks assigned to the current user's campaigner_id
     const { data: tasks, error: tasksError } = await supabaseClient
@@ -110,7 +106,6 @@ serve(async (req) => {
       throw new Error('Failed to fetch tasks: ' + tasksError.message);
     }
 
-    console.log(`Found ${tasks?.length || 0} tasks to sync`);
 
     const results = {
       synced: 0,
@@ -181,17 +176,14 @@ serve(async (req) => {
               .update({ google_calendar_event_id: responseData.id })
               .eq('id', task.id);
             results.synced++;
-            console.log(`Created new event for task: ${task.title}`);
           } else {
             results.updated++;
-            console.log(`Updated event for task: ${task.title}`);
           }
         } else {
           const errorData = await calendarResponse.json();
           
           // אם האירוע לא נמצא (404), צור חדש
           if (calendarResponse.status === 404 && task.google_calendar_event_id) {
-            console.log(`Event not found for task ${task.title}, creating new one...`);
             
             const createResponse = await fetch(
               'https://www.googleapis.com/calendar/v3/calendars/primary/events',
@@ -212,7 +204,6 @@ serve(async (req) => {
                 .update({ google_calendar_event_id: createData.id })
                 .eq('id', task.id);
               results.synced++;
-              console.log(`Re-created event for task: ${task.title}`);
             } else {
               results.failed++;
               results.errors.push(`${task.title}: Failed to re-create event`);
@@ -232,7 +223,6 @@ serve(async (req) => {
       }
     }
 
-    console.log('Sync completed:', results);
 
     return new Response(JSON.stringify({ 
       success: true, 

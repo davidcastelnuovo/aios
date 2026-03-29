@@ -14,8 +14,6 @@ serve(async (req) => {
   try {
     const { tableId, startDate, endDate } = await req.json();
     
-    console.log('Syncing Google Search Console data for table:', tableId);
-    console.log('Date range:', startDate, 'to', endDate);
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -59,7 +57,6 @@ serve(async (req) => {
 
     // Refresh token if needed
     if (integrationSettings?.expires_at && new Date(integrationSettings.expires_at) < new Date()) {
-      console.log('Refreshing expired token...');
       
       const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
         method: 'POST',
@@ -109,7 +106,6 @@ serve(async (req) => {
     );
 
     const searchData = await searchResponse.json();
-    console.log('Search Console response:', JSON.stringify(searchData).substring(0, 500));
 
     if (searchData.error) {
       throw new Error(searchData.error.message);
@@ -194,7 +190,6 @@ serve(async (req) => {
       })
       .eq('id', tableId);
 
-    console.log(`Successfully synced ${records.length} records`);
 
     return new Response(
       JSON.stringify({ success: true, records_synced: records.length }),

@@ -118,7 +118,6 @@ Deno.serve(async (req) => {
 
     // Check if token needs refresh
     if (integration.settings?.expires_at && new Date(integration.settings.expires_at) < new Date()) {
-      console.log('Token expired, refreshing...');
       const refreshed = await refreshToken(supabase, integration);
       if (!refreshed) {
         return new Response(JSON.stringify({ error: 'Failed to refresh token' }), {
@@ -176,7 +175,6 @@ Deno.serve(async (req) => {
     const startDateStr = startDate.toISOString().split('T')[0].replace(/-/g, '');
     const endDateStr = endDate.toISOString().split('T')[0].replace(/-/g, '');
 
-    console.log(`Syncing Google Ads data for ${customerId} from ${startDateStr} to ${endDateStr}`);
 
     // Use Google Ads Query Language to fetch campaign performance
     const query = `
@@ -246,7 +244,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`Got ${records.length} Google Ads records`);
 
     // Create fields if they don't exist
     const fieldKeys = ['date', 'campaign_name', 'campaign_id', 'impressions', 'clicks', 'ctr', 'cpc', 'cost', 'conversions', 'cost_per_conversion'];

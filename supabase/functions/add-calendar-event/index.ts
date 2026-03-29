@@ -27,7 +27,6 @@ serve(async (req) => {
     
     // Determine which user's calendar to add event to
     const calendarOwnerId = target_user_id || user.id;
-    console.log('Creating calendar event:', { summary, start, end, attendees, requestingUserId: user.id, calendarOwnerId });
 
     if (!summary || !start) {
       throw new Error('Missing required fields: summary and start are required');
@@ -73,7 +72,6 @@ serve(async (req) => {
 
     // Refresh token if expired
     if (expiresAt <= new Date()) {
-      console.log('Token expired, refreshing...');
       
       const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
       const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET');
@@ -112,7 +110,6 @@ serve(async (req) => {
         })
         .eq('user_id', calendarOwnerId);
 
-      console.log('Token refreshed successfully');
     }
 
     // Create event in Google Calendar
@@ -134,7 +131,6 @@ serve(async (req) => {
       event.attendees = attendees.map((email: string) => ({ email }));
     }
 
-    console.log('Sending event to Google Calendar API...', { hasAttendees: !!event.attendees });
 
     // Use sendUpdates=all to send email invitations to attendees
     const calendarResponse = await fetch(
@@ -156,7 +152,6 @@ serve(async (req) => {
       throw new Error(eventData.error?.message || 'Failed to create event');
     }
 
-    console.log('Event created successfully:', eventData.id);
 
     return new Response(JSON.stringify({ 
       success: true, 

@@ -63,7 +63,6 @@ serve(async (req) => {
 
     // Test the API key by making a simple Domain Rating request
     if (action === 'test' || action === 'connect') {
-      console.log('Testing Ahrefs API connection...');
       
       // Get current date formatted as YYYY-MM-DD
       const today = new Date();
@@ -74,7 +73,6 @@ serve(async (req) => {
       testUrl.searchParams.set('target', 'ahrefs.com');
       testUrl.searchParams.set('date', dateStr);
       
-      console.log('Testing URL:', testUrl.toString());
       
       const testResponse = await fetch(testUrl.toString(), {
         headers: {
@@ -93,7 +91,6 @@ serve(async (req) => {
       }
 
       const testResult = await testResponse.json();
-      console.log('Ahrefs API test successful:', testResult);
 
       // Save/update integration
       const { data: existingIntegration } = await supabase

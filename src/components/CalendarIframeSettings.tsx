@@ -29,12 +29,10 @@ const [eventEnd, setEventEnd] = useState("");
     queryFn: async () => {
       if (!userId) return null;
       
-      console.log('Checking calendar status for user:', userId);
       const { data, error } = await supabase.functions.invoke('google-calendar-auth', {
         body: { action: 'status' }
       });
 
-      console.log('Calendar status response:', data, 'error:', error);
       if (error) throw error;
       return data;
     },
@@ -47,7 +45,6 @@ const [eventEnd, setEventEnd] = useState("");
   // Connect to Google Calendar
   const connectMutation = useMutation({
     mutationFn: async () => {
-      console.log('Starting Google Calendar connection for user:', userId);
       
       // Open popup BEFORE the async call to avoid popup blockers
       const popup = window.open(
@@ -66,7 +63,6 @@ const [eventEnd, setEventEnd] = useState("");
         body: { action: 'init' }
       });
 
-      console.log('Response from google-calendar-auth:', { 
         data, 
         error,
         hasAuthUrl: !!data?.authUrl,
@@ -88,7 +84,6 @@ const [eventEnd, setEventEnd] = useState("");
       return data;
     },
     onSuccess: (data) => {
-      console.log('Success! Auth URL:', data?.authUrl);
       if (data?.authUrl && popupRef.current && !popupRef.current.closed) {
         // Navigate the already-open popup to the auth URL
         popupRef.current.location.href = data.authUrl;
@@ -96,7 +91,6 @@ const [eventEnd, setEventEnd] = useState("");
         // Listen for the popup to notify on success
         const onMessage = (event: MessageEvent) => {
           if (event.data?.type === 'calendar_connected') {
-            console.log('Calendar connected successfully!');
             window.removeEventListener('message', onMessage);
             queryClient.invalidateQueries({ queryKey: ["calendar-status", userId] });
             toast.success("היומן מחובר בהצלחה!");
@@ -122,7 +116,6 @@ const [eventEnd, setEventEnd] = useState("");
   // Disconnect calendar
   const disconnectMutation = useMutation({
     mutationFn: async () => {
-      console.log('🔌 Starting disconnect - User ID:', userId);
       
       // Use supabase.functions.invoke with DELETE-like action
       const { data, error } = await supabase.functions.invoke('google-calendar-auth', {
@@ -134,11 +127,9 @@ const [eventEnd, setEventEnd] = useState("");
         throw error;
       }
 
-      console.log('✅ Disconnect successful:', data);
       return data;
     },
     onSuccess: () => {
-      console.log('🎉 Disconnect mutation onSuccess triggered');
       queryClient.invalidateQueries({ queryKey: ["calendar-status", userId] });
       toast.success("הלוח השנה נותק בהצלחה");
     },
@@ -191,7 +182,6 @@ const [eventEnd, setEventEnd] = useState("");
   };
 
   const isConnected = connectionStatus?.connected === true;
-  console.log('Rendering with isConnected:', isConnected, 'connectionStatus:', connectionStatus);
 
   useEffect(() => {
     if (isConnected && calendarRef.current) {
@@ -258,7 +248,6 @@ const [eventEnd, setEventEnd] = useState("");
               <Button
                 variant="destructive"
                 onClick={() => {
-                  console.log('👆 Disconnect button clicked');
                   disconnectMutation.mutate();
                 }}
                 disabled={disconnectMutation.isPending}

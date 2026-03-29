@@ -151,7 +151,6 @@ export default function GreenAPISettings() {
 
   // Configure Green API webhooks
   const configureWebhooks = async (instId: string, token: string) => {
-    console.log("🔧 Configuring Green API webhooks...");
     try {
       const { data, error } = await supabase.functions.invoke('configure-green-api', {
         body: { instanceId: instId, apiToken: token }
@@ -162,7 +161,6 @@ export default function GreenAPISettings() {
         throw error;
       }
 
-      console.log("✅ Webhooks configured:", data);
       return data;
     } catch (err) {
       console.error("❌ Failed to configure webhooks:", err);

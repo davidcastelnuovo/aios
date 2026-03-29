@@ -65,7 +65,6 @@ async function findSubscriberIdByPhone(apiKey: string, phoneCandidates: string[]
     });
 
     const data = await safeJson(res);
-    console.log(`Find subscriber (${candidate}) response:`, JSON.stringify(data));
 
     // Expected: { status: 'success', data: { id: ... } }
     if (data?.status === 'success' && data?.data?.id) {
@@ -88,7 +87,6 @@ async function findSubscriberIdByEmail(apiKey: string, email?: string | null): P
   });
 
   const data = await safeJson(res);
-  console.log(`Find subscriber (email=${email}) response:`, JSON.stringify(data));
 
   if (data?.status === 'success' && data?.data?.id) {
     return String(data.data.id);
@@ -214,7 +212,6 @@ Deno.serve(async (req) => {
     const phoneCandidates = getPhoneLookupCandidates(lead.phone);
     leadName = lead.contact_name || lead.company_name || 'Unknown';
     
-    console.log(`Processing lead ${lead.id}: ${leadName}, phone: ${formattedPhone}`);
 
     // Step 1: Try to find existing subscriber (phone first, then email)
     subscriberId = await findSubscriberIdByPhone(apiKey, phoneCandidates);
@@ -223,7 +220,6 @@ Deno.serve(async (req) => {
     }
     if (subscriberId) {
       wasExisting = true;
-      console.log(`Found existing subscriber: ${subscriberId}`);
     }
 
     // Step 2: If not found, create new subscriber
@@ -253,23 +249,19 @@ Deno.serve(async (req) => {
       });
 
       const createData = await safeJson(createRes);
-      console.log('Create subscriber response:', JSON.stringify(createData));
 
       if (createData.status === 'success' && createData.data?.id) {
         subscriberId = createData.data.id;
-        console.log(`Created new subscriber: ${subscriberId}`);
       } else {
         // If creation failed because subscriber already exists, try lookup again
         const alreadyExistsMsg = JSON.stringify(createData).toLowerCase();
         const waAlreadyExists = alreadyExistsMsg.includes('already exists');
 
         if (waAlreadyExists) {
-          console.log('Subscriber already exists according to createSubscriber, retrying lookup...');
           subscriberId = await findSubscriberIdByPhone(apiKey, phoneCandidates);
           if (!subscriberId) subscriberId = await findSubscriberIdByEmail(apiKey, lead.email);
           if (subscriberId) {
             wasExisting = true;
-            console.log(`Found after create conflict: ${subscriberId}`);
           }
         }
       }
@@ -278,7 +270,6 @@ Deno.serve(async (req) => {
       if (!subscriberId) {
         wasSkipped = true;
         errorMessage = `Could not find or create subscriber: ${JSON.stringify(createData)}`;
-        console.log(`Skipping lead ${lead.id}: ${errorMessage}`);
         
         // Mark lead with special value so we don't keep trying it
         await supabase
@@ -303,11 +294,9 @@ Deno.serve(async (req) => {
       });
 
       const tagData = await safeJson(tagRes);
-      console.log('Add tag response:', JSON.stringify(tagData));
 
       if (tagData?.status !== 'success') {
         // Tag failed but we still have the subscriber - mark it anyway
-        console.log(`Tag failed for ${subscriberId}, but continuing: ${JSON.stringify(tagData)}`);
       }
 
       // Step 4: Update lead in database with subscriber ID
@@ -338,7 +327,6 @@ Deno.serve(async (req) => {
 
     // Throttle next call to avoid ManyChat rate limits (only if there is more work)
     if ((remainingCount || 0) > 0 && delayMs > 0) {
-      console.log(`Throttling next call: waiting ${delayMs}ms...`);
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
 

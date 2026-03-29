@@ -792,7 +792,6 @@ export default function Users() {
                   id="super-admin-access"
                   checked={currentTenantDetails?.allow_super_admin_access ?? true}
                   onCheckedChange={(checked) => {
-                    console.log("Toggling allow_super_admin_access:", { tenantId, checked });
                     updateSuperAdminAccessMutation.mutate({ allowAccess: !!checked });
                   }}
                 />

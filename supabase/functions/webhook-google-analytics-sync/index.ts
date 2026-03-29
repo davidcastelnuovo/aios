@@ -79,7 +79,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`Received ${records.length} Google Analytics records for table ${table_id}`);
 
     // Fetch table to validate and get settings
     const { data: tableData, error: tableError } = await supabase
@@ -212,7 +211,6 @@ Deno.serve(async (req) => {
       .update({ last_sync_at: new Date().toISOString() })
       .eq("id", table_id);
 
-    console.log(`Sync complete: ${insertedCount} inserted, ${updatedCount} updated`);
 
     return new Response(
       JSON.stringify({

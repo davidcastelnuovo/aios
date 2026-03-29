@@ -246,11 +246,9 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
 
   const mutation = useMutation({
     mutationFn: async (values: z.infer<typeof formSchema>) => {
-      console.log('EditTask: Starting update mutation', { taskId: task.id, values });
       
       // Get agency_id from the selected client if client is specified
       const selectedClient = clients?.find(c => c.id === values.client_id);
-      console.log('EditTask: Selected client', { selectedClient, allClients: clients?.length });
       
       // Only require agency_id if a client is selected
       let agencyId = task.agency_id; // Keep existing agency_id as default
@@ -271,7 +269,6 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
         task_type: "other" as const,
       };
       
-      console.log('EditTask: Update data', updateData);
 
       const { data, error } = await supabase
         .from("tasks")
@@ -279,11 +276,9 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
         .eq("id", task.id)
         .select();
         
-      console.log('EditTask: Update result', { data, error });
       if (error) throw error;
     },
     onSuccess: () => {
-      console.log('EditTask: Update successful');
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       toast.success("המשימה עודכנה בהצלחה");
       onOpenChange(false);

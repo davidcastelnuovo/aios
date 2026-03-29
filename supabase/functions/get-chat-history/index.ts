@@ -29,13 +29,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    console.log('User authenticated:', user.id);
 
     // Parse request body
     let requestBody;
     try {
       requestBody = await req.json();
-      console.log('Request body:', requestBody);
     } catch (parseError) {
       console.error('Failed to parse request body:', parseError);
       return new Response(
@@ -54,7 +52,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log('Fetching messages for:', clientId ? `client: ${clientId}` : `lead: ${leadId}`);
 
     // Get contact to determine tenant_id
     let tenantId: string;
@@ -91,7 +88,6 @@ Deno.serve(async (req) => {
       tenantId = leadData.tenant_id;
     }
 
-    console.log('Contact tenant_id:', tenantId);
 
     // Verify user has access to this tenant
     const { data: userTenantData, error: userTenantError } = await supabase
@@ -122,7 +118,6 @@ Deno.serve(async (req) => {
         .limit(1);
       
       hasAccess = !!(sharedAccess && sharedAccess.length > 0);
-      console.log('Shared integration access check:', hasAccess);
     }
 
     if (!hasAccess) {
@@ -165,7 +160,6 @@ Deno.serve(async (req) => {
     // Reverse to get chronological order (oldest first for display)
     const sortedMessages = messages?.reverse() || [];
 
-    console.log(`Found ${sortedMessages.length} messages`);
 
     return new Response(
       JSON.stringify({ messages: sortedMessages }),
