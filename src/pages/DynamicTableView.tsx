@@ -2129,17 +2129,20 @@ export default function DynamicTableView() {
 
           const entries = Object.entries(campaignGroups);
           const ecommerceCampaigns = entries.filter(([, data]) =>
-            data.campaign_type === 'ecommerce' ||
+            (data.campaign_type === 'ecommerce' ||
             data.purchases > 0 ||
-            data.purchase_value > 0 ||
-            data.add_to_cart > 0
+            data.purchase_value > 0) &&
+            // If campaign has leads but no purchases/revenue, it's a lead campaign
+            // even if it has add_to_cart events
+            !(data.leads > 0 && data.purchases === 0 && data.purchase_value === 0)
           );
+          // Campaigns with only add_to_cart but also leads → lead campaigns
           const leadCampaigns = entries.filter(([, data]) =>
             !(
-              data.campaign_type === 'ecommerce' ||
+              (data.campaign_type === 'ecommerce' ||
               data.purchases > 0 ||
-              data.purchase_value > 0 ||
-              data.add_to_cart > 0
+              data.purchase_value > 0) &&
+              !(data.leads > 0 && data.purchases === 0 && data.purchase_value === 0)
             )
           );
 
