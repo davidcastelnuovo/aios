@@ -51,7 +51,7 @@ export default function SocialGantt() {
   const updatePost = useMutation({
     mutationFn: async (updates: Partial<SocialPost> & { id: string }) => {
       const { id, ...rest } = updates;
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from("social_gantt_posts")
         .update({ ...rest, updated_at: new Date().toISOString() })
         .eq("id", id);
