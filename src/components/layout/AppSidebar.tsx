@@ -39,6 +39,7 @@ import {
   Radar,
   Plug,
   Cpu,
+  Share2,
 } from "lucide-react";
 import {
   Sidebar,
@@ -116,6 +117,7 @@ const iconMap: Record<string, any> = {
   Radar,
   Plug,
   Cpu,
+  Share2,
 };
 
 export function AppSidebar() {
@@ -324,6 +326,7 @@ export function AppSidebar() {
       'rank_tracking': 'clients', // מעקב מיקומים - מי שיש לו גישה ללקוחות יכול לראות
       'ai-detection': 'dashboard', // ניטור נראות AI - נגיש לכל מי שיש לו גישה לדשבורד
       'agents': 'dashboard', // סוכני AI - נגיש לכל מי שיש לו גישה לדשבורד
+      'social-media': 'dashboard', // מתזמן מדיה חברתית - נגיש לכל מי שיש לו גישה לדשבורד
     };
 
     // פריטים שאינם דורשים הרשאה מיוחדת (נגישים לכולם)

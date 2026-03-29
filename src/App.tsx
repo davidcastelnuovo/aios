@@ -86,6 +86,7 @@ const SharedTable = lazy(() => import("./pages/SharedTable"));
 const AiDetection = lazy(() => import("./pages/AiDetection"));
 const TelephonySettings = lazy(() => import("./pages/TelephonySettings"));
 const GithubAgent = lazy(() => import("./pages/GithubAgent"));
+const SocialMediaScheduler = lazy(() => import("./pages/SocialMediaScheduler"));
 
 // QueryClient with optimized defaults for better caching
 const queryClient = new QueryClient({
@@ -208,6 +209,7 @@ const App = () => (
                   <Route path="/t/:tenantSlug/ai-detection" element={<ProtectedRoute><AppLayout><AiDetection /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/github-agent" element={<ProtectedRoute><AppLayout><GithubAgent /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/telephony-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><TelephonySettings /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/social-media" element={<ProtectedRoute><AppLayout><SocialMediaScheduler /></AppLayout></ProtectedRoute>} />
                    
                    {/* Public signing page */}
                   <Route path="/sign/:token" element={<SignDocument />} />
