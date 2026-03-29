@@ -220,7 +220,7 @@ const MENU_TABS: MenuTab[] = [
       {
         label: "כספים",
         items: [
-          { key: "finance", label: "כספים", route: "/finance", icon: DollarSign },
+          // { key: "finance", label: "כספים", route: "/finance", icon: DollarSign }, // hidden
           { key: "accounting-integrations", label: "הנהלת חשבונות", route: "/accounting-integrations", icon: BarChart3 },
         ],
       },

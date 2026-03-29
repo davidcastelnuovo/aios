@@ -84,7 +84,7 @@ const CATEGORIES: Category[] = [
       { key: "agencies", label: "סוכנויות", description: "ניהול סוכנויות ושיוכים", route: "/agencies", icon: Building2, permission: "agencies", color: "bg-violet-500/10 text-violet-600" },
       { key: "users", label: "משתמשים", description: "ניהול משתמשים והרשאות", route: "/users", icon: Users, permission: "users", color: "bg-violet-500/10 text-violet-600" },
       { key: "suppliers", label: "ספקים", description: "ניהול ספקים וחוזים", route: "/suppliers", icon: Truck, permission: "suppliers", color: "bg-violet-500/10 text-violet-600" },
-      { key: "finance", label: "כספים", description: "ניהול כספי ותשלומים", route: "/finance", icon: DollarSign, permission: "finance", color: "bg-violet-500/10 text-violet-600" },
+      // { key: "finance", ... } // hidden
       { key: "accounting-integrations", label: "הנהלת חשבונות", description: "אינטגרציות לתוכנות חשבונאות", route: "/accounting-integrations", icon: BarChart3, permission: "accounting", color: "bg-violet-500/10 text-violet-600" },
       { key: "time-tracking", label: "מעקב זמן", description: "מעקב שעות עבודה", route: "/time-tracking", icon: Clock, permission: "time_tracking", color: "bg-violet-500/10 text-violet-600" },
       { key: "automations", label: "אוטומציות", description: "בניית תהליכים אוטומטיים", route: "/automations", icon: Zap, permission: "automations", color: "bg-violet-500/10 text-violet-600" },
