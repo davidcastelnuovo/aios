@@ -120,14 +120,21 @@ export function AIOSProvider({ children }: { children: React.ReactNode }) {
       activeRef.current = false;
       setIsLoading(false);
     }
-  }, [userId, tenantId, history, queryClient]);
+  }, [userId, tenantId, history, conversationId, queryClient]);
 
   const removePanel = useCallback((index: number) => {
     setDataPanels((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
+  const resetConversation = useCallback(() => {
+    setConversationId(null);
+    setHistory([]);
+    setStatusText("");
+    setDataPanels([]);
+  }, []);
+
   return (
-    <AIOSContext.Provider value={{ isLoading, statusText, dataPanels, history, send, removePanel }}>
+    <AIOSContext.Provider value={{ isLoading, statusText, dataPanels, history, send, removePanel, resetConversation }}>
       {children}
     </AIOSContext.Provider>
   );
