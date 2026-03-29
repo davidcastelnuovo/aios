@@ -46,7 +46,7 @@ export function TrackingCodeGenerator({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  const supabaseUrl = "https://zvoijyneresvkadpprel.supabase.co";
+  const supabaseUrl = "https://jnzguisakdtcollxmgzd.supabase.co";
 
   const generateEmbedCode = (trackingId: string) => {
     return `<!-- Marketing Captain Analytics -->

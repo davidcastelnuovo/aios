@@ -470,7 +470,7 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                 <div className="flex gap-2">
                   <Input 
                     readOnly 
-                    value={`https://zvoijyneresvkadpprel.supabase.co/functions/v1/webhook-task-intake`}
+                    value={`https://jnzguisakdtcollxmgzd.supabase.co/functions/v1/webhook-task-intake`}
                     className="font-mono text-xs bg-background"
                   />
                   <Button
@@ -478,7 +478,7 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                     variant="outline"
                     size="icon"
                     onClick={() => {
-                      navigator.clipboard.writeText(`https://zvoijyneresvkadpprel.supabase.co/functions/v1/webhook-task-intake`);
+                      navigator.clipboard.writeText(`https://jnzguisakdtcollxmgzd.supabase.co/functions/v1/webhook-task-intake`);
                       toast.success("הועתק!");
                     }}
                   >
@@ -504,7 +504,7 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                   <div className="flex gap-2">
                     <Input 
                       readOnly 
-                      value={`https://zvoijyneresvkadpprel.supabase.co/functions/v1/webhook-maskyoo-intake?tenant_id=${automation.tenant_id || 'YOUR_TENANT_ID'}`}
+                      value={`https://jnzguisakdtcollxmgzd.supabase.co/functions/v1/webhook-maskyoo-intake?tenant_id=${automation.tenant_id || 'YOUR_TENANT_ID'}`}
                       className="font-mono text-xs bg-background"
                     />
                     <Button
@@ -512,7 +512,7 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                       variant="outline"
                       size="icon"
                       onClick={() => {
-                        navigator.clipboard.writeText(`https://zvoijyneresvkadpprel.supabase.co/functions/v1/webhook-maskyoo-intake?tenant_id=${automation.tenant_id || ''}`);
+                        navigator.clipboard.writeText(`https://jnzguisakdtcollxmgzd.supabase.co/functions/v1/webhook-maskyoo-intake?tenant_id=${automation.tenant_id || ''}`);
                         toast.success("הועתק!");
                       }}
                     >
