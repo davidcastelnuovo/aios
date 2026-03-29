@@ -359,8 +359,27 @@ export function AppSidebar() {
     return iconMap[iconName] || LayoutDashboard;
   };
 
-  // Get menu items ordered by sort_order
-  const allMenuItems = [...dbMenuItems].sort((a, b) => a.sort_order - b.sort_order);
+  // Get menu items ordered by sort_order, inject hardcoded items if missing from DB
+  const ensuredMenuItems = [...dbMenuItems];
+  const hardcodedItems: MenuItem[] = [
+    {
+      id: 'hardcoded-social-gantt',
+      menu_key: 'social-gantt',
+      custom_label: null,
+      original_label: 'גאנט סושיאל',
+      is_visible: true,
+      sort_order: 999,
+      icon: 'CalendarRange',
+      route: '/social-gantt',
+      parent_menu_key: null,
+    },
+  ];
+  for (const item of hardcodedItems) {
+    if (!ensuredMenuItems.some(m => m.menu_key === item.menu_key)) {
+      ensuredMenuItems.push(item);
+    }
+  }
+  const allMenuItems = ensuredMenuItems.sort((a, b) => a.sort_order - b.sort_order);
   
   // Separate parent items from child items, filtering by visibility and permissions
   const childItemsMap = new Map<string, MenuItem[]>();
