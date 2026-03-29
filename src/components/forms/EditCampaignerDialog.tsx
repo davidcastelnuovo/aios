@@ -211,8 +211,7 @@ export function EditCampaignerDialog({ campaigner, open: externalOpen, onOpenCha
           {agencies && (
             <div className="space-y-2">
               <Label>סוכנויות *</Label>
-agencies?.filter(a => a.name.toLowerCase().includes(agencySearchEC.toLowerCase())).map((agency) => (
-                {agencies?.map((agency) => (
+              {agencies?.filter(a => a.name.toLowerCase().includes(agencySearchEC.toLowerCase())).map((agency) => (
                   <div key={agency.id} className="flex items-center space-x-2 space-x-reverse">
                     <input
                       type="checkbox"
