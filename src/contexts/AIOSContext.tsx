@@ -94,6 +94,7 @@ export function AIOSProvider({ children }: { children: React.ReactNode }) {
 
             if (parsed.type === "conversation_id" && parsed.id) {
               setConversationId(parsed.id);
+              try { localStorage.setItem("aios_conversation_id", parsed.id); } catch {}
               continue;
             }
 
