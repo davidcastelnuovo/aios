@@ -1473,7 +1473,7 @@ const tools = [
           status: { type: 'string', description: 'סינון לפי סטטוס' },
           agency_id: { type: 'string', description: 'סינון לפי סוכנות (UUID)' },
           agency_name: { type: 'string', description: 'סינון לפי שם סוכנות (חיפוש חלקי)' },
-          limit: { type: 'integer', description: 'מספר מקסימלי (ברירת מחדל: 20)' },
+          limit: { type: 'integer', description: 'מספר מקסימלי (ברירת מחדל: 100)' },
         },
       },
     },
