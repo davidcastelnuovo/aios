@@ -101,7 +101,9 @@ function TaskResultDisplay({ result }: { result: any }) {
       {/* Text output */}
       {output && (
         <div className={`p-3 rounded-xl text-xs whitespace-pre-wrap ${hasVisualContent ? "bg-muted/40 text-foreground" : "bg-green-50 text-green-900"}`}>
-          <ReactMarkdown className="prose prose-xs prose-green max-w-none">{output}</ReactMarkdown>
+          <div className="prose prose-xs prose-green max-w-none">
+            <ReactMarkdown>{output}</ReactMarkdown>
+          </div>
         </div>
       )}
     </div>
