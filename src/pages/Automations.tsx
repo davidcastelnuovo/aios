@@ -300,7 +300,7 @@ export default function Automations() {
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <CardTitle className="text-base md:text-lg truncate flex items-center gap-2">
-                    {automation.trigger_type === "carmen_whatsapp_session" ? (
+                    {(automation.trigger_type as string) === "carmen_whatsapp_session" ? (
                       <Bot className="h-4 w-4 shrink-0 text-purple-400" />
                     ) : (automation as any).is_flow ? (
                       <Workflow className="h-4 w-4 shrink-0 text-primary" />
