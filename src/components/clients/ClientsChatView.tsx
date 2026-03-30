@@ -360,7 +360,7 @@ export function ClientsChatView({
   };
 
   return (
-    <div className="flex h-[calc(100vh-220px)] border rounded-lg overflow-hidden bg-background" dir="rtl">
+    <div className="flex h-full border rounded-lg overflow-hidden bg-background" dir="rtl">
       {/* Right side - Client list (25%) */}
       <div className="w-[25%] min-w-[240px] border-s flex flex-col bg-muted/20">
         {/* List header with search */}
