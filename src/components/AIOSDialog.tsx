@@ -215,6 +215,187 @@ export function AIOSDialog({ open, onOpenChange }: AIOSDialogProps) {
     }
   };
 
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        if (recordingTimerRef.current) {
+          clearInterval(recordingTimerRef.current);
+          recordingTimerRef.current = null;
+        }
+        setRecordingDuration(0);
+
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        if (audioBlob.size < 1000) return; // too short
+
+        setIsTranscribing(true);
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) throw new Error('Not authenticated');
+
+          const formData = new FormData();
+          formData.append('audio', audioBlob, 'voice.webm');
+
+          const res = await fetch(
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-voice`,
+            {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${session.access_token}` },
+              body: formData,
+            }
+          );
+
+          if (!res.ok) throw new Error('Transcription failed');
+          const { text } = await res.json();
+
+          if (text && text.trim()) {
+            // Auto-send the transcribed text to Carmen
+            setInput(text.trim());
+            // Use a slight delay to let state update, then trigger send
+            setTimeout(() => {
+              const fakeInput = text.trim();
+              setInput("");
+              // Directly invoke the send logic with the transcribed text
+              sendMessageWithText(fakeInput);
+            }, 100);
+          }
+        } catch (err: any) {
+          console.error('Transcription error:', err);
+          toast({
+            title: "שגיאה בתמלול",
+            description: "לא הצלחנו לתמלל את ההקלטה. נסה שוב.",
+            variant: "destructive",
+          });
+        } finally {
+          setIsTranscribing(false);
+        }
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingDuration(0);
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingDuration(prev => prev + 1);
+      }, 1000);
+    } catch (err) {
+      toast({
+        title: "אין גישה למיקרופון",
+        description: "יש לאפשר גישה למיקרופון בדפדפן",
+        variant: "destructive",
+      });
+    }
+  }, [toast]);
+
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  }, []);
+
+  const sendMessageWithText = async (text: string) => {
+    if (!text.trim() || isStreaming) return;
+
+    const userMessage: Message = {
+      role: 'user',
+      content: text,
+      timestamp: new Date().toISOString(),
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setIsStreaming(true);
+    setStreamingMessage("");
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-support-chat`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            message: text,
+            conversation_id: currentConversationId,
+            tenant_slug: tenantSlug,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        if (response.status === 429) throw new Error('חריגה ממגבלת הקצב. אנא נסה שוב מאוחר יותר.');
+        if (response.status === 402) throw new Error('נדרש תשלום. אנא הוסף יתרה ל-workspace שלך.');
+        throw new Error('שגיאה בתקשורת עם השרת');
+      }
+
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let assistantContent = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.trim() || line.startsWith(':')) continue;
+          if (!line.startsWith('data: ')) continue;
+
+          const data = line.slice(6);
+          if (data === '[DONE]') continue;
+
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.type === 'token') {
+              assistantContent += parsed.content;
+              setStreamingMessage(prev => prev + parsed.content);
+            } else if (parsed.type === 'tool_call') {
+              setMessages(prev => [...prev, {
+                role: 'tool_call', tool: parsed.tool, args: parsed.args, timestamp: new Date().toISOString(),
+              }]);
+            } else if (parsed.type === 'conversation_id') {
+              setCurrentConversationId(parsed.id);
+            } else if (parsed.type === 'done') {
+              if (assistantContent) {
+                setMessages(prev => [...prev, { role: 'assistant', content: assistantContent, timestamp: new Date().toISOString() }]);
+                setStreamingMessage("");
+              }
+              setIsStreaming(false);
+              queryClient.invalidateQueries({ queryKey: ['ai-conversations'] });
+            }
+          } catch (e) { console.error('Parse error:', e); }
+        }
+      }
+    } catch (error: any) {
+      console.error('Error sending message:', error);
+      toast({ title: "שגיאה", description: error.message || "שגיאה בשליחת ההודעה", variant: "destructive" });
+      setIsStreaming(false);
+    }
+  };
+
+  const formatDuration = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
   const toolLabelMap: Record<string, string> = {
     create_task: "יוצר משימה",
     update_task: "מעדכן משימה",
