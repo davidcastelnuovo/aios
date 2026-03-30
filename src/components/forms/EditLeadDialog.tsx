@@ -414,6 +414,7 @@ const updateMutation = useMutation({
 
   // Get available time slots from the meeting scheduler hook
   const timeSlots = meetingScheduler.getAvailableTimeSlots();
+  const endTimeSlots = meetingScheduler.getAvailableEndTimeSlots();
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -1145,7 +1146,7 @@ const updateMutation = useMutation({
                       <div className="space-y-2">
                         <label className="text-sm font-medium flex items-center gap-2">
                           <Clock className="h-4 w-4" />
-                          שעת הפגישה
+                          משעה
                         </label>
                         <Select value={meetingScheduler.meetingTime} onValueChange={meetingScheduler.setMeetingTime}>
                           <SelectTrigger className="w-full text-right rounded-lg border-2 h-11">
@@ -1160,6 +1161,37 @@ const updateMutation = useMutation({
                               timeSlots.map(({ time, available }) => (
                                 <SelectItem
                                   key={time}
+                                  value={time}
+                                  disabled={!available}
+                                  className={cn(!available && "text-muted-foreground line-through")}
+                                >
+                                  {time} {!available && "(תפוס)"}
+                                </SelectItem>
+                              ))
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">עד שעה</label>
+                        <Select value={meetingScheduler.meetingEndTime} onValueChange={meetingScheduler.setMeetingEndTime}>
+                          <SelectTrigger className="w-full text-right rounded-lg border-2 h-11">
+                            <SelectValue placeholder="בחר שעת סיום" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-background z-50 max-h-[200px]">
+                            {!meetingScheduler.meetingTime ? (
+                              <div className="p-2 text-center text-sm text-muted-foreground">בחר קודם שעת התחלה</div>
+                            ) : meetingScheduler.isLoadingCalendar ? (
+                              <div className="p-2 text-center text-sm text-muted-foreground">טוען יומן...</div>
+                            ) : meetingScheduler.calendarError ? (
+                              <div className="p-2 text-center text-sm text-destructive">{meetingScheduler.calendarError}</div>
+                            ) : endTimeSlots.length === 0 ? (
+                              <div className="p-2 text-center text-sm text-muted-foreground">אין שעות סיום זמינות</div>
+                            ) : (
+                              endTimeSlots.map(({ time, available }) => (
+                                <SelectItem
+                                  key={`end-${time}`}
                                   value={time}
                                   disabled={!available}
                                   className={cn(!available && "text-muted-foreground line-through")}
@@ -1211,7 +1243,7 @@ const updateMutation = useMutation({
                           <div className="flex items-center gap-2 text-sm">
                             <CheckCircle2 className="h-4 w-4 text-primary" />
                             <span className="font-medium">
-                              {format(meetingScheduler.meetingDate, "EEEE, d בMMMM yyyy", { locale: he })} בשעה {meetingScheduler.meetingTime}
+                              {format(meetingScheduler.meetingDate, "EEEE, d בMMMM yyyy", { locale: he })} {meetingScheduler.meetingTime} - {meetingScheduler.meetingEndTime}
                             </span>
                           </div>
                         </Card>
@@ -1220,7 +1252,7 @@ const updateMutation = useMutation({
                       <Button
                         type="button"
                         onClick={handleScheduleMeeting}
-                        disabled={!meetingScheduler.meetingDate || meetingScheduler.isSchedulingMeeting}
+                        disabled={!meetingScheduler.meetingDate || !meetingScheduler.meetingTime || !meetingScheduler.meetingEndTime || meetingScheduler.isSchedulingMeeting}
                         className="w-full h-11"
                       >
                         {meetingScheduler.isSchedulingMeeting ? (
