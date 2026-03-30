@@ -31,7 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, X, Calendar as CalendarIcon, Clock, CheckCircle2, Paperclip, Plus, Trash2, Users } from "lucide-react";
+import { Loader2, X, Calendar as CalendarIcon, Clock, CheckCircle2, Paperclip, Plus, Trash2, Users, UserPlus } from "lucide-react";
 import { FolderLinksField } from "@/components/forms/FolderLinksField";
 import { AttachmentsField } from "@/components/forms/AttachmentsField";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -82,8 +82,23 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
 
   const meetingScheduler = useMeetingScheduler(tenantId);
   const [selectedMeetingEmails, setSelectedMeetingEmails] = useState<string[]>([]);
+  const [selectedTeamMembers, setSelectedTeamMembers] = useState<string[]>([]);
 
-  // Client contacts
+  // Team members for meeting invitations
+  const { data: teamMembers } = useQuery({
+    queryKey: ["team-members-for-meeting", tenantId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .not("email", "is", null)
+        .order("full_name");
+      if (error) throw error;
+      return (data || []).filter((p: any) => p.email && p.email.trim() !== "");
+    },
+    enabled: !!tenantId && open,
+  });
+
   interface ClientContact {
     id?: string;
     contact_name: string;
@@ -406,10 +421,11 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
       contactEmail: client.email,
       contactId: client.id,
       contactType: 'client',
-      additionalEmails: selectedMeetingEmails,
+      additionalEmails: [...selectedMeetingEmails, ...selectedTeamMembers],
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ["clients"] });
         setSelectedMeetingEmails([]);
+        setSelectedTeamMembers([]);
       },
     });
   };
@@ -966,7 +982,34 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                     </div>
                   )}
 
-                  {/* Summary Card */}
+                  {/* Team members selection */}
+                  {teamMembers && teamMembers.length > 0 && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium flex items-center gap-2">
+                        <UserPlus className="h-4 w-4" />
+                        הזמן משתמשים מהמערכת:
+                      </label>
+                      <div className="space-y-1.5 max-h-[150px] overflow-y-auto">
+                        {teamMembers.map((member: any) => (
+                          <label key={member.id} className="flex items-center gap-2 p-2 rounded-md bg-muted/50 cursor-pointer text-sm">
+                            <Checkbox
+                              checked={selectedTeamMembers.includes(member.email)}
+                              onCheckedChange={(checked) => {
+                                setSelectedTeamMembers(prev =>
+                                  checked
+                                    ? [...prev, member.email]
+                                    : prev.filter(e => e !== member.email)
+                                );
+                              }}
+                            />
+                            <span className="font-medium">{member.full_name}</span>
+                            <span className="text-muted-foreground mr-auto">{member.email}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {meetingScheduler.meetingDate && (
                     <Card className="p-4 bg-primary/5 border-primary/20">
                       <div className="flex items-center gap-2 text-sm">
@@ -991,7 +1034,10 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                     ) : (
                       <>
                         <CalendarIcon className="ml-2 h-4 w-4" />
-                        {selectedMeetingEmails.length > 0 ? `קבע פגישה ושלח זימון ל-${selectedMeetingEmails.length} אנשי קשר` : "קבע פגישה"}
+                        {(() => {
+                          const totalInvitees = selectedMeetingEmails.length + selectedTeamMembers.length;
+                          return totalInvitees > 0 ? `קבע פגישה ושלח זימון ל-${totalInvitees} משתתפים` : "קבע פגישה";
+                        })()}
                       </>
                     )}
                   </Button>
