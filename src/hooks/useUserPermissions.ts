@@ -118,7 +118,7 @@ export function useUserPermissions() {
     }
 
     // Modules accessible to ALL authenticated org members regardless of permissions
-    const alwaysAccessibleModules: ModulePermission[] = ["team_chat", "settings"];
+    const alwaysAccessibleModules: ModulePermission[] = ["team_chat", "settings", "reports"];
 
     if (alwaysAccessibleModules.includes(module)) {
       return true;
