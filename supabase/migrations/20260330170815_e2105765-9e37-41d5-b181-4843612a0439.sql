@@ -1,0 +1,1 @@
+ALTER TABLE public.carmen_whatsapp_sessions ADD COLUMN ai_conversation_id uuid REFERENCES public.ai_conversations(id);
