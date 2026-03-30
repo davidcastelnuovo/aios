@@ -1752,7 +1752,7 @@ Deno.serve(async (req) => {
                 } else {
                   // No content after keyword — create empty ai_conversation for future messages
                   await syncCarmenToAIConversation(supabaseClient, newSession, []);
-                
+                }
                 return new Response(JSON.stringify({ success: true, carmen_session: 'started' }), {
                   headers: { ...corsHeaders, 'Content-Type': 'application/json' },
                 });
