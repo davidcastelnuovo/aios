@@ -1,58 +1,54 @@
 
 
-# תוכנית: השלמת יכולות כרמן במודול משימות
+# תיקון כרמן בוואטסאפ — chat_id חסר בסשן
 
-## מצב נוכחי
+## הבעיה
 
-### מה אפשר לעשות ידנית במודול משימות:
-1. **יצירת משימה** - כותרת, לקוח, ליד, קמפיינר, תאריך, שעה, עדיפות, הערות, משך זמן
-2. **חיפוש משימה** - לפי שם/כותרת
-3. **עדכון משימה** - כותרת, הערות, עדיפות, סטטוס, תאריך, שעה, לקוח, ליד, קמפיינר, משך
-4. **מחיקת משימה**
-5. **שינוי סטטוס** - open / in_progress / done
-6. **הוספת עדכון** (תגובה/הערה על משימה)
-7. **הוספת שותפים** (collaborators) למשימה
-8. **הסרת שותפים** ממשימה
-9. **גרירת משימה** בין ימים (שינוי תאריך)
-10. **סינון** - לפי קמפיינר, סטטוס, לקוח, עדיפות
-11. **שיוך ליד** למשימה
+כרמן מגיבה להודעה הראשונה (עם מילת הטריגר "כרמן") אבל לא לשאר ההודעות בשיחה. הסיבה:
 
-### מה כרמן יכולה לעשות כרגע:
-1. ✅ יצירת משימה (חלקי - בלי ליד, בלי קמפיינר ספציפי, בלי משך)
-2. ❌ חיפוש משימה לפי שם/כותרת
-3. ❌ עדכון פרטי משימה (רק סטטוס)
-4. ❌ מחיקת משימה
-5. ✅ שינוי סטטוס
-6. ❌ הוספת עדכון למשימה
-7. ❌ ניהול שותפים
-8. ❌ שיוך ליד למשימה
+1. **הוובהוק שולח payload לאוטומציה בלי `chat_id`** — שדה `chat_id` (לדוגמה `972507677613@c.us`) לא נכלל ב-payload שנשלח ל-`trigger-automation`.
+2. **הסשן נוצר עם `chat_id` ריק** — ה-`trigger-automation` יוצר סשן ב-`carmen_whatsapp_sessions` עם `chat_id: ""`.
+3. **הוובהוק לא מוצא את הסשן** — כשההודעה הבאה מגיעה, `findActiveCarmenSession` ב-`green-api-webhook` מחפש לפי `chat_id` אבל הסשן שמור עם ערך ריק, אז לא נמצא, וההודעה לא מועברת לכרמן.
 
-## שינויים נדרשים
+## התיקון (2 שינויים)
 
-### קובץ: `supabase/functions/run-ai-agent/index.ts`
+### 1. הוספת `chat_id` ל-automation payload (`green-api-webhook`)
+בשורות ~1729-1745, להוסיף את `senderData.chatId` לתוך ה-payload שנשלח ל-trigger-automation:
+```typescript
+data: {
+  chat_id: senderData.chatId,  // ← הוספה
+  sender_name: ...,
+  sender_phone: phoneNumber,
+  ...
+}
+```
 
-**1. הוספת כלי `search_tasks`** - חיפוש משימות לפי כותרת/שם
-- פרמטרים: `search_term`, `status` (אופציונלי), `client_id` (אופציונלי)
-- שימוש ב-`ilike` לחיפוש טקסט חופשי
+### 2. תיקון `findActiveCarmenSession` לחפש גם לפי phone (`green-api-webhook`)
+שינוי הפונקציה בשורות 259-274 כך שתחפש גם לפי phone (כמו ש-trigger-automation כבר עושה):
+```typescript
+async function findActiveCarmenSession(supabase, tenantId, chatId) {
+  const phone = chatId.split('@')[0];
+  const { data } = await supabase
+    .from('carmen_whatsapp_sessions')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .eq('status', 'active')
+    .or(`chat_id.eq.${chatId},phone.eq.${phone}`)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data || null;
+}
+```
 
-**2. הרחבת כלי `create_task`** - הוספת פרמטרים חסרים:
-- `lead_id` - שיוך ליד
-- `campaigner_id` - שיוך קמפיינר ספציפי
-- `duration_minutes` - משך המשימה
+### 3. תיקון הסשן הקיים בDB
+עדכון הסשן הפעיל הנוכחי (שנוצר עם chat_id ריק) כדי שיעבוד מיד:
+```sql
+UPDATE carmen_whatsapp_sessions 
+SET chat_id = '972507677613@c.us' 
+WHERE id = '8f7b67b8-...' AND chat_id = '';
+```
 
-**3. הוספת כלי `update_task`** - עדכון כל שדות המשימה:
-- title, notes, priority, due_date, due_time, client_id, lead_id, campaigner_id, duration_minutes, status
-
-**4. הוספת כלי `delete_task`** - מחיקת משימה לפי ID
-
-**5. הוספת כלי `add_task_update`** - הוספת תגובה/עדכון למשימה
-
-**6. הוספת כלי `manage_task_collaborators`** - הוספה/הסרת שותפים:
-- action: `add` / `remove`
-- task_id, campaigner_id
-
-כל הכלים ישמרו על tenant isolation וישתמשו ב-`tenantId` הקיים.
-
-## סיכום
-6 שינויים בקובץ אחד (`run-ai-agent/index.ts`) שיביאו את כרמן לפריטי מלא עם מודול המשימות.
+### סיכום
+שני שינויים קטנים + תיקון נתון בDB. אחרי זה כרמן תזהה את הסשן הפעיל בכל הודעה ותמשיך את השיחה.
 
