@@ -574,26 +574,61 @@ export function AIOSDialog({ open, onOpenChange }: AIOSDialogProps) {
         {/* Input */}
         <div className="border-t border-border p-3 bg-card flex-shrink-0">
           <div className="max-w-2xl mx-auto flex gap-2">
-            <Textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyPress}
-              placeholder="בקש ממני לבצע פעולה... (Enter לשליחה)"
-              className="min-h-[44px] max-h-[120px] resize-none text-sm"
-              disabled={isStreaming}
-            />
-            <Button
-              onClick={sendMessage}
-              disabled={!input.trim() || isStreaming}
-              size="icon"
-              className="h-[44px] w-[44px] flex-shrink-0"
-            >
-              {isStreaming ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-            </Button>
+            {isRecording ? (
+              <div className="flex-1 flex items-center gap-3 bg-destructive/10 border border-destructive/30 rounded-md px-4 py-2">
+                <div className="h-3 w-3 rounded-full bg-destructive animate-pulse" />
+                <span className="text-sm font-medium text-destructive">מקליט... {formatDuration(recordingDuration)}</span>
+                <div className="flex-1" />
+                <Button
+                  onClick={stopRecording}
+                  size="icon"
+                  variant="destructive"
+                  className="h-[36px] w-[36px]"
+                >
+                  <Square className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : isTranscribing ? (
+              <div className="flex-1 flex items-center gap-3 bg-muted rounded-md px-4 py-2">
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                <span className="text-sm text-muted-foreground">ממלל את ההקלטה...</span>
+              </div>
+            ) : (
+              <>
+                <Textarea
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyPress}
+                  placeholder="בקש ממני לבצע פעולה... (Enter לשליחה)"
+                  className="min-h-[44px] max-h-[120px] resize-none text-sm"
+                  disabled={isStreaming}
+                />
+                <div className="flex flex-col gap-1">
+                  <Button
+                    onClick={sendMessage}
+                    disabled={!input.trim() || isStreaming}
+                    size="icon"
+                    className="h-[44px] w-[44px] flex-shrink-0"
+                  >
+                    {isStreaming ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+                <Button
+                  onClick={startRecording}
+                  disabled={isStreaming}
+                  size="icon"
+                  variant="outline"
+                  className="h-[44px] w-[44px] flex-shrink-0 hover:bg-primary/10 hover:text-primary hover:border-primary"
+                  title="הקלט הודעה קולית"
+                >
+                  <Mic className="h-4 w-4" />
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </DialogContent>
