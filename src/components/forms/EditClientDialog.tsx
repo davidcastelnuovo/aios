@@ -84,17 +84,19 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
   const [selectedMeetingEmails, setSelectedMeetingEmails] = useState<string[]>([]);
   const [selectedTeamMembers, setSelectedTeamMembers] = useState<string[]>([]);
 
-  // Team members for meeting invitations
+  // Team members for meeting invitations - filtered by tenant
   const { data: teamMembers } = useQuery({
     queryKey: ["team-members-for-meeting", tenantId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("profiles")
-        .select("id, full_name, email")
-        .not("email", "is", null)
-        .order("full_name");
+        .from("tenant_users")
+        .select("user_id, profiles!inner(id, full_name, email)")
+        .eq("tenant_id", tenantId!)
+        .not("profiles.email", "is", null);
       if (error) throw error;
-      return (data || []).filter((p: any) => p.email && p.email.trim() !== "");
+      return (data || [])
+        .map((tu: any) => tu.profiles)
+        .filter((p: any) => p && p.email && p.email.trim() !== "");
     },
     enabled: !!tenantId && open,
   });
