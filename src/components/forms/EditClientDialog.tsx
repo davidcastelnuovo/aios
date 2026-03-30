@@ -982,7 +982,34 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                     </div>
                   )}
 
-                  {/* Summary Card */}
+                  {/* Team members selection */}
+                  {teamMembers && teamMembers.length > 0 && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium flex items-center gap-2">
+                        <UserPlus className="h-4 w-4" />
+                        הזמן משתמשים מהמערכת:
+                      </label>
+                      <div className="space-y-1.5 max-h-[150px] overflow-y-auto">
+                        {teamMembers.map((member: any) => (
+                          <label key={member.id} className="flex items-center gap-2 p-2 rounded-md bg-muted/50 cursor-pointer text-sm">
+                            <Checkbox
+                              checked={selectedTeamMembers.includes(member.email)}
+                              onCheckedChange={(checked) => {
+                                setSelectedTeamMembers(prev =>
+                                  checked
+                                    ? [...prev, member.email]
+                                    : prev.filter(e => e !== member.email)
+                                );
+                              }}
+                            />
+                            <span className="font-medium">{member.full_name}</span>
+                            <span className="text-muted-foreground mr-auto">{member.email}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {meetingScheduler.meetingDate && (
                     <Card className="p-4 bg-primary/5 border-primary/20">
                       <div className="flex items-center gap-2 text-sm">
