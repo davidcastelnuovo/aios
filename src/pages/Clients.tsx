@@ -1180,6 +1180,7 @@ export default function Clients() {
           </Table>
         </div>
       )}
+      </div>
 
       {visibleClients?.length === 0 && (
         <Card>
