@@ -1731,6 +1731,7 @@ Deno.serve(async (req) => {
           trigger_type: 'whatsapp_message_received',
           tenant_id: tenantId,
           data: {
+            chat_id: senderData.chatId,
             sender_name: senderData.senderName || null,
             sender_phone: phoneNumber,
             message_text: messageText,
