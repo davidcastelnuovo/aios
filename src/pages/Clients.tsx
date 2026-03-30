@@ -516,7 +516,7 @@ export default function Clients() {
   }
 
   return (
-    <div className="space-y-4 p-4">
+    <div className="flex flex-col h-full p-4 gap-4 overflow-hidden">
       <div className="flex items-center gap-2 flex-wrap">
         <h2 className="text-2xl font-bold ml-auto">לקוחות</h2>
 
@@ -695,6 +695,7 @@ export default function Clients() {
         </DialogContent>
       </Dialog>
 
+      <div className="flex-1 min-h-0 overflow-auto">
       {viewMode === "chat" ? (
         <ClientsChatView
           clients={visibleClients || []}
@@ -1179,6 +1180,7 @@ export default function Clients() {
           </Table>
         </div>
       )}
+      </div>
 
       {visibleClients?.length === 0 && (
         <Card>
