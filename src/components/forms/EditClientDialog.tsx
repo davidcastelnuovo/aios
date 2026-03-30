@@ -152,18 +152,16 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
     setShowAddContact(false);
   };
 
-  // Get all emails for meeting invitations
+  // Get all contacts for meeting invitations (with or without email)
   const allContactEmails = useMemo(() => {
-    const emails: { email: string; name: string; source: string }[] = [];
-    if (client.email) {
-      emails.push({ email: client.email, name: client.contact_name || client.name, source: "ראשי" });
-    }
+    const contacts: { email: string | null; name: string; source: string }[] = [];
+    // Always add the primary contact
+    contacts.push({ email: client.email || null, name: client.contact_name || client.name, source: "ראשי" });
+    // Add all non-primary contacts
     clientContacts?.forEach((c: any) => {
-      if (c.email) {
-        emails.push({ email: c.email, name: c.contact_name, source: c.role || "נוסף" });
-      }
+      contacts.push({ email: c.email || null, name: c.contact_name, source: c.role || "נוסף" });
     });
-    return emails;
+    return contacts;
   }, [client.email, client.contact_name, client.name, clientContacts]);
 
   const { data: agencies } = useQuery({
@@ -943,30 +941,28 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                         שלח זימון ל:
                       </label>
                       <div className="space-y-1.5">
-                        {allContactEmails.map((contact) => (
-                          <label key={contact.email} className="flex items-center gap-2 p-2 rounded-md bg-muted/50 cursor-pointer text-sm">
+                        {allContactEmails.map((contact, idx) => (
+                          <label key={contact.email || `contact-${idx}`} className={`flex items-center gap-2 p-2 rounded-md bg-muted/50 text-sm ${contact.email ? 'cursor-pointer' : 'opacity-60'}`}>
                             <Checkbox
-                              checked={selectedMeetingEmails.includes(contact.email)}
+                              checked={contact.email ? selectedMeetingEmails.includes(contact.email) : false}
+                              disabled={!contact.email}
                               onCheckedChange={(checked) => {
+                                if (!contact.email) return;
                                 setSelectedMeetingEmails(prev =>
                                   checked
-                                    ? [...prev, contact.email]
+                                    ? [...prev, contact.email!]
                                     : prev.filter(e => e !== contact.email)
                                 );
                               }}
                             />
                             <span className="font-medium">{contact.name}</span>
                             <span className="text-muted-foreground">({contact.source})</span>
-                            <span className="text-muted-foreground mr-auto">{contact.email}</span>
+                            <span className="text-muted-foreground mr-auto">
+                              {contact.email || 'ללא אימייל'}
+                            </span>
                           </label>
                         ))}
                       </div>
-                    </div>
-                  )}
-
-                  {allContactEmails.length === 0 && (
-                    <div className="bg-muted/50 border rounded-lg p-3 text-sm text-muted-foreground">
-                      אין אנשי קשר עם אימייל — הזימון לא יישלח במייל
                     </div>
                   )}
 
