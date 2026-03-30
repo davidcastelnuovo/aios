@@ -129,23 +129,49 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return { update_id: data.id }
     }
     case 'create_task': {
-      const { data: profile } = await supabase.from('profiles').select('campaigner_id').eq('id', userId).single()
-      const { data: campAgency } = await supabase.from('campaigner_agencies').select('agency_id').eq('campaigner_id', profile?.campaigner_id).limit(1).single()
+      let campaignerId = args.campaigner_id
+      let agencyId = null
+      if (!campaignerId) {
+        const { data: profile } = await supabase.from('profiles').select('campaigner_id').eq('id', userId).single()
+        campaignerId = profile?.campaigner_id
+      }
+      if (campaignerId) {
+        const { data: campAgency } = await supabase.from('campaigner_agencies').select('agency_id').eq('campaigner_id', campaignerId).limit(1).single()
+        agencyId = campAgency?.agency_id
+      }
+      if (!agencyId) {
+        const { data: defaultAgency } = await supabase.from('agencies').select('id').eq('tenant_id', tenantId).limit(1).single()
+        agencyId = defaultAgency?.id
+      }
       const { data, error } = await supabase.from('tasks').insert({
-        title: args.title, agency_id: campAgency?.agency_id, campaigner_id: profile?.campaigner_id,
+        title: args.title, agency_id: agencyId, campaigner_id: campaignerId,
         tenant_id: tenantId, priority: args.priority || 5, status: 'open', task_type: 'other',
-        client_id: args.client_id, due_date: args.due_date, due_time: args.due_time, notes: args.notes,
+        client_id: args.client_id || null, lead_id: args.lead_id || null,
+        due_date: args.due_date, due_time: args.due_time, notes: args.notes,
+        duration_minutes: args.duration_minutes || null,
       }).select('id, title, status').single()
       if (error) throw error
       return { task_id: data.id, title: data.title, status: data.status }
     }
-    case 'list_tasks': {
-      let query = supabase.from('tasks').select('id, title, status, priority, due_date, clients(name)').eq('tenant_id', tenantId).order('priority', { ascending: false }).limit(args.limit || 20)
+    case 'search_tasks': {
+      let query = supabase.from('tasks').select('id, title, status, priority, due_date, due_time, notes, duration_minutes, clients(name), leads(company_name), campaigners(full_name)')
+        .eq('tenant_id', tenantId)
+        .ilike('title', `%${args.search_term}%`)
+        .order('created_at', { ascending: false })
+        .limit(10)
       if (args.status) query = query.eq('status', args.status)
       if (args.client_id) query = query.eq('client_id', args.client_id)
       const { data, error } = await query
       if (error) throw error
-      return { count: data.length, tasks: data.map((t: any) => ({ ...t, client_name: t.clients?.name })) }
+      return { count: data.length, tasks: data.map((t: any) => ({ ...t, client_name: t.clients?.name, lead_name: t.leads?.company_name, campaigner_name: t.campaigners?.full_name })) }
+    }
+    case 'list_tasks': {
+      let query = supabase.from('tasks').select('id, title, status, priority, due_date, due_time, duration_minutes, clients(name), leads(company_name), campaigners(full_name)').eq('tenant_id', tenantId).order('priority', { ascending: false }).limit(args.limit || 20)
+      if (args.status) query = query.eq('status', args.status)
+      if (args.client_id) query = query.eq('client_id', args.client_id)
+      const { data, error } = await query
+      if (error) throw error
+      return { count: data.length, tasks: data.map((t: any) => ({ ...t, client_name: t.clients?.name, lead_name: t.leads?.company_name, campaigner_name: t.campaigners?.full_name })) }
     }
     case 'update_task_status': {
       const { data, error } = await supabase.from('tasks').update({ status: args.status }).eq('id', args.task_id).eq('tenant_id', tenantId).select('id, title, status').single()
