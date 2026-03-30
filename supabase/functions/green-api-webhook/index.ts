@@ -1743,7 +1743,15 @@ Deno.serve(async (req) => {
                     })
                     .eq('id', newSession.id);
                   await sendGreenApiMessage(instanceId, apiToken, chatId, carmenResponse);
-                }
+                  
+                  // Sync to ai_conversations
+                  await syncCarmenToAIConversation(supabaseClient, newSession, [
+                    { role: 'user', content: contentAfterKeyword, timestamp: new Date().toISOString() },
+                    { role: 'assistant', content: carmenResponse, timestamp: new Date().toISOString() }
+                  ]);
+                } else {
+                  // No content after keyword — create empty ai_conversation for future messages
+                  await syncCarmenToAIConversation(supabaseClient, newSession, []);
                 
                 return new Response(JSON.stringify({ success: true, carmen_session: 'started' }), {
                   headers: { ...corsHeaders, 'Content-Type': 'application/json' },
