@@ -132,8 +132,16 @@ const AUTO_DETECT_MAPPINGS: Record<string, string> = {
   'account manager': 'campaigner',
 };
 
-export function ImportClientsCSV() {
-  const [open, setOpen] = useState(false);
+interface ImportClientsCSVProps {
+  externalOpen?: boolean;
+  onExternalOpenChange?: (open: boolean) => void;
+}
+
+export function ImportClientsCSV({ externalOpen, onExternalOpenChange }: ImportClientsCSVProps = {}) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = externalOpen !== undefined;
+  const open = isControlled ? externalOpen : internalOpen;
+  const setOpen = isControlled ? (v: boolean) => onExternalOpenChange?.(v) : setInternalOpen;
   const [step, setStep] = useState<ImportStep>('upload');
   const [file, setFile] = useState<File | null>(null);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
@@ -547,12 +555,14 @@ export function ImportClientsCSV() {
       if (!isOpen) handleClose();
       else setOpen(true);
     }}>
-      <DialogTrigger asChild>
-        <Button variant="outline">
-          <Upload className="ml-2 h-4 w-4" />
-          ייבוא מ-CSV
-        </Button>
-      </DialogTrigger>
+      {!isControlled && (
+        <DialogTrigger asChild>
+          <Button variant="outline">
+            <Upload className="ml-2 h-4 w-4" />
+            ייבוא מ-CSV
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent dir="rtl" className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>ייבוא לקוחות מקובץ CSV</DialogTitle>

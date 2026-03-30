@@ -16,8 +16,16 @@ import { Label } from "@/components/ui/label";
 import { FileSpreadsheet } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
-export function ImportClientsSheet() {
-  const [open, setOpen] = useState(false);
+interface ImportClientsSheetProps {
+  externalOpen?: boolean;
+  onExternalOpenChange?: (open: boolean) => void;
+}
+
+export function ImportClientsSheet({ externalOpen, onExternalOpenChange }: ImportClientsSheetProps = {}) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = externalOpen !== undefined;
+  const open = isControlled ? externalOpen : internalOpen;
+  const setOpen = isControlled ? (v: boolean) => onExternalOpenChange?.(v) : setInternalOpen;
   const [sheetId, setSheetId] = useState("");
   const [range, setRange] = useState("Sheet1!A:I");
   const queryClient = useQueryClient();
@@ -70,12 +78,14 @@ export function ImportClientsSheet() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline">
-          <FileSpreadsheet className="ml-2 h-4 w-4" />
-          ייבוא מגוגל שיטס
-        </Button>
-      </DialogTrigger>
+      {!isControlled && (
+        <DialogTrigger asChild>
+          <Button variant="outline">
+            <FileSpreadsheet className="ml-2 h-4 w-4" />
+            ייבוא מגוגל שיטס
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent dir="rtl" className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>ייבוא לקוחות מגוגל שיטס</DialogTitle>

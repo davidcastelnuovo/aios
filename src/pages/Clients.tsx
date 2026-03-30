@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, Building2, Globe, Coins, Phone, Mail, LayoutGrid, Table as TableIcon, MessageCircle, Edit, Search, Plus, Trash2, FolderOpen, ExternalLink, Download } from "lucide-react";
+import { Users, Building2, Globe, Coins, Phone, Mail, LayoutGrid, Table as TableIcon, MessageCircle, Edit, Search, Plus, Trash2, FolderOpen, ExternalLink, Download, Filter, FileSpreadsheet, Upload } from "lucide-react";
 import { AddClientForm } from "@/components/forms/AddClientForm";
 import { ImportClientsSheet } from "@/components/forms/ImportClientsSheet";
 import { ImportClientsCSV } from "@/components/forms/ImportClientsCSV";
@@ -46,6 +46,18 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export default function Clients() {
   const { selectedAgency } = useAgency();
@@ -63,6 +75,16 @@ export default function Clients() {
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
   const { getFieldLabel } = useCustomFieldLabels('client');
+  const [showFiltersDialog, setShowFiltersDialog] = useState(false);
+  const [showImportCSV, setShowImportCSV] = useState(false);
+  const [showImportSheet, setShowImportSheet] = useState(false);
+
+  // Track active filter count for badge
+  const activeFilterCount = [
+    selectedCampaigner !== "all" ? 1 : 0,
+    selectedMoodStatus !== "all" ? 1 : 0,
+    hideInactive ? 1 : 0,
+  ].reduce((a, b) => a + b, 0);
 
   // Fetch agencies (owned + shared) first for client scoping
   const { data: agencies } = useQuery({
@@ -494,97 +516,53 @@ export default function Clients() {
   }
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h2 className="text-3xl font-bold">לקוחות</h2>
-        </div>
-        <div className="flex flex-wrap gap-2 md:gap-4 items-center">
-          <div className="relative min-w-[200px]">
+    <div className="space-y-4 p-4">
+      <div className="flex items-center gap-2 flex-wrap">
+        <h2 className="text-2xl font-bold ml-auto">לקוחות</h2>
+
+          <div className="relative min-w-[180px]">
             <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               type="text"
               placeholder="חפש לקוח..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pr-9"
+              className="pr-9 h-9"
             />
           </div>
-          
-          {/* Campaigner Filter - Only for team managers and owners */}
-          {(isTeamManager || isOwner) && (
-            <>
-              <div className="h-8 w-px bg-border"></div>
-              <Select value={selectedCampaigner} onValueChange={setSelectedCampaigner}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="כל הקמפיינרים" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">כל הקמפיינרים</SelectItem>
-                  {campaigners?.map((campaigner) => (
-                    <SelectItem key={campaigner.id} value={campaigner.id}>
-                      {campaigner.full_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </>
-          )}
-          
-          {/* Mood Status Filter */}
-          <div className="h-8 w-px bg-border"></div>
-          <Select value={selectedMoodStatus} onValueChange={setSelectedMoodStatus}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="כל המצבים" />
-            </SelectTrigger>
-            <SelectContent className="bg-background">
-              <SelectItem value="all">כל המצבים</SelectItem>
-              <SelectItem value="happy">
-                <span className="flex items-center gap-2">
-                  <span>😊</span>
-                  <span>לקוח מבסוט</span>
-                </span>
-              </SelectItem>
-              <SelectItem value="wavering">
-                <span className="flex items-center gap-2">
-                  <span>😐</span>
-                  <span>לקוח מתנדנד</span>
-                </span>
-              </SelectItem>
-              <SelectItem value="churn_risk">
-                <span className="flex items-center gap-2">
-                  <span>😟</span>
-                  <span>סכנת נטישה</span>
-                </span>
-              </SelectItem>
-              <SelectItem value="not_progressing">
-                <span className="flex items-center gap-2">
-                  <span>😔</span>
-                  <span>לא מתקדם</span>
-                </span>
-              </SelectItem>
-            </SelectContent>
-          </Select>
-          
-          <div className="h-8 w-px bg-border"></div>
+
+          {/* Filters button */}
+          <Button variant="outline" size="sm" className="h-9 relative" onClick={() => setShowFiltersDialog(true)}>
+            <Filter className="h-4 w-4" />
+            {activeFilterCount > 0 && (
+              <Badge className="absolute -top-1.5 -left-1.5 h-4 w-4 p-0 flex items-center justify-center text-[10px]">
+                {activeFilterCount}
+              </Badge>
+            )}
+          </Button>
+
+          {/* View mode toggle */}
           <div className="flex gap-1 border rounded-md p-1">
             <Button
               variant={viewMode === "grid" ? "default" : "ghost"}
-              size="sm"
+              size="icon"
+              className="h-7 w-7"
               onClick={() => setViewMode("grid")}
             >
               <LayoutGrid className="h-4 w-4" />
             </Button>
             <Button
               variant={viewMode === "table" ? "default" : "ghost"}
-              size="sm"
+              size="icon"
+              className="h-7 w-7"
               onClick={() => setViewMode("table")}
             >
               <TableIcon className="h-4 w-4" />
             </Button>
             <Button
               variant={viewMode === "chat" ? "default" : "ghost"}
-              size="sm"
+              size="icon"
+              className="h-7 w-7"
               onClick={() => setViewMode("chat")}
               title="תצוגת צ'אט"
             >
@@ -592,30 +570,130 @@ export default function Clients() {
             </Button>
           </div>
 
-          <div className="h-8 w-px bg-border"></div>
-          
-          <div className="flex items-center gap-2" dir="ltr">
-            <Label htmlFor="hide-inactive" className="cursor-pointer">
-              הסתר לא פעילים
-            </Label>
-            <Switch
-              id="hide-inactive"
-              checked={hideInactive}
-              onCheckedChange={setHideInactive}
-            />
-          </div>
-          
-          <div className="h-8 w-px bg-border"></div>
-          
-          <Button variant="outline" onClick={handleExportToExcel}>
-            <Download className="ml-2 h-4 w-4" />
-            ייצוא לאקסל
-          </Button>
-          <ImportClientsCSV />
-          <ImportClientsSheet />
+          {/* Import/Export dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon" className="h-9 w-9" title="ייבוא/ייצוא">
+                <FileSpreadsheet className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="bg-background">
+              <DropdownMenuItem onClick={handleExportToExcel}>
+                <Download className="ml-2 h-4 w-4" />
+                ייצוא לאקסל
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setShowImportCSV(true)}>
+                <Upload className="ml-2 h-4 w-4" />
+                ייבוא מ-CSV
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setShowImportSheet(true)}>
+                <FileSpreadsheet className="ml-2 h-4 w-4" />
+                ייבוא מגוגל שיטס
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Add client */}
           <AddClientForm />
-        </div>
       </div>
+
+      {/* Import dialogs opened from dropdown */}
+      {showImportCSV && <ImportClientsCSV externalOpen={showImportCSV} onExternalOpenChange={setShowImportCSV} />}
+      {showImportSheet && <ImportClientsSheet externalOpen={showImportSheet} onExternalOpenChange={setShowImportSheet} />}
+
+      {/* Filters Dialog */}
+      <Dialog open={showFiltersDialog} onOpenChange={setShowFiltersDialog}>
+        <DialogContent dir="rtl" className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>סינון לקוחות</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Campaigner Filter */}
+            {(isTeamManager || isOwner) && (
+              <div className="space-y-2">
+                <Label>קמפיינר</Label>
+                <Select value={selectedCampaigner} onValueChange={setSelectedCampaigner}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="כל הקמפיינרים" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">כל הקמפיינרים</SelectItem>
+                    {campaigners?.map((campaigner) => (
+                      <SelectItem key={campaigner.id} value={campaigner.id}>
+                        {campaigner.full_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Mood Status Filter */}
+            <div className="space-y-2">
+              <Label>מצב לקוח</Label>
+              <Select value={selectedMoodStatus} onValueChange={setSelectedMoodStatus}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="כל המצבים" />
+                </SelectTrigger>
+                <SelectContent className="bg-background">
+                  <SelectItem value="all">כל המצבים</SelectItem>
+                  <SelectItem value="happy">
+                    <span className="flex items-center gap-2">
+                      <span>😊</span>
+                      <span>לקוח מבסוט</span>
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="wavering">
+                    <span className="flex items-center gap-2">
+                      <span>😐</span>
+                      <span>לקוח מתנדנד</span>
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="churn_risk">
+                    <span className="flex items-center gap-2">
+                      <span>😟</span>
+                      <span>סכנת נטישה</span>
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="not_progressing">
+                    <span className="flex items-center gap-2">
+                      <span>😔</span>
+                      <span>לא מתקדם</span>
+                    </span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Hide inactive toggle */}
+            <div className="flex items-center justify-between">
+              <Label htmlFor="hide-inactive-dialog" className="cursor-pointer">
+                הסתר לא פעילים
+              </Label>
+              <Switch
+                id="hide-inactive-dialog"
+                checked={hideInactive}
+                onCheckedChange={setHideInactive}
+              />
+            </div>
+
+            {activeFilterCount > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full text-muted-foreground"
+                onClick={() => {
+                  setSelectedCampaigner("all");
+                  setSelectedMoodStatus("all");
+                  setHideInactive(false);
+                }}
+              >
+                נקה את כל הפילטרים
+              </Button>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {viewMode === "chat" ? (
         <ClientsChatView
