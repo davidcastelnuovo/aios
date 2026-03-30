@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -11,6 +11,7 @@ import { he } from "date-fns/locale";
 export function useMeetingScheduler(tenantId?: string) {
   const [meetingDate, setMeetingDate] = useState<Date | undefined>(undefined);
   const [meetingTime, setMeetingTime] = useState("10:00");
+  const [meetingEndTime, setMeetingEndTime] = useState("11:00");
   const [meetingSubject, setMeetingSubject] = useState("");
   const [meetingLocation, setMeetingLocation] = useState("");
   const [personalMessage, setPersonalMessage] = useState("");
@@ -84,6 +85,48 @@ export function useMeetingScheduler(tenantId?: string) {
   };
 
   /**
+   * יצירת רשימת שעות סיום אפשריות לפי שעת התחלה
+   */
+  const generateEndTimeOptions = (startTime: string): string[] => {
+    const [startHour, startMinute] = startTime.split(':').map(Number);
+    const cursor = new Date();
+    cursor.setHours(startHour, startMinute, 0, 0);
+    cursor.setMinutes(cursor.getMinutes() + 30);
+
+    const maxEnd = new Date();
+    maxEnd.setHours(23, 30, 0, 0);
+
+    const options: string[] = [];
+    while (cursor <= maxEnd) {
+      options.push(`${cursor.getHours().toString().padStart(2, '0')}:${cursor.getMinutes().toString().padStart(2, '0')}`);
+      cursor.setMinutes(cursor.getMinutes() + 30);
+    }
+
+    return options;
+  };
+
+  /**
+   * עדכון אוטומטי של שעת סיום כששעת התחלה משתנה
+   */
+  useEffect(() => {
+    if (!meetingTime) return;
+
+    const [startHour, startMinute] = meetingTime.split(':').map(Number);
+    const nextHour = new Date();
+    nextHour.setHours(startHour, startMinute, 0, 0);
+    nextHour.setMinutes(nextHour.getMinutes() + 60);
+
+    const suggestedEnd = `${nextHour.getHours().toString().padStart(2, '0')}:${nextHour
+      .getMinutes()
+      .toString()
+      .padStart(2, '0')}`;
+
+    if (!meetingEndTime || meetingEndTime <= meetingTime) {
+      setMeetingEndTime(suggestedEnd);
+    }
+  }, [meetingTime, meetingEndTime]);
+
+  /**
    * מציאת שעות פנויות על בסיס אירועי היומן
    */
   const getAvailableTimeSlots = () => {
@@ -115,6 +158,42 @@ export function useMeetingScheduler(tenantId?: string) {
   };
 
   /**
+   * מציאת שעות סיום אפשריות על בסיס שעת התחלה ואירועי יומן
+   */
+  const getAvailableEndTimeSlots = () => {
+    if (!meetingDate || !meetingTime) {
+      return [] as { time: string; available: boolean }[];
+    }
+
+    const [startHours, startMinutes] = meetingTime.split(':').map(Number);
+    const startDateTime = new Date(meetingDate);
+    startDateTime.setHours(startHours, startMinutes, 0, 0);
+
+    const endOptions = generateEndTimeOptions(meetingTime);
+
+    if (calendarEvents.length === 0) {
+      return endOptions.map(time => ({ time, available: true }));
+    }
+
+    return endOptions.map(time => {
+      const [endHours, endMinutes] = time.split(':').map(Number);
+      const candidateEnd = new Date(meetingDate);
+      candidateEnd.setHours(endHours, endMinutes, 0, 0);
+
+      const hasConflict = calendarEvents.some(event => {
+        if (!event.start?.dateTime || !event.end?.dateTime) {
+          return false;
+        }
+        const eventStart = new Date(event.start.dateTime);
+        const eventEnd = new Date(event.end.dateTime);
+        return startDateTime < eventEnd && candidateEnd > eventStart;
+      });
+
+      return { time, available: !hasConflict };
+    });
+  };
+
+  /**
    * קביעת פגישה
    */
   const scheduleMeeting = async (params: {
@@ -127,7 +206,7 @@ export function useMeetingScheduler(tenantId?: string) {
   }) => {
     const { contactName, contactEmail, contactId, contactType, additionalEmails, onSuccess } = params;
 
-    if (!meetingDate || !meetingTime) {
+    if (!meetingDate || !meetingTime || !meetingEndTime) {
       toast.error("נא לבחור תאריך ושעה");
       return;
     }
@@ -139,8 +218,14 @@ export function useMeetingScheduler(tenantId?: string) {
       const startDateTime = new Date(meetingDate);
       startDateTime.setHours(hours, minutes, 0, 0);
 
-      const endDateTime = new Date(startDateTime);
-      endDateTime.setHours(startDateTime.getHours() + 1);
+      const [endHours, endMinutes] = meetingEndTime.split(':').map(Number);
+      const endDateTime = new Date(meetingDate);
+      endDateTime.setHours(endHours, endMinutes, 0, 0);
+
+      if (endDateTime <= startDateTime) {
+        toast.error("שעת הסיום חייבת להיות אחרי שעת ההתחלה");
+        return;
+      }
 
       const subject = meetingSubject || `פגישה עם ${contactName}`;
       const attendees = [
@@ -236,6 +321,7 @@ export function useMeetingScheduler(tenantId?: string) {
   const resetForm = () => {
     setMeetingDate(undefined);
     setMeetingTime("10:00");
+    setMeetingEndTime("11:00");
     setMeetingSubject("");
     setPersonalMessage("");
     setMeetingLocation("");
@@ -247,6 +333,8 @@ export function useMeetingScheduler(tenantId?: string) {
     setMeetingDate,
     meetingTime,
     setMeetingTime,
+    meetingEndTime,
+    setMeetingEndTime,
     meetingSubject,
     setMeetingSubject,
     meetingLocation,
@@ -261,6 +349,7 @@ export function useMeetingScheduler(tenantId?: string) {
     // Functions
     handleDateSelect,
     getAvailableTimeSlots,
+    getAvailableEndTimeSlots,
     scheduleMeeting,
     resetForm,
   };
