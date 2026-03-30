@@ -76,6 +76,8 @@ export default function Clients() {
   const { tenantId } = useCurrentTenant();
   const { getFieldLabel } = useCustomFieldLabels('client');
   const [showFiltersDialog, setShowFiltersDialog] = useState(false);
+  const [showImportCSV, setShowImportCSV] = useState(false);
+  const [showImportSheet, setShowImportSheet] = useState(false);
 
   // Track active filter count for badge
   const activeFilterCount = [
