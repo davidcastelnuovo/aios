@@ -985,7 +985,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                   )}
 
                   {/* Team members selection */}
-                  {teamMembers && teamMembers.length > 0 && (
+                  {(
                     <div className="space-y-2">
                       <label className="text-sm font-medium flex items-center gap-2">
                         <UserPlus className="h-4 w-4" />
