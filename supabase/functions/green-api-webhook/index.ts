@@ -1646,6 +1646,9 @@ Deno.serve(async (req) => {
         // Send Carmen's response back via WhatsApp
         await sendGreenApiMessage(instanceId, apiToken, chatId, carmenResponse);
         
+        // Sync to ai_conversations so it appears in AIOS chat UI
+        await syncCarmenToAIConversation(supabaseClient, activeSession, updatedHistory);
+        
         return new Response(JSON.stringify({ success: true, carmen_session: 'active', response_sent: true }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
