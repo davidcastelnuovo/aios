@@ -941,30 +941,28 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                         שלח זימון ל:
                       </label>
                       <div className="space-y-1.5">
-                        {allContactEmails.map((contact) => (
-                          <label key={contact.email} className="flex items-center gap-2 p-2 rounded-md bg-muted/50 cursor-pointer text-sm">
+                        {allContactEmails.map((contact, idx) => (
+                          <label key={contact.email || `contact-${idx}`} className={`flex items-center gap-2 p-2 rounded-md bg-muted/50 text-sm ${contact.email ? 'cursor-pointer' : 'opacity-60'}`}>
                             <Checkbox
-                              checked={selectedMeetingEmails.includes(contact.email)}
+                              checked={contact.email ? selectedMeetingEmails.includes(contact.email) : false}
+                              disabled={!contact.email}
                               onCheckedChange={(checked) => {
+                                if (!contact.email) return;
                                 setSelectedMeetingEmails(prev =>
                                   checked
-                                    ? [...prev, contact.email]
+                                    ? [...prev, contact.email!]
                                     : prev.filter(e => e !== contact.email)
                                 );
                               }}
                             />
                             <span className="font-medium">{contact.name}</span>
                             <span className="text-muted-foreground">({contact.source})</span>
-                            <span className="text-muted-foreground mr-auto">{contact.email}</span>
+                            <span className="text-muted-foreground mr-auto">
+                              {contact.email || 'ללא אימייל'}
+                            </span>
                           </label>
                         ))}
                       </div>
-                    </div>
-                  )}
-
-                  {allContactEmails.length === 0 && (
-                    <div className="bg-muted/50 border rounded-lg p-3 text-sm text-muted-foreground">
-                      אין אנשי קשר עם אימייל — הזימון לא יישלח במייל
                     </div>
                   )}
 
