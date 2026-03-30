@@ -1180,6 +1180,7 @@ export type Database = {
       carmen_whatsapp_sessions: {
         Row: {
           agent_id: string | null
+          ai_conversation_id: string | null
           chat_id: string
           connection_user_id: string | null
           conversation_history: Json | null
@@ -1196,6 +1197,7 @@ export type Database = {
         }
         Insert: {
           agent_id?: string | null
+          ai_conversation_id?: string | null
           chat_id: string
           connection_user_id?: string | null
           conversation_history?: Json | null
@@ -1212,6 +1214,7 @@ export type Database = {
         }
         Update: {
           agent_id?: string | null
+          ai_conversation_id?: string | null
           chat_id?: string
           connection_user_id?: string | null
           conversation_history?: Json | null
@@ -1226,7 +1229,15 @@ export type Database = {
           status?: string | null
           tenant_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "carmen_whatsapp_sessions_ai_conversation_id_fkey"
+            columns: ["ai_conversation_id"]
+            isOneToOne: false
+            referencedRelation: "ai_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       chat_contact_tags: {
         Row: {

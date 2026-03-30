@@ -234,6 +234,66 @@ async function forwardToTeamChannels(
 // CARMEN WHATSAPP SESSION LOGIC
 // ===========================
 
+// Sync Carmen WhatsApp session to ai_conversations table (so it appears in AIOS chat UI)
+async function syncCarmenToAIConversation(
+  supabase: any,
+  session: any,
+  conversationHistory: any[]
+): Promise<string | null> {
+  try {
+    const userId = session.connection_user_id;
+    const tenantId = session.tenant_id;
+    if (!userId || !tenantId) return null;
+
+    // Convert carmen history format to ai_conversations messages format
+    const messages = conversationHistory.map((msg: any) => ({
+      role: msg.role,
+      content: msg.content,
+    }));
+
+    if (session.ai_conversation_id) {
+      // Update existing conversation
+      await supabase
+        .from('ai_conversations')
+        .update({
+          messages,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', session.ai_conversation_id);
+      return session.ai_conversation_id;
+    } else {
+      // Create new conversation
+      const title = `שיחת WhatsApp — ${session.sender_name || session.phone || 'לא ידוע'}`;
+      const { data, error } = await supabase
+        .from('ai_conversations')
+        .insert({
+          user_id: userId,
+          tenant_id: tenantId,
+          title,
+          messages,
+        })
+        .select('id')
+        .single();
+
+      if (error || !data) {
+        console.error('Failed to create ai_conversation:', error);
+        return null;
+      }
+
+      // Link back to session
+      await supabase
+        .from('carmen_whatsapp_sessions')
+        .update({ ai_conversation_id: data.id })
+        .eq('id', session.id);
+
+      return data.id;
+    }
+  } catch (e) {
+    console.error('syncCarmenToAIConversation error:', e);
+    return null;
+  }
+}
+
 // Send a WhatsApp message via Green API
 async function sendGreenApiMessage(
   instanceId: string,
@@ -1586,6 +1646,9 @@ Deno.serve(async (req) => {
         // Send Carmen's response back via WhatsApp
         await sendGreenApiMessage(instanceId, apiToken, chatId, carmenResponse);
         
+        // Sync to ai_conversations so it appears in AIOS chat UI
+        await syncCarmenToAIConversation(supabaseClient, activeSession, updatedHistory);
+        
         return new Response(JSON.stringify({ success: true, carmen_session: 'active', response_sent: true }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -1680,8 +1743,16 @@ Deno.serve(async (req) => {
                     })
                     .eq('id', newSession.id);
                   await sendGreenApiMessage(instanceId, apiToken, chatId, carmenResponse);
+                  
+                  // Sync to ai_conversations
+                  await syncCarmenToAIConversation(supabaseClient, newSession, [
+                    { role: 'user', content: contentAfterKeyword, timestamp: new Date().toISOString() },
+                    { role: 'assistant', content: carmenResponse, timestamp: new Date().toISOString() }
+                  ]);
+                } else {
+                  // No content after keyword — create empty ai_conversation for future messages
+                  await syncCarmenToAIConversation(supabaseClient, newSession, []);
                 }
-                
                 return new Response(JSON.stringify({ success: true, carmen_session: 'started' }), {
                   headers: { ...corsHeaders, 'Content-Type': 'application/json' },
                 });
