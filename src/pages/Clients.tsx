@@ -580,14 +580,24 @@ export default function Clients() {
                 <Download className="ml-2 h-4 w-4" />
                 ייצוא לאקסל
               </DropdownMenuItem>
-              <ImportClientsCSV triggerAsMenuItem />
-              <ImportClientsSheet triggerAsMenuItem />
+              <DropdownMenuItem onSelect={() => setShowImportCSV(true)}>
+                <Upload className="ml-2 h-4 w-4" />
+                ייבוא מ-CSV
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setShowImportSheet(true)}>
+                <FileSpreadsheet className="ml-2 h-4 w-4" />
+                ייבוא מגוגל שיטס
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
           {/* Add client */}
           <AddClientForm />
       </div>
+
+      {/* Import dialogs opened from dropdown */}
+      {showImportCSV && <ImportClientsCSV externalOpen={showImportCSV} onExternalOpenChange={setShowImportCSV} />}
+      {showImportSheet && <ImportClientsSheet externalOpen={showImportSheet} onExternalOpenChange={setShowImportSheet} />}
 
       {/* Filters Dialog */}
       <Dialog open={showFiltersDialog} onOpenChange={setShowFiltersDialog}>
