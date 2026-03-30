@@ -286,6 +286,7 @@ Deno.serve(async (req) => {
       .update({ last_sync_at: new Date().toISOString() })
       .eq("id", table_id);
 
+    console.log(
       `Synced ${records.length} records: ${insertedCount} inserted, ${updatedCount} updated, ${skippedInvalidCount} skipped invalid, ${skippedOutOfRangeCount} skipped out-of-range`
     );
 
