@@ -695,6 +695,7 @@ export default function Clients() {
         </DialogContent>
       </Dialog>
 
+      <div className="flex-1 min-h-0 overflow-auto">
       {viewMode === "chat" ? (
         <ClientsChatView
           clients={visibleClients || []}
