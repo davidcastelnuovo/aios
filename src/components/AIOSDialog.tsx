@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,7 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { Bot, Send, Plus, Loader2, Wrench, Menu, Sparkles, Zap, MessageSquare, Users, Target } from "lucide-react";
+import { Bot, Send, Plus, Loader2, Wrench, Menu, Sparkles, Zap, MessageSquare, Users, Target, Mic, MicOff, Square } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -43,7 +43,13 @@ export function AIOSDialog({ open, onOpenChange }: AIOSDialogProps) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { toast } = useToast();
   const { userId } = useCurrentUser();
   const queryClient = useQueryClient();
@@ -209,10 +215,195 @@ export function AIOSDialog({ open, onOpenChange }: AIOSDialogProps) {
     }
   };
 
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        if (recordingTimerRef.current) {
+          clearInterval(recordingTimerRef.current);
+          recordingTimerRef.current = null;
+        }
+        setRecordingDuration(0);
+
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        if (audioBlob.size < 1000) return; // too short
+
+        setIsTranscribing(true);
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) throw new Error('Not authenticated');
+
+          const formData = new FormData();
+          formData.append('audio', audioBlob, 'voice.webm');
+
+          const res = await fetch(
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-voice`,
+            {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${session.access_token}` },
+              body: formData,
+            }
+          );
+
+          if (!res.ok) throw new Error('Transcription failed');
+          const { text } = await res.json();
+
+          if (text && text.trim()) {
+            // Auto-send the transcribed text to Carmen
+            setInput(text.trim());
+            // Use a slight delay to let state update, then trigger send
+            setTimeout(() => {
+              const fakeInput = text.trim();
+              setInput("");
+              // Directly invoke the send logic with the transcribed text
+              sendMessageWithText(fakeInput);
+            }, 100);
+          }
+        } catch (err: any) {
+          console.error('Transcription error:', err);
+          toast({
+            title: "שגיאה בתמלול",
+            description: "לא הצלחנו לתמלל את ההקלטה. נסה שוב.",
+            variant: "destructive",
+          });
+        } finally {
+          setIsTranscribing(false);
+        }
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingDuration(0);
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingDuration(prev => prev + 1);
+      }, 1000);
+    } catch (err) {
+      toast({
+        title: "אין גישה למיקרופון",
+        description: "יש לאפשר גישה למיקרופון בדפדפן",
+        variant: "destructive",
+      });
+    }
+  }, [toast]);
+
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  }, []);
+
+  const sendMessageWithText = async (text: string) => {
+    if (!text.trim() || isStreaming) return;
+
+    const userMessage: Message = {
+      role: 'user',
+      content: text,
+      timestamp: new Date().toISOString(),
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setIsStreaming(true);
+    setStreamingMessage("");
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-support-chat`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            message: text,
+            conversation_id: currentConversationId,
+            tenant_slug: tenantSlug,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        if (response.status === 429) throw new Error('חריגה ממגבלת הקצב. אנא נסה שוב מאוחר יותר.');
+        if (response.status === 402) throw new Error('נדרש תשלום. אנא הוסף יתרה ל-workspace שלך.');
+        throw new Error('שגיאה בתקשורת עם השרת');
+      }
+
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let assistantContent = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.trim() || line.startsWith(':')) continue;
+          if (!line.startsWith('data: ')) continue;
+
+          const data = line.slice(6);
+          if (data === '[DONE]') continue;
+
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.type === 'token') {
+              assistantContent += parsed.content;
+              setStreamingMessage(prev => prev + parsed.content);
+            } else if (parsed.type === 'tool_call') {
+              setMessages(prev => [...prev, {
+                role: 'tool_call', tool: parsed.tool, args: parsed.args, timestamp: new Date().toISOString(),
+              }]);
+            } else if (parsed.type === 'conversation_id') {
+              setCurrentConversationId(parsed.id);
+            } else if (parsed.type === 'done') {
+              if (assistantContent) {
+                setMessages(prev => [...prev, { role: 'assistant', content: assistantContent, timestamp: new Date().toISOString() }]);
+                setStreamingMessage("");
+              }
+              setIsStreaming(false);
+              queryClient.invalidateQueries({ queryKey: ['ai-conversations'] });
+            }
+          } catch (e) { console.error('Parse error:', e); }
+        }
+      }
+    } catch (error: any) {
+      console.error('Error sending message:', error);
+      toast({ title: "שגיאה", description: error.message || "שגיאה בשליחת ההודעה", variant: "destructive" });
+      setIsStreaming(false);
+    }
+  };
+
+  const formatDuration = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
   const toolLabelMap: Record<string, string> = {
     create_task: "יוצר משימה",
     update_task: "מעדכן משימה",
     update_task_status: "מעדכן סטטוס משימה",
+    search_tasks: "מחפש משימות",
+    delete_task: "מוחק משימה",
+    add_task_update: "מוסיף עדכון למשימה",
+    manage_task_collaborators: "מנהל שותפים במשימה",
     list_tasks: "שולף משימות",
     search_entities: "מחפש",
     get_client_info: "שולף מידע על לקוח",
@@ -387,26 +578,61 @@ export function AIOSDialog({ open, onOpenChange }: AIOSDialogProps) {
         {/* Input */}
         <div className="border-t border-border p-3 bg-card flex-shrink-0">
           <div className="max-w-2xl mx-auto flex gap-2">
-            <Textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyPress}
-              placeholder="בקש ממני לבצע פעולה... (Enter לשליחה)"
-              className="min-h-[44px] max-h-[120px] resize-none text-sm"
-              disabled={isStreaming}
-            />
-            <Button
-              onClick={sendMessage}
-              disabled={!input.trim() || isStreaming}
-              size="icon"
-              className="h-[44px] w-[44px] flex-shrink-0"
-            >
-              {isStreaming ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-            </Button>
+            {isRecording ? (
+              <div className="flex-1 flex items-center gap-3 bg-destructive/10 border border-destructive/30 rounded-md px-4 py-2">
+                <div className="h-3 w-3 rounded-full bg-destructive animate-pulse" />
+                <span className="text-sm font-medium text-destructive">מקליט... {formatDuration(recordingDuration)}</span>
+                <div className="flex-1" />
+                <Button
+                  onClick={stopRecording}
+                  size="icon"
+                  variant="destructive"
+                  className="h-[36px] w-[36px]"
+                >
+                  <Square className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : isTranscribing ? (
+              <div className="flex-1 flex items-center gap-3 bg-muted rounded-md px-4 py-2">
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                <span className="text-sm text-muted-foreground">ממלל את ההקלטה...</span>
+              </div>
+            ) : (
+              <>
+                <Textarea
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyPress}
+                  placeholder="בקש ממני לבצע פעולה... (Enter לשליחה)"
+                  className="min-h-[44px] max-h-[120px] resize-none text-sm"
+                  disabled={isStreaming}
+                />
+                <div className="flex flex-col gap-1">
+                  <Button
+                    onClick={sendMessage}
+                    disabled={!input.trim() || isStreaming}
+                    size="icon"
+                    className="h-[44px] w-[44px] flex-shrink-0"
+                  >
+                    {isStreaming ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+                <Button
+                  onClick={startRecording}
+                  disabled={isStreaming}
+                  size="icon"
+                  variant="outline"
+                  className="h-[44px] w-[44px] flex-shrink-0 hover:bg-primary/10 hover:text-primary hover:border-primary"
+                  title="הקלט הודעה קולית"
+                >
+                  <Mic className="h-4 w-4" />
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </DialogContent>
