@@ -634,7 +634,7 @@ Deno.serve(async (req) => {
         }),
         signal: automationAbort.signal,
       }).then(r => {
-        else r.text().then(t => console.error('⚠️ Automation trigger failed:', t));
+        if (!r.ok) r.text().then(t => console.error('⚠️ Automation trigger failed:', t));
       }).catch(e => console.error('⚠️ Automation trigger error:', e.message));
     }
 
