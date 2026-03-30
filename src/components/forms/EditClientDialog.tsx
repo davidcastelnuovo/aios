@@ -85,18 +85,35 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
   const [selectedTeamMembers, setSelectedTeamMembers] = useState<string[]>([]);
 
   // Team members for meeting invitations - filtered by tenant
-  const { data: teamMembers } = useQuery({
+  const {
+    data: teamMembers = [],
+    isLoading: isLoadingTeamMembers,
+    error: teamMembersError,
+  } = useQuery({
     queryKey: ["team-members-for-meeting", tenantId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      if (!tenantId) return [];
+
+      const { data: tenantUsersData, error: tenantUsersError } = await supabase
         .from("tenant_users")
-        .select("user_id, profiles!inner(id, full_name, email)")
-        .eq("tenant_id", tenantId!)
-        .not("profiles.email", "is", null);
-      if (error) throw error;
-      return (data || [])
-        .map((tu: any) => tu.profiles)
-        .filter((p: any) => p && p.email && p.email.trim() !== "");
+        .select("user_id")
+        .eq("tenant_id", tenantId);
+
+      if (tenantUsersError) throw tenantUsersError;
+
+      const userIds = (tenantUsersData || []).map((tu) => tu.user_id).filter(Boolean);
+      if (userIds.length === 0) return [];
+
+      const { data: profilesData, error: profilesError } = await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .in("id", userIds)
+        .not("email", "is", null)
+        .order("full_name");
+
+      if (profilesError) throw profilesError;
+
+      return (profilesData || []).filter((p: any) => p.email && p.email.trim() !== "");
     },
     enabled: !!tenantId && open,
   });
@@ -415,6 +432,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
 
   // Get available time slots from the meeting scheduler hook
   const timeSlots = meetingScheduler.getAvailableTimeSlots();
+  const endTimeSlots = meetingScheduler.getAvailableEndTimeSlots();
 
   // Wrapper for scheduling meeting with client details
   const handleScheduleMeeting = async () => {
@@ -896,7 +914,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                   <div className="space-y-2">
                     <label className="text-sm font-medium flex items-center gap-2">
                       <Clock className="h-4 w-4" />
-                      שעה
+                      משעה
                     </label>
                     <Select value={meetingScheduler.meetingTime} onValueChange={meetingScheduler.setMeetingTime}>
                       <SelectTrigger className="w-full text-right rounded-lg border-2 h-11">
@@ -911,6 +929,37 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                           timeSlots.map(({ time, available }) => (
                             <SelectItem
                               key={time}
+                              value={time}
+                              disabled={!available}
+                              className={!available ? "text-muted-foreground line-through" : ""}
+                            >
+                              {time} {!available && "(תפוס)"}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">עד שעה</label>
+                    <Select value={meetingScheduler.meetingEndTime} onValueChange={meetingScheduler.setMeetingEndTime}>
+                      <SelectTrigger className="w-full text-right rounded-lg border-2 h-11">
+                        <SelectValue placeholder="בחר שעת סיום" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-background z-50 max-h-[200px]">
+                        {!meetingScheduler.meetingTime ? (
+                          <SelectItem value="no-start" disabled>בחר קודם שעת התחלה</SelectItem>
+                        ) : meetingScheduler.isLoadingCalendar ? (
+                          <SelectItem value="loading-end" disabled>טוען יומן...</SelectItem>
+                        ) : meetingScheduler.calendarError ? (
+                          <SelectItem value="error-end" disabled>{meetingScheduler.calendarError}</SelectItem>
+                        ) : endTimeSlots.length === 0 ? (
+                          <SelectItem value="none-end" disabled>אין שעות סיום זמינות</SelectItem>
+                        ) : (
+                          endTimeSlots.map(({ time, available }) => (
+                            <SelectItem
+                              key={`end-${time}`}
                               value={time}
                               disabled={!available}
                               className={!available ? "text-muted-foreground line-through" : ""}
@@ -990,7 +1039,13 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                       <UserPlus className="h-4 w-4" />
                       הזמן משתמשים מהמערכת:
                     </label>
-                    {teamMembers && teamMembers.length > 0 ? (
+                    {isLoadingTeamMembers ? (
+                      <p className="text-sm text-muted-foreground">טוען משתמשי צוות...</p>
+                    ) : teamMembersError ? (
+                      <p className="text-sm text-destructive">
+                        {teamMembersError instanceof Error ? teamMembersError.message : "שגיאה בטעינת משתמשי צוות"}
+                      </p>
+                    ) : teamMembers.length > 0 ? (
                       <div className="space-y-1.5 max-h-[150px] overflow-y-auto">
                         {teamMembers.map((member: any) => (
                           <label key={member.id} className="flex items-center gap-2 p-2 rounded-md bg-muted/50 cursor-pointer text-sm">
@@ -1019,7 +1074,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                       <div className="flex items-center gap-2 text-sm">
                         <CheckCircle2 className="h-4 w-4 text-primary" />
                         <span className="font-medium">
-                          {format(meetingScheduler.meetingDate, 'EEEE, d בMMMM yyyy', { locale: he })} בשעה {meetingScheduler.meetingTime}
+                          {format(meetingScheduler.meetingDate, 'EEEE, d בMMMM yyyy', { locale: he })} {meetingScheduler.meetingTime} - {meetingScheduler.meetingEndTime}
                         </span>
                       </div>
                     </Card>
@@ -1027,7 +1082,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
 
                   <Button
                     onClick={handleScheduleMeeting}
-                    disabled={!meetingScheduler.meetingDate || !meetingScheduler.meetingTime || meetingScheduler.isSchedulingMeeting}
+                    disabled={!meetingScheduler.meetingDate || !meetingScheduler.meetingTime || !meetingScheduler.meetingEndTime || meetingScheduler.isSchedulingMeeting}
                     className="w-full"
                   >
                     {meetingScheduler.isSchedulingMeeting ? (
