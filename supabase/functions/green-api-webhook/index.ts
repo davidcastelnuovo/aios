@@ -255,18 +255,19 @@ async function sendGreenApiMessage(
   }
 }
 
-// Find an active Carmen session for a given chat
+// Find an active Carmen session for a given chat (searches by chat_id OR phone)
 async function findActiveCarmenSession(
   supabase: any,
   tenantId: string,
   chatId: string
 ): Promise<any | null> {
+  const phone = chatId.split('@')[0];
   const { data } = await supabase
     .from('carmen_whatsapp_sessions')
     .select('*')
     .eq('tenant_id', tenantId)
-    .eq('chat_id', chatId)
     .eq('status', 'active')
+    .or(`chat_id.eq.${chatId},phone.eq.${phone}`)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
