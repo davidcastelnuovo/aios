@@ -41,7 +41,8 @@ const ALL_TOOLS = [
   { name: 'update_lead_status', description: 'עדכון סטטוס ליד', parameters: { type: 'object', properties: { lead_id: { type: 'string' }, status: { type: 'string' } }, required: ['lead_id', 'status'] } },
   { name: 'add_lead_update', description: 'הוספת עדכון לליד', parameters: { type: 'object', properties: { lead_id: { type: 'string' }, content: { type: 'string' } }, required: ['lead_id', 'content'] } },
   // TASKS
-  { name: 'create_task', description: 'יצירת משימה חדשה', parameters: { type: 'object', properties: { title: { type: 'string' }, client_id: { type: 'string' }, priority: { type: 'integer' }, due_date: { type: 'string' }, due_time: { type: 'string' }, notes: { type: 'string' } }, required: ['title'] } },
+  { name: 'create_task', description: 'יצירת משימה חדשה', parameters: { type: 'object', properties: { title: { type: 'string' }, client_id: { type: 'string' }, lead_id: { type: 'string' }, campaigner_id: { type: 'string', description: 'מזהה קמפיינר לשיוך המשימה' }, priority: { type: 'integer' }, due_date: { type: 'string' }, due_time: { type: 'string' }, notes: { type: 'string' }, duration_minutes: { type: 'integer', description: 'משך המשימה בדקות' } }, required: ['title'] } },
+  { name: 'search_tasks', description: 'חיפוש משימות לפי שם/כותרת. חשוב! השתמש בכלי הזה לפני יצירת משימה כדי לוודא שהיא לא קיימת כבר', parameters: { type: 'object', properties: { search_term: { type: 'string', description: 'מילת חיפוש בכותרת המשימה' }, status: { type: 'string' }, client_id: { type: 'string' } }, required: ['search_term'] } },
   { name: 'list_tasks', description: 'רשימת משימות', parameters: { type: 'object', properties: { status: { type: 'string' }, client_id: { type: 'string' }, limit: { type: 'integer' } } } },
   { name: 'update_task_status', description: 'עדכון סטטוס משימה', parameters: { type: 'object', properties: { task_id: { type: 'string' }, status: { type: 'string', enum: ['open', 'in_progress', 'completed', 'cancelled'] } }, required: ['task_id', 'status'] } },
   // CLIENTS
@@ -63,9 +64,10 @@ const ALL_TOOLS = [
   { name: 'update_lead', description: 'עדכון פרטי ליד קיים (שם, טלפון, אימייל, מקור, הערות)', parameters: { type: 'object', properties: { lead_id: { type: 'string' }, company_name: { type: 'string' }, contact_name: { type: 'string' }, phone: { type: 'string' }, email: { type: 'string' }, source: { type: 'string' }, notes: { type: 'string' }, follow_up_date: { type: 'string', description: 'תאריך מעקב בפורמט YYYY-MM-DD' } }, required: ['lead_id'] } },
   { name: 'delete_lead', description: 'מחיקת ליד מהמערכת', parameters: { type: 'object', properties: { lead_id: { type: 'string' } }, required: ['lead_id'] } },
   // TASKS - full CRUD
-  { name: 'update_task', description: 'עדכון פרטי משימה (כותרת, תאריך, עדיפות, הערות)', parameters: { type: 'object', properties: { task_id: { type: 'string' }, title: { type: 'string' }, due_date: { type: 'string' }, due_time: { type: 'string' }, priority: { type: 'integer', description: '1-10' }, notes: { type: 'string' }, client_id: { type: 'string' } }, required: ['task_id'] } },
+  { name: 'update_task', description: 'עדכון פרטי משימה (כותרת, תאריך, עדיפות, הערות, סטטוס, שיוך ליד/קמפיינר)', parameters: { type: 'object', properties: { task_id: { type: 'string' }, title: { type: 'string' }, due_date: { type: 'string' }, due_time: { type: 'string' }, priority: { type: 'integer', description: '1-10' }, notes: { type: 'string' }, client_id: { type: 'string' }, lead_id: { type: 'string' }, campaigner_id: { type: 'string' }, duration_minutes: { type: 'integer' }, status: { type: 'string', enum: ['open', 'in_progress', 'completed', 'cancelled'] } }, required: ['task_id'] } },
   { name: 'delete_task', description: 'מחיקת משימה', parameters: { type: 'object', properties: { task_id: { type: 'string' } }, required: ['task_id'] } },
   { name: 'add_task_update', description: 'הוספת הערה/עדכון למשימה', parameters: { type: 'object', properties: { task_id: { type: 'string' }, content: { type: 'string' } }, required: ['task_id', 'content'] } },
+  { name: 'manage_task_collaborators', description: 'הוספה או הסרה של שותפים (קמפיינרים) למשימה', parameters: { type: 'object', properties: { task_id: { type: 'string' }, campaigner_id: { type: 'string' }, action: { type: 'string', enum: ['add', 'remove'] } }, required: ['task_id', 'campaigner_id', 'action'] } },
   // CLIENT ONBOARDING
   { name: 'create_onboarding', description: 'יצירת תהליך קליטת לקוח חדש', parameters: { type: 'object', properties: { title: { type: 'string' }, client_id: { type: 'string' }, campaigner_id: { type: 'string' }, notes: { type: 'string' } }, required: ['title', 'client_id'] } },
   { name: 'list_onboarding', description: 'רשימת תהליכי קליטת לקוחות', parameters: { type: 'object', properties: { status: { type: 'string' }, limit: { type: 'integer' } } } },
@@ -127,23 +129,49 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return { update_id: data.id }
     }
     case 'create_task': {
-      const { data: profile } = await supabase.from('profiles').select('campaigner_id').eq('id', userId).single()
-      const { data: campAgency } = await supabase.from('campaigner_agencies').select('agency_id').eq('campaigner_id', profile?.campaigner_id).limit(1).single()
+      let campaignerId = args.campaigner_id
+      let agencyId = null
+      if (!campaignerId) {
+        const { data: profile } = await supabase.from('profiles').select('campaigner_id').eq('id', userId).single()
+        campaignerId = profile?.campaigner_id
+      }
+      if (campaignerId) {
+        const { data: campAgency } = await supabase.from('campaigner_agencies').select('agency_id').eq('campaigner_id', campaignerId).limit(1).single()
+        agencyId = campAgency?.agency_id
+      }
+      if (!agencyId) {
+        const { data: defaultAgency } = await supabase.from('agencies').select('id').eq('tenant_id', tenantId).limit(1).single()
+        agencyId = defaultAgency?.id
+      }
       const { data, error } = await supabase.from('tasks').insert({
-        title: args.title, agency_id: campAgency?.agency_id, campaigner_id: profile?.campaigner_id,
+        title: args.title, agency_id: agencyId, campaigner_id: campaignerId,
         tenant_id: tenantId, priority: args.priority || 5, status: 'open', task_type: 'other',
-        client_id: args.client_id, due_date: args.due_date, due_time: args.due_time, notes: args.notes,
+        client_id: args.client_id || null, lead_id: args.lead_id || null,
+        due_date: args.due_date, due_time: args.due_time, notes: args.notes,
+        duration_minutes: args.duration_minutes || null,
       }).select('id, title, status').single()
       if (error) throw error
       return { task_id: data.id, title: data.title, status: data.status }
     }
-    case 'list_tasks': {
-      let query = supabase.from('tasks').select('id, title, status, priority, due_date, clients(name)').eq('tenant_id', tenantId).order('priority', { ascending: false }).limit(args.limit || 20)
+    case 'search_tasks': {
+      let query = supabase.from('tasks').select('id, title, status, priority, due_date, due_time, notes, duration_minutes, clients(name), leads(company_name), campaigners(full_name)')
+        .eq('tenant_id', tenantId)
+        .ilike('title', `%${args.search_term}%`)
+        .order('created_at', { ascending: false })
+        .limit(10)
       if (args.status) query = query.eq('status', args.status)
       if (args.client_id) query = query.eq('client_id', args.client_id)
       const { data, error } = await query
       if (error) throw error
-      return { count: data.length, tasks: data.map((t: any) => ({ ...t, client_name: t.clients?.name })) }
+      return { count: data.length, tasks: data.map((t: any) => ({ ...t, client_name: t.clients?.name, lead_name: t.leads?.company_name, campaigner_name: t.campaigners?.full_name })) }
+    }
+    case 'list_tasks': {
+      let query = supabase.from('tasks').select('id, title, status, priority, due_date, due_time, duration_minutes, clients(name), leads(company_name), campaigners(full_name)').eq('tenant_id', tenantId).order('priority', { ascending: false }).limit(args.limit || 20)
+      if (args.status) query = query.eq('status', args.status)
+      if (args.client_id) query = query.eq('client_id', args.client_id)
+      const { data, error } = await query
+      if (error) throw error
+      return { count: data.length, tasks: data.map((t: any) => ({ ...t, client_name: t.clients?.name, lead_name: t.leads?.company_name, campaigner_name: t.campaigners?.full_name })) }
     }
     case 'update_task_status': {
       const { data, error } = await supabase.from('tasks').update({ status: args.status }).eq('id', args.task_id).eq('tenant_id', tenantId).select('id, title, status').single()
@@ -402,6 +430,10 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (args.priority !== undefined) updates.priority = args.priority
       if (args.notes !== undefined) updates.notes = args.notes
       if (args.client_id !== undefined) updates.client_id = args.client_id
+      if (args.lead_id !== undefined) updates.lead_id = args.lead_id
+      if (args.campaigner_id !== undefined) updates.campaigner_id = args.campaigner_id
+      if (args.duration_minutes !== undefined) updates.duration_minutes = args.duration_minutes
+      if (args.status) updates.status = args.status
       const { data, error } = await supabase.from('tasks').update(updates).eq('id', args.task_id).eq('tenant_id', tenantId).select('id, title, status').single()
       if (error) throw error
       return data
@@ -415,6 +447,20 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const { data, error } = await supabase.from('task_updates').insert({ task_id: args.task_id, user_id: userId, tenant_id: tenantId, content: args.content }).select('id').single()
       if (error) throw error
       return { update_id: data.id }
+    }
+    case 'manage_task_collaborators': {
+      if (args.action === 'add') {
+        const { data, error } = await supabase.from('task_collaborators').insert({
+          task_id: args.task_id, campaigner_id: args.campaigner_id, tenant_id: tenantId,
+        }).select('id').single()
+        if (error) throw error
+        return { success: true, action: 'added', collaborator_id: data.id }
+      } else {
+        const { error } = await supabase.from('task_collaborators').delete()
+          .eq('task_id', args.task_id).eq('campaigner_id', args.campaigner_id).eq('tenant_id', tenantId)
+        if (error) throw error
+        return { success: true, action: 'removed' }
+      }
     }
     // CLIENT ONBOARDING
     case 'create_onboarding': {
@@ -591,6 +637,7 @@ Deno.serve(async (req) => {
             `אתה כרמן, מנהלת AI ראשית של ${tenantName}. את עוזרת אישית חכמה, יעילה ומקצועית.`,
             'יש לך גישה מלאה לכל מודולי המערכת: לידים, לקוחות, משימות, קמפיינרים, אנשי מכירות, סוכנויות, ספקים, מוצרים, אוטומציות, ועוד.',
             'את יכולה לבצע כל פעולה שמשתמש יכול לבצע ידנית במערכת.',
+            'חשוב מאוד: לפני יצירת משימה חדשה, תמיד חפשי קודם עם search_tasks כדי לוודא שהמשימה לא קיימת כבר. אם היא קיימת - עדכני אותה במקום ליצור חדשה.',
             'ענה בעברית. היי תמציתית, מקצועית, ויעילה. כשמבצעים פעולה — אשרי את הביצוע עם פרטים.',
           ]
         : [
