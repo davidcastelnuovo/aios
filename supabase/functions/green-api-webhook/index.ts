@@ -234,6 +234,66 @@ async function forwardToTeamChannels(
 // CARMEN WHATSAPP SESSION LOGIC
 // ===========================
 
+// Sync Carmen WhatsApp session to ai_conversations table (so it appears in AIOS chat UI)
+async function syncCarmenToAIConversation(
+  supabase: any,
+  session: any,
+  conversationHistory: any[]
+): Promise<string | null> {
+  try {
+    const userId = session.connection_user_id;
+    const tenantId = session.tenant_id;
+    if (!userId || !tenantId) return null;
+
+    // Convert carmen history format to ai_conversations messages format
+    const messages = conversationHistory.map((msg: any) => ({
+      role: msg.role,
+      content: msg.content,
+    }));
+
+    if (session.ai_conversation_id) {
+      // Update existing conversation
+      await supabase
+        .from('ai_conversations')
+        .update({
+          messages,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', session.ai_conversation_id);
+      return session.ai_conversation_id;
+    } else {
+      // Create new conversation
+      const title = `שיחת WhatsApp — ${session.sender_name || session.phone || 'לא ידוע'}`;
+      const { data, error } = await supabase
+        .from('ai_conversations')
+        .insert({
+          user_id: userId,
+          tenant_id: tenantId,
+          title,
+          messages,
+        })
+        .select('id')
+        .single();
+
+      if (error || !data) {
+        console.error('Failed to create ai_conversation:', error);
+        return null;
+      }
+
+      // Link back to session
+      await supabase
+        .from('carmen_whatsapp_sessions')
+        .update({ ai_conversation_id: data.id })
+        .eq('id', session.id);
+
+      return data.id;
+    }
+  } catch (e) {
+    console.error('syncCarmenToAIConversation error:', e);
+    return null;
+  }
+}
+
 // Send a WhatsApp message via Green API
 async function sendGreenApiMessage(
   instanceId: string,
