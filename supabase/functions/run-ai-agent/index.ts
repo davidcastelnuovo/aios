@@ -430,6 +430,10 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (args.priority !== undefined) updates.priority = args.priority
       if (args.notes !== undefined) updates.notes = args.notes
       if (args.client_id !== undefined) updates.client_id = args.client_id
+      if (args.lead_id !== undefined) updates.lead_id = args.lead_id
+      if (args.campaigner_id !== undefined) updates.campaigner_id = args.campaigner_id
+      if (args.duration_minutes !== undefined) updates.duration_minutes = args.duration_minutes
+      if (args.status) updates.status = args.status
       const { data, error } = await supabase.from('tasks').update(updates).eq('id', args.task_id).eq('tenant_id', tenantId).select('id, title, status').single()
       if (error) throw error
       return data
@@ -443,6 +447,20 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const { data, error } = await supabase.from('task_updates').insert({ task_id: args.task_id, user_id: userId, tenant_id: tenantId, content: args.content }).select('id').single()
       if (error) throw error
       return { update_id: data.id }
+    }
+    case 'manage_task_collaborators': {
+      if (args.action === 'add') {
+        const { data, error } = await supabase.from('task_collaborators').insert({
+          task_id: args.task_id, campaigner_id: args.campaigner_id, tenant_id: tenantId,
+        }).select('id').single()
+        if (error) throw error
+        return { success: true, action: 'added', collaborator_id: data.id }
+      } else {
+        const { error } = await supabase.from('task_collaborators').delete()
+          .eq('task_id', args.task_id).eq('campaigner_id', args.campaigner_id).eq('tenant_id', tenantId)
+        if (error) throw error
+        return { success: true, action: 'removed' }
+      }
     }
     // CLIENT ONBOARDING
     case 'create_onboarding': {
