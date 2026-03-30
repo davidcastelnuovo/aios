@@ -82,8 +82,23 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
 
   const meetingScheduler = useMeetingScheduler(tenantId);
   const [selectedMeetingEmails, setSelectedMeetingEmails] = useState<string[]>([]);
+  const [selectedTeamMembers, setSelectedTeamMembers] = useState<string[]>([]);
 
-  // Client contacts
+  // Team members for meeting invitations
+  const { data: teamMembers } = useQuery({
+    queryKey: ["team-members-for-meeting", tenantId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .not("email", "is", null)
+        .order("full_name");
+      if (error) throw error;
+      return (data || []).filter((p: any) => p.email && p.email.trim() !== "");
+    },
+    enabled: !!tenantId && open,
+  });
+
   interface ClientContact {
     id?: string;
     contact_name: string;
