@@ -176,3 +176,12 @@ verify_jwt = true
 
 [functions.paycall-webhook]
 verify_jwt = false
+
+[functions.sync-woocommerce-data]
+verify_jwt = true
+
+[functions.cron-sync-woocommerce]
+verify_jwt = false
+
+[functions.test-wordpress-connection]
+verify_jwt = true

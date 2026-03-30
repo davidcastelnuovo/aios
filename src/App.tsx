@@ -89,6 +89,7 @@ const AiDetection = lazy(() => import("./pages/AiDetection"));
 const TelephonySettings = lazy(() => import("./pages/TelephonySettings"));
 const GithubAgent = lazy(() => import("./pages/GithubAgent"));
 const SocialDashboard = lazy(() => import("./pages/SocialDashboard"));
+const WordPressSettings = lazy(() => import("./pages/WordPressSettings"));
 
 // QueryClient with optimized defaults for better caching
 const queryClient = new QueryClient({
@@ -213,6 +214,7 @@ const App = () => (
                   <Route path="/t/:tenantSlug/ai-detection" element={<ProtectedRoute><AppLayout><AiDetection /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/github-agent" element={<ProtectedRoute><AppLayout><GithubAgent /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/telephony-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><TelephonySettings /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/wordpress-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><WordPressSettings /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/social-media" element={<ProtectedRoute><AppLayout><SocialDashboard /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/social-gantt" element={<ProtectedRoute><AppLayout><SocialDashboard /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/social" element={<ProtectedRoute><AppLayout><SocialDashboard /></AppLayout></ProtectedRoute>} />

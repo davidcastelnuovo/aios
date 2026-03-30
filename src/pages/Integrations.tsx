@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Webhook, Facebook, MessageCircle, ArrowLeft, Settings, TrendingUp, Calculator, Zap, Search, Video, Mail, Brain, Phone } from "lucide-react";
+import { Webhook, Facebook, MessageCircle, ArrowLeft, Settings, TrendingUp, Calculator, Zap, Search, Video, Mail, Brain, Phone, Globe, ShoppingCart } from "lucide-react";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -270,6 +270,23 @@ export default function Integrations() {
     },
   });
 
+  // Check WordPress / WooCommerce integration status
+  const { data: wordpressSite } = useQuery({
+    queryKey: ['wordpress-site-integration', currentTenantId],
+    queryFn: async () => {
+      if (!currentTenantId) return null;
+      const { data } = await (supabase
+        .from('social_media_wordpress_sites' as any)
+        .select('id, woocommerce_enabled')
+        .eq('tenant_id', currentTenantId)
+        .eq('is_active', true)
+        .limit(1)
+        .maybeSingle() as any);
+      return data;
+    },
+    enabled: !!currentTenantId,
+  });
+
   // Check Manus integration status
   const { data: manusIntegration } = useQuery({
     queryKey: ['manus-integration', currentTenantId],
@@ -487,6 +504,20 @@ export default function Integrations() {
       isConnected: !!manusIntegration,
       route: "manus-settings",
       gradient: "bg-gradient-to-r from-violet-500 to-indigo-700",
+    },
+    {
+      icon: <Globe className="h-6 w-6" />,
+      title: "WordPress & WooCommerce",
+      description: "פרסום פוסטים ב-AI ומשיכת נתוני חנות לדוחות עבור כל הלקוחות",
+      features: [
+        "פרסום פוסטים ישירות מהמערכת",
+        "סנכרון הזמנות, מוצרים ולקוחות",
+        "דוחות WooCommerce אוטומטיים",
+        "ניהול 30+ אתרים ממקום אחד",
+      ],
+      isConnected: !!wordpressSite,
+      route: "wordpress-settings",
+      gradient: "bg-gradient-to-r from-blue-700 to-indigo-800",
     },
     {
       icon: <Phone className="h-6 w-6" />,
