@@ -1,21 +1,57 @@
 
 
-# תיקון שגיאות Build ב-Reports.tsx
+# אוטומציית הקלטה → יומן → תמלול → סיכום
 
-## הבעיה
-`Object.entries(revenueByStatus)` מחזיר `[string, unknown][]` למרות שה-reduce מוגדר כ-`Record<string, number>`. TypeScript לא מזהה את הטיפוס בפירוק.
+## סקירה
+כשהקלטת Zoom חדשה נוצרת, המערכת תבצע אוטומטית:
+1. תחפש פגישה תואמת ביומן גוגל לפי שעת ההתחלה
+2. תעדכן את שם ההקלטה לשם הפגישה מהיומן
+3. תתמלל את ההקלטה
+4. תייצר סיכום AI ותשלח אותו בוואטסאפ לבעל ההקלטה
 
-## תיקון
-בשורה 588, להוסיף casting ל-entries:
+## שלבי מימוש
 
-```typescript
-{(Object.entries(revenueByStatus) as [string, number][])
-  .sort(([, a], [, b]) => b - a)
-  .map(([status, amount]) => {
-```
+### 1. Edge Function חדשה: `process-new-recording`
+פונקציה מרכזית שמתפעלת את כל הזרימה:
 
-שינוי של שורה אחת בלבד — הוספת `as [string, number][]` אחרי `Object.entries(revenueByStatus)`.
+- **קלט**: `recording_id`, `tenant_id`
+- **שלב א - חיפוש ביומן**: שולפת את `calendar_tokens` של המשתמש (לפי `host_email` של ההקלטה מול `profiles`), קוראת ל-Google Calendar API עם חלון זמן של ±30 דקות מ-`start_time` של ההקלטה, ומוצאת פגישה תואמת
+- **שלב ב - עדכון שם**: מעדכנת את `meeting_topic` בטבלת `zoom_recordings` לשם הפגישה מהיומן
+- **שלב ג - תמלול**: קוראת ל-`transcribe-recording` הקיימת ומחכה לתוצאה
+- **שלב ד - סיכום AI**: שולחת את התמלול ל-Lovable AI Gateway לקבלת סיכום מובנה
+- **שלב ה - שליחה בוואטסאפ**: שולחת את הסיכום למשתמש דרך `send-green-api-message` (לפי מספר הטלפון מ-`profiles`)
 
-### קובץ
-- `src/pages/Reports.tsx` — שורה 587
+### 2. עדכון `zoom-webhook/index.ts`
+בסוף הטיפול ב-`recording.completed`, אחרי שמירת ההקלטות בDB, הפונקציה תקרא ל-`process-new-recording` באופן אסינכרוני (fire-and-forget עם `fetch`) כדי להפעיל את כל הזרימה.
+
+### 3. עדכון `fetch-zoom-recordings/index.ts`
+גם כשמביאים הקלטות ידנית (sync), ניתן להפעיל את אותו flow על הקלטות חדשות שנוספו.
+
+## פרטים טכניים
+
+**התאמת פגישה ביומן:**
+- שליפת `start_time` מההקלטה
+- חיפוש אירועי יומן בחלון `start_time ± 30 דקות`
+- התאמה לפי חפיפת זמן (לא חייב להיות מדויק)
+- אם נמצאה פגישה → שם הפגישה = `event.summary`
+
+**זיהוי המשתמש:**
+- `host_email` מההקלטה → חיפוש ב-`auth.users` / `profiles` → `user_id` → `calendar_tokens`
+- אם אין חיבור יומן → דילוג על שלב שם הפגישה, המשך לתמלול
+
+**שליחת סיכום בוואטסאפ:**
+- חיפוש `green_api_connections` של המשתמש
+- שליחה למספר הטלפון של המשתמש מ-`profiles` או מ-`campaigners`
+- הסיכום יישלח כהודעת טקסט מעוצבת
+
+**טיפול בשגיאות:**
+- אם אין יומן מחובר → ממשיך בלי שם פגישה
+- אם התמלול נכשל → לוג שגיאה, לא שולח סיכום
+- אם וואטסאפ לא מחובר → שומר סיכום בDB בלבד
+
+### קבצים שיווצרו/יערכו
+| קובץ | פעולה |
+|---|---|
+| `supabase/functions/process-new-recording/index.ts` | חדש — orchestrator |
+| `supabase/functions/zoom-webhook/index.ts` | עריכה — trigger ל-process-new-recording |
 
