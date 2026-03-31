@@ -197,13 +197,6 @@ Deno.serve(async (req) => {
       }
     }
 
-      phone,
-      description,
-      maskyooNumber,
-      contactName,
-      callStatus,
-      callDuration,
-    })
 
     // Find default or first agency for this tenant
     let agencyId: string | null = null
