@@ -584,7 +584,7 @@ export default function Reports() {
                 <CardTitle className="text-base">הכנסות לפי סטטוס</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {Object.entries(revenueByStatus)
+                {(Object.entries(revenueByStatus) as [string, number][])
                   .sort(([, a], [, b]) => b - a)
                   .map(([status, amount]) => {
                     const s = STATUS_LABELS[status] || { label: status, color: "" };
