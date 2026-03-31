@@ -174,8 +174,8 @@ const App = () => (
                   <Route path="/t/:tenantSlug/automations/flow/:automationId" element={<ProtectedRoute requiredPermission="automations"><AutomationFlow /></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/products" element={<ProtectedRoute requiredPermission="leads"><AppLayout><Products /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/branding" element={<ProtectedRoute requiredPermission="branding"><AppLayout><Branding /></AppLayout></ProtectedRoute>} />
-                  <Route path="/t/:tenantSlug/accounting-integrations" element={<ProtectedRoute requiredPermission="accounting"><AppLayout><AccountingIntegrations /></AppLayout></ProtectedRoute>} />
-                  <Route path="/t/:tenantSlug/accounting-settings" element={<ProtectedRoute requiredPermission="accounting"><AppLayout><AccountingSettings /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/accounting-integrations" element={<ProtectedRoute requiredPermission="accounting_integrations"><AppLayout><AccountingIntegrations /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/accounting-settings" element={<ProtectedRoute requiredPermission="accounting_integrations"><AppLayout><AccountingSettings /></AppLayout></ProtectedRoute>} />
                   {/* AIOS is now accessed via header button, keeping route for backward compat */}
                   <Route path="/t/:tenantSlug/ai-support" element={<ProtectedRoute><AppLayout><DashboardRouter /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/menu-management" element={<ProtectedRoute requiredPermission="menu_management"><AppLayout><MenuManagement /></AppLayout></ProtectedRoute>} />

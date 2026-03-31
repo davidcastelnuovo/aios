@@ -3,41 +3,62 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "./useCurrentUser";
 import { useUserRole } from "./useUserRole";
 
-export type ModulePermission = 
+/**
+ * ModulePermission
+ * ─────────────────────────────────────────────────────────────────────────────
+ * כל הרשאה חייבת להיות מוגדרת כאן וגם ב-PERMISSION_CATEGORIES שב-modules.ts.
+ * כשמוסיפים מודול עתידי – יש להוסיף את ה-ID כאן.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+export type ModulePermission =
+  // ── ניהול שוטף ────────────────────────────────────────────────────────
   | "dashboard"
   | "clients"
-  | "agencies"
-  | "campaigners"
-  | "suppliers"
-  | "tasks"
   | "client_onboarding"
+  | "tasks"
   | "time_tracking"
-  | "finance"
+  | "recordings"
+  // ── תקשורת ────────────────────────────────────────────────────────────
+  | "chat"
+  | "team_chat"
+  | "gmail"
+  | "signatures"
+  // ── מכירות ────────────────────────────────────────────────────────────
+  | "sales_dashboard"
+  | "leads"
+  | "sales_people"
+  | "campaigners"
+  | "products"
+  // ── שיווק ואנליטיקס ───────────────────────────────────────────────────
+  | "social_media"
   | "reports"
-  | "users" // Access to user management
-  | "sales_dashboard" // Sales dashboard
-  | "leads" // Leads management
-  | "sales_people" // Sales people management
-  | "lead_integrations" // Lead integrations
-  | "finance_view" // Special permission for viewing financial data
-  | "automations" // Automations management (admin only)
-  | "tenants" // Tenant management (admin only)
-  | "branding" // System branding and customization
-  | "accounting" // Accounting integrations (admin only)
-  | "ai_support" // AI Support chatbot
-  | "menu_management" // Menu customization (owner only)
-  | "fields_management" // Custom fields management (owner only)
-  | "dynamic_tables" // Dynamic tables (owner only)
-  | "chat" // Chat with clients via ManyChat
-  | "products" // Products and services management
-  | "manychat_settings" // ManyChat integration settings
-  | "green_api_settings" // Green API WhatsApp integration settings
-  | "chat_integrations" // Chat integrations settings
-  | "accounting_integrations" // Accounting integrations
-  | "recordings" // Recordings management
-  | "team_chat" // Team internal communication
-  | "signatures" // Digital signatures
-  | "settings"; // System settings
+  | "dynamic_tables"
+  | "ai_detection"
+  // ── ניהול ארגון ───────────────────────────────────────────────────────
+  | "agencies"
+  | "suppliers"
+  | "tenants"
+  | "users"
+  // ── אוטומציה ו-AI ─────────────────────────────────────────────────────
+  | "automations"
+  | "agents"
+  // ── אינטגרציות ────────────────────────────────────────────────────────
+  | "lead_integrations"
+  | "chat_integrations"
+  | "manychat_settings"
+  | "green_api_settings"
+  | "accounting_integrations"
+  // ── הגדרות מערכת ──────────────────────────────────────────────────────
+  | "branding"
+  | "menu_management"
+  | "fields_management"
+  | "ai_support"
+  // ── הרשאות מיוחדות ────────────────────────────────────────────────────
+  | "finance"
+  | "finance_view"
+  // ── Backward-compat (לא מוצגים בדיאלוג, נשמרים לתאימות) ──────────────
+  | "accounting"   // alias ל-accounting_integrations
+  | "settings";    // גישה כללית להגדרות
 
 export function useUserPermissions() {
   const { user } = useCurrentUser();
@@ -63,9 +84,9 @@ export function useUserPermissions() {
         permissionsMap[perm.module] = perm.can_access;
       });
 
-      return { 
-        permissions: permissionsMap, 
-        hasAnyPermissions: !!data && data.length > 0 
+      return {
+        permissions: permissionsMap,
+        hasAnyPermissions: !!data && data.length > 0,
       };
     },
     enabled: !!user?.id,
@@ -74,23 +95,19 @@ export function useUserPermissions() {
   // Global loading: until we know the user id OR query finished
   const isLoading = !user?.id || queryLoading;
 
-  // Removed realtime subscription to reduce DB connection pressure.
-  // Permissions are cached and will refresh on page reload or after staleTime.
-
   const hasPermission = (module: ModulePermission): boolean => {
     // While loading or user unknown, do NOT allow (prevents leaks)
-    if (isLoading) {
-      return false;
-    }
+    if (isLoading) return false;
 
     // Super admins can access all modules in the UI
-    if (isSuperAdmin) {
-      return true;
-    }
+    if (isSuperAdmin) return true;
 
-    const { permissions, hasAnyPermissions } = permissionsData || { permissions: null, hasAnyPermissions: false };
+    const { permissions, hasAnyPermissions } = permissionsData || {
+      permissions: null,
+      hasAnyPermissions: false,
+    };
 
-    // Modules requiring explicit allow unless owner override
+    // ── מודולים שדורשים הרשאה מפורשת (גם לבעלים) ─────────────────────
     const restrictedModules: ModulePermission[] = [
       "sales_dashboard",
       "leads",
@@ -108,8 +125,14 @@ export function useUserPermissions() {
       "ai_support",
     ];
 
-    // Owners always see these admin modules in the UI
-    if ((module === "tenants" || module === "menu_management" || module === "fields_management" || module === "ai_support") && isOwner) {
+    // ── בעלים תמיד רואים מודולי ניהול ────────────────────────────────
+    if (
+      isOwner &&
+      (module === "tenants" ||
+        module === "menu_management" ||
+        module === "fields_management" ||
+        module === "ai_support")
+    ) {
       return true;
     }
 
@@ -117,23 +140,22 @@ export function useUserPermissions() {
       return permissions?.[module] === true;
     }
 
-    // Modules accessible to ALL authenticated org members regardless of permissions
-    const alwaysAccessibleModules: ModulePermission[] = ["team_chat", "settings", "reports"];
+    // ── מודולים נגישים לכל המשתמשים המאומתים ─────────────────────────
+    const alwaysAccessibleModules: ModulePermission[] = [
+      "team_chat",
+      "settings",
+      "reports",
+    ];
 
-    if (alwaysAccessibleModules.includes(module)) {
-      return true;
-    }
+    if (alwaysAccessibleModules.includes(module)) return true;
 
-    // If user has no permissions defined at all:
-    // - Owners get full access to non-restricted modules
-    // - Regular users only get access to their profile
+    // ── אם אין הרשאות מוגדרות כלל ────────────────────────────────────
     if (!hasAnyPermissions) {
       if (isOwner) return true;
-      // Only allow access to profile for users without explicit permissions
       return false;
     }
 
-    // Owners always get access to non-restricted modules, even if permission says false
+    // ── בעלים מקבלים גישה למודולים לא-מוגבלים ────────────────────────
     if (isOwner && !restrictedModules.includes(module)) return true;
 
     return permissions?.[module] === true;

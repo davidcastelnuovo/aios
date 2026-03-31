@@ -9,12 +9,50 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
-import { MAIN_MODULES, SALES_MODULES, SETTINGS_MODULES, SPECIAL_PERMISSIONS } from "@/lib/modules";
+import { PERMISSION_CATEGORIES, getAllModules } from "@/lib/modules";
+import {
+  ClipboardList,
+  MessageSquare,
+  TrendingUp,
+  Share2,
+  Building2,
+  Zap,
+  Plug,
+  Settings,
+  ShieldAlert,
+} from "lucide-react";
 
+// ─── אייקון לכל קטגוריה ────────────────────────────────────────────────────
+const CATEGORY_ICONS: Record<string, React.ReactNode> = {
+  daily:         <ClipboardList className="h-4 w-4" />,
+  communication: <MessageSquare className="h-4 w-4" />,
+  sales:         <TrendingUp className="h-4 w-4" />,
+  marketing:     <Share2 className="h-4 w-4" />,
+  organization:  <Building2 className="h-4 w-4" />,
+  automation:    <Zap className="h-4 w-4" />,
+  integrations:  <Plug className="h-4 w-4" />,
+  settings:      <Settings className="h-4 w-4" />,
+  special:       <ShieldAlert className="h-4 w-4" />,
+};
+
+// ─── צבע badge לכל קטגוריה ─────────────────────────────────────────────────
+const CATEGORY_COLORS: Record<string, string> = {
+  daily:         "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+  communication: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
+  sales:         "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
+  marketing:     "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
+  organization:  "bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-300",
+  automation:    "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300",
+  integrations:  "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
+  settings:      "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300",
+  special:       "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+};
+
+// ─── Props ──────────────────────────────────────────────────────────────────
 interface EditUserPermissionsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -22,6 +60,7 @@ interface EditUserPermissionsDialogProps {
   userEmail: string;
 }
 
+// ─── Component ───────────────────────────────────────────────────────────────
 export function EditUserPermissionsDialog({
   open,
   onOpenChange,
@@ -32,12 +71,15 @@ export function EditUserPermissionsDialog({
   const [permissions, setPermissions] = useState<Record<string, boolean>>({});
   const { tenantId } = useCurrentTenant();
 
-  // Check if user is owner in current tenant
+  // כל המודולים (שטוח) – לאתחול ברירת מחדל
+  const allModules = getAllModules();
+
+  // בדיקה אם המשתמש הוא בעלים בטנאנט הנוכחי
   const { data: isOwnerInTenant } = useQuery({
     queryKey: ["user-is-owner", userId, tenantId],
     queryFn: async () => {
       if (!userId || !tenantId) return false;
-      
+
       const { data, error } = await supabase
         .from("user_roles")
         .select("role")
@@ -45,23 +87,21 @@ export function EditUserPermissionsDialog({
         .eq("role", "owner");
 
       if (error) throw error;
-      
-      // Check if user is owner AND is part of current tenant
       if (!data || data.length === 0) return false;
-      
+
       const { data: tenantUser } = await supabase
         .from("tenant_users")
         .select("id")
         .eq("user_id", userId)
         .eq("tenant_id", tenantId)
         .maybeSingle();
-      
+
       return !!tenantUser;
     },
     enabled: open && !!userId && !!tenantId,
   });
 
-  // Fetch current user's permissions
+  // טעינת הרשאות קיימות
   const { data: currentPermissions } = useQuery({
     queryKey: ["user-permissions", userId],
     queryFn: async () => {
@@ -72,23 +112,14 @@ export function EditUserPermissionsDialog({
 
       if (error) throw error;
 
+      // ברירת מחדל: כל המודולים כבויים
       const permissionsMap: Record<string, boolean> = {};
-      
-      // If user is owner in current tenant, set all permissions to true by default
-      if (isOwnerInTenant) {
-        [...MAIN_MODULES, ...SALES_MODULES, ...SETTINGS_MODULES, ...SPECIAL_PERMISSIONS].forEach(module => {
-          permissionsMap[module.id] = true;
-        });
-      } else {
-        // *** FIX: Set all modules to FALSE by default - only grant what's explicitly set ***
-        [...MAIN_MODULES, ...SALES_MODULES, ...SETTINGS_MODULES, ...SPECIAL_PERMISSIONS].forEach(module => {
-          permissionsMap[module.id] = false;
-        });
-      }
+      allModules.forEach(module => {
+        permissionsMap[module.id] = isOwnerInTenant ? true : false;
+      });
 
-      // Override with actual values from database (only for current tenant)
-      // This will set to true only the modules that were explicitly granted
-      data?.forEach((perm) => {
+      // דריסה עם הערכים מה-DB
+      data?.forEach(perm => {
         permissionsMap[perm.module] = perm.can_access;
       });
 
@@ -103,15 +134,14 @@ export function EditUserPermissionsDialog({
     }
   }, [currentPermissions, isOwnerInTenant]);
 
+  // שמירת הרשאות
   const updatePermissionsMutation = useMutation({
     mutationFn: async (perms: Record<string, boolean>) => {
-      // Delete existing permissions
       await supabase
         .from("user_permissions")
         .delete()
         .eq("user_id", userId);
 
-      // Insert new permissions
       const permissionsToInsert = Object.entries(perms).map(([module, canAccess]) => ({
         user_id: userId,
         module,
@@ -139,146 +169,141 @@ export function EditUserPermissionsDialog({
   };
 
   const togglePermission = (moduleId: string) => {
-    setPermissions(prev => ({
-      ...prev,
-      [moduleId]: !prev[moduleId],
-    }));
+    setPermissions(prev => ({ ...prev, [moduleId]: !prev[moduleId] }));
   };
+
+  // בחירת/ביטול כל הקטגוריה
+  const toggleCategory = (categoryId: string, value: boolean) => {
+    const cat = PERMISSION_CATEGORIES.find(c => c.id === categoryId);
+    if (!cat) return;
+    setPermissions(prev => {
+      const next = { ...prev };
+      cat.modules.forEach(m => { next[m.id] = value; });
+      return next;
+    });
+  };
+
+  // האם כל הקטגוריה מסומנת
+  const isCategoryFullyChecked = (categoryId: string): boolean => {
+    const cat = PERMISSION_CATEGORIES.find(c => c.id === categoryId);
+    if (!cat) return false;
+    return cat.modules.every(m => permissions[m.id] === true);
+  };
+
+  // האם חלק מהקטגוריה מסומן
+  const isCategoryPartiallyChecked = (categoryId: string): boolean => {
+    const cat = PERMISSION_CATEGORIES.find(c => c.id === categoryId);
+    if (!cat) return false;
+    const checked = cat.modules.filter(m => permissions[m.id] === true).length;
+    return checked > 0 && checked < cat.modules.length;
+  };
+
+  // ספירת הרשאות פעילות
+  const activeCount = Object.values(permissions).filter(Boolean).length;
+  const totalCount = allModules.length;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent dir="rtl" className="max-w-2xl max-h-[80vh] overflow-y-auto">
+      <DialogContent dir="rtl" className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>הרשאות משתמש</DialogTitle>
-          <DialogDescription>
-            ניהול הרשאות גישה למודולים עבור: {userEmail}
+          <DialogTitle className="text-xl">הרשאות משתמש</DialogTitle>
+          <DialogDescription className="flex items-center justify-between">
+            <span>ניהול הרשאות גישה למודולים עבור: <strong>{userEmail}</strong></span>
+            <Badge variant="secondary" className="mr-2 text-xs">
+              {activeCount} / {totalCount} מודולים פעילים
+            </Badge>
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6">
-          <div>
-            <h3 className="text-lg font-semibold mb-3">מודולים כלליים</h3>
-            <div className="space-y-3">
-              {MAIN_MODULES.map((module) => (
-                <div key={module.id} className="flex items-start space-x-3 space-x-reverse">
-                  <Checkbox
-                    id={`module-${module.id}`}
-                    checked={permissions[module.id] ?? false}
-                    onCheckedChange={() => togglePermission(module.id)}
-                  />
-                  <div className="flex-1">
-                    <label
-                      htmlFor={`module-${module.id}`}
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                    >
-                      {module.label}
-                    </label>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {module.description}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+        <div className="space-y-4 py-2">
+          {PERMISSION_CATEGORIES.map((category) => {
+            const fullyChecked = isCategoryFullyChecked(category.id);
+            const partiallyChecked = isCategoryPartiallyChecked(category.id);
+            const colorClass = CATEGORY_COLORS[category.id] ?? "bg-gray-100 text-gray-800";
+            const icon = CATEGORY_ICONS[category.id];
+            const categoryActiveCount = category.modules.filter(m => permissions[m.id]).length;
 
-          <div className="border-t pt-4">
-            <h3 className="text-lg font-semibold mb-3">מודולי מכירות</h3>
-            <p className="text-sm text-muted-foreground mb-3">
-              ברירת מחדל: ללא גישה למודולי מכירות
-            </p>
-            <div className="space-y-3">
-              {SALES_MODULES.map((module) => (
-                <div key={module.id} className="flex items-start space-x-3 space-x-reverse">
-                  <Checkbox
-                    id={`sales-${module.id}`}
-                    checked={permissions[module.id] ?? false}
-                    onCheckedChange={() => togglePermission(module.id)}
-                  />
-                  <div className="flex-1">
-                    <label
-                      htmlFor={`sales-${module.id}`}
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                    >
-                      {module.label}
-                    </label>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {module.description}
-                    </p>
+            return (
+              <div
+                key={category.id}
+                className="rounded-lg border bg-card overflow-hidden"
+              >
+                {/* כותרת קטגוריה */}
+                <div className="flex items-center justify-between px-4 py-3 bg-muted/40 border-b">
+                  <div className="flex items-center gap-2">
+                    {/* Checkbox לבחירת כל הקטגוריה */}
+                    <Checkbox
+                      id={`cat-${category.id}`}
+                      checked={fullyChecked}
+                      data-state={partiallyChecked ? "indeterminate" : undefined}
+                      className={partiallyChecked ? "opacity-70" : ""}
+                      onCheckedChange={(checked) =>
+                        toggleCategory(category.id, !!checked)
+                      }
+                    />
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${colorClass}`}>
+                      {icon}
+                      {category.label}
+                    </span>
+                    {category.description && (
+                      <span className="text-xs text-muted-foreground hidden sm:inline">
+                        {category.description}
+                      </span>
+                    )}
                   </div>
+                  <Badge variant="outline" className="text-xs">
+                    {categoryActiveCount}/{category.modules.length}
+                  </Badge>
                 </div>
-              ))}
-            </div>
-          </div>
 
-          <div className="border-t pt-4">
-            <h3 className="text-lg font-semibold mb-3">הגדרות ואינטגרציות</h3>
-            <div className="space-y-3">
-              {SETTINGS_MODULES.map((module) => (
-                <div key={module.id} className="flex items-start space-x-3 space-x-reverse">
-                  <Checkbox
-                    id={`settings-${module.id}`}
-                    checked={permissions[module.id] ?? false}
-                    onCheckedChange={() => togglePermission(module.id)}
-                  />
-                  <div className="flex-1">
-                    <label
-                      htmlFor={`settings-${module.id}`}
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                {/* מודולים */}
+                <div className="divide-y">
+                  {category.modules.map((module) => (
+                    <div
+                      key={module.id}
+                      className="flex items-start gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors"
                     >
-                      {module.label}
-                    </label>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {module.description}
-                    </p>
-                  </div>
+                      <Checkbox
+                        id={`module-${module.id}`}
+                        checked={permissions[module.id] ?? false}
+                        onCheckedChange={() => togglePermission(module.id)}
+                        className="mt-0.5"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <label
+                          htmlFor={`module-${module.id}`}
+                          className="text-sm font-medium leading-none cursor-pointer"
+                        >
+                          {module.label}
+                        </label>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {module.description}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
+              </div>
+            );
+          })}
+        </div>
 
-          <div className="border-t pt-4">
-            <h3 className="text-lg font-semibold mb-3">הרשאות מיוחדות</h3>
-            <div className="space-y-3">
-              {SPECIAL_PERMISSIONS.map((perm) => (
-                <div key={perm.id} className="flex items-start space-x-3 space-x-reverse">
-                  <Checkbox
-                    id={`perm-${perm.id}`}
-                    checked={permissions[perm.id] ?? false}
-                    onCheckedChange={() => togglePermission(perm.id)}
-                  />
-                  <div className="flex-1">
-                    <label
-                      htmlFor={`perm-${perm.id}`}
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                    >
-                      {perm.label}
-                    </label>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {perm.description}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex gap-2 pt-4">
-            <Button
-              onClick={handleSave}
-              disabled={updatePermissionsMutation.isPending}
-              className="flex-1"
-            >
-              {updatePermissionsMutation.isPending ? "שומר..." : "שמור שינויים"}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={updatePermissionsMutation.isPending}
-            >
-              ביטול
-            </Button>
-          </div>
+        {/* כפתורי פעולה */}
+        <div className="flex gap-2 pt-2 border-t sticky bottom-0 bg-background pb-1">
+          <Button
+            onClick={handleSave}
+            disabled={updatePermissionsMutation.isPending}
+            className="flex-1"
+          >
+            {updatePermissionsMutation.isPending ? "שומר..." : "שמור שינויים"}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={updatePermissionsMutation.isPending}
+          >
+            ביטול
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

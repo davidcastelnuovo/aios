@@ -245,23 +245,61 @@ const MENU_TABS: MenuTab[] = [
 ];
 
 // Permission map
+/**
+ * modulePermissions
+ * מיפוי בין menu_key (מפתח בתפריט) לבין ModulePermission (הרשאה ב-useUserPermissions).
+ * כשמוסיפים מודול עתידי – יש להוסיף כאן שורה בפורמט: "menu-key": "permission_id"
+ */
 const modulePermissions: Record<string, string> = {
-  users: "users", agencies: "agencies", leads: "leads", clients: "clients",
-  tasks: "tasks", "client-onboarding": "client_onboarding", products: "products",
-  finance: "finance", "sales-dashboard": "sales_dashboard", reports: "reports",
-  "time-tracking": "time_tracking", campaigners: "campaigners",
-  "sales-people": "sales_people", dashboard: "dashboard", suppliers: "suppliers",
-  automations: "automations", tenants: "tenants", branding: "branding",
-  "accounting-integrations": "accounting_integrations", "ai-support": "ai_support",
-  "menu-management": "menu_management", "fields-management": "fields_management",
-  "lead-integrations": "lead_integrations", integrations: "lead_integrations",
-  "manychat-settings": "manychat_settings", "green-api-settings": "green_api_settings",
-  "chat-integrations": "chat_integrations", chat: "chat",
-  "dynamic-tables": "dynamic_tables", recordings: "recordings",
-  "team-chat": "team_chat", signatures: "signatures", gmail: "gmail",
-  site_analytics: "clients", rank_tracking: "clients",
-  "ai-detection": "dashboard", agents: "dashboard",
-  "social-media": "dashboard", "social-gantt": "dashboard",
+  // ── ניהול שוטף ──────────────────────────────────────────────────────
+  dashboard: "dashboard",
+  clients: "clients",
+  "client-onboarding": "client_onboarding",
+  tasks: "tasks",
+  "time-tracking": "time_tracking",
+  recordings: "recordings",
+  // ── תקשורת ──────────────────────────────────────────────────────────
+  chat: "chat",
+  "team-chat": "team_chat",
+  gmail: "gmail",
+  signatures: "signatures",
+  // ── מכירות ──────────────────────────────────────────────────────────
+  "sales-dashboard": "sales_dashboard",
+  leads: "leads",
+  "sales-people": "sales_people",
+  campaigners: "campaigners",
+  products: "products",
+  // ── שיווק ואנליטיקס ─────────────────────────────────────────────────
+  "social-media": "social_media",
+  "social-gantt": "social_media",
+  reports: "reports",
+  "dynamic-tables": "dynamic_tables",
+  "ai-detection": "ai_detection",
+  // ── ניהול ארגון ─────────────────────────────────────────────────────
+  agencies: "agencies",
+  suppliers: "suppliers",
+  tenants: "tenants",
+  users: "users",
+  // ── אוטומציה ו-AI ───────────────────────────────────────────────────
+  automations: "automations",
+  agents: "agents",
+  // ── אינטגרציות ──────────────────────────────────────────────────────
+  "lead-integrations": "lead_integrations",
+  integrations: "lead_integrations",
+  "chat-integrations": "chat_integrations",
+  "manychat-settings": "manychat_settings",
+  "green-api-settings": "green_api_settings",
+  "accounting-integrations": "accounting_integrations",
+  // ── הגדרות מערכת ────────────────────────────────────────────────────
+  branding: "branding",
+  "menu-management": "menu_management",
+  "fields-management": "fields_management",
+  "ai-support": "ai_support",
+  // ── כספים ───────────────────────────────────────────────────────────
+  finance: "finance",
+  // ── מיפויים לתאימות לאחור ────────────────────────────────────────────
+  site_analytics: "clients",
+  rank_tracking: "clients",
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
