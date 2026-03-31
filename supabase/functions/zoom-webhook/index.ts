@@ -122,6 +122,37 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Trigger async processing for each audio recording (fire-and-forget)
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+      if (insertRows.length > 0) {
+        // Get the IDs of newly inserted recordings
+        const { data: newRecordings } = await supabase
+          .from('zoom_recordings')
+          .select('id, recording_type')
+          .eq('tenant_id', tenantId)
+          .eq('meeting_id', String(meetingObject.id || meetingObject.uuid || ''))
+          .order('created_at', { ascending: false })
+          .limit(insertRows.length);
+
+        if (newRecordings) {
+          for (const rec of newRecordings) {
+            // Only process audio recordings
+            if (rec.recording_type?.toLowerCase().includes('audio')) {
+              fetch(`${supabaseUrl}/functions/v1/process-new-recording`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${serviceKey}`,
+                },
+                body: JSON.stringify({ recording_id: rec.id, tenant_id: tenantId }),
+              }).catch(err => console.error('Failed to trigger process-new-recording:', err));
+            }
+          }
+        }
+      }
+
       return new Response(JSON.stringify({ success: true, count: insertRows.length }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
