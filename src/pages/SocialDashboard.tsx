@@ -299,7 +299,7 @@ export default function SocialDashboard() {
         </TabsContent>
 
         {/* ── Calendar Tab ───────────────────────────────────────── */}
-        <TabsContent value="calendar" className="flex-1 overflow-hidden mt-0">
+        <TabsContent value="calendar" className="m-0 h-[calc(100vh-4rem)] flex flex-col">
           <VisualPostCalendar />
         </TabsContent>
 
