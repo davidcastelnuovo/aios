@@ -40,6 +40,7 @@ import { NewPostDialog } from "@/components/social-gantt/NewPostDialog";
 // Social Media Scheduler components (publishing)
 import { PostsList } from "@/components/social-media/PostsList";
 import { ScheduleCalendar } from "@/components/social-media/ScheduleCalendar";
+import { VisualPostCalendar } from "@/components/social-media/VisualPostCalendar";
 import { ChannelManager } from "@/components/social-media/ChannelManager";
 import { WordPressSettings } from "@/components/social-media/WordPressSettings";
 
@@ -298,8 +299,8 @@ export default function SocialDashboard() {
         </TabsContent>
 
         {/* ── Calendar Tab ───────────────────────────────────────── */}
-        <TabsContent value="calendar" className="flex-1 overflow-auto mt-0 p-6">
-          <ScheduleCalendar />
+        <TabsContent value="calendar" className="flex-1 overflow-hidden mt-0">
+          <VisualPostCalendar />
         </TabsContent>
 
         {/* ── Channels Tab ───────────────────────────────────────── */}
