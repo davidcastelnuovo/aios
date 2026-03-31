@@ -315,7 +315,7 @@ async function sendGreenApiMessage(
   }
 }
 
-// Find an active Carmen session for a given chat (searches by chat_id OR phone)
+// Find an active Carmen session for a given chat (strict match: connection + chat_id + phone)
 async function findActiveCarmenSession(
   supabase: any,
   tenantId: string,
@@ -329,7 +329,8 @@ async function findActiveCarmenSession(
     .eq('tenant_id', tenantId)
     .eq('status', 'active')
     .eq('connection_user_id', connectionUserId)
-    .or(`chat_id.eq.${chatId},phone.eq.${phone}`)
+    .eq('chat_id', chatId)
+    .eq('phone', phone)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
