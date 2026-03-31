@@ -319,7 +319,8 @@ async function sendGreenApiMessage(
 async function findActiveCarmenSession(
   supabase: any,
   tenantId: string,
-  chatId: string
+  chatId: string,
+  connectionUserId: string
 ): Promise<any | null> {
   const phone = chatId.split('@')[0];
   const { data } = await supabase
@@ -327,6 +328,7 @@ async function findActiveCarmenSession(
     .select('*')
     .eq('tenant_id', tenantId)
     .eq('status', 'active')
+    .eq('connection_user_id', connectionUserId)
     .or(`chat_id.eq.${chatId},phone.eq.${phone}`)
     .order('created_at', { ascending: false })
     .limit(1)
