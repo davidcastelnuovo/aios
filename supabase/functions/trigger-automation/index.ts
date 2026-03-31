@@ -381,12 +381,14 @@ Deno.serve(async (req) => {
         let hasActiveCarmenSession = false
         const senderPhone = payloadData?.sender_phone || payloadData?.phone || ''
         const chatId = payloadData?.chat_id || ''
-        if (senderPhone || chatId) {
+        const connectionUserId = payloadData?.connection_user_id || ''
+        if ((senderPhone || chatId) && connectionUserId) {
           const { data: activeSession } = await supabase
             .from('carmen_whatsapp_sessions')
             .select('id, agent_id, conversation_history, end_keyword')
             .eq('tenant_id', payload.tenant_id)
             .eq('status', 'active')
+            .eq('connection_user_id', connectionUserId)
             .or(`phone.eq.${senderPhone},chat_id.eq.${chatId}`)
             .order('created_at', { ascending: false })
             .limit(1)
@@ -587,6 +589,7 @@ Deno.serve(async (req) => {
                       const cId = payloadData?.chat_id || ''
                       if (!payloadData._carmen_session_id) {
                         // First message — create new session
+                        const connUserId = payloadData?.connection_user_id || ''
                         const { data: newSession } = await supabase
                           .from('carmen_whatsapp_sessions')
                           .insert({
@@ -595,6 +598,7 @@ Deno.serve(async (req) => {
                             phone: sPhone,
                             sender_name: payloadData?.sender_name || payloadData?.contact_name || '',
                             agent_id: agentId,
+                            connection_user_id: connUserId || null,
                             conversation_history: [],
                             status: 'active',
                             started_by_keyword: (automation as any).configuration?.trigger_keyword || 'כרמן',
