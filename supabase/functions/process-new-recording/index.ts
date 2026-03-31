@@ -162,9 +162,12 @@ Deno.serve(async (req) => {
     // 5. Transcribe the recording (only audio types)
     let transcription: string | null = recording.transcription;
 
-    if (!transcription && recording.recording_type?.toLowerCase().includes('audio')) {
+    const recType = (recording.recording_type || '').toLowerCase();
+    const isTranscribable = recType.includes('audio') || recType.includes('video') || recType === 'shared_screen_with_speaker_view' || recType === 'shared_screen_with_gallery_view' || recType === 'active_speaker';
+
+    if (!transcription && isTranscribable) {
       try {
-        console.log('Starting transcription...');
+        console.log(`Starting transcription for type: ${recording.recording_type}...`);
         const transcribeResponse = await fetch(`${SUPABASE_URL}/functions/v1/transcribe-recording`, {
           method: 'POST',
           headers: {
@@ -176,7 +179,15 @@ Deno.serve(async (req) => {
 
         if (transcribeResponse.ok) {
           const transcribeResult = await transcribeResponse.json();
-          transcription = transcribeResult.transcription || null;
+          // transcribe-recording returns { text: ... } on success
+          transcription = transcribeResult.text || transcribeResult.transcription || null;
+          
+          // If file was too large and needs chunking, log it
+          if (transcribeResult.needs_chunking) {
+            console.log(`Recording needs chunking (${transcribeResult.size_mb}MB). Skipping auto-transcription.`);
+            transcription = null;
+          }
+          
           console.log(`Transcription completed: ${transcription?.length || 0} chars`);
         } else {
           console.error('Transcription failed:', await transcribeResponse.text());
