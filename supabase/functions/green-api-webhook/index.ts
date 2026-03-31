@@ -1585,7 +1585,7 @@ Deno.serve(async (req) => {
       const normalizedMsg = messageText.trim().toLowerCase();
       
       // Check for active Carmen session
-      const activeSession = await findActiveCarmenSession(supabaseClient, tenantId, chatId);
+      const activeSession = await findActiveCarmenSession(supabaseClient, tenantId, chatId, connectionUserId);
       
       if (activeSession) {
         // === SESSION IS ACTIVE: route message to Carmen ===
