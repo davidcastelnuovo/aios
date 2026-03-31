@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { ArrowRight, Save, ZoomIn, ZoomOut, RotateCcw, MessageSquare, TestTube, History } from "lucide-react";
+import { ArrowRight, Save, ZoomIn, ZoomOut, RotateCcw, MessageSquare, TestTube, History, Pause, Play } from "lucide-react";
 import { FlowNode, FlowNodeData } from "./FlowNode";
 import { FlowConnector } from "./FlowConnector";
 import { StepConfigPanel } from "./StepConfigPanel";
@@ -195,6 +195,36 @@ export default function FlowEditor() {
     },
   });
 
+  const toggleActiveMutation = useMutation({
+    mutationFn: async (nextActive: boolean) => {
+      if (!automationId) throw new Error("Missing automation id");
+
+      const { error } = await supabase
+        .from("automations")
+        .update({ active: nextActive } as any)
+        .eq("id", automationId);
+
+      if (error) throw error;
+      return nextActive;
+    },
+    onMutate: (nextActive) => {
+      setAutomationActive(nextActive);
+    },
+    onSuccess: (nextActive) => {
+      queryClient.invalidateQueries({ queryKey: ["automation", automationId] });
+      queryClient.invalidateQueries({ queryKey: ["automations"] });
+      toast({ title: nextActive ? "האוטומציה הופעלה" : "האוטומציה הושהתה מיד" });
+    },
+    onError: (err: any) => {
+      setAutomationActive(automation?.active ?? true);
+      toast({
+        title: "שגיאה בעדכון מצב האוטומציה",
+        description: err.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   // Add step
   const addStep = useCallback(
     (stepType: "action" | "condition" | "delay" | "agent" | "whatsapp_session") => {
@@ -331,8 +361,21 @@ export default function FlowEditor() {
 
         <div className="flex items-center gap-2 text-sm">
           <span className="text-muted-foreground">פעיל</span>
-          <Switch checked={automationActive} onCheckedChange={setAutomationActive} />
+          <Switch
+            checked={automationActive}
+            onCheckedChange={(checked) => toggleActiveMutation.mutate(checked)}
+            disabled={toggleActiveMutation.isPending}
+          />
         </div>
+
+        <Button
+          variant={automationActive ? "destructive" : "outline"}
+          onClick={() => toggleActiveMutation.mutate(!automationActive)}
+          disabled={toggleActiveMutation.isPending}
+        >
+          {automationActive ? <Pause className="h-4 w-4 ml-2" /> : <Play className="h-4 w-4 ml-2" />}
+          {toggleActiveMutation.isPending ? "מעדכן..." : automationActive ? "השהה עכשיו" : "הפעל מחדש"}
+        </Button>
 
         <div className="flex-1" />
 
