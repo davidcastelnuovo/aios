@@ -381,12 +381,14 @@ Deno.serve(async (req) => {
         let hasActiveCarmenSession = false
         const senderPhone = payloadData?.sender_phone || payloadData?.phone || ''
         const chatId = payloadData?.chat_id || ''
-        if (senderPhone || chatId) {
+        const connectionUserId = payloadData?.connection_user_id || ''
+        if ((senderPhone || chatId) && connectionUserId) {
           const { data: activeSession } = await supabase
             .from('carmen_whatsapp_sessions')
             .select('id, agent_id, conversation_history, end_keyword')
             .eq('tenant_id', payload.tenant_id)
             .eq('status', 'active')
+            .eq('connection_user_id', connectionUserId)
             .or(`phone.eq.${senderPhone},chat_id.eq.${chatId}`)
             .order('created_at', { ascending: false })
             .limit(1)
