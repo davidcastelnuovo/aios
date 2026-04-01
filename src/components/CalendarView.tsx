@@ -1,31 +1,23 @@
 import { useQuery } from "@tanstack/react-query";
-import { useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
+import { checkCalendarConnection } from "@/lib/calendarApi";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar as CalendarIcon, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useRef } from "react";
 
 export function CalendarView() {
+  const { currentTenantId } = useTenant();
+
   const { data: calendarStatus, isLoading } = useQuery({
-    queryKey: ["calendar-status"],
+    queryKey: ["calendar-status", currentTenantId],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return { connected: false };
-
-      const { data, error } = await supabase
-        .from("calendar_tokens")
-        .select("id")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (error) {
-        console.error("Error checking calendar status:", error);
-        return { connected: false };
-      }
-
-      return { connected: !!data };
+      if (!currentTenantId) return { connected: false, type: 'none' as const };
+      return await checkCalendarConnection({ tenantId: currentTenantId });
     },
+    enabled: !!currentTenantId,
   });
 
   const popupRef = useRef<Window | null>(null);
@@ -44,7 +36,6 @@ export function CalendarView() {
       if (error) throw error;
 
       if (data?.authUrl) {
-        // Navigate the pre-opened popup if available; otherwise try to open now
         if (popupRef.current && !popupRef.current.closed) {
           popupRef.current.location.href = data.authUrl;
         } else {
@@ -60,11 +51,9 @@ export function CalendarView() {
           popupRef.current = popup;
         }
 
-        // Listen for messages from the popup
         const messageHandler = (event: MessageEvent) => {
           if (event.data?.type === 'calendar_connected') {
             window.removeEventListener('message', messageHandler);
-            // Refresh the calendar status
             window.location.reload();
             try { popupRef.current?.close(); } catch {}
             popupRef.current = null;
@@ -97,13 +86,13 @@ export function CalendarView() {
       <Card className="shadow-card">
         <CardContent className="flex flex-col items-center justify-center py-12 space-y-4">
           <CalendarIcon className="h-16 w-16 text-muted-foreground" />
-          <h3 className="text-xl font-semibold">התחבר ליומן Google</h3>
+          <h3 className="text-xl font-semibold">התחבר ליומן</h3>
           <p className="text-muted-foreground text-center max-w-md">
-            כדי לצפות ביומן שלך, עליך להתחבר תחילה ל-Google Calendar
+            כדי לצפות ביומן שלך, עליך להתחבר תחילה ליומן דרך הגדרות האינטגרציות או ישירות ל-Google Calendar
           </p>
           <Button onClick={handleConnect} size="lg">
             <CalendarIcon className="mr-2 h-5 w-5" />
-            התחבר ל-Google Calendar
+            התחבר ליומן
           </Button>
         </CardContent>
       </Card>
@@ -115,7 +104,7 @@ export function CalendarView() {
       <Alert>
         <AlertCircle className="h-4 w-4" />
         <AlertDescription>
-          היומן מחובר ל-Google Calendar שלך. כאן תוכל לצפות ביומן שלך בעתיד.
+          היומן מחובר. כאן תוכל לצפות ביומן שלך בעתיד.
         </AlertDescription>
       </Alert>
 
