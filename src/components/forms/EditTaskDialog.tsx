@@ -543,14 +543,18 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
       const endOfDay = new Date(selectedDate);
       endOfDay.setHours(23, 59, 59, 999);
       
-      const { data, error } = await supabase.functions.invoke('get-calendar-events', {
-        body: {
-          timeMin: startOfDay.toISOString(),
-          timeMax: endOfDay.toISOString(),
-        },
-      });
+      const { getCalendarEvents: fetchEvents } = await import("@/lib/calendarApi");
+      const { data: { user } } = await supabase.auth.getUser();
+      const tenantResult = await supabase.from('tenant_users').select('tenant_id').eq('user_id', user!.id).limit(1).single();
+      const tid = tenantResult.data?.tenant_id;
       
-      if (error) throw error;
+      if (!tid) throw new Error('No tenant');
+      
+      const data = await fetchEvents(
+        startOfDay.toISOString(),
+        endOfDay.toISOString(),
+        { tenantId: tid }
+      );
       
       if (data?.needsReconnect) {
         setCalendarError('היומן לא מחובר. יש לחבר את יומן Google.');
