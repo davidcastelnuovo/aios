@@ -90,6 +90,7 @@ const TelephonySettings = lazy(() => import("./pages/TelephonySettings"));
 const GithubAgent = lazy(() => import("./pages/GithubAgent"));
 const SocialDashboard = lazy(() => import("./pages/SocialDashboard"));
 const WordPressSettings = lazy(() => import("./pages/WordPressSettings"));
+const UnifiedSettings = lazy(() => import("./pages/UnifiedSettings"));
 
 // QueryClient with optimized defaults for better caching
 const queryClient = new QueryClient({
