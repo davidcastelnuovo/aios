@@ -393,14 +393,16 @@ export function WeeklyTaskBoard() {
           const startDateTime = new Date(`${format(validDate, "yyyy-MM-dd")}T${time}:00`);
           const endDateTime = new Date(startDateTime.getTime() + 30 * 60000); // 30 דקות
           
-          const { data: calendarResult } = await supabase.functions.invoke("add-calendar-event", {
-            body: {
+          const { addCalendarEvent } = await import("@/lib/calendarApi");
+          const calendarResult = await addCalendarEvent(
+            {
               summary: title,
               description: `משימה ממערכת Marketing Captain`,
               start: startDateTime.toISOString(),
               end: endDateTime.toISOString(),
             },
-          });
+            { tenantId: tenantId! }
+          );
           
           // שמור את ה-eventId במשימה לסנכרון עתידי
           if (calendarResult?.eventId) {
