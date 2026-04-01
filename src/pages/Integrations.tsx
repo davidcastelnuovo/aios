@@ -549,7 +549,7 @@ export default function Integrations() {
       gradient: "bg-gradient-to-r from-teal-600 to-cyan-700",
     },
     {
-      icon: <Globe className="h-6 w-6" />,
+      icon: <Link2 className="h-6 w-6" />,
       title: "Unified.to",
       description: "גישה ל-420+ אינטגרציות דרך API אחד — CRM, ATS, Ticketing ועוד",
       features: [
@@ -557,7 +557,7 @@ export default function Integrations() {
         "CRM, ATS, Ticketing, Commerce",
         "ממשק חיבור מובנה",
       ],
-      isConnected: false,
+      isConnected: (unifiedConnections?.length || 0) > 0,
       route: "unified-settings",
       gradient: "bg-gradient-to-r from-fuchsia-600 to-purple-700",
     },
