@@ -95,11 +95,7 @@ export function InteractiveCalendar() {
   // Update event mutation
   const updateMutation = useMutation({
     mutationFn: async (params: { eventId: string; summary: string; description: string; start: string; end: string }) => {
-      const { data, error } = await supabase.functions.invoke('update-calendar-event', {
-        body: params
-      });
-      if (error) throw error;
-      return data;
+      return await updateCalendarEvent(params, { tenantId: tenantId! });
     },
     onSuccess: () => {
       toast.success('האירוע עודכן בהצלחה');
@@ -115,11 +111,7 @@ export function InteractiveCalendar() {
   // Delete event mutation
   const deleteMutation = useMutation({
     mutationFn: async (eventId: string) => {
-      const { data, error } = await supabase.functions.invoke('delete-calendar-event', {
-        body: { eventId }
-      });
-      if (error) throw error;
-      return data;
+      return await deleteCalendarEvent(eventId, { tenantId: tenantId! });
     },
     onSuccess: () => {
       toast.success('האירוע נמחק בהצלחה');
