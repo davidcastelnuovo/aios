@@ -1,57 +1,90 @@
 
 
-# אוטומציית הקלטה → יומן → תמלול → סיכום
+# חיבור Unified.to כשכבת אינטגרציה נוספת
 
 ## סקירה
-כשהקלטת Zoom חדשה נוצרת, המערכת תבצע אוטומטית:
-1. תחפש פגישה תואמת ביומן גוגל לפי שעת ההתחלה
-2. תעדכן את שם ההקלטה לשם הפגישה מהיומן
-3. תתמלל את ההקלטה
-4. תייצר סיכום AI ותשלח אותו בוואטסאפ לבעל ההקלטה
+Unified.to הוא Unified API שמאפשר גישה ל-420+ אינטגרציות דרך API אחד סטנדרטי. נחבר אותו כשכבה נוספת — האינטגרציות הקיימות (Facebook, Google Ads, Green API וכו׳) ימשיכו לעבוד כמו היום, ו-Unified.to ישמש רק לאינטגרציות חדשות.
+
+## ארכיטקטורה
+
+```text
+┌─────────────────────────────────────────┐
+│           tenant_integrations           │
+│  (טבלה קיימת - ללא שינוי מבני)          │
+│                                         │
+│  integration_type = 'facebook'    ──► Edge Functions ישירות (כמו היום)
+│  integration_type = 'google_ads'  ──► Edge Functions ישירות (כמו היום)
+│  integration_type = 'unified_crm' ──► Edge Function חדשה ──► Unified.to API
+│  integration_type = 'unified_ats' ──► Edge Function חדשה ──► Unified.to API
+│  ...                                    │
+└─────────────────────────────────────────┘
+```
 
 ## שלבי מימוש
 
-### 1. Edge Function חדשה: `process-new-recording`
-פונקציה מרכזית שמתפעלת את כל הזרימה:
+### 1. שמירת API Token של Unified.to
+- הוספת Secret `UNIFIED_API_KEY` דרך כלי ה-secrets
+- ה-token ישמש ב-Edge Functions לקריאות ל-Unified.to API
 
-- **קלט**: `recording_id`, `tenant_id`
-- **שלב א - חיפוש ביומן**: שולפת את `calendar_tokens` של המשתמש (לפי `host_email` של ההקלטה מול `profiles`), קוראת ל-Google Calendar API עם חלון זמן של ±30 דקות מ-`start_time` של ההקלטה, ומוצאת פגישה תואמת
-- **שלב ב - עדכון שם**: מעדכנת את `meeting_topic` בטבלת `zoom_recordings` לשם הפגישה מהיומן
-- **שלב ג - תמלול**: קוראת ל-`transcribe-recording` הקיימת ומחכה לתוצאה
-- **שלב ד - סיכום AI**: שולחת את התמלול ל-Lovable AI Gateway לקבלת סיכום מובנה
-- **שלב ה - שליחה בוואטסאפ**: שולחת את הסיכום למשתמש דרך `send-green-api-message` (לפי מספר הטלפון מ-`profiles`)
+### 2. Edge Function: `unified-api-proxy`
+פונקציה אחת שמשמשת כ-proxy לכל קריאות Unified.to:
+- מקבלת: `connection_id` (של Unified.to), `method`, `path`, `body`
+- מעבירה את הקריאה ל-`https://api.unified.to/{path}` עם ה-API token
+- מחזירה את התוצאה ללקוח
+- כוללת validation ואימות משתמש
 
-### 2. עדכון `zoom-webhook/index.ts`
-בסוף הטיפול ב-`recording.completed`, אחרי שמירת ההקלטות בDB, הפונקציה תקרא ל-`process-new-recording` באופן אסינכרוני (fire-and-forget עם `fetch`) כדי להפעיל את כל הזרימה.
+### 3. Edge Function: `unified-connections`
+ניהול connections של Unified.to:
+- **create**: יוצרת connection חדש דרך Unified.to Embed URL ושומרת ב-`tenant_integrations` עם `integration_type = 'unified_{category}'`
+- **list**: מחזירה את כל ה-connections הפעילים של ה-tenant
+- **delete**: מוחקת connection
 
-### 3. עדכון `fetch-zoom-recordings/index.ts`
-גם כשמביאים הקלטות ידנית (sync), ניתן להפעיל את אותו flow על הקלטות חדשות שנוספו.
+### 4. דף הגדרות: `UnifiedSettings.tsx`
+דף חדש שמאפשר:
+- צפייה בקטגוריות זמינות (CRM, ATS, Ticketing, Commerce וכו׳)
+- חיבור אינטגרציה חדשה דרך Unified.to Embed (iframe/popup)
+- ניהול connections קיימים (ניתוק, רענון)
 
-## פרטים טכניים
+### 5. עדכון דף Integrations.tsx
+הוספת כרטיס "Unified.to" לרשימת האינטגרציות הקיימת, עם קישור לדף ההגדרות החדש.
 
-**התאמת פגישה ביומן:**
-- שליפת `start_time` מההקלטה
-- חיפוש אירועי יומן בחלון `start_time ± 30 דקות`
-- התאמה לפי חפיפת זמן (לא חייב להיות מדויק)
-- אם נמצאה פגישה → שם הפגישה = `event.summary`
+### 6. הרחבת AddIntegrationDialog
+הוספת אפשרות לבחור אינטגרציות Unified.to בדיאלוג הוספת אינטגרציה לטבלאות דינמיות (CRM tables).
 
-**זיהוי המשתמש:**
-- `host_email` מההקלטה → חיפוש ב-`auth.users` / `profiles` → `user_id` → `calendar_tokens`
-- אם אין חיבור יומן → דילוג על שלב שם הפגישה, המשך לתמלול
+## שימוש ב-Unified.to
 
-**שליחת סיכום בוואטסאפ:**
-- חיפוש `green_api_connections` של המשתמש
-- שליחה למספר הטלפון של המשתמש מ-`profiles` או מ-`campaigners`
-- הסיכום יישלח כהודעת טקסט מעוצבת
+**חיבור אינטגרציה (Embed URL):**
+Unified.to מספק URL מוכן שפותח חלון חיבור ללקוח הסופי. ה-URL נבנה כך:
+```
+https://embed.unified.to/integration?
+  workspace_id=...&
+  categories=crm,ats,ticketing&
+  success_redirect=...&
+  failure_redirect=...
+```
 
-**טיפול בשגיאות:**
-- אם אין יומן מחובר → ממשיך בלי שם פגישה
-- אם התמלול נכשל → לוג שגיאה, לא שולח סיכום
-- אם וואטסאפ לא מחובר → שומר סיכום בDB בלבד
+**קריאת נתונים:**
+```
+GET https://api.unified.to/crm/{connection_id}/contact
+GET https://api.unified.to/crm/{connection_id}/deal
+GET https://api.unified.to/ats/{connection_id}/candidate
+```
 
-### קבצים שיווצרו/יערכו
+**שמירת connection_id:**
+ב-`tenant_integrations.settings` נשמור את ה-`unified_connection_id` שמאפשר קריאות ל-API.
+
+## קבצים
+
 | קובץ | פעולה |
 |---|---|
-| `supabase/functions/process-new-recording/index.ts` | חדש — orchestrator |
-| `supabase/functions/zoom-webhook/index.ts` | עריכה — trigger ל-process-new-recording |
+| `supabase/functions/unified-api-proxy/index.ts` | חדש — proxy לקריאות API |
+| `supabase/functions/unified-connections/index.ts` | חדש — ניהול connections |
+| `src/pages/UnifiedSettings.tsx` | חדש — דף הגדרות |
+| `src/pages/Integrations.tsx` | עריכה — הוספת כרטיס |
+| `src/components/dynamic-tables/AddIntegrationDialog.tsx` | עריכה — תמיכה ב-Unified |
+
+## מה לא משתנה
+- כל האינטגרציות הקיימות (Facebook, Google Ads, Green API וכו׳) — ממשיכות לעבוד בדיוק כמו היום
+- טבלת `tenant_integrations` — ללא שינוי מבני, רק שורות חדשות עם `integration_type` חדש
+- ה-Edge Functions הקיימות — ללא נגיעה
 
