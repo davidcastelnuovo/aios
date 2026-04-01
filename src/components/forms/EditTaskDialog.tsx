@@ -653,15 +653,24 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
         }
       }
 
-      const { data: calendarData, error: calendarError } = await supabase.functions.invoke('add-calendar-event', {
-        body: {
+      const { addCalendarEvent } = await import("@/lib/calendarApi");
+      const tenantResult2 = await supabase.from('tenant_users').select('tenant_id').eq('user_id', userId!).limit(1).single();
+      const tid2 = tenantResult2.data?.tenant_id;
+      
+      if (!tid2) throw new Error('No tenant');
+
+      const calendarData = await addCalendarEvent(
+        {
           summary: subject,
           description: `משימה: ${task.title}\n\n${task.notes || ''}`,
           start: startDateTime.toISOString(),
           end: endDateTime.toISOString(),
-          location: meetingLocation || undefined,
           attendees: attendeeEmail ? [attendeeEmail] : undefined,
-        }
+        },
+        { tenantId: tid2 }
+      ).catch(err => {
+        console.error('Calendar error:', err);
+        return null;
       });
 
       if (calendarError) {
