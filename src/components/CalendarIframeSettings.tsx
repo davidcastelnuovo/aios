@@ -6,6 +6,8 @@ import { Label } from "@/components/ui/label";
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { checkCalendarConnection, addCalendarEvent } from "@/lib/calendarApi";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Calendar, Plus, Unplug, Loader2 } from "lucide-react";
