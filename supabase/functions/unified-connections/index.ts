@@ -60,12 +60,20 @@ Deno.serve(async (req) => {
         }
 
         const workspaceId = Deno.env.get("UNIFIED_WORKSPACE_ID");
-        const wsParam = workspaceId ? `&workspace_id=${workspaceId}` : "";
-        const apiKeyForUnified = Deno.env.get("UNIFIED_API_KEY")!;
-        console.log("Calling Unified.to with key ending:", apiKeyForUnified.slice(-6), "workspace:", workspaceId?.slice(0, 8));
-        const resp = await fetch(`https://api.unified.to/unified/integration?categories=${category}${wsParam}`, {
-          headers: { "Authorization": `Bearer ${apiKeyForUnified}` },
+        if (!workspaceId) {
+          return new Response(JSON.stringify({ error: "UNIFIED_WORKSPACE_ID not configured" }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const params = new URLSearchParams({
+          categories: category,
+          active: "false",
+          env: "Production",
         });
+
+        const resp = await fetch(`https://api.unified.to/unified/integration/workspace/${workspaceId}?${params.toString()}`);
 
         if (!resp.ok) {
           const errText = await resp.text();
