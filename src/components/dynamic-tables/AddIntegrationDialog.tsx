@@ -164,8 +164,17 @@ export function AddIntegrationDialog({
           return data?.sites?.map((s: any) => ({ id: s.siteUrl, name: s.siteUrl })) || [];
         }
         case 'ahrefs': {
-          // Ahrefs doesn't have multiple accounts - just return a placeholder
           return [{ id: 'ahrefs_default', name: 'Ahrefs SEO Data' }];
+        }
+        case 'unified': {
+          // Fetch unified connections for this tenant
+          const { data: unifiedData } = await supabase.functions.invoke('unified-connections', {
+            body: { action: 'list', tenant_id: activeTenantId }
+          });
+          return unifiedData?.connections?.map((c: any) => ({
+            id: c.id,
+            name: c.settings?.integration_name || c.integration_type
+          })) || [];
         }
         default:
           return [];
