@@ -59,7 +59,9 @@ Deno.serve(async (req) => {
           });
         }
 
-        const resp = await fetch(`https://api.unified.to/unified/integration?categories=${category}`, {
+        const workspaceId = Deno.env.get("UNIFIED_WORKSPACE_ID");
+        const wsParam = workspaceId ? `&workspace_id=${workspaceId}` : "";
+        const resp = await fetch(`https://api.unified.to/unified/integration?categories=${category}${wsParam}`, {
           headers: { "Authorization": `Bearer ${unifiedApiKey}` },
         });
 
