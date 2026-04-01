@@ -40,6 +40,7 @@ interface CalendarEvent {
 
 export function InteractiveCalendar() {
   const { userId } = useCurrentUser();
+  const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [isEditing, setIsEditing] = useState(false);
