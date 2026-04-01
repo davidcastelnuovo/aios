@@ -6,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
-import { Loader2, Facebook, BarChart3, Search, ExternalLink, Plus, Check, TrendingUp } from "lucide-react";
+import { Loader2, Facebook, BarChart3, Search, ExternalLink, Plus, Check, TrendingUp, Link2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 
