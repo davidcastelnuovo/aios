@@ -532,6 +532,19 @@ export default function Integrations() {
       route: "telephony-settings",
       gradient: "bg-gradient-to-r from-teal-600 to-cyan-700",
     },
+    {
+      icon: <Globe className="h-6 w-6" />,
+      title: "Unified.to",
+      description: "גישה ל-420+ אינטגרציות דרך API אחד — CRM, ATS, Ticketing ועוד",
+      features: [
+        "חיבור ל-Salesforce, HubSpot, Pipedrive",
+        "CRM, ATS, Ticketing, Commerce",
+        "ממשק חיבור מובנה",
+      ],
+      isConnected: false,
+      route: "unified-settings",
+      gradient: "bg-gradient-to-r from-fuchsia-600 to-purple-700",
+    },
   ];
 
   return (
