@@ -29,21 +29,15 @@ const [eventEnd, setEventEnd] = useState("");
 
   // Check connection status
   const { data: connectionStatus, isLoading: statusLoading } = useQuery({
-    queryKey: ["calendar-status", userId],
+    queryKey: ["calendar-status", userId, tenantId],
     queryFn: async () => {
-      if (!userId) return null;
-      
-      const { data, error } = await supabase.functions.invoke('google-calendar-auth', {
-        body: { action: 'status' }
-      });
-
-      if (error) throw error;
-      return data;
+      if (!userId || !tenantId) return null;
+      return await checkCalendarConnection({ tenantId });
     },
-    enabled: !!userId,
-    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
-    refetchOnWindowFocus: false, // Don't refetch on window focus
-    refetchOnMount: false, // Don't refetch on mount
+    enabled: !!userId && !!tenantId,
+    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 
   // Connect to Google Calendar
