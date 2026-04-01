@@ -187,18 +187,17 @@ export function WeeklyTaskBoard() {
 
   // Fetch Google Calendar events
   const { data: calendarEvents = [] } = useQuery({
-    queryKey: ["calendar-events-weekly", format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd")],
+    queryKey: ["calendar-events-weekly", format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd"), tenantId],
     queryFn: async () => {
       try {
-        const { data, error } = await supabase.functions.invoke("get-calendar-events", {
-          body: {
-            timeMin: dateRange.start.toISOString(),
-            timeMax: endOfDay(addDays(dateRange.end, 1)).toISOString(),
-          },
-        });
-        if (error) throw error;
+        const { getCalendarEvents } = await import("@/lib/calendarApi");
+        const data = await getCalendarEvents(
+          dateRange.start.toISOString(),
+          endOfDay(addDays(dateRange.end, 1)).toISOString(),
+          { tenantId: tenantId! }
+        );
         
-        // Transform Google Calendar API response to our CalendarEvent format
+        // Transform to our CalendarEvent format
         // Only include timed events (with dateTime), skip all-day events (with date only)
         const events = (data?.events || [])
           .filter((event: any) => event.start?.dateTime && event.end?.dateTime)
@@ -217,7 +216,7 @@ export function WeeklyTaskBoard() {
         return [];
       }
     },
-    enabled: !!user?.id && viewMode !== "monthly",
+    enabled: !!user?.id && !!tenantId && viewMode !== "monthly",
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
 
