@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Webhook, Facebook, MessageCircle, ArrowLeft, Settings, TrendingUp, Calculator, Zap, Search, Video, Mail, Brain, Phone, Globe, ShoppingCart } from "lucide-react";
+import { Webhook, Facebook, MessageCircle, ArrowLeft, Settings, TrendingUp, Calculator, Zap, Search, Video, Mail, Brain, Phone, Globe, ShoppingCart, Link2 } from "lucide-react";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -304,6 +304,22 @@ export default function Integrations() {
     enabled: !!currentTenantId,
   });
 
+  // Check Unified.to connections
+  const { data: unifiedConnections } = useQuery({
+    queryKey: ['unified-connections-count', currentTenantId],
+    queryFn: async () => {
+      if (!currentTenantId) return null;
+      const { data } = await supabase
+        .from('tenant_integrations')
+        .select('id')
+        .eq('tenant_id', currentTenantId)
+        .like('integration_type', 'unified_%')
+        .eq('is_active', true);
+      return data;
+    },
+    enabled: !!currentTenantId,
+  });
+
   const integrations: IntegrationCardProps[] = [
     {
       icon: <Webhook className="h-6 w-6" />,
@@ -531,6 +547,19 @@ export default function Integrations() {
       isConnected: false,
       route: "telephony-settings",
       gradient: "bg-gradient-to-r from-teal-600 to-cyan-700",
+    },
+    {
+      icon: <Link2 className="h-6 w-6" />,
+      title: "Unified.to",
+      description: "גישה ל-420+ אינטגרציות דרך API אחד — CRM, ATS, Ticketing ועוד",
+      features: [
+        "חיבור ל-Salesforce, HubSpot, Pipedrive",
+        "CRM, ATS, Ticketing, Commerce",
+        "ממשק חיבור מובנה",
+      ],
+      isConnected: (unifiedConnections?.length || 0) > 0,
+      route: "unified-settings",
+      gradient: "bg-gradient-to-r from-fuchsia-600 to-purple-700",
     },
   ];
 

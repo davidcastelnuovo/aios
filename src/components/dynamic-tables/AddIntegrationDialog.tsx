@@ -6,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
-import { Loader2, Facebook, BarChart3, Search, ExternalLink, Plus, Check, TrendingUp } from "lucide-react";
+import { Loader2, Facebook, BarChart3, Search, ExternalLink, Plus, Check, TrendingUp, Link2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 
@@ -25,7 +25,7 @@ interface AddIntegrationDialogProps {
   onIntegrationAdded: () => void;
 }
 
-type IntegrationType = 'facebook_insights' | 'google_ads' | 'google_analytics' | 'google_search_console' | 'ahrefs';
+type IntegrationType = 'facebook_insights' | 'google_ads' | 'google_analytics' | 'google_search_console' | 'ahrefs' | 'unified';
 
 interface PlatformConfig {
   type: IntegrationType;
@@ -76,6 +76,14 @@ const PLATFORMS: PlatformConfig[] = [
     color: 'bg-orange-600',
     integrationType: 'ahrefs',
     settingsRoute: 'google-search-console-settings',
+  },
+  {
+    type: 'unified',
+    name: 'Unified.to',
+    icon: <Link2 className="h-5 w-5" />,
+    color: 'bg-purple-600',
+    integrationType: 'unified',
+    settingsRoute: 'unified-settings',
   },
 ];
 
@@ -156,8 +164,17 @@ export function AddIntegrationDialog({
           return data?.sites?.map((s: any) => ({ id: s.siteUrl, name: s.siteUrl })) || [];
         }
         case 'ahrefs': {
-          // Ahrefs doesn't have multiple accounts - just return a placeholder
           return [{ id: 'ahrefs_default', name: 'Ahrefs SEO Data' }];
+        }
+        case 'unified': {
+          // Fetch unified connections for this tenant
+          const { data: unifiedData } = await supabase.functions.invoke('unified-connections', {
+            body: { action: 'list', tenant_id: activeTenantId }
+          });
+          return unifiedData?.connections?.map((c: any) => ({
+            id: c.id,
+            name: c.settings?.integration_name || c.integration_type
+          })) || [];
         }
         default:
           return [];
