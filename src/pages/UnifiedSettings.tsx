@@ -6,13 +6,10 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
-import { Loader2, Plus, Trash2, ExternalLink, ArrowLeft, Link2, Package, Users, ShoppingCart, Ticket, Briefcase, BarChart3, CalendarDays, Megaphone, Search } from "lucide-react";
+import { Loader2, Plus, Trash2, ArrowLeft, Link2, Package, Users, ShoppingCart, Ticket, Briefcase, BarChart3, CalendarDays, Megaphone, Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import UnifiedProviderPicker from "@/components/unified/UnifiedProviderPicker";
 
 const UNIFIED_CATEGORIES = [
   { key: "calendar", label: "Calendar", icon: <CalendarDays className="h-5 w-5" />, description: "Google Calendar, Outlook Calendar, CalDAV" },
@@ -33,15 +30,9 @@ export default function UnifiedSettings() {
   const { buildPath } = useTenantPath();
   const queryClient = useQueryClient();
   const { currentTenantId } = useTenant();
-  const [showConnectDialog, setShowConnectDialog] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState("");
-  const [workspaceId, setWorkspaceId] = useState("");
-  const [embedUrl, setEmbedUrl] = useState("");
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [showSaveDialog, setShowSaveDialog] = useState(false);
-  const [newConnectionId, setNewConnectionId] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<{ key: string; label: string } | null>(null);
 
-  // Fetch existing unified connections
   const { data: connections, isLoading } = useQuery({
     queryKey: ["unified-connections", currentTenantId],
     queryFn: async () => {
@@ -54,80 +45,17 @@ export default function UnifiedSettings() {
     enabled: !!currentTenantId,
   });
 
-  const handleConnect = async () => {
-    if (!selectedCategory || !workspaceId) {
-      toast({ title: "נא למלא את כל השדות", variant: "destructive" });
-      return;
-    }
-
-    setIsConnecting(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("unified-connections", {
-        body: {
-          action: "get_embed_url",
-          tenant_id: currentTenantId,
-          category: selectedCategory,
-          workspace_id: workspaceId,
-          success_redirect: window.location.href,
-          failure_redirect: window.location.href,
-        },
-      });
-
-      if (error) throw error;
-
-      if (data?.embed_url) {
-        setEmbedUrl(data.embed_url);
-        window.open(data.embed_url, "_blank", "width=600,height=700");
-        setShowConnectDialog(false);
-        setShowSaveDialog(true);
-      }
-    } catch (error: any) {
-      toast({ title: "שגיאה ביצירת קישור", description: error.message, variant: "destructive" });
-    } finally {
-      setIsConnecting(false);
-    }
-  };
-
-  const handleSaveConnection = async () => {
-    if (!newConnectionId) {
-      toast({ title: "נא להזין Connection ID", variant: "destructive" });
-      return;
-    }
-
-    try {
-      const { error } = await supabase.functions.invoke("unified-connections", {
-        body: {
-          action: "save_connection",
-          tenant_id: currentTenantId,
-          connection_id: newConnectionId,
-          category: selectedCategory,
-        },
-      });
-
-      if (error) throw error;
-
-      toast({ title: "החיבור נשמר בהצלחה!" });
-      queryClient.invalidateQueries({ queryKey: ["unified-connections"] });
-      setShowSaveDialog(false);
-      setNewConnectionId("");
-      setSelectedCategory("");
-    } catch (error: any) {
-      toast({ title: "שגיאה בשמירת החיבור", description: error.message, variant: "destructive" });
-    }
+  const handleCategoryClick = (cat: typeof UNIFIED_CATEGORIES[0]) => {
+    setSelectedCategory({ key: cat.key, label: cat.label });
+    setPickerOpen(true);
   };
 
   const handleDelete = async (integrationId: string) => {
     try {
       const { error } = await supabase.functions.invoke("unified-connections", {
-        body: {
-          action: "delete",
-          tenant_id: currentTenantId,
-          connection_id: integrationId,
-        },
+        body: { action: "delete", tenant_id: currentTenantId, connection_id: integrationId },
       });
-
       if (error) throw error;
-
       toast({ title: "החיבור נותק בהצלחה" });
       queryClient.invalidateQueries({ queryKey: ["unified-connections"] });
     } catch (error: any) {
@@ -155,16 +83,12 @@ export default function UnifiedSettings() {
               <CardTitle>קטגוריות זמינות</CardTitle>
               <CardDescription>בחר קטגוריה לחיבור שירות חדש</CardDescription>
             </div>
-            <Button onClick={() => setShowConnectDialog(true)}>
-              <Plus className="h-4 w-4 ml-2" />
-              חבר שירות חדש
-            </Button>
           </div>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {UNIFIED_CATEGORIES.map((cat) => (
-              <Card key={cat.key} className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => { setSelectedCategory(cat.key); setShowConnectDialog(true); }}>
+              <Card key={cat.key} className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => handleCategoryClick(cat)}>
                 <CardContent className="p-4 flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-primary/10 text-primary">{cat.icon}</div>
                   <div>
@@ -215,58 +139,18 @@ export default function UnifiedSettings() {
               })}
             </div>
           ) : (
-            <p className="text-center text-muted-foreground py-8">אין חיבורים פעילים עדיין. לחץ &quot;חבר שירות חדש&quot; להתחלה.</p>
+            <p className="text-center text-muted-foreground py-8">אין חיבורים פעילים עדיין. לחץ על קטגוריה להתחלה.</p>
           )}
         </CardContent>
       </Card>
 
-      {/* Connect Dialog */}
-      <Dialog open={showConnectDialog} onOpenChange={setShowConnectDialog}>
-        <DialogContent dir="rtl">
-          <DialogHeader>
-            <DialogTitle>חבר שירות חדש</DialogTitle>
-            <DialogDescription>הזן את פרטי ה-Workspace ובחר קטגוריה</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>קטגוריה</Label>
-              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                <SelectTrigger><SelectValue placeholder="בחר קטגוריה..." /></SelectTrigger>
-                <SelectContent>
-                  {UNIFIED_CATEGORIES.map((cat) => (
-                    <SelectItem key={cat.key} value={cat.key}>{cat.label} - {cat.description}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Workspace ID (מ-Unified.to)</Label>
-              <Input value={workspaceId} onChange={(e) => setWorkspaceId(e.target.value)} placeholder="הזן Workspace ID..." />
-            </div>
-            <Button onClick={handleConnect} disabled={isConnecting} className="w-full">
-              {isConnecting ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <ExternalLink className="h-4 w-4 ml-2" />}
-              פתח חלון חיבור
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Save Connection Dialog */}
-      <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
-        <DialogContent dir="rtl">
-          <DialogHeader>
-            <DialogTitle>שמור חיבור</DialogTitle>
-            <DialogDescription>לאחר שהחיבור הצליח בחלון Unified.to, הזן את ה-Connection ID שהתקבל</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Connection ID</Label>
-              <Input value={newConnectionId} onChange={(e) => setNewConnectionId(e.target.value)} placeholder="הזן Connection ID..." />
-            </div>
-            <Button onClick={handleSaveConnection} className="w-full">שמור חיבור</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Provider Picker Dialog */}
+      <UnifiedProviderPicker
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        selectedCategory={selectedCategory}
+        tenantId={currentTenantId || ""}
+      />
     </div>
   );
 }
