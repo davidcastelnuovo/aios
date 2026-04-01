@@ -447,9 +447,8 @@ export function WeeklyTaskBoard() {
   // Sync tasks to Google Calendar mutation
   const syncToCalendar = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke("sync-tasks-to-calendar");
-      if (error) throw error;
-      return data;
+      const { syncTasksToCalendar } = await import("@/lib/calendarApi");
+      return await syncTasksToCalendar({ tenantId: tenantId! });
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["calendar-events"] });
