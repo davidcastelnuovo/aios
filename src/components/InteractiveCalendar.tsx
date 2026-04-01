@@ -75,25 +75,21 @@ export function InteractiveCalendar() {
   };
   // Fetch events
   const { data: eventsData, isLoading, error } = useQuery({
-    queryKey: ['calendar-events', userId],
+    queryKey: ['calendar-events', userId, tenantId],
     queryFn: async () => {
       const now = new Date();
       const oneMonthAgo = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       const twoMonthsLater = new Date(now.getFullYear(), now.getMonth() + 2, 0);
 
-      const { data, error } = await supabase.functions.invoke('get-calendar-events', {
-        body: {
-          timeMin: oneMonthAgo.toISOString(),
-          timeMax: twoMonthsLater.toISOString(),
-        }
-      });
-
-      if (error) throw error;
-      return data;
+      return await getCalendarEvents(
+        oneMonthAgo.toISOString(),
+        twoMonthsLater.toISOString(),
+        { tenantId: tenantId! }
+      );
     },
-    enabled: !!userId,
-    staleTime: 1000 * 60 * 2, // Cache for 2 minutes
-    refetchOnWindowFocus: false, // Don't refetch on window focus
+    enabled: !!userId && !!tenantId,
+    staleTime: 1000 * 60 * 2,
+    refetchOnWindowFocus: false,
   });
 
   // Update event mutation
