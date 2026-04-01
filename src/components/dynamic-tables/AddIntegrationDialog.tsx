@@ -25,7 +25,7 @@ interface AddIntegrationDialogProps {
   onIntegrationAdded: () => void;
 }
 
-type IntegrationType = 'facebook_insights' | 'google_ads' | 'google_analytics' | 'google_search_console' | 'ahrefs';
+type IntegrationType = 'facebook_insights' | 'google_ads' | 'google_analytics' | 'google_search_console' | 'ahrefs' | 'unified';
 
 interface PlatformConfig {
   type: IntegrationType;
