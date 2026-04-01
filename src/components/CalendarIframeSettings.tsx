@@ -15,6 +15,8 @@ import { InteractiveCalendar } from "./InteractiveCalendar";
 
 export function CalendarIframeSettings() {
   const { userId, user } = useCurrentUser();
+  const { tenantId } = useCurrentTenant();
+  const queryClient = useQueryClient();
   const queryClient = useQueryClient();
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [eventSummary, setEventSummary] = useState("");
