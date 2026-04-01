@@ -77,6 +77,14 @@ const PLATFORMS: PlatformConfig[] = [
     integrationType: 'ahrefs',
     settingsRoute: 'google-search-console-settings',
   },
+  {
+    type: 'unified',
+    name: 'Unified.to',
+    icon: <Link2 className="h-5 w-5" />,
+    color: 'bg-purple-600',
+    integrationType: 'unified',
+    settingsRoute: 'unified-settings',
+  },
 ];
 
 export function AddIntegrationDialog({ 
