@@ -543,14 +543,18 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
       const endOfDay = new Date(selectedDate);
       endOfDay.setHours(23, 59, 59, 999);
       
-      const { data, error } = await supabase.functions.invoke('get-calendar-events', {
-        body: {
-          timeMin: startOfDay.toISOString(),
-          timeMax: endOfDay.toISOString(),
-        },
-      });
+      const { getCalendarEvents: fetchEvents } = await import("@/lib/calendarApi");
+      const { data: { user } } = await supabase.auth.getUser();
+      const tenantResult = await supabase.from('tenant_users').select('tenant_id').eq('user_id', user!.id).limit(1).single();
+      const tid = tenantResult.data?.tenant_id;
       
-      if (error) throw error;
+      if (!tid) throw new Error('No tenant');
+      
+      const data = await fetchEvents(
+        startOfDay.toISOString(),
+        endOfDay.toISOString(),
+        { tenantId: tid }
+      );
       
       if (data?.needsReconnect) {
         setCalendarError('היומן לא מחובר. יש לחבר את יומן Google.');
@@ -649,19 +653,27 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
         }
       }
 
-      const { data: calendarData, error: calendarError } = await supabase.functions.invoke('add-calendar-event', {
-        body: {
+      const { addCalendarEvent } = await import("@/lib/calendarApi");
+      const tenantResult2 = await supabase.from('tenant_users').select('tenant_id').eq('user_id', userId!).limit(1).single();
+      const tid2 = tenantResult2.data?.tenant_id;
+      
+      if (!tid2) throw new Error('No tenant');
+
+      const calendarData = await addCalendarEvent(
+        {
           summary: subject,
           description: `משימה: ${task.title}\n\n${task.notes || ''}`,
           start: startDateTime.toISOString(),
           end: endDateTime.toISOString(),
-          location: meetingLocation || undefined,
           attendees: attendeeEmail ? [attendeeEmail] : undefined,
-        }
+        },
+        { tenantId: tid2 }
+      ).catch(err => {
+        console.error('Calendar error:', err);
+        return null;
       });
 
-      if (calendarError) {
-        console.error('Calendar error:', calendarError);
+      if (!calendarData) {
         toast.error("שגיאה ביצירת הפגישה ביומן");
       } else {
         const successMessage = attendeeEmail 

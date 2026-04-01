@@ -5,6 +5,8 @@ import { he } from "date-fns/locale";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { getCalendarEvents, updateCalendarEvent, deleteCalendarEvent } from "@/lib/calendarApi";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -38,6 +40,7 @@ interface CalendarEvent {
 
 export function InteractiveCalendar() {
   const { userId } = useCurrentUser();
+  const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -75,35 +78,27 @@ export function InteractiveCalendar() {
   };
   // Fetch events
   const { data: eventsData, isLoading, error } = useQuery({
-    queryKey: ['calendar-events', userId],
+    queryKey: ['calendar-events', userId, tenantId],
     queryFn: async () => {
       const now = new Date();
       const oneMonthAgo = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       const twoMonthsLater = new Date(now.getFullYear(), now.getMonth() + 2, 0);
 
-      const { data, error } = await supabase.functions.invoke('get-calendar-events', {
-        body: {
-          timeMin: oneMonthAgo.toISOString(),
-          timeMax: twoMonthsLater.toISOString(),
-        }
-      });
-
-      if (error) throw error;
-      return data;
+      return await getCalendarEvents(
+        oneMonthAgo.toISOString(),
+        twoMonthsLater.toISOString(),
+        { tenantId: tenantId! }
+      );
     },
-    enabled: !!userId,
-    staleTime: 1000 * 60 * 2, // Cache for 2 minutes
-    refetchOnWindowFocus: false, // Don't refetch on window focus
+    enabled: !!userId && !!tenantId,
+    staleTime: 1000 * 60 * 2,
+    refetchOnWindowFocus: false,
   });
 
   // Update event mutation
   const updateMutation = useMutation({
     mutationFn: async (params: { eventId: string; summary: string; description: string; start: string; end: string }) => {
-      const { data, error } = await supabase.functions.invoke('update-calendar-event', {
-        body: params
-      });
-      if (error) throw error;
-      return data;
+      return await updateCalendarEvent(params, { tenantId: tenantId! });
     },
     onSuccess: () => {
       toast.success('האירוע עודכן בהצלחה');
@@ -119,11 +114,7 @@ export function InteractiveCalendar() {
   // Delete event mutation
   const deleteMutation = useMutation({
     mutationFn: async (eventId: string) => {
-      const { data, error } = await supabase.functions.invoke('delete-calendar-event', {
-        body: { eventId }
-      });
-      if (error) throw error;
-      return data;
+      return await deleteCalendarEvent(eventId, { tenantId: tenantId! });
     },
     onSuccess: () => {
       toast.success('האירוע נמחק בהצלחה');

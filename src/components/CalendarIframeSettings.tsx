@@ -6,6 +6,8 @@ import { Label } from "@/components/ui/label";
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { checkCalendarConnection, addCalendarEvent } from "@/lib/calendarApi";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Calendar, Plus, Unplug, Loader2 } from "lucide-react";
@@ -13,6 +15,7 @@ import { InteractiveCalendar } from "./InteractiveCalendar";
 
 export function CalendarIframeSettings() {
   const { userId, user } = useCurrentUser();
+  const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [eventSummary, setEventSummary] = useState("");
@@ -25,21 +28,15 @@ const [eventEnd, setEventEnd] = useState("");
 
   // Check connection status
   const { data: connectionStatus, isLoading: statusLoading } = useQuery({
-    queryKey: ["calendar-status", userId],
+    queryKey: ["calendar-status", userId, tenantId],
     queryFn: async () => {
-      if (!userId) return null;
-      
-      const { data, error } = await supabase.functions.invoke('google-calendar-auth', {
-        body: { action: 'status' }
-      });
-
-      if (error) throw error;
-      return data;
+      if (!userId || !tenantId) return null;
+      return await checkCalendarConnection({ tenantId });
     },
-    enabled: !!userId,
-    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
-    refetchOnWindowFocus: false, // Don't refetch on window focus
-    refetchOnMount: false, // Don't refetch on mount
+    enabled: !!userId && !!tenantId,
+    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 
   // Connect to Google Calendar
@@ -136,12 +133,8 @@ const [eventEnd, setEventEnd] = useState("");
   // Add event mutation
   const addEventMutation = useMutation({
     mutationFn: async (eventData: { summary: string; description?: string; start: string; end?: string }) => {
-      const { data, error } = await supabase.functions.invoke('add-calendar-event', {
-        body: eventData
-      });
-
-      if (error) throw error;
-      return data;
+      if (!tenantId) throw new Error('No tenant');
+      return await addCalendarEvent(eventData, { tenantId });
     },
     onSuccess: () => {
       toast.success("האירוע נוסף בהצלחה ללוח השנה");
