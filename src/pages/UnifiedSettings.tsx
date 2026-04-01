@@ -6,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
-import { Loader2, Plus, Trash2, ExternalLink, ArrowLeft, Link2, Package, Users, ShoppingCart, Ticket, Briefcase, BarChart3, CalendarDays } from "lucide-react";
+import { Loader2, Plus, Trash2, ExternalLink, ArrowLeft, Link2, Package, Users, ShoppingCart, Ticket, Briefcase, BarChart3, CalendarDays, Megaphone, Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -15,13 +15,16 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const UNIFIED_CATEGORIES = [
+  { key: "calendar", label: "Calendar", icon: <CalendarDays className="h-5 w-5" />, description: "Google Calendar, Outlook Calendar, CalDAV" },
   { key: "crm", label: "CRM", icon: <Users className="h-5 w-5" />, description: "Salesforce, HubSpot, Pipedrive ועוד" },
   { key: "ats", label: "ATS - גיוס", icon: <Briefcase className="h-5 w-5" />, description: "Greenhouse, Lever, Workable" },
   { key: "ticketing", label: "Ticketing", icon: <Ticket className="h-5 w-5" />, description: "Zendesk, Freshdesk, Jira" },
   { key: "commerce", label: "Commerce", icon: <ShoppingCart className="h-5 w-5" />, description: "Shopify, WooCommerce, Stripe" },
   { key: "martech", label: "Marketing", icon: <BarChart3 className="h-5 w-5" />, description: "Mailchimp, ActiveCampaign, Klaviyo" },
   { key: "storage", label: "Storage", icon: <Package className="h-5 w-5" />, description: "Google Drive, Dropbox, OneDrive" },
-  { key: "calendar", label: "Calendar", icon: <CalendarDays className="h-5 w-5" />, description: "Google Calendar, Outlook Calendar" },
+  { key: "social", label: "Social Media", icon: <Megaphone className="h-5 w-5" />, description: "Facebook, Instagram, TikTok, YouTube, LinkedIn" },
+  { key: "ads", label: "פרסום ממומן", icon: <BarChart3 className="h-5 w-5" />, description: "Google Ads, Meta Ads, TikTok Ads" },
+  { key: "seo", label: "SEO & Analytics", icon: <Search className="h-5 w-5" />, description: "Ahrefs, Google Analytics, Search Console" },
 ];
 
 export default function UnifiedSettings() {
