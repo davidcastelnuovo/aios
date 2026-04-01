@@ -21,6 +21,7 @@ const UNIFIED_CATEGORIES = [
   { key: "commerce", label: "Commerce", icon: <ShoppingCart className="h-5 w-5" />, description: "Shopify, WooCommerce, Stripe" },
   { key: "martech", label: "Marketing", icon: <BarChart3 className="h-5 w-5" />, description: "Mailchimp, ActiveCampaign, Klaviyo" },
   { key: "storage", label: "Storage", icon: <Package className="h-5 w-5" />, description: "Google Drive, Dropbox, OneDrive" },
+  { key: "calendar", label: "Calendar", icon: <CalendarDays className="h-5 w-5" />, description: "Google Calendar, Outlook Calendar" },
 ];
 
 export default function UnifiedSettings() {
