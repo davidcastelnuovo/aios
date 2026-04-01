@@ -1,90 +1,62 @@
 
 
-# חיבור Unified.to כשכבת אינטגרציה נוספת
+# מעבר Google Calendar לחיבור דרך Unified.to
 
-## סקירה
-Unified.to הוא Unified API שמאפשר גישה ל-420+ אינטגרציות דרך API אחד סטנדרטי. נחבר אותו כשכבה נוספת — האינטגרציות הקיימות (Facebook, Google Ads, Green API וכו׳) ימשיכו לעבוד כמו היום, ו-Unified.to ישמש רק לאינטגרציות חדשות.
+## הרעיון
+במקום לחבר את Google Calendar ישירות עם OAuth credentials משלך (שדורש scopes רגישים כמו `calendar.events`), נעביר את החיבור ליומן דרך **Unified.to** שכבר מוגדר במערכת. כך:
+- **אימות משתמשים (Sign-In)** — נשאר ישירות מול Google, עם scopes לא רגישים בלבד (`email`, `profile`, `openid`)
+- **יומן Google** — עובר דרך Unified.to שכבר מאומת מול Google ולא יציג התראת טסט
 
-## ארכיטקטורה
+## השפעה על Verification
+עם השינוי הזה, האפליקציה שלך ב-Google Cloud Console תבקש רק scopes לא רגישים. תהליך ה-Verification יהיה מהיר ופשוט — ללא צורך באודיט אבטחה.
 
-```text
-┌─────────────────────────────────────────┐
-│           tenant_integrations           │
-│  (טבלה קיימת - ללא שינוי מבני)          │
-│                                         │
-│  integration_type = 'facebook'    ──► Edge Functions ישירות (כמו היום)
-│  integration_type = 'google_ads'  ──► Edge Functions ישירות (כמו היום)
-│  integration_type = 'unified_crm' ──► Edge Function חדשה ──► Unified.to API
-│  integration_type = 'unified_ats' ──► Edge Function חדשה ──► Unified.to API
-│  ...                                    │
-└─────────────────────────────────────────┘
-```
+## מה צריך לשנות
 
-## שלבי מימוש
+### שלב 1: הוספת קטגוריית Calendar ל-Unified.to
+- הוספת `calendar` לרשימת הקטגוריות ב-`UnifiedSettings.tsx` (Google Calendar, Outlook Calendar וכו׳)
+- המשתמש יחבר את יומן Google דרך ממשק Unified.to הקיים
 
-### 1. שמירת API Token של Unified.to
-- הוספת Secret `UNIFIED_API_KEY` דרך כלי ה-secrets
-- ה-token ישמש ב-Edge Functions לקריאות ל-Unified.to API
+### שלב 2: Edge Function חדשה — `unified-calendar-proxy`
+פונקציה חדשה שתחליף את הקריאות הישירות ל-Google Calendar API:
+- **שליפת אירועים** — דרך Unified.to Calendar API (`GET /unified/calendar/{connection_id}/event`)
+- **יצירת אירוע** — `POST /unified/calendar/{connection_id}/event`
+- **עדכון אירוע** — `PUT /unified/calendar/{connection_id}/event/{id}`
+- **מחיקת אירוע** — `DELETE /unified/calendar/{connection_id}/event/{id}`
+- הפונקציה תמצא את ה-`unified_connection_id` מטבלת `tenant_integrations` לפי tenant + user
 
-### 2. Edge Function: `unified-api-proxy`
-פונקציה אחת שמשמשת כ-proxy לכל קריאות Unified.to:
-- מקבלת: `connection_id` (של Unified.to), `method`, `path`, `body`
-- מעבירה את הקריאה ל-`https://api.unified.to/{path}` עם ה-API token
-- מחזירה את התוצאה ללקוח
-- כוללת validation ואימות משתמש
+### שלב 3: עדכון רכיבי Frontend
+קבצים שצריכים שינוי:
+- **`src/components/InteractiveCalendar.tsx`** — להחליף קריאה ל-`get-calendar-events` בקריאה ל-`unified-calendar-proxy`
+- **`src/components/CalendarIframeSettings.tsx`** — להחליף `add-calendar-event`
+- **`src/components/tasks/WeeklyTaskBoard.tsx`** — להחליף `get-calendar-events`, `add-calendar-event`, `sync-tasks-to-calendar`
+- **`src/components/forms/EditTaskDialog.tsx`** — להחליף `get-calendar-events`, `add-calendar-event`
+- **`src/components/CalendarView.tsx`** — להחליף בדיקת חיבור מ-`calendar_tokens` לבדיקה ב-`tenant_integrations`
 
-### 3. Edge Function: `unified-connections`
-ניהול connections של Unified.to:
-- **create**: יוצרת connection חדש דרך Unified.to Embed URL ושומרת ב-`tenant_integrations` עם `integration_type = 'unified_{category}'`
-- **list**: מחזירה את כל ה-connections הפעילים של ה-tenant
-- **delete**: מוחקת connection
+### שלב 4: עדכון Edge Functions קיימות
+- **`add-calendar-event`** — לנתב דרך Unified.to API במקום Google ישירות
+- **`get-calendar-events`** — אותו שינוי
+- **`update-calendar-event`** — אותו שינוי
+- **`delete-calendar-event`** — אותו שינוי
+- **`sync-tasks-to-calendar`** — לשנות לשימוש ב-Unified.to API
 
-### 4. דף הגדרות: `UnifiedSettings.tsx`
-דף חדש שמאפשר:
-- צפייה בקטגוריות זמינות (CRM, ATS, Ticketing, Commerce וכו׳)
-- חיבור אינטגרציה חדשה דרך Unified.to Embed (iframe/popup)
-- ניהול connections קיימים (ניתוק, רענון)
+### שלב 5: ניקוי
+- טבלת `calendar_tokens` תישאר זמנית לתמיכה בחיבורים קיימים, אבל חיבורים חדשים יעברו דרך Unified.to
+- הסרת ה-scope `https://www.googleapis.com/auth/calendar` מה-OAuth flow ב-`google-calendar-auth`
 
-### 5. עדכון דף Integrations.tsx
-הוספת כרטיס "Unified.to" לרשימת האינטגרציות הקיימת, עם קישור לדף ההגדרות החדש.
-
-### 6. הרחבת AddIntegrationDialog
-הוספת אפשרות לבחור אינטגרציות Unified.to בדיאלוג הוספת אינטגרציה לטבלאות דינמיות (CRM tables).
-
-## שימוש ב-Unified.to
-
-**חיבור אינטגרציה (Embed URL):**
-Unified.to מספק URL מוכן שפותח חלון חיבור ללקוח הסופי. ה-URL נבנה כך:
-```
-https://embed.unified.to/integration?
-  workspace_id=...&
-  categories=crm,ats,ticketing&
-  success_redirect=...&
-  failure_redirect=...
-```
-
-**קריאת נתונים:**
-```
-GET https://api.unified.to/crm/{connection_id}/contact
-GET https://api.unified.to/crm/{connection_id}/deal
-GET https://api.unified.to/ats/{connection_id}/candidate
-```
-
-**שמירת connection_id:**
-ב-`tenant_integrations.settings` נשמור את ה-`unified_connection_id` שמאפשר קריאות ל-API.
-
-## קבצים
-
-| קובץ | פעולה |
+## סיכום קבצים לשינוי
+| קובץ | שינוי |
 |---|---|
-| `supabase/functions/unified-api-proxy/index.ts` | חדש — proxy לקריאות API |
-| `supabase/functions/unified-connections/index.ts` | חדש — ניהול connections |
-| `src/pages/UnifiedSettings.tsx` | חדש — דף הגדרות |
-| `src/pages/Integrations.tsx` | עריכה — הוספת כרטיס |
-| `src/components/dynamic-tables/AddIntegrationDialog.tsx` | עריכה — תמיכה ב-Unified |
+| `src/pages/UnifiedSettings.tsx` | הוספת קטגוריית Calendar |
+| `supabase/functions/unified-calendar-proxy/index.ts` | **חדש** — proxy ל-Unified.to Calendar API |
+| `src/components/InteractiveCalendar.tsx` | שינוי קריאות API |
+| `src/components/CalendarIframeSettings.tsx` | שינוי קריאות API |
+| `src/components/tasks/WeeklyTaskBoard.tsx` | שינוי קריאות API |
+| `src/components/forms/EditTaskDialog.tsx` | שינוי קריאות API |
+| `src/components/CalendarView.tsx` | שינוי בדיקת חיבור |
+| Edge Functions קיימות (5) | עדכון לשימוש ב-Unified.to |
 
-## מה לא משתנה
-- כל האינטגרציות הקיימות (Facebook, Google Ads, Green API וכו׳) — ממשיכות לעבוד בדיוק כמו היום
-- טבלת `tenant_integrations` — ללא שינוי מבני, רק שורות חדשות עם `integration_type` חדש
-- ה-Edge Functions הקיימות — ללא נגיעה
+## תוצאה
+- משתמשים מחברים יומן דרך Unified.to (ללא התראת טסט)
+- Google Sign-In נשאר ישיר עם scopes לא רגישים בלבד
+- Verification פשוט ומהיר
 
