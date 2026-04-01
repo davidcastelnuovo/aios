@@ -304,6 +304,22 @@ export default function Integrations() {
     enabled: !!currentTenantId,
   });
 
+  // Check Unified.to connections
+  const { data: unifiedConnections } = useQuery({
+    queryKey: ['unified-connections-count', currentTenantId],
+    queryFn: async () => {
+      if (!currentTenantId) return null;
+      const { data } = await supabase
+        .from('tenant_integrations')
+        .select('id')
+        .eq('tenant_id', currentTenantId)
+        .like('integration_type', 'unified_%')
+        .eq('is_active', true);
+      return data;
+    },
+    enabled: !!currentTenantId,
+  });
+
   const integrations: IntegrationCardProps[] = [
     {
       icon: <Webhook className="h-6 w-6" />,
