@@ -134,12 +134,8 @@ const [eventEnd, setEventEnd] = useState("");
   // Add event mutation
   const addEventMutation = useMutation({
     mutationFn: async (eventData: { summary: string; description?: string; start: string; end?: string }) => {
-      const { data, error } = await supabase.functions.invoke('add-calendar-event', {
-        body: eventData
-      });
-
-      if (error) throw error;
-      return data;
+      if (!tenantId) throw new Error('No tenant');
+      return await addCalendarEvent(eventData, { tenantId });
     },
     onSuccess: () => {
       toast.success("האירוע נוסף בהצלחה ללוח השנה");
