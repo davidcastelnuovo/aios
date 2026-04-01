@@ -40,7 +40,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { action, tenant_id, category, connection_id, workspace_id, success_redirect, failure_redirect } = await req.json();
+    const body = await req.json();
+    const { action, tenant_id, category, connection_id, integration_type, success_redirect, failure_redirect } = body;
 
     if (!tenant_id) {
       return new Response(JSON.stringify({ error: "tenant_id is required" }), {
@@ -50,17 +51,62 @@ Deno.serve(async (req) => {
     }
 
     switch (action) {
+      case "list_integrations": {
+        if (!category) {
+          return new Response(JSON.stringify({ error: "category is required" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const resp = await fetch(`https://api.unified.to/unified/integration?categories=${category}`, {
+          headers: { "Authorization": `Bearer ${unifiedApiKey}` },
+        });
+
+        if (!resp.ok) {
+          const errText = await resp.text();
+          console.error("Unified.to list_integrations error:", errText);
+          return new Response(JSON.stringify({ error: "Failed to fetch integrations", details: errText }), {
+            status: 502,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const integrations = await resp.json();
+
+        const mapped = (integrations || []).map((i: any) => ({
+          name: i.name || i.type,
+          type: i.type,
+          icon_url: i.logo_url || i.icon_url || null,
+          categories: i.categories || [],
+          support: i.support || {},
+        }));
+
+        return new Response(JSON.stringify({ integrations: mapped }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       case "get_embed_url": {
-        if (!workspace_id || !category) {
-          return new Response(JSON.stringify({ error: "workspace_id and category are required" }), {
+        const workspaceId = Deno.env.get("UNIFIED_WORKSPACE_ID");
+        if (!workspaceId) {
+          return new Response(JSON.stringify({ error: "UNIFIED_WORKSPACE_ID not configured" }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        if (!category) {
+          return new Response(JSON.stringify({ error: "category is required" }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
 
         const params = new URLSearchParams({
-          workspace_id,
+          workspace_id: workspaceId,
           categories: category,
+          ...(integration_type && { integration_type }),
           ...(success_redirect && { success_redirect }),
           ...(failure_redirect && { failure_redirect }),
         });
@@ -80,7 +126,6 @@ Deno.serve(async (req) => {
           });
         }
 
-        // Fetch connection details from Unified.to
         const connResp = await fetch(`https://api.unified.to/unified/connection/${connection_id}`, {
           headers: { "Authorization": `Bearer ${unifiedApiKey}` },
         });
@@ -88,7 +133,6 @@ Deno.serve(async (req) => {
 
         const integrationType = `unified_${category}`;
 
-        // Save to tenant_integrations
         const { data, error } = await supabase
           .from("tenant_integrations")
           .insert({
@@ -99,7 +143,7 @@ Deno.serve(async (req) => {
             settings: {
               unified_connection_id: connection_id,
               unified_category: category,
-              integration_name: connData.integration_type || category,
+              integration_name: connData.integration_type || integration_type || category,
               connected_at: new Date().toISOString(),
             },
           })
@@ -136,7 +180,6 @@ Deno.serve(async (req) => {
           });
         }
 
-        // Deactivate in our DB
         const { error } = await supabase
           .from("tenant_integrations")
           .update({ is_active: false })
