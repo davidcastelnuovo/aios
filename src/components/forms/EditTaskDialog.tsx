@@ -673,8 +673,7 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
         return null;
       });
 
-      if (calendarError) {
-        console.error('Calendar error:', calendarError);
+      if (!calendarData) {
         toast.error("שגיאה ביצירת הפגישה ביומן");
       } else {
         const successMessage = attendeeEmail 
