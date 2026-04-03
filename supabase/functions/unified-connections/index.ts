@@ -68,31 +68,56 @@ Deno.serve(async (req) => {
         }
 
         const params = new URLSearchParams({
+          workspace_id: workspaceId,
           categories: category,
-          active: "false",
           env: "Production",
         });
 
-        const resp = await fetch(`https://api.unified.to/unified/integration/workspace/${workspaceId}?${params.toString()}`);
+        const resp = await fetch(`https://api.unified.to/unified/integration/workspace?${params.toString()}`, {
+          headers: {
+            "Authorization": `Bearer ${unifiedApiKey}`,
+            "Content-Type": "application/json",
+          },
+        });
+
+        const rawBody = await resp.text();
+        let parsedBody: any = [];
+        try {
+          parsedBody = rawBody ? JSON.parse(rawBody) : [];
+        } catch {
+          parsedBody = rawBody;
+        }
 
         if (!resp.ok) {
-          const errText = await resp.text();
-          console.error("Unified.to list_integrations error:", errText);
-          return new Response(JSON.stringify({ error: "Failed to fetch integrations", details: errText }), {
-            status: 502,
+          const details = typeof parsedBody === "object" && parsedBody !== null
+            ? parsedBody.message || parsedBody.error || parsedBody?.attributes?.error || JSON.stringify(parsedBody)
+            : rawBody;
+
+          console.error("Unified.to list_integrations error:", details);
+          return new Response(JSON.stringify({
+            error: resp.status === 401 ? "Unified API credentials are invalid" : "Failed to fetch integrations",
+            details,
+          }), {
+            status: resp.status === 401 ? 500 : 502,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
 
-        const integrations = await resp.json();
+        const integrations = Array.isArray(parsedBody)
+          ? parsedBody
+          : Array.isArray(parsedBody?.data)
+            ? parsedBody.data
+            : [];
 
-        const mapped = (integrations || []).map((i: any) => ({
-          name: i.name || i.type,
-          type: i.type,
-          icon_url: i.logo_url || i.icon_url || null,
-          categories: i.categories || [],
+        const mapped = integrations.map((i: any) => ({
+          name: i.name || i.display_name || i.label || i.integration_type || i.type,
+          type: i.integration_type || i.type,
+          icon_url: i.logo_url || i.image_uri || i.icon_url || null,
+          categories: Array.isArray(i.categories) ? i.categories : i.category ? [i.category] : [],
           support: i.support || {},
         }));
+
+        console.log(`Unified integrations fetched for ${category}: ${mapped.length}`);
 
         return new Response(JSON.stringify({ integrations: mapped }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -115,15 +140,22 @@ Deno.serve(async (req) => {
           });
         }
 
+        if (!integration_type) {
+          return new Response(JSON.stringify({ error: "integration_type is required" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
         const params = new URLSearchParams({
-          workspace_id: workspaceId,
-          categories: category,
-          ...(integration_type && { integration_type }),
+          redirect: "1",
+          env: "Production",
+          lang: "he",
           ...(success_redirect && { success_redirect }),
           ...(failure_redirect && { failure_redirect }),
         });
 
-        const embedUrl = `https://embed.unified.to/integration?${params.toString()}`;
+        const embedUrl = `https://api.unified.to/unified/integration/auth/${workspaceId}/${integration_type}?${params.toString()}`;
 
         return new Response(JSON.stringify({ embed_url: embedUrl }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -141,7 +173,27 @@ Deno.serve(async (req) => {
         const connResp = await fetch(`https://api.unified.to/unified/connection/${connection_id}`, {
           headers: { "Authorization": `Bearer ${unifiedApiKey}` },
         });
-        const connData = await connResp.json();
+        const connText = await connResp.text();
+        let connData: any = null;
+        try {
+          connData = connText ? JSON.parse(connText) : null;
+        } catch {
+          connData = connText;
+        }
+
+        if (!connResp.ok) {
+          const details = typeof connData === "object" && connData !== null
+            ? connData.message || connData.error || connData?.attributes?.error || JSON.stringify(connData)
+            : connText;
+
+          return new Response(JSON.stringify({
+            error: connResp.status === 401 ? "Unified API credentials are invalid" : "Failed to validate connection",
+            details,
+          }), {
+            status: connResp.status === 401 ? 500 : 502,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
 
         const integrationType = `unified_${category}`;
 
