@@ -49,7 +49,7 @@ export default function AccountingIntegrations() {
   
   const [searchQuery, setSearchQuery] = useState("");
   const [agencyFilter, setAgencyFilter] = useState<string>("all");
-  const [clientStatusFilter, setClientStatusFilter] = useState<string>("active_relevant");
+  const [clientStatusFilter, setClientStatusFilter] = useState<string>("active");
   const [selectedMonth, setSelectedMonth] = useState(() => format(subMonths(new Date(), 1), "yyyy-MM"));
   const [editingClient, setEditingClient] = useState<any | null>(null);
   
