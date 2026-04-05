@@ -189,80 +189,8 @@ export default function AccountingIntegrations() {
     enabled: !!currentTenantId,
   });
 
-  // Fetch finance summary
-  const { data: financeData } = useQuery({
-    queryKey: ["finance-summary", currentTenantId, agencyFilter, clientStatusFilter],
-    queryFn: async () => {
-      if (!currentTenantId) return { income: 0, expenses: 0 };
-      
-      const { data: ownedAgencies } = await supabase.from("agencies").select("id").eq("tenant_id", currentTenantId);
-      const { data: sharedAgencies } = await supabase.from("agency_tenant_access").select("agency_id").eq("accessing_tenant_id", currentTenantId);
-      
-      let agencyIds = [...(ownedAgencies || []).map(a => a.id), ...(sharedAgencies || []).map(a => a.agency_id)];
-      if (agencyFilter && agencyFilter !== "all") agencyIds = agencyIds.filter(id => id === agencyFilter);
-      
-      type ClientStatus = "active" | "ended" | "onboarding" | "paused";
-      const getStatusFilter = (): ClientStatus[] | null => {
-        if (clientStatusFilter === "all") return null;
-        if (clientStatusFilter === "active_relevant") return ["active", "onboarding", "paused"];
-        if (clientStatusFilter === "active_onboarding") return ["active", "onboarding"];
-        return [clientStatusFilter as ClientStatus];
-      };
-      const statusFilter = getStatusFilter();
-      
-      let income = 0;
-      if (agencyIds.length > 0) {
-        let clientsQuery = supabase.from("clients").select("id, retainer, status, updated_at").in("agency_id", agencyIds);
-        if (statusFilter) clientsQuery = clientsQuery.in("status", statusFilter);
-        const { data: clientsData } = await clientsQuery;
-        
-        let filteredClients = clientsData || [];
-        if (clientStatusFilter === "active_relevant") {
-          const thirtyDaysAgo = new Date();
-          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-          filteredClients = filteredClients.filter(c => {
-            if (c.status === "paused") return c.updated_at && new Date(c.updated_at) >= thirtyDaysAgo;
-            return true;
-          });
-        }
-        
-        const clientIds = filteredClients.map(c => c.id);
-        if (clientIds.length > 0) {
-          const { data: financialData } = await supabase
-            .from("client_tenant_financial_data").select("client_id, retainer").eq("tenant_id", currentTenantId).in("client_id", clientIds);
-          const financialMap = new Map((financialData || []).map(f => [f.client_id, f.retainer]));
-          income = filteredClients.reduce((sum, c) => sum + (financialMap.get(c.id) ?? c.retainer ?? 0), 0);
-        }
-      }
-      
-      // Supplier expenses
-      const { data: suppliersData } = await supabase.from("suppliers").select("payment_1, payment_2, payment_3, agency_id_1, agency_id_2, agency_id_3").eq("tenant_id", currentTenantId);
-      let supplierExpenses = 0;
-      suppliersData?.forEach(s => {
-        if (agencyFilter && agencyFilter !== "all") {
-          if (s.agency_id_1 === agencyFilter) supplierExpenses += (s.payment_1 || 0);
-          if (s.agency_id_2 === agencyFilter) supplierExpenses += (s.payment_2 || 0);
-          if (s.agency_id_3 === agencyFilter) supplierExpenses += (s.payment_3 || 0);
-        } else {
-          supplierExpenses += (s.payment_1 || 0) + (s.payment_2 || 0) + (s.payment_3 || 0);
-        }
-      });
-      
-      // Campaigner expenses
-      let campaignerExpenses = 0;
-      if (agencyIds.length > 0) {
-        const { data: clientsForTeam } = await supabase.from("clients").select("id").in("agency_id", agencyIds).in("status", ["active", "onboarding"]);
-        const clientIds = (clientsForTeam || []).map(c => c.id);
-        if (clientIds.length > 0) {
-          const { data: teamData } = await supabase.from("client_team").select("campaigner_payment").in("client_id", clientIds).gt("campaigner_payment", 0);
-          campaignerExpenses = teamData?.reduce((sum, t) => sum + (t.campaigner_payment || 0), 0) || 0;
-        }
-      }
 
-      return { income, expenses: supplierExpenses + campaignerExpenses };
-    },
-    enabled: !!currentTenantId,
-  });
+
 
   // Create one-time income
   const createOneTimeIncome = useMutation({
