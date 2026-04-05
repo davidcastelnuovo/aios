@@ -387,16 +387,17 @@ export default function AccountingIntegrations() {
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
-  const profit = (financeData?.income || 0) - (financeData?.expenses || 0);
   const selectedMonthLabel = monthOptions.find(m => m.value === selectedMonth)?.label || selectedMonth;
 
-  // Totals
+  // Totals - calculated from table data
   const totalRetainer = filteredClients.reduce((sum, c) => sum + (c.retainer || 0), 0);
   const totalExpenses = filteredClients.reduce((sum, c) => sum + (clientExpensesMap.get(c.id) || 0), 0);
   const totalOneTime = filteredClients.reduce((sum, c) => {
     const items = clientOneTimeMap.get(c.id) || [];
     return sum + items.reduce((s: number, i: any) => s + (i.amount || 0), 0);
   }, 0);
+  const totalIncome = totalRetainer + totalOneTime;
+  const profit = totalIncome - totalExpenses;
 
   return (
     <div className="container mx-auto p-6 space-y-6">
