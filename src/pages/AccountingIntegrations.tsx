@@ -416,7 +416,7 @@ export default function AccountingIntegrations() {
             <TrendingUp className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{formatCurrency(financeData?.income || 0)}</div>
+            <div className="text-2xl font-bold text-green-600">{formatCurrency(totalIncome)}</div>
             <p className="text-xs text-muted-foreground mt-1">חד פעמי ב{selectedMonthLabel}: {formatCurrency(totalOneTime)}</p>
           </CardContent>
         </Card>
@@ -427,7 +427,7 @@ export default function AccountingIntegrations() {
             <TrendingDown className="h-4 w-4 text-red-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">{formatCurrency(financeData?.expenses || 0)}</div>
+            <div className="text-2xl font-bold text-red-600">{formatCurrency(totalExpenses)}</div>
           </CardContent>
         </Card>
 
