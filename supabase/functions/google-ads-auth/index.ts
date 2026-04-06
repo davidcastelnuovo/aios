@@ -310,6 +310,9 @@ async function getGoogleAdsAccounts(supabase: any, tenantId: string) {
   const accessToken = updatedIntegration?.api_key || integration.api_key;
 
   // Fetch accessible customers from Google Ads API
+  console.log('Calling Google Ads API with developer token length:', DEVELOPER_TOKEN?.length || 0);
+  console.log('Access token length:', accessToken?.length || 0);
+  
   const response = await fetch('https://googleads.googleapis.com/v18/customers:listAccessibleCustomers', {
     headers: {
       'Authorization': `Bearer ${accessToken}`,
@@ -317,7 +320,23 @@ async function getGoogleAdsAccounts(supabase: any, tenantId: string) {
     },
   });
 
-  const data = await response.json();
+  const responseText = await response.text();
+  console.log('Google Ads API response status:', response.status);
+  console.log('Google Ads API response (first 500 chars):', responseText.substring(0, 500));
+  
+  let data: any;
+  try {
+    data = JSON.parse(responseText);
+  } catch {
+    console.error('Failed to parse Google Ads API response as JSON');
+    return new Response(JSON.stringify({ 
+      error: `Google Ads API returned non-JSON response (status ${response.status}). Check that the Google Ads API is enabled in your Google Cloud project and that the Developer Token is valid.`,
+      accounts: []
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
 
   if (data.error) {
     console.error('Google Ads API error:', data.error);
