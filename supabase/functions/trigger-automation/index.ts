@@ -362,7 +362,18 @@ Deno.serve(async (req) => {
       if (safeConfig.source_filter === 'private' && safeData.group_id) {
         return { matches: false, reason: 'source_filter_private' }
       }
-
+      // Specific phones whitelist
+      if (safeConfig.source_filter === 'specific_phones') {
+        const allowedPhones: string[] = safeConfig.allowed_phones || []
+        if (allowedPhones.length === 0) {
+          console.warn('[TRIGGER] specific_phones selected but no phones configured — blocking')
+          return { matches: false, reason: 'specific_phones_none_configured' }
+        }
+        const senderPhone = String(safeData.sender_phone || safeData.phone || '').trim()
+        if (!senderPhone || !allowedPhones.includes(senderPhone)) {
+          return { matches: false, reason: 'specific_phones_not_allowed' }
+        }
+      }
       return { matches: true }
     }
 

@@ -2037,6 +2037,8 @@ function WhatsAppTriggerConfig({
             <SelectItem value="all_groups_except">כל הקבוצות חוץ מ...</SelectItem>
             <SelectItem value="multiple_groups">קבוצות מרובות</SelectItem>
             <SelectItem value="group">קבוצה ספציפית</SelectItem>
+            <SelectItem value="specific_phones">מספרי טלפון ספציפיים</SelectItem>
+            <SelectItem value="private">שיחות פרטיות בלבד</SelectItem>
             <SelectItem value="tagged_contact">איש קשר מתויג</SelectItem>
           </SelectContent>
         </Select>
@@ -2159,6 +2161,33 @@ function WhatsAppTriggerConfig({
               ))}
             </SelectContent>
           </Select>
+        </div>
+      )}
+
+      {/* Specific phones filter */}
+      {sourceFilter === "specific_phones" && (
+        <div className="space-y-2">
+          <Label className="text-right block">מספרי טלפון מאושרים</Label>
+          <p className="text-xs text-muted-foreground text-right">
+            הכנס מספר אחד בכל שורה, בפורמט בינלאומי ללא + (לדוגמא: 972501234567). האוטומציה תגיב רק למספרים אלו.
+          </p>
+          <textarea
+            className="w-full min-h-[100px] rounded-md border border-input bg-background px-3 py-2 text-sm text-right resize-y font-mono"
+            placeholder={"972501234567\n972521234567\n972541234567"}
+            value={(configuration?.allowed_phones || []).join("\n")}
+            onChange={(e) => {
+              const phones = e.target.value
+                .split("\n")
+                .map((p: string) => p.trim())
+                .filter(Boolean)
+              onConfigChange("allowed_phones", phones)
+            }}
+          />
+          {(configuration?.allowed_phones || []).length > 0 && (
+            <p className="text-xs text-green-600 text-right font-medium">
+              ✓ {(configuration?.allowed_phones || []).length} מספרים מוגדרים — האוטומציה תגיב רק להם
+            </p>
+          )}
         </div>
       )}
 
