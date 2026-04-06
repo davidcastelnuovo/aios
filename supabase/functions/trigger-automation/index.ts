@@ -258,7 +258,47 @@ Deno.serve(async (req) => {
       const safeConfig = config || {}
       const safeData = data || {}
 
+      // ═══════════════════════════════════════════════════════════
+      // CARMEN SCOPE ENFORCEMENT — CRITICAL SECURITY CHECK
+      // Runs BEFORE session bypass. Prevents agent from responding
+      // to wrong groups/phones even if a session is active.
+      // ═══════════════════════════════════════════════════════════
+      const scopeMode = safeConfig.carmen_scope_mode
+      if (scopeMode && scopeMode !== 'all') {
+        if (scopeMode === 'specific_group') {
+          const allowedGroupId = safeConfig.carmen_allowed_group_id
+          if (!allowedGroupId) {
+            console.warn('[CARMEN SCOPE] specific_group configured but no group ID set — blocking')
+            return { matches: false, reason: 'carmen_scope_no_group_configured' }
+          }
+          if (!safeData.group_id || safeData.group_id !== allowedGroupId) {
+            return { matches: false, reason: 'carmen_scope_group_mismatch' }
+          }
+        } else if (scopeMode === 'specific_phone') {
+          const allowedPhones: string[] = safeConfig.carmen_allowed_phones || []
+          if (allowedPhones.length === 0) {
+            console.warn('[CARMEN SCOPE] specific_phone configured but no phones listed — blocking')
+            return { matches: false, reason: 'carmen_scope_no_phones_configured' }
+          }
+          const senderPhone = String(safeData.sender_phone || safeData.phone || '').trim()
+          if (!senderPhone || !allowedPhones.includes(senderPhone)) {
+            return { matches: false, reason: 'carmen_scope_phone_not_allowed' }
+          }
+        } else if (scopeMode === 'private_only') {
+          if (safeData.group_id) {
+            return { matches: false, reason: 'carmen_scope_private_only_but_group' }
+          }
+        }
+        // Enforce specific Green API connection if set
+        if (safeConfig.carmen_connection_user_id && safeData.connection_user_id) {
+          if (safeConfig.carmen_connection_user_id !== safeData.connection_user_id) {
+            return { matches: false, reason: 'carmen_scope_connection_mismatch' }
+          }
+        }
+      }
+
       // CARMEN SESSION MODE: if there's an active session, bypass keyword check entirely
+      // (scope enforcement above already ran and passed)
       if (safeConfig.carmen_session_mode && hasActiveCarmenSession) {
         // But still close session if end keyword is sent
         if (safeConfig.end_keyword && safeData.message_text) {
@@ -382,37 +422,97 @@ Deno.serve(async (req) => {
         const senderPhone = payloadData?.sender_phone || payloadData?.phone || ''
         const chatId = payloadData?.chat_id || ''
         const connectionUserId = payloadData?.connection_user_id || ''
-        if (senderPhone && chatId && connectionUserId) {
-          const { data: activeSession } = await supabase
+        if (senderPhone && chatId) {
+          const sessionQuery = supabase
             .from('carmen_whatsapp_sessions')
-            .select('id, agent_id, conversation_history, end_keyword')
+            .select('id, agent_id, conversation_history, end_keyword, last_message_at, automation_id')
             .eq('tenant_id', payload.tenant_id)
             .eq('status', 'active')
-            .eq('connection_user_id', connectionUserId)
             .eq('chat_id', chatId)
             .eq('phone', senderPhone)
+          // connection_user_id is optional — only filter if present
+          if (connectionUserId) {
+            sessionQuery.eq('connection_user_id', connectionUserId)
+          }
+          const { data: activeSession } = await sessionQuery
             .order('created_at', { ascending: false })
             .limit(1)
             .maybeSingle()
+
           if (activeSession) {
-            hasActiveCarmenSession = true
-            // Check if this message is the end keyword — if so, close session
-            const msgText = (payloadData?.message_text || '').toLowerCase()
-            const endKw = (activeSession.end_keyword || 'סיימנו כרמן').toLowerCase()
-            if (msgText.includes(endKw)) {
-              // Close the session
-              await supabase
-                .from('carmen_whatsapp_sessions')
-                .update({ status: 'ended', ended_at: new Date().toISOString() })
-                .eq('id', activeSession.id)
-              hasActiveCarmenSession = false
-              // Inject end signal so the flow can handle it (or just skip)
-              payloadData._carmen_session_ended = true
+            // ── Timeout check: if session is stale, close it ──────────────────────
+            // We need the trigger config to know the timeout setting
+            // Fetch it from the automation's trigger step
+            let sessionTimeoutMinutes = 60 // default
+            if (activeSession.automation_id) {
+              const { data: tStep } = await supabase
+                .from('automation_flow_steps')
+                .select('configuration')
+                .eq('automation_id', activeSession.automation_id)
+                .eq('step_type', 'trigger')
+                .limit(1)
+                .maybeSingle()
+              if (tStep?.configuration?.session_timeout_minutes != null) {
+                sessionTimeoutMinutes = tStep.configuration.session_timeout_minutes
+              }
+            }
+            if (sessionTimeoutMinutes > 0 && activeSession.last_message_at) {
+              const lastMsg = new Date(activeSession.last_message_at).getTime()
+              const idleMs = Date.now() - lastMsg
+              if (idleMs > sessionTimeoutMinutes * 60 * 1000) {
+                // Session timed out — close it
+                await supabase
+                  .from('carmen_whatsapp_sessions')
+                  .update({ status: 'ended', ended_at: new Date().toISOString() })
+                  .eq('id', activeSession.id)
+                console.log(`[CARMEN] Session ${activeSession.id} timed out after ${sessionTimeoutMinutes} min`)
+                // Don't set hasActiveCarmenSession — let it fall through to keyword check
+              } else {
+                hasActiveCarmenSession = true
+                // Check if this message is the end keyword — if so, close session
+                const msgText = (payloadData?.message_text || '').toLowerCase()
+                const endKw = (activeSession.end_keyword || 'סיימנו').toLowerCase()
+                if (msgText.includes(endKw)) {
+                  await supabase
+                    .from('carmen_whatsapp_sessions')
+                    .update({ status: 'ended', ended_at: new Date().toISOString() })
+                    .eq('id', activeSession.id)
+                  hasActiveCarmenSession = false
+                  payloadData._carmen_session_ended = true
+                  console.log(`[CARMEN] Session ${activeSession.id} closed by end keyword`)
+                } else {
+                  // Inject session context into payload for the AI agent
+                  payloadData._carmen_session_id = activeSession.id
+                  payloadData._carmen_agent_id = activeSession.agent_id
+                  payloadData._carmen_history = activeSession.conversation_history || []
+                  // Update last_message_at
+                  await supabase
+                    .from('carmen_whatsapp_sessions')
+                    .update({ last_message_at: new Date().toISOString() })
+                    .eq('id', activeSession.id)
+                }
+              }
             } else {
-              // Inject session context into payload for the AI agent
-              payloadData._carmen_session_id = activeSession.id
-              payloadData._carmen_agent_id = activeSession.agent_id
-              payloadData._carmen_history = activeSession.conversation_history || []
+              // No timeout configured — session stays active indefinitely
+              hasActiveCarmenSession = true
+              const msgText = (payloadData?.message_text || '').toLowerCase()
+              const endKw = (activeSession.end_keyword || 'סיימנו').toLowerCase()
+              if (msgText.includes(endKw)) {
+                await supabase
+                  .from('carmen_whatsapp_sessions')
+                  .update({ status: 'ended', ended_at: new Date().toISOString() })
+                  .eq('id', activeSession.id)
+                hasActiveCarmenSession = false
+                payloadData._carmen_session_ended = true
+              } else {
+                payloadData._carmen_session_id = activeSession.id
+                payloadData._carmen_agent_id = activeSession.agent_id
+                payloadData._carmen_history = activeSession.conversation_history || []
+                await supabase
+                  .from('carmen_whatsapp_sessions')
+                  .update({ last_message_at: new Date().toISOString() })
+                  .eq('id', activeSession.id)
+              }
             }
           }
         }
@@ -762,11 +862,42 @@ Deno.serve(async (req) => {
                 if (effectiveActionType === 'agent') {
                   const agentId = stepConfig.agent_id
                   if (agentId) {
-                    // CARMEN SESSION: if this is a carmen_session_mode flow, manage session
-                    const isCarmenFlow = (automation as any).configuration?.carmen_session_mode
+                    // CARMEN SESSION: detect from trigger step config OR legacy automation.configuration
+                    // Trigger step config takes priority (new Flow Builder approach)
+                    const triggerStepForCarmen = (flowSteps || []).find((s: any) => s.step_type === 'trigger')
+                    const triggerCfg = triggerStepForCarmen?.configuration || {}
+                    const isCarmenFlow = triggerCfg.carmen_session_mode ||
+                      (automation as any).configuration?.carmen_session_mode
+
                     if (isCarmenFlow) {
                       const sPhone = payloadData?.sender_phone || payloadData?.phone || ''
                       const cId = payloadData?.chat_id || ''
+
+                      // ── Timeout check: close expired sessions ──────────────
+                      const timeoutMinutes = triggerCfg.session_timeout_minutes ??
+                        (automation as any).configuration?.session_timeout_minutes ?? 60
+                      if (timeoutMinutes > 0 && payloadData._carmen_session_id) {
+                        const { data: sessionRow } = await supabase
+                          .from('carmen_whatsapp_sessions')
+                          .select('last_message_at')
+                          .eq('id', payloadData._carmen_session_id)
+                          .single()
+                        if (sessionRow?.last_message_at) {
+                          const lastMsg = new Date(sessionRow.last_message_at).getTime()
+                          const idleMs = Date.now() - lastMsg
+                          if (idleMs > timeoutMinutes * 60 * 1000) {
+                            // Session timed out — close it and start fresh
+                            await supabase
+                              .from('carmen_whatsapp_sessions')
+                              .update({ status: 'ended', ended_at: new Date().toISOString() })
+                              .eq('id', payloadData._carmen_session_id)
+                            payloadData._carmen_session_id = undefined
+                            payloadData._carmen_history = []
+                            console.log(`[CARMEN] Session timed out after ${timeoutMinutes} minutes — starting fresh`)
+                          }
+                        }
+                      }
+
                       if (!payloadData._carmen_session_id) {
                         // First message — create new session
                         const connUserId = payloadData?.connection_user_id || ''
@@ -781,15 +912,25 @@ Deno.serve(async (req) => {
                             connection_user_id: connUserId || null,
                             conversation_history: [],
                             status: 'active',
-                            started_by_keyword: (automation as any).configuration?.trigger_keyword || 'כרמן',
-                            end_keyword: (automation as any).configuration?.end_keyword || 'סיימנו כרמן',
+                            automation_id: automation.id || null,
+                            started_by_keyword: triggerCfg.trigger_keyword ||
+                              (automation as any).configuration?.trigger_keyword || 'כרמן',
+                            end_keyword: triggerCfg.end_keyword ||
+                              (automation as any).configuration?.end_keyword || 'סיימנו',
                           })
                           .select('id')
                           .single()
                         if (newSession) {
                           payloadData._carmen_session_id = newSession.id
                           payloadData._carmen_history = []
+                          console.log(`[CARMEN] New session created: ${newSession.id} for chat ${cId}`)
                         }
+                      } else {
+                        // Update last_message_at on every message to keep session alive
+                        await supabase
+                          .from('carmen_whatsapp_sessions')
+                          .update({ last_message_at: new Date().toISOString() })
+                          .eq('id', payloadData._carmen_session_id)
                       }
                     }
 

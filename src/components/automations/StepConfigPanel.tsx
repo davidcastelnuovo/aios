@@ -1688,67 +1688,72 @@ function CarmenSessionConfig({
   configuration: Record<string, any>;
   onConfigChange: (key: string, value: any) => void;
 }) {
-  // Fetch Carmen agents for this tenant
-  const { data: carmenAgents } = useQuery({
-    queryKey: ["carmen-agents", tenantId],
+  // Fetch ALL active agents for this tenant
+  const { data: allAgents } = useQuery({
+    queryKey: ["all-agents-for-carmen", tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
       const { data, error } = await supabase
         .from("ai_agents")
         .select("id, name")
         .eq("tenant_id", tenantId)
-        .or("name.ilike.%carmen%,name.ilike.%כרמן%")
-        .eq("active", true);
+        .eq("active", true)
+        .order("name");
       if (error) throw error;
       return data || [];
     },
     enabled: !!tenantId,
   });
 
+  // Fetch WhatsApp groups for source restriction
+  const { data: groups } = useQuery({
+    queryKey: ["whatsapp-groups-for-carmen", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from("whatsapp_groups")
+        .select("id, group_name, group_chat_id")
+        .eq("tenant_id", tenantId)
+        .order("group_name");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenantId,
+  });
+
+  // Fetch Green API connections
+  const { data: connections } = useQuery({
+    queryKey: ["green-api-connections-carmen", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from("tenant_integrations")
+        .select("id, settings, user_id, instance_id")
+        .eq("tenant_id", tenantId)
+        .eq("integration_type", "green_api")
+        .eq("is_active", true);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenantId,
+  });
+
+  const scopeMode = configuration?.carmen_scope_mode || "all";
+
   return (
     <div className="space-y-4">
       {/* Info banner */}
       <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3 space-y-1">
-        <p className="text-sm font-semibold text-purple-400 text-right">שיחת כרמן ב-WhatsApp</p>
+        <p className="text-sm font-semibold text-purple-400 text-right">שיחת סוכן AI ב-WhatsApp</p>
         <p className="text-xs text-muted-foreground text-right">
-          כשמשתמש שולח את מילת ההפעלה (ברירת מחדל: "כרמן"), כרמן תפתח שיחה אינטראקטיבית ב-WhatsApp. השיחה נמשכת עד שהמשתמש כותב את מילת הסיום.
+          כשמשתמש שולח את מילת ההפעלה, הסוכן יפתח שיחה אינטראקטיבית ויזכור את כל השיחה עד שהמשתמש כותב את מילת הסיום.
         </p>
       </div>
 
-      {/* Trigger keyword */}
+      {/* ── סוכן AI ── */}
       <div className="space-y-2">
-        <Label className="text-right block">מילת הפעלה</Label>
-        <Input
-          value={configuration?.trigger_keyword || "כרמן"}
-          onChange={(e) => onConfigChange("trigger_keyword", e.target.value)}
-          placeholder="כרמן"
-          className="text-right"
-          dir="rtl"
-        />
-        <p className="text-xs text-muted-foreground text-right">
-          כשהודעה מכילה מילה זו — כרמן תפעל
-        </p>
-      </div>
-
-      {/* End keyword */}
-      <div className="space-y-2">
-        <Label className="text-right block">מילת סיום שיחה</Label>
-        <Input
-          value={configuration?.end_keyword || "סיימנו כרמן"}
-          onChange={(e) => onConfigChange("end_keyword", e.target.value)}
-          placeholder="סיימנו כרמן"
-          className="text-right"
-          dir="rtl"
-        />
-        <p className="text-xs text-muted-foreground text-right">
-          כשהמשתמש כותב מילה זו — השיחה נסגרת
-        </p>
-      </div>
-
-      {/* Carmen agent selector */}
-      <div className="space-y-2">
-        <Label className="text-right block">סוכן כרמן</Label>
-        {carmenAgents && carmenAgents.length > 0 ? (
+        <Label className="text-right block font-semibold">סוכן AI</Label>
+        {allAgents && allAgents.length > 0 ? (
           <Select
             value={configuration?.agent_id || ""}
             onValueChange={(v) => onConfigChange("agent_id", v)}
@@ -1757,7 +1762,7 @@ function CarmenSessionConfig({
               <SelectValue placeholder="בחר סוכן..." />
             </SelectTrigger>
             <SelectContent>
-              {carmenAgents.map((agent) => (
+              {allAgents.map((agent: any) => (
                 <SelectItem key={agent.id} value={agent.id}>
                   {agent.name}
                 </SelectItem>
@@ -1766,28 +1771,194 @@ function CarmenSessionConfig({
           </Select>
         ) : (
           <div className="text-xs text-muted-foreground text-right p-2 border rounded-md bg-muted/30">
-            לא נמצא סוכן כרמן פעיל. צור סוכן AI בשם כרמן במודול ה-AI.
+            אין סוכנים פעילים. צור סוכן AI במודול ה-AI.
           </div>
         )}
+      </div>
+
+      {/* ── מילת הפעלה ── */}
+      <div className="space-y-2">
+        <Label className="text-right block font-semibold">מילת הפעלה</Label>
+        <Input
+          value={configuration?.trigger_keyword || "כרמן"}
+          onChange={(e) => onConfigChange("trigger_keyword", e.target.value)}
+          placeholder="כרמן"
+          className="text-right"
+          dir="rtl"
+        />
         <p className="text-xs text-muted-foreground text-right">
-          אם לא נבחר, המערכת תחפש אוטומטית סוכן בשם כרמן
+          כשהודעה מכילה מילה זו — הסוכן יפעל
         </p>
       </div>
 
-      {/* Status info */}
+      {/* ── מילת סיום ── */}
+      <div className="space-y-2">
+        <Label className="text-right block font-semibold">מילת סיום שיחה</Label>
+        <Input
+          value={configuration?.end_keyword || "סיימנו"}
+          onChange={(e) => onConfigChange("end_keyword", e.target.value)}
+          placeholder="סיימנו"
+          className="text-right"
+          dir="rtl"
+        />
+        <p className="text-xs text-muted-foreground text-right">
+          כשהמשתמש כותב מילה זו — השיחה נסגרת
+        </p>
+      </div>
+
+      {/* ── Timeout ── */}
+      <div className="space-y-2">
+        <Label className="text-right block font-semibold">סגירת שיחה אוטומטית לאחר X דקות דומייה</Label>
+        <div className="flex items-center gap-2">
+          <Input
+            type="number"
+            min={0}
+            max={1440}
+            value={configuration?.session_timeout_minutes ?? 60}
+            onChange={(e) => onConfigChange("session_timeout_minutes", parseInt(e.target.value) || 0)}
+            className="w-24 text-center"
+          />
+          <span className="text-sm text-muted-foreground">דקות (0 = ללא הגבלה)</span>
+        </div>
+        <p className="text-xs text-muted-foreground text-right">
+          אם אין פעילות בשיחה לאחר מספר הדקות הזה, השיחה תיסגר אוטומטית
+        </p>
+      </div>
+
+      {/* ── נעילת מקור – חשוב מאוד! ── */}
+      <div className="space-y-3 bg-red-500/10 border-2 border-red-500/40 rounded-lg p-3">
+        <div className="flex items-center gap-2 justify-end">
+          <p className="text-sm font-bold text-red-500">נעילת מקור – מאין הסוכן יגיב</p>
+          <span className="text-lg">🔒</span>
+        </div>
+        <p className="text-xs text-muted-foreground text-right">
+          הסוכן יגיב אך ורק להודעות מהמקור שנבחר כאן. כל הודעה ממקור אחר תידחף אוטומטית.
+        </p>
+        <div className="space-y-2">
+          <Label className="text-right block">הגבל למקור</Label>
+          <Select
+            value={scopeMode}
+            onValueChange={(v) => onConfigChange("carmen_scope_mode", v)}
+          >
+            <SelectTrigger className="text-right">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">כל ההודעות (ללא הגבלה)</SelectItem>
+              <SelectItem value="specific_group">קבוצה ספציפית בלבד</SelectItem>
+              <SelectItem value="specific_phone">מספר טלפון ספציפי בלבד</SelectItem>
+              <SelectItem value="private_only">שיחות פרטיות בלבד (לא קבוצות)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* קבוצה ספציפית */}
+        {scopeMode === "specific_group" && (
+          <div className="space-y-2">
+            <Label className="text-right block">בחר קבוצה</Label>
+            <Select
+              value={configuration?.carmen_allowed_group_id || ""}
+              onValueChange={(v) => onConfigChange("carmen_allowed_group_id", v)}
+            >
+              <SelectTrigger className="text-right">
+                <SelectValue placeholder="בחר קבוצה..." />
+              </SelectTrigger>
+              <SelectContent>
+                {(groups || []).map((g: any) => (
+                  <SelectItem key={g.id} value={g.group_chat_id || g.id}>
+                    {g.group_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {configuration?.carmen_allowed_group_id && (
+              <div className="flex items-center gap-1 bg-green-500/10 border border-green-500/30 rounded p-2">
+                <span className="text-xs text-green-600 text-right flex-1">
+                  ✅ הסוכן יגיב אך ורק לקבוצה הזו
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* מספר טלפון ספציפי */}
+        {scopeMode === "specific_phone" && (
+          <div className="space-y-2">
+            <Label className="text-right block">מספרי טלפון מורשים (972501234567)</Label>
+            <textarea
+              className="w-full border rounded-md p-2 text-sm text-right bg-background resize-none"
+              rows={3}
+              value={(configuration?.carmen_allowed_phones || []).join("\n")}
+              onChange={(e) => {
+                const phones = e.target.value
+                  .split("\n")
+                  .map((p: string) => p.trim())
+                  .filter(Boolean);
+                onConfigChange("carmen_allowed_phones", phones);
+              }}
+              placeholder={"972501234567\n972521234567"}
+              dir="ltr"
+            />
+            <p className="text-xs text-muted-foreground text-right">
+              שורה נפרדת לכל מספר. הסוכן יגיב אך ורק למספרים אלו.
+            </p>
+            {(configuration?.carmen_allowed_phones?.length || 0) > 0 && (
+              <div className="flex items-center gap-1 bg-green-500/10 border border-green-500/30 rounded p-2">
+                <span className="text-xs text-green-600 text-right flex-1">
+                  ✅ {configuration.carmen_allowed_phones.length} מספרים מורשים
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* שיחות פרטיות */}
+        {scopeMode === "private_only" && (
+          <div className="bg-blue-500/10 border border-blue-500/30 rounded p-2">
+            <p className="text-xs text-blue-600 text-right">
+              ℹ️ הסוכן יגיב רק לשיחות פרטיות (לא מקבוצות)
+            </p>
+          </div>
+        )}
+
+        {/* בחירת חיבור Green API */}
+        {connections && connections.length > 1 && (
+          <div className="space-y-2">
+            <Label className="text-right block">חיבור Green API ספציפי</Label>
+            <Select
+              value={configuration?.carmen_connection_user_id || "all"}
+              onValueChange={(v) => onConfigChange("carmen_connection_user_id", v === "all" ? "" : v)}
+            >
+              <SelectTrigger className="text-right">
+                <SelectValue placeholder="כל החיבורים" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">כל החיבורים</SelectItem>
+                {connections.map((c: any) => (
+                  <SelectItem key={c.id} value={c.user_id}>
+                    {(c.settings as any)?.display_name || `חיבור ${c.instance_id}`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+      </div>
+
+      {/* ── סיכום ── */}
       <div className="bg-muted/30 rounded-lg p-3 space-y-1">
         <p className="text-xs font-medium text-right">איך זה עובד?</p>
         <ul className="text-xs text-muted-foreground space-y-1 text-right list-none">
-          <li>• משתמש שולח הודעה שמכילה "כרמן" → כרמן מקבלת את השליטה</li>
-          <li>• כל הודעה באותו צ'AT מועברת ישירות לכרמן</li>
-          <li>• כרמן זוכרת את כל השיחה (היסטוריית שיחה מלאה)</li>
-          <li>• "סיימנו כרמן" → השיחה נסגרת</li>
+          <li>• משתמש שולח את מילת ההפעלה → הסוכן מקבל שליטה</li>
+          <li>• כל הודעה באותו צ'אט מועברת ישירות לסוכן</li>
+          <li>• הסוכן זוכר את כל השיחה (היסטוריית שיחה מלאה)</li>
+          <li>• מילת סיום או timeout → השיחה נסגרת</li>
+          <li>• 🔒 הסוכן יגיב אך ורק למקור שהוגדר כאן</li>
         </ul>
       </div>
     </div>
   );
 }
-
 function WhatsAppTriggerConfig({
   tenantId,
   configuration,
