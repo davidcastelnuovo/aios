@@ -577,7 +577,6 @@ export default function Integrations() {
             {integrations.map((integration) => (
               <IntegrationCard key={integration.title} {...integration} />
             ))}
-          </div>
         </div>
       </div>
     </div>
