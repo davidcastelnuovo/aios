@@ -222,6 +222,7 @@ export default function FlowEditor() {
           style: { stroke: "hsl(var(--border))", strokeWidth: 2 },
           markerEnd: { type: "arrowclosed" as any },
         });
+        // Note: edge type and data set after initial render via effect
       });
 
       setNodeDataMap(dataMap);
@@ -374,6 +375,8 @@ export default function FlowEditor() {
             target: newId,
             sourceHandle,
             targetHandle: "input",
+            type: "insertable",
+            data: { onInsert: handleInsertBetween },
             animated: false,
             style: { stroke: "hsl(var(--border))", strokeWidth: 2 },
             markerEnd: { type: "arrowclosed" as any },
@@ -383,7 +386,7 @@ export default function FlowEditor() {
 
       setSelectedNodeId(newId);
     },
-    [nodeDataMap, syncRFNodes, setRfEdges]
+    [nodeDataMap, syncRFNodes, setRfEdges, handleInsertBetween]
   );
 
   // ── Update node data ───────────────────────────────────────────────────────
@@ -406,6 +409,8 @@ export default function FlowEditor() {
       const edge: Edge = {
         ...connection,
         id: `e-${connection.source}-${connection.target}-${Date.now()}`,
+        type: "insertable",
+        data: { onInsert: handleInsertBetween },
         animated: false,
         style: { stroke: "hsl(var(--border))", strokeWidth: 2 },
         markerEnd: { type: "arrowclosed" as any },
@@ -578,6 +583,7 @@ export default function FlowEditor() {
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
           fitView
           fitViewOptions={{ padding: 0.2 }}
           deleteKeyCode="Delete"
