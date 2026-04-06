@@ -313,7 +313,7 @@ async function getGoogleAdsAccounts(supabase: any, tenantId: string) {
   const accessToken = updatedIntegration?.api_key || integration.api_key;
 
   // Fetch accessible customers from Google Ads API
-  const response = await fetch('https://googleads.googleapis.com/v18/customers:listAccessibleCustomers', {
+  const response = await fetch('https://googleads.googleapis.com/v19/customers:listAccessibleCustomers', {
     headers: {
       'Authorization': `Bearer ${accessToken}`,
       'developer-token': DEVELOPER_TOKEN,
@@ -354,7 +354,7 @@ async function getGoogleAdsAccounts(supabase: any, tenantId: string) {
     
     try {
       const detailResponse = await fetch(
-        `https://googleads.googleapis.com/v18/customers/${customerId}/googleAds:search`,
+        `https://googleads.googleapis.com/v19/customers/${customerId}/googleAds:search`,
         {
           method: 'POST',
           headers: {
