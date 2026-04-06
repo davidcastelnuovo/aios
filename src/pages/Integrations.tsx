@@ -564,18 +564,22 @@ export default function Integrations() {
   ];
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">אינטגרציות</h1>
-        <p className="text-muted-foreground mt-2">
-          חבר את המערכת למקורות לידים חיצוניים ולפלטפורמות צ'אט
-        </p>
-      </div>
+    <div className="h-full min-h-0 overflow-hidden">
+      <div className="h-full overflow-y-auto">
+        <div className="container mx-auto p-6 space-y-6">
+          <div>
+            <h1 className="text-3xl font-bold">אינטגרציות</h1>
+            <p className="text-muted-foreground mt-2">
+              חבר את המערכת למקורות לידים חיצוניים ולפלטפורמות צ'אט
+            </p>
+          </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {integrations.map((integration) => (
-          <IntegrationCard key={integration.title} {...integration} />
-        ))}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {integrations.map((integration) => (
+              <IntegrationCard key={integration.title} {...integration} />
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
