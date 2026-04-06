@@ -474,8 +474,6 @@ export default function AgentHub() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
             {/* Built-in agents */}
             <GithubAgentCard />
-            <SocialCreativeAgentCard />
-            <SocialCopyAgentCard />
             {activeAgents.map(agent => (
               <AgentCard
                 key={agent.id}
