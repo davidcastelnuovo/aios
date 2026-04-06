@@ -14,7 +14,7 @@ import {
   Panel,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
@@ -24,7 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Save, History, TestTube, MessageSquare, ZoomIn, ZoomOut } from "lucide-react";
+import { Save, History, TestTube, MessageSquare, ZoomIn, ZoomOut, ArrowRight } from "lucide-react";
 import { FlowNodeRF, FlowNodeData } from "./FlowNode";
 import { AddStepMenu } from "./AddStepMenu";
 import { StepConfigPanel } from "./StepConfigPanel";
@@ -55,6 +55,7 @@ export default function FlowEditor() {
   const { automationId } = useParams<{ automationId: string }>();
   const { tenantId } = useCurrentTenant();
   const { buildPath } = useTenantPath();
+  const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -426,6 +427,16 @@ export default function FlowEditor() {
     <div className="flex flex-col h-screen" dir="rtl">
       {/* ── Top bar ── */}
       <div className="flex items-center gap-3 px-4 py-2 border-b bg-background flex-wrap">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate(buildPath("/automations"))}
+          className="gap-1 text-muted-foreground hover:text-foreground"
+        >
+          <ArrowRight className="h-4 w-4" />
+          אוטומציות
+        </Button>
+        <div className="w-px h-5 bg-border" />
         <Input
           value={automationName}
           onChange={(e) => setAutomationName(e.target.value)}
