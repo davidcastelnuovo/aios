@@ -218,11 +218,12 @@ export default function FlowEditor() {
           target: s.id,
           sourceHandle,
           targetHandle: "input",
+          type: "insertable",
+          data: { onInsert: handleInsertBetween },
           animated: false,
           style: { stroke: "hsl(var(--border))", strokeWidth: 2 },
           markerEnd: { type: "arrowclosed" as any },
         });
-        // Note: edge type and data set after initial render via effect
       });
 
       setNodeDataMap(dataMap);
@@ -248,7 +249,7 @@ export default function FlowEditor() {
       setRfEdges([]);
       syncRFNodes(dataMap);
     }
-  }, [steps, automation]);
+  }, [steps, automation, handleInsertBetween]);
 
   // ── Insert step between two nodes ─────────────────────────────────────────
 
@@ -553,6 +554,14 @@ export default function FlowEditor() {
         <div className="flex-1" />
 
         <AddStepMenu onAdd={addStep} />
+        {insertBetween && (
+          <AddStepMenu onAdd={(stepType) => doInsertBetween(stepType)} label="הוסף באמצע" />
+        )}
+        {insertBetween && (
+          <Button variant="ghost" size="sm" onClick={() => setInsertBetween(null)} className="text-xs text-muted-foreground">
+            ביטול
+          </Button>
+        )}
 
         {allNodes.some((n) => n.step_type === "trigger" && n.action_type === "manual_command") && (
           <Button variant="outline" size="sm" onClick={() => setShowManualTrigger(true)}>
