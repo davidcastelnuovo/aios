@@ -131,6 +131,73 @@ const defaultForm: AgentFormData = {
 };
 
 // Carmen's default module access (all modules, edit level)
+const CARMEN_MODES = [
+  {
+    id: 'sales',
+    icon: '💰',
+    name: 'מכירות',
+    description: 'מתמקדת בהבשלת לידים, סגירת עסקאות ומעקב פיפלאינ',
+    prompt: 'את מומחית מכירות. את מזהה הזדמנויות בלידים, מעקבת אחרי פיפלאיים, מסייעת בסגירת עסקאות ויוצרת הצעות מותאמות אישית. תמיד תשאלי שאלות בירור לפני שתיצרי פעולות.',
+  },
+  {
+    id: 'support',
+    icon: '🌟',
+    name: 'שירות לקוחות',
+    description: 'מתמקדת בפתרון בעיות, אמפתיה ושיפור חוויית לקוח',
+    prompt: 'את מומחית שירות לקוחות. את אמפתית, סבלנית ופותרת בעיות. תמיד תוודאי שהלקוח הבין את הפתרון לפני שתסגרי את השיחה. תיעדי ביצירת משימות מעקב לאחר כל פנייה.',
+  },
+  {
+    id: 'copywriting',
+    icon: '✏️',
+    name: 'קופיראיטינג',
+    description: 'כתיבת תוכן, פוסטים והודעות שיווק משכנעות',
+    prompt: 'את מומחית קופיראיטינג. את כותבת בצורה משכנעת, יצירתית ומותאמת לקהל יעד. תמיד תשאלי על הטון, הפלטפורמה וקהל היעד לפני שתתחילי לכתוב.',
+  },
+  {
+    id: 'analyst',
+    icon: '📊',
+    name: 'ניתוח נתונים',
+    description: 'מנתחת נתונים, דוחות ותובנות עסקיות',
+    prompt: 'את מנתחת נתונים. את שולפת נתונים מהמערכת, מזהה דפוסים ומסיקה תובנות עסקיות ברורות. תמיד תציגי נתונים בצורה מסודרת וברורה.',
+  },
+  {
+    id: 'scheduler',
+    icon: '📅',
+    name: 'ניהול לוח זמנים',
+    description: 'תיאום פגישות, תזכורות ומשימות זמניות',
+    prompt: 'את מומחית ניהול לוח זמנים. את מתאמת פגישות, יוצרת תזכורות ומנהלת משימות זמניות בצורה יעילה. תמיד תאשרי פרטי תאריך ושעה לפני שתיצרי אירוע.',
+  },
+  {
+    id: 'onboarding',
+    icon: '🚀',
+    name: 'קליטת לקוחות',
+    description: 'מדריכה לקוחות חדשים בתהליך הקליטה',
+    prompt: 'את מומחית קליטת לקוחות. את מדריכה לקוחות חדשים בצורה חמה ומקצועית, מודיעה אותם על המערכת ומסייעת בהגדרת הפרופיל שלהם. תמיד תיצרי תהליך קליטה מובנה ללקוחות חדשים.',
+  },
+];
+
+const BUILT_IN_SKILLS = [
+  { id: 'lead-qualifier', icon: '🎯', name: 'הסמכת לידים', description: 'מדרג אוטומטי של לידים לפי פרמטרים', prompt: 'כשמתבקשת להעריך ליד, תשאלי על תקציב, גודל עסק, צורך ולוח זמנים. דרגי 0-10 וספקי הסבר.' },
+  { id: 'follow-up', icon: '🔄', name: 'פולואפ אוטומטי', description: 'יוצר הודעות מעקב בזמנים הנכונים', prompt: 'כשמתבקשת לעקוב אחרי ליד או לקוח, צרי משימות מעקב בזמנים אסטרטגיים (3 ימים, שבוע, חודש).' },
+  { id: 'proposal-writer', icon: '📝', name: 'כתיבת הצעות', description: 'יוצר הצעות מותאמות אישית', prompt: 'כשמתבקשת לכתוב הצעה, שאלי על צרכי הלקוח, תקציב ודדליין. צרי הצעה מותאמת אישית עם הדגשת הערך ללקוח.' },
+  { id: 'meeting-prep', icon: '🤝', name: 'הכנה לפגישות', description: 'מכין סיכום פגישה ונקודות דיון', prompt: 'לפני פגישה, שלוף את היסטוריית הלקוח/ליד, הצע נקודות דיון ושאלות רלוונטיות.' },
+  { id: 'objection-handler', icon: '🛡️', name: 'טיפול בהתנגדויות', description: 'עונה להתנגדויות בצורה משכנעת', prompt: 'כשלקוח מתנגד, הביני את החשש האמיתי מאחוריו ועני בצורה אמפתית ומשכנעת. אל תוויתרי אותומטית במחיר.' },
+  { id: 'task-manager', icon: '✅', name: 'ניהול משימות', description: 'יוצר ומעדכן משימות באופן אוטומטי', prompt: 'כשמתבקשת לנהל משימות, תמיד חפשי קודם אם המשימה קיימת. צרי משימות עם תאריך יעד ושייוך לאדם הנכון.' },
+  { id: 'whatsapp-responder', icon: '💬', name: 'מענה WhatsApp', description: 'מנסח תבניות תגובה לוואטסאפ', prompt: 'כשעונה להודעות WhatsApp, כתוב בסגנון קצר, ישיר וחברותי. הימנע מטקסט ארוך מדי.' },
+  { id: 'data-enricher', icon: '🔍', name: 'העשרת נתונים', description: 'משלים פרטים חסרים על לידים ולקוחות', prompt: 'כשנתקלת על ליד/לקוח עם פרטים חסרים, שאלי שאלות משלימות באופן טבעי ועדכני את הפרופיל.' },
+  { id: 'report-generator', icon: '📈', name: 'יצירת דוחות', description: 'יוצר דוחות סיכום וניתוח', prompt: 'כשמתבקשת דוח, שלוף נתונים מהמערכת, זהה דפוסים והצג תובנות ברורות עם מסקנות עסקיות.' },
+  { id: 'email-drafter', icon: '📧', name: 'כתיבת אימיילים', description: 'מנסח אימיילים מקצועיים', prompt: 'כשמתבקשת לכתוב אימייל, שאלי על הנמען, הטון והמטרה. צרי אימייל מקצועי עם שורת נושא משכנעת.' },
+  { id: 'social-planner', icon: '📱', name: 'תכנון סושיאל', description: 'מתכנן תוכן לרשתות חברתיות', prompt: 'כשמתבקשת תוכן לסושיאל, שאלי על הפלטפורמה, קהל היעד והמסר. צרי תוכן משכנע עם השתמש בסיפור וקריאה לפעולה.' },
+  { id: 'price-calculator', icon: '💵', name: 'חישוב מחירים', description: 'מחשב הצעות מחיר והנחות', prompt: 'כשמתבקשת מחיר, שאלי על השירות/מוצר, כמות ופרטי לקוח. הצג מחיר סופי עם פירוט ואפשרות הנחה.' },
+  { id: 'competitor-analyzer', icon: '🔭', name: 'ניתוח מתחרים', description: 'מנתח שוק ומתחרים', prompt: 'כשמתבקשת ניתוח מתחרים, שלוף נתונים מהמערכת, זהה דפוסים והצג השוואה מול מתחרים.' },
+  { id: 'sentiment-analyzer', icon: '🧠', name: 'ניתוח סנטימנט', description: 'מזהה טון ורגש בהודעות', prompt: 'בכל הודעה שמקבלת, נתחי את הטון הרגשי (חיובי/שלילי/נייטרלי) והתאם את התגובה בהתאם.' },
+  { id: 'faq-responder', icon: '❓', name: 'מענה שאלות נפוצות', description: 'עונה לשאלות נפוצות לפי בסיס ידע', prompt: 'כשעונה לשאלות, שלוף קודם את הנתונים הקיימים במערכת וענה לפי המידע הקיים.' },
+  { id: 'upsell-advisor', icon: '📈', name: 'ייעוץ אפסליינג', description: 'מזהה הזדמנויות להרחבת עסקאות', prompt: 'כשמתבקשת לנתח לקוח, זהה הזדמנויות לאפסליינג וקרוס-סלינג לפי היסטוריית הקניות.' },
+  { id: 'churn-predictor', icon: '⚠️', name: 'זיהוי נטישה', description: 'מזהה לקוחות בסיכון נטישה', prompt: 'נתח את דפוסי הלקוחות וזהה סימני אזהרה לנטישה פוטנציאלית. הצע פעולות שימור מתאימות.' },
+  { id: 'campaign-optimizer', icon: '🎯', name: 'אופטימיזציית קמפיינים', description: 'מנתח ומשפר קמפייני פרסום', prompt: 'נתח נתוני קמפיינים מהמערכת, זהה מה עובד ומה לא, והצע שיפורים קונקרטיים.' },
+  { id: 'smart-summarizer', icon: '📚', name: 'סיכום חכם', description: 'מסכם שיחות, מסמכים ונתונים', prompt: 'כשמתבקשת סיכום, שלוף את כל המידע הרלוונטי והצג את העיקריות בצורה קצרה וברורה.' },
+];
+
 const DEFAULT_CARMEN_ACCESS: Record<string, "none" | "view" | "edit"> = Object.fromEntries(
   MODULE_PERMISSIONS.map(m => [m.key, "edit"])
 );
@@ -156,6 +223,8 @@ export default function AgentHub() {
   const [carmenTaskDialogOpen, setCarmenTaskDialogOpen] = useState(false);
   const [carmenSaving, setCarmenSaving] = useState(false);
   const [sendingTask, setSendingTask] = useState(false);
+  const [carmenActiveModes, setCarmenActiveModes] = useState<string[]>([]);
+  const [carmenActiveSkills, setCarmenActiveSkills] = useState<string[]>([]);
 
   const { data: agents = [], isLoading } = useQuery({
     queryKey: ["ai_agents", tenantId],
@@ -466,6 +535,8 @@ export default function AgentHub() {
           <Tabs defaultValue="instructions" dir="rtl">
             <TabsList className="w-full mb-4">
               <TabsTrigger value="instructions" className="flex-1">✍️ הנחיות</TabsTrigger>
+              <TabsTrigger value="modes" className="flex-1">🎯 מצבים</TabsTrigger>
+              <TabsTrigger value="skills" className="flex-1">⚡ סקילז</TabsTrigger>
               <TabsTrigger value="engine" className="flex-1">מנוע AI</TabsTrigger>
               <TabsTrigger value="permissions" className="flex-1">גישות</TabsTrigger>
               <TabsTrigger value="tools" className="flex-1">כלים</TabsTrigger>
@@ -532,6 +603,74 @@ export default function AgentHub() {
               </div>
             </TabsContent>
 
+            {/* Modes Tab */}
+            <TabsContent value="modes" className="space-y-4">
+              <div>
+                <Label className="text-sm font-medium mb-1 block">🎯 מצבי פעולה של כרמן</Label>
+                <p className="text-xs text-muted-foreground mb-3">בחר מצב מוכן מראש שמוסיף הנחיות ייחודיות לכרמן. ניתן להפעיל מספר מצבים במקביל.</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {CARMEN_MODES.map(mode => (
+                    <div
+                      key={mode.id}
+                      onClick={() => {
+                        setCarmenActiveModes(prev =>
+                          prev.includes(mode.id) ? prev.filter(m => m !== mode.id) : [...prev, mode.id]
+                        );
+                      }}
+                      className={`border rounded-xl p-3 cursor-pointer transition-all ${
+                        carmenActiveModes.includes(mode.id)
+                          ? 'border-primary bg-primary/5 shadow-sm'
+                          : 'border-border hover:border-primary/40'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-lg">{mode.icon}</span>
+                        <span className="font-medium text-sm">{mode.name}</span>
+                        {carmenActiveModes.includes(mode.id) && (
+                          <span className="mr-auto text-xs bg-primary text-white rounded-full px-2 py-0.5">פעיל</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">{mode.description}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </TabsContent>
+            {/* Skills Tab */}
+            <TabsContent value="skills" className="space-y-4">
+              <div>
+                <Label className="text-sm font-medium mb-1 block">⚡ סקילז פעילים</Label>
+                <p className="text-xs text-muted-foreground mb-3">סקילז הם יכולות מודולריות שמרחיבות את כרמן. ניתן לנהל את ספריית הסקילז המלאה בדף הסקילז.</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {BUILT_IN_SKILLS.map(skill => (
+                    <div
+                      key={skill.id}
+                      onClick={() => {
+                        setCarmenActiveSkills(prev =>
+                          prev.includes(skill.id) ? prev.filter(s => s !== skill.id) : [...prev, skill.id]
+                        );
+                      }}
+                      className={`border rounded-lg p-2.5 cursor-pointer transition-all ${
+                        carmenActiveSkills.includes(skill.id)
+                          ? 'border-primary bg-primary/5'
+                          : 'border-border hover:border-primary/40'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span>{skill.icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-medium truncate">{skill.name}</div>
+                          <div className="text-[10px] text-muted-foreground truncate">{skill.description}</div>
+                        </div>
+                        {carmenActiveSkills.includes(skill.id) && (
+                          <div className="w-2 h-2 rounded-full bg-primary shrink-0" />
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </TabsContent>
             {/* Engine Tab */}
             <TabsContent value="engine" className="space-y-4">
               <div>
@@ -652,19 +791,24 @@ export default function AgentHub() {
                     .eq('tenant_id', tenantId)
                     .ilike('name', '%כרמן%')
                     .maybeSingle();
+                  const agentData = {
+                    engine: carmenEngine,
+                    system_prompt: finalPrompt || null,
+                    active_modes: carmenActiveModes,
+                    active_skills: carmenActiveSkills,
+                    writing_style: carmenWritingStyle,
+                    response_length: carmenResponseLength,
+                    language: carmenLanguage,
+                  };
                   if (existing?.id) {
-                    const { error } = await supabase.from('ai_agents').update({
-                      engine: carmenEngine,
-                      system_prompt: finalPrompt || null,
-                    }).eq('id', existing.id);
+                    const { error } = await supabase.from('ai_agents').update(agentData).eq('id', existing.id);
                     if (error) throw error;
                   } else {
                     const { error } = await supabase.from('ai_agents').insert({
                       tenant_id: tenantId,
                       name: 'כרמן',
-                      engine: carmenEngine,
-                      system_prompt: finalPrompt || null,
                       active: true,
+                      ...agentData,
                     });
                     if (error) throw error;
                   }

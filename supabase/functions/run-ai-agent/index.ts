@@ -648,6 +648,71 @@ Deno.serve(async (req) => {
       parts.push('כשמבקשים ממך ליצור מודעה או פוסט לסושיאל: 1) קודם צור תמונה עם generate_ad_image עם תיאור מפורט באנגלית 2) אז צור פוסט עם create_social_post והכנס את ה-image_url שקיבלת ל-media_urls. תמיד צור גם ויזואל וגם טקסט.')
       systemPrompt = parts.filter(Boolean).join(' ')
     }
+    // Inject active modes
+    const activeModes: string[] = (agent as any).active_modes || []
+    if (activeModes.length > 0) {
+      const MODES_PROMPTS: Record<string, string> = {
+        sales: 'את מומחית מכירות. מזהה הזדמנויות בלידים, מעקבת אחרי פיפלאיים, מסייעת בסגירת עסקאות ויוצרת הצעות מותאמות אישית. תמיד תשאלי שאלות בירור לפני שתיצרי פעולות.',
+        support: 'את מומחית שירות לקוחות. אמפתית, סבלנית ופותרת בעיות. תמיד תוודאי שהלקוח הבין את הפתרון לפני שתסגרי את השיחה. תיעדי ביצירת משימות מעקב לאחר כל פנייה.',
+        copywriting: 'את מומחית קופיראיטינג. כותבת בצורה משכנעת, יצירתית ומותאמת לקהל יעד. תמיד תשאלי על הטון, הפלטפורמה וקהל היעד לפני שתתחילי לכתוב.',
+        analyst: 'את מנתחת נתונים. שולפת נתונים מהמערכת, מזהה דפוסים ומסיקה תובנות עסקיות ברורות. תמיד תציגי נתונים בצורה מסודרת וברורה.',
+        scheduler: 'את מומחית ניהול לוח זמנים. מתאמת פגישות, יוצרת תזכורות ומנהלת משימות זמניות בצורה יעילה. תמיד תאשרי פרטי תאריך ושעה לפני שתיצרי אירוע.',
+        onboarding: 'את מומחית קליטת לקוחות. מדריכה לקוחות חדשים בצורה חמה ומקצועית, מודיעה אותם על המערכת ומסייעת בהגדרת הפרופיל שלהם.',
+      }
+      const modePrompts = activeModes.map((m: string) => MODES_PROMPTS[m]).filter(Boolean)
+      if (modePrompts.length > 0) {
+        systemPrompt += `\n\n=== מצבי פעולה פעילים ===\n${modePrompts.join('\n')}`
+      }
+    }
+    // Inject active skills
+    const activeSkills: string[] = (agent as any).active_skills || []
+    if (activeSkills.length > 0) {
+      const SKILLS_PROMPTS: Record<string, string> = {
+        'lead-qualifier': 'כשמתבקשת להעריך ליד, תשאלי על תקציב, גודל עסק, צורך ולוח זמנים. דרגי 0-10 וספקי הסבר.',
+        'follow-up': 'כשמתבקשת לעקוב אחרי ליד או לקוח, צרי משימות מעקב בזמנים אסטרטגיים (3 ימים, שבוע, חודש).',
+        'proposal-writer': 'כשמתבקשת לכתוב הצעה, שאלי על צרכי הלקוח, תקציב ודדליין. צרי הצעה מותאמת אישית עם הדגשת הערך ללקוח.',
+        'meeting-prep': 'לפני פגישה, שלוף את היסטוריית הלקוח/ליד, הצע נקודות דיון ושאלות רלוונטיות.',
+        'objection-handler': 'כשלקוח מתנגד, הביני את החשש האמיתי מאחוריו ועני בצורה אמפתית ומשכנעת. אל תוויתרי אותומטית במחיר.',
+        'task-manager': 'כשמתבקשת לנהל משימות, תמיד חפשי קודם אם המשימה קיימת. צרי משימות עם תאריך יעד ושייוך לאדם הנכון.',
+        'whatsapp-responder': 'כשעונה להודעות WhatsApp, כתוב בסגנון קצר, ישיר וחברותי. הימנע מטקסט ארוך מדי.',
+        'data-enricher': 'כשנתקלת על ליד/לקוח עם פרטים חסרים, שאלי שאלות משלימות באופן טבעי ועדכני את הפרופיל.',
+        'report-generator': 'כשמתבקשת דוח, שלוף נתונים מהמערכת, זהה דפוסים והצג תובנות ברורות עם מסקנות עסקיות.',
+        'email-drafter': 'כשמתבקשת לכתוב אימייל, שאלי על הנמען, הטון והמטרה. צרי אימייל מקצועי עם שורת נושא משכנעת.',
+        'social-planner': 'כשמתבקשת תוכן לסושיאל, שאלי על הפלטפורמה, קהל היעד והמסר. צרי תוכן משכנע עם סיפור וקריאה לפעולה.',
+        'price-calculator': 'כשמתבקשת מחיר, שאלי על השירות/מוצר, כמות ופרטי לקוח. הצג מחיר סופי עם פירוט ואפשרות הנחה.',
+        'competitor-analyzer': 'כשמתבקשת ניתוח מתחרים, שלוף נתונים מהמערכת, זהה דפוסים והצג השוואה מול מתחרים.',
+        'sentiment-analyzer': 'בכל הודעה שמקבלת, נתחי את הטון הרגשי (חיובי/שלילי/נייטרלי) והתאם את התגובה בהתאם.',
+        'faq-responder': 'כשעונה לשאלות, שלוף קודם את הנתונים הקיימים במערכת וענה לפי המידע הקיים.',
+        'upsell-advisor': 'כשמתבקשת לנתח לקוח, זהה הזדמנויות לאפסליינג וקרוס-סלינג לפי היסטוריית הקניות.',
+        'churn-predictor': 'נתח את דפוסי הלקוחות וזהה סימני אזהרה לנטישה פוטנציאלית. הצע פעולות שימור מתאימות.',
+        'campaign-optimizer': 'נתח נתוני קמפיינים מהמערכת, זהה מה עובד ומה לא, והצע שיפורים קונקרטיים.',
+        'smart-summarizer': 'כשמתבקשת סיכום, שלוף את כל המידע הרלוונטי והצג את העיקריות בצורה קצרה וברורה.',
+      }
+      const skillPrompts = activeSkills.map((s: string) => SKILLS_PROMPTS[s]).filter(Boolean)
+      if (skillPrompts.length > 0) {
+        systemPrompt += `\n\n=== סקילז פעילים ===\n${skillPrompts.join('\n')}`
+      }
+    }
+    // Inject writing style
+    const writingStyle = (agent as any).writing_style
+    if (writingStyle && writingStyle !== 'professional') {
+      const styleMap: Record<string, string> = {
+        friendly: 'כתוב בסגנון חברותי וחמול.',
+        formal: 'כתוב בסגנון פורמלי ועסקי.',
+        casual: 'כתוב בסגנון קזואלי ונגיש.',
+        empathetic: 'כתוב בסגנון אמפתי ומבין.',
+      }
+      if (styleMap[writingStyle]) systemPrompt += `\n${styleMap[writingStyle]}`
+    }
+    // Inject response length
+    const responseLength = (agent as any).response_length
+    if (responseLength) {
+      const lengthMap: Record<string, string> = {
+        short: 'הגבל תשובות ל-2-3 משפטים מקסימום.',
+        detailed: 'תן תשובות מפורטות ומקיפות.',
+      }
+      if (lengthMap[responseLength]) systemPrompt += `\n${lengthMap[responseLength]}`
+    }
     // Always inject tenant context
     systemPrompt += `\n\n=== הקשר ארגוני ===\n${tenantContext}`
 
