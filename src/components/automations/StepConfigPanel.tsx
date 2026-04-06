@@ -25,20 +25,90 @@ import { FlowNodeData } from "./FlowNode";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useToast } from "@/hooks/use-toast";
 
-const TRIGGER_OPTIONS = [
-  { value: "lead_created", label: "ליד נוצר" },
-  { value: "lead_status_changed", label: "סטטוס ליד השתנה" },
-  { value: "client_created", label: "לקוח נוצר" },
-  { value: "client_status_changed", label: "סטטוס לקוח השתנה" },
-  { value: "task_status_changed", label: "סטטוס משימה השתנה" },
-  { value: "task_assigned", label: "משימה שוייכה" },
-  { value: "meeting_created", label: "נוצרה פגישה" },
-  { value: "task_overdue", label: "משימה באיחור" },
-  { value: "inbound_webhook_task", label: "Webhook נכנס" },
-  { value: "manual_command", label: "פקודה ידנית (צ'אט)" },
-  { value: "whatsapp_message_received", label: "הודעת WhatsApp נכנסת" },
-  { value: "carmen_whatsapp_session", label: "שיחת כרמן ב-WhatsApp" },
+// Trigger options organized by category for the Flow Builder
+export const TRIGGER_CATEGORIES = [
+  {
+    label: "👤 לידים",
+    options: [
+      { value: "lead_created",        label: "ליד נוצר" },
+      { value: "lead_updated",         label: "ליד עודכן" },
+      { value: "lead_status_changed",  label: "סטאטוס ליד השתנה" },
+      { value: "lead_note_added",      label: "הערה נוספה לליד" },
+      { value: "lead_inactive_days",   label: "ליד לא פעיל X ימים" },
+    ],
+  },
+  {
+    label: "🏢 לקוחות",
+    options: [
+      { value: "client_created",        label: "לקוח נוצר" },
+      { value: "client_status_changed", label: "סטאטוס לקוח השתנה" },
+      { value: "client_note_added",     label: "הערה נוספה ללקוח" },
+    ],
+  },
+  {
+    label: "✅ משימות",
+    options: [
+      { value: "task_created",       label: "משימה נוצרה" },
+      { value: "task_status_changed",label: "סטאטוס משימה השתנה" },
+      { value: "task_completed",     label: "משימה הושלמה" },
+      { value: "task_assigned",      label: "משימה שוייכה" },
+      { value: "task_overdue",       label: "משימה באיחור" },
+    ],
+  },
+  {
+    label: "📅 פגישות",
+    options: [
+      { value: "meeting_created",   label: "פגישה נוצרה" },
+      { value: "meeting_updated",   label: "פגישה עודכנה" },
+      { value: "meeting_cancelled", label: "פגישה בוטלה" },
+    ],
+  },
+  {
+    label: "💬 הודעות",
+    options: [
+      { value: "whatsapp_message_received", label: "הודעת WhatsApp נכנסת (Green API)" },
+      { value: "carmen_whatsapp_session",   label: "שיחת כרמן ב-WhatsApp" },
+      { value: "telegram_message_received", label: "הודעת טלגרם נכנסת" },
+      { value: "email_received",            label: "אימייל נכנס(Gmail)" },
+    ],
+  },
+  {
+    label: "📈 Google Workspace",
+    options: [
+      { value: "google_sheet_new_row",          label: "שורה חדשה ב-Google Sheets" },
+      { value: "google_sheet_row_updated",      label: "שורה עודכנה ב-Google Sheets" },
+      { value: "google_calendar_event_created", label: "אירוע חדש ב-Google Calendar" },
+      { value: "google_form_submitted",         label: "טופס Google Forms נשלח" },
+    ],
+  },
+  {
+    label: "⏰ לוח זמנים",
+    options: [
+      { value: "scheduled_daily",   label: "טריגר יומי בשעה קבועה" },
+      { value: "scheduled_weekly",  label: "טריגר שבועי" },
+      { value: "scheduled_monthly", label: "טריגר חודשי" },
+    ],
+  },
+  {
+    label: "🔗 אינטגרציות",
+    options: [
+      { value: "inbound_webhook_task", label: "Webhook נכנס" },
+      { value: "facebook_lead_form",   label: "טופס ליד פייסבוק" },
+      { value: "instagram_message",    label: "הודעת אינסטגרם" },
+      { value: "typeform_submitted",   label: "Typeform נשלח" },
+      { value: "stripe_payment",       label: "תשלום Stripe" },
+    ],
+  },
+  {
+    label: "💬 צ'אט ופקודות",
+    options: [
+      { value: "manual_command", label: "פקודה ידנית (צ'אט)" },
+    ],
+  },
 ];
+
+// Flat list for backward compat
+const TRIGGER_OPTIONS = TRIGGER_CATEGORIES.flatMap(c => c.options);
 
 const ACTION_OPTIONS = [
   { value: "send_whatsapp", label: "שלח WhatsApp (ManyChat)" },
@@ -258,18 +328,41 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [] }
               <Label className="text-right block">
                 {node.step_type === "trigger" ? "סוג טריגר" : "סוג פעולה"}
               </Label>
-              <Select value={node.action_type || ""} onValueChange={handleActionTypeChange}>
-                <SelectTrigger className="text-right">
-                  <SelectValue placeholder="בחר..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {options.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {node.step_type === "trigger" ? (
+                <Select value={node.action_type || ""} onValueChange={handleActionTypeChange}>
+                  <SelectTrigger className="text-right">
+                    <SelectValue placeholder="בחר טריגר..." />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[400px]">
+                    {TRIGGER_CATEGORIES.map((cat) => (
+                      <SelectGroup key={cat.label}>
+                        <SelectLabel className="text-right text-xs font-bold text-muted-foreground py-1">
+                          {cat.label}
+                        </SelectLabel>
+                        {cat.options.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value} className="text-right">
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                        <SelectSeparator />
+                      </SelectGroup>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Select value={node.action_type || ""} onValueChange={handleActionTypeChange}>
+                  <SelectTrigger className="text-right">
+                    <SelectValue placeholder="בחר פעולה..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ACTION_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           )}
 
@@ -293,13 +386,232 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [] }
             />
           )}
 
-          {/* Carmen WhatsApp Session trigger config */}
+           {/* Carmen WhatsApp Session trigger config */}
           {node.step_type === "trigger" && node.action_type === "whatsapp_message_received" && node.configuration?.carmen_session_mode === true && (
             <CarmenSessionConfig
               tenantId={tenantId}
               configuration={node.configuration}
               onConfigChange={handleConfigChange}
             />
+          )}
+
+          {/* ── טלגרם ── */}
+          {node.step_type === "trigger" && node.action_type === "telegram_message_received" && (
+            <div className="space-y-3 bg-sky-500/10 border border-sky-500/30 rounded-lg p-3">
+              <p className="text-xs font-semibold text-sky-600">הגדרת Telegram Bot</p>
+              <div className="space-y-2">
+                <Label className="text-right block">Bot Token</Label>
+                <Input
+                  value={node.configuration?.telegram_bot_token || ""}
+                  onChange={(e) => handleConfigChange("telegram_bot_token", e.target.value)}
+                  placeholder="123456:ABC-DEF..."
+                  dir="ltr"
+                  className="font-mono text-xs"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-right block">סנן הפעלה (אופציונלי)</Label>
+                <Input
+                  value={node.configuration?.telegram_keyword || ""}
+                  onChange={(e) => handleConfigChange("telegram_keyword", e.target.value)}
+                  placeholder="למשל: /start"
+                  className="text-right"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* ── אימייל נכנס (Gmail) ── */}
+          {node.step_type === "trigger" && node.action_type === "email_received" && (
+            <div className="space-y-3 bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+              <p className="text-xs font-semibold text-red-600">סינון Gmail</p>
+              <div className="space-y-2">
+                <Label className="text-right block">סנן בשורת הנושא (אופציונלי)</Label>
+                <Input
+                  value={node.configuration?.email_subject_filter || ""}
+                  onChange={(e) => handleConfigChange("email_subject_filter", e.target.value)}
+                  placeholder="למשל: הזמנה"
+                  className="text-right"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-right block">סנן בשולח (אופציונלי)</Label>
+                <Input
+                  value={node.configuration?.email_sender_filter || ""}
+                  onChange={(e) => handleConfigChange("email_sender_filter", e.target.value)}
+                  placeholder="example@gmail.com"
+                  dir="ltr"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* ── Google Sheets ── */}
+          {node.step_type === "trigger" && (node.action_type === "google_sheet_new_row" || node.action_type === "google_sheet_row_updated") && (
+            <div className="space-y-3 bg-green-500/10 border border-green-500/30 rounded-lg p-3">
+              <p className="text-xs font-semibold text-green-600">הגדרת Google Sheets</p>
+              <div className="space-y-2">
+                <Label className="text-right block">Spreadsheet ID</Label>
+                <Input
+                  value={node.configuration?.sheet_id || ""}
+                  onChange={(e) => handleConfigChange("sheet_id", e.target.value)}
+                  placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms"
+                  dir="ltr"
+                  className="font-mono text-xs"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-right block">שם הגיליון (Sheet Name)</Label>
+                <Input
+                  value={node.configuration?.sheet_name || ""}
+                  onChange={(e) => handleConfigChange("sheet_name", e.target.value)}
+                  placeholder="Sheet1"
+                  dir="ltr"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* ── Google Calendar ── */}
+          {node.step_type === "trigger" && node.action_type === "google_calendar_event_created" && (
+            <div className="space-y-3 bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+              <p className="text-xs font-semibold text-blue-600">הגדרת Google Calendar</p>
+              <div className="space-y-2">
+                <Label className="text-right block">סנן בכותרת האירוע (אופציונלי)</Label>
+                <Input
+                  value={node.configuration?.calendar_title_filter || ""}
+                  onChange={(e) => handleConfigChange("calendar_title_filter", e.target.value)}
+                  placeholder="למשל: פגישה"
+                  className="text-right"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* ── לוח זמנים – יומי ── */}
+          {node.step_type === "trigger" && node.action_type === "scheduled_daily" && (
+            <div className="space-y-3 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+              <p className="text-xs font-semibold text-amber-600">הגדרת טריגר יומי</p>
+              <div className="space-y-2">
+                <Label className="text-right block">שעת הפעלה</Label>
+                <Input
+                  type="time"
+                  value={node.configuration?.schedule_time || "08:00"}
+                  onChange={(e) => handleConfigChange("schedule_time", e.target.value)}
+                  dir="ltr"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* ── לוח זמנים – שבועי ── */}
+          {node.step_type === "trigger" && node.action_type === "scheduled_weekly" && (
+            <div className="space-y-3 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+              <p className="text-xs font-semibold text-amber-600">הגדרת טריגר שבועי</p>
+              <div className="space-y-2">
+                <Label className="text-right block">יום בשבוע</Label>
+                <Select
+                  value={node.configuration?.schedule_day || "1"}
+                  onValueChange={(v) => handleConfigChange("schedule_day", v)}
+                >
+                  <SelectTrigger className="text-right"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">אחד</SelectItem>
+                    <SelectItem value="1">שני</SelectItem>
+                    <SelectItem value="2">שלישי</SelectItem>
+                    <SelectItem value="3">רביעי</SelectItem>
+                    <SelectItem value="4">חמישי</SelectItem>
+                    <SelectItem value="5">שישי</SelectItem>
+                    <SelectItem value="6">שבת</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-right block">שעת הפעלה</Label>
+                <Input
+                  type="time"
+                  value={node.configuration?.schedule_time || "08:00"}
+                  onChange={(e) => handleConfigChange("schedule_time", e.target.value)}
+                  dir="ltr"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* ── לוח זמנים – חודשי ── */}
+          {node.step_type === "trigger" && node.action_type === "scheduled_monthly" && (
+            <div className="space-y-3 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+              <p className="text-xs font-semibold text-amber-600">הגדרת טריגר חודשי</p>
+              <div className="space-y-2">
+                <Label className="text-right block">יום בחודש (1-28)</Label>
+                <Input
+                  type="number" min={1} max={28}
+                  value={node.configuration?.schedule_day_of_month || 1}
+                  onChange={(e) => handleConfigChange("schedule_day_of_month", parseInt(e.target.value) || 1)}
+                  className="text-right"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-right block">שעת הפעלה</Label>
+                <Input
+                  type="time"
+                  value={node.configuration?.schedule_time || "08:00"}
+                  onChange={(e) => handleConfigChange("schedule_time", e.target.value)}
+                  dir="ltr"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* ── ליד לא פעיל ── */}
+          {node.step_type === "trigger" && node.action_type === "lead_inactive_days" && (
+            <div className="space-y-3 bg-orange-500/10 border border-orange-500/30 rounded-lg p-3">
+              <p className="text-xs font-semibold text-orange-600">הגדרת ליד לא פעיל</p>
+              <div className="space-y-2">
+                <Label className="text-right block">מספר ימים ללא פעילות</Label>
+                <Input
+                  type="number" min={1}
+                  value={node.configuration?.inactive_days || 7}
+                  onChange={(e) => handleConfigChange("inactive_days", parseInt(e.target.value) || 7)}
+                  className="text-right"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground text-right">
+                יופעל בדיקה יומית אוטומטית.
+              </p>
+            </div>
+          )}
+
+          {/* ── Webhook נכנס ── */}
+          {node.step_type === "trigger" && node.action_type === "inbound_webhook_task" && (
+            <div className="space-y-2 bg-muted/50 p-3 rounded">
+              <p className="text-xs text-right text-muted-foreground">
+                האוטומציה תופעל בקריאה ל-Webhook הנכנס של המערכת.
+                כל הנתונים שיישלחו ב-payload יהיו זמינים כמשתנים בצעדים הבאים.
+              </p>
+            </div>
+          )}
+
+          {/* ── Stripe ── */}
+          {node.step_type === "trigger" && node.action_type === "stripe_payment" && (
+            <div className="space-y-3 bg-violet-500/10 border border-violet-500/30 rounded-lg p-3">
+              <p className="text-xs font-semibold text-violet-600">הגדרת Stripe Webhook</p>
+              <div className="space-y-2">
+                <Label className="text-right block">סוג אירוע</Label>
+                <Select
+                  value={node.configuration?.stripe_event || "payment_intent.succeeded"}
+                  onValueChange={(v) => handleConfigChange("stripe_event", v)}
+                >
+                  <SelectTrigger className="text-right"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="payment_intent.succeeded">תשלום הצליח</SelectItem>
+                    <SelectItem value="payment_intent.payment_failed">תשלום נכשל</SelectItem>
+                    <SelectItem value="customer.subscription.created">מנוי נוצר</SelectItem>
+                    <SelectItem value="customer.subscription.deleted">מנוי בוטל</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           )}
 
           {/* Delay config */}

@@ -131,30 +131,63 @@ const STEP_TYPE_CONFIG: Record<
 };
 
 export const ACTION_TYPE_LABELS: Record<string, string> = {
+  // פעולות
   whatsapp_session: "שמור סשן שיחה",
   send_whatsapp: "שלח WhatsApp (ManyChat)",
   send_greenapi_message: "שלח WhatsApp (Green API)",
+  send_greenapi_to_campaigner: "שלח WhatsApp ל-Campaigner",
   create_task: "צור משימה",
   add_lead_update: "הוסף עדכון לליד",
   add_client_update: "הוסף עדכון ללקוח",
   create_manychat_subscriber: "צור subscriber",
-  update_status: "שנה סטטוס",
+  update_status: "שנה סטאטוס",
   webhook: "Webhook",
   email: "אימייל",
   notification: "התראה",
   create_lead: "צור ליד",
+  agent: "סוכן AI",
+  // טריגרים – לידים
   lead_created: "ליד נוצר",
-  lead_status_changed: "סטטוס ליד השתנה",
+  lead_updated: "ליד עודכן",
+  lead_status_changed: "סטאטוס ליד השתנה",
+  lead_note_added: "הערה נוספה לליד",
+  lead_inactive_days: "ליד לא פעיל X ימים",
+  // טריגרים – לקוחות
   client_created: "לקוח נוצר",
-  client_status_changed: "סטטוס לקוח השתנה",
-  task_status_changed: "סטטוס משימה השתנה",
+  client_status_changed: "סטאטוס לקוח השתנה",
+  client_note_added: "הערה נוספה ללקוח",
+  // טריגרים – משימות
+  task_created: "משימה נוצרה",
+  task_status_changed: "סטאטוס משימה השתנה",
+  task_completed: "משימה הושלמה",
   task_assigned: "משימה שוייכה",
-  meeting_created: "נוצרה פגישה",
   task_overdue: "משימה באיחור",
-  inbound_webhook_task: "Webhook נכנס",
-  manual_command: "פקודה ידנית (צ'אט)",
+  // טריגרים – פגישות
+  meeting_created: "פגישה נוצרה",
+  meeting_updated: "פגישה עודכנה",
+  meeting_cancelled: "פגישה בוטלה",
+  // טריגרים – הודעות
   whatsapp_message_received: "הודעת WhatsApp נכנסת",
   carmen_whatsapp_session: "שיחת כרמן ב-WhatsApp",
+  telegram_message_received: "הודעת טלגרם נכנסת",
+  email_received: "אימייל נכנס (Gmail)",
+  // טריגרים – Google Workspace
+  google_sheet_new_row: "שורה חדשה ב-Google Sheets",
+  google_sheet_row_updated: "שורה עודכנה ב-Google Sheets",
+  google_calendar_event_created: "אירוע חדש ב-Google Calendar",
+  google_form_submitted: "טופס Google Forms נשלח",
+  // טריגרים – לוח זמנים
+  scheduled_daily: "טריגר יומי",
+  scheduled_weekly: "טריגר שבועי",
+  scheduled_monthly: "טריגר חודשי",
+  // טריגרים – אינטגרציות
+  inbound_webhook_task: "Webhook נכנס",
+  facebook_lead_form: "טופס ליד פייסבוק",
+  instagram_message: "הודעת אינסטגרם",
+  typeform_submitted: "Typeform נשלח",
+  stripe_payment: "תשלום Stripe",
+  // טריגרים – צ'אט
+  manual_command: "פקודה ידנית (צ'אט)",
 };
 
 // ─── React Flow custom node component ─────────────────────────────────────────
