@@ -358,9 +358,8 @@ async function findCarmenSessionAutomation(
   supabase: any,
   tenantId: string
 ): Promise<any | null> {
-  // Look for active automations with trigger_type = whatsapp_message_received
-  // and carmen_session_mode = true in configuration
-  const { data } = await supabase
+  // Method 1: Legacy — top-level configuration.carmen_session_mode
+  const { data: legacyMatch } = await supabase
     .from('automations')
     .select('id, name, configuration')
     .eq('tenant_id', tenantId)
@@ -369,7 +368,34 @@ async function findCarmenSessionAutomation(
     .filter('configuration->>carmen_session_mode', 'eq', 'true')
     .limit(1)
     .maybeSingle();
-  return data || null;
+  if (legacyMatch) return legacyMatch;
+
+  // Method 2: Flow Builder — trigger step with action_type = carmen_whatsapp_session
+  const { data: flowSteps } = await supabase
+    .from('automation_flow_steps')
+    .select('automation_id, configuration')
+    .eq('tenant_id', tenantId)
+    .eq('step_type', 'trigger')
+    .eq('action_type', 'carmen_whatsapp_session');
+
+  if (flowSteps && flowSteps.length > 0) {
+    const automationIds = flowSteps.map((s: any) => s.automation_id);
+    const { data: automations } = await supabase
+      .from('automations')
+      .select('id, name, configuration')
+      .in('id', automationIds)
+      .eq('active', true)
+      .limit(1);
+    if (automations && automations.length > 0) {
+      // Merge trigger step config into the automation config for downstream use
+      const auto = automations[0];
+      const stepConfig = flowSteps.find((s: any) => s.automation_id === auto.id)?.configuration || {};
+      auto.configuration = { ...auto.configuration, ...stepConfig };
+      return auto;
+    }
+  }
+
+  return null;
 }
 
 // Run Carmen AI and return her response
