@@ -148,8 +148,13 @@ export default function AgentHub() {
   const [carmenDialogOpen, setCarmenDialogOpen] = useState(false);
   const [carmenAccess, setCarmenAccess] = useState<Record<string, "none" | "view" | "edit">>(DEFAULT_CARMEN_ACCESS);
   const [carmenEngine, setCarmenEngine] = useState("manus-1.6");
+  const [carmenSystemPrompt, setCarmenSystemPrompt] = useState("");
+  const [carmenWritingStyle, setCarmenWritingStyle] = useState("professional");
+  const [carmenResponseLength, setCarmenResponseLength] = useState("medium");
+  const [carmenLanguage, setCarmenLanguage] = useState("he");
   const [carmenTask, setCarmenTask] = useState("");
   const [carmenTaskDialogOpen, setCarmenTaskDialogOpen] = useState(false);
+  const [carmenSaving, setCarmenSaving] = useState(false);
   const [sendingTask, setSendingTask] = useState(false);
 
   const { data: agents = [], isLoading } = useQuery({
@@ -458,12 +463,74 @@ export default function AgentHub() {
             </DialogTitle>
           </DialogHeader>
 
-          <Tabs defaultValue="engine" dir="rtl">
+          <Tabs defaultValue="instructions" dir="rtl">
             <TabsList className="w-full mb-4">
+              <TabsTrigger value="instructions" className="flex-1">✍️ הנחיות</TabsTrigger>
               <TabsTrigger value="engine" className="flex-1">מנוע AI</TabsTrigger>
-              <TabsTrigger value="permissions" className="flex-1">גישות למודולים</TabsTrigger>
+              <TabsTrigger value="permissions" className="flex-1">גישות</TabsTrigger>
               <TabsTrigger value="tools" className="flex-1">כלים</TabsTrigger>
             </TabsList>
+
+            {/* Instructions Tab */}
+            <TabsContent value="instructions" className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium flex items-center gap-1.5">
+                  <span>📝</span> הנחיות מרכזיות (System Prompt)
+                </Label>
+                <p className="text-xs text-muted-foreground">כתוב כאן את ההנחיות המלאות לכרמן — אופי, סגנון, דרך התנהגות, גבולות. אם ריק — ישתמש בברירת המחדל.</p>
+                <Textarea
+                  value={carmenSystemPrompt}
+                  onChange={e => setCarmenSystemPrompt(e.target.value)}
+                  placeholder="לדוגמא: את כרמן, עוזרת אישית חכמה ומקצועית. את מדברת בעברית בלבד. את תמיד מנסחת לאשר פעולות לפני שמבצעת אותן..."
+                  className="min-h-[140px] text-sm font-mono resize-y text-right"
+                  dir="rtl"
+                />
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">🎭 סגנון כתיבה</Label>
+                  <Select value={carmenWritingStyle} onValueChange={setCarmenWritingStyle}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="professional">מקצועי</SelectItem>
+                      <SelectItem value="friendly">חברותי</SelectItem>
+                      <SelectItem value="formal">פורמלי</SelectItem>
+                      <SelectItem value="casual">קזואלי</SelectItem>
+                      <SelectItem value="empathetic">אמפתי</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">📰 אורך תשובות</Label>
+                  <Select value={carmenResponseLength} onValueChange={setCarmenResponseLength}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="short">קצר</SelectItem>
+                      <SelectItem value="medium">בינוני</SelectItem>
+                      <SelectItem value="detailed">מפורט</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">🌐 שפה</Label>
+                  <Select value={carmenLanguage} onValueChange={setCarmenLanguage}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="he">עברית</SelectItem>
+                      <SelectItem value="en">English</SelectItem>
+                      <SelectItem value="ar">ערבית</SelectItem>
+                      <SelectItem value="auto">אוטומטי</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </TabsContent>
 
             {/* Engine Tab */}
             <TabsContent value="engine" className="space-y-4">
@@ -568,12 +635,49 @@ export default function AgentHub() {
             <Button variant="outline" onClick={() => setCarmenDialogOpen(false)}>ביטול</Button>
             <Button
               className="bg-red-500 hover:bg-red-600 text-white"
-              onClick={() => {
-                toast.success("הגדרות כרמן נשמרו");
-                setCarmenDialogOpen(false);
+              disabled={carmenSaving}
+              onClick={async () => {
+                setCarmenSaving(true);
+                try {
+                  // Build system prompt with style/length/language appended
+                  const styleMap: Record<string, string> = { professional: 'מקצועי', friendly: 'חברותי', formal: 'פורמלי', casual: 'קזואלי', empathetic: 'אמפתי' };
+                  const lengthMap: Record<string, string> = { short: 'קצרות', medium: 'בינוניות', detailed: 'מפורטות' };
+                  const langMap: Record<string, string> = { he: 'עברית בלבד', en: 'English only', ar: 'ערבית בלבד', auto: 'בשפת המשתמש' };
+                  const styleNote = `סגנון כתיבה: ${styleMap[carmenWritingStyle] || carmenWritingStyle}. אורך תשובות: ${lengthMap[carmenResponseLength] || carmenResponseLength}. שפה: ${langMap[carmenLanguage] || carmenLanguage}.`;
+                  const finalPrompt = [carmenSystemPrompt.trim(), styleNote].filter(Boolean).join('\n\n');
+                  // Find or upsert carmen agent
+                  const { data: existing } = await supabase
+                    .from('ai_agents')
+                    .select('id')
+                    .eq('tenant_id', tenantId)
+                    .ilike('name', '%כרמן%')
+                    .maybeSingle();
+                  if (existing?.id) {
+                    const { error } = await supabase.from('ai_agents').update({
+                      engine: carmenEngine,
+                      system_prompt: finalPrompt || null,
+                    }).eq('id', existing.id);
+                    if (error) throw error;
+                  } else {
+                    const { error } = await supabase.from('ai_agents').insert({
+                      tenant_id: tenantId,
+                      name: 'כרמן',
+                      engine: carmenEngine,
+                      system_prompt: finalPrompt || null,
+                      active: true,
+                    });
+                    if (error) throw error;
+                  }
+                  toast.success('הגדרות כרמן נשמרו בהצלחה!');
+                  setCarmenDialogOpen(false);
+                } catch (e: any) {
+                  toast.error('שגיאה בשמירה: ' + e.message);
+                } finally {
+                  setCarmenSaving(false);
+                }
               }}
             >
-              שמור הגדרות
+              {carmenSaving ? 'שומר...' : 'שמור הגדרות'}
             </Button>
           </div>
         </DialogContent>
