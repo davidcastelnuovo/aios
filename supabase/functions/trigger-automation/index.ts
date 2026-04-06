@@ -297,9 +297,17 @@ Deno.serve(async (req) => {
         }
       }
 
+      const keywordConfig = safeConfig.trigger_keyword || safeConfig.keyword
+      const isCarmenConfig = Boolean(
+        safeConfig.carmen_session_mode ||
+        safeConfig.trigger_keyword ||
+        safeConfig.end_keyword ||
+        safeConfig.carmen_scope_mode
+      )
+
       // CARMEN SESSION MODE: if there's an active session, bypass keyword check entirely
       // (scope enforcement above already ran and passed)
-      if (safeConfig.carmen_session_mode && hasActiveCarmenSession) {
+      if (isCarmenConfig && hasActiveCarmenSession) {
         // But still close session if end keyword is sent
         if (safeConfig.end_keyword && safeData.message_text) {
           const endKw = String(safeConfig.end_keyword).toLowerCase()
@@ -321,8 +329,8 @@ Deno.serve(async (req) => {
         return { matches: false, reason: 'connection_user_id_mismatch' }
       }
 
-      if (safeConfig.keyword && safeData.message_text) {
-        const keywords = String(safeConfig.keyword)
+      if (keywordConfig && safeData.message_text) {
+        const keywords = String(keywordConfig)
           .split(',')
           .map((k: string) => k.trim().toLowerCase())
           .filter(Boolean)
@@ -331,7 +339,7 @@ Deno.serve(async (req) => {
         if (!hasMatch) {
           return { matches: false, reason: 'keyword_mismatch' }
         }
-      } else if (safeConfig.keyword && !safeData.message_text) {
+      } else if (keywordConfig && !safeData.message_text) {
         return { matches: false, reason: 'keyword_no_message' }
       }
 
@@ -528,12 +536,16 @@ Deno.serve(async (req) => {
           }
         }
 
+        const triggerTypesToMatch = payload.trigger_type === 'whatsapp_message_received'
+          ? ['whatsapp_message_received', 'carmen_whatsapp_session']
+          : [payload.trigger_type]
+
         const { data: flowTriggerSteps, error: flowError } = await supabase
           .from('automation_flow_steps')
           .select('automation_id, configuration')
           .eq('tenant_id', payload.tenant_id)
           .eq('step_type', 'trigger')
-          .eq('action_type', payload.trigger_type)
+          .in('action_type', triggerTypesToMatch)
 
         if (flowError) {
           console.error('Error fetching flow trigger steps:', flowError)
@@ -608,12 +620,20 @@ Deno.serve(async (req) => {
               // Check action_type match (e.g. whatsapp_message_received vs lead_created)
               const triggerActionType = triggerStep.action_type
               const incomingTriggerType = (requestBody as any).trigger_type || (requestBody as any).triggerType
-              if (triggerActionType && incomingTriggerType && triggerActionType !== incomingTriggerType) {
+              const triggerTypesMatch = !triggerActionType || !incomingTriggerType ||
+                triggerActionType === incomingTriggerType ||
+                (triggerActionType === 'carmen_whatsapp_session' && incomingTriggerType === 'whatsapp_message_received')
+
+              if (!triggerTypesMatch) {
                 return { skipped: true, reason: 'trigger_type_mismatch' }
               }
               // Also validate trigger step filters (group_id, keyword, etc.)
               const config = triggerStep.configuration || {}
-              const validation = validateFlowTriggerConfig(config, payloadData)
+              const validation = validateFlowTriggerConfig(
+                config,
+                payloadData,
+                Boolean(payloadData?._carmen_session_id && !payloadData?._carmen_session_ended)
+              )
               if (!validation.matches) {
                 return { skipped: true, reason: validation.reason || 'trigger_config_mismatch' }
               }
@@ -877,7 +897,8 @@ Deno.serve(async (req) => {
                     // Trigger step config takes priority (new Flow Builder approach)
                     const triggerStepForCarmen = (flowSteps || []).find((s: any) => s.step_type === 'trigger')
                     const triggerCfg = triggerStepForCarmen?.configuration || {}
-                    const isCarmenFlow = triggerCfg.carmen_session_mode ||
+                      const isCarmenFlow = triggerStepForCarmen?.action_type === 'carmen_whatsapp_session' ||
+                        triggerCfg.carmen_session_mode ||
                       (automation as any).configuration?.carmen_session_mode
 
                     if (isCarmenFlow) {
