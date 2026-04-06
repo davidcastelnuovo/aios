@@ -50,7 +50,7 @@ async function verifySignature(
     }
 
     // Compute body SHA256 hex
-    const digest = await crypto.subtle.digest('SHA-256', body as ArrayBuffer);
+    const digest = await crypto.subtle.digest('SHA-256', body);
     const bodyHash = Array.from(new Uint8Array(digest))
       .map(b => b.toString(16).padStart(2, '0')).join('');
 
