@@ -24,15 +24,16 @@ import { FlowNodeData } from "./FlowNode";
 
 interface AddStepMenuProps {
   onAdd: (stepType: FlowNodeData["step_type"]) => void;
+  label?: string;
 }
 
-export function AddStepMenu({ onAdd }: AddStepMenuProps) {
+export function AddStepMenu({ onAdd, label }: AddStepMenuProps) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="sm" className="gap-1">
           <Plus className="h-4 w-4" />
-          הוסף צעד
+          {label || "הוסף צעד"}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52">
