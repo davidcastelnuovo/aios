@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ReactFlow,
   Background,
@@ -71,6 +71,9 @@ export default function FlowEditor() {
   const [showTestWithLead, setShowTestWithLead] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [insertBetween, setInsertBetween] = useState<{ sourceId: string; targetId: string } | null>(null);
+
+  // Track whether we've initialized from DB to prevent re-init after save
+  const initializedRef = useRef(false);
 
   // Internal node data store (source of truth for DB)
   const [nodeDataMap, setNodeDataMap] = useState<Record<string, FlowNodeData>>({});
@@ -170,7 +173,7 @@ export default function FlowEditor() {
   }, [automation]);
 
   useEffect(() => {
-    if (!steps) return;
+    if (!steps || initializedRef.current) return;
 
     if (steps.length > 0) {
       const dataMap: Record<string, FlowNodeData> = {};
@@ -229,6 +232,7 @@ export default function FlowEditor() {
       setNodeDataMap(dataMap);
       setRfEdges(edges);
       syncRFNodes(dataMap);
+      initializedRef.current = true;
     } else if (automation) {
       // New flow – create default trigger node
       const triggerId = crypto.randomUUID();
@@ -248,6 +252,7 @@ export default function FlowEditor() {
       setNodeDataMap(dataMap);
       setRfEdges([]);
       syncRFNodes(dataMap);
+      initializedRef.current = true;
     }
   }, [steps, automation, handleInsertBetween]);
 
