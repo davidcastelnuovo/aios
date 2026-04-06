@@ -360,9 +360,9 @@ export function ClientsChatView({
   };
 
   return (
-    <div className="flex h-full border rounded-lg overflow-hidden bg-background" dir="rtl">
+    <div className="flex h-full min-h-0 border rounded-lg overflow-hidden bg-background" dir="rtl">
       {/* Right side - Client list (25%) */}
-      <div className="w-[25%] min-w-[240px] border-s flex flex-col bg-muted/20 overflow-hidden">
+      <div className="w-[25%] min-w-[240px] border-s flex flex-col bg-muted/20 overflow-hidden min-h-0">
         {/* List header with search */}
         <div className="p-3 border-b bg-background/80 backdrop-blur-sm">
           <div className="flex items-center gap-2">
@@ -451,7 +451,7 @@ export function ClientsChatView({
         )}
 
         {/* Client list */}
-        <ScrollArea className="flex-1">
+        <ScrollArea className="flex-1 min-h-0">
           <div className="divide-y">
             {filteredClients.map((client) => {
               const isSelected = client.id === selectedClientId;
@@ -529,7 +529,7 @@ export function ClientsChatView({
       </div>
 
       {/* Left side - Client detail panel (75%) */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden min-h-0">
         {selectedClient ? (
           <>
             {/* Toolbar */}
@@ -684,7 +684,7 @@ export function ClientsChatView({
                 </TabsTrigger>
               </TabsList>
 
-              <ScrollArea className={cn("flex-1 p-4", (activeTab === "whatsapp" || activeTab === "calls") && "hidden")}>
+              <ScrollArea className={cn("flex-1 min-h-0 p-4", (activeTab === "whatsapp" || activeTab === "calls") && "hidden")}>
                 <TabsContent value="details" className="mt-0 space-y-6">
                   <div className="grid grid-cols-2 gap-4">
                     {/* Timeline - shown first in DOM but appears on LEFT in RTL layout */}
