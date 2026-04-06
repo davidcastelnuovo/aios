@@ -1,39 +1,26 @@
 
 
-# שיפור תהליך חיבור Unified.to — קטגוריה ואז ספק ספציפי
+## תיקון גלילה פנימית בתצוגת צ'אט של לקוחות
 
-## הבעיה
-כרגע הממשק מציג רק קטגוריות כלליות (כמו "פרסום ממומן") ופותח חלון Unified.to שמציג את כל הספקים בקטגוריה. המשתמש צריך לבחור ספק ספציפי (Google Ads, Meta Ads וכו') כבר בממשק שלנו.
+### הבעיה
+למרות ש-`overflow-hidden` מוגדר ברמות שונות, העמוד כולו עדיין גולל במקום שרק רשימת הלקוחות והפאנל הימני יגללו בנפרד. הסיבה: ה-`ScrollArea` של Radix צריך גובה מוגבל מפורש כדי לעבוד — `flex-1` לבד לא מספיק בכל המקרים, וחסר `min-h-0` בנקודות קריטיות.
 
-## התיקון
+### שינויים נדרשים
 
-### שלב 1: עדכון Edge Function `unified-connections`
-הוספת action חדש `list_integrations` שמושך את רשימת הספקים הזמינים מ-Unified.to API לפי קטגוריה:
-- קריאה ל-`GET https://api.unified.to/unified/integration?categories=<category>`
-- מחזיר רשימת ספקים עם `name`, `type`, `icon_url`, `categories`
+**1. `src/components/clients/ClientsChatView.tsx`**
+- הקונטיינר הראשי (שורה 363): להוסיף `min-h-0` כדי שה-flex children יוכלו להתכווץ
+- הסיידבר של רשימת הלקוחות (שורה 365): להוסיף `min-h-0` 
+- ה-`ScrollArea` של רשימת הלקוחות (שורה 454): להוסיף `min-h-0` 
+- פאנל הפרטים (שורה 532): לוודא שיש `min-h-0`
+- תוכן הפרטים (אחרי ה-toolbar): לעטוף ב-`ScrollArea` עם `flex-1 min-h-0` אם עדיין לא עטוף
 
-### שלב 2: עדכון ממשק `UnifiedSettings.tsx`
-שינוי הדיאלוג לתהליך דו-שלבי:
+**2. `src/pages/Clients.tsx`**
+- הקונטיינר הראשי (שורה 519): לוודא שיש `min-h-0` על `flex flex-col h-full`
+- לוודא שאין `overflow-y-auto` שמתחרה עם `overflow-hidden`
 
-1. **שלב ראשון** — בחירת קטגוריה (נשאר כמו היום — רשימת כרטיסים)
-2. **שלב שני** — לאחר בחירת קטגוריה, מושכים מ-API את רשימת הספקים הספציפיים ומציגים אותם כרשימה עם אייקונים (Google Ads, Meta Ads, TikTok Ads וכו')
-3. **שלב שלישי** — לחיצה על ספק פותחת את חלון Unified.to עם `integration_type` ספציפי במקום קטגוריה כללית
+**3. `src/components/layout/AppLayout.tsx`**
+- ה-`main` (שורה 226): כבר מוגדר נכון עם `flex-1 min-h-0 overflow-hidden`, אבל ב-mobile יש `overflow-y-auto` שיכול לגרום לגלילת עמוד — צריך להסיר את `overflow-y-auto` ולהשאיר רק `overflow-hidden`
 
-### שלב 3: שמירת Workspace ID כ-Secret
-במקום לבקש מהמשתמש להזין Workspace ID בכל פעם, נשמור אותו ב-`tenant_integrations` (או ב-tenant settings) פעם אחת ונשתמש בו אוטומטית.
-
-### פרטים טכניים
-
-**Edge Function — action חדש:**
-```
-GET https://api.unified.to/unified/integration?categories=ads
-→ מחזיר: [{ name: "Google Ads", type: "google_ads", icon_url: "...", ... }]
-```
-
-**Embed URL משופר:**
-במקום לשלוח רק `categories=ads`, נשלח גם `integration_type=google_ads` כדי להציג רק את הספק שנבחר.
-
-**קבצים שישתנו:**
-- `supabase/functions/unified-connections/index.ts` — הוספת action `list_integrations`
-- `src/pages/UnifiedSettings.tsx` — שינוי הדיאלוג ל-wizard דו-שלבי, הסרת שדה Workspace ID (יילקח אוטומטית)
+### עיקרון
+הבעיה הקלאסית: ב-flexbox, ילד עם `flex-1` לא יתכווץ מתחת לגודל התוכן שלו אלא אם יש לו `min-h-0`. צריך להבטיח שכל שרשרת ה-flex מההורה ועד ל-ScrollArea מכילה `min-h-0`.
 
