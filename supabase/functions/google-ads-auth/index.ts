@@ -313,7 +313,7 @@ async function getGoogleAdsAccounts(supabase: any, tenantId: string) {
   const accessToken = updatedIntegration?.api_key || integration.api_key;
 
   // Fetch accessible customers from Google Ads API
-  const response = await fetch('https://googleads.googleapis.com/v18/customers:listAccessibleCustomers', {
+  const response = await fetch('https://googleads.googleapis.com/v23/customers:listAccessibleCustomers', {
     headers: {
       'Authorization': `Bearer ${accessToken}`,
       'developer-token': DEVELOPER_TOKEN,
@@ -354,7 +354,7 @@ async function getGoogleAdsAccounts(supabase: any, tenantId: string) {
     
     try {
       const detailResponse = await fetch(
-        `https://googleads.googleapis.com/v18/customers/${customerId}/googleAds:search`,
+        `https://googleads.googleapis.com/v23/customers/${customerId}/googleAds:search`,
         {
           method: 'POST',
           headers: {
@@ -412,15 +412,17 @@ async function parseGoogleAdsJsonResponse(
 ): Promise<{ success: true; data: any } | { success: false; error: string }> {
   const responseText = await response.text();
 
+  console.log(`Google Ads ${context} - Status: ${response.status}, Content-Type: ${response.headers.get('content-type')}, Body (first 500): ${responseText.substring(0, 500)}`);
+
   try {
     const data = JSON.parse(responseText);
 
     if (!response.ok || data?.error) {
+      const errMsg = data?.error?.message || `Google Ads request failed (status ${response.status}).`;
+      console.error(`Google Ads error for ${context}: ${errMsg}`);
       return {
         success: false,
-        error:
-          data?.error?.message ||
-          `Google Ads request failed while trying to ${context} (status ${response.status}).`,
+        error: errMsg,
       };
     }
 
@@ -434,7 +436,7 @@ async function parseGoogleAdsJsonResponse(
     return {
       success: false,
       error:
-        `Google Ads returned an invalid response while trying to ${context}. Check that the Google Ads API is enabled and that the Developer Token is valid for production use.`,
+        `Google Ads returned an invalid response (status ${response.status}) while trying to ${context}. Response: ${responseText.substring(0, 200)}`,
     };
   }
 }

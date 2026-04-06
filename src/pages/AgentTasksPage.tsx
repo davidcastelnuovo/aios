@@ -570,9 +570,10 @@ export default function AgentTasksPage() {
 
   const toggleEnabled = useMutation({
     mutationFn: async (task: any) => {
+      const newStatus = task.status === 'active' ? 'paused' : 'active';
       const { error } = await supabase
         .from("agent_tasks")
-        .update({ enabled: !task.enabled })
+        .update({ status: newStatus })
         .eq("id", task.id);
       if (error) throw error;
     },
