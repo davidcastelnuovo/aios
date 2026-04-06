@@ -533,13 +533,13 @@ export default function AgentHub() {
           </DialogHeader>
 
           <Tabs defaultValue="instructions" dir="rtl">
-            <TabsList className="w-full mb-4">
-              <TabsTrigger value="instructions" className="flex-1">✍️ הנחיות</TabsTrigger>
-              <TabsTrigger value="modes" className="flex-1">🎯 מצבים</TabsTrigger>
-              <TabsTrigger value="skills" className="flex-1">⚡ סקילז</TabsTrigger>
-              <TabsTrigger value="engine" className="flex-1">מנוע AI</TabsTrigger>
-              <TabsTrigger value="permissions" className="flex-1">גישות</TabsTrigger>
-              <TabsTrigger value="tools" className="flex-1">כלים</TabsTrigger>
+            <TabsList className="w-full mb-4 flex flex-wrap gap-1 h-auto">
+              <TabsTrigger value="instructions" className="flex-1 min-w-[80px]">✍️ הנחיות</TabsTrigger>
+              <TabsTrigger value="modes" className="flex-1 min-w-[80px]">🎯 מצבים</TabsTrigger>
+              <TabsTrigger value="skills" className="flex-1 min-w-[80px]">⚡ סקילז</TabsTrigger>
+              <TabsTrigger value="engine" className="flex-1 min-w-[80px]">מנוע AI</TabsTrigger>
+              <TabsTrigger value="permissions" className="flex-1 min-w-[80px]">גישות</TabsTrigger>
+              <TabsTrigger value="tools" className="flex-1 min-w-[80px]">כלים</TabsTrigger>
             </TabsList>
 
             {/* Instructions Tab */}
