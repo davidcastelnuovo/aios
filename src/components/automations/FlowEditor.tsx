@@ -1,5 +1,20 @@
-import { useState, useCallback, useRef, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import {
+  ReactFlow,
+  Background,
+  Controls,
+  MiniMap,
+  addEdge,
+  useNodesState,
+  useEdgesState,
+  Connection,
+  Edge,
+  Node,
+  BackgroundVariant,
+  Panel,
+} from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
+import { useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
@@ -8,61 +23,93 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { ArrowRight, Save, ZoomIn, ZoomOut, RotateCcw, MessageSquare, TestTube, History, Pause, Play } from "lucide-react";
-import { FlowNode, FlowNodeData } from "./FlowNode";
-import { FlowConnector } from "./FlowConnector";
-import { StepConfigPanel } from "./StepConfigPanel";
+import { Label } from "@/components/ui/label";
+import { Save, History, TestTube, MessageSquare, ZoomIn, ZoomOut } from "lucide-react";
+import { FlowNodeRF, FlowNodeData } from "./FlowNode";
 import { AddStepMenu } from "./AddStepMenu";
+import { StepConfigPanel } from "./StepConfigPanel";
 import { ManualTriggerDialog } from "./ManualTriggerDialog";
 import { TestFlowWithLeadDialog } from "./TestFlowWithLeadDialog";
 import { ExecutionHistoryPanel } from "./ExecutionHistoryPanel";
 
-const NODE_WIDTH = 220;
-const NODE_HEIGHT = 90;
-const NODE_GAP = 60;
+// ─── React Flow node type registry ───────────────────────────────────────────
+const nodeTypes = {
+  flowNode: FlowNodeRF,
+};
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function toRFNode(nd: FlowNodeData, onDelete: (id: string) => void, onSelect: (id: string) => void): Node {
+  return {
+    id: nd.id,
+    type: "flowNode",
+    position: { x: nd.position_x, y: nd.position_y },
+    data: { nodeData: nd, onDelete, onSelect },
+    draggable: true,
+  };
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
 
 export default function FlowEditor() {
   const { automationId } = useParams<{ automationId: string }>();
-  const navigate = useNavigate();
   const { tenantId } = useCurrentTenant();
   const { buildPath } = useTenantPath();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [nodes, setNodes] = useState<FlowNodeData[]>([]);
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [automationName, setAutomationName] = useState("");
+  const [automationName, setAutomationName] = useState("אוטומציה חדשה");
   const [automationActive, setAutomationActive] = useState(true);
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [isPanning, setIsPanning] = useState(false);
-  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
-  const [dragNodeId, setDragNodeId] = useState<string | null>(null);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const wasDraggingRef = useRef(false);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [showManualTrigger, setShowManualTrigger] = useState(false);
   const [showTestWithLead, setShowTestWithLead] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  const canvasRef = useRef<HTMLDivElement>(null);
 
-  // Wheel handler for pan/zoom
-  useEffect(() => {
-    const el = canvasRef.current;
-    if (!el) return;
-    const handleWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      if (e.ctrlKey || e.metaKey) {
-        const delta = e.deltaY > 0 ? -0.1 : 0.1;
-        setZoom(z => Math.min(Math.max(z + delta, 0.3), 2));
-      } else {
-        setPan(p => ({ x: p.x - e.deltaX, y: p.y - e.deltaY }));
-      }
-    };
-    el.addEventListener("wheel", handleWheel, { passive: false });
-    return () => el.removeEventListener("wheel", handleWheel);
+  // Internal node data store (source of truth for DB)
+  const [nodeDataMap, setNodeDataMap] = useState<Record<string, FlowNodeData>>({});
+
+  // React Flow state
+  const [rfNodes, setRfNodes, onNodesChange] = useNodesState([]);
+  const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState([]);
+
+  // ── Callbacks ──────────────────────────────────────────────────────────────
+
+  const handleDeleteNode = useCallback((id: string) => {
+    setNodeDataMap((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    setRfNodes((nds) => nds.filter((n) => n.id !== id));
+    setRfEdges((eds) => eds.filter((e) => e.source !== id && e.target !== id));
+    setSelectedNodeId((cur) => (cur === id ? null : cur));
+  }, [setRfNodes, setRfEdges]);
+
+  const handleSelectNode = useCallback((id: string) => {
+    setSelectedNodeId(id);
   }, []);
 
-  // Fetch automation
+  const syncRFNodes = useCallback(
+    (dataMap: Record<string, FlowNodeData>) => {
+      setRfNodes((prev) =>
+        Object.values(dataMap).map((nd) => {
+          const existing = prev.find((n) => n.id === nd.id);
+          return {
+            ...(existing || {}),
+            id: nd.id,
+            type: "flowNode",
+            position: existing?.position ?? { x: nd.position_x, y: nd.position_y },
+            data: { nodeData: nd, onDelete: handleDeleteNode, onSelect: handleSelectNode },
+            draggable: true,
+          } as Node;
+        })
+      );
+    },
+    [setRfNodes, handleDeleteNode, handleSelectNode]
+  );
+
+  // ── Fetch automation ───────────────────────────────────────────────────────
+
   const { data: automation } = useQuery({
     queryKey: ["automation", automationId],
     queryFn: async () => {
@@ -78,7 +125,6 @@ export default function FlowEditor() {
     enabled: !!automationId,
   });
 
-  // Fetch steps
   const { data: steps } = useQuery({
     queryKey: ["automation-flow-steps", automationId],
     queryFn: async () => {
@@ -94,7 +140,8 @@ export default function FlowEditor() {
     enabled: !!automationId,
   });
 
-  // Initialize nodes from DB
+  // ── Init from DB ───────────────────────────────────────────────────────────
+
   useEffect(() => {
     if (automation) {
       setAutomationName(automation.name);
@@ -103,9 +150,14 @@ export default function FlowEditor() {
   }, [automation]);
 
   useEffect(() => {
-    if (steps && steps.length > 0) {
-      setNodes(
-        steps.map((s: any) => ({
+    if (!steps) return;
+
+    if (steps.length > 0) {
+      const dataMap: Record<string, FlowNodeData> = {};
+      const edges: Edge[] = [];
+
+      steps.forEach((s: any) => {
+        const nd: FlowNodeData = {
           id: s.id,
           step_type: s.step_type,
           action_type: s.action_type,
@@ -116,12 +168,50 @@ export default function FlowEditor() {
           sort_order: s.sort_order,
           parent_step_id: s.parent_step_id,
           condition_branch: s.condition_branch,
-        }))
-      );
-    } else if (steps && steps.length === 0 && automation) {
-      // New flow - create default trigger node
+          switch_branches: s.configuration?.switch_branches,
+        };
+        dataMap[s.id] = nd;
+      });
+
+      // Build edges from parent_step_id + condition_branch
+      steps.forEach((s: any) => {
+        if (!s.parent_step_id) return;
+        const parent = dataMap[s.parent_step_id];
+        if (!parent) return;
+
+        let sourceHandle = "output";
+        if (parent.step_type === "condition") {
+          sourceHandle = s.condition_branch === "true" ? "true" : "false";
+        } else if (parent.step_type === "switch" && s.condition_branch) {
+          sourceHandle = `branch_${s.condition_branch}`;
+        } else if (parent.step_type === "loop") {
+          sourceHandle = s.condition_branch === "done" ? "loop_done" : "loop_body";
+        } else if (parent.step_type === "error_branch") {
+          sourceHandle = s.condition_branch === "error" ? "error" : "success";
+        } else if (parent.step_type === "merge") {
+          sourceHandle = "output";
+        }
+
+        edges.push({
+          id: `e-${s.parent_step_id}-${s.id}`,
+          source: s.parent_step_id,
+          target: s.id,
+          sourceHandle,
+          targetHandle: "input",
+          animated: false,
+          style: { stroke: "hsl(var(--border))", strokeWidth: 2 },
+          markerEnd: { type: "arrowclosed" as any },
+        });
+      });
+
+      setNodeDataMap(dataMap);
+      setRfEdges(edges);
+      syncRFNodes(dataMap);
+    } else if (automation) {
+      // New flow – create default trigger node
+      const triggerId = crypto.randomUUID();
       const defaultTrigger: FlowNodeData = {
-        id: crypto.randomUUID(),
+        id: triggerId,
         step_type: "trigger",
         action_type: automation.trigger_type || undefined,
         label: undefined,
@@ -132,21 +222,143 @@ export default function FlowEditor() {
         parent_step_id: null,
         condition_branch: null,
       };
-      setNodes([defaultTrigger]);
+      const dataMap = { [triggerId]: defaultTrigger };
+      setNodeDataMap(dataMap);
+      setRfEdges([]);
+      syncRFNodes(dataMap);
     }
   }, [steps, automation]);
 
-  // Save mutation
+  // ── Add step ───────────────────────────────────────────────────────────────
+
+  const addStep = useCallback(
+    (stepType: FlowNodeData["step_type"]) => {
+      const allNodes = Object.values(nodeDataMap);
+      const lastNode = allNodes.sort((a, b) => b.sort_order - a.sort_order)[0];
+      const newId = crypto.randomUUID();
+
+      const newNode: FlowNodeData = {
+        id: newId,
+        step_type: stepType,
+        action_type: undefined,
+        label: undefined,
+        configuration:
+          stepType === "switch"
+            ? { switch_branches: ["ברירת מחדל"] }
+            : stepType === "merge"
+            ? { input_count: 2 }
+            : {},
+        position_x: lastNode ? lastNode.position_x : 400,
+        position_y: lastNode ? lastNode.position_y + 160 : 240,
+        sort_order: allNodes.length,
+        parent_step_id: lastNode?.id || null,
+        condition_branch: null,
+        switch_branches: stepType === "switch" ? ["ברירת מחדל"] : undefined,
+      };
+
+      const newDataMap = { ...nodeDataMap, [newId]: newNode };
+      setNodeDataMap(newDataMap);
+      syncRFNodes(newDataMap);
+
+      // Auto-connect to last node
+      if (lastNode) {
+        const sourceHandle =
+          lastNode.step_type === "condition"
+            ? "true"
+            : lastNode.step_type === "loop"
+            ? "loop_body"
+            : lastNode.step_type === "error_branch"
+            ? "success"
+            : "output";
+
+        setRfEdges((eds) => [
+          ...eds,
+          {
+            id: `e-${lastNode.id}-${newId}`,
+            source: lastNode.id,
+            target: newId,
+            sourceHandle,
+            targetHandle: "input",
+            animated: false,
+            style: { stroke: "hsl(var(--border))", strokeWidth: 2 },
+            markerEnd: { type: "arrowclosed" as any },
+          },
+        ]);
+      }
+
+      setSelectedNodeId(newId);
+    },
+    [nodeDataMap, syncRFNodes, setRfEdges]
+  );
+
+  // ── Update node data ───────────────────────────────────────────────────────
+
+  const updateNode = useCallback(
+    (nodeId: string, updates: Partial<FlowNodeData>) => {
+      setNodeDataMap((prev) => {
+        const updated = { ...prev, [nodeId]: { ...prev[nodeId], ...updates } };
+        syncRFNodes(updated);
+        return updated;
+      });
+    },
+    [syncRFNodes]
+  );
+
+  // ── Handle new connections drawn by user ───────────────────────────────────
+
+  const onConnect = useCallback(
+    (connection: Connection) => {
+      const edge: Edge = {
+        ...connection,
+        id: `e-${connection.source}-${connection.target}-${Date.now()}`,
+        animated: false,
+        style: { stroke: "hsl(var(--border))", strokeWidth: 2 },
+        markerEnd: { type: "arrowclosed" as any },
+      };
+      setRfEdges((eds) => addEdge(edge, eds));
+
+      // Update parent_step_id in nodeDataMap
+      if (connection.target) {
+        const branch =
+          connection.sourceHandle === "true" || connection.sourceHandle === "false"
+            ? connection.sourceHandle
+            : connection.sourceHandle?.startsWith("branch_")
+            ? connection.sourceHandle.replace("branch_", "")
+            : connection.sourceHandle === "loop_done"
+            ? "done"
+            : connection.sourceHandle === "error"
+            ? "error"
+            : null;
+
+        setNodeDataMap((prev) => ({
+          ...prev,
+          [connection.target!]: {
+            ...prev[connection.target!],
+            parent_step_id: connection.source,
+            condition_branch: branch,
+          },
+        }));
+      }
+    },
+    [setRfEdges]
+  );
+
+  // ── Save ───────────────────────────────────────────────────────────────────
+
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!automationId || !tenantId) throw new Error("Missing data");
 
-      // Sync trigger_type from the flow's trigger step so the main automations table
-      // reflects the actual trigger (e.g. 'whatsapp_message_received' instead of generic 'lead_created')
-      const triggerNode = nodes.find(n => n.step_type === 'trigger');
+      const allNodes = Object.values(nodeDataMap);
+      const triggerNode = allNodes.find((n) => n.step_type === "trigger");
       const flowTriggerType = triggerNode?.action_type || undefined;
 
-      // Update automation
+      // Sync positions from React Flow
+      const rfNodePositions: Record<string, { x: number; y: number }> = {};
+      rfNodes.forEach((n) => {
+        rfNodePositions[n.id] = n.position;
+      });
+
       await supabase
         .from("automations")
         .update({
@@ -157,24 +369,25 @@ export default function FlowEditor() {
         } as any)
         .eq("id", automationId);
 
-      // Delete existing steps
       await supabase
         .from("automation_flow_steps" as any)
         .delete()
         .eq("automation_id", automationId);
 
-      // Insert new steps
-      if (nodes.length > 0) {
-        const stepsToInsert = nodes.map((n, idx) => ({
+      if (allNodes.length > 0) {
+        const stepsToInsert = allNodes.map((n, idx) => ({
           id: n.id,
           automation_id: automationId,
           tenant_id: tenantId,
           step_type: n.step_type,
           action_type: n.action_type || null,
           label: n.label || null,
-          configuration: n.configuration,
-          position_x: n.position_x,
-          position_y: n.position_y,
+          configuration: {
+            ...n.configuration,
+            ...(n.switch_branches ? { switch_branches: n.switch_branches } : {}),
+          },
+          position_x: rfNodePositions[n.id]?.x ?? n.position_x,
+          position_y: rfNodePositions[n.id]?.y ?? n.position_y,
           sort_order: idx,
           parent_step_id: n.parent_step_id || null,
           condition_branch: n.condition_branch || null,
@@ -198,325 +411,121 @@ export default function FlowEditor() {
   const toggleActiveMutation = useMutation({
     mutationFn: async (nextActive: boolean) => {
       if (!automationId) throw new Error("Missing automation id");
-
-      const { error } = await supabase
-        .from("automations")
-        .update({ active: nextActive } as any)
-        .eq("id", automationId);
-
-      if (error) throw error;
-      return nextActive;
+      await supabase.from("automations").update({ active: nextActive } as any).eq("id", automationId);
     },
-    onMutate: (nextActive) => {
+    onSuccess: (_, nextActive) => {
       setAutomationActive(nextActive);
-    },
-    onSuccess: (nextActive) => {
-      queryClient.invalidateQueries({ queryKey: ["automation", automationId] });
-      queryClient.invalidateQueries({ queryKey: ["automations"] });
-      toast({ title: nextActive ? "האוטומציה הופעלה" : "האוטומציה הושהתה מיד" });
-    },
-    onError: (err: any) => {
-      setAutomationActive(automation?.active ?? true);
-      toast({
-        title: "שגיאה בעדכון מצב האוטומציה",
-        description: err.message,
-        variant: "destructive",
-      });
+      toast({ title: nextActive ? "אוטומציה הופעלה" : "אוטומציה הושהתה" });
     },
   });
 
-  // Add step
-  const addStep = useCallback(
-    (stepType: "action" | "condition" | "delay" | "agent" | "whatsapp_session") => {
-      const lastNode = nodes[nodes.length - 1];
-      const newNode: FlowNodeData = {
-        id: crypto.randomUUID(),
-        step_type: stepType,
-        action_type: undefined,
-        label: undefined,
-        configuration: {},
-        position_x: lastNode ? lastNode.position_x : 400,
-        position_y: lastNode ? lastNode.position_y + NODE_HEIGHT + NODE_GAP : 80,
-        sort_order: nodes.length,
-        parent_step_id: lastNode?.id || null,
-        condition_branch: null,
-      };
-      setNodes((prev) => [...prev, newNode]);
-      setSelectedNodeId(newNode.id);
-    },
-    [nodes]
-  );
-
-  // Delete node
-  const deleteNode = useCallback(
-    (nodeId: string) => {
-      setNodes((prev) => {
-        const filtered = prev.filter((n) => n.id !== nodeId);
-        // Re-link children
-        return filtered.map((n) => ({
-          ...n,
-          parent_step_id: n.parent_step_id === nodeId ? null : n.parent_step_id,
-        }));
-      });
-      if (selectedNodeId === nodeId) setSelectedNodeId(null);
-    },
-    [selectedNodeId]
-  );
-
-  // Update node
-  const updateNode = useCallback((nodeId: string, updates: Partial<FlowNodeData>) => {
-    setNodes((prev) =>
-      prev.map((n) => (n.id === nodeId ? { ...n, ...updates } : n))
-    );
-  }, []);
-
-  // Mouse handlers for panning
-  const handleCanvasMouseDown = (e: React.MouseEvent) => {
-    if (e.target === canvasRef.current || (e.target as HTMLElement).tagName === "svg") {
-      setIsPanning(true);
-      setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
-      setSelectedNodeId(null);
-    }
-  };
-
-  const handleCanvasMouseMove = (e: React.MouseEvent) => {
-    if (isPanning) {
-      setPan({ x: e.clientX - panStart.x, y: e.clientY - panStart.y });
-    }
-    if (dragNodeId) {
-      wasDraggingRef.current = true;
-      const rect = canvasRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      const x = (e.clientX - rect.left - pan.x) / zoom - dragOffset.x;
-      const y = (e.clientY - rect.top - pan.y) / zoom - dragOffset.y;
-      updateNode(dragNodeId, { position_x: Math.round(x), position_y: Math.round(y) });
-    }
-  };
-
-  const handleCanvasMouseUp = () => {
-    setIsPanning(false);
-    setDragNodeId(null);
-  };
-
-  const handleNodeMouseDown = (e: React.MouseEvent, node: FlowNodeData) => {
-    e.stopPropagation();
-    wasDraggingRef.current = false;
-    const rect = canvasRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const mouseX = (e.clientX - rect.left - pan.x) / zoom;
-    const mouseY = (e.clientY - rect.top - pan.y) / zoom;
-    setDragNodeId(node.id);
-    setDragOffset({ x: mouseX - node.position_x, y: mouseY - node.position_y });
-  };
-
-  const handleNodeClick = (nodeId: string) => {
-    if (!wasDraggingRef.current) {
-      setSelectedNodeId(nodeId);
-    }
-  };
-
-  // Build connections
-  const connections = nodes
-    .filter((n) => n.parent_step_id)
-    .map((n) => {
-      const parent = nodes.find((p) => p.id === n.parent_step_id);
-      if (!parent) return null;
-      return {
-        fromX: parent.position_x + NODE_WIDTH / 2,
-        fromY: parent.position_y + NODE_HEIGHT,
-        toX: n.position_x + NODE_WIDTH / 2,
-        toY: n.position_y,
-        label: n.condition_branch === "true" ? "כן" : n.condition_branch === "false" ? "לא" : undefined,
-      };
-    })
-    .filter(Boolean);
-
-  const selectedNode = nodes.find((n) => n.id === selectedNodeId) || null;
+  const selectedNode = selectedNodeId ? nodeDataMap[selectedNodeId] : null;
+  const allNodes = Object.values(nodeDataMap);
 
   return (
-    <div className="h-[calc(100vh-4rem)] flex flex-col">
-      {/* Toolbar */}
-      <div className="flex items-center gap-3 p-3 border-b bg-background z-10">
-        <Button variant="ghost" size="icon" onClick={() => navigate(buildPath("automations"))}>
-          <ArrowRight className="h-5 w-5" />
-        </Button>
-
+    <div className="flex flex-col h-screen" dir="rtl">
+      {/* ── Top bar ── */}
+      <div className="flex items-center gap-3 px-4 py-2 border-b bg-background flex-wrap">
         <Input
           value={automationName}
           onChange={(e) => setAutomationName(e.target.value)}
-          onBlur={() => {
-            if (automationId && automationName) {
-              supabase
-                .from("automations")
-                .update({ name: automationName } as any)
-                .eq("id", automationId)
-                .then(() => {
-                  queryClient.invalidateQueries({ queryKey: ["automation", automationId] });
-                });
-            }
-          }}
-          className="max-w-[280px] text-right font-semibold border-transparent hover:border-input focus:border-input transition-colors"
+          className="w-56 h-8 text-sm font-semibold"
           placeholder="שם האוטומציה"
         />
-
-        <div className="flex items-center gap-2 text-sm">
-          <span className="text-muted-foreground">פעיל</span>
+        <div className="flex items-center gap-2">
           <Switch
             checked={automationActive}
-            onCheckedChange={(checked) => toggleActiveMutation.mutate(checked)}
-            disabled={toggleActiveMutation.isPending}
+            onCheckedChange={(v) => toggleActiveMutation.mutate(v)}
           />
+          <Label className="text-xs">{automationActive ? "פעיל" : "מושהה"}</Label>
         </div>
-
-        <Button
-          variant={automationActive ? "destructive" : "outline"}
-          onClick={() => toggleActiveMutation.mutate(!automationActive)}
-          disabled={toggleActiveMutation.isPending}
-        >
-          {automationActive ? <Pause className="h-4 w-4 ml-2" /> : <Play className="h-4 w-4 ml-2" />}
-          {toggleActiveMutation.isPending ? "מעדכן..." : automationActive ? "השהה עכשיו" : "הפעל מחדש"}
-        </Button>
 
         <div className="flex-1" />
 
-        {/* Manual trigger button - show only when trigger is manual_command */}
-        {nodes.find(n => n.step_type === "trigger" && n.action_type === "manual_command") && (
-          <Button variant="outline" onClick={() => setShowManualTrigger(true)}>
-            <MessageSquare className="h-4 w-4 ml-2" />
+        <AddStepMenu onAdd={addStep} />
+
+        {allNodes.some((n) => n.step_type === "trigger" && n.action_type === "manual_command") && (
+          <Button variant="outline" size="sm" onClick={() => setShowManualTrigger(true)}>
+            <MessageSquare className="h-4 w-4 ml-1" />
             הפעל ידנית
           </Button>
         )}
-
-        <Button variant="outline" onClick={() => setShowTestWithLead(true)}>
-          <TestTube className="h-4 w-4 ml-2" />
+        <Button variant="outline" size="sm" onClick={() => setShowTestWithLead(true)}>
+          <TestTube className="h-4 w-4 ml-1" />
           בדוק עם ליד
         </Button>
-
-        <Button variant="outline" onClick={() => setShowHistory(true)}>
-          <History className="h-4 w-4 ml-2" />
+        <Button variant="outline" size="sm" onClick={() => setShowHistory(true)}>
+          <History className="h-4 w-4 ml-1" />
           היסטוריה
         </Button>
-
-        <div className="flex items-center gap-1">
-          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setZoom((z) => Math.min(z + 0.1, 2))}>
-            <ZoomIn className="h-4 w-4" />
-          </Button>
-          <span className="text-xs w-12 text-center">{Math.round(zoom * 100)}%</span>
-          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setZoom((z) => Math.max(z - 0.1, 0.3))}>
-            <ZoomOut className="h-4 w-4" />
-          </Button>
-          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}>
-            <RotateCcw className="h-4 w-4" />
-          </Button>
-        </div>
-
-        <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
-          <Save className="h-4 w-4 ml-2" />
+        <Button size="sm" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+          <Save className="h-4 w-4 ml-1" />
           {saveMutation.isPending ? "שומר..." : "שמור"}
         </Button>
       </div>
 
-      {/* Canvas */}
-      <div
-        ref={canvasRef}
-        className="flex-1 overflow-hidden bg-muted/30 relative cursor-grab active:cursor-grabbing"
-        onMouseDown={handleCanvasMouseDown}
-        onMouseMove={handleCanvasMouseMove}
-        onMouseUp={handleCanvasMouseUp}
-        onMouseLeave={handleCanvasMouseUp}
-      >
-        {/* Dot grid pattern */}
-        <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ opacity: 0.3 }}>
-          <defs>
-            <pattern id="dot-grid" width="20" height="20" patternUnits="userSpaceOnUse">
-              <circle cx="10" cy="10" r="1" fill="hsl(var(--foreground))" opacity="0.3" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#dot-grid)" />
-        </svg>
-
-        <div
-          style={{
-            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-            transformOrigin: "0 0",
-          }}
-          className="absolute inset-0"
+      {/* ── Canvas ── */}
+      <div className="flex-1 relative">
+        <ReactFlow
+          nodes={rfNodes}
+          edges={rfEdges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          nodeTypes={nodeTypes}
+          fitView
+          fitViewOptions={{ padding: 0.2 }}
+          deleteKeyCode="Delete"
+          onNodeClick={(_, node) => setSelectedNodeId(node.id)}
+          onPaneClick={() => setSelectedNodeId(null)}
         >
-          {/* SVG connectors */}
-          <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ overflow: "visible" }}>
-            {connections.map((conn, i) =>
-              conn ? (
-                <FlowConnector
-                  key={i}
-                  fromX={conn.fromX}
-                  fromY={conn.fromY}
-                  toX={conn.toX}
-                  toY={conn.toY}
-                  label={conn.label}
-                />
-              ) : null
-            )}
-          </svg>
-
-          {/* Nodes */}
-          {nodes.map((node) => (
-            <div
-              key={node.id}
-              className="absolute"
-              style={{ left: node.position_x, top: node.position_y }}
-              onMouseDown={(e) => handleNodeMouseDown(e, node)}
-            >
-              <FlowNode
-                node={node}
-                isSelected={selectedNodeId === node.id}
-                onClick={() => handleNodeClick(node.id)}
-                onDelete={() => deleteNode(node.id)}
-                isDragging={dragNodeId === node.id}
-              />
-            </div>
-          ))}
-
-          {/* Add step button after last node */}
-          {nodes.length > 0 && (
-            <div
-              className="absolute flex justify-center"
-              style={{
-                left: nodes[nodes.length - 1].position_x + NODE_WIDTH / 2 - 16,
-                top: nodes[nodes.length - 1].position_y + NODE_HEIGHT + 20,
-              }}
-            >
-              <AddStepMenu onAdd={addStep} />
-            </div>
-          )}
-        </div>
+          <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
+          <Controls />
+          <MiniMap
+            nodeColor={(n) => {
+              const nd = (n.data as any)?.nodeData as FlowNodeData | undefined;
+              if (!nd) return "#888";
+              const colors: Record<string, string> = {
+                trigger: "#f59e0b",
+                action: "#3b82f6",
+                condition: "#a855f7",
+                switch: "#6366f1",
+                delay: "#10b981",
+                agent: "#f97316",
+                merge: "#14b8a6",
+                loop: "#06b6d4",
+                code: "#64748b",
+                error_branch: "#ef4444",
+                whatsapp_session: "#16a34a",
+              };
+              return colors[nd.step_type] || "#888";
+            }}
+          />
+        </ReactFlow>
       </div>
 
-      {/* Step config panel */}
+      {/* ── Config panel ── */}
       <StepConfigPanel
         node={selectedNode}
         open={!!selectedNodeId}
         onClose={() => setSelectedNodeId(null)}
         onUpdate={updateNode}
-        allNodes={nodes}
+        allNodes={allNodes}
       />
 
-      {/* Manual trigger dialog */}
+      {/* ── Dialogs ── */}
       <ManualTriggerDialog
         open={showManualTrigger}
         onOpenChange={setShowManualTrigger}
         automationId={automationId || ""}
         automationName={automationName}
       />
-
-      {/* Test with lead dialog */}
       <TestFlowWithLeadDialog
         open={showTestWithLead}
         onOpenChange={setShowTestWithLead}
         automationId={automationId || ""}
         automationName={automationName}
       />
-
-      {/* Execution history panel */}
       <ExecutionHistoryPanel
         open={showHistory}
         onClose={() => setShowHistory(false)}

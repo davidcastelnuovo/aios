@@ -229,7 +229,12 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [] }
           <SheetTitle className="text-right">
             {node.step_type === "trigger" ? "הגדרת טריגר" :
              node.step_type === "action" ? "הגדרת פעולה" :
-             node.step_type === "condition" ? "הגדרת תנאי" :
+             node.step_type === "condition" ? "הגדרת תנאי (IF)" :
+             node.step_type === "switch" ? "הגדרת מיתוג (Switch)" :
+             node.step_type === "merge" ? "הגדרת מיזוג (Merge)" :
+             node.step_type === "loop" ? "הגדרת לולאה (Loop)" :
+             node.step_type === "code" ? "הגדרת קוד (Code)" :
+             node.step_type === "error_branch" ? "הגדרת טיפול בשגיאה" :
              node.step_type === "agent" ? "הגדרת סוכן AI" :
              "הגדרת השהייה"}
           </SheetTitle>
@@ -330,20 +335,168 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [] }
             </>
           )}
 
-          {/* Condition config */}
+          {/* ── CONDITION (IF) config ── */}
           {node.step_type === "condition" && (
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label className="text-right block">שדה לבדיקה</Label>
+                <Select
+                  value={node.configuration?.condition_field || ""}
+                  onValueChange={(v) => handleConfigChange("condition_field", v)}
+                >
+                  <SelectTrigger className="text-right">
+                    <SelectValue placeholder="בחר שדה..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableFields.map((f) => (
+                      <SelectItem key={f.key} value={f.key}>{f.label}</SelectItem>
+                    ))}
+                    <SelectItem value="status">סטאטוס</SelectItem>
+                    <SelectItem value="source">מקור</SelectItem>
+                    <SelectItem value="message_text">טקסט הודעה</SelectItem>
+                    <SelectItem value="previous_step_output">פלט צעד קודם</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-right block">אופרטור</Label>
+                <Select
+                  value={node.configuration?.condition_operator || "equals"}
+                  onValueChange={(v) => handleConfigChange("condition_operator", v)}
+                >
+                  <SelectTrigger className="text-right">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="equals">שווה ל</SelectItem>
+                    <SelectItem value="not_equals">לא שווה ל</SelectItem>
+                    <SelectItem value="contains">מכיל</SelectItem>
+                    <SelectItem value="not_contains">לא מכיל</SelectItem>
+                    <SelectItem value="starts_with">מתחיל ב</SelectItem>
+                    <SelectItem value="greater_than">גדול מ</SelectItem>
+                    <SelectItem value="less_than">קטן מ</SelectItem>
+                    <SelectItem value="is_empty">ריק</SelectItem>
+                    <SelectItem value="is_not_empty">לא ריק</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {!["is_empty", "is_not_empty"].includes(node.configuration?.condition_operator || "") && (
+                <div className="space-y-2">
+                  <Label className="text-right block">ערך לבדיקה</Label>
+                  <Input
+                    value={node.configuration?.condition_value || ""}
+                    onChange={(e) => handleConfigChange("condition_value", e.target.value)}
+                    placeholder="הזן ערך..."
+                    className="text-right"
+                  />
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground text-right bg-muted/50 p-2 rounded">
+                כן → נתיב ירוק &nbsp;|  לא → נתיב אדום
+              </p>
+            </div>
+          )}
+
+          {/* ── SWITCH config ── */}
+          {node.step_type === "switch" && (
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label className="text-right block">שדה למיתוג</Label>
+                <Input
+                  value={node.configuration?.switch_field || ""}
+                  onChange={(e) => handleConfigChange("switch_field", e.target.value)}
+                  placeholder="למשל: status, source..."
+                  className="text-right"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-right block">ערכי סניף (שורה אחת לכל ערך)</Label>
+                <Textarea
+                  value={(node.configuration?.switch_branches || ["ברירת מחדל"]).join("\n")}
+                  onChange={(e) => {
+                    const branches = e.target.value.split("\n").map(s => s.trim()).filter(Boolean)
+                    handleConfigChange("switch_branches", branches)
+                    onUpdate(node.id, { switch_branches: branches })
+                  }}
+                  placeholder="ערך1&#10;ערך2&#10;ברירת מחדל"
+                  className="text-right font-mono text-xs"
+                  rows={4}
+                />
+                <p className="text-xs text-muted-foreground text-right">
+                  הערך האחרון ישמש כברירת מחדל (אם אין התאמה)
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* ── MERGE config ── */}
+          {node.step_type === "merge" && (
             <div className="space-y-2">
-              <Label className="text-right block">תנאי (ביטוי)</Label>
-              <Textarea
-                value={node.configuration?.condition_expression || ""}
-                onChange={(e) => handleConfigChange("condition_expression", e.target.value)}
-                placeholder="למשל: lead.status === 'new'"
-                className="text-right font-mono text-xs"
-                rows={3}
+              <Label className="text-right block">מספר נתיבי קלט</Label>
+              <Input
+                type="number"
+                min={2}
+                max={10}
+                value={node.configuration?.input_count || 2}
+                onChange={(e) => handleConfigChange("input_count", parseInt(e.target.value) || 2)}
+                className="text-right"
               />
               <p className="text-xs text-muted-foreground text-right">
-                אם התנאי מתקיים - הענף הראשי. אם לא - הענף החלופי.
+                הצומת ממתין עד שכל הנתיבים התחברו, אז ממזג את הנתונים.
               </p>
+            </div>
+          )}
+
+          {/* ── LOOP config ── */}
+          {node.step_type === "loop" && (
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label className="text-right block">שדה לריצה (מערך או רשימה)</Label>
+                <Input
+                  value={node.configuration?.loop_field || ""}
+                  onChange={(e) => handleConfigChange("loop_field", e.target.value)}
+                  placeholder="למשל: leads, items..."
+                  className="text-right"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground text-right bg-muted/50 p-2 rounded">
+                נתיב איטראציה → מריץ על כל פריט | נתיב סיום → אחרי הלולאה
+              </p>
+            </div>
+          )}
+
+          {/* ── CODE config ── */}
+          {node.step_type === "code" && (
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label className="text-right block">קוד JavaScript</Label>
+                <Textarea
+                  value={node.configuration?.code || ""}
+                  onChange={(e) => handleConfigChange("code", e.target.value)}
+                  placeholder={`// קבל נתונים בתוך $input\n// החזר אובייקט עם שדות חדשים\nconst name = $input.contact_name || 'Unknown';\nreturn { full_greeting: 'Hello ' + name };`}
+                  className="text-right font-mono text-xs"
+                  rows={10}
+                  dir="ltr"
+                />
+              </div>
+              <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded space-y-1">
+                <p className="font-semibold">שדות זמינים ב-$input:</p>
+                <p className="font-mono">{availableFields.slice(0, 4).map(f => `$input.${f.key}`).join(", ")}</p>
+                <p>הערך המוחזר מה-return יוזן לצעדים הבאים.</p>
+              </div>
+            </div>
+          )}
+
+          {/* ── ERROR BRANCH config ── */}
+          {node.step_type === "error_branch" && (
+            <div className="space-y-2 bg-muted/50 p-3 rounded">
+              <p className="text-sm text-right">
+                צומת זה בודק את הצעד הקודם ומפצל לשני נתיבים:
+              </p>
+              <ul className="text-xs text-muted-foreground text-right space-y-1 list-disc list-inside">
+                <li>נתיב ירוק = הצעד הקודם הצליח</li>
+                <li>נתיב אדום = הצעד הקודם נכשל</li>
+              </ul>
             </div>
           )}
 

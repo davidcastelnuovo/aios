@@ -542,11 +542,55 @@ Deno.serve(async (req) => {
             }
             // === END FB ENRICHMENT ===
 
-            let previousStepOutput: any = null
+            // ═══════════════════════════════════════════════════════════════
+            // DAG-BASED FLOW ENGINE
+            // Executes nodes in topological order (Kahn's algorithm).
+            // Supports: condition(IF), switch, merge, loop, code, error_branch
+            // ═══════════════════════════════════════════════════════════════
+
+            // Build adjacency map
+            type StepEdge = { targetId: string; sourceHandle: string | null }
+            const outEdges: Record<string, StepEdge[]> = {}
+            const inDegree: Record<string, number> = {}
+            const stepMap: Record<string, any> = {}
+
+            for (const s of (flowSteps || [])) {
+              stepMap[s.id] = s
+              outEdges[s.id] = outEdges[s.id] || []
+              inDegree[s.id] = inDegree[s.id] || 0
+            }
+            for (const s of (flowSteps || [])) {
+              if (s.parent_step_id && stepMap[s.parent_step_id]) {
+                outEdges[s.parent_step_id].push({ targetId: s.id, sourceHandle: s.condition_branch || null })
+                inDegree[s.id] = (inDegree[s.id] || 0) + 1
+              }
+            }
+
+            // Topological sort
+            const topoQueue: string[] = Object.keys(stepMap).filter(id => (inDegree[id] || 0) === 0)
+            const topoOrder: string[] = []
+            const tempDeg = { ...inDegree }
+            while (topoQueue.length > 0) {
+              const cur = topoQueue.shift()!
+              topoOrder.push(cur)
+              for (const edge of (outEdges[cur] || [])) {
+                tempDeg[edge.targetId] = (tempDeg[edge.targetId] || 1) - 1
+                if (tempDeg[edge.targetId] === 0) topoQueue.push(edge.targetId)
+              }
+            }
+
+            // Per-node output store
+            const nodeOutputs: Record<string, any> = {}
+            const skippedNodes = new Set<string>()
+
             const stepResults: any[] = []
             let actionCount = 0
+            let previousStepOutput: any = null
 
-            for (const step of (flowSteps || [])) {
+            for (const stepId of topoOrder) {
+              const step = stepMap[stepId]
+              if (!step) continue
+
               // SAFETY: Runtime timeout check
               const elapsedSeconds = (Date.now() - executionStartTime) / 1000
               if (elapsedSeconds >= MAX_RUNTIME_SECONDS) {
@@ -560,19 +604,27 @@ Deno.serve(async (req) => {
                 stepResults.push({ step_id: step.id, action_type: step.action_type, success: false, error: 'Max actions exceeded' })
                 break
               }
-              
+
               // Skip trigger steps
               if (step.step_type === 'trigger') {
+                nodeOutputs[step.id] = payloadData
+                continue
+              }
+
+              // Skip nodes on branches not taken
+              if (skippedNodes.has(step.id)) {
+                for (const edge of (outEdges[step.id] || [])) skippedNodes.add(edge.targetId)
                 continue
               }
 
               const stepConfig = step.configuration || {}
-              
-              // Merge previous step output into data for template variables
-              const stepData = {
+
+              // Build stepData: merge payloadData + latest parent output
+              const stepData: Record<string, any> = {
                 ...payloadData,
                 previous_step_output: previousStepOutput,
                 agent_output: previousStepOutput?.output || previousStepOutput,
+                _node_outputs: nodeOutputs,
               }
 
               let stepResponse: any = null
@@ -580,6 +632,133 @@ Deno.serve(async (req) => {
               try {
                 const effectiveActionType = step.action_type || step.step_type
 
+                // ── CONDITION (IF) ──────────────────────────────────────────
+                if (step.step_type === 'condition') {
+                  const field = stepConfig.condition_field || ''
+                  const operator = stepConfig.condition_operator || 'equals'
+                  const expected = String(stepConfig.condition_value || '')
+                  const actual = String(stepData[field] ?? '')
+                  let result = false
+                  if (operator === 'equals') result = actual === expected
+                  else if (operator === 'not_equals') result = actual !== expected
+                  else if (operator === 'contains') result = actual.toLowerCase().includes(expected.toLowerCase())
+                  else if (operator === 'not_contains') result = !actual.toLowerCase().includes(expected.toLowerCase())
+                  else if (operator === 'starts_with') result = actual.startsWith(expected)
+                  else if (operator === 'greater_than') result = parseFloat(actual) > parseFloat(expected)
+                  else if (operator === 'less_than') result = parseFloat(actual) < parseFloat(expected)
+                  else if (operator === 'is_empty') result = !actual || actual === 'undefined'
+                  else if (operator === 'is_not_empty') result = !!actual && actual !== 'undefined'
+                  stepResponse = { condition_result: result }
+                  nodeOutputs[step.id] = { ...stepData, condition_result: result }
+                  const notTakenHandle = result ? 'false' : 'true'
+                  for (const edge of (outEdges[step.id] || [])) {
+                    if (edge.sourceHandle === notTakenHandle) skippedNodes.add(edge.targetId)
+                  }
+                  actionCount++
+                  stepResults.push({ step_id: step.id, action_type: 'condition', success: true, response: stepResponse })
+                  continue
+                }
+
+                // ── SWITCH ──────────────────────────────────────────────────
+                if (step.step_type === 'switch') {
+                  const switchField = stepConfig.switch_field || ''
+                  const actualValue = String(stepData[switchField] ?? '')
+                  const branches: string[] = stepConfig.switch_branches || ['ברירת מחדל']
+                  const matchedBranch = branches.includes(actualValue) ? actualValue : branches[branches.length - 1]
+                  stepResponse = { matched_branch: matchedBranch }
+                  nodeOutputs[step.id] = { ...stepData, matched_branch: matchedBranch }
+                  for (const edge of (outEdges[step.id] || [])) {
+                    const branchName = edge.sourceHandle?.replace('branch_', '') || ''
+                    if (branchName !== matchedBranch) skippedNodes.add(edge.targetId)
+                  }
+                  actionCount++
+                  stepResults.push({ step_id: step.id, action_type: 'switch', success: true, response: stepResponse })
+                  continue
+                }
+
+                // ── MERGE ───────────────────────────────────────────────────
+                if (step.step_type === 'merge') {
+                  const mergedData: Record<string, any> = { ...stepData }
+                  Object.values(nodeOutputs).forEach(o => { if (o && typeof o === 'object') Object.assign(mergedData, o) })
+                  stepResponse = { merged: true }
+                  nodeOutputs[step.id] = mergedData
+                  Object.assign(payloadData, mergedData)
+                  actionCount++
+                  stepResults.push({ step_id: step.id, action_type: 'merge', success: true, response: stepResponse })
+                  continue
+                }
+
+                // ── LOOP ────────────────────────────────────────────────────
+                if (step.step_type === 'loop') {
+                  const loopField = stepConfig.loop_field || ''
+                  const rawItems = stepData[loopField]
+                  const items: any[] = Array.isArray(rawItems)
+                    ? rawItems
+                    : typeof rawItems === 'string'
+                    ? rawItems.split(',').map((s: string) => s.trim()).filter(Boolean)
+                    : []
+                  stepResponse = { loop_items_count: items.length }
+                  nodeOutputs[step.id] = { ...stepData, loop_items: items, loop_current_item: items[0] }
+                  payloadData.loop_items = items
+                  payloadData.loop_current_item = items[0]
+                  if (items.length === 0) {
+                    for (const edge of (outEdges[step.id] || [])) {
+                      if (edge.sourceHandle === 'loop_body') skippedNodes.add(edge.targetId)
+                    }
+                  }
+                  actionCount++
+                  stepResults.push({ step_id: step.id, action_type: 'loop', success: true, response: stepResponse })
+                  continue
+                }
+
+                // ── CODE ────────────────────────────────────────────────────
+                if (step.step_type === 'code') {
+                  const codeStr = stepConfig.code || 'return {};'
+                  try {
+                    const fn = new Function('$input', `"use strict"; ${codeStr}`)
+                    const result = fn({ ...stepData })
+                    stepResponse = result && typeof result === 'object' ? result : { output: result }
+                    if (stepResponse && typeof stepResponse === 'object') Object.assign(payloadData, stepResponse)
+                    nodeOutputs[step.id] = { ...stepData, ...stepResponse }
+                    previousStepOutput = stepResponse
+                  } catch (codeErr: any) {
+                    stepResponse = { error: codeErr.message }
+                    nodeOutputs[step.id] = { ...stepData, code_error: codeErr.message }
+                  }
+                  actionCount++
+                  stepResults.push({ step_id: step.id, action_type: 'code', success: !stepResponse?.error, response: stepResponse })
+                  continue
+                }
+
+                // ── ERROR BRANCH ────────────────────────────────────────────
+                if (step.step_type === 'error_branch') {
+                  const prevResult = stepResults[stepResults.length - 1]
+                  const hadError = prevResult && !prevResult.success
+                  stepResponse = { had_error: hadError, prev_error: prevResult?.error || null }
+                  nodeOutputs[step.id] = { ...stepData, had_error: hadError }
+                  for (const edge of (outEdges[step.id] || [])) {
+                    if (hadError && edge.sourceHandle === 'success') skippedNodes.add(edge.targetId)
+                    if (!hadError && edge.sourceHandle === 'error') skippedNodes.add(edge.targetId)
+                  }
+                  actionCount++
+                  stepResults.push({ step_id: step.id, action_type: 'error_branch', success: true, response: stepResponse })
+                  continue
+                }
+
+                // ── DELAY ───────────────────────────────────────────────────
+                if (step.step_type === 'delay') {
+                  const amount = parseInt(stepConfig.delay_amount || '1', 10)
+                  const unit = stepConfig.delay_unit || 'minutes'
+                  const ms = unit === 'minutes' ? amount * 60000 : unit === 'hours' ? amount * 3600000 : amount * 86400000
+                  if (ms <= 30000) await new Promise(r => setTimeout(r, ms))
+                  stepResponse = { delayed_ms: ms }
+                  nodeOutputs[step.id] = stepData
+                  actionCount++
+                  stepResults.push({ step_id: step.id, action_type: 'delay', success: true, response: stepResponse })
+                  continue
+                }
+
+                // ── REGULAR ACTIONS ─────────────────────────────────────────
                 if (effectiveActionType === 'agent') {
                   const agentId = stepConfig.agent_id
                   if (agentId) {
@@ -815,10 +994,16 @@ Deno.serve(async (req) => {
                 } else {
                 }
 
+                // Store output for downstream nodes
+                nodeOutputs[step.id] = {
+                  ...stepData,
+                  ...(stepResponse && typeof stepResponse === 'object' ? stepResponse : { output: stepResponse }),
+                }
                 actionCount++
                 stepResults.push({ step_id: step.id, action_type: effectiveActionType, success: true, response: stepResponse })
               } catch (stepErr: any) {
                 console.error(`Error in flow step ${step.id}:`, stepErr)
+                nodeOutputs[step.id] = { ...payloadData, _error: stepErr.message }
                 stepResults.push({ step_id: step.id, action_type: step.action_type, success: false, error: stepErr.message })
                 // Continue to next step even if one fails
               }
