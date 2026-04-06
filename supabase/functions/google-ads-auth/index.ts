@@ -297,7 +297,10 @@ async function getGoogleAdsAccounts(supabase: any, tenantId: string) {
 
   // Check if token needs refresh
   if (integration.settings?.expires_at && new Date(integration.settings.expires_at) < new Date()) {
-    await refreshAccessToken(supabase, tenantId);
+    const refreshResponse = await refreshAccessToken(supabase, tenantId);
+    if (refreshResponse.status >= 400) {
+      return refreshResponse;
+    }
   }
 
   // Get updated token
@@ -310,9 +313,6 @@ async function getGoogleAdsAccounts(supabase: any, tenantId: string) {
   const accessToken = updatedIntegration?.api_key || integration.api_key;
 
   // Fetch accessible customers from Google Ads API
-  console.log('Calling Google Ads API with developer token length:', DEVELOPER_TOKEN?.length || 0);
-  console.log('Access token length:', accessToken?.length || 0);
-  
   const response = await fetch('https://googleads.googleapis.com/v18/customers:listAccessibleCustomers', {
     headers: {
       'Authorization': `Bearer ${accessToken}`,
@@ -320,28 +320,14 @@ async function getGoogleAdsAccounts(supabase: any, tenantId: string) {
     },
   });
 
-  const responseText = await response.text();
-  console.log('Google Ads API response status:', response.status);
-  console.log('Google Ads API response (first 500 chars):', responseText.substring(0, 500));
-  
-  let data: any;
-  try {
-    data = JSON.parse(responseText);
-  } catch {
-    console.error('Failed to parse Google Ads API response as JSON');
-    return new Response(JSON.stringify({ 
-      error: `Google Ads API returned non-JSON response (status ${response.status}). Check that the Google Ads API is enabled in your Google Cloud project and that the Developer Token is valid.`,
-      accounts: []
-    }), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
-  }
+  const accessibleCustomersResult = await parseGoogleAdsJsonResponse(
+    response,
+    'load accessible Google Ads accounts'
+  );
 
-  if (data.error) {
-    console.error('Google Ads API error:', data.error);
+  if (!accessibleCustomersResult.success) {
     return new Response(JSON.stringify({ 
-      error: data.error.message || 'Failed to fetch accounts',
+      error: accessibleCustomersResult.error,
       accounts: []
     }), {
       status: 200,
@@ -351,41 +337,106 @@ async function getGoogleAdsAccounts(supabase: any, tenantId: string) {
 
   // Get account details for each customer
   const accounts = [];
-  const resourceNames = data.resourceNames || [];
+  const resourceNames = accessibleCustomersResult.data?.resourceNames || [];
+  const detailQuery = `
+    SELECT
+      customer.id,
+      customer.descriptive_name,
+      customer.currency_code,
+      customer.manager
+    FROM customer
+    LIMIT 1
+  `;
 
   for (const resourceName of resourceNames) {
-    const customerId = resourceName.split('/')[1];
+    const customerId = typeof resourceName === 'string' ? resourceName.split('/')[1] : null;
+    if (!customerId) continue;
     
     try {
       const detailResponse = await fetch(
-        `https://googleads.googleapis.com/v18/customers/${customerId}`,
+        `https://googleads.googleapis.com/v18/customers/${customerId}/googleAds:search`,
         {
+          method: 'POST',
           headers: {
             'Authorization': `Bearer ${accessToken}`,
             'developer-token': DEVELOPER_TOKEN,
-            'login-customer-id': customerId,
+            'Content-Type': 'application/json',
           },
+          body: JSON.stringify({ query: detailQuery, pageSize: 1 }),
         }
       );
 
-      const detail = await detailResponse.json();
-      
-      if (!detail.error) {
+      const detailResult = await parseGoogleAdsJsonResponse(
+        detailResponse,
+        `load details for Google Ads account ${customerId}`
+      );
+
+      if (!detailResult.success) {
+        console.error(`Error fetching details for ${customerId}:`, detailResult.error);
         accounts.push({
           id: customerId,
-          name: detail.descriptiveName || `Account ${customerId}`,
-          currency: detail.currencyCode || 'ILS',
-          manager: detail.manager || false,
+          name: `Account ${customerId}`,
+          currency: 'ILS',
+          manager: false,
         });
+        continue;
       }
+
+      const customer = detailResult.data?.results?.[0]?.customer;
+
+      accounts.push({
+        id: customerId,
+        name: customer?.descriptiveName || `Account ${customerId}`,
+        currency: customer?.currencyCode || 'ILS',
+        manager: Boolean(customer?.manager),
+      });
     } catch (err) {
       console.error(`Error fetching details for ${customerId}:`, err);
+      accounts.push({
+        id: customerId,
+        name: `Account ${customerId}`,
+        currency: 'ILS',
+        manager: false,
+      });
     }
   }
 
   return new Response(JSON.stringify({ accounts }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' }
   });
+}
+
+async function parseGoogleAdsJsonResponse(
+  response: Response,
+  context: string
+): Promise<{ success: true; data: any } | { success: false; error: string }> {
+  const responseText = await response.text();
+
+  try {
+    const data = JSON.parse(responseText);
+
+    if (!response.ok || data?.error) {
+      return {
+        success: false,
+        error:
+          data?.error?.message ||
+          `Google Ads request failed while trying to ${context} (status ${response.status}).`,
+      };
+    }
+
+    return { success: true, data };
+  } catch {
+    console.error(
+      `Google Ads returned non-JSON response while trying to ${context}:`,
+      responseText.substring(0, 500)
+    );
+
+    return {
+      success: false,
+      error:
+        `Google Ads returned an invalid response while trying to ${context}. Check that the Google Ads API is enabled and that the Developer Token is valid for production use.`,
+    };
+  }
 }
 
 async function disconnectGoogleAds(supabase: any, tenantId: string) {
