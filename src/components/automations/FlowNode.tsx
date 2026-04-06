@@ -4,6 +4,7 @@ import {
   Zap, Play, GitBranch, Timer, Bot, Trash2, MessageSquare,
   GitMerge, RotateCcw, Code2, AlertTriangle, SplitSquareHorizontal,
   GripVertical,
+  Unlink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -196,6 +197,7 @@ interface RFNodeData {
   nodeData: FlowNodeData;
   onDelete: (id: string) => void;
   onSelect: (id: string) => void;
+  onDisconnect?: (id: string) => void;
 }
 
 export const FlowNodeRF = memo(function FlowNodeRF({
@@ -205,7 +207,7 @@ export const FlowNodeRF = memo(function FlowNodeRF({
   data: RFNodeData;
   selected?: boolean;
 }) {
-  const { nodeData, onDelete, onSelect } = data;
+  const { nodeData, onDelete, onSelect, onDisconnect } = data;
   const config = STEP_TYPE_CONFIG[nodeData.step_type] || STEP_TYPE_CONFIG.action;
   const Icon = config.icon;
 
@@ -270,6 +272,20 @@ export const FlowNodeRF = memo(function FlowNodeRF({
         >
           <Trash2 className="h-3 w-3 text-destructive" />
         </Button>
+        {nodeData.step_type !== "trigger" && nodeData.parent_step_id && onDisconnect && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-5 w-5 hover:bg-orange-500/20"
+            title="נתק שלב"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDisconnect(nodeData.id);
+            }}
+          >
+            <Unlink className="h-3 w-3 text-orange-500" />
+          </Button>
+        )}
       </div>
 
       {/* ── Body ── */}
