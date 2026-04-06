@@ -1997,15 +1997,28 @@ export default function DynamicTableView() {
                         </SelectTrigger>
                         <SelectContent>
                           {(Array.isArray(adAccounts) ? adAccounts : [])
-                            .filter((account: any) => 
-                              account.name?.toLowerCase().includes(adAccountSearch.toLowerCase()) ||
-                              account.id?.includes(adAccountSearch)
-                            )
-                            .map((account: any) => (
-                              <SelectItem key={account.id} value={account.id}>
-                                {account.name} ({account.id})
-                              </SelectItem>
-                            ))}
+                            .filter((account: any) => {
+                              const searchTerm = adAccountSearch.trim().toLowerCase();
+                              if (!searchTerm) return true;
+
+                              const normalizedSearchTerm = searchTerm.replace(/\D/g, '');
+                              const formattedAccountId = String(account.id || '').replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
+
+                              return (
+                                account.name?.toLowerCase().includes(searchTerm) ||
+                                formattedAccountId.includes(searchTerm) ||
+                                String(account.id || '').includes(normalizedSearchTerm)
+                              );
+                            })
+                            .map((account: any) => {
+                              const formattedAccountId = String(account.id || '').replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
+
+                              return (
+                                <SelectItem key={account.id} value={account.id}>
+                                  {account.name} ({formattedAccountId})
+                                </SelectItem>
+                              );
+                            })}
                         </SelectContent>
                       </Select>
                     </>
