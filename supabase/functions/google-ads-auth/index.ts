@@ -348,6 +348,10 @@ async function getGoogleAdsAccounts(supabase: any, tenantId: string) {
     LIMIT 1
   `;
 
+  // First pass: try to get details, collect MCC IDs
+  const mccIds: string[] = [];
+  const failedIds: string[] = [];
+
   for (const resourceName of resourceNames) {
     const customerId = typeof resourceName === 'string' ? resourceName.split('/')[1] : null;
     if (!customerId) continue;
@@ -361,6 +365,7 @@ async function getGoogleAdsAccounts(supabase: any, tenantId: string) {
             'Authorization': `Bearer ${accessToken}`,
             'developer-token': DEVELOPER_TOKEN,
             'Content-Type': 'application/json',
+            'login-customer-id': customerId,
           },
           body: JSON.stringify({ query: detailQuery, pageSize: 1 }),
         }
@@ -368,30 +373,72 @@ async function getGoogleAdsAccounts(supabase: any, tenantId: string) {
 
       const detailResult = await parseGoogleAdsJsonResponse(
         detailResponse,
-        `load details for Google Ads account ${customerId}`
+        `load details for account ${customerId}`
       );
 
       if (!detailResult.success) {
-        console.error(`Error fetching details for ${customerId}:`, detailResult.error);
-        accounts.push({
-          id: customerId,
-          name: `Account ${customerId}`,
-          currency: 'ILS',
-          manager: false,
-        });
+        console.warn(`First attempt failed for ${customerId}: ${detailResult.error}`);
+        failedIds.push(customerId);
         continue;
       }
 
       const customer = detailResult.data?.results?.[0]?.customer;
+      const isManager = Boolean(customer?.manager);
+      if (isManager) mccIds.push(customerId);
 
       accounts.push({
         id: customerId,
         name: customer?.descriptiveName || `Account ${customerId}`,
         currency: customer?.currencyCode || 'ILS',
-        manager: Boolean(customer?.manager),
+        manager: isManager,
       });
     } catch (err) {
-      console.error(`Error fetching details for ${customerId}:`, err);
+      console.warn(`Exception for ${customerId}:`, err);
+      failedIds.push(customerId);
+    }
+  }
+
+  // Second pass: retry failed accounts using MCC login-customer-id
+  for (const customerId of failedIds) {
+    let found = false;
+    for (const mccId of mccIds) {
+      try {
+        const detailResponse = await fetch(
+          `https://googleads.googleapis.com/v23/customers/${customerId}/googleAds:search`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'developer-token': DEVELOPER_TOKEN,
+              'Content-Type': 'application/json',
+              'login-customer-id': mccId,
+            },
+            body: JSON.stringify({ query: detailQuery, pageSize: 1 }),
+          }
+        );
+
+        const detailResult = await parseGoogleAdsJsonResponse(
+          detailResponse,
+          `load details for account ${customerId} via MCC ${mccId}`
+        );
+
+        if (detailResult.success) {
+          const customer = detailResult.data?.results?.[0]?.customer;
+          accounts.push({
+            id: customerId,
+            name: customer?.descriptiveName || `Account ${customerId}`,
+            currency: customer?.currencyCode || 'ILS',
+            manager: Boolean(customer?.manager),
+          });
+          found = true;
+          break;
+        }
+      } catch {
+        // try next MCC
+      }
+    }
+
+    if (!found) {
       accounts.push({
         id: customerId,
         name: `Account ${customerId}`,
