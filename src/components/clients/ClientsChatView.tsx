@@ -360,7 +360,7 @@ export function ClientsChatView({
   };
 
   return (
-    <div className="flex h-full min-h-0 border rounded-lg overflow-hidden bg-background" dir="rtl">
+    <div className="flex h-full min-h-0 max-h-full border rounded-lg overflow-hidden bg-background" dir="rtl">
       {/* Right side - Client list (25%) */}
       <div className="w-[25%] min-w-[240px] border-s flex flex-col bg-muted/20 overflow-hidden min-h-0">
         {/* List header with search */}
@@ -451,7 +451,7 @@ export function ClientsChatView({
         )}
 
         {/* Client list */}
-        <ScrollArea className="flex-1 min-h-0">
+        <ScrollArea className="h-0 flex-1 min-h-0">
           <div className="divide-y">
             {filteredClients.map((client) => {
               const isSelected = client.id === selectedClientId;
@@ -644,7 +644,7 @@ export function ClientsChatView({
             </div>
 
             {/* Detail tabs */}
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0 flex flex-col overflow-hidden">
               <TabsList className="mx-4 mt-3 grid grid-cols-9 w-auto max-w-3xl h-9 bg-muted/50 mr-4 ml-auto">
                 <TabsTrigger value="details" className="text-xs gap-1">
                   <FileText className="h-3.5 w-3.5" />
@@ -684,7 +684,7 @@ export function ClientsChatView({
                 </TabsTrigger>
               </TabsList>
 
-              <ScrollArea className={cn("flex-1 min-h-0 p-4", (activeTab === "whatsapp" || activeTab === "calls") && "hidden")}>
+              <ScrollArea className={cn("h-0 flex-1 min-h-0 p-4", (activeTab === "whatsapp" || activeTab === "calls") && "hidden")}>
                 <TabsContent value="details" className="mt-0 space-y-6">
                   <div className="grid grid-cols-2 gap-4">
                     {/* Timeline - shown first in DOM but appears on LEFT in RTL layout */}
@@ -973,13 +973,13 @@ export function ClientsChatView({
               </ScrollArea>
 
               {activeTab === "calls" && (
-                <div className="flex-1 min-h-0 p-4">
+                <div className="flex-1 min-h-0 overflow-hidden p-4">
                   <CallHistoryTab clientId={selectedClient.id} />
                 </div>
               )}
 
               {activeTab === "whatsapp" && (
-                <div className="flex-1 min-h-0">
+                <div className="flex-1 min-h-0 overflow-hidden">
                   {selectedClient.phone ? (
                     <ChatViewComponent
                       contactId={selectedClient.id}
