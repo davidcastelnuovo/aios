@@ -386,8 +386,8 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [] }
             />
           )}
 
-           {/* Carmen WhatsApp Session trigger config */}
-          {node.step_type === "trigger" && node.action_type === "whatsapp_message_received" && node.configuration?.carmen_session_mode === true && (
+          {/* Carmen WhatsApp Session trigger config */}
+          {node.step_type === "trigger" && node.action_type === "carmen_whatsapp_session" && (
             <CarmenSessionConfig
               tenantId={tenantId}
               configuration={node.configuration}
