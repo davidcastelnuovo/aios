@@ -1,0 +1,1 @@
+UPDATE public.carmen_whatsapp_sessions SET status = 'ended', ended_at = now() WHERE id = '8f7b67b8-73a9-4e64-982c-0acfa6805300' AND status = 'active';
