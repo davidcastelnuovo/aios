@@ -834,8 +834,11 @@ Deno.serve(async (req) => {
                           .order('last_message_at', { ascending: false })
                           .limit(1)
                           .maybeSingle()
-                        if (sessionRow?.conversation_history?.length > 0) {
-                          carmenHistory = sessionRow.conversation_history
+                        const sessionHistory = Array.isArray(sessionRow?.conversation_history)
+                          ? sessionRow.conversation_history
+                          : []
+                        if (sessionHistory.length > 0) {
+                          carmenHistory = sessionHistory
                           payloadData._session_chat_id = sessionChatId
                         }
                       }
