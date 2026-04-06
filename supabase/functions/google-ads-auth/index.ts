@@ -413,7 +413,7 @@ async function getGoogleAdsAccounts(supabase: any, tenantId: string) {
               'Content-Type': 'application/json',
               'login-customer-id': mccId,
             },
-            body: JSON.stringify({ query: detailQuery, pageSize: 1 }),
+            body: JSON.stringify({ query: detailQuery }),
           }
         );
 
