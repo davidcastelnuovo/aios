@@ -733,15 +733,28 @@ export function GoogleAdsTableDialog({ open, onOpenChange, assignedClientIds }: 
                         </SelectTrigger>
                         <SelectContent>
                           {accounts
-                            .filter((account) => 
-                              account.name?.toLowerCase().includes(accountSearch.toLowerCase()) ||
-                              account.id?.includes(accountSearch)
-                            )
-                            .map((account) => (
-                              <SelectItem key={account.id} value={account.id}>
-                                {account.name} ({account.currency}) {account.manager ? '(MCC)' : ''}
-                              </SelectItem>
-                            ))}
+                            .filter((account) => {
+                              const searchTerm = accountSearch.trim().toLowerCase();
+                              if (!searchTerm) return true;
+
+                              const normalizedSearchTerm = searchTerm.replace(/\D/g, '');
+                              const formattedAccountId = account.id.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
+
+                              return (
+                                account.name?.toLowerCase().includes(searchTerm) ||
+                                formattedAccountId.includes(searchTerm) ||
+                                account.id?.includes(normalizedSearchTerm)
+                              );
+                            })
+                            .map((account) => {
+                              const formattedAccountId = account.id.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
+
+                              return (
+                                <SelectItem key={account.id} value={account.id}>
+                                  {account.name} ({formattedAccountId}) • {account.currency} {account.manager ? '(MCC)' : ''}
+                                </SelectItem>
+                              );
+                            })}
                         </SelectContent>
                       </Select>
                     </>
