@@ -589,7 +589,7 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
 
   try {
-    const { agent_id, command_text, temperature, automation_id, user_name, lead_data, tenant_id, user_id } = await req.json()
+    const { agent_id, command_text, temperature, automation_id, user_name, lead_data, tenant_id, user_id, task_skills, task_mode } = await req.json()
 
     if (!agent_id || !command_text) throw new Error('Missing agent_id or command_text')
     if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured')
@@ -647,6 +647,48 @@ Deno.serve(async (req) => {
           ]
       parts.push('כשמבקשים ממך ליצור מודעה או פוסט לסושיאל: 1) קודם צור תמונה עם generate_ad_image עם תיאור מפורט באנגלית 2) אז צור פוסט עם create_social_post והכנס את ה-image_url שקיבלת ל-media_urls. תמיד צור גם ויזואל וגם טקסט.')
       systemPrompt = parts.filter(Boolean).join(' ')
+    }
+    // Inject task-level mode override (from AgentTasksPage)
+    if (task_mode) {
+      const TASK_MODE_PROMPTS: Record<string, string> = {
+        sales: 'את מומחית מכירות. מזהה הזדמנויות בלידים, מעקבת אחרי פיפלאיים, מסייעת בסגירת עסקאות ויוצרת הצעות מותאמות אישית.',
+        support: 'את מומחית שירות לקוחות. אמפתית, סבלנית ופותרת בעיות.',
+        copywriting: 'את מומחית קופיראיטינג. כותבת בצורה משכנעת, יצירתית ומותאמת לקהל יעד.',
+        analyst: 'את מנתחת נתונים. שולפת נתונים מהמערכת, מזהה דפוסים ומסיקה תובנות עסקיות ברורות.',
+        scheduler: 'את מומחית ניהול לוח זמנים. מתאמת פגישות, יוצרת תזכורות ומנהלת משימות זמניות בצורה יעילה.',
+        onboarding: 'את מומחית קליטת לקוחות. מדריכה לקוחות חדשים בצורה חמה ומקצועית.',
+      }
+      if (TASK_MODE_PROMPTS[task_mode]) {
+        systemPrompt += `\n\n=== מוד משימה ===\n${TASK_MODE_PROMPTS[task_mode]}`
+      }
+    }
+    // Inject task-level skills override (from AgentTasksPage)
+    if (task_skills && Array.isArray(task_skills) && task_skills.length > 0) {
+      const TASK_SKILLS_PROMPTS: Record<string, string> = {
+        'lead-qualifier': 'כשמתבקשת להעריך ליד, תשאלי על תקציב, גודל עסק, צורך ולוח זמנים. דרגי 0-10 וספקי הסבר.',
+        'follow-up': 'כשמתבקשת לעקוב אחרי ליד או לקוח, צרי משימות מעקב בזמנים אסטרטגיים (3 ימים, שבוע, חודש).',
+        'proposal-writer': 'כשמתבקשת לכתוב הצעה, שאלי על צרכי הלקוח, תקציב ודדליין. צרי הצעה מותאמת אישית עם הדגשת הערך ללקוח.',
+        'meeting-prep': 'לפני פגישה, שלוף את היסטוריית הלקוח/ליד, הצע נקודות דיון ושאלות רלוונטיות.',
+        'objection-handler': 'כשלקוח מתנגד, הביני את החשש האמיתי מאחוריו ועני בצורה אמפתית ומשכנעת.',
+        'task-manager': 'כשמתבקשת לנהל משימות, תמיד חפשי קודם אם המשימה קיימת. צרי משימות עם תאריך יעד ושייוך לאדם הנכון.',
+        'whatsapp-responder': 'כשעונה להודעות WhatsApp, כתוב בסגנון קצר, ישיר וחברותי.',
+        'data-enricher': 'כשנתקלת על ליד/לקוח עם פרטים חסרים, שאלי שאלות משלימות באופן טבעי ועדכני את הפרופיל.',
+        'report-generator': 'כשמתבקשת דוח, שלוף נתונים מהמערכת, זהה דפוסים והצג תובנות ברורות עם מסקנות עסקיות.',
+        'email-drafter': 'כשמתבקשת לכתוב אימייל, שאלי על הנמען, הטון והמטרה. צרי אימייל מקצועי עם שורת נושא משכנעת.',
+        'social-planner': 'כשמתבקשת תוכן לסושיאל, שאלי על הפלטפורמה, קהל היעד והמסר. צרי תוכן משכנע עם סיפור וקריאה לפעולה.',
+        'price-calculator': 'כשמתבקשת מחיר, שאלי על השירות/מוצר, כמות ופרטי לקוח. הצג מחיר סופי עם פירוט ואפשרות הנחה.',
+        'competitor-analyzer': 'כשמתבקשת ניתוח מתחרים, שלוף נתונים מהמערכת, זהה דפוסים והצג השוואה מול מתחרים.',
+        'sentiment-analyzer': 'בכל הודעה שמקבלת, נתחי את הטון הרגשי (חיובי/שלילי/נייטרלי) והתאם את התגובה בהתאם.',
+        'faq-responder': 'כשעונה לשאלות, שלוף קודם את הנתונים הקיימים במערכת וענה לפי המידע הקיים.',
+        'upsell-advisor': 'כשמתבקשת לנתח לקוח, זהה הזדמנויות לאפסליינג וקרוס-סלינג לפי היסטוריית הקניות.',
+        'churn-predictor': 'נתח את דפוסי הלקוחות וזהה סימני אזהרה לנטישה פוטנציאלית. הצע פעולות שימור מתאימות.',
+        'campaign-optimizer': 'נתח נתוני קמפיינים מהמערכת, זהה מה עובד ומה לא, והצע שיפורים קונקרטיים.',
+        'smart-summarizer': 'כשמתבקשת סיכום, שלוף את כל המידע הרלוונטי והצג את העיקריות בצורה קצרה וברורה.',
+      }
+      const taskSkillPrompts = (task_skills as string[]).map((s: string) => TASK_SKILLS_PROMPTS[s]).filter(Boolean)
+      if (taskSkillPrompts.length > 0) {
+        systemPrompt += `\n\n=== סקילז למשימה זו ===\n${taskSkillPrompts.join('\n')}`
+      }
     }
     // Inject active modes
     const activeModes: string[] = (agent as any).active_modes || []
