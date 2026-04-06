@@ -529,7 +529,7 @@ export function ClientsChatView({
       </div>
 
       {/* Left side - Client detail panel (75%) */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col overflow-hidden">
         {selectedClient ? (
           <>
             {/* Toolbar */}
