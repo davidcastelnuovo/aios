@@ -362,7 +362,7 @@ export function ClientsChatView({
   return (
     <div className="flex h-full border rounded-lg overflow-hidden bg-background" dir="rtl">
       {/* Right side - Client list (25%) */}
-      <div className="w-[25%] min-w-[240px] border-s flex flex-col bg-muted/20">
+      <div className="w-[25%] min-w-[240px] border-s flex flex-col bg-muted/20 overflow-hidden">
         {/* List header with search */}
         <div className="p-3 border-b bg-background/80 backdrop-blur-sm">
           <div className="flex items-center gap-2">
@@ -529,7 +529,7 @@ export function ClientsChatView({
       </div>
 
       {/* Left side - Client detail panel (75%) */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col overflow-hidden">
         {selectedClient ? (
           <>
             {/* Toolbar */}
