@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ReactFlow,
   Background,
@@ -71,6 +71,9 @@ export default function FlowEditor() {
   const [showTestWithLead, setShowTestWithLead] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [insertBetween, setInsertBetween] = useState<{ sourceId: string; targetId: string } | null>(null);
+
+  // Track whether we've initialized from DB to prevent re-init after save
+  const initializedRef = useRef(false);
 
   // Internal node data store (source of truth for DB)
   const [nodeDataMap, setNodeDataMap] = useState<Record<string, FlowNodeData>>({});
@@ -170,7 +173,7 @@ export default function FlowEditor() {
   }, [automation]);
 
   useEffect(() => {
-    if (!steps) return;
+    if (!steps || initializedRef.current) return;
 
     if (steps.length > 0) {
       const dataMap: Record<string, FlowNodeData> = {};
@@ -229,6 +232,7 @@ export default function FlowEditor() {
       setNodeDataMap(dataMap);
       setRfEdges(edges);
       syncRFNodes(dataMap);
+      initializedRef.current = true;
     } else if (automation) {
       // New flow – create default trigger node
       const triggerId = crypto.randomUUID();
@@ -248,6 +252,7 @@ export default function FlowEditor() {
       setNodeDataMap(dataMap);
       setRfEdges([]);
       syncRFNodes(dataMap);
+      initializedRef.current = true;
     }
   }, [steps, automation, handleInsertBetween]);
 
@@ -460,7 +465,27 @@ export default function FlowEditor() {
         rfNodePositions[n.id] = n.position;
       });
 
-      await supabase
+      // First prepare the steps data before deleting
+      const stepsToInsert = allNodes.map((n, idx) => ({
+        id: n.id,
+        automation_id: automationId,
+        tenant_id: tenantId,
+        step_type: n.step_type,
+        action_type: n.action_type || null,
+        label: n.label || null,
+        configuration: {
+          ...n.configuration,
+          ...(n.switch_branches ? { switch_branches: n.switch_branches } : {}),
+        },
+        position_x: Math.round(rfNodePositions[n.id]?.x ?? n.position_x),
+        position_y: Math.round(rfNodePositions[n.id]?.y ?? n.position_y),
+        sort_order: idx,
+        parent_step_id: n.parent_step_id || null,
+        condition_branch: n.condition_branch || null,
+      }));
+
+      // Update automation metadata
+      const { error: updateError } = await supabase
         .from("automations")
         .update({
           name: automationName,
@@ -469,35 +494,24 @@ export default function FlowEditor() {
           ...(flowTriggerType ? { trigger_type: flowTriggerType } : {}),
         } as any)
         .eq("id", automationId);
+      if (updateError) throw updateError;
 
-      await supabase
+      // Delete old steps
+      const { error: deleteError } = await supabase
         .from("automation_flow_steps" as any)
         .delete()
         .eq("automation_id", automationId);
+      if (deleteError) throw deleteError;
 
-      if (allNodes.length > 0) {
-        const stepsToInsert = allNodes.map((n, idx) => ({
-          id: n.id,
-          automation_id: automationId,
-          tenant_id: tenantId,
-          step_type: n.step_type,
-          action_type: n.action_type || null,
-          label: n.label || null,
-          configuration: {
-            ...n.configuration,
-            ...(n.switch_branches ? { switch_branches: n.switch_branches } : {}),
-          },
-          position_x: rfNodePositions[n.id]?.x ?? n.position_x,
-          position_y: rfNodePositions[n.id]?.y ?? n.position_y,
-          sort_order: idx,
-          parent_step_id: n.parent_step_id || null,
-          condition_branch: n.condition_branch || null,
-        }));
-
+      // Insert new steps
+      if (stepsToInsert.length > 0) {
         const { error } = await supabase
           .from("automation_flow_steps" as any)
           .insert(stepsToInsert);
-        if (error) throw error;
+        if (error) {
+          console.error("Save steps error:", error, "Steps data:", JSON.stringify(stepsToInsert));
+          throw error;
+        }
       }
     },
     onSuccess: () => {
