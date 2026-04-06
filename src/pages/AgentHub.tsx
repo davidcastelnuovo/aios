@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Bot, Zap, Brain, Heart, Sparkles, ChevronDown, ChevronUp, PenLine, Settings, Eye, Edit3, Shield, Send, Users } from "lucide-react";
+import { Plus, Bot, Zap, Brain, Heart, Sparkles, ChevronDown, ChevronUp, PenLine, Settings, Eye, Edit3, Shield, Send, Users, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { toast } from "sonner";
@@ -225,6 +225,7 @@ export default function AgentHub() {
   const [sendingTask, setSendingTask] = useState(false);
   const [carmenActiveModes, setCarmenActiveModes] = useState<string[]>([]);
   const [carmenActiveSkills, setCarmenActiveSkills] = useState<string[]>([]);
+  const [deleteConfirmAgent, setDeleteConfirmAgent] = useState<Agent | null>(null);
 
   const { data: agents = [], isLoading } = useQuery({
     queryKey: ["ai_agents", tenantId],
@@ -481,6 +482,7 @@ export default function AgentHub() {
                 agent={agent}
                 onEdit={() => openEdit(agent)}
                 onToggleActive={() => toggleActiveMutation.mutate({ id: agent.id, active: false })}
+                onDelete={() => setDeleteConfirmAgent(agent)}
               />
             ))}
             {activeAgents.length === 0 && (
@@ -512,6 +514,7 @@ export default function AgentHub() {
                       agent={agent}
                       onEdit={() => openEdit(agent)}
                       onToggleActive={() => toggleActiveMutation.mutate({ id: agent.id, active: true })}
+                      onDelete={() => setDeleteConfirmAgent(agent)}
                       inactive
                     />
                   ))}
@@ -1048,6 +1051,42 @@ export default function AgentHub() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ─── DELETE CONFIRM DIALOG ──────────────────────────────── */}
+      <Dialog open={!!deleteConfirmAgent} onOpenChange={(open) => !open && setDeleteConfirmAgent(null)}>
+        <DialogContent className="max-w-sm" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="h-5 w-5" />
+              מחיקת סוכן
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-3">
+            <p className="text-sm text-muted-foreground">
+              האם אתה בטוח שברצונך למחוק את הסוכן{" "}
+              <span className="font-semibold text-foreground">{deleteConfirmAgent?.name}</span>?
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              פעולה זו אינה ניתנת לביטול.
+            </p>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => setDeleteConfirmAgent(null)}>ביטול</Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (deleteConfirmAgent) {
+                  deleteMutation.mutate(deleteConfirmAgent.id);
+                  setDeleteConfirmAgent(null);
+                }
+              }}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? "מוחק..." : "מחק סוכן"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1127,10 +1166,11 @@ function GithubAgentCard() {
   );
 }
 
-function AgentCard({ agent, onEdit, onToggleActive, inactive = false }: {
+function AgentCard({ agent, onEdit, onToggleActive, onDelete, inactive = false }: {
   agent: Agent;
   onEdit: () => void;
   onToggleActive: () => void;
+  onDelete: () => void;
   inactive?: boolean;
 }) {
   const toolCount = (agent.allowed_tools || []).length;
@@ -1145,16 +1185,25 @@ function AgentCard({ agent, onEdit, onToggleActive, inactive = false }: {
       onClick={onEdit}
     >
       <div className="flex items-start justify-between mb-4">
-        <button
-          onClick={e => { e.stopPropagation(); onToggleActive(); }}
-          className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
-            inactive
-              ? "bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary"
-              : "bg-primary/10 text-primary hover:bg-destructive/10 hover:text-destructive"
-          }`}
-        >
-          {inactive ? "הפעל" : "השהה"}
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={e => { e.stopPropagation(); onToggleActive(); }}
+            className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
+              inactive
+                ? "bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                : "bg-primary/10 text-primary hover:bg-destructive/10 hover:text-destructive"
+            }`}
+          >
+            {inactive ? "הפעל" : "השהה"}
+          </button>
+          <button
+            onClick={e => { e.stopPropagation(); onDelete(); }}
+            className="text-xs p-1.5 rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
+            title="מחק סוכן"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
         <img
           src={avatarSrc}
           alt={agent.name}
