@@ -564,9 +564,8 @@ export default function Integrations() {
   ];
 
   return (
-    <div className="h-full min-h-0 overflow-hidden">
-      <div className="h-full overflow-y-auto">
-        <div className="container mx-auto p-6 space-y-6">
+    <div className="h-full overflow-y-auto">
+      <div className="container mx-auto p-6 space-y-6">
           <div>
             <h1 className="text-3xl font-bold">אינטגרציות</h1>
             <p className="text-muted-foreground mt-2">
