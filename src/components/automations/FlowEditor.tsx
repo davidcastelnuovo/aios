@@ -27,6 +27,7 @@ import { Label } from "@/components/ui/label";
 import { Save, History, TestTube, MessageSquare, ZoomIn, ZoomOut, ArrowRight } from "lucide-react";
 import { FlowNodeRF, FlowNodeData } from "./FlowNode";
 import { AddStepMenu } from "./AddStepMenu";
+import { InsertableEdge } from "./InsertableEdge";
 import { StepConfigPanel } from "./StepConfigPanel";
 import { ManualTriggerDialog } from "./ManualTriggerDialog";
 import { TestFlowWithLeadDialog } from "./TestFlowWithLeadDialog";
@@ -35,6 +36,10 @@ import { ExecutionHistoryPanel } from "./ExecutionHistoryPanel";
 // ─── React Flow node type registry ───────────────────────────────────────────
 const nodeTypes = {
   flowNode: FlowNodeRF,
+};
+
+const edgeTypes = {
+  insertable: InsertableEdge,
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -65,6 +70,7 @@ export default function FlowEditor() {
   const [showManualTrigger, setShowManualTrigger] = useState(false);
   const [showTestWithLead, setShowTestWithLead] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [insertBetween, setInsertBetween] = useState<{ sourceId: string; targetId: string } | null>(null);
 
   // Internal node data store (source of truth for DB)
   const [nodeDataMap, setNodeDataMap] = useState<Record<string, FlowNodeData>>({});
@@ -86,6 +92,19 @@ export default function FlowEditor() {
     setSelectedNodeId((cur) => (cur === id ? null : cur));
   }, [setRfNodes, setRfEdges]);
 
+  const handleDisconnectNode = useCallback((id: string) => {
+    // Remove the edge coming into this node and clear parent_step_id
+    setRfEdges((eds) => eds.filter((e) => e.target !== id));
+    setNodeDataMap((prev) => ({
+      ...prev,
+      [id]: { ...prev[id], parent_step_id: null, condition_branch: null },
+    }));
+  }, [setRfEdges]);
+
+  const handleInsertBetween = useCallback((sourceId: string, targetId: string) => {
+    setInsertBetween({ sourceId, targetId });
+  }, []);
+
   const handleSelectNode = useCallback((id: string) => {
     setSelectedNodeId(id);
   }, []);
@@ -100,13 +119,13 @@ export default function FlowEditor() {
             id: nd.id,
             type: "flowNode",
             position: existing?.position ?? { x: nd.position_x, y: nd.position_y },
-            data: { nodeData: nd, onDelete: handleDeleteNode, onSelect: handleSelectNode },
+            data: { nodeData: nd, onDelete: handleDeleteNode, onSelect: handleSelectNode, onDisconnect: handleDisconnectNode },
             draggable: true,
           } as Node;
         })
       );
     },
-    [setRfNodes, handleDeleteNode, handleSelectNode]
+    [setRfNodes, handleDeleteNode, handleSelectNode, handleDisconnectNode]
   );
 
   // ── Fetch automation ───────────────────────────────────────────────────────
@@ -230,8 +249,83 @@ export default function FlowEditor() {
     }
   }, [steps, automation]);
 
-  // ── Add step ───────────────────────────────────────────────────────────────
+  // ── Insert step between two nodes ─────────────────────────────────────────
 
+  const doInsertBetween = useCallback(
+    (stepType: FlowNodeData["step_type"]) => {
+      if (!insertBetween) return;
+      const { sourceId, targetId } = insertBetween;
+      const sourceNode = nodeDataMap[sourceId];
+      const targetNode = nodeDataMap[targetId];
+      if (!sourceNode || !targetNode) { setInsertBetween(null); return; }
+
+      const newId = crypto.randomUUID();
+      const midX = (sourceNode.position_x + targetNode.position_x) / 2;
+      const midY = (sourceNode.position_y + targetNode.position_y) / 2;
+
+      // Find the edge to get sourceHandle info
+      const oldEdge = rfEdges.find((e) => e.source === sourceId && e.target === targetId);
+      const sourceHandle = oldEdge?.sourceHandle || "output";
+
+      const newNode: FlowNodeData = {
+        id: newId,
+        step_type: stepType,
+        action_type: undefined,
+        label: undefined,
+        configuration: stepType === "switch" ? { switch_branches: ["ברירת מחדל"] } : {},
+        position_x: midX,
+        position_y: midY,
+        sort_order: sourceNode.sort_order + 1,
+        parent_step_id: sourceId,
+        condition_branch: targetNode.condition_branch,
+        switch_branches: stepType === "switch" ? ["ברירת מחדל"] : undefined,
+      };
+
+      // Update target to point to new node
+      const updatedTarget = { ...targetNode, parent_step_id: newId, condition_branch: null };
+      const newDataMap = { ...nodeDataMap, [newId]: newNode, [targetId]: updatedTarget };
+      setNodeDataMap(newDataMap);
+      syncRFNodes(newDataMap);
+
+      // Replace old edge with two new edges
+      setRfEdges((eds) => {
+        const filtered = eds.filter((e) => !(e.source === sourceId && e.target === targetId));
+        return [
+          ...filtered,
+          {
+            id: `e-${sourceId}-${newId}`,
+            source: sourceId,
+            target: newId,
+            sourceHandle,
+            targetHandle: "input",
+            type: "insertable",
+            data: { onInsert: handleInsertBetween },
+            animated: false,
+            style: { stroke: "hsl(var(--border))", strokeWidth: 2 },
+            markerEnd: { type: "arrowclosed" as any },
+          },
+          {
+            id: `e-${newId}-${targetId}`,
+            source: newId,
+            target: targetId,
+            sourceHandle: "output",
+            targetHandle: "input",
+            type: "insertable",
+            data: { onInsert: handleInsertBetween },
+            animated: false,
+            style: { stroke: "hsl(var(--border))", strokeWidth: 2 },
+            markerEnd: { type: "arrowclosed" as any },
+          },
+        ];
+      });
+
+      setSelectedNodeId(newId);
+      setInsertBetween(null);
+    },
+    [insertBetween, nodeDataMap, rfEdges, syncRFNodes, setRfEdges, handleInsertBetween]
+  );
+
+  // ── Add step ───────────────────────────────────────────────────────────────
   const addStep = useCallback(
     (stepType: FlowNodeData["step_type"]) => {
       const allNodes = Object.values(nodeDataMap);
