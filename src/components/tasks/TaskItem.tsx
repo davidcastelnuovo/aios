@@ -114,38 +114,74 @@ export function TaskItem({ task, onToggleComplete, onClick, clientsList, campaig
         {(onUpdateClient || onUpdateCampaigner) && (
           <div className="flex items-center gap-2 mt-1.5 flex-wrap" onClick={(e) => e.stopPropagation()}>
             {onUpdateClient && clientsList && (
-              <Select
-                value={task.client_id || "none"}
-                onValueChange={(value) => onUpdateClient(task.id, value === "none" ? null : value)}
-              >
-                <SelectTrigger className="h-6 text-[11px] w-[120px] px-2">
-                  <Users className="h-3 w-3 text-muted-foreground shrink-0" />
-                  <SelectValue placeholder="לקוח" />
-                </SelectTrigger>
-                <SelectContent className="bg-background z-50">
-                  <SelectItem value="none">ללא לקוח</SelectItem>
-                  {clientsList.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={clientOpen} onOpenChange={(open) => { setClientOpen(open); if (!open) setClientSearch(""); }}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="h-6 text-[11px] w-[120px] px-2 justify-start gap-1">
+                    <Users className="h-3 w-3 text-muted-foreground shrink-0" />
+                    <span className="truncate">{selectedClientName || "לקוח"}</span>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[200px] p-2 z-50" align="start">
+                  <div className="flex items-center gap-1 mb-2">
+                    <Search className="h-3 w-3 text-muted-foreground" />
+                    <Input
+                      placeholder="חיפוש לקוח..."
+                      value={clientSearch}
+                      onChange={(e) => setClientSearch(e.target.value)}
+                      className="h-7 text-xs"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="max-h-[200px] overflow-y-auto space-y-0.5">
+                    <button
+                      className={cn("w-full text-right text-xs px-2 py-1.5 rounded hover:bg-accent", !task.client_id && "bg-accent")}
+                      onClick={() => { onUpdateClient(task.id, null); setClientOpen(false); }}
+                    >ללא לקוח</button>
+                    {filteredClients.map((c) => (
+                      <button
+                        key={c.id}
+                        className={cn("w-full text-right text-xs px-2 py-1.5 rounded hover:bg-accent", task.client_id === c.id && "bg-accent")}
+                        onClick={() => { onUpdateClient(task.id, c.id); setClientOpen(false); }}
+                      >{c.name}</button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
             )}
             {onUpdateCampaigner && campaignersList && (
-              <Select
-                value={task.campaigner_id || "none"}
-                onValueChange={(value) => onUpdateCampaigner(task.id, value === "none" ? null : value)}
-              >
-                <SelectTrigger className="h-6 text-[11px] w-[120px] px-2">
-                  <Megaphone className="h-3 w-3 text-muted-foreground shrink-0" />
-                  <SelectValue placeholder="קמפיינר" />
-                </SelectTrigger>
-                <SelectContent className="bg-background z-50">
-                  <SelectItem value="none">ללא קמפיינר</SelectItem>
-                  {campaignersList.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={campaignerOpen} onOpenChange={(open) => { setCampaignerOpen(open); if (!open) setCampaignerSearch(""); }}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="h-6 text-[11px] w-[120px] px-2 justify-start gap-1">
+                    <Megaphone className="h-3 w-3 text-muted-foreground shrink-0" />
+                    <span className="truncate">{selectedCampaignerName || "קמפיינר"}</span>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[200px] p-2 z-50" align="start">
+                  <div className="flex items-center gap-1 mb-2">
+                    <Search className="h-3 w-3 text-muted-foreground" />
+                    <Input
+                      placeholder="חיפוש קמפיינר..."
+                      value={campaignerSearch}
+                      onChange={(e) => setCampaignerSearch(e.target.value)}
+                      className="h-7 text-xs"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="max-h-[200px] overflow-y-auto space-y-0.5">
+                    <button
+                      className={cn("w-full text-right text-xs px-2 py-1.5 rounded hover:bg-accent", !task.campaigner_id && "bg-accent")}
+                      onClick={() => { onUpdateCampaigner(task.id, null); setCampaignerOpen(false); }}
+                    >ללא קמפיינר</button>
+                    {filteredCampaigners.map((c) => (
+                      <button
+                        key={c.id}
+                        className={cn("w-full text-right text-xs px-2 py-1.5 rounded hover:bg-accent", task.campaigner_id === c.id && "bg-accent")}
+                        onClick={() => { onUpdateCampaigner(task.id, c.id); setCampaignerOpen(false); }}
+                      >{c.full_name}</button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
             )}
           </div>
         )}
