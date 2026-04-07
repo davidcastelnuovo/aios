@@ -82,15 +82,14 @@ Deno.serve(async (req) => {
       // Auto-assign client_id from previous reports for this domain
       let resolved_client_id = client_id;
       if (!resolved_client_id) {
-        const { data: prevReport } = await supabase
+        const { data: prevReports } = await supabase
           .from("ahrefs_reports")
           .select("client_id")
           .eq("domain", domain)
           .not("client_id", "is", null)
-          .limit(1)
-          .single();
-        if (prevReport?.client_id) {
-          resolved_client_id = prevReport.client_id;
+          .limit(1);
+        if (prevReports && prevReports.length > 0 && prevReports[0].client_id) {
+          resolved_client_id = prevReports[0].client_id;
         }
       }
 
