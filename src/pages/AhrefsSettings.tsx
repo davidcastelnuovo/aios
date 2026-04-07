@@ -88,15 +88,13 @@ export default function AhrefsSettings() {
 
         await supabase.functions.invoke('crm-tables', {
           body: {
-            action: 'create',
-            tenantId,
             name: tableName,
             slug,
             description: `דוח SEO עבור ${domain}`,
             category: 'seo',
             icon: 'TrendingUp',
-            agencyId: client?.agency_id || null,
-            clientId,
+            agency_id: client?.agency_id || null,
+            client_id: clientId,
             integration_type: 'ahrefs',
             integration_settings: {
               data_source: 'ahrefs_reports',
