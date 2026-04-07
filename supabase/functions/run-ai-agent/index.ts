@@ -93,6 +93,19 @@ const ALL_TOOLS = [
   // SOCIAL MEDIA
   { name: 'create_social_post', description: 'יצירת פוסט/מודעה חדשה במודול ניהול סושיאל מדיה. השתמש בכלי הזה כדי ליצור פוסטים עם תוכן טקסטואלי ותמונות. הפוסט יישמר כטיוטה במערכת.', parameters: { type: 'object', properties: { title: { type: 'string', description: 'כותרת הפוסט/מודעה' }, content: { type: 'string', description: 'תוכן הפוסט - הקופי של המודעה' }, post_type: { type: 'string', enum: ['text', 'image', 'video', 'carousel'], description: 'סוג הפוסט' }, media_urls: { type: 'array', items: { type: 'string' }, description: 'קישורי מדיה (תמונות/וידאו)' } }, required: ['title', 'content'] } },
   { name: 'generate_ad_image', description: 'יצירת תמונה למודעה/פוסט באמצעות AI. מחזיר URL של התמונה שנוצרה. השתמש בכלי הזה כדי ליצור ויזואל למודעות ופוסטים ואז השתמש ב-create_social_post כדי לשמור את הפוסט.', parameters: { type: 'object', properties: { prompt: { type: 'string', description: 'תיאור מפורט של התמונה הרצויה באנגלית' }, aspect_ratio: { type: 'string', enum: ['1:1', '16:9', '9:16', '4:5'], description: 'יחס גובה-רוחב' } }, required: ['prompt'] } },
+  // MEMORY
+  { name: 'save_memory', description: 'שמירת מידע לזיכרון מתמשך (העדפות, פרויקטים, הוראות)', parameters: { type: 'object', properties: { key: { type: 'string', description: 'מפתח זיהוי' }, content: { type: 'string', description: 'התוכן לשמירה' }, category: { type: 'string', enum: ['preferences', 'projects', 'clients', 'workflows', 'personal'] } }, required: ['key', 'content'] } },
+  { name: 'recall_memory', description: 'שליפת זיכרונות שנשמרו', parameters: { type: 'object', properties: { category: { type: 'string' }, search: { type: 'string' } } } },
+  { name: 'delete_memory', description: 'מחיקת זיכרון', parameters: { type: 'object', properties: { key: { type: 'string' } }, required: ['key'] } },
+  // CHAT HISTORY
+  { name: 'get_chat_history', description: 'שליפת היסטוריית שיחות WhatsApp עם ליד או לקוח', parameters: { type: 'object', properties: { contact_type: { type: 'string', enum: ['lead', 'client'] }, contact_id: { type: 'string' }, limit: { type: 'integer' } }, required: ['contact_type', 'contact_id'] } },
+  { name: 'get_recent_inbound_messages', description: 'שליפת הודעות נכנסות אחרונות מכל השיחות', parameters: { type: 'object', properties: { limit: { type: 'integer' }, hours: { type: 'integer', description: 'כמה שעות אחורה (ברירת מחדל 24)' } } } },
+  // FINANCE
+  { name: 'list_finance', description: 'רשימת תנועות כספיות', parameters: { type: 'object', properties: { client_id: { type: 'string' }, type: { type: 'string', enum: ['income', 'expense'] }, limit: { type: 'integer' } } } },
+  { name: 'create_finance_entry', description: 'יצירת רשומה כספית', parameters: { type: 'object', properties: { client_id: { type: 'string' }, amount: { type: 'number' }, type: { type: 'string', enum: ['income', 'expense'] }, description: { type: 'string' }, date: { type: 'string' } }, required: ['amount', 'type', 'description'] } },
+  { name: 'get_finance_summary', description: 'סיכום כספי חודשי', parameters: { type: 'object', properties: { month: { type: 'string', description: 'YYYY-MM' } } } },
+  // UPDATES
+  { name: 'list_updates', description: 'רשימת עדכונים ללקוח או ליד', parameters: { type: 'object', properties: { entity_type: { type: 'string', enum: ['client', 'lead'] }, entity_id: { type: 'string' }, limit: { type: 'integer' } }, required: ['entity_type', 'entity_id'] } },
 ]
 
 // ===========================
@@ -577,6 +590,82 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         active_onboarding: onboardingRes.data?.length || 0,
       }
     }
+    // MEMORY
+    case 'save_memory': {
+      const { data, error } = await supabase.from('ai_memory').upsert({
+        tenant_id: tenantId, user_id: userId || 'system', key: args.key, content: args.content, category: args.category || 'general',
+      }, { onConflict: 'tenant_id,user_id,key' }).select('key, category').single()
+      if (error) throw error
+      return { saved: true, key: data.key, category: data.category }
+    }
+    case 'recall_memory': {
+      let query = supabase.from('ai_memory').select('key, content, category, updated_at').eq('tenant_id', tenantId)
+      if (args.category) query = query.eq('category', args.category)
+      if (args.search) query = query.ilike('content', `%${args.search}%`)
+      const { data, error } = await query.order('updated_at', { ascending: false }).limit(20)
+      if (error) throw error
+      return { count: data.length, memories: data }
+    }
+    case 'delete_memory': {
+      const { error } = await supabase.from('ai_memory').delete().eq('tenant_id', tenantId).eq('key', args.key)
+      if (error) throw error
+      return { deleted: true, key: args.key }
+    }
+    // CHAT HISTORY
+    case 'get_chat_history': {
+      const filterCol = args.contact_type === 'client' ? 'client_id' : 'lead_id'
+      const { data, error } = await supabase.from('chat_messages').select('id, message_text, direction, sender_name, created_at')
+        .eq('tenant_id', tenantId).eq(filterCol, args.contact_id)
+        .order('created_at', { ascending: false }).limit(args.limit || 20)
+      if (error) throw error
+      return { count: data.length, messages: data.reverse() }
+    }
+    case 'get_recent_inbound_messages': {
+      const hoursAgo = args.hours || 24
+      const since = new Date(Date.now() - hoursAgo * 60 * 60 * 1000).toISOString()
+      const { data, error } = await supabase.from('chat_messages')
+        .select('id, message_text, sender_name, sender_phone, created_at, client_id, lead_id, clients(name), leads(company_name)')
+        .eq('tenant_id', tenantId).eq('direction', 'inbound').gte('created_at', since)
+        .order('created_at', { ascending: false }).limit(args.limit || 30)
+      if (error) throw error
+      return { count: data.length, messages: data.map((m: any) => ({ ...m, contact_name: m.clients?.name || m.leads?.company_name || m.sender_name || m.sender_phone })) }
+    }
+    // FINANCE
+    case 'list_finance': {
+      let query = supabase.from('finance').select('id, amount, type, description, date, client_id, clients(name)').eq('tenant_id', tenantId).order('date', { ascending: false }).limit(args.limit || 20)
+      if (args.client_id) query = query.eq('client_id', args.client_id)
+      if (args.type) query = query.eq('type', args.type)
+      const { data, error } = await query
+      if (error) throw error
+      return { count: data.length, entries: data.map((f: any) => ({ ...f, client_name: f.clients?.name })) }
+    }
+    case 'create_finance_entry': {
+      const { data, error } = await supabase.from('finance').insert({
+        amount: args.amount, type: args.type, description: args.description,
+        date: args.date || new Date().toISOString().split('T')[0],
+        client_id: args.client_id || null, tenant_id: tenantId,
+      }).select('id, amount, type, description').single()
+      if (error) throw error
+      return { finance_id: data.id, amount: data.amount, type: data.type }
+    }
+    case 'get_finance_summary': {
+      const month = args.month || new Date().toISOString().slice(0, 7)
+      const startDate = `${month}-01`
+      const endDate = new Date(parseInt(month.split('-')[0]), parseInt(month.split('-')[1]), 0).toISOString().split('T')[0]
+      const { data, error } = await supabase.from('finance').select('amount, type').eq('tenant_id', tenantId).gte('date', startDate).lte('date', endDate)
+      if (error) throw error
+      const income = (data || []).filter((f: any) => f.type === 'income').reduce((s: number, f: any) => s + (f.amount || 0), 0)
+      const expense = (data || []).filter((f: any) => f.type === 'expense').reduce((s: number, f: any) => s + (f.amount || 0), 0)
+      return { month, income, expense, profit: income - expense, entries_count: data.length }
+    }
+    // UPDATES
+    case 'list_updates': {
+      const table = args.entity_type === 'client' ? 'client_updates' : 'lead_updates'
+      const idCol = args.entity_type === 'client' ? 'client_id' : 'lead_id'
+      const { data, error } = await supabase.from(table).select('id, content, created_at').eq(idCol, args.entity_id).order('created_at', { ascending: false }).limit(args.limit || 10)
+      if (error) throw error
+      return { count: data.length, updates: data }
+    }
     default:
       throw new Error(`Unknown tool: ${name}`)
   }
@@ -589,7 +678,7 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
 
   try {
-    const { agent_id, command_text, temperature, automation_id, user_name, lead_data, tenant_id, user_id, task_skills, task_mode } = await req.json()
+    const { agent_id, command_text, temperature, automation_id, user_name, lead_data, tenant_id, user_id, task_skills, task_mode, conversation_history } = await req.json()
 
     if (!agent_id || !command_text) throw new Error('Missing agent_id or command_text')
     if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured')
@@ -606,15 +695,16 @@ Deno.serve(async (req) => {
     let resolvedUserId = user_id || 'system'
 
     // 3. Build system prompt with full tenant context
-    // Fetch tenant context for Carmen and all agents
-    const [tenantRes, agenciesRes, statsRes] = await Promise.all([
+    // Fetch tenant context, memory for Carmen and all agents
+    const [tenantRes, agenciesRes, statsRes, memoryRes] = await Promise.all([
       supabase.from('tenants').select('name, type').eq('id', resolvedTenantId).single(),
       supabase.from('agencies').select('id, name').eq('tenant_id', resolvedTenantId).order('name').limit(20),
       Promise.all([
         supabase.from('leads').select('status', { count: 'exact', head: false }).eq('tenant_id', resolvedTenantId),
         supabase.from('clients').select('id', { count: 'exact', head: false }).eq('tenant_id', resolvedTenantId),
         supabase.from('tasks').select('id', { count: 'exact', head: false }).eq('tenant_id', resolvedTenantId).eq('status', 'open'),
-      ])
+      ]),
+      supabase.from('ai_memory').select('key, content, category').eq('tenant_id', resolvedTenantId).order('updated_at', { ascending: false }).limit(30),
     ])
     const tenantName = tenantRes.data?.name || 'הארגון'
     const agencyList = (agenciesRes.data || []).map((a: any) => `${a.name} (${a.id})`).join(', ')
@@ -764,12 +854,25 @@ Deno.serve(async (req) => {
     systemPrompt += `\n\n=== תאריך ושעה נוכחיים ===\nהיום: ${currentDate}, שעה: ${currentTime}\nתאריך ISO של היום: ${todayISO}\nתאריך ISO של מחר: ${tomorrowDate}\nחשוב: כשמבקשים "למחר" השתמש ב-${tomorrowDate}, כש"היום" השתמש ב-${todayISO}.`
     systemPrompt += `\n\n=== הקשר ארגוני ===\n${tenantContext}`
 
+    // Inject memory context
+    const memoryItems = memoryRes.data || []
+    if (memoryItems.length > 0) {
+      const memoryContext = memoryItems.map((m: any) => `[${m.category}] ${m.key}: ${m.content}`).join('\n')
+      systemPrompt += `\n\n🧠 === זיכרון מתמשך ===\n${memoryContext}`
+    }
+
     // Inject lead context
     if (lead_data) {
       const leadParts = Object.entries(lead_data)
         .filter(([, v]) => v)
         .map(([k, v]) => `${k}: ${v}`)
       if (leadParts.length) systemPrompt += `\n\nפרטי ליד:\n${leadParts.join('\n')}`
+    }
+
+    // WhatsApp context
+    if (isCarmen) {
+      systemPrompt += `\n\n💬 **כשעונה להודעות WhatsApp:** כתוב בסגנון קצר, ישיר וחברותי. הימנע מטקסט ארוך מדי. אל תשתמש ב-markdown בהודעות וואטסאפ.`
+      systemPrompt += `\n🧠 **זיכרון:** כשהמשתמש מספר לך העדפות, שמות פרויקטים, או מידע חשוב — שמור אותם אוטומטית באמצעות save_memory.`
     }
 
     // 4. Filter tools
@@ -782,13 +885,22 @@ Deno.serve(async (req) => {
 
     // 5. Run agent with tool loop
     const model = resolveModel(agent.engine || 'gemini-3-flash')
-    const maxRounds = agent.max_tool_rounds || 3
+    const maxRounds = agent.max_tool_rounds || 5
     const safeTemp = typeof temperature === 'number' ? Math.min(2, Math.max(0, temperature)) : undefined
 
-    let messages: any[] = [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: command_text },
-    ]
+    // Build messages with conversation history
+    let messages: any[] = [{ role: 'system', content: systemPrompt }]
+    
+    // Add conversation history from Carmen WhatsApp sessions
+    const history = Array.isArray(conversation_history) ? conversation_history : []
+    for (const h of history) {
+      if (h.role === 'user' || h.role === 'assistant') {
+        messages.push({ role: h.role, content: h.content })
+      }
+    }
+    
+    // Add current message
+    messages.push({ role: 'user', content: command_text })
 
     let finalOutput = ''
     const toolLog: any[] = []
