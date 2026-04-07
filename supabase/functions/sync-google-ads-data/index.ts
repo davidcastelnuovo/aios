@@ -194,6 +194,9 @@ Deno.serve(async (req) => {
       ORDER BY segments.date DESC
     `;
 
+    // Use manager_id (MCC) as login-customer-id if available, otherwise use customerId
+    const loginCustomerId = settings.manager_id || customerId;
+
     const searchResponse = await fetch(
       `https://googleads.googleapis.com/v23/customers/${customerId}/googleAds:searchStream`,
       {
@@ -201,7 +204,7 @@ Deno.serve(async (req) => {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
           'developer-token': DEVELOPER_TOKEN,
-          'login-customer-id': customerId,
+          'login-customer-id': loginCustomerId,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ query }),

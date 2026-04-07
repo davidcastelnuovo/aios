@@ -299,6 +299,7 @@ export function GoogleAdsTableDialog({ open, onOpenChange, assignedClientIds }: 
           customer_id: selectedAccount,
           account_name: selectedAcc?.name || '',
           currency: selectedAcc?.currency || 'ILS',
+          manager_id: selectedAcc?.manager_id || undefined,
         };
       }
       // For webhook, we just set the data_source and let the user configure via Make.com
