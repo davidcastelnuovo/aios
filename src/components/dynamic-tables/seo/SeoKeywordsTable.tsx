@@ -227,6 +227,7 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], hasGscData = 
               title="כל הביטויים — שינוי חודשי"
               icon={<Calendar className="h-4 w-4 text-primary" />}
               showPrevMonth
+              showGsc={hasGscData}
             />
           </TabsContent>
 
