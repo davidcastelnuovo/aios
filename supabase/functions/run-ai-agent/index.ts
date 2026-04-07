@@ -998,7 +998,7 @@ Deno.serve(async (req) => {
 
         let result: any
         try {
-          result = await executeTool(toolName, toolArgs, supabase, resolvedTenantId, resolvedUserId)
+          result = await executeTool(toolName, toolArgs, supabase, resolvedTenantId, resolvedUserId, callerCampaignerId)
         } catch (e: any) {
           result = { error: e.message }
         }
