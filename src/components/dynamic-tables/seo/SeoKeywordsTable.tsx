@@ -75,12 +75,13 @@ function KeywordRow({ kw, showCampaignStart, showPrevMonth, showGsc }: { kw: any
     </tr>
   );
 }
-function KeywordTable({ keywords, title, icon, showCampaignStart, showPrevMonth }: {
+function KeywordTable({ keywords, title, icon, showCampaignStart, showPrevMonth, showGsc }: {
   keywords: any[];
   title: string;
   icon: React.ReactNode;
   showCampaignStart?: boolean;
   showPrevMonth?: boolean;
+  showGsc?: boolean;
 }) {
   if (keywords.length === 0) return null;
 
@@ -105,6 +106,17 @@ function KeywordTable({ keywords, title, icon, showCampaignStart, showPrevMonth 
               {showCampaignStart && (
                 <th className="text-center p-3 font-medium">שינוי מיקום (קידום)</th>
               )}
+              {showGsc && (
+                <>
+                  <th className="text-center p-3 font-medium text-xs">
+                    <div className="flex items-center justify-center gap-1"><MousePointerClick className="h-3 w-3" />קליקים</div>
+                  </th>
+                  <th className="text-center p-3 font-medium text-xs">
+                    <div className="flex items-center justify-center gap-1"><Eye className="h-3 w-3" />חשיפות</div>
+                  </th>
+                  <th className="text-center p-3 font-medium text-xs">CTR</th>
+                </>
+              )}
               <th className="text-center p-3 font-medium">תנועה</th>
               <th className="text-center p-3 font-medium">נפח חיפוש</th>
               <th className="text-center p-3 font-medium">KD</th>
@@ -114,7 +126,7 @@ function KeywordTable({ keywords, title, icon, showCampaignStart, showPrevMonth 
           </thead>
           <tbody>
             {keywords.map((kw, idx) => (
-              <KeywordRow key={idx} kw={kw} showCampaignStart={showCampaignStart} showPrevMonth={showPrevMonth} />
+              <KeywordRow key={idx} kw={kw} showCampaignStart={showCampaignStart} showPrevMonth={showPrevMonth} showGsc={showGsc} />
             ))}
           </tbody>
         </table>
