@@ -7,6 +7,8 @@ interface SeoKeywordsTableProps {
   keywords: any[];
   trackedKeywords?: any[];
   hasGscData?: boolean;
+  show3Month?: boolean;
+  showYearly?: boolean;
 }
 
 function PositionChange({ value }: { value: number | null }) {
