@@ -19,6 +19,7 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   selectedCategory: { key: string; label: string } | null;
   tenantId: string;
+  directIntegrationType?: string; // If set, skip provider list and connect directly
 }
 
 export default function UnifiedProviderPicker({ open, onOpenChange, selectedCategory, tenantId }: Props) {
