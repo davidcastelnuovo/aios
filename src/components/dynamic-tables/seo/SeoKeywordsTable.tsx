@@ -1,11 +1,12 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowUp, ArrowDown, Trophy, TrendingUp, Calendar } from "lucide-react";
+import { ArrowUp, ArrowDown, Trophy, TrendingUp, Calendar, MousePointerClick, Eye } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface SeoKeywordsTableProps {
   keywords: any[];
   trackedKeywords?: any[];
+  hasGscData?: boolean;
 }
 
 function PositionChange({ value }: { value: number | null }) {
