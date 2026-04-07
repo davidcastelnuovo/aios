@@ -47,16 +47,15 @@ Deno.serve(async (req) => {
 
       // Resolve tenant_id
       if (!tenant_id) {
-        const { data: existingReport } = await supabase
+        const { data: existingReports } = await supabase
           .from("ahrefs_reports")
           .select("tenant_id")
           .eq("domain", domain)
           .not("tenant_id", "is", null)
-          .limit(1)
-          .single();
+          .limit(1);
 
-        if (existingReport?.tenant_id) {
-          tenant_id = existingReport.tenant_id;
+        if (existingReports && existingReports.length > 0 && existingReports[0].tenant_id) {
+          tenant_id = existingReports[0].tenant_id;
         } else {
           const { data: mcTenant } = await supabase
             .from("tenants")
@@ -82,29 +81,28 @@ Deno.serve(async (req) => {
       // Auto-assign client_id from previous reports for this domain
       let resolved_client_id = client_id;
       if (!resolved_client_id) {
-        const { data: prevReport } = await supabase
+        const { data: prevReports } = await supabase
           .from("ahrefs_reports")
           .select("client_id")
           .eq("domain", domain)
           .not("client_id", "is", null)
-          .limit(1)
-          .single();
-        if (prevReport?.client_id) {
-          resolved_client_id = prevReport.client_id;
+          .limit(1);
+        if (prevReports && prevReports.length > 0 && prevReports[0].client_id) {
+          resolved_client_id = prevReports[0].client_id;
         }
       }
 
       // Check for existing report (deduplication) - only when report_date is set
       let action = "inserted";
       if (report_date) {
-        const { data: existing } = await supabase
+        const { data: existingList } = await supabase
           .from("ahrefs_reports")
           .select("id, client_id")
           .eq("domain", domain)
           .eq("report_date", report_date)
           .eq("report_type", report_type)
-          .limit(1)
-          .single();
+          .limit(1);
+        const existing = existingList && existingList.length > 0 ? existingList[0] : null;
 
         if (existing) {
           // Update existing report (UPSERT), preserve existing client_id if already set
