@@ -20,7 +20,7 @@ function PositionChange({ value }: { value: number | null }) {
   );
 }
 
-function KeywordRow({ kw, showCampaignStart, showPrevMonth }: { kw: any; showCampaignStart?: boolean; showPrevMonth?: boolean }) {
+function KeywordRow({ kw, showCampaignStart, showPrevMonth, showGsc }: { kw: any; showCampaignStart?: boolean; showPrevMonth?: boolean; showGsc?: boolean }) {
   const posChangeMonth = kw.position_prev_month != null && kw.position != null
     ? kw.position_prev_month - kw.position : null;
   const posChangeCampaign = kw.position_campaign_start != null && kw.position != null
@@ -41,6 +41,19 @@ function KeywordRow({ kw, showCampaignStart, showPrevMonth }: { kw: any; showCam
       )}
       {showCampaignStart && (
         <td className="p-3 text-center"><PositionChange value={posChangeCampaign} /></td>
+      )}
+      {showGsc && (
+        <>
+          <td className="p-3 text-center text-xs">
+            {kw.gsc_clicks != null ? Number(kw.gsc_clicks).toLocaleString() : <span className="text-muted-foreground">—</span>}
+          </td>
+          <td className="p-3 text-center text-xs">
+            {kw.gsc_impressions != null ? Number(kw.gsc_impressions).toLocaleString() : <span className="text-muted-foreground">—</span>}
+          </td>
+          <td className="p-3 text-center text-xs">
+            {kw.gsc_ctr != null ? `${kw.gsc_ctr}%` : <span className="text-muted-foreground">—</span>}
+          </td>
+        </>
       )}
       <td className="p-3 text-center">{kw.traffic != null ? Number(kw.traffic).toLocaleString() : '-'}</td>
       <td className="p-3 text-center">{kw.volume != null ? Number(kw.volume).toLocaleString() : '-'}</td>
