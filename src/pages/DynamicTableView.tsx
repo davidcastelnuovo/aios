@@ -957,55 +957,60 @@ export default function DynamicTableView() {
 
       // If data_source is ahrefs_reports, pull from DB instead of API
       if (settings.data_source === 'ahrefs_reports') {
-        const clientId = settings.clientId as string;
+        const clientId = (settings.clientId || settings.client_id) as string;
         if (!clientId) throw new Error('Missing client ID for SEO report');
 
+        // Pull ALL reports for this client (all months)
         const { data: reports, error } = await supabase
           .from('ahrefs_reports')
           .select('*')
           .eq('tenant_id', table.tenant_id)
           .eq('client_id', clientId)
-          .order('received_at', { ascending: false });
+          .order('report_date', { ascending: false });
 
         if (error) throw error;
         if (!reports || reports.length === 0) throw new Error('לא נמצאו דוחות SEO עבור לקוח זה');
 
-        // Flatten report data into simple key-value records for the table
-        const latestReport = reports[0];
-        const rd = latestReport.report_data as any || {};
-        const snapshot = rd.snapshot || {};
-        const snapshotPrev = rd.snapshot_prev_month || {};
-        const organicKeywords = Array.isArray(rd.organic_keywords) ? rd.organic_keywords : [];
-        const trackedKeywords = Array.isArray(rd.tracked_keywords) ? rd.tracked_keywords : [];
-        const allKeywords = [...organicKeywords, ...trackedKeywords];
+        // Build records from ALL reports, each tagged with report_date
+        const allRecordsToInsert: any[] = [];
 
-        // Create one record per keyword for a useful table view
-        const recordsToInsert = allKeywords.length > 0
-          ? allKeywords.map((kw: any) => ({
+        for (const report of reports) {
+          const rd = (report as any).report_data as any || {};
+          const snapshot = rd.snapshot || {};
+          const reportDate = (report as any).report_date || (report as any).received_at;
+          const organicKeywords = Array.isArray(rd.organic_keywords) ? rd.organic_keywords : [];
+          const trackedKeywords = Array.isArray(rd.tracked_keywords) ? rd.tracked_keywords : [];
+          const allKeywords = [...organicKeywords, ...trackedKeywords];
+
+          if (allKeywords.length > 0) {
+            for (const kw of allKeywords) {
+              allRecordsToInsert.push({
+                table_id: table.id,
+                tenant_id: table.tenant_id,
+                data: {
+                  keyword: String(kw.keyword || ''),
+                  position: kw.position ?? null,
+                  position_prev_month: kw.position_prev_month ?? null,
+                  position_change: kw.position_prev_month != null && kw.position != null
+                    ? kw.position_prev_month - kw.position : null,
+                  traffic: kw.traffic ?? 0,
+                  traffic_prev_month: kw.traffic_prev_month ?? 0,
+                  volume: kw.volume ?? 0,
+                  kd: kw.kd ?? null,
+                  cpc: kw.cpc ?? null,
+                  url: kw.url ?? '',
+                  domain: (report as any).domain,
+                  dr: snapshot.dr,
+                  report_date: reportDate,
+                },
+              });
+            }
+          } else {
+            allRecordsToInsert.push({
               table_id: table.id,
               tenant_id: table.tenant_id,
               data: {
-                keyword: String(kw.keyword || ''),
-                position: kw.position ?? null,
-                position_prev_month: kw.position_prev_month ?? null,
-                position_change: kw.position_prev_month != null && kw.position != null 
-                  ? kw.position_prev_month - kw.position : null,
-                traffic: kw.traffic ?? 0,
-                traffic_prev_month: kw.traffic_prev_month ?? 0,
-                volume: kw.volume ?? 0,
-                kd: kw.kd ?? null,
-                cpc: kw.cpc ?? null,
-                url: kw.url ?? '',
-                domain: latestReport.domain,
-                dr: snapshot.dr,
-                report_date: rd.report_date || latestReport.received_at,
-              },
-            }))
-          : [{
-              table_id: table.id,
-              tenant_id: table.tenant_id,
-              data: {
-                domain: latestReport.domain,
+                domain: (report as any).domain,
                 dr: snapshot.dr,
                 org_traffic: snapshot.org_traffic,
                 org_keywords_top3: snapshot.org_keywords_top3,
@@ -1014,11 +1019,15 @@ export default function DynamicTableView() {
                 referring_domains: snapshot.referring_domains,
                 backlinks_live: snapshot.backlinks_live,
                 backlinks_all_time: snapshot.backlinks_all_time,
-                report_date: rd.report_date || latestReport.received_at,
+                report_date: reportDate,
               },
-            }];
+            });
+          }
+        }
 
-        // Delete old records first, then insert
+        const recordsToInsert = allRecordsToInsert;
+
+        // Full rebuild - delete and re-insert all historical records
         await supabase.from('crm_records').delete().eq('table_id', table.id);
 
         const { error: insertError } = await supabase
@@ -1031,7 +1040,8 @@ export default function DynamicTableView() {
         const fieldsList = (existingFields as any)?.fields || [];
         
         if (fieldsList.length === 0) {
-          const seoFields = allKeywords.length > 0
+          const hasKeywords = recordsToInsert.some((r: any) => r.data?.keyword);
+          const seoFields = hasKeywords
             ? [
                 { key: 'keyword', label: 'מילת מפתח', type: 'text' },
                 { key: 'position', label: 'מיקום', type: 'number' },
