@@ -32,7 +32,25 @@ interface TaskItemProps {
 }
 
 export function TaskItem({ task, onToggleComplete, onClick, clientsList, campaignersList, onUpdateClient, onUpdateCampaigner }: TaskItemProps) {
-  const {
+  const [clientSearch, setClientSearch] = useState("");
+  const [campaignerSearch, setCampaignerSearch] = useState("");
+  const [clientOpen, setClientOpen] = useState(false);
+  const [campaignerOpen, setCampaignerOpen] = useState(false);
+
+  const filteredClients = useMemo(() => {
+    if (!clientsList) return [];
+    if (!clientSearch) return clientsList;
+    return clientsList.filter(c => c.name.toLowerCase().includes(clientSearch.toLowerCase()));
+  }, [clientsList, clientSearch]);
+
+  const filteredCampaigners = useMemo(() => {
+    if (!campaignersList) return [];
+    if (!campaignerSearch) return campaignersList;
+    return campaignersList.filter(c => c.full_name.toLowerCase().includes(campaignerSearch.toLowerCase()));
+  }, [campaignersList, campaignerSearch]);
+
+  const selectedClientName = clientsList?.find(c => c.id === task.client_id)?.name;
+  const selectedCampaignerName = campaignersList?.find(c => c.id === task.campaigner_id)?.full_name;
     attributes,
     listeners,
     setNodeRef,
