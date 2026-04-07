@@ -168,6 +168,56 @@ serve(async (req) => {
       );
     }
 
+    // Fetch organic keywords with historical comparison
+    if (action === 'fetch-keywords') {
+      const body = await req.json().catch(() => ({}));
+      const target = body.target;
+      const date = body.date || new Date().toISOString().split('T')[0];
+      const dateCompared = body.date_compared;
+      const limit = body.limit || 50;
+      const country = body.country || 'il';
+
+      if (!target) {
+        return new Response(
+          JSON.stringify({ error: 'Missing target domain' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const kwUrl = new URL('https://api.ahrefs.com/v3/site-explorer/organic-keywords');
+      kwUrl.searchParams.set('target', target);
+      kwUrl.searchParams.set('country', country);
+      kwUrl.searchParams.set('date', date);
+      if (dateCompared) {
+        kwUrl.searchParams.set('date_compared', dateCompared);
+      }
+      kwUrl.searchParams.set('limit', String(limit));
+      kwUrl.searchParams.set('select', 'keyword,best_position,best_position_prev,best_position_url,sum_traffic,sum_traffic_prev,search_volume,keyword_difficulty,cost_per_click');
+      kwUrl.searchParams.set('order_by', 'sum_traffic:desc');
+
+      const kwResp = await fetch(kwUrl.toString(), {
+        headers: {
+          'Authorization': `Bearer ${ahrefsApiKey}`,
+          'Accept': 'application/json',
+        },
+      });
+
+      if (!kwResp.ok) {
+        const errText = await kwResp.text();
+        console.error('Ahrefs keywords fetch failed:', errText);
+        return new Response(
+          JSON.stringify({ error: 'Failed to fetch keywords', details: errText }),
+          { status: kwResp.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const kwData = await kwResp.json();
+      return new Response(
+        JSON.stringify({ success: true, data: kwData }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     return new Response(
       JSON.stringify({ error: 'Invalid action' }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
