@@ -204,21 +204,6 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
     }
   }, [selectedReport, hasAutoEnriched]);
 
-  const [cachedComparison, setCachedComparison] = useState<{
-    threeMonth: Map<string, any>;
-    yearly: Map<string, any>;
-  } | null>(null);
-
-  // Effective comparison data: API data takes priority, then cached DB data
-  const effectiveComparison = useMemo(() => {
-    if (comparisonData.threeMonth.size > 0 || comparisonData.yearly.size > 0) {
-      return comparisonData;
-    }
-    if (cachedComparison) {
-      return cachedComparison;
-    }
-    return comparisonData;
-  }, [comparisonData, cachedComparison]);
 
   const handleManualSync = useCallback(async () => {
     if (!domain) return;
