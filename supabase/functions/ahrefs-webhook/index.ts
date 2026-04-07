@@ -182,6 +182,86 @@ Deno.serve(async (req) => {
           } catch (e) {
             console.error("Error auto-creating SEO table:", e);
           }
+
+          // Auto-sync to crm_records for the dynamic table
+          try {
+            const { data: crmTables } = await supabase
+              .from("crm_tables")
+              .select("id")
+              .eq("client_id", resolved_client_id)
+              .eq("integration_type", "ahrefs");
+
+            if (crmTables && crmTables.length > 0) {
+              const crmTableId = crmTables[0].id;
+              const rd = report_data as any || {};
+              const snapshot = rd.snapshot || {};
+              const organicKeywords = Array.isArray(rd.organic_keywords) ? rd.organic_keywords : [];
+              const trackedKeywords = Array.isArray(rd.tracked_keywords) ? rd.tracked_keywords : [];
+              const allKeywords = [...organicKeywords, ...trackedKeywords];
+              const reportDateVal = report_date || new Date().toISOString().split("T")[0];
+
+              // Delete existing records for this specific report_date
+              await supabase
+                .from("crm_records")
+                .delete()
+                .eq("table_id", crmTableId)
+                .contains("data", { report_date: reportDateVal } as any);
+
+              // Build records
+              const crmRecords: any[] = [];
+              if (allKeywords.length > 0) {
+                for (const kw of allKeywords) {
+                  crmRecords.push({
+                    table_id: crmTableId,
+                    tenant_id,
+                    data: {
+                      keyword: String(kw.keyword || ""),
+                      position: kw.position ?? null,
+                      position_prev_month: kw.position_prev_month ?? null,
+                      position_change: kw.position_prev_month != null && kw.position != null
+                        ? kw.position_prev_month - kw.position : null,
+                      traffic: kw.traffic ?? 0,
+                      traffic_prev_month: kw.traffic_prev_month ?? 0,
+                      volume: kw.volume ?? 0,
+                      kd: kw.kd ?? null,
+                      cpc: kw.cpc ?? null,
+                      url: kw.url ?? "",
+                      domain,
+                      dr: snapshot.dr,
+                      report_date: reportDateVal,
+                    },
+                  });
+                }
+              } else {
+                crmRecords.push({
+                  table_id: crmTableId,
+                  tenant_id,
+                  data: {
+                    domain,
+                    dr: snapshot.dr,
+                    org_traffic: snapshot.org_traffic,
+                    org_keywords_top3: snapshot.org_keywords_top3,
+                    org_keywords_top10: snapshot.org_keywords_top10,
+                    org_keywords_total: snapshot.org_keywords_total,
+                    referring_domains: snapshot.referring_domains,
+                    backlinks_live: snapshot.backlinks_live,
+                    backlinks_all_time: snapshot.backlinks_all_time,
+                    report_date: reportDateVal,
+                  },
+                });
+              }
+
+              // Insert in batches
+              const batchSize = 500;
+              for (let i = 0; i < crmRecords.length; i += batchSize) {
+                const batch = crmRecords.slice(i, i + batchSize);
+                await supabase.from("crm_records").insert(batch);
+              }
+              console.log(`Auto-synced ${crmRecords.length} records to crm_records for table ${crmTableId}`);
+            }
+          } catch (e) {
+            console.error("Error auto-syncing to crm_records:", e);
+          }
         }
       }
     }
