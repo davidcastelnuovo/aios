@@ -192,7 +192,7 @@ serve(async (req) => {
         kwUrl.searchParams.set('date_compared', dateCompared);
       }
       kwUrl.searchParams.set('limit', String(limit));
-      kwUrl.searchParams.set('select', 'keyword,best_position,best_position_prev,best_position_url,sum_traffic,sum_traffic_prev,search_volume,keyword_difficulty,cost_per_click');
+      kwUrl.searchParams.set('select', 'keyword,best_position,best_position_prev,best_position_url,best_position_url_prev,sum_traffic,sum_traffic_prev,volume,volume_prev,keyword_difficulty,keyword_difficulty_prev,cpc,cpc_prev');
       kwUrl.searchParams.set('order_by', 'sum_traffic:desc');
 
       const kwResp = await fetch(kwUrl.toString(), {
