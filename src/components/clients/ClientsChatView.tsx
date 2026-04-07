@@ -104,6 +104,8 @@ export function ClientsChatView({
 
   const [addingContact, setAddingContact] = useState(false);
   const [newContact, setNewContact] = useState({ contact_name: "", phone: "", email: "", role: "" });
+  const [editingContactId, setEditingContactId] = useState<string | null>(null);
+  const [editContactData, setEditContactData] = useState({ contact_name: "", phone: "", email: "", role: "" });
   const [groupSearch, setGroupSearch] = useState("");
   const [showGroupDropdown, setShowGroupDropdown] = useState(false);
 
@@ -870,36 +872,80 @@ export function ClientsChatView({
                     {clientContacts.length > 0 ? (
                       <div className="space-y-2">
                         {clientContacts.map((contact: any) => (
-                          <div key={contact.id} className="border border-border/60 rounded-lg p-3 flex items-start justify-between gap-2 group bg-muted/20 hover:bg-muted/40 transition-colors">
-                            <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 text-destructive shrink-0"
-                              onClick={async () => {
-                                try {
-                                  const { error } = await supabase.from("client_contacts").delete().eq("id", contact.id);
-                                  if (error) throw error;
-                                  toast.success("איש קשר נמחק");
-                                  queryClient.invalidateQueries({ queryKey: ["client-contacts", selectedClient.id] });
-                                } catch { toast.error("שגיאה במחיקה"); }
-                              }}>
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                            <div className="text-sm space-y-1 text-right flex-1">
-                              <div className="font-medium flex items-center gap-2 justify-end">
-                                {contact.role && <Badge variant="outline" className="text-xs">{contact.role}</Badge>}
-                                {contact.contact_name}
+                          <div key={contact.id} className="border border-border/60 rounded-lg p-3 group bg-muted/20 hover:bg-muted/40 transition-colors">
+                            {editingContactId === contact.id ? (
+                              <div className="space-y-2">
+                                <div className="grid grid-cols-2 gap-2">
+                                  <Input placeholder="שם" value={editContactData.contact_name} onChange={e => setEditContactData(p => ({ ...p, contact_name: e.target.value }))} className="text-sm h-8 text-right" dir="rtl" />
+                                  <Input placeholder="תפקיד" value={editContactData.role} onChange={e => setEditContactData(p => ({ ...p, role: e.target.value }))} className="text-sm h-8 text-right" dir="rtl" />
+                                  <Input placeholder="טלפון" value={editContactData.phone} onChange={e => setEditContactData(p => ({ ...p, phone: e.target.value }))} className="text-sm h-8 text-right" dir="rtl" />
+                                  <Input placeholder="אימייל" value={editContactData.email} onChange={e => setEditContactData(p => ({ ...p, email: e.target.value }))} className="text-sm h-8 text-right" dir="rtl" />
+                                </div>
+                                <div className="flex gap-2 justify-end">
+                                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setEditingContactId(null)}>ביטול</Button>
+                                  <Button size="sm" className="h-7 text-xs" disabled={!editContactData.contact_name.trim()} onClick={async () => {
+                                    try {
+                                      const { error } = await supabase.from("client_contacts").update({
+                                        contact_name: editContactData.contact_name.trim(),
+                                        phone: editContactData.phone.trim() || null,
+                                        email: editContactData.email.trim() || null,
+                                        role: editContactData.role.trim() || null,
+                                      }).eq("id", contact.id);
+                                      if (error) throw error;
+                                      toast.success("איש קשר עודכן");
+                                      setEditingContactId(null);
+                                      queryClient.invalidateQueries({ queryKey: ["client-contacts", selectedClient.id] });
+                                    } catch { toast.error("שגיאה בעדכון איש קשר"); }
+                                  }}>שמור</Button>
+                                </div>
                               </div>
-                              {contact.phone && (
-                                <div className="flex items-center gap-1 justify-end text-muted-foreground">
-                                  <a href={`tel:${contact.phone}`} className="text-primary hover:underline">{contact.phone}</a>
-                                  <Phone className="h-3 w-3" />
+                            ) : (
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 text-destructive"
+                                    onClick={async () => {
+                                      try {
+                                        const { error } = await supabase.from("client_contacts").delete().eq("id", contact.id);
+                                        if (error) throw error;
+                                        toast.success("איש קשר נמחק");
+                                        queryClient.invalidateQueries({ queryKey: ["client-contacts", selectedClient.id] });
+                                      } catch { toast.error("שגיאה במחיקה"); }
+                                    }}>
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100"
+                                    onClick={() => {
+                                      setEditingContactId(contact.id);
+                                      setEditContactData({
+                                        contact_name: contact.contact_name || "",
+                                        phone: contact.phone || "",
+                                        email: contact.email || "",
+                                        role: contact.role || "",
+                                      });
+                                    }}>
+                                    <Pencil className="h-3 w-3" />
+                                  </Button>
                                 </div>
-                              )}
-                              {contact.email && (
-                                <div className="flex items-center gap-1 justify-end text-muted-foreground">
-                                  <a href={`mailto:${contact.email}`} className="text-primary hover:underline truncate">{contact.email}</a>
-                                  <Mail className="h-3 w-3" />
+                                <div className="text-sm space-y-1 text-right flex-1">
+                                  <div className="font-medium flex items-center gap-2 justify-end">
+                                    {contact.role && <Badge variant="outline" className="text-xs">{contact.role}</Badge>}
+                                    {contact.contact_name}
+                                  </div>
+                                  {contact.phone && (
+                                    <div className="flex items-center gap-1 justify-end text-muted-foreground">
+                                      <a href={`tel:${contact.phone}`} className="text-primary hover:underline">{contact.phone}</a>
+                                      <Phone className="h-3 w-3" />
+                                    </div>
+                                  )}
+                                  {contact.email && (
+                                    <div className="flex items-center gap-1 justify-end text-muted-foreground">
+                                      <a href={`mailto:${contact.email}`} className="text-primary hover:underline truncate">{contact.email}</a>
+                                      <Mail className="h-3 w-3" />
+                                    </div>
+                                  )}
                                 </div>
-                              )}
-                            </div>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
