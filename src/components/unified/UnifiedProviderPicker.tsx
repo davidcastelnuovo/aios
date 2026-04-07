@@ -79,6 +79,13 @@ export default function UnifiedProviderPicker({ open, onOpenChange, selectedCate
     setSelectedProvider(provider);
     setIsConnecting(true);
     try {
+      // Save pending connection context to sessionStorage (backup for callback page)
+      sessionStorage.setItem("unified_pending_connection", JSON.stringify({
+        category: selectedCategory!.key,
+        integration_type: provider.type,
+        tenant_id: tenantId,
+      }));
+
       // Build callback URL with params
       const callbackUrl = new URL("/unified-callback", window.location.origin);
       callbackUrl.searchParams.set("category", selectedCategory!.key);
