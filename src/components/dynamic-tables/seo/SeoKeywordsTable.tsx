@@ -119,11 +119,10 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [] }: SeoKeywords
     }
   }
 
-  // 1. Top 10 by position (best ranked)
+  // 1. All keywords in top 10 positions (page 1)
   const top10 = [...allKeywords]
-    .filter(k => k.position != null)
-    .sort((a, b) => (a.position || 999) - (b.position || 999))
-    .slice(0, 10);
+    .filter(k => k.position != null && k.position <= 10)
+    .sort((a, b) => (a.position || 999) - (b.position || 999));
 
   // 2. All keywords sorted by campaign start change (biggest improvement first)
   const byCampaignChange = [...allKeywords]
