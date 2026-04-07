@@ -151,8 +151,13 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         agencyId = campAgency?.agency_id
       }
       if (!agencyId) {
-        const { data: defaultAgency } = await supabase.from('agencies').select('id').eq('tenant_id', tenantId).limit(1).single()
-        agencyId = defaultAgency?.id
+        const { data: defaultAgency } = await supabase.from('agencies').select('id').eq('tenant_id', tenantId).eq('is_default', true).limit(1).maybeSingle()
+        if (defaultAgency) {
+          agencyId = defaultAgency.id
+        } else {
+          const { data: fallbackAgency } = await supabase.from('agencies').select('id').eq('tenant_id', tenantId).order('created_at', { ascending: true }).limit(1).single()
+          agencyId = fallbackAgency?.id
+        }
       }
       const { data, error } = await supabase.from('tasks').insert({
         title: args.title, agency_id: agencyId, campaigner_id: campaignerId,
