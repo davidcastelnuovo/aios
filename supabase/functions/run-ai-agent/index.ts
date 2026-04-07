@@ -590,6 +590,82 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         active_onboarding: onboardingRes.data?.length || 0,
       }
     }
+    // MEMORY
+    case 'save_memory': {
+      const { data, error } = await supabase.from('ai_memory').upsert({
+        tenant_id: tenantId, user_id: userId || 'system', key: args.key, content: args.content, category: args.category || 'general',
+      }, { onConflict: 'tenant_id,user_id,key' }).select('key, category').single()
+      if (error) throw error
+      return { saved: true, key: data.key, category: data.category }
+    }
+    case 'recall_memory': {
+      let query = supabase.from('ai_memory').select('key, content, category, updated_at').eq('tenant_id', tenantId)
+      if (args.category) query = query.eq('category', args.category)
+      if (args.search) query = query.ilike('content', `%${args.search}%`)
+      const { data, error } = await query.order('updated_at', { ascending: false }).limit(20)
+      if (error) throw error
+      return { count: data.length, memories: data }
+    }
+    case 'delete_memory': {
+      const { error } = await supabase.from('ai_memory').delete().eq('tenant_id', tenantId).eq('key', args.key)
+      if (error) throw error
+      return { deleted: true, key: args.key }
+    }
+    // CHAT HISTORY
+    case 'get_chat_history': {
+      const filterCol = args.contact_type === 'client' ? 'client_id' : 'lead_id'
+      const { data, error } = await supabase.from('chat_messages').select('id, message_text, direction, sender_name, created_at')
+        .eq('tenant_id', tenantId).eq(filterCol, args.contact_id)
+        .order('created_at', { ascending: false }).limit(args.limit || 20)
+      if (error) throw error
+      return { count: data.length, messages: data.reverse() }
+    }
+    case 'get_recent_inbound_messages': {
+      const hoursAgo = args.hours || 24
+      const since = new Date(Date.now() - hoursAgo * 60 * 60 * 1000).toISOString()
+      const { data, error } = await supabase.from('chat_messages')
+        .select('id, message_text, sender_name, sender_phone, created_at, client_id, lead_id, clients(name), leads(company_name)')
+        .eq('tenant_id', tenantId).eq('direction', 'inbound').gte('created_at', since)
+        .order('created_at', { ascending: false }).limit(args.limit || 30)
+      if (error) throw error
+      return { count: data.length, messages: data.map((m: any) => ({ ...m, contact_name: m.clients?.name || m.leads?.company_name || m.sender_name || m.sender_phone })) }
+    }
+    // FINANCE
+    case 'list_finance': {
+      let query = supabase.from('finance').select('id, amount, type, description, date, client_id, clients(name)').eq('tenant_id', tenantId).order('date', { ascending: false }).limit(args.limit || 20)
+      if (args.client_id) query = query.eq('client_id', args.client_id)
+      if (args.type) query = query.eq('type', args.type)
+      const { data, error } = await query
+      if (error) throw error
+      return { count: data.length, entries: data.map((f: any) => ({ ...f, client_name: f.clients?.name })) }
+    }
+    case 'create_finance_entry': {
+      const { data, error } = await supabase.from('finance').insert({
+        amount: args.amount, type: args.type, description: args.description,
+        date: args.date || new Date().toISOString().split('T')[0],
+        client_id: args.client_id || null, tenant_id: tenantId,
+      }).select('id, amount, type, description').single()
+      if (error) throw error
+      return { finance_id: data.id, amount: data.amount, type: data.type }
+    }
+    case 'get_finance_summary': {
+      const month = args.month || new Date().toISOString().slice(0, 7)
+      const startDate = `${month}-01`
+      const endDate = new Date(parseInt(month.split('-')[0]), parseInt(month.split('-')[1]), 0).toISOString().split('T')[0]
+      const { data, error } = await supabase.from('finance').select('amount, type').eq('tenant_id', tenantId).gte('date', startDate).lte('date', endDate)
+      if (error) throw error
+      const income = (data || []).filter((f: any) => f.type === 'income').reduce((s: number, f: any) => s + (f.amount || 0), 0)
+      const expense = (data || []).filter((f: any) => f.type === 'expense').reduce((s: number, f: any) => s + (f.amount || 0), 0)
+      return { month, income, expense, profit: income - expense, entries_count: data.length }
+    }
+    // UPDATES
+    case 'list_updates': {
+      const table = args.entity_type === 'client' ? 'client_updates' : 'lead_updates'
+      const idCol = args.entity_type === 'client' ? 'client_id' : 'lead_id'
+      const { data, error } = await supabase.from(table).select('id, content, created_at').eq(idCol, args.entity_id).order('created_at', { ascending: false }).limit(args.limit || 10)
+      if (error) throw error
+      return { count: data.length, updates: data }
+    }
     default:
       throw new Error(`Unknown tool: ${name}`)
   }
