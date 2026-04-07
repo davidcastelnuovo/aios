@@ -9,7 +9,7 @@ interface SeoTrafficChartProps {
 export function SeoTrafficChart({ trafficHistory }: SeoTrafficChartProps) {
   const chartData = trafficHistory.map((item: any) => ({
     date: item.date ? format(new Date(item.date), 'MM/yy') : '',
-    traffic: item.traffic || 0,
+    traffic: item.org_traffic || item.traffic || 0,
   }));
 
   if (chartData.length === 0) return null;
