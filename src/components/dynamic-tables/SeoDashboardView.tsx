@@ -1,17 +1,19 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Globe, FileText, Calendar } from "lucide-react";
+import { Globe, FileText, Calendar, RefreshCw } from "lucide-react";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { SeoSnapshotCards } from "./seo/SeoSnapshotCards";
 import { SeoTrafficChart } from "./seo/SeoTrafficChart";
 import { SeoKeywordsTable } from "./seo/SeoKeywordsTable";
 import { GscIntegration, type GscKeywordData } from "./seo/GscIntegration";
+import { useAhrefsEnrichment } from "@/hooks/useAhrefsEnrichment";
 
 interface SeoDashboardViewProps {
   tenantId: string;
@@ -21,6 +23,8 @@ interface SeoDashboardViewProps {
 export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) {
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [gscData, setGscData] = useState<GscKeywordData[]>([]);
+  const { fetchKeywords, enrichedData: ahrefsApiData, isLoading: isEnriching } = useAhrefsEnrichment();
+  const [hasAutoEnriched, setHasAutoEnriched] = useState(false);
 
   const handleGscDataLoaded = useCallback((data: GscKeywordData[]) => {
     setGscData(data);
@@ -137,8 +141,28 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
     const normalized = normalizeKeyword(kw);
     const kwLower = String(normalized.keyword).toLowerCase().trim();
     // Use inline data first, fallback to cross-report comparison
-    const prevPos = normalized.position_prev_month ?? prevMonthMap.get(kwLower) ?? null;
-    const campPos = normalized.position_campaign_start ?? campaignStartMap.get(kwLower) ?? null;
+    let prevPos = normalized.position_prev_month ?? prevMonthMap.get(kwLower) ?? null;
+    let campPos = normalized.position_campaign_start ?? campaignStartMap.get(kwLower) ?? null;
+    
+    // Enrich from Ahrefs API data if available
+    const apiRow = ahrefsApiData.get(kwLower);
+    if (apiRow) {
+      // If we have API comparison data, use it to fill missing prev month
+      if (prevPos === null && apiRow.best_position_prev != null && normalized.position != null) {
+        prevPos = apiRow.best_position_prev;
+      }
+      // Fill volume/traffic from API if missing
+      if (normalized.volume == null && apiRow.volume != null) {
+        normalized.volume = apiRow.volume;
+      }
+      if (normalized.kd == null && apiRow.keyword_difficulty != null) {
+        normalized.kd = apiRow.keyword_difficulty;
+      }
+      if (normalized.cpc == null && apiRow.cpc != null) {
+        normalized.cpc = apiRow.cpc;
+      }
+    }
+    
     // Merge GSC data (clicks, impressions, CTR)
     const gscRow = gscMap.get(kwLower);
     return {
@@ -152,8 +176,46 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
     };
   }
 
-  const organicKeywords = useMemo(() => rawOrganic.map(enrichKeyword), [rawOrganic, prevMonthMap, campaignStartMap, gscMap]);
-  const trackedKeywords = useMemo(() => rawTracked.map(enrichKeyword), [rawTracked, prevMonthMap, campaignStartMap, gscMap]);
+  const organicKeywords = useMemo(() => rawOrganic.map(enrichKeyword), [rawOrganic, prevMonthMap, campaignStartMap, gscMap, ahrefsApiData]);
+  const trackedKeywords = useMemo(() => rawTracked.map(enrichKeyword), [rawTracked, prevMonthMap, campaignStartMap, gscMap, ahrefsApiData]);
+
+  // Auto-enrich: fetch comparison data from Ahrefs API when keywords lack it
+  const domain = reportData?.domain || selectedReport?.domain;
+  const needsEnrichment = useMemo(() => {
+    const allKw = [...rawOrganic, ...rawTracked];
+    if (allKw.length === 0) return false;
+    // Check if most keywords lack prev month data
+    const withPrev = allKw.filter(kw => 
+      (kw.position_prev_month != null) || (kw.best_position_prev != null)
+    );
+    return withPrev.length < allKw.length * 0.3;
+  }, [rawOrganic, rawTracked]);
+
+  useEffect(() => {
+    if (domain && needsEnrichment && !hasAutoEnriched && !isEnriching && reports.length > 0) {
+      setHasAutoEnriched(true);
+      const reportDate = selectedReport?.report_date || new Date().toISOString().split('T')[0];
+      // Compare with 3 months back
+      const compDate = (() => {
+        const d = new Date(reportDate);
+        d.setMonth(d.getMonth() - 3);
+        return d.toISOString().split('T')[0];
+      })();
+      fetchKeywords(domain, reportDate, compDate, 200);
+    }
+  }, [domain, needsEnrichment, hasAutoEnriched, isEnriching, reports.length, selectedReport, fetchKeywords]);
+
+  const handleManualSync = useCallback(() => {
+    if (!domain) return;
+    setHasAutoEnriched(true);
+    const reportDate = selectedReport?.report_date || new Date().toISOString().split('T')[0];
+    const compDate = (() => {
+      const d = new Date(reportDate);
+      d.setMonth(d.getMonth() - 3);
+      return d.toISOString().split('T')[0];
+    })();
+    fetchKeywords(domain, reportDate, compDate, 200);
+  }, [domain, selectedReport, fetchKeywords]);
 
   if (isLoading) {
     return (
@@ -190,6 +252,16 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
           {reportData?.project_name && (
             <Badge variant="outline">{reportData.project_name}</Badge>
           )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleManualSync}
+            disabled={isEnriching}
+            className="h-8 text-xs gap-1.5"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isEnriching ? 'animate-spin' : ''}`} />
+            {isEnriching ? 'מסנכרן...' : 'סנכרון Ahrefs'}
+          </Button>
         </div>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           {reports.length > 1 && (
