@@ -111,7 +111,7 @@ const ALL_TOOLS = [
 // ===========================
 // TOOL EXECUTOR
 // ===========================
-async function executeTool(name: string, args: Record<string, any>, supabase: any, tenantId: string, userId: string): Promise<any> {
+async function executeTool(name: string, args: Record<string, any>, supabase: any, tenantId: string, userId: string, callerCampaignerId?: string | null): Promise<any> {
   switch (name) {
     case 'create_lead': {
       const { data: agency } = await supabase.from('agencies').select('id').eq('tenant_id', tenantId).limit(1).single()
@@ -142,11 +142,15 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     case 'create_task': {
       let campaignerId = args.campaigner_id
       let agencyId = null
+      // Priority: 1) explicit arg, 2) caller identity (from WhatsApp phone), 3) user profile, 4) tenant owner
+      if (!campaignerId && callerCampaignerId) {
+        campaignerId = callerCampaignerId
+      }
       if (!campaignerId && userId && userId !== 'system') {
         const { data: profile } = await supabase.from('profiles').select('campaigner_id').eq('id', userId).single()
         campaignerId = profile?.campaigner_id
       }
-      // Fallback for system/WhatsApp: assign to tenant owner's campaigner
+      // Fallback for system/WhatsApp without phone match: assign to tenant owner
       if (!campaignerId) {
         const { data: ownerRole } = await supabase.from('user_roles').select('user_id').eq('role', 'owner').limit(1).maybeSingle()
         if (ownerRole?.user_id) {
@@ -707,6 +711,35 @@ Deno.serve(async (req) => {
     let resolvedTenantId = tenant_id || agent.tenant_id
     let resolvedUserId = user_id || 'system'
 
+    // 2.5. Resolve caller identity from phone number (WhatsApp sessions)
+    let callerCampaignerId: string | null = null
+    let callerName: string | null = user_name || null
+    const callerPhone = lead_data?.phone || null
+    if (callerPhone && resolvedTenantId) {
+      // Normalize: take last 9 digits for comparison
+      const normalizedPhone = callerPhone.replace(/[^0-9]/g, '').slice(-9)
+      if (normalizedPhone.length >= 9) {
+        const { data: matchedCampaigners } = await supabase
+          .from('campaigners')
+          .select('id, full_name, phone')
+          .eq('tenant_id', resolvedTenantId)
+          .eq('active', true)
+        
+        if (matchedCampaigners) {
+          const match = matchedCampaigners.find((c: any) => {
+            if (!c.phone) return false
+            const cNorm = c.phone.replace(/[^0-9]/g, '').slice(-9)
+            return cNorm === normalizedPhone
+          })
+          if (match) {
+            callerCampaignerId = match.id
+            callerName = match.full_name
+            console.log(`[AGENT] Resolved caller phone ${callerPhone} → campaigner: ${match.full_name} (${match.id})`)
+          }
+        }
+      }
+    }
+
     // 3. Build system prompt with full tenant context
     // Fetch tenant context, memory for Carmen and all agents
     const [tenantRes, agenciesRes, statsRes, memoryRes] = await Promise.all([
@@ -886,6 +919,10 @@ Deno.serve(async (req) => {
     if (isCarmen) {
       systemPrompt += `\n\n💬 **כשעונה להודעות WhatsApp:** כתוב בסגנון קצר, ישיר וחברותי. הימנע מטקסט ארוך מדי. אל תשתמש ב-markdown בהודעות וואטסאפ.`
       systemPrompt += `\n🧠 **זיכרון:** כשהמשתמש מספר לך העדפות, שמות פרויקטים, או מידע חשוב — שמור אותם אוטומטית באמצעות save_memory.`
+      // Inject caller identity for task assignment
+      if (callerCampaignerId && callerName) {
+        systemPrompt += `\n\n👤 **זהות המשתמש הנוכחי:** ${callerName} (campaigner_id: ${callerCampaignerId}). כשיוצרים משימה, שייך אותה אוטומטית ל-${callerName} אלא אם המשתמש מבקש במפורש לשייך למישהו אחר.`
+      }
     }
 
     // 4. Filter tools
@@ -960,7 +997,7 @@ Deno.serve(async (req) => {
 
         let result: any
         try {
-          result = await executeTool(toolName, toolArgs, supabase, resolvedTenantId, resolvedUserId)
+          result = await executeTool(toolName, toolArgs, supabase, resolvedTenantId, resolvedUserId, callerCampaignerId)
         } catch (e: any) {
           result = { error: e.message }
         }
