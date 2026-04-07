@@ -172,22 +172,58 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
   const organicKeywords = useMemo(() => rawOrganic.map(enrichKeyword), [rawOrganic, prevMonthMap, gscMap, comparisonData]);
   const trackedKeywords = useMemo(() => rawTracked.map(enrichKeyword), [rawTracked, prevMonthMap, gscMap, comparisonData]);
 
-  // Auto-enrich: fetch comparison data from Ahrefs API
   const domain = reportData?.domain || selectedReport?.domain;
 
+  // Load cached comparison data from the database on mount (no API call)
   useEffect(() => {
-    if (domain && !hasAutoEnriched && !isEnriching && reports.length > 0) {
+    if (selectedReport && !hasAutoEnriched) {
+      const cached = (selectedReport as any).comparison_data;
+      if (cached && cached.threeMonth && cached.yearly) {
+        const threeMonthMap = new Map<string, any>(Object.entries(cached.threeMonth));
+        const yearlyMap = new Map<string, any>(Object.entries(cached.yearly));
+        // Set comparison data via the hook's internal setter is not exposed,
+        // so we store it locally and merge into enrichKeyword
+        setCachedComparison({ threeMonth: threeMonthMap, yearly: yearlyMap });
+      }
       setHasAutoEnriched(true);
-      const reportDate = selectedReport?.report_date || new Date().toISOString().split('T')[0];
-      fetchComparisons(domain, reportDate, 200);
     }
-  }, [domain, hasAutoEnriched, isEnriching, reports.length, selectedReport, fetchComparisons]);
+  }, [selectedReport, hasAutoEnriched]);
 
-  const handleManualSync = useCallback(() => {
+  const [cachedComparison, setCachedComparison] = useState<{
+    threeMonth: Map<string, any>;
+    yearly: Map<string, any>;
+  } | null>(null);
+
+  // Effective comparison data: API data takes priority, then cached DB data
+  const effectiveComparison = useMemo(() => {
+    if (comparisonData.threeMonth.size > 0 || comparisonData.yearly.size > 0) {
+      return comparisonData;
+    }
+    if (cachedComparison) {
+      return cachedComparison;
+    }
+    return comparisonData;
+  }, [comparisonData, cachedComparison]);
+
+  const handleManualSync = useCallback(async () => {
     if (!domain) return;
-    setHasAutoEnriched(true);
     const reportDate = selectedReport?.report_date || new Date().toISOString().split('T')[0];
-    fetchComparisons(domain, reportDate, 200);
+    const result = await fetchComparisons(domain, reportDate, 200);
+    
+    // Save to DB as cache
+    if (result && selectedReport?.id) {
+      const cachePayload: Record<string, Record<string, any>> = {
+        threeMonth: {},
+        yearly: {},
+      };
+      result.threeMonth.forEach((v, k) => { cachePayload.threeMonth[k] = v; });
+      result.yearly.forEach((v, k) => { cachePayload.yearly[k] = v; });
+      
+      await supabase
+        .from('ahrefs_reports')
+        .update({ comparison_data: cachePayload } as any)
+        .eq('id', selectedReport.id);
+    }
   }, [domain, selectedReport, fetchComparisons]);
 
   if (isLoading) {

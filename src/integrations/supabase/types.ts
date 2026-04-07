@@ -192,6 +192,7 @@ export type Database = {
         Row: {
           agency_id: string | null
           client_id: string | null
+          comparison_data: Json | null
           created_at: string
           domain: string
           id: string
@@ -205,6 +206,7 @@ export type Database = {
         Insert: {
           agency_id?: string | null
           client_id?: string | null
+          comparison_data?: Json | null
           created_at?: string
           domain: string
           id?: string
@@ -218,6 +220,7 @@ export type Database = {
         Update: {
           agency_id?: string | null
           client_id?: string | null
+          comparison_data?: Json | null
           created_at?: string
           domain?: string
           id?: string
