@@ -27,8 +27,8 @@ export default function UnifiedSettings() {
   const { currentTenantId } = useTenant();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<{ key: string; label: string } | null>(null);
+  const [directIntegrationType, setDirectIntegrationType] = useState<string | undefined>(undefined);
 
-  // Fetch active connections from DB
   const { data: connections, isLoading: isLoadingConnections } = useQuery({
     queryKey: ["unified-connections", currentTenantId],
     queryFn: async () => {
@@ -55,9 +55,9 @@ export default function UnifiedSettings() {
   });
 
   const handleIntegrationClick = (integration: WorkspaceIntegration) => {
-    // Use first category of the integration
     const category = integration.categories[0] || integration.type;
     setSelectedCategory({ key: category, label: integration.name });
+    setDirectIntegrationType(integration.type);
     setPickerOpen(true);
   };
 
@@ -235,9 +235,13 @@ export default function UnifiedSettings() {
       {/* Provider Picker Dialog */}
       <UnifiedProviderPicker
         open={pickerOpen}
-        onOpenChange={setPickerOpen}
+        onOpenChange={(val) => {
+          setPickerOpen(val);
+          if (!val) setDirectIntegrationType(undefined);
+        }}
         selectedCategory={selectedCategory}
         tenantId={currentTenantId || ""}
+        directIntegrationType={directIntegrationType}
       />
     </div>
   );
