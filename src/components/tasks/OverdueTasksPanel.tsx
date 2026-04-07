@@ -1,10 +1,11 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { ListTodo, MessageSquare, Users, CalendarDays, Clock, ChevronLeft, ChevronRight, AlertTriangle, GripVertical, Megaphone } from "lucide-react";
+import { ListTodo, MessageSquare, Users, CalendarDays, Clock, ChevronLeft, ChevronRight, AlertTriangle, GripVertical, Megaphone, Check } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { QuickTaskInput } from "./QuickTaskInput";
