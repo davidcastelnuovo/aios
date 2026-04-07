@@ -1,7 +1,8 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Globe, FileText, Calendar } from "lucide-react";
@@ -17,6 +18,8 @@ interface SeoDashboardViewProps {
 }
 
 export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) {
+  const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
+
   const { data: reports = [], isLoading } = useQuery({
     queryKey: ['seo-dashboard-reports', tenantId, clientId],
     queryFn: async () => {
@@ -25,15 +28,22 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
         .select('*')
         .eq('tenant_id', tenantId)
         .eq('client_id', clientId)
-        .order('received_at', { ascending: false });
+        .order('report_date', { ascending: false });
       if (error) throw error;
       return data || [];
     },
     enabled: !!tenantId && !!clientId,
   });
 
-  const latestReport = reports[0];
-  const reportData = latestReport?.report_data as any;
+  // Selected report (default to latest)
+  const selectedReport = useMemo(() => {
+    if (selectedReportId) {
+      return reports.find(r => r.id === selectedReportId) || reports[0];
+    }
+    return reports[0];
+  }, [reports, selectedReportId]);
+
+  const reportData = selectedReport?.report_data as any;
 
   const snapshot = reportData?.snapshot || {};
   const snapshotPrevMonth = reportData?.snapshot_prev_month || {};
@@ -74,17 +84,38 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-3">
           <Globe className="h-5 w-5 text-primary" />
-          <span className="font-semibold text-lg">{reportData?.domain || latestReport?.domain}</span>
+          <span className="font-semibold text-lg">{reportData?.domain || selectedReport?.domain}</span>
           {reportData?.project_name && (
             <Badge variant="outline">{reportData.project_name}</Badge>
           )}
         </div>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Calendar className="h-4 w-4" />
-          {latestReport && format(new Date(latestReport.received_at), 'dd MMMM yyyy', { locale: he })}
+          {reports.length > 1 && (
+            <Select
+              value={selectedReport?.id || ''}
+              onValueChange={(val) => setSelectedReportId(val)}
+            >
+              <SelectTrigger className="w-[200px] h-8 text-xs">
+                <SelectValue placeholder="בחר תאריך דוח" />
+              </SelectTrigger>
+              <SelectContent>
+                {reports.map((r) => (
+                  <SelectItem key={r.id} value={r.id}>
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-3 w-3" />
+                      {r.report_date 
+                        ? format(new Date(r.report_date), 'dd MMMM yyyy', { locale: he })
+                        : format(new Date(r.received_at), 'dd MMMM yyyy', { locale: he })
+                      }
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           {campaignStartDate && (
             <Badge variant="secondary">
-              תחילת קמפיין: {format(new Date(campaignStartDate), 'dd/MM/yyyy')}
+              תחילת קידום: {format(new Date(campaignStartDate), 'dd/MM/yyyy')}
             </Badge>
           )}
           <Badge variant="secondary">{reports.length} דוחות</Badge>
