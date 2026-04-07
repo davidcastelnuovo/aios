@@ -1,64 +1,50 @@
 
 
-## סיכום הבעיה
+## הבנתי - הבעיה והפתרון
 
-ה-webhook של Ahrefs (`ahrefs-webhook/index.ts`) מכניס כל דוח שנשלח כשורה חדשה **בלי בדיקת כפילויות**. כלומר אם אותו דוח נשלח פעמיים (או יותר) לאותו דומיין ותאריך - נוצרות שורות כפולות. מתוך 79 דוחות בבסיס הנתונים, 45 הם כפילויות מיותרות.
+### הבעיה
+כשלוחצים "סנכרן" בדוח הדינמי, הקוד (שורה 1022 ב-`DynamicTableView.tsx`) **מוחק את כל הרשומות הקודמות** ומכניס רק את הדוח האחרון. כלומר המידע ההיסטורי נמחק מהטבלה הדינמית בכל סנכרון.
 
-בנוסף, כשמשייכים דוח ללקוח - זה מעדכן רק שורה אחת, והכפילויות נשארות ללא שיוך.
+בנוסף, ה-webhook שומר דוחות חדשים ב-`ahrefs_reports` אבל לא מעדכן את הטבלה הדינמית (`crm_records`) אוטומטית.
 
----
+### מה צריך לקרות
+1. כל חודש מגיע דוח חדש דרך webhook → נשמר ב-`ahrefs_reports` (כבר עובד)
+2. הדוח משויך אוטומטית ללקוח לפי דומיין (כבר עובד)  
+3. הנתונים צריכים להיכנס לטבלה הדינמית **בלי למחוק** דוחות קודמים
+4. אפשרות לפלטר לפי חודש בטבלה הדינמית
 
-## תוכנית
+### תוכנית
 
-### שלב 1: ניקוי כפילויות קיימות (מיגרציה)
+**שלב 1: עדכון סנכרון הטבלה הדינמית** (`DynamicTableView.tsx`)
+- שינוי `syncAhrefsMutation` כך שיכניס רשומות מ**כל** הדוחות, לא רק מהאחרון
+- כל רשומה תכיל שדה `report_date` כדי לאפשר סינון
+- במקום למחוק הכל → מחיקה רק של רשומות ישנות שהתעדכנו, או upsert
 
-מיגרציית SQL שתמחק את כל הכפילויות. הלוגיקה:
-- לכל שילוב של `domain + report_date + report_type` - נשמור רק שורה אחת
-- עדיפות: שורה עם `client_id` (משויכת) לפני שורה ללא שיוך, ובתוך זה הכי חדשה
+**שלב 2: עדכון אוטומטי מה-webhook** (`ahrefs-webhook/index.ts`)
+- אחרי שמירת/עדכון דוח ב-`ahrefs_reports`, ה-webhook גם ימצא את ה-`crm_table` המתאים (לפי `client_id` + `integration_type = 'ahrefs'`)
+- יכניס/יעדכן את הרשומות ב-`crm_records` ישירות — כך שהטבלה הדינמית מתעדכנת אוטומטית בלי צורך בסנכרון ידני
 
-### שלב 2: מניעת כפילויות עתידיות (webhook)
+**שלב 3: סינון לפי חודש**
+- שדה `report_date` כבר נכנס בכל רשומה
+- מנגנון הפילטר הקיים ב-`DynamicTableView` (dateFilter) כבר עובד על שדה `date` — נוודא שהוא עובד גם על `report_date`
 
-עדכון `ahrefs-webhook/index.ts` - לפני INSERT, בדיקה אם כבר קיים דוח עם אותו `domain + report_date + report_type`. אם כן:
-- עדכון (UPSERT) של הדוח הקיים במקום יצירת חדש
-- שמירה על `client_id` הקיים אם כבר שויך
+### פרטים טכניים
 
-### שלב 3: שיוך אוטומטי לפי דומיין
-
-עדכון ה-webhook כך שכאשר מגיע דוח חדש לדומיין שכבר שויך ללקוח בעבר:
-1. מוצא את ה-`client_id` מדוח קודם לאותו דומיין
-2. משייך אותו אוטומטית לדוח החדש
-3. יוצר דוח SEO בטבלת `crm_tables` אם עדיין לא קיים
-
-### שלב 4: UNIQUE constraint בבסיס הנתונים
-
-הוספת אינדקס ייחודי על `(domain, report_date, report_type)` כדי למנוע כפילויות ברמת הDB.
-
----
-
-## פרטים טכניים
-
-**מיגרציה - מחיקת כפילויות:**
-```sql
-DELETE FROM ahrefs_reports 
-WHERE id NOT IN (
-  SELECT DISTINCT ON (domain, report_date, report_type) id
-  FROM ahrefs_reports
-  ORDER BY domain, report_date, report_type, client_id NULLS LAST, received_at DESC
-);
-
-CREATE UNIQUE INDEX idx_ahrefs_reports_unique_domain_date_type 
-ON ahrefs_reports (domain, report_date, report_type);
+**`DynamicTableView.tsx` - syncAhrefsMutation:**
+```
+- שליפת כל הדוחות (לא רק האחרון)
+- לכל דוח → יצירת רשומות עם report_date
+- מחיקה ואז הכנסה מחדש של כל הרשומות (rebuild מלא)
 ```
 
-**Webhook - UPSERT logic:**
-- שימוש ב-`ON CONFLICT` על האינדקס החדש
-- בעת conflict: עדכון `report_data`, `metadata`, `received_at`, ושמירה על `client_id` קיים
-
-**שיוך אוטומטי:**
-- בwebhook, חיפוש `client_id` מדוח קודם לאותו דומיין
-- אם נמצא, שיוך אוטומטי + יצירת דוח SEO אם חסר
+**`ahrefs-webhook/index.ts` - אחרי insert/update:**
+```
+- חיפוש crm_table עם integration_type='ahrefs' + client_id
+- אם נמצא: מחיקת רשומות ישנות לאותו report_date + הכנסת חדשות
+- כך כל דוח חודשי חדש מופיע אוטומטית בטבלה
+```
 
 **קבצים שישתנו:**
-- `supabase/functions/ahrefs-webhook/index.ts` - הוספת UPSERT ושיוך אוטומטי
-- מיגרציה חדשה - ניקוי + UNIQUE constraint
+- `src/pages/DynamicTableView.tsx` — syncAhrefsMutation + date filter alignment
+- `supabase/functions/ahrefs-webhook/index.ts` — auto-sync to crm_records
 
