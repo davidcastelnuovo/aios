@@ -1,34 +1,64 @@
 
-מטרת התיקון: להחזיר גלילה לעמוד האינטגרציות בלי לשבור את מבנה ה-fixed viewport של המערכת.
 
-1. זיהוי הבעיה
-- `AppLayout` כבר מוגדר כ-viewport מקובע עם `h-screen` ו-`overflow-hidden`.
-- עמוד `Integrations.tsx` מחזיר רק wrapper רגיל: `container mx-auto p-6 space-y-6`.
-- לכן אין לעמוד עצמו אזור גלילה פנימי, ובגלל שה-layout חוסם גלילת עמוד חיצונית, התוצאה היא עמוד “תקוע”.
+## סיכום הבעיה
 
-2. מה אשנה
-- ב-`src/pages/Integrations.tsx` אעטוף את התוכן במבנה דו-שכבתי:
-  - שכבה חיצונית: `h-full min-h-0 overflow-hidden`
-  - שכבה פנימית גוללת: `h-full overflow-y-auto`
-- בתוך השכבה הגוללת אשאיר את ה-`container mx-auto p-6 space-y-6` הקיים, כדי לא לשנות את העיצוב.
-- אוסיף גם `dir="rtl"` לעטיפה אם צריך לשמור על עקביות עם דפי הגדרות אחרים.
+ה-webhook של Ahrefs (`ahrefs-webhook/index.ts`) מכניס כל דוח שנשלח כשורה חדשה **בלי בדיקת כפילויות**. כלומר אם אותו דוח נשלח פעמיים (או יותר) לאותו דומיין ותאריך - נוצרות שורות כפולות. מתוך 79 דוחות בבסיס הנתונים, 45 הם כפילויות מיותרות.
 
-3. למה זה הפתרון הנכון
-- הוא תואם לארכיטקטורה הקיימת: header/sidebar נשארים קבועים.
-- הוא פותר את הבעיה מקומית לעמוד האינטגרציות במקום לפתוח שוב גלילה גלובלית ב-`AppLayout`.
-- הוא לא ישפיע על דפי צ׳אט/לקוחות שכבר דורשים התנהגות גלילה מותאמת משלהם.
+בנוסף, כשמשייכים דוח ללקוח - זה מעדכן רק שורה אחת, והכפילויות נשארות ללא שיוך.
 
-4. קבצים שצפויים להשתנות
-- `src/pages/Integrations.tsx` בלבד.
+---
 
-5. בדיקה אחרי התיקון
-- לוודא שאפשר לגלול את עמוד האינטגרציות כולו.
-- לוודא שה-header העליון נשאר מקובע.
-- לוודא שכרטיסי האינטגרציות בתחתית נגישים.
-- לוודא שבמסכים ברוחב כמו שלך הגלילה עובדת חלק.
-- לבדוק שגם ניווט לעמודי הגדרות מתוך הכרטיסים עדיין תקין.
+## תוכנית
 
-פרטים טכניים
-- כרגע יש mismatch בין layout מקובע (`overflow-hidden`) לבין page wrapper בלי `overflow-y-auto`.
-- הפתרון הוא לא להחזיר `overflow-y-auto` ל-`main` ב-`AppLayout`, אלא לתת לכל עמוד ארוך לממש scroll container פנימי משלו.
-- אם אראה שגם עמודי אינטגרציות נוספים בנויים באותה צורה, אפשר אחר כך להחיל את אותו pattern גם על דפי settings הארוכים, אבל כרגע אתמקד רק בבעיה שדיווחת עליה.
+### שלב 1: ניקוי כפילויות קיימות (מיגרציה)
+
+מיגרציית SQL שתמחק את כל הכפילויות. הלוגיקה:
+- לכל שילוב של `domain + report_date + report_type` - נשמור רק שורה אחת
+- עדיפות: שורה עם `client_id` (משויכת) לפני שורה ללא שיוך, ובתוך זה הכי חדשה
+
+### שלב 2: מניעת כפילויות עתידיות (webhook)
+
+עדכון `ahrefs-webhook/index.ts` - לפני INSERT, בדיקה אם כבר קיים דוח עם אותו `domain + report_date + report_type`. אם כן:
+- עדכון (UPSERT) של הדוח הקיים במקום יצירת חדש
+- שמירה על `client_id` הקיים אם כבר שויך
+
+### שלב 3: שיוך אוטומטי לפי דומיין
+
+עדכון ה-webhook כך שכאשר מגיע דוח חדש לדומיין שכבר שויך ללקוח בעבר:
+1. מוצא את ה-`client_id` מדוח קודם לאותו דומיין
+2. משייך אותו אוטומטית לדוח החדש
+3. יוצר דוח SEO בטבלת `crm_tables` אם עדיין לא קיים
+
+### שלב 4: UNIQUE constraint בבסיס הנתונים
+
+הוספת אינדקס ייחודי על `(domain, report_date, report_type)` כדי למנוע כפילויות ברמת הDB.
+
+---
+
+## פרטים טכניים
+
+**מיגרציה - מחיקת כפילויות:**
+```sql
+DELETE FROM ahrefs_reports 
+WHERE id NOT IN (
+  SELECT DISTINCT ON (domain, report_date, report_type) id
+  FROM ahrefs_reports
+  ORDER BY domain, report_date, report_type, client_id NULLS LAST, received_at DESC
+);
+
+CREATE UNIQUE INDEX idx_ahrefs_reports_unique_domain_date_type 
+ON ahrefs_reports (domain, report_date, report_type);
+```
+
+**Webhook - UPSERT logic:**
+- שימוש ב-`ON CONFLICT` על האינדקס החדש
+- בעת conflict: עדכון `report_data`, `metadata`, `received_at`, ושמירה על `client_id` קיים
+
+**שיוך אוטומטי:**
+- בwebhook, חיפוש `client_id` מדוח קודם לאותו דומיין
+- אם נמצא, שיוך אוטומטי + יצירת דוח SEO אם חסר
+
+**קבצים שישתנו:**
+- `supabase/functions/ahrefs-webhook/index.ts` - הוספת UPSERT ושיוך אוטומטי
+- מיגרציה חדשה - ניקוי + UNIQUE constraint
+
