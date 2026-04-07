@@ -47,16 +47,15 @@ Deno.serve(async (req) => {
 
       // Resolve tenant_id
       if (!tenant_id) {
-        const { data: existingReport } = await supabase
+        const { data: existingReports } = await supabase
           .from("ahrefs_reports")
           .select("tenant_id")
           .eq("domain", domain)
           .not("tenant_id", "is", null)
-          .limit(1)
-          .single();
+          .limit(1);
 
-        if (existingReport?.tenant_id) {
-          tenant_id = existingReport.tenant_id;
+        if (existingReports && existingReports.length > 0 && existingReports[0].tenant_id) {
+          tenant_id = existingReports[0].tenant_id;
         } else {
           const { data: mcTenant } = await supabase
             .from("tenants")
