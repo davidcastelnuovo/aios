@@ -8,14 +8,25 @@ export default function UnifiedCallback() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const connectionId = params.get("id");
-    const category = params.get("category");
-    const integrationType = params.get("integration_type");
-    const tenantId = params.get("tenant_id");
+    let connectionId = params.get("id");
+    let category = params.get("category");
+    let integrationType = params.get("integration_type");
+    let tenantId = params.get("tenant_id");
+
+    // Fallback to sessionStorage if URL params were stripped by Unified.to
+    const stored = sessionStorage.getItem("unified_pending_connection");
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        if (!category) category = parsed.category;
+        if (!integrationType) integrationType = parsed.integration_type;
+        if (!tenantId) tenantId = parsed.tenant_id;
+      } catch {}
+    }
 
     if (!connectionId || !tenantId) {
       setStatus("error");
-      setErrorMsg("Missing connection ID or tenant ID");
+      setErrorMsg("Missing connection ID or tenant ID. connectionId=" + connectionId + " tenantId=" + tenantId);
       return;
     }
 
@@ -33,6 +44,9 @@ export default function UnifiedCallback() {
         if (error) throw error;
 
         setStatus("success");
+
+        // Clean up sessionStorage
+        sessionStorage.removeItem("unified_pending_connection");
 
         // Notify parent window
         if (window.opener) {
