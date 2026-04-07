@@ -301,13 +301,13 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
   const [commModal, setCommModal] = useState<{ clientId: string; clientName: string } | null>(null);
   const [seoModal, setSeoModal] = useState<{ clientId: string; clientName: string } | null>(null);
 
-  // Fetch clients for this agency
+  // Fetch clients for this agency — base query (id + name only, safe without migration)
   const { data: clients = [], isLoading: clientsLoading } = useQuery({
     queryKey: ['clients-agency', agencyId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('clients')
-        .select('id, name, mood_status')
+        .select('id, name')
         .eq('agency_id', agencyId)
         .eq('status', 'active');
       if (error) throw error;
@@ -317,6 +317,27 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
   });
 
   const clientIds = clients.map((c: any) => c.id);
+
+  // CRM: fetch extended client fields (tier, services, mood_status) — only when CRM tab active
+  // These columns may not exist yet if migration hasn't run; errors are silently ignored.
+  const { data: crmClientFields = [] } = useQuery({
+    queryKey: ['clients-crm-fields', agencyId],
+    queryFn: async () => {
+      try {
+        const { data, error } = await supabase
+          .from('clients')
+          .select('id, tier, services, mood_status')
+          .eq('agency_id', agencyId)
+          .eq('status', 'active');
+        if (error) return []; // columns may not exist yet — return empty gracefully
+        return data || [];
+      } catch {
+        return [];
+      }
+    },
+    enabled: !!agencyId && mainTab === 'crm',
+    staleTime: 60_000,
+  });
 
   // CRM: fetch communication logs (only when CRM tab is active)
   const { data: commLogs = [] } = useQuery({
@@ -353,8 +374,19 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
   });
 
   // CRM: build enriched rows sorted worst first
+  // Merges base client (id, name) with extended CRM fields (tier, services, mood_status)
+  // Extended fields fall back to null/empty if migration hasn't run yet
   const crmRows = useMemo(() => {
     return clients.map((c: any) => {
+      // Merge extended CRM fields if available
+      const ext = crmClientFields.find((f: any) => f.id === c.id) ?? {};
+      const merged = {
+        ...c,
+        tier: ext.tier ?? null,
+        services: ext.services ?? [],
+        mood_status: ext.mood_status ?? null,
+      };
+
       const latestComm = commLogs.find((l: any) => l.client_id === c.id) ?? null;
       const daysSinceComm = latestComm ? differenceInDays(new Date(), new Date(latestComm.created_at)) : null;
       const seoHistory = seoUpdates
@@ -362,24 +394,24 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
         .slice(0, 3)
         .map((s: any) => s.status as 'up' | 'stable' | 'down');
       const result = calculateHealthScore({
-        communicationStatus: latestComm?.status ?? null,
+        communicationStatus: latestComm?.status ?? merged.mood_status ?? null,
         daysSinceLastCommunication: daysSinceComm,
-        services: c.services ?? [],
+        services: merged.services,
         performanceChangePct: null,
         daysSinceLastCampaignTouch: null,
         seoHistory,
       });
       return {
-        ...c,
+        ...merged,
         score: result.score,
         overallStatus: result.status,
         flags: result.flags,
         daysSinceComm,
         lastCommDate: latestComm?.created_at ?? null,
-        communicationStatus: latestComm?.status ?? null,
+        communicationStatus: latestComm?.status ?? merged.mood_status ?? null,
       };
     }).sort((a: any, b: any) => a.score - b.score);
-  }, [clients, commLogs, seoUpdates]);
+  }, [clients, crmClientFields, commLogs, seoUpdates]);
 
   // Fetch all tables for these clients
   const { data: tables = [], isLoading: tablesLoading } = useQuery({

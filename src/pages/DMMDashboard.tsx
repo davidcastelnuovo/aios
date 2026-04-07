@@ -118,7 +118,7 @@ export default function DMMDashboard() {
   const [commModal, setCommModal] = useState<{ clientId: string; clientName: string } | null>(null);
   const [seoModal, setSeoModal] = useState<{ clientId: string; clientName: string } | null>(null);
 
-  // ── Fetch clients ──────────────────────────────────────────────────────────
+  // ── Fetch clients (base: always-safe fields) ──────────────────────────────
   const { data: rawClients = [], isLoading: clientsLoading, refetch } = useQuery({
     queryKey: ["dmm-clients", tenantId],
     queryFn: async () => {
@@ -126,7 +126,7 @@ export default function DMMDashboard() {
       const { data, error } = await supabase
         .from("clients")
         .select(`
-          id, name, tier, services, mood_status, status,
+          id, name, status,
           client_team (
             campaigners ( full_name )
           )
@@ -139,6 +139,29 @@ export default function DMMDashboard() {
     },
     enabled: !!tenantId,
     staleTime: 30_000,
+  });
+
+  // ── Fetch CRM extended fields (tier, services, mood_status) ────────────────
+  // These columns are added by migration 20260407_dmm_crm_adaptation.sql
+  // If migration hasn't run yet, errors are silently ignored — fields stay null/empty
+  const { data: crmFields = [] } = useQuery({
+    queryKey: ["dmm-clients-crm-fields", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      try {
+        const { data, error } = await supabase
+          .from("clients")
+          .select("id, tier, services, mood_status")
+          .eq("tenant_id", tenantId)
+          .in("status", ["active", "onboarding"]);
+        if (error) return []; // columns not yet created — graceful fallback
+        return data ?? [];
+      } catch {
+        return [];
+      }
+    },
+    enabled: !!tenantId,
+    staleTime: 60_000,
   });
 
   const clientIds = rawClients.map((c: any) => c.id);
@@ -182,6 +205,13 @@ export default function DMMDashboard() {
   // ── Build enriched client rows ─────────────────────────────────────────────
   const clients: ClientRow[] = useMemo(() => {
     return rawClients.map((c: any) => {
+      // Merge CRM extended fields (tier, services, mood_status)
+      // Falls back to null/empty if migration hasn't run yet
+      const ext = crmFields.find((f: any) => f.id === c.id) ?? {};
+      const tier: string | null = ext.tier ?? null;
+      const services: string[] = ext.services ?? [];
+      const mood_status: string | null = ext.mood_status ?? null;
+
       // Latest comm log
       const latestComm = commLogs.find((l: any) => l.client_id === c.id) ?? null;
       const daysSinceComm = latestComm
@@ -198,11 +228,11 @@ export default function DMMDashboard() {
       const campaignerName =
         c.client_team?.[0]?.campaigners?.full_name ?? "—";
 
-      // Health score
+      // Health score — uses mood_status as fallback comm status if no log exists
       const result = calculateHealthScore({
-        communicationStatus: latestComm?.status ?? null,
+        communicationStatus: latestComm?.status ?? mood_status ?? null,
         daysSinceLastCommunication: daysSinceComm,
-        services: c.services ?? [],
+        services,
         performanceChangePct: null, // TODO: wire from crm_records
         daysSinceLastCampaignTouch: null,
         seoHistory,
@@ -211,12 +241,12 @@ export default function DMMDashboard() {
       return {
         id: c.id,
         name: c.name,
-        tier: c.tier ?? null,
-        services: c.services ?? [],
-        mood_status: c.mood_status ?? null,
+        tier,
+        services,
+        mood_status,
         status: c.status,
         campaignerName,
-        communicationStatus: latestComm?.status ?? null,
+        communicationStatus: latestComm?.status ?? mood_status ?? null,
         lastCommDate: latestComm?.created_at ?? null,
         daysSinceComm,
         seoHistory,
@@ -226,7 +256,7 @@ export default function DMMDashboard() {
         flags: result.flags,
       } as ClientRow;
     });
-  }, [rawClients, commLogs, seoUpdates]);
+  }, [rawClients, crmFields, commLogs, seoUpdates]);
 
   // ── Filtered list ──────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
