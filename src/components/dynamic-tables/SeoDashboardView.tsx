@@ -23,6 +23,8 @@ interface SeoDashboardViewProps {
 export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) {
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [gscData, setGscData] = useState<GscKeywordData[]>([]);
+  const { fetchKeywords, enrichedData: ahrefsApiData, isLoading: isEnriching } = useAhrefsEnrichment();
+  const [hasAutoEnriched, setHasAutoEnriched] = useState(false);
 
   const handleGscDataLoaded = useCallback((data: GscKeywordData[]) => {
     setGscData(data);
