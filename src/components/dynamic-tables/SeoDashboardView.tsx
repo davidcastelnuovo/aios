@@ -25,6 +25,21 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
   const [gscData, setGscData] = useState<GscKeywordData[]>([]);
   const { fetchComparisons, comparisonData, isLoading: isEnriching } = useAhrefsEnrichment();
   const [hasAutoEnriched, setHasAutoEnriched] = useState(false);
+  const [cachedComparison, setCachedComparison] = useState<{
+    threeMonth: Map<string, any>;
+    yearly: Map<string, any>;
+  } | null>(null);
+
+  // Effective comparison data: API data takes priority, then cached DB data
+  const effectiveComparison = useMemo(() => {
+    if (comparisonData.threeMonth.size > 0 || comparisonData.yearly.size > 0) {
+      return comparisonData;
+    }
+    if (cachedComparison) {
+      return cachedComparison;
+    }
+    return comparisonData;
+  }, [comparisonData, cachedComparison]);
 
   const handleGscDataLoaded = useCallback((data: GscKeywordData[]) => {
     setGscData(data);
