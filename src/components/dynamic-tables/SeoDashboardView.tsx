@@ -114,15 +114,15 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
     return map;
   }, [gscData]);
 
-  function enrichKeyword(kw: any): any {
+  function enrichKeyword(kw: any, effComparison: typeof comparisonData): any {
     const normalized = normalizeKeyword(kw);
     const kwLower = String(normalized.keyword).toLowerCase().trim();
     // Use inline data first, fallback to cross-report comparison
     let prevPos = normalized.position_prev_month ?? prevMonthMap.get(kwLower) ?? null;
     
-    // Enrich from Ahrefs API 3-month data
-    const api3m = comparisonData.threeMonth.get(kwLower);
-    const apiYear = comparisonData.yearly.get(kwLower);
+    // Enrich from comparison data (API or cached)
+    const api3m = effComparison.threeMonth.get(kwLower);
+    const apiYear = effComparison.yearly.get(kwLower);
     
     // 3-month position comparison
     let pos3m: number | null = null;
@@ -136,12 +136,12 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
       posYear = apiYear.best_position_prev;
     }
 
-    // Fill missing prev month from 3m API data if needed
+    // Fill missing prev month from 3m data if needed
     if (prevPos === null && api3m?.best_position_prev != null) {
       prevPos = api3m.best_position_prev;
     }
     
-    // Fill volume/kd/cpc from API if missing
+    // Fill volume/kd/cpc from data if missing
     const apiRow = api3m || apiYear;
     if (apiRow) {
       if (normalized.volume == null && apiRow.volume != null) {
@@ -169,8 +169,8 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
     };
   }
 
-  const organicKeywords = useMemo(() => rawOrganic.map(enrichKeyword), [rawOrganic, prevMonthMap, gscMap, comparisonData]);
-  const trackedKeywords = useMemo(() => rawTracked.map(enrichKeyword), [rawTracked, prevMonthMap, gscMap, comparisonData]);
+  const organicKeywords = useMemo(() => rawOrganic.map(kw => enrichKeyword(kw, effectiveComparison)), [rawOrganic, prevMonthMap, gscMap, effectiveComparison]);
+  const trackedKeywords = useMemo(() => rawTracked.map(kw => enrichKeyword(kw, effectiveComparison)), [rawTracked, prevMonthMap, gscMap, effectiveComparison]);
 
   const domain = reportData?.domain || selectedReport?.domain;
 
