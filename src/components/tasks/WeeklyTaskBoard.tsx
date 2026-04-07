@@ -548,25 +548,19 @@ export function WeeklyTaskBoard() {
           const endDateTime = new Date(startDateTime.getTime() + duration * 60000);
           
           if (googleCalendarEventId) {
-            // עדכון אירוע קיים
-            await supabase.functions.invoke("update-calendar-event", {
-              body: {
-                eventId: googleCalendarEventId,
-                summary: title,
-                start: startDateTime.toISOString(),
-                end: endDateTime.toISOString(),
-              },
-            });
+            // עדכון אירוע קיים דרך Unified
+            const { updateCalendarEvent: updateCalEvent } = await import("@/lib/calendarApi");
+            await updateCalEvent(
+              { eventId: googleCalendarEventId, summary: title, start: startDateTime.toISOString(), end: endDateTime.toISOString() },
+              { tenantId: tenantId! }
+            );
           } else {
-            // יצירת אירוע חדש ושמירת ה-eventId
-            const { data: calendarResult } = await supabase.functions.invoke("add-calendar-event", {
-              body: {
-                summary: title,
-                description: `משימה ממערכת Marketing Captain`,
-                start: startDateTime.toISOString(),
-                end: endDateTime.toISOString(),
-              },
-            });
+            // יצירת אירוע חדש דרך Unified
+            const { addCalendarEvent: addCalEvent } = await import("@/lib/calendarApi");
+            const calendarResult = await addCalEvent(
+              { summary: title, description: `משימה ממערכת Marketing Captain`, start: startDateTime.toISOString(), end: endDateTime.toISOString() },
+              { tenantId: tenantId! }
+            );
             
             if (calendarResult?.eventId) {
               await supabase.from("tasks")
@@ -651,12 +645,10 @@ export function WeeklyTaskBoard() {
       // אם יש eventId - מחק גם מגוגל קלנדר
       if (googleCalendarEventId) {
         try {
-          await supabase.functions.invoke("delete-calendar-event", {
-            body: { eventId: googleCalendarEventId },
-          });
+          const { deleteCalendarEvent: delCalEvent } = await import("@/lib/calendarApi");
+          await delCalEvent(googleCalendarEventId, { tenantId: tenantId! });
         } catch (calendarError) {
           console.warn("לא הצלחנו למחוק מיומן גוגל:", calendarError);
-          // ממשיכים למחוק את המשימה גם אם מחיקת הגוגל נכשלה
         }
       }
       
@@ -711,11 +703,8 @@ export function WeeklyTaskBoard() {
       start: string; 
       end: string;
     }) => {
-      const { data, error } = await supabase.functions.invoke("update-calendar-event", {
-        body: { eventId, summary, description, start, end },
-      });
-      if (error) throw error;
-      return data;
+      const { updateCalendarEvent: updateCalEvent } = await import("@/lib/calendarApi");
+      return await updateCalEvent({ eventId, summary, description, start, end }, { tenantId: tenantId! });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly"] });
@@ -731,11 +720,8 @@ export function WeeklyTaskBoard() {
   // Delete calendar event mutation
   const deleteCalendarEvent = useMutation({
     mutationFn: async (eventId: string) => {
-      const { data, error } = await supabase.functions.invoke("delete-calendar-event", {
-        body: { eventId },
-      });
-      if (error) throw error;
-      return data;
+      const { deleteCalendarEvent: delCalEvent } = await import("@/lib/calendarApi");
+      return await delCalEvent(eventId, { tenantId: tenantId! });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly"] });

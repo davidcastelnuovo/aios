@@ -72,18 +72,6 @@ const [eventEnd, setEventEnd] = useState("");
     mutationFn: async () => {
       if (!tenantId) throw new Error("לא נמצא ארגון פעיל.");
 
-      if (connectionStatus?.type === 'legacy') {
-        const { data, error } = await supabase.functions.invoke('google-calendar-auth', {
-          body: { action: 'disconnect' },
-        });
-
-        if (error) {
-          console.error('❌ Disconnect error:', error);
-          throw error;
-        }
-
-        return data;
-      }
 
       const integrationId = await findUnifiedCalendarConnectionId(tenantId);
 
@@ -210,11 +198,7 @@ const [eventEnd, setEventEnd] = useState("");
             <Alert>
               <Calendar className="h-4 w-4" />
               <AlertDescription>
-                {connectionStatus?.google_email ? (
-                  <>היומן מחובר לחשבון: <strong>{connectionStatus.google_email}</strong></>
-                ) : (
-                  <>היומן שלך מחובר בהצלחה דרך Unified. תוכל להוסיף, לערוך ולמחוק אירועים מכאן.</>
-                )}
+                היומן שלך מחובר בהצלחה דרך Unified. תוכל להוסיף, לערוך ולמחוק אירועים מכאן.
               </AlertDescription>
             </Alert>
 
