@@ -61,10 +61,9 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
   const campaignStartDate = reportData?.campaign_start_date || snapshotCampaignStart?.date;
   const trafficHistory = Array.isArray(reportData?.traffic_history) ? reportData.traffic_history : [];
 
-  // Find previous month report and campaign start report for keyword comparison
+  // Find previous month report for keyword comparison
   const selectedIdx = reports.findIndex(r => r.id === selectedReport?.id);
   const prevMonthReport = selectedIdx >= 0 && selectedIdx < reports.length - 1 ? reports[selectedIdx + 1] : null;
-  const campaignStartReport = reports.length > 0 ? reports[reports.length - 1] : null;
 
   // Normalize keyword fields from various source formats
   function normalizeKeyword(kw: any): any {
