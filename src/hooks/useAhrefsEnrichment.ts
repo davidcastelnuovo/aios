@@ -2,7 +2,7 @@ import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-interface AhrefsKeyword {
+export interface AhrefsKeyword {
   keyword: string;
   best_position: number | null;
   best_position_prev: number | null;
@@ -16,10 +16,6 @@ interface AhrefsKeyword {
   keyword_difficulty_prev: number | null;
   cpc: number | null;
   cpc_prev: number | null;
-}
-
-interface EnrichmentResult {
-  keywords: AhrefsKeyword[];
 }
 
 export function useAhrefsEnrichment() {
@@ -36,26 +32,12 @@ export function useAhrefsEnrichment() {
     setIsLoading(true);
     try {
       const currentDate = date || new Date().toISOString().split("T")[0];
-      // Default comparison: 3 months back
       const compDate = dateCompared || (() => {
         const d = new Date();
         d.setMonth(d.getMonth() - 3);
         return d.toISOString().split("T")[0];
       })();
 
-      const { data, error } = await supabase.functions.invoke("ahrefs-auth", {
-        body: {
-          target: domain,
-          date: currentDate,
-          date_compared: compDate,
-          limit,
-          country,
-        },
-        headers: { "x-action": "fetch-keywords" },
-      });
-
-      // The edge function uses query params for action, but invoke sends body.
-      // We need to call with the action in the URL. Let's use fetch directly.
       const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
       const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
       const session = (await supabase.auth.getSession()).data.session;
@@ -85,12 +67,12 @@ export function useAhrefsEnrichment() {
       const result = await resp.json();
       const keywords: AhrefsKeyword[] = result.data?.keywords || [];
 
-      // Build lookup map
       const map = new Map<string, AhrefsKeyword>();
       for (const kw of keywords) {
         map.set(kw.keyword.toLowerCase().trim(), kw);
       }
       setEnrichedData(map);
+      toast.success(`סונכרנו ${keywords.length} ביטויים מ-Ahrefs`);
       return map;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "שגיאה בשליפת נתונים מ-Ahrefs";
