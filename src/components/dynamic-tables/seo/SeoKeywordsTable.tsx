@@ -1,12 +1,14 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowUp, ArrowDown, Trophy, TrendingUp, Calendar, MousePointerClick, Eye } from "lucide-react";
+import { ArrowUp, ArrowDown, Trophy, TrendingUp, Calendar, MousePointerClick, Eye, CalendarRange } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface SeoKeywordsTableProps {
   keywords: any[];
   trackedKeywords?: any[];
   hasGscData?: boolean;
+  show3Month?: boolean;
+  showYearly?: boolean;
 }
 
 function PositionChange({ value }: { value: number | null }) {
@@ -20,11 +22,13 @@ function PositionChange({ value }: { value: number | null }) {
   );
 }
 
-function KeywordRow({ kw, showCampaignStart, showPrevMonth, showGsc }: { kw: any; showCampaignStart?: boolean; showPrevMonth?: boolean; showGsc?: boolean }) {
+function KeywordRow({ kw, show3Month, showYearly, showPrevMonth, showGsc }: { kw: any; show3Month?: boolean; showYearly?: boolean; showPrevMonth?: boolean; showGsc?: boolean }) {
   const posChangeMonth = kw.position_prev_month != null && kw.position != null
     ? kw.position_prev_month - kw.position : null;
-  const posChangeCampaign = kw.position_campaign_start != null && kw.position != null
-    ? kw.position_campaign_start - kw.position : null;
+  const posChange3m = kw.position_3month != null && kw.position != null
+    ? kw.position_3month - kw.position : null;
+  const posChangeYear = kw.position_yearly != null && kw.position != null
+    ? kw.position_yearly - kw.position : null;
 
   return (
     <tr className="border-b last:border-0 hover:bg-muted/30">
@@ -39,8 +43,11 @@ function KeywordRow({ kw, showCampaignStart, showPrevMonth, showGsc }: { kw: any
       {showPrevMonth && (
         <td className="p-3 text-center"><PositionChange value={posChangeMonth} /></td>
       )}
-      {showCampaignStart && (
-        <td className="p-3 text-center"><PositionChange value={posChangeCampaign} /></td>
+      {show3Month && (
+        <td className="p-3 text-center"><PositionChange value={posChange3m} /></td>
+      )}
+      {showYearly && (
+        <td className="p-3 text-center"><PositionChange value={posChangeYear} /></td>
       )}
       {showGsc && (
         <>
@@ -51,35 +58,27 @@ function KeywordRow({ kw, showCampaignStart, showPrevMonth, showGsc }: { kw: any
             {kw.gsc_impressions != null ? Number(kw.gsc_impressions).toLocaleString() : <span className="text-muted-foreground">—</span>}
           </td>
           <td className="p-3 text-center text-xs">
-            {kw.gsc_ctr != null ? `${kw.gsc_ctr}%` : <span className="text-muted-foreground">—</span>}
+            {kw.gsc_ctr != null ? `${(Number(kw.gsc_ctr) * 100).toFixed(1)}%` : <span className="text-muted-foreground">—</span>}
           </td>
         </>
       )}
-      <td className="p-3 text-center">{kw.traffic != null ? Number(kw.traffic).toLocaleString() : '-'}</td>
-      <td className="p-3 text-center">{kw.volume != null ? Number(kw.volume).toLocaleString() : '-'}</td>
-      <td className="p-3 text-center">
-        {kw.kd != null ? (
-          <Badge variant={kw.kd <= 20 ? 'default' : kw.kd <= 50 ? 'secondary' : 'destructive'} className="text-xs">
-            {kw.kd}
-          </Badge>
-        ) : '-'}
-      </td>
-      <td className="p-3 text-center">{kw.cpc != null ? `$${Number(kw.cpc).toFixed(2)}` : '-'}</td>
-      <td className="p-3 text-right max-w-[180px] truncate">
-        {kw.url ? (
-          <a href={kw.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline text-xs">
-            {(() => { try { return new URL(kw.url).pathname; } catch { return kw.url; } })()}
-          </a>
-        ) : '-'}
+      <td className="p-3 text-center">{kw.traffic != null ? Number(kw.traffic).toLocaleString() : '—'}</td>
+      <td className="p-3 text-center">{kw.volume != null ? Number(kw.volume).toLocaleString() : '—'}</td>
+      <td className="p-3 text-center">{kw.kd != null ? kw.kd : '—'}</td>
+      <td className="p-3 text-center">{kw.cpc != null ? `$${kw.cpc}` : '—'}</td>
+      <td className="p-3 text-right text-xs max-w-[200px] truncate text-muted-foreground" title={kw.url}>
+        {kw.url ? new URL(kw.url).pathname : '—'}
       </td>
     </tr>
   );
 }
-function KeywordTable({ keywords, title, icon, showCampaignStart, showPrevMonth, showGsc }: {
+
+function KeywordTable({ keywords, title, icon, show3Month, showYearly, showPrevMonth, showGsc }: {
   keywords: any[];
   title: string;
   icon: React.ReactNode;
-  showCampaignStart?: boolean;
+  show3Month?: boolean;
+  showYearly?: boolean;
   showPrevMonth?: boolean;
   showGsc?: boolean;
 }) {
@@ -101,10 +100,13 @@ function KeywordTable({ keywords, title, icon, showCampaignStart, showPrevMonth,
               <th className="text-right p-3 font-medium">ביטוי</th>
               <th className="text-center p-3 font-medium">מיקום</th>
               {showPrevMonth && (
-                <th className="text-center p-3 font-medium">שינוי מיקום (חודש)</th>
+                <th className="text-center p-3 font-medium">שינוי חודשי</th>
               )}
-              {showCampaignStart && (
-                <th className="text-center p-3 font-medium">שינוי מיקום (קידום)</th>
+              {show3Month && (
+                <th className="text-center p-3 font-medium">שינוי 3 חודשים</th>
+              )}
+              {showYearly && (
+                <th className="text-center p-3 font-medium">שינוי שנתי</th>
               )}
               {showGsc && (
                 <>
@@ -126,7 +128,7 @@ function KeywordTable({ keywords, title, icon, showCampaignStart, showPrevMonth,
           </thead>
           <tbody>
             {keywords.map((kw, idx) => (
-              <KeywordRow key={idx} kw={kw} showCampaignStart={showCampaignStart} showPrevMonth={showPrevMonth} showGsc={showGsc} />
+              <KeywordRow key={idx} kw={kw} show3Month={show3Month} showYearly={showYearly} showPrevMonth={showPrevMonth} showGsc={showGsc} />
             ))}
           </tbody>
         </table>
@@ -135,7 +137,7 @@ function KeywordTable({ keywords, title, icon, showCampaignStart, showPrevMonth,
   );
 }
 
-export function SeoKeywordsTable({ keywords, trackedKeywords = [], hasGscData = false }: SeoKeywordsTableProps) {
+export function SeoKeywordsTable({ keywords, trackedKeywords = [], hasGscData = false, show3Month = false, showYearly = false }: SeoKeywordsTableProps) {
   // Merge all keywords (tracked + organic), deduplicate by keyword name
   const allKeywords = [...trackedKeywords];
   const trackedNames = new Set(trackedKeywords.map((k: any) => String(k.keyword || '').toLowerCase()));
@@ -150,22 +152,31 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], hasGscData = 
     .filter(k => k.position != null && k.position <= 10)
     .sort((a, b) => (a.position || 999) - (b.position || 999));
 
-  // 2. All keywords sorted by campaign start change (biggest improvement first)
-  const byCampaignChange = [...allKeywords]
-    .filter(k => k.position != null && k.position_campaign_start != null)
+  // 2. All keywords sorted by 3-month change (biggest improvement first)
+  const by3MonthChange = [...allKeywords]
+    .filter(k => k.position != null && k.position_3month != null)
     .sort((a, b) => {
-      const changeA = (a.position_campaign_start || 0) - (a.position || 0);
-      const changeB = (b.position_campaign_start || 0) - (b.position || 0);
-      return changeB - changeA; // biggest positive change first
+      const changeA = (a.position_3month || 0) - (a.position || 0);
+      const changeB = (b.position_3month || 0) - (b.position || 0);
+      return changeB - changeA;
     });
 
-  // 3. All keywords sorted by monthly change (biggest improvement first)
+  // 3. All keywords sorted by yearly change (biggest improvement first)
+  const byYearlyChange = [...allKeywords]
+    .filter(k => k.position != null && k.position_yearly != null)
+    .sort((a, b) => {
+      const changeA = (a.position_yearly || 0) - (a.position || 0);
+      const changeB = (b.position_yearly || 0) - (b.position || 0);
+      return changeB - changeA;
+    });
+
+  // 4. All keywords sorted by monthly change (biggest improvement first)
   const byMonthlyChange = [...allKeywords]
     .filter(k => k.position != null && k.position_prev_month != null)
     .sort((a, b) => {
       const changeA = (a.position_prev_month || 0) - (a.position || 0);
       const changeB = (b.position_prev_month || 0) - (b.position || 0);
-      return changeB - changeA; // biggest positive change first
+      return changeB - changeA;
     });
 
   if (allKeywords.length === 0) return null;
@@ -189,8 +200,11 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], hasGscData = 
             <TabsTrigger value="top10" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
               🏆 Top 10 מקודמים ({top10.length})
             </TabsTrigger>
-            <TabsTrigger value="campaign" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
-              📈 שינוי מתחילת קידום
+            <TabsTrigger value="3month" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
+              📈 שינוי 3 חודשים
+            </TabsTrigger>
+            <TabsTrigger value="yearly" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
+              📅 שינוי שנתי
             </TabsTrigger>
             <TabsTrigger value="monthly" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
               📅 שינוי חודשי
@@ -205,18 +219,29 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], hasGscData = 
               keywords={top10}
               title={`${top10.length} ביטויים בעמוד הראשון`}
               icon={<Trophy className="h-4 w-4 text-primary" />}
-              showCampaignStart
+              show3Month={show3Month}
+              showYearly={showYearly}
               showPrevMonth
               showGsc={hasGscData}
             />
           </TabsContent>
 
-          <TabsContent value="campaign" className="mt-0">
+          <TabsContent value="3month" className="mt-0">
             <KeywordTable
-              keywords={byCampaignChange}
-              title="כל הביטויים — שינוי מתחילת קידום"
+              keywords={by3MonthChange}
+              title="כל הביטויים — שינוי 3 חודשים"
               icon={<TrendingUp className="h-4 w-4 text-primary" />}
-              showCampaignStart
+              show3Month
+              showGsc={hasGscData}
+            />
+          </TabsContent>
+
+          <TabsContent value="yearly" className="mt-0">
+            <KeywordTable
+              keywords={byYearlyChange}
+              title="כל הביטויים — שינוי שנתי"
+              icon={<CalendarRange className="h-4 w-4 text-primary" />}
+              showYearly
               showGsc={hasGscData}
             />
           </TabsContent>
@@ -236,7 +261,8 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], hasGscData = 
               keywords={[...keywords].sort((a, b) => (a.position || 999) - (b.position || 999)).slice(0, 50)}
               title="טופ 50 ביטויים אורגניים"
               icon={<span>📋</span>}
-              showCampaignStart
+              show3Month={show3Month}
+              showYearly={showYearly}
               showPrevMonth
               showGsc={hasGscData}
             />

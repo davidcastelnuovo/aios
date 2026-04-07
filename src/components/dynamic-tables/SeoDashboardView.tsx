@@ -23,7 +23,7 @@ interface SeoDashboardViewProps {
 export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) {
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [gscData, setGscData] = useState<GscKeywordData[]>([]);
-  const { fetchKeywords, enrichedData: ahrefsApiData, isLoading: isEnriching } = useAhrefsEnrichment();
+  const { fetchComparisons, comparisonData, isLoading: isEnriching } = useAhrefsEnrichment();
   const [hasAutoEnriched, setHasAutoEnriched] = useState(false);
 
   const handleGscDataLoaded = useCallback((data: GscKeywordData[]) => {
@@ -61,10 +61,9 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
   const campaignStartDate = reportData?.campaign_start_date || snapshotCampaignStart?.date;
   const trafficHistory = Array.isArray(reportData?.traffic_history) ? reportData.traffic_history : [];
 
-  // Find previous month report and campaign start report for keyword comparison
+  // Find previous month report for keyword comparison
   const selectedIdx = reports.findIndex(r => r.id === selectedReport?.id);
   const prevMonthReport = selectedIdx >= 0 && selectedIdx < reports.length - 1 ? reports[selectedIdx + 1] : null;
-  const campaignStartReport = reports.length > 0 ? reports[reports.length - 1] : null;
 
   // Normalize keyword fields from various source formats
   function normalizeKeyword(kw: any): any {
@@ -100,29 +99,7 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
     return map;
   }
 
-  // Build lookup map for campaign start positions
-  // If the oldest report has inline position_campaign_start, use that (actual campaign start data)
-  // Otherwise fall back to the report's own position
-  function buildCampaignStartMap(report: any): Map<string, number | null> {
-    const rd = report?.report_data as any;
-    if (!rd) return new Map();
-    const map = new Map<string, number | null>();
-    const organic = Array.isArray(rd.organic_keywords) ? rd.organic_keywords : [];
-    const tracked = Array.isArray(rd.tracked_keywords) ? rd.tracked_keywords : [];
-    for (const kw of [...tracked, ...organic]) {
-      const name = String(kw.keyword || '').toLowerCase();
-      if (!map.has(name)) {
-        // Prefer the campaign_start position if available (carries historical data from source)
-        const campPos = kw.position_campaign_start ?? null;
-        const currentPos = kw.position ?? kw.best_position ?? null;
-        map.set(name, campPos ?? currentPos);
-      }
-    }
-    return map;
-  }
-
   const prevMonthMap = useMemo(() => buildPrevMonthMap(prevMonthReport), [prevMonthReport]);
-  const campaignStartMap = useMemo(() => buildCampaignStartMap(campaignStartReport), [campaignStartReport]);
 
   // Normalize and enrich keywords with comparison data
   const rawOrganic = Array.isArray(reportData?.organic_keywords) ? reportData.organic_keywords : [];
@@ -142,16 +119,31 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
     const kwLower = String(normalized.keyword).toLowerCase().trim();
     // Use inline data first, fallback to cross-report comparison
     let prevPos = normalized.position_prev_month ?? prevMonthMap.get(kwLower) ?? null;
-    let campPos = normalized.position_campaign_start ?? campaignStartMap.get(kwLower) ?? null;
     
-    // Enrich from Ahrefs API data if available
-    const apiRow = ahrefsApiData.get(kwLower);
+    // Enrich from Ahrefs API 3-month data
+    const api3m = comparisonData.threeMonth.get(kwLower);
+    const apiYear = comparisonData.yearly.get(kwLower);
+    
+    // 3-month position comparison
+    let pos3m: number | null = null;
+    if (api3m?.best_position_prev != null) {
+      pos3m = api3m.best_position_prev;
+    }
+    
+    // Yearly position comparison
+    let posYear: number | null = null;
+    if (apiYear?.best_position_prev != null) {
+      posYear = apiYear.best_position_prev;
+    }
+
+    // Fill missing prev month from 3m API data if needed
+    if (prevPos === null && api3m?.best_position_prev != null) {
+      prevPos = api3m.best_position_prev;
+    }
+    
+    // Fill volume/kd/cpc from API if missing
+    const apiRow = api3m || apiYear;
     if (apiRow) {
-      // If we have API comparison data, use it to fill missing prev month
-      if (prevPos === null && apiRow.best_position_prev != null && normalized.position != null) {
-        prevPos = apiRow.best_position_prev;
-      }
-      // Fill volume/traffic from API if missing
       if (normalized.volume == null && apiRow.volume != null) {
         normalized.volume = apiRow.volume;
       }
@@ -168,7 +160,8 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
     return {
       ...normalized,
       position_prev_month: prevPos,
-      position_campaign_start: campPos,
+      position_3month: pos3m,
+      position_yearly: posYear,
       gsc_clicks: gscRow?.clicks ?? null,
       gsc_impressions: gscRow?.impressions ?? null,
       gsc_ctr: gscRow?.ctr ?? null,
@@ -176,46 +169,26 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
     };
   }
 
-  const organicKeywords = useMemo(() => rawOrganic.map(enrichKeyword), [rawOrganic, prevMonthMap, campaignStartMap, gscMap, ahrefsApiData]);
-  const trackedKeywords = useMemo(() => rawTracked.map(enrichKeyword), [rawTracked, prevMonthMap, campaignStartMap, gscMap, ahrefsApiData]);
+  const organicKeywords = useMemo(() => rawOrganic.map(enrichKeyword), [rawOrganic, prevMonthMap, gscMap, comparisonData]);
+  const trackedKeywords = useMemo(() => rawTracked.map(enrichKeyword), [rawTracked, prevMonthMap, gscMap, comparisonData]);
 
-  // Auto-enrich: fetch comparison data from Ahrefs API when keywords lack it
+  // Auto-enrich: fetch comparison data from Ahrefs API
   const domain = reportData?.domain || selectedReport?.domain;
-  const needsEnrichment = useMemo(() => {
-    const allKw = [...rawOrganic, ...rawTracked];
-    if (allKw.length === 0) return false;
-    // Check if most keywords lack prev month data
-    const withPrev = allKw.filter(kw => 
-      (kw.position_prev_month != null) || (kw.best_position_prev != null)
-    );
-    return withPrev.length < allKw.length * 0.3;
-  }, [rawOrganic, rawTracked]);
 
   useEffect(() => {
-    if (domain && needsEnrichment && !hasAutoEnriched && !isEnriching && reports.length > 0) {
+    if (domain && !hasAutoEnriched && !isEnriching && reports.length > 0) {
       setHasAutoEnriched(true);
       const reportDate = selectedReport?.report_date || new Date().toISOString().split('T')[0];
-      // Compare with 3 months back
-      const compDate = (() => {
-        const d = new Date(reportDate);
-        d.setMonth(d.getMonth() - 3);
-        return d.toISOString().split('T')[0];
-      })();
-      fetchKeywords(domain, reportDate, compDate, 200);
+      fetchComparisons(domain, reportDate, 200);
     }
-  }, [domain, needsEnrichment, hasAutoEnriched, isEnriching, reports.length, selectedReport, fetchKeywords]);
+  }, [domain, hasAutoEnriched, isEnriching, reports.length, selectedReport, fetchComparisons]);
 
   const handleManualSync = useCallback(() => {
     if (!domain) return;
     setHasAutoEnriched(true);
     const reportDate = selectedReport?.report_date || new Date().toISOString().split('T')[0];
-    const compDate = (() => {
-      const d = new Date(reportDate);
-      d.setMonth(d.getMonth() - 3);
-      return d.toISOString().split('T')[0];
-    })();
-    fetchKeywords(domain, reportDate, compDate, 200);
-  }, [domain, selectedReport, fetchKeywords]);
+    fetchComparisons(domain, reportDate, 200);
+  }, [domain, selectedReport, fetchComparisons]);
 
   if (isLoading) {
     return (
@@ -320,6 +293,8 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
         keywords={organicKeywords}
         trackedKeywords={trackedKeywords}
         hasGscData={gscData.length > 0}
+        show3Month={comparisonData.threeMonth.size > 0}
+        showYearly={comparisonData.yearly.size > 0}
       />
 
       {/* HTML content fallback */}

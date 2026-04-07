@@ -18,62 +18,99 @@ export interface AhrefsKeyword {
   cpc_prev: number | null;
 }
 
+export interface AhrefsComparisonData {
+  threeMonth: Map<string, AhrefsKeyword>;
+  yearly: Map<string, AhrefsKeyword>;
+}
+
 export function useAhrefsEnrichment() {
   const [isLoading, setIsLoading] = useState(false);
-  const [enrichedData, setEnrichedData] = useState<Map<string, AhrefsKeyword>>(new Map());
+  const [comparisonData, setComparisonData] = useState<AhrefsComparisonData>({
+    threeMonth: new Map(),
+    yearly: new Map(),
+  });
 
-  const fetchKeywords = useCallback(async (
+  const fetchKeywordsForPeriod = async (
     domain: string,
-    date?: string,
-    dateCompared?: string,
-    limit = 100,
+    date: string,
+    dateCompared: string,
+    limit: number,
+    country: string,
+    accessToken: string,
+    anonKey: string,
+    projectId: string
+  ): Promise<AhrefsKeyword[]> => {
+    const url = `https://${projectId}.supabase.co/functions/v1/ahrefs-auth?action=fetch-keywords`;
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${accessToken || anonKey}`,
+        "apikey": anonKey,
+      },
+      body: JSON.stringify({
+        target: domain,
+        date,
+        date_compared: dateCompared,
+        limit,
+        country,
+      }),
+    });
+
+    if (!resp.ok) {
+      const errData = await resp.json().catch(() => ({}));
+      throw new Error(errData.error || "Failed to fetch from Ahrefs");
+    }
+
+    const result = await resp.json();
+    return result.data?.keywords || [];
+  };
+
+  const buildMap = (keywords: AhrefsKeyword[]): Map<string, AhrefsKeyword> => {
+    const map = new Map<string, AhrefsKeyword>();
+    for (const kw of keywords) {
+      map.set(kw.keyword.toLowerCase().trim(), kw);
+    }
+    return map;
+  };
+
+  const fetchComparisons = useCallback(async (
+    domain: string,
+    reportDate?: string,
+    limit = 200,
     country = "il"
   ) => {
     setIsLoading(true);
     try {
-      const currentDate = date || new Date().toISOString().split("T")[0];
-      const compDate = dateCompared || (() => {
-        const d = new Date();
-        d.setMonth(d.getMonth() - 3);
-        return d.toISOString().split("T")[0];
-      })();
-
+      const currentDate = reportDate || new Date().toISOString().split("T")[0];
       const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
       const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
       const session = (await supabase.auth.getSession()).data.session;
+      const token = session?.access_token || anonKey;
 
-      const url = `https://${projectId}.supabase.co/functions/v1/ahrefs-auth?action=fetch-keywords`;
-      const resp = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${session?.access_token || anonKey}`,
-          "apikey": anonKey,
-        },
-        body: JSON.stringify({
-          target: domain,
-          date: currentDate,
-          date_compared: compDate,
-          limit,
-          country,
-        }),
-      });
+      // Calculate comparison dates
+      const baseDate = new Date(currentDate);
+      const threeMonthsAgo = new Date(baseDate);
+      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+      const oneYearAgo = new Date(baseDate);
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
 
-      if (!resp.ok) {
-        const errData = await resp.json().catch(() => ({}));
-        throw new Error(errData.error || "Failed to fetch from Ahrefs");
-      }
+      const date3m = threeMonthsAgo.toISOString().split("T")[0];
+      const date1y = oneYearAgo.toISOString().split("T")[0];
 
-      const result = await resp.json();
-      const keywords: AhrefsKeyword[] = result.data?.keywords || [];
+      // Fetch both periods in parallel
+      const [threeMonthKw, yearlyKw] = await Promise.all([
+        fetchKeywordsForPeriod(domain, currentDate, date3m, limit, country, token, anonKey, projectId),
+        fetchKeywordsForPeriod(domain, currentDate, date1y, limit, country, token, anonKey, projectId),
+      ]);
 
-      const map = new Map<string, AhrefsKeyword>();
-      for (const kw of keywords) {
-        map.set(kw.keyword.toLowerCase().trim(), kw);
-      }
-      setEnrichedData(map);
-      toast.success(`סונכרנו ${keywords.length} ביטויים מ-Ahrefs`);
-      return map;
+      const data: AhrefsComparisonData = {
+        threeMonth: buildMap(threeMonthKw),
+        yearly: buildMap(yearlyKw),
+      };
+      setComparisonData(data);
+      toast.success(`סונכרנו ${threeMonthKw.length} ביטויים (3 חודשים + שנה)`);
+      return data;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "שגיאה בשליפת נתונים מ-Ahrefs";
       toast.error(message);
@@ -83,5 +120,5 @@ export function useAhrefsEnrichment() {
     }
   }, []);
 
-  return { fetchKeywords, enrichedData, isLoading };
+  return { fetchComparisons, comparisonData, isLoading };
 }
