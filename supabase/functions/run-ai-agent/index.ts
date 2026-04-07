@@ -711,6 +711,35 @@ Deno.serve(async (req) => {
     let resolvedTenantId = tenant_id || agent.tenant_id
     let resolvedUserId = user_id || 'system'
 
+    // 2.5. Resolve caller identity from phone number (WhatsApp sessions)
+    let callerCampaignerId: string | null = null
+    let callerName: string | null = user_name || null
+    const callerPhone = lead_data?.phone || null
+    if (callerPhone && resolvedTenantId) {
+      // Normalize: take last 9 digits for comparison
+      const normalizedPhone = callerPhone.replace(/[^0-9]/g, '').slice(-9)
+      if (normalizedPhone.length >= 9) {
+        const { data: matchedCampaigners } = await supabase
+          .from('campaigners')
+          .select('id, full_name, phone')
+          .eq('tenant_id', resolvedTenantId)
+          .eq('active', true)
+        
+        if (matchedCampaigners) {
+          const match = matchedCampaigners.find((c: any) => {
+            if (!c.phone) return false
+            const cNorm = c.phone.replace(/[^0-9]/g, '').slice(-9)
+            return cNorm === normalizedPhone
+          })
+          if (match) {
+            callerCampaignerId = match.id
+            callerName = match.full_name
+            console.log(`[AGENT] Resolved caller phone ${callerPhone} → campaigner: ${match.full_name} (${match.id})`)
+          }
+        }
+      }
+    }
+
     // 3. Build system prompt with full tenant context
     // Fetch tenant context, memory for Carmen and all agents
     const [tenantRes, agenciesRes, statsRes, memoryRes] = await Promise.all([
