@@ -46,12 +46,66 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
   const reportData = selectedReport?.report_data as any;
 
   const snapshot = reportData?.snapshot || {};
-  const snapshotPrevMonth = reportData?.snapshot_prev_month || {};
+  const snapshotPrevMonth = reportData?.snapshot_prev_month || reportData?.snapshot_prev || {};
   const snapshotCampaignStart = reportData?.snapshot_campaign_start || {};
-  const campaignStartDate = reportData?.campaign_start_date;
+  const campaignStartDate = reportData?.campaign_start_date || snapshotCampaignStart?.date;
   const trafficHistory = Array.isArray(reportData?.traffic_history) ? reportData.traffic_history : [];
-  const organicKeywords = Array.isArray(reportData?.organic_keywords) ? reportData.organic_keywords : [];
-  const trackedKeywords = Array.isArray(reportData?.tracked_keywords) ? reportData.tracked_keywords : [];
+
+  // Find previous month report and campaign start report for keyword comparison
+  const selectedIdx = reports.findIndex(r => r.id === selectedReport?.id);
+  const prevMonthReport = selectedIdx >= 0 && selectedIdx < reports.length - 1 ? reports[selectedIdx + 1] : null;
+  const campaignStartReport = reports.length > 0 ? reports[reports.length - 1] : null;
+
+  // Normalize keyword fields from various source formats
+  function normalizeKeyword(kw: any): any {
+    return {
+      keyword: kw.keyword || '',
+      position: kw.position ?? kw.best_position ?? null,
+      traffic: kw.traffic ?? kw.sum_traffic ?? 0,
+      volume: kw.volume ?? kw.search_volume ?? null,
+      kd: kw.kd ?? kw.keyword_difficulty ?? null,
+      cpc: kw.cpc ?? kw.cost_per_click ?? null,
+      url: kw.url ?? kw.best_position_url ?? '',
+    };
+  }
+
+  // Build lookup maps from other reports' keywords
+  function buildKeywordMap(report: any): Map<string, number | null> {
+    const rd = report?.report_data as any;
+    if (!rd) return new Map();
+    const map = new Map<string, number | null>();
+    const organic = Array.isArray(rd.organic_keywords) ? rd.organic_keywords : [];
+    const tracked = Array.isArray(rd.tracked_keywords) ? rd.tracked_keywords : [];
+    for (const kw of [...tracked, ...organic]) {
+      const name = String(kw.keyword || '').toLowerCase();
+      if (!map.has(name)) {
+        map.set(name, kw.position ?? kw.best_position ?? null);
+      }
+    }
+    return map;
+  }
+
+  const prevMonthMap = useMemo(() => buildKeywordMap(prevMonthReport), [prevMonthReport]);
+  const campaignStartMap = useMemo(() => buildKeywordMap(campaignStartReport), [campaignStartReport]);
+
+  // Normalize and enrich keywords with comparison data
+  const rawOrganic = Array.isArray(reportData?.organic_keywords) ? reportData.organic_keywords : [];
+  const rawTracked = Array.isArray(reportData?.tracked_keywords) ? reportData.tracked_keywords : [];
+
+  function enrichKeyword(kw: any): any {
+    const normalized = normalizeKeyword(kw);
+    const kwLower = String(normalized.keyword).toLowerCase();
+    const prevPos = prevMonthMap.get(kwLower) ?? null;
+    const campPos = campaignStartMap.get(kwLower) ?? null;
+    return {
+      ...normalized,
+      position_prev_month: prevPos,
+      position_campaign_start: campPos,
+    };
+  }
+
+  const organicKeywords = useMemo(() => rawOrganic.map(enrichKeyword), [rawOrganic, prevMonthMap, campaignStartMap]);
+  const trackedKeywords = useMemo(() => rawTracked.map(enrichKeyword), [rawTracked, prevMonthMap, campaignStartMap]);
 
   if (isLoading) {
     return (
