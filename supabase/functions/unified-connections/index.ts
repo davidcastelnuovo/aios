@@ -41,7 +41,17 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { action, tenant_id, category, connection_id, integration_type, success_redirect, failure_redirect } = body;
+    const {
+      action,
+      tenant_id,
+      category,
+      connection_id,
+      integration_type,
+      success_redirect,
+      failure_redirect,
+      state,
+      uid,
+    } = body;
 
     if (!tenant_id) {
       return new Response(JSON.stringify({ error: "tenant_id is required" }), {
@@ -207,11 +217,80 @@ Deno.serve(async (req) => {
           lang: "he",
           ...(success_redirect && { success_redirect }),
           ...(failure_redirect && { failure_redirect }),
+          ...(state && { state }),
+          ...(uid && { uid }),
         });
 
         const embedUrl = `https://api.unified.to/unified/integration/auth/${workspaceId}/${integration_type}?${params.toString()}`;
 
         return new Response(JSON.stringify({ embed_url: embedUrl }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      case "find_connection": {
+        if (!uid) {
+          return new Response(JSON.stringify({ error: "uid is required" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const params = new URLSearchParams({
+          external_xref: uid,
+          limit: "100",
+        });
+
+        const resp = await fetch(`https://api.unified.to/unified/connection?${params.toString()}`, {
+          headers: {
+            "Authorization": `Bearer ${unifiedApiKey}`,
+            "Content-Type": "application/json",
+          },
+        });
+
+        const rawBody = await resp.text();
+        let parsedBody: any = [];
+        try {
+          parsedBody = rawBody ? JSON.parse(rawBody) : [];
+        } catch {
+          parsedBody = rawBody;
+        }
+
+        if (!resp.ok) {
+          return new Response(JSON.stringify({
+            error: resp.status === 401 ? "Unified API credentials are invalid" : "Failed to find connection",
+            details: rawBody,
+          }), {
+            status: resp.status === 401 ? 500 : 502,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const connections = Array.isArray(parsedBody)
+          ? parsedBody
+          : Array.isArray(parsedBody?.data) ? parsedBody.data : [];
+
+        const matchedConnections = connections
+          .filter((conn: any) => !integration_type || conn.integration_type === integration_type || conn.integration?.type === integration_type)
+          .sort((a: any, b: any) => {
+            const aTime = new Date(a.updated_at || a.created_at || a.created || 0).getTime();
+            const bTime = new Date(b.updated_at || b.created_at || b.created || 0).getTime();
+            return bTime - aTime;
+          });
+
+        const matchedConnection = matchedConnections[0];
+
+        if (!matchedConnection?.id) {
+          return new Response(JSON.stringify({ error: "No matching connection found" }), {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        return new Response(JSON.stringify({
+          connection_id: matchedConnection.id,
+          connection: matchedConnection,
+        }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
