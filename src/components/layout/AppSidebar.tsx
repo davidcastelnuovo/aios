@@ -122,6 +122,7 @@ const MENU_TABS: MenuTab[] = [
         label: "לקוחות",
         items: [
           { key: "clients", label: "לקוחות", route: "/clients", icon: Users },
+          { key: "dmm-dashboard", label: "דשבורד CRM סוכנות", route: "/dmm-dashboard", icon: LayoutDashboard },
           { key: "client-onboarding", label: "לקוחות בקליטה", route: "/client-onboarding", icon: UserPlus },
           { key: "tasks", label: "משימות", route: "/tasks", icon: CheckSquare },
         ],
@@ -300,6 +301,7 @@ const modulePermissions: Record<string, string> = {
   // ── מיפויים לתאימות לאחור ────────────────────────────────────────────
   site_analytics: "clients",
   rank_tracking: "clients",
+  "dmm-dashboard": "clients",
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────

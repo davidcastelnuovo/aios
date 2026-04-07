@@ -62,6 +62,8 @@ const formSchema = z.object({
   status: z.enum(["active", "paused", "ended", "onboarding"]),
   mood_status: z.enum(["happy", "wavering", "churn_risk", "not_progressing"]).optional(),
   is_seo_client: z.boolean().default(false),
+  tier: z.enum(["A", "B", "C"]).optional().nullable(),
+  services: z.array(z.string()).default([]),
 });
 
 interface EditClientDialogProps {
@@ -332,6 +334,8 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
       status: client.status || "active",
       mood_status: client.mood_status || "happy",
       is_seo_client: client.is_seo_client || false,
+      tier: client.tier || null,
+      services: client.services || [],
     },
   });
   
@@ -389,6 +393,8 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
           status: values.status,
           mood_status: values.mood_status || "happy",
           is_seo_client: values.is_seo_client,
+          tier: values.tier || null,
+          services: values.services || [],
         })
         .eq("id", client.id);
 
@@ -787,6 +793,58 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                 </FormItem>
               )}
             />
+
+            {/* DMM: Tier + Services */}
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="tier"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>דרגת לקוח (Tier)</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || ""}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="בחר דרגה" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="bg-background">
+                        <SelectItem value="A"><span className="font-bold text-purple-700">A — עדיפות גבוהה</span></SelectItem>
+                        <SelectItem value="B"><span className="font-bold text-blue-700">B — עדיפות בינונית</span></SelectItem>
+                        <SelectItem value="C"><span className="font-bold text-gray-600">C — עדיפות נמוכה</span></SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="services"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>שירותים פעילים</FormLabel>
+                    <div className="flex flex-col gap-2 mt-1">
+                      {["performance", "seo", "social"].map((svc) => (
+                        <label key={svc} className="flex items-center gap-2 cursor-pointer">
+                          <Checkbox
+                            checked={field.value?.includes(svc)}
+                            onCheckedChange={(checked) => {
+                              const current = field.value || [];
+                              field.onChange(
+                                checked ? [...current, svc] : current.filter((s: string) => s !== svc)
+                              );
+                            }}
+                          />
+                          <span className="text-sm">{svc === "performance" ? "Performance" : svc === "seo" ? "SEO" : "Social"}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <FormField
               control={form.control}

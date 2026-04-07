@@ -92,6 +92,7 @@ const SocialDashboard = lazy(() => import("./pages/SocialDashboard"));
 const WordPressSettings = lazy(() => import("./pages/WordPressSettings"));
 const UnifiedSettings = lazy(() => import("./pages/UnifiedSettings"));
 const UnifiedCallback = lazy(() => import("./pages/UnifiedCallback"));
+const DMMDashboard = lazy(() => import("./pages/DMMDashboard"));
 
 // QueryClient with optimized defaults for better caching
 const queryClient = new QueryClient({
@@ -202,6 +203,7 @@ const App = () => (
                   <Route path="/t/:tenantSlug/site-analytics" element={<ProtectedRoute requiredPermission="clients"><AppLayout><SiteAnalytics /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/rank-tracking" element={<ProtectedRoute requiredPermission="clients"><AppLayout><RankTracking /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/rank-tracking/:projectId" element={<ProtectedRoute requiredPermission="clients"><AppLayout><RankTrackingProject /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/dmm-dashboard" element={<ProtectedRoute requiredPermission="clients"><AppLayout><DMMDashboard /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/integrations/serpapi" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><SerpApiSettings /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/zoom-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><ZoomSettings /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/recordings" element={<ProtectedRoute requiredPermission="recordings"><AppLayout><Recordings /></AppLayout></ProtectedRoute>} />

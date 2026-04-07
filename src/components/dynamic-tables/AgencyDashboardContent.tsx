@@ -5,9 +5,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Facebook, FileSpreadsheet, TrendingUp, TrendingDown, Minus, ShoppingCart, LayoutGrid } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Facebook, FileSpreadsheet, TrendingUp, TrendingDown, Minus, ShoppingCart, LayoutGrid, Activity, MessageSquare } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LineChart, Line, ComposedChart, Area } from "recharts";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { differenceInDays } from "date-fns";
+import { calculateHealthScore, FLAG_LABELS, FLAG_COLORS, OVERALL_STATUS_CONFIG, TIER_COLORS, SERVICE_LABELS, COMMUNICATION_STATUS_LABELS, COMMUNICATION_STATUS_COLORS, type FlagKey, type OverallStatus } from "@/lib/healthScore";
+import { CommunicationUpdateModal } from "@/components/clients/CommunicationUpdateModal";
+import { SeoUpdateModal } from "@/components/clients/SeoUpdateModal";
+import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Button } from "@/components/ui/button";
 
 interface AgencyDashboardContentProps {
   agencyId: string;
@@ -288,7 +295,11 @@ function ClientTableCard({ data }: { data: ClientTableData }) {
 }
 
 export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: AgencyDashboardContentProps) {
+  const [mainTab, setMainTab] = useState<'performance' | 'crm'>('performance');
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all');
+  const { tenantId } = useCurrentTenant();
+  const [commModal, setCommModal] = useState<{ clientId: string; clientName: string } | null>(null);
+  const [seoModal, setSeoModal] = useState<{ clientId: string; clientName: string } | null>(null);
 
   // Fetch clients for this agency
   const { data: clients = [], isLoading: clientsLoading } = useQuery({
@@ -296,7 +307,7 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
     queryFn: async () => {
       const { data, error } = await supabase
         .from('clients')
-        .select('id, name')
+        .select('id, name, tier, services, mood_status')
         .eq('agency_id', agencyId)
         .eq('status', 'active');
       if (error) throw error;
@@ -304,6 +315,71 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
     },
     enabled: !!agencyId,
   });
+
+  const clientIds = clients.map((c: any) => c.id);
+
+  // CRM: fetch communication logs (only when CRM tab is active)
+  const { data: commLogs = [] } = useQuery({
+    queryKey: ['comm-logs-agency', agencyId, clientIds.join(',')],
+    queryFn: async () => {
+      if (!clientIds.length || !tenantId) return [];
+      const { data, error } = await supabase
+        .from('communication_logs')
+        .select('client_id, status, created_at')
+        .in('client_id', clientIds)
+        .eq('tenant_id', tenantId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: clientIds.length > 0 && !!tenantId && mainTab === 'crm',
+  });
+
+  // CRM: fetch SEO history (only when CRM tab is active)
+  const { data: seoUpdates = [] } = useQuery({
+    queryKey: ['seo-agency', agencyId, clientIds.join(',')],
+    queryFn: async () => {
+      if (!clientIds.length || !tenantId) return [];
+      const { data, error } = await supabase
+        .from('seo_monthly_updates')
+        .select('client_id, month, status')
+        .in('client_id', clientIds)
+        .eq('tenant_id', tenantId)
+        .order('month', { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: clientIds.length > 0 && !!tenantId && mainTab === 'crm',
+  });
+
+  // CRM: build enriched rows sorted worst first
+  const crmRows = useMemo(() => {
+    return clients.map((c: any) => {
+      const latestComm = commLogs.find((l: any) => l.client_id === c.id) ?? null;
+      const daysSinceComm = latestComm ? differenceInDays(new Date(), new Date(latestComm.created_at)) : null;
+      const seoHistory = seoUpdates
+        .filter((s: any) => s.client_id === c.id)
+        .slice(0, 3)
+        .map((s: any) => s.status as 'up' | 'stable' | 'down');
+      const result = calculateHealthScore({
+        communicationStatus: latestComm?.status ?? null,
+        daysSinceLastCommunication: daysSinceComm,
+        services: c.services ?? [],
+        performanceChangePct: null,
+        daysSinceLastCampaignTouch: null,
+        seoHistory,
+      });
+      return {
+        ...c,
+        score: result.score,
+        overallStatus: result.status,
+        flags: result.flags,
+        daysSinceComm,
+        lastCommDate: latestComm?.created_at ?? null,
+        communicationStatus: latestComm?.status ?? null,
+      };
+    }).sort((a: any, b: any) => a.score - b.score);
+  }, [clients, commLogs, seoUpdates]);
 
   // Fetch all tables for these clients
   const { data: tables = [], isLoading: tablesLoading } = useQuery({
@@ -659,7 +735,176 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" dir="rtl">
+      {/* Main Tab: Performance vs CRM */}
+      <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as 'performance' | 'crm')}>
+        <TabsList className="mb-4">
+          <TabsTrigger value="performance" className="gap-2">
+            <Activity className="h-4 w-4" />
+            ביצועים
+          </TabsTrigger>
+          <TabsTrigger value="crm" className="gap-2">
+            🏢 CRM לקוחות
+          </TabsTrigger>
+        </TabsList>
+
+        {/* ── CRM Tab ── */}
+        <TabsContent value="crm">
+          <div className="space-y-4">
+            {/* Summary */}
+            <div className="grid grid-cols-3 gap-3">
+              {(['red', 'yellow', 'green'] as OverallStatus[]).map((s) => {
+                const count = crmRows.filter((r: any) => r.overallStatus === s).length;
+                const cfg = OVERALL_STATUS_CONFIG[s];
+                return (
+                  <Card key={s} className="p-4 flex items-center gap-3">
+                    <span className="text-2xl">{cfg.dot}</span>
+                    <div>
+                      <p className="text-xl font-bold">{count}</p>
+                      <p className="text-xs text-muted-foreground">{cfg.label}</p>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+
+            {/* CRM Table */}
+            <Card>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-right w-8">סטטוס</TableHead>
+                      <TableHead className="text-right">לקוח</TableHead>
+                      <TableHead className="text-right w-16">ציון</TableHead>
+                      <TableHead className="text-right">Flags</TableHead>
+                      <TableHead className="text-right">תקשורת</TableHead>
+                      <TableHead className="text-right">פעולות</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {crmRows.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                          אין לקוחות להצגה
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      crmRows.map((client: any) => (
+                        <TableRow
+                          key={client.id}
+                          className={
+                            client.overallStatus === 'red' ? 'bg-red-50/40' :
+                            client.overallStatus === 'yellow' ? 'bg-yellow-50/30' : ''
+                          }
+                        >
+                          <TableCell className="text-center">
+                            <TooltipProvider>
+                              <UITooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="text-xl cursor-default">
+                                    {OVERALL_STATUS_CONFIG[client.overallStatus as OverallStatus]?.dot}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  {OVERALL_STATUS_CONFIG[client.overallStatus as OverallStatus]?.label}
+                                </TooltipContent>
+                              </UITooltip>
+                            </TooltipProvider>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{client.name}</span>
+                              {client.tier && (
+                                <Badge variant="outline" className={`text-xs px-1.5 ${TIER_COLORS[client.tier] || ''}`}>
+                                  {client.tier}
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant="outline"
+                              className={`font-bold ${
+                                client.overallStatus === 'green' ? 'bg-green-100 text-green-800 border-green-300' :
+                                client.overallStatus === 'yellow' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' :
+                                'bg-red-100 text-red-800 border-red-300'
+                              }`}
+                            >
+                              {client.score}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1 max-w-[220px]">
+                              {(client.flags as FlagKey[]).slice(0, 3).map((flag: FlagKey) => (
+                                <Badge key={flag} variant="outline" className={`text-xs ${FLAG_COLORS[flag] || ''}`}>
+                                  {FLAG_LABELS[flag]}
+                                </Badge>
+                              ))}
+                              {client.flags.length > 3 && (
+                                <Badge variant="outline" className="text-xs">+{client.flags.length - 3}</Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {client.communicationStatus ? (
+                              <Badge variant="outline" className={`text-xs ${COMMUNICATION_STATUS_COLORS[client.communicationStatus] || ''}`}>
+                                {COMMUNICATION_STATUS_LABELS[client.communicationStatus]}
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-xs text-muted-foreground">אין רשומה</Badge>
+                            )}
+                            {client.daysSinceComm !== null && (
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {client.daysSinceComm === 0 ? 'היום' : `לפני ${client.daysSinceComm} ימים`}
+                              </p>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-1">
+                              <TooltipProvider>
+                                <UITooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="outline" size="sm" className="h-8 px-2"
+                                      onClick={() => setCommModal({ clientId: client.id, clientName: client.name })}
+                                    >
+                                      <MessageSquare className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>עדכון תקשורת</TooltipContent>
+                                </UITooltip>
+                              </TooltipProvider>
+                              {(client.services ?? []).includes('seo') && (
+                                <TooltipProvider>
+                                  <UITooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="outline" size="sm" className="h-8 px-2"
+                                        onClick={() => setSeoModal({ clientId: client.id, clientName: client.name })}
+                                      >
+                                        🔍
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>עדכון SEO</TooltipContent>
+                                  </UITooltip>
+                                </TooltipProvider>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* ── Performance Tab ── */}
+        <TabsContent value="performance">
+          <div className="space-y-6">
       {/* Platform Filter Tabs */}
       <Tabs value={platformFilter} onValueChange={(v) => setPlatformFilter(v as PlatformFilter)} dir="rtl">
         <TabsList className="h-auto flex-wrap gap-1">
@@ -755,6 +1000,27 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
         clientTableDataList.map((data) => (
           <ClientTableCard key={`${data.clientId}-${data.tableId}`} data={data} />
         ))
+      )}
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      {/* Modals */}
+      {commModal && (
+        <CommunicationUpdateModal
+          clientId={commModal.clientId}
+          clientName={commModal.clientName}
+          open={!!commModal}
+          onOpenChange={(open) => !open && setCommModal(null)}
+        />
+      )}
+      {seoModal && (
+        <SeoUpdateModal
+          clientId={seoModal.clientId}
+          clientName={seoModal.clientName}
+          open={!!seoModal}
+          onOpenChange={(open) => !open && setSeoModal(null)}
+        />
       )}
     </div>
   );
