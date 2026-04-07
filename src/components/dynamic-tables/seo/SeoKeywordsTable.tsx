@@ -238,6 +238,7 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], hasGscData = 
               icon={<span>📋</span>}
               showCampaignStart
               showPrevMonth
+              showGsc={hasGscData}
             />
           </TabsContent>
         </Tabs>
