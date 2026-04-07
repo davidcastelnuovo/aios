@@ -448,6 +448,61 @@ async function getGoogleAdsAccounts(supabase: any, tenantId: string) {
     }
   }
 
+  // Third pass: fetch child accounts under each MCC
+  const existingIds = new Set(accounts.map(a => a.id));
+  const childQuery = `
+    SELECT
+      customer_client.id,
+      customer_client.descriptive_name,
+      customer_client.currency_code,
+      customer_client.manager,
+      customer_client.status
+    FROM customer_client
+    WHERE customer_client.status = 'ENABLED'
+      AND customer_client.manager = false
+  `;
+
+  for (const mccId of mccIds) {
+    try {
+      const childResponse = await fetch(
+        `https://googleads.googleapis.com/v23/customers/${mccId}/googleAds:search`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'developer-token': DEVELOPER_TOKEN,
+            'Content-Type': 'application/json',
+            'login-customer-id': mccId,
+          },
+          body: JSON.stringify({ query: childQuery }),
+        }
+      );
+
+      const childResult = await parseGoogleAdsJsonResponse(
+        childResponse,
+        `load child accounts for MCC ${mccId}`
+      );
+
+      if (childResult.success && childResult.data?.results) {
+        for (const row of childResult.data.results) {
+          const client = row.customerClient;
+          if (!client?.id) continue;
+          const childId = String(client.id);
+          if (existingIds.has(childId)) continue;
+          existingIds.add(childId);
+          accounts.push({
+            id: childId,
+            name: client.descriptiveName || `Account ${childId}`,
+            currency: client.currencyCode || 'ILS',
+            manager: Boolean(client.manager),
+          });
+        }
+      }
+    } catch (err) {
+      console.warn(`Failed to fetch children for MCC ${mccId}:`, err);
+    }
+  }
+
   return new Response(JSON.stringify({ accounts }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' }
   });
