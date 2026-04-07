@@ -95,14 +95,14 @@ Deno.serve(async (req) => {
       // Check for existing report (deduplication) - only when report_date is set
       let action = "inserted";
       if (report_date) {
-        const { data: existing } = await supabase
+        const { data: existingList } = await supabase
           .from("ahrefs_reports")
           .select("id, client_id")
           .eq("domain", domain)
           .eq("report_date", report_date)
           .eq("report_type", report_type)
-          .limit(1)
-          .single();
+          .limit(1);
+        const existing = existingList && existingList.length > 0 ? existingList[0] : null;
 
         if (existing) {
           // Update existing report (UPSERT), preserve existing client_id if already set
