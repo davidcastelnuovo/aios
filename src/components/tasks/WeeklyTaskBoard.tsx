@@ -703,11 +703,8 @@ export function WeeklyTaskBoard() {
       start: string; 
       end: string;
     }) => {
-      const { data, error } = await supabase.functions.invoke("update-calendar-event", {
-        body: { eventId, summary, description, start, end },
-      });
-      if (error) throw error;
-      return data;
+      const { updateCalendarEvent: updateCalEvent } = await import("@/lib/calendarApi");
+      return await updateCalEvent({ eventId, summary, description, start, end }, { tenantId: tenantId! });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly"] });
@@ -723,11 +720,8 @@ export function WeeklyTaskBoard() {
   // Delete calendar event mutation
   const deleteCalendarEvent = useMutation({
     mutationFn: async (eventId: string) => {
-      const { data, error } = await supabase.functions.invoke("delete-calendar-event", {
-        body: { eventId },
-      });
-      if (error) throw error;
-      return data;
+      const { deleteCalendarEvent: delCalEvent } = await import("@/lib/calendarApi");
+      return await delCalEvent(eventId, { tenantId: tenantId! });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly"] });
