@@ -60,7 +60,9 @@ function DraggableBacklogTask({
   campaignersList?: { id: string; full_name: string }[];
   onUpdateClient?: (taskId: string, clientId: string | null) => void;
   onUpdateCampaigner?: (taskId: string, campaignerId: string | null) => void;
-}) {
+) {
+  const [clientOpen, setClientOpen] = useState(false);
+  const [campaignerOpen, setCampaignerOpen] = useState(false);
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: task.id,
     data: { task },
