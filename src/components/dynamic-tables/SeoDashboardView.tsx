@@ -66,10 +66,15 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
       kd: kw.kd ?? kw.keyword_difficulty ?? null,
       cpc: kw.cpc ?? kw.cost_per_click ?? null,
       url: kw.url ?? kw.best_position_url ?? '',
+      // Preserve inline comparison fields if they exist in the raw data
+      position_prev_month: kw.position_prev_month ?? null,
+      position_campaign_start: kw.position_campaign_start ?? null,
+      traffic_prev_month: kw.traffic_prev_month ?? null,
+      traffic_campaign_start: kw.traffic_campaign_start ?? null,
     };
   }
 
-  // Build lookup maps from other reports' keywords
+  // Build lookup maps from other reports' keywords (fallback when inline data missing)
   function buildKeywordMap(report: any): Map<string, number | null> {
     const rd = report?.report_data as any;
     if (!rd) return new Map();
@@ -95,8 +100,9 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
   function enrichKeyword(kw: any): any {
     const normalized = normalizeKeyword(kw);
     const kwLower = String(normalized.keyword).toLowerCase();
-    const prevPos = prevMonthMap.get(kwLower) ?? null;
-    const campPos = campaignStartMap.get(kwLower) ?? null;
+    // Use inline data first, fallback to cross-report comparison
+    const prevPos = normalized.position_prev_month ?? prevMonthMap.get(kwLower) ?? null;
+    const campPos = normalized.position_campaign_start ?? campaignStartMap.get(kwLower) ?? null;
     return {
       ...normalized,
       position_prev_month: prevPos,
