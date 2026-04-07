@@ -218,6 +218,7 @@ const App = () => (
                   <Route path="/t/:tenantSlug/telephony-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><TelephonySettings /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/wordpress-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><WordPressSettings /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/unified-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><UnifiedSettings /></AppLayout></ProtectedRoute>} />
+                  <Route path="/unified-callback" element={<Suspense fallback={<div />}><UnifiedCallback /></Suspense>} />
                   <Route path="/t/:tenantSlug/social-media" element={<ProtectedRoute><AppLayout><SocialDashboard /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/social-gantt" element={<ProtectedRoute><AppLayout><SocialDashboard /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/social" element={<ProtectedRoute><AppLayout><SocialDashboard /></AppLayout></ProtectedRoute>} />
