@@ -924,7 +924,6 @@ Deno.serve(async (req) => {
         systemPrompt += `\n\n👤 **זהות המשתמש הנוכחי:** ${callerName} (campaigner_id: ${callerCampaignerId}). כשיוצרים משימה, שייך אותה אוטומטית ל-${callerName} אלא אם המשתמש מבקש במפורש לשייך למישהו אחר.`
       }
     }
-    }
 
     // 4. Filter tools
     const allowedTools = (agent.allowed_tools || []) as string[]
