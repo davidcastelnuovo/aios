@@ -179,6 +179,44 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
   const organicKeywords = useMemo(() => rawOrganic.map(enrichKeyword), [rawOrganic, prevMonthMap, campaignStartMap, gscMap, ahrefsApiData]);
   const trackedKeywords = useMemo(() => rawTracked.map(enrichKeyword), [rawTracked, prevMonthMap, campaignStartMap, gscMap, ahrefsApiData]);
 
+  // Auto-enrich: fetch comparison data from Ahrefs API when keywords lack it
+  const domain = reportData?.domain || selectedReport?.domain;
+  const needsEnrichment = useMemo(() => {
+    const allKw = [...rawOrganic, ...rawTracked];
+    if (allKw.length === 0) return false;
+    // Check if most keywords lack prev month data
+    const withPrev = allKw.filter(kw => 
+      (kw.position_prev_month != null) || (kw.best_position_prev != null)
+    );
+    return withPrev.length < allKw.length * 0.3;
+  }, [rawOrganic, rawTracked]);
+
+  useEffect(() => {
+    if (domain && needsEnrichment && !hasAutoEnriched && !isEnriching && reports.length > 0) {
+      setHasAutoEnriched(true);
+      const reportDate = selectedReport?.report_date || new Date().toISOString().split('T')[0];
+      // Compare with 3 months back
+      const compDate = (() => {
+        const d = new Date(reportDate);
+        d.setMonth(d.getMonth() - 3);
+        return d.toISOString().split('T')[0];
+      })();
+      fetchKeywords(domain, reportDate, compDate, 200);
+    }
+  }, [domain, needsEnrichment, hasAutoEnriched, isEnriching, reports.length, selectedReport, fetchKeywords]);
+
+  const handleManualSync = useCallback(() => {
+    if (!domain) return;
+    setHasAutoEnriched(true);
+    const reportDate = selectedReport?.report_date || new Date().toISOString().split('T')[0];
+    const compDate = (() => {
+      const d = new Date(reportDate);
+      d.setMonth(d.getMonth() - 3);
+      return d.toISOString().split('T')[0];
+    })();
+    fetchKeywords(domain, reportDate, compDate, 200);
+  }, [domain, selectedReport, fetchKeywords]);
+
   if (isLoading) {
     return (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4" dir="rtl">
