@@ -51,6 +51,8 @@ export function TaskItem({ task, onToggleComplete, onClick, clientsList, campaig
 
   const selectedClientName = clientsList?.find(c => c.id === task.client_id)?.name;
   const selectedCampaignerName = campaignersList?.find(c => c.id === task.campaigner_id)?.full_name;
+
+  const {
     attributes,
     listeners,
     setNodeRef,
