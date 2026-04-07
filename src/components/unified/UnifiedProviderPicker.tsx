@@ -73,7 +73,18 @@ export default function UnifiedProviderPicker({ open, onOpenChange, selectedCate
   };
 
   const onDialogOpen = () => {
-    if (selectedCategory) fetchProviders();
+    if (directIntegrationType && selectedCategory) {
+      // Skip provider list — connect directly
+      const fakeProvider: UnifiedProvider = {
+        name: selectedCategory.label,
+        type: directIntegrationType,
+        icon_url: null,
+        categories: [selectedCategory.key],
+      };
+      handleSelectProvider(fakeProvider);
+    } else if (selectedCategory) {
+      fetchProviders();
+    }
   };
 
   const handleSelectProvider = async (provider: UnifiedProvider) => {
