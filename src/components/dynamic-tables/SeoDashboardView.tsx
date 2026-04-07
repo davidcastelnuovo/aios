@@ -252,6 +252,16 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
           {reportData?.project_name && (
             <Badge variant="outline">{reportData.project_name}</Badge>
           )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleManualSync}
+            disabled={isEnriching}
+            className="h-8 text-xs gap-1.5"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isEnriching ? 'animate-spin' : ''}`} />
+            {isEnriching ? 'מסנכרן...' : 'סנכרון Ahrefs'}
+          </Button>
         </div>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           {reports.length > 1 && (
