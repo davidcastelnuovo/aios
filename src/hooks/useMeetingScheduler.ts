@@ -3,9 +3,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
+import { getCalendarEvents, addCalendarEvent } from "@/lib/calendarApi";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 /**
- * Hook לניהול קביעת פגישות עם יומן Google
+ * Hook לניהול קביעת פגישות עם יומן Google (דרך Unified)
  * משותף בין EditLeadDialog ו-EditClientDialog
  */
 export function useMeetingScheduler(tenantId?: string) {
@@ -21,9 +23,10 @@ export function useMeetingScheduler(tenantId?: string) {
   const [calendarError, setCalendarError] = useState<string | null>(null);
 
   /**
-   * טעינת אירועי יומן לתאריך נתון
+   * טעינת אירועי יומן לתאריך נתון (דרך Unified)
    */
   const fetchCalendarEvents = async (selectedDate: Date) => {
+    if (!tenantId) return;
     setIsLoadingCalendar(true);
     setCalendarError(null);
     setCalendarEvents([]);
@@ -34,19 +37,11 @@ export function useMeetingScheduler(tenantId?: string) {
       const endOfDay = new Date(selectedDate);
       endOfDay.setHours(23, 59, 59, 999);
 
-      const { data, error } = await supabase.functions.invoke('get-calendar-events', {
-        body: {
-          timeMin: startOfDay.toISOString(),
-          timeMax: endOfDay.toISOString(),
-        },
-      });
-
-      if (error) throw error;
-
-      if (data?.needsReconnect) {
-        setCalendarError('היומן לא מחובר. יש לחבר את יומן Google.');
-        return;
-      }
+      const data = await getCalendarEvents(
+        startOfDay.toISOString(),
+        endOfDay.toISOString(),
+        { tenantId }
+      );
 
       if (data?.events) {
         setCalendarEvents(data.events);
@@ -143,10 +138,9 @@ export function useMeetingScheduler(tenantId?: string) {
       const slotEnd = new Date(slotStart);
       slotEnd.setMinutes(slotEnd.getMinutes() + 30);
 
-      // בדיקה אם השעה תפוסה (מתעלמים מאירועים של כל היום)
       const isOccupied = calendarEvents.some(event => {
         if (!event.start?.dateTime || !event.end?.dateTime) {
-          return false; // Skip all-day events
+          return false;
         }
         const eventStart = new Date(event.start.dateTime);
         const eventEnd = new Date(event.end.dateTime);
@@ -194,7 +188,7 @@ export function useMeetingScheduler(tenantId?: string) {
   };
 
   /**
-   * קביעת פגישה
+   * קביעת פגישה (דרך Unified)
    */
   const scheduleMeeting = async (params: {
     contactName: string;
@@ -208,6 +202,11 @@ export function useMeetingScheduler(tenantId?: string) {
 
     if (!meetingDate || !meetingTime || !meetingEndTime) {
       toast.error("נא לבחור תאריך ושעה");
+      return;
+    }
+
+    if (!tenantId) {
+      toast.error("לא נמצא ארגון פעיל");
       return;
     }
 
@@ -231,25 +230,19 @@ export function useMeetingScheduler(tenantId?: string) {
       const attendees = [
         ...(contactEmail ? [contactEmail] : []),
         ...(additionalEmails || []),
-      ].filter((email, index, self) => self.indexOf(email) === index); // dedupe
+      ].filter((email, index, self) => self.indexOf(email) === index);
 
-      // יצירת אירוע ביומן
-      const { error: calendarError } = await supabase.functions.invoke('add-calendar-event', {
-        body: {
+      // יצירת אירוע ביומן דרך Unified
+      await addCalendarEvent(
+        {
           summary: subject,
           description: personalMessage || `פגישה עם ${contactType === 'lead' ? 'ליד' : 'לקוח'}: ${contactName}`,
           start: startDateTime.toISOString(),
           end: endDateTime.toISOString(),
           attendees,
-          location: meetingLocation || undefined,
-        }
-      });
-
-      if (calendarError) {
-        console.error('Calendar error:', calendarError);
-        toast.error("שגיאה ביצירת הפגישה ביומן");
-        return;
-      }
+        },
+        { tenantId }
+      );
 
       // עדכון פרטי הפגישה בליד (אם זה ליד)
       if (contactType === 'lead') {
@@ -299,10 +292,8 @@ export function useMeetingScheduler(tenantId?: string) {
         toast.success("הפגישה נוספה ליומן!");
       }
 
-      // איפוס הטופס
       resetForm();
 
-      // קריאה לפונקציית הצלחה
       if (onSuccess) {
         onSuccess();
       }
@@ -328,7 +319,6 @@ export function useMeetingScheduler(tenantId?: string) {
   };
 
   return {
-    // State
     meetingDate,
     setMeetingDate,
     meetingTime,
@@ -345,8 +335,6 @@ export function useMeetingScheduler(tenantId?: string) {
     isLoadingCalendar,
     calendarEvents,
     calendarError,
-
-    // Functions
     handleDateSelect,
     getAvailableTimeSlots,
     getAvailableEndTimeSlots,
