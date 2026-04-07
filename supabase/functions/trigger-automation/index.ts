@@ -993,26 +993,44 @@ Deno.serve(async (req) => {
                     }
 
                     const agentUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/run-ai-agent`
-                    // Build conversation history — load from whatsapp_sessions by chat_id
+                    // Build conversation history — prefer the active Carmen session,
+                    // otherwise reuse the most recent Carmen session for this chat.
                     let carmenHistory: any[] = payloadData?._carmen_history || []
                     if (carmenHistory.length === 0) {
-                      const sessionChatId = payloadData?.chat_id || payloadData?.sender_phone || ''
-                      if (sessionChatId) {
-                        const { data: sessionRow } = await supabase
-                          .from('whatsapp_sessions')
-                          .select('conversation_history')
+                      const sessionChatId = payloadData?.chat_id || ''
+                      const sessionPhone = payloadData?.sender_phone || payloadData?.phone || ''
+
+                      if (sessionChatId || sessionPhone) {
+                        let previousSessionQuery = supabase
+                          .from('carmen_whatsapp_sessions')
+                          .select('id, conversation_history')
                           .eq('tenant_id', tenantId)
-                          .eq('chat_id', sessionChatId)
-                          .eq('status', 'active')
                           .order('last_message_at', { ascending: false })
+                          .order('created_at', { ascending: false })
                           .limit(1)
-                          .maybeSingle()
-                        const sessionHistory = Array.isArray(sessionRow?.conversation_history)
-                          ? sessionRow.conversation_history
+
+                        if (sessionChatId) {
+                          previousSessionQuery = previousSessionQuery.eq('chat_id', sessionChatId)
+                        }
+                        if (sessionPhone) {
+                          previousSessionQuery = previousSessionQuery.eq('phone', sessionPhone)
+                        }
+                        if (payloadData?.connection_user_id) {
+                          previousSessionQuery = previousSessionQuery.eq('connection_user_id', payloadData.connection_user_id)
+                        }
+                        if (payloadData?._carmen_session_id) {
+                          previousSessionQuery = previousSessionQuery.neq('id', payloadData._carmen_session_id)
+                        }
+
+                        const { data: previousSession } = await previousSessionQuery.maybeSingle()
+                        const previousHistory = Array.isArray(previousSession?.conversation_history)
+                          ? previousSession.conversation_history
                           : []
-                        if (sessionHistory.length > 0) {
-                          carmenHistory = sessionHistory
-                          payloadData._session_chat_id = sessionChatId
+
+                        if (previousHistory.length > 0) {
+                          carmenHistory = previousHistory
+                          payloadData._carmen_history = previousHistory
+                          console.log(`[CARMEN] Restored ${previousHistory.length} history items from previous session ${previousSession.id}`)
                         }
                       }
                     }
