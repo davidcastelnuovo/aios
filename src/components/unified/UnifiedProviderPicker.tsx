@@ -22,7 +22,7 @@ interface Props {
   directIntegrationType?: string; // If set, skip provider list and connect directly
 }
 
-export default function UnifiedProviderPicker({ open, onOpenChange, selectedCategory, tenantId }: Props) {
+export default function UnifiedProviderPicker({ open, onOpenChange, selectedCategory, tenantId, directIntegrationType }: Props) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
