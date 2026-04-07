@@ -72,11 +72,47 @@ export default function AhrefsSettings() {
           .update({ website: websiteUrl })
           .eq('id', clientId);
       }
+
+      // Auto-create SEO report table if one doesn't exist for this client
+      const { data: existingTables } = await supabase
+        .from('crm_tables')
+        .select('id')
+        .eq('client_id', clientId)
+        .eq('integration_type', 'ahrefs')
+        .limit(1);
+
+      if (!existingTables || existingTables.length === 0) {
+        const clientName = client?.name || clients.find(c => c.id === clientId)?.name || '';
+        const tableName = `דוח SEO - ${clientName}`;
+        const slug = `seo-report-${clientId}-${Date.now()}`;
+
+        await supabase.functions.invoke('crm-tables', {
+          body: {
+            action: 'create',
+            tenantId,
+            name: tableName,
+            slug,
+            description: `דוח SEO עבור ${domain}`,
+            category: 'seo',
+            icon: 'TrendingUp',
+            agencyId: client?.agency_id || null,
+            clientId,
+            integration_type: 'ahrefs',
+            integration_settings: {
+              data_source: 'ahrefs_reports',
+              targetDomain: domain,
+              reportType: 'site_explorer',
+              clientId,
+            },
+          }
+        });
+      }
     },
     onSuccess: () => {
-      toast.success('הדוח שויך ללקוח בהצלחה');
+      toast.success('הדוח שויך ללקוח בהצלחה ודוח SEO נוצר אוטומטית');
       queryClient.invalidateQueries({ queryKey: ['ahrefs-reports'] });
       queryClient.invalidateQueries({ queryKey: ['clients-for-ahrefs'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
       setClientSearchOpen(null);
       setClientSearch("");
     },
