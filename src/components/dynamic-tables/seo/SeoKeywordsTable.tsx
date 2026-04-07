@@ -161,7 +161,7 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [] }: SeoKeywords
         <Tabs defaultValue="top10" className="w-full">
           <TabsList dir="rtl" className="w-full justify-start rounded-none border-b bg-transparent h-auto p-0 gap-0">
             <TabsTrigger value="top10" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
-              🏆 Top 10 מקודמים
+              🏆 Top 10 מקודמים ({top10.length})
             </TabsTrigger>
             <TabsTrigger value="campaign" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
               📈 שינוי מתחילת קידום
