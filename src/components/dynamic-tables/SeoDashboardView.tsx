@@ -20,6 +20,11 @@ interface SeoDashboardViewProps {
 
 export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) {
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
+  const [gscData, setGscData] = useState<GscKeywordData[]>([]);
+
+  const handleGscDataLoaded = useCallback((data: GscKeywordData[]) => {
+    setGscData(data);
+  }, []);
 
   const { data: reports = [], isLoading } = useQuery({
     queryKey: ['seo-dashboard-reports', tenantId, clientId],
