@@ -6,24 +6,18 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
-import { Loader2, Plus, Trash2, ArrowLeft, Link2, Package, Users, ShoppingCart, Ticket, Briefcase, BarChart3, CalendarDays, Megaphone, Search, CheckCircle2 } from "lucide-react";
+import { Loader2, Trash2, ArrowLeft, Link2, CheckCircle2, Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import UnifiedProviderPicker from "@/components/unified/UnifiedProviderPicker";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
-const UNIFIED_CATEGORIES = [
-  { key: "calendar", label: "Calendar", icon: <CalendarDays className="h-5 w-5" />, description: "Google Calendar, Outlook Calendar, CalDAV" },
-  { key: "crm", label: "CRM", icon: <Users className="h-5 w-5" />, description: "Salesforce, HubSpot, Pipedrive ועוד" },
-  { key: "ats", label: "ATS - גיוס", icon: <Briefcase className="h-5 w-5" />, description: "Greenhouse, Lever, Workable" },
-  { key: "ticketing", label: "Ticketing", icon: <Ticket className="h-5 w-5" />, description: "Zendesk, Freshdesk, Jira" },
-  { key: "commerce", label: "Commerce", icon: <ShoppingCart className="h-5 w-5" />, description: "Shopify, WooCommerce, Stripe" },
-  { key: "martech", label: "Marketing", icon: <BarChart3 className="h-5 w-5" />, description: "Mailchimp, ActiveCampaign, Klaviyo" },
-  { key: "storage", label: "Storage", icon: <Package className="h-5 w-5" />, description: "Google Drive, Dropbox, OneDrive" },
-  { key: "social", label: "Social Media", icon: <Megaphone className="h-5 w-5" />, description: "Facebook, Instagram, TikTok, YouTube, LinkedIn" },
-  { key: "ads", label: "פרסום ממומן", icon: <BarChart3 className="h-5 w-5" />, description: "Google Ads, Meta Ads, TikTok Ads" },
-  { key: "seo", label: "SEO & Analytics", icon: <Search className="h-5 w-5" />, description: "Ahrefs, Google Analytics, Search Console" },
-];
+interface WorkspaceIntegration {
+  name: string;
+  type: string;
+  icon_url: string | null;
+  categories: string[];
+}
 
 export default function UnifiedSettings() {
   const { toast } = useToast();
@@ -34,7 +28,8 @@ export default function UnifiedSettings() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<{ key: string; label: string } | null>(null);
 
-  const { data: connections, isLoading } = useQuery({
+  // Fetch active connections from DB
+  const { data: connections, isLoading: isLoadingConnections } = useQuery({
     queryKey: ["unified-connections", currentTenantId],
     queryFn: async () => {
       const { data, error } = await supabase.functions.invoke("unified-connections", {
@@ -46,8 +41,23 @@ export default function UnifiedSettings() {
     enabled: !!currentTenantId,
   });
 
-  const handleCategoryClick = (cat: typeof UNIFIED_CATEGORIES[0]) => {
-    setSelectedCategory({ key: cat.key, label: cat.label });
+  // Fetch active workspace integrations from Unified.to
+  const { data: workspaceIntegrations, isLoading: isLoadingWorkspace } = useQuery({
+    queryKey: ["unified-workspace-integrations", currentTenantId],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("unified-connections", {
+        body: { action: "list_workspace_integrations", tenant_id: currentTenantId },
+      });
+      if (error) throw error;
+      return (data?.integrations || []) as WorkspaceIntegration[];
+    },
+    enabled: !!currentTenantId,
+  });
+
+  const handleIntegrationClick = (integration: WorkspaceIntegration) => {
+    // Use first category of the integration
+    const category = integration.categories[0] || integration.type;
+    setSelectedCategory({ key: category, label: integration.name });
     setPickerOpen(true);
   };
 
@@ -64,8 +74,8 @@ export default function UnifiedSettings() {
     }
   };
 
-  // Group active connections by integration_name for individual cards
   const activeConnections = connections || [];
+  const availableIntegrations = workspaceIntegrations || [];
 
   return (
     <div className="container mx-auto p-6 space-y-6" dir="rtl">
@@ -87,7 +97,12 @@ export default function UnifiedSettings() {
               <Badge variant="secondary" className="mr-2 text-xs">{activeConnections.length}</Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="categories">כל הקטגוריות</TabsTrigger>
+          <TabsTrigger value="available">
+            אינטגרציות זמינות
+            {availableIntegrations.length > 0 && (
+              <Badge variant="secondary" className="mr-2 text-xs">{availableIntegrations.length}</Badge>
+            )}
+          </TabsTrigger>
         </TabsList>
 
         {/* Active Connections Tab */}
@@ -98,7 +113,7 @@ export default function UnifiedSettings() {
               <CardDescription>כל השירותים המחוברים דרך Unified.to</CardDescription>
             </CardHeader>
             <CardContent>
-              {isLoading ? (
+              {isLoadingConnections ? (
                 <div className="flex justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
@@ -106,19 +121,26 @@ export default function UnifiedSettings() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {activeConnections.map((conn: any) => {
                     const settings = conn.settings || {};
-                    const categoryDef = UNIFIED_CATEGORIES.find(c => c.key === settings.unified_category);
+                    // Find matching workspace integration for icon
+                    const matchingIntegration = availableIntegrations.find(
+                      (wi) => wi.type === settings.integration_name || wi.name === settings.integration_name
+                    );
                     return (
                       <Card key={conn.id} className="border-green-500/50">
                         <CardContent className="p-4 space-y-3">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                              <div className="p-2 rounded-lg bg-green-500/10 text-green-600">
-                                {categoryDef?.icon || <Link2 className="h-5 w-5" />}
-                              </div>
+                              {matchingIntegration?.icon_url ? (
+                                <img src={matchingIntegration.icon_url} alt={settings.integration_name} className="h-10 w-10 rounded object-contain" />
+                              ) : (
+                                <div className="p-2 rounded-lg bg-green-500/10 text-green-600">
+                                  <Link2 className="h-5 w-5" />
+                                </div>
+                              )}
                               <div>
                                 <p className="font-medium">{settings.integration_name || conn.integration_type}</p>
                                 <p className="text-xs text-muted-foreground">
-                                  {categoryDef?.label || settings.unified_category || "—"}
+                                  {settings.unified_category || "—"}
                                 </p>
                               </div>
                             </div>
@@ -144,47 +166,67 @@ export default function UnifiedSettings() {
                 <div className="text-center py-12 space-y-3">
                   <Link2 className="h-12 w-12 text-muted-foreground/40 mx-auto" />
                   <p className="text-muted-foreground">אין חיבורים פעילים עדיין</p>
-                  <p className="text-sm text-muted-foreground">עבור ללשונית "כל הקטגוריות" כדי לחבר שירות חדש</p>
+                  <p className="text-sm text-muted-foreground">עבור ללשונית "אינטגרציות זמינות" כדי לחבר שירות חדש</p>
                 </div>
               )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* Categories Tab */}
-        <TabsContent value="categories">
+        {/* Available Integrations Tab - dynamic from Unified.to */}
+        <TabsContent value="available">
           <Card>
             <CardHeader>
-              <CardTitle>קטגוריות זמינות</CardTitle>
-              <CardDescription>בחר קטגוריה לחיבור שירות חדש</CardDescription>
+              <CardTitle>אינטגרציות זמינות</CardTitle>
+              <CardDescription>אינטגרציות פעילות ב-Unified.to — לחץ לחיבור</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {UNIFIED_CATEGORIES.map((cat) => {
-                  const connectedProviders = activeConnections.filter(
-                    (conn: any) => conn.settings?.unified_category === cat.key
-                  );
-                  const isConnected = connectedProviders.length > 0;
-                  return (
-                    <Card key={cat.key} className={`hover:bg-muted/50 transition-colors cursor-pointer ${isConnected ? 'border-green-500/50' : ''}`} onClick={() => handleCategoryClick(cat)}>
-                      <CardContent className="p-4 flex items-center gap-3">
-                        <div className={`p-2 rounded-lg ${isConnected ? 'bg-green-500/10 text-green-600' : 'bg-primary/10 text-primary'}`}>{cat.icon}</div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium">{cat.label}</p>
-                            {isConnected && <Badge variant="default" className="bg-green-500/90 text-xs">מחובר</Badge>}
+              {isLoadingWorkspace ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : availableIntegrations.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {availableIntegrations.map((integration) => {
+                    // Check if already connected
+                    const isConnected = activeConnections.some(
+                      (conn: any) => conn.settings?.integration_name === integration.type || conn.settings?.integration_name === integration.name
+                    );
+                    return (
+                      <Card
+                        key={integration.type}
+                        className={`hover:bg-muted/50 transition-colors cursor-pointer ${isConnected ? 'border-green-500/50' : ''}`}
+                        onClick={() => handleIntegrationClick(integration)}
+                      >
+                        <CardContent className="p-4 flex items-center gap-3">
+                          {integration.icon_url ? (
+                            <img src={integration.icon_url} alt={integration.name} className="h-10 w-10 rounded object-contain" />
+                          ) : (
+                            <div className="h-10 w-10 rounded bg-primary/10 flex items-center justify-center text-sm font-bold text-primary">
+                              {integration.name.charAt(0)}
+                            </div>
+                          )}
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium">{integration.name}</p>
+                              {isConnected && <Badge variant="default" className="bg-green-500/90 text-xs">מחובר</Badge>}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              {integration.categories.join(", ")}
+                            </p>
                           </div>
-                          <p className="text-xs text-muted-foreground">
-                            {isConnected
-                              ? connectedProviders.map((c: any) => c.settings?.integration_name || c.integration_type).join(", ")
-                              : cat.description}
-                          </p>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
+                          {!isConnected && <Plus className="h-4 w-4 text-muted-foreground" />}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-12 space-y-3">
+                  <p className="text-muted-foreground">לא נמצאו אינטגרציות פעילות ב-Unified.to</p>
+                  <p className="text-sm text-muted-foreground">הפעל אינטגרציות בדשבורד של Unified.to כדי שיופיעו כאן</p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
