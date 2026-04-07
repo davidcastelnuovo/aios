@@ -142,9 +142,17 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     case 'create_task': {
       let campaignerId = args.campaigner_id
       let agencyId = null
-      if (!campaignerId) {
+      if (!campaignerId && userId && userId !== 'system') {
         const { data: profile } = await supabase.from('profiles').select('campaigner_id').eq('id', userId).single()
         campaignerId = profile?.campaigner_id
+      }
+      // Fallback for system/WhatsApp: assign to tenant owner's campaigner
+      if (!campaignerId) {
+        const { data: ownerRole } = await supabase.from('user_roles').select('user_id').eq('role', 'owner').limit(1).maybeSingle()
+        if (ownerRole?.user_id) {
+          const { data: ownerProfile } = await supabase.from('profiles').select('campaigner_id').eq('id', ownerRole.user_id).maybeSingle()
+          campaignerId = ownerProfile?.campaigner_id
+        }
       }
       if (campaignerId) {
         const { data: campAgency } = await supabase.from('campaigner_agencies').select('agency_id').eq('campaigner_id', campaignerId).limit(1).single()
