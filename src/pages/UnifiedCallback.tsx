@@ -45,6 +45,9 @@ export default function UnifiedCallback() {
 
         setStatus("success");
 
+        // Clean up sessionStorage
+        sessionStorage.removeItem("unified_pending_connection");
+
         // Notify parent window
         if (window.opener) {
           window.opener.postMessage({ type: "unified-connected" }, "*");
