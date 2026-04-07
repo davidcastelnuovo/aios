@@ -87,17 +87,30 @@ export default function UnifiedSettings() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {UNIFIED_CATEGORIES.map((cat) => (
-              <Card key={cat.key} className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => handleCategoryClick(cat)}>
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-primary/10 text-primary">{cat.icon}</div>
-                  <div>
-                    <p className="font-medium">{cat.label}</p>
-                    <p className="text-xs text-muted-foreground">{cat.description}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+            {UNIFIED_CATEGORIES.map((cat) => {
+              const connectedProviders = (connections || []).filter(
+                (conn: any) => conn.settings?.unified_category === cat.key
+              );
+              const isConnected = connectedProviders.length > 0;
+              return (
+                <Card key={cat.key} className={`hover:bg-muted/50 transition-colors cursor-pointer ${isConnected ? 'border-green-500/50' : ''}`} onClick={() => handleCategoryClick(cat)}>
+                  <CardContent className="p-4 flex items-center gap-3">
+                    <div className={`p-2 rounded-lg ${isConnected ? 'bg-green-500/10 text-green-600' : 'bg-primary/10 text-primary'}`}>{cat.icon}</div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium">{cat.label}</p>
+                        {isConnected && <Badge variant="default" className="bg-green-500/90 text-xs">מחובר</Badge>}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {isConnected
+                          ? connectedProviders.map((c: any) => c.settings?.integration_name || c.integration_type).join(", ")
+                          : cat.description}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </CardContent>
       </Card>
