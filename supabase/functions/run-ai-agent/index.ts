@@ -678,7 +678,7 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
 
   try {
-    const { agent_id, command_text, temperature, automation_id, user_name, lead_data, tenant_id, user_id, task_skills, task_mode } = await req.json()
+    const { agent_id, command_text, temperature, automation_id, user_name, lead_data, tenant_id, user_id, task_skills, task_mode, conversation_history } = await req.json()
 
     if (!agent_id || !command_text) throw new Error('Missing agent_id or command_text')
     if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured')
@@ -695,15 +695,16 @@ Deno.serve(async (req) => {
     let resolvedUserId = user_id || 'system'
 
     // 3. Build system prompt with full tenant context
-    // Fetch tenant context for Carmen and all agents
-    const [tenantRes, agenciesRes, statsRes] = await Promise.all([
+    // Fetch tenant context, memory for Carmen and all agents
+    const [tenantRes, agenciesRes, statsRes, memoryRes] = await Promise.all([
       supabase.from('tenants').select('name, type').eq('id', resolvedTenantId).single(),
       supabase.from('agencies').select('id, name').eq('tenant_id', resolvedTenantId).order('name').limit(20),
       Promise.all([
         supabase.from('leads').select('status', { count: 'exact', head: false }).eq('tenant_id', resolvedTenantId),
         supabase.from('clients').select('id', { count: 'exact', head: false }).eq('tenant_id', resolvedTenantId),
         supabase.from('tasks').select('id', { count: 'exact', head: false }).eq('tenant_id', resolvedTenantId).eq('status', 'open'),
-      ])
+      ]),
+      supabase.from('ai_memory').select('key, content, category').eq('tenant_id', resolvedTenantId).order('updated_at', { ascending: false }).limit(30),
     ])
     const tenantName = tenantRes.data?.name || 'הארגון'
     const agencyList = (agenciesRes.data || []).map((a: any) => `${a.name} (${a.id})`).join(', ')
