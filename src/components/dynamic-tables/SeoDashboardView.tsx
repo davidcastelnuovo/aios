@@ -234,10 +234,20 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
       {/* Traffic History Chart */}
       <SeoTrafficChart trafficHistory={trafficHistory} />
 
+      {/* Google Search Console Integration */}
+      <GscIntegration
+        tenantId={tenantId}
+        clientId={clientId}
+        domain={reportData?.domain || selectedReport?.domain}
+        keywords={[...organicKeywords, ...trackedKeywords].map((k: any) => k.keyword).filter(Boolean)}
+        onDataLoaded={handleGscDataLoaded}
+      />
+
       {/* Keywords — unified view with tabs */}
       <SeoKeywordsTable
         keywords={organicKeywords}
         trackedKeywords={trackedKeywords}
+        hasGscData={gscData.length > 0}
       />
 
       {/* HTML content fallback */}
