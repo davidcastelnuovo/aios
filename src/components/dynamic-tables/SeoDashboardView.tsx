@@ -329,8 +329,8 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
         keywords={organicKeywords}
         trackedKeywords={trackedKeywords}
         hasGscData={gscData.length > 0}
-        show3Month={comparisonData.threeMonth.size > 0}
-        showYearly={comparisonData.yearly.size > 0}
+        show3Month={effectiveComparison.threeMonth.size > 0}
+        showYearly={effectiveComparison.yearly.size > 0}
       />
 
       {/* HTML content fallback */}
