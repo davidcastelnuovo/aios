@@ -51,6 +51,60 @@ Deno.serve(async (req) => {
     }
 
     switch (action) {
+      case "list_workspace_integrations": {
+        const workspaceId = Deno.env.get("UNIFIED_WORKSPACE_ID");
+        if (!workspaceId) {
+          return new Response(JSON.stringify({ error: "UNIFIED_WORKSPACE_ID not configured" }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const params = new URLSearchParams({
+          workspace_id: workspaceId,
+          env: "Production",
+          active: "true",
+        });
+
+        const resp = await fetch(`https://api.unified.to/unified/integration/workspace?${params.toString()}`, {
+          headers: {
+            "Authorization": `Bearer ${unifiedApiKey}`,
+            "Content-Type": "application/json",
+          },
+        });
+
+        const rawBody = await resp.text();
+        let parsedBody: any = [];
+        try {
+          parsedBody = rawBody ? JSON.parse(rawBody) : [];
+        } catch {
+          parsedBody = rawBody;
+        }
+
+        if (!resp.ok) {
+          console.error("Unified.to list_workspace_integrations error:", rawBody);
+          return new Response(JSON.stringify({ error: "Failed to fetch workspace integrations" }), {
+            status: 502,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const integrations = Array.isArray(parsedBody)
+          ? parsedBody
+          : Array.isArray(parsedBody?.data) ? parsedBody.data : [];
+
+        const mapped = integrations.map((i: any) => ({
+          name: i.name || i.display_name || i.label || i.integration_type || i.type,
+          type: i.integration_type || i.type,
+          icon_url: i.logo_url || i.image_uri || i.icon_url || null,
+          categories: Array.isArray(i.categories) ? i.categories : i.category ? [i.category] : [],
+        }));
+
+        return new Response(JSON.stringify({ integrations: mapped }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       case "list_integrations": {
         if (!category) {
           return new Response(JSON.stringify({ error: "category is required" }), {

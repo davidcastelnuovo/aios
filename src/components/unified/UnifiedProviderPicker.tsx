@@ -19,9 +19,10 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   selectedCategory: { key: string; label: string } | null;
   tenantId: string;
+  directIntegrationType?: string; // If set, skip provider list and connect directly
 }
 
-export default function UnifiedProviderPicker({ open, onOpenChange, selectedCategory, tenantId }: Props) {
+export default function UnifiedProviderPicker({ open, onOpenChange, selectedCategory, tenantId, directIntegrationType }: Props) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -72,7 +73,18 @@ export default function UnifiedProviderPicker({ open, onOpenChange, selectedCate
   };
 
   const onDialogOpen = () => {
-    if (selectedCategory) fetchProviders();
+    if (directIntegrationType && selectedCategory) {
+      // Skip provider list — connect directly
+      const fakeProvider: UnifiedProvider = {
+        name: selectedCategory.label,
+        type: directIntegrationType,
+        icon_url: null,
+        categories: [selectedCategory.key],
+      };
+      handleSelectProvider(fakeProvider);
+    } else if (selectedCategory) {
+      fetchProviders();
+    }
   };
 
   const handleSelectProvider = async (provider: UnifiedProvider) => {
