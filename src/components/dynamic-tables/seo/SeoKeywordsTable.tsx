@@ -135,7 +135,7 @@ function KeywordTable({ keywords, title, icon, showCampaignStart, showPrevMonth,
   );
 }
 
-export function SeoKeywordsTable({ keywords, trackedKeywords = [] }: SeoKeywordsTableProps) {
+export function SeoKeywordsTable({ keywords, trackedKeywords = [], hasGscData = false }: SeoKeywordsTableProps) {
   // Merge all keywords (tracked + organic), deduplicate by keyword name
   const allKeywords = [...trackedKeywords];
   const trackedNames = new Set(trackedKeywords.map((k: any) => String(k.keyword || '').toLowerCase()));
