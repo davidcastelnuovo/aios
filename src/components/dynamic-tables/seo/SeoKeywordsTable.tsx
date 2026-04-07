@@ -207,6 +207,7 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], hasGscData = 
               icon={<Trophy className="h-4 w-4 text-primary" />}
               showCampaignStart
               showPrevMonth
+              showGsc={hasGscData}
             />
           </TabsContent>
 
