@@ -210,11 +210,7 @@ const [eventEnd, setEventEnd] = useState("");
             <Alert>
               <Calendar className="h-4 w-4" />
               <AlertDescription>
-                {connectionStatus?.google_email ? (
-                  <>היומן מחובר לחשבון: <strong>{connectionStatus.google_email}</strong></>
-                ) : (
-                  <>היומן שלך מחובר בהצלחה דרך Unified. תוכל להוסיף, לערוך ולמחוק אירועים מכאן.</>
-                )}
+                היומן שלך מחובר בהצלחה דרך Unified. תוכל להוסיף, לערוך ולמחוק אירועים מכאן.
               </AlertDescription>
             </Alert>
 
