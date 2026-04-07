@@ -57,7 +57,7 @@ export function CRMAlerts() {
     queryKey: ["crm-alerts-comm", clientIds.join(","), tenantId],
     queryFn: async () => {
       if (!clientIds.length || !tenantId) return [];
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("communication_logs")
         .select("client_id, status, created_at")
         .in("client_id", clientIds)
@@ -74,7 +74,7 @@ export function CRMAlerts() {
     queryKey: ["crm-alerts-seo", clientIds.join(","), tenantId],
     queryFn: async () => {
       if (!clientIds.length || !tenantId) return [];
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("seo_monthly_updates")
         .select("client_id, month, status")
         .in("client_id", clientIds)

@@ -73,7 +73,7 @@ export function SeoUpdateModal({
     queryKey: ["seo-monthly-history", clientId, tenantId],
     queryFn: async () => {
       if (!clientId || !tenantId) return [];
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("seo_monthly_updates")
         .select("id, month, status, notes, created_at")
         .eq("client_id", clientId)
@@ -90,7 +90,7 @@ export function SeoUpdateModal({
     mutationFn: async () => {
       if (!tenantId || !user?.id) throw new Error("Missing tenant or user");
 
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from("seo_monthly_updates")
         .upsert(
           {

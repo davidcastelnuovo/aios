@@ -77,7 +77,7 @@ export function CommunicationUpdateModal({
       if (!note.trim()) throw new Error("הערה נדרשת");
 
       // 1. Insert communication log
-      const { error: logError } = await supabase
+      const { error: logError } = await (supabase as any)
         .from("communication_logs")
         .insert({
           client_id: clientId,
@@ -92,7 +92,7 @@ export function CommunicationUpdateModal({
       // 2. Sync mood_status on client (backward compat)
       const { error: clientError } = await supabase
         .from("clients")
-        .update({ mood_status: COMM_TO_MOOD[status] || "happy" })
+        .update({ mood_status: (COMM_TO_MOOD[status] || "happy") as any })
         .eq("id", clientId);
       if (clientError) throw clientError;
     },

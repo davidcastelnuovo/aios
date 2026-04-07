@@ -148,7 +148,7 @@ export default function DMMDashboard() {
     queryKey: ["communication-logs-latest", clientIds.join(","), tenantId],
     queryFn: async () => {
       if (!clientIds.length || !tenantId) return [];
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("communication_logs")
         .select("client_id, status, created_at")
         .in("client_id", clientIds)
@@ -166,7 +166,7 @@ export default function DMMDashboard() {
     queryKey: ["seo-monthly-latest", clientIds.join(","), tenantId],
     queryFn: async () => {
       if (!clientIds.length || !tenantId) return [];
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("seo_monthly_updates")
         .select("client_id, month, status")
         .in("client_id", clientIds)

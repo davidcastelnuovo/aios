@@ -307,7 +307,7 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
     queryFn: async () => {
       const { data, error } = await supabase
         .from('clients')
-        .select('id, name, tier, services, mood_status')
+        .select('id, name, mood_status')
         .eq('agency_id', agencyId)
         .eq('status', 'active');
       if (error) throw error;
@@ -323,7 +323,7 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
     queryKey: ['comm-logs-agency', agencyId, clientIds.join(',')],
     queryFn: async () => {
       if (!clientIds.length || !tenantId) return [];
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('communication_logs')
         .select('client_id, status, created_at')
         .in('client_id', clientIds)
@@ -340,7 +340,7 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
     queryKey: ['seo-agency', agencyId, clientIds.join(',')],
     queryFn: async () => {
       if (!clientIds.length || !tenantId) return [];
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('seo_monthly_updates')
         .select('client_id, month, status')
         .in('client_id', clientIds)
