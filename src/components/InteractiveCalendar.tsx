@@ -1,12 +1,12 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { Calendar, dateFnsLocalizer, Event as BigCalendarEvent } from "react-big-calendar";
 import { format, parse, startOfWeek, getDay } from "date-fns";
 import { he } from "date-fns/locale";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { getCalendarEvents, updateCalendarEvent, deleteCalendarEvent } from "@/lib/calendarApi";
+import { listenForUnifiedConnection, openUnifiedCalendarConnection } from "@/lib/unifiedCalendarConnection";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -48,31 +48,32 @@ export function InteractiveCalendar() {
   const [editDescription, setEditDescription] = useState("");
   const [editStart, setEditStart] = useState("");
   const [editEnd, setEditEnd] = useState("");
+  const listenerCleanupRef = useRef<(() => void) | null>(null);
 
-  // Reconnect Google Calendar flow (opens popup)
+  useEffect(() => {
+    return () => listenerCleanupRef.current?.();
+  }, []);
+
+  // Reconnect Google Calendar flow through Unified
   const handleReconnect = async () => {
+    if (!tenantId) {
+      toast.error('לא נמצא ארגון פעיל');
+      return;
+    }
+
     try {
-      const { data, error } = await supabase.functions.invoke('google-calendar-auth', {
-        body: { action: 'init' },
+      listenerCleanupRef.current?.();
+      listenerCleanupRef.current = listenForUnifiedConnection(() => {
+        listenerCleanupRef.current = null;
+        toast.success('היומן התחבר בהצלחה דרך Unified');
+        queryClient.invalidateQueries({ queryKey: ['calendar-status'] });
+        queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
       });
-      if (error) throw error;
 
-      const authUrl = (data as any)?.authUrl;
-      if (!authUrl) throw new Error('לא נמצאה כתובת התחברות');
-
-      const popup = window.open(authUrl, 'calendar-auth', 'width=600,height=700');
-      // Listen for success from the callback
-      const handler = (event: MessageEvent) => {
-        if (event.data?.type === 'calendar_connected') {
-          toast.success('היומן התחבר בהצלחה');
-          popup?.close();
-          // Refetch events after reconnect
-          queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
-          window.removeEventListener('message', handler);
-        }
-      };
-      window.addEventListener('message', handler);
+      await openUnifiedCalendarConnection({ tenantId });
     } catch (e: any) {
+      listenerCleanupRef.current?.();
+      listenerCleanupRef.current = null;
       toast.error(`שגיאה בהתחברות ליומן: ${e?.message || ''}`);
     }
   };
@@ -225,7 +226,7 @@ export function InteractiveCalendar() {
         <Alert>
           <AlertTitle>נדרש להתחבר מחדש ליומן</AlertTitle>
           <AlertDescription className="flex items-center justify-between gap-2">
-            חיבור Google Calendar פג תוקף או בוטל. התחברו מחדש כדי להציג אירועים.
+            חיבור היומן פג תוקף או בוטל. התחברו מחדש דרך Unified כדי להציג אירועים.
             <Button size="sm" onClick={handleReconnect}>התחברות מחדש</Button>
           </AlertDescription>
         </Alert>

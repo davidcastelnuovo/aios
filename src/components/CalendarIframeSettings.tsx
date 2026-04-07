@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { checkCalendarConnection, addCalendarEvent } from "@/lib/calendarApi";
+import { findUnifiedCalendarConnectionId, listenForUnifiedConnection, openUnifiedCalendarConnection } from "@/lib/unifiedCalendarConnection";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Calendar, Plus, Unplug, Loader2 } from "lucide-react";
@@ -24,7 +25,11 @@ export function CalendarIframeSettings() {
 const [eventEnd, setEventEnd] = useState("");
 
   const calendarRef = useRef<HTMLDivElement | null>(null);
-  const popupRef = useRef<Window | null>(null);
+  const listenerCleanupRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    return () => listenerCleanupRef.current?.();
+  }, []);
 
   // Check connection status
   const { data: connectionStatus, isLoading: statusLoading } = useQuery({
@@ -39,66 +44,24 @@ const [eventEnd, setEventEnd] = useState("");
     refetchOnMount: false,
   });
 
-  // Connect to Google Calendar
+  // Connect to Google Calendar through Unified
   const connectMutation = useMutation({
     mutationFn: async () => {
-      
-      // Open popup BEFORE the async call to avoid popup blockers
-      const popup = window.open(
-        'about:blank',
-        'google-calendar-auth',
-        'width=600,height=700,left=100,top=100'
-      );
-      
-      if (!popup) {
-        throw new Error('חלון הקופץ נחסם. נא לאפשר חלונות קופצים ולנסות שוב.');
-      }
-      
-      popupRef.current = popup;
-      
-      const { data, error } = await supabase.functions.invoke('google-calendar-auth', {
-        body: { action: 'init' }
+      if (!tenantId) throw new Error("לא נמצא ארגון פעיל.");
+
+      listenerCleanupRef.current?.();
+      listenerCleanupRef.current = listenForUnifiedConnection(() => {
+        listenerCleanupRef.current = null;
+        queryClient.invalidateQueries({ queryKey: ["calendar-status"] });
+        queryClient.invalidateQueries({ queryKey: ["calendar-events"] });
+        toast.success("היומן חובר בהצלחה דרך Unified!");
       });
 
-      if (error) {
-        console.error('Error from edge function:', error);
-        popup.close();
-        throw error;
-      }
-      
-      if (!data?.authUrl) {
-        console.error('No authUrl in response!', data);
-        popup.close();
-        throw new Error('לא התקבל קישור התחברות מהשרת');
-      }
-      
-      return data;
-    },
-    onSuccess: (data) => {
-      if (data?.authUrl && popupRef.current && !popupRef.current.closed) {
-        // Navigate the already-open popup to the auth URL
-        popupRef.current.location.href = data.authUrl;
-        
-        // Listen for the popup to notify on success
-        const onMessage = (event: MessageEvent) => {
-          if (event.data?.type === 'calendar_connected') {
-            window.removeEventListener('message', onMessage);
-            queryClient.invalidateQueries({ queryKey: ["calendar-status", userId] });
-            toast.success("היומן מחובר בהצלחה!");
-            // Close popup if still open
-            try { popupRef.current?.close(); } catch {}
-            popupRef.current = null;
-          }
-        };
-        window.addEventListener('message', onMessage);
-      } else {
-        toast.error('לא התקבל קישור התחברות מהשרת. נסה שוב מאוחר יותר.');
-      }
+      await openUnifiedCalendarConnection({ tenantId });
     },
     onError: (error) => {
-      // Close any pre-opened popup on error
-      try { popupRef.current?.close(); } catch {}
-      popupRef.current = null;
+      listenerCleanupRef.current?.();
+      listenerCleanupRef.current = null;
       console.error("Error connecting calendar:", error);
       toast.error("שגיאה בהתחברות ללוח השנה: " + (error as Error).message);
     },
@@ -107,10 +70,33 @@ const [eventEnd, setEventEnd] = useState("");
   // Disconnect calendar
   const disconnectMutation = useMutation({
     mutationFn: async () => {
-      
-      // Use supabase.functions.invoke with DELETE-like action
-      const { data, error } = await supabase.functions.invoke('google-calendar-auth', {
-        body: { action: 'disconnect' },
+      if (!tenantId) throw new Error("לא נמצא ארגון פעיל.");
+
+      if (connectionStatus?.type === 'legacy') {
+        const { data, error } = await supabase.functions.invoke('google-calendar-auth', {
+          body: { action: 'disconnect' },
+        });
+
+        if (error) {
+          console.error('❌ Disconnect error:', error);
+          throw error;
+        }
+
+        return data;
+      }
+
+      const integrationId = await findUnifiedCalendarConnectionId(tenantId);
+
+      if (!integrationId) {
+        throw new Error('לא נמצא חיבור יומן פעיל לניתוק.');
+      }
+
+      const { data, error } = await supabase.functions.invoke('unified-connections', {
+        body: {
+          action: 'delete',
+          tenant_id: tenantId,
+          connection_id: integrationId,
+        },
       });
 
       if (error) {
@@ -121,7 +107,8 @@ const [eventEnd, setEventEnd] = useState("");
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["calendar-status", userId] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-status"] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-events"] });
       toast.success("הלוח השנה נותק בהצלחה");
     },
     onError: (error) => {
@@ -200,21 +187,21 @@ const [eventEnd, setEventEnd] = useState("");
           Google Calendar
         </CardTitle>
         <CardDescription>
-          חבר את Google Calendar שלך כדי להוסיף משימות ישירות ללוח השנה
+          חבר את Google Calendar שלך דרך Unified כדי להוסיף משימות ישירות ללוח השנה
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {!isConnected ? (
           <div className="text-center py-8 space-y-4">
             <p className="text-muted-foreground">
-              חבר את חשבון Google שלך כדי להוסיף אירועים ישירות ללוח השנה
+              חבר את חשבון Google שלך דרך Unified כדי להוסיף אירועים ישירות ללוח השנה
             </p>
             <Button 
               onClick={() => connectMutation.mutate()}
               disabled={connectMutation.isPending}
             >
               <Calendar className="h-4 w-4 ml-2" />
-              התחבר ל-Google Calendar
+              התחבר דרך Unified
             </Button>
           </div>
         ) : (
@@ -226,7 +213,7 @@ const [eventEnd, setEventEnd] = useState("");
                 {connectionStatus?.google_email ? (
                   <>היומן מחובר לחשבון: <strong>{connectionStatus.google_email}</strong></>
                 ) : (
-                  <>היומן שלך מחובר בהצלחה. תוכל להוסיף, לערוך ולמחוק אירועים מכאן.</>
+                  <>היומן שלך מחובר בהצלחה דרך Unified. תוכל להוסיף, לערוך ולמחוק אירועים מכאן.</>
                 )}
               </AlertDescription>
             </Alert>

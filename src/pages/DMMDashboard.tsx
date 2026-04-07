@@ -76,6 +76,13 @@ interface ClientRow {
   flags: FlagKey[];
 }
 
+type CRMClientFields = {
+  id: string;
+  tier?: string | null;
+  services?: string[] | null;
+  mood_status?: string | null;
+};
+
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
 function StatusDot({ status }: { status: OverallStatus }) {
@@ -207,7 +214,7 @@ export default function DMMDashboard() {
     return rawClients.map((c: any) => {
       // Merge CRM extended fields (tier, services, mood_status)
       // Falls back to null/empty if migration hasn't run yet
-      const ext = crmFields.find((f: any) => f.id === c.id) ?? {};
+      const ext = (crmFields.find((f: any) => f.id === c.id) ?? {}) as CRMClientFields;
       const tier: string | null = ext.tier ?? null;
       const services: string[] = ext.services ?? [];
       const mood_status: string | null = ext.mood_status ?? null;

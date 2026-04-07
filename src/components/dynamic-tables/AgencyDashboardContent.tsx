@@ -123,6 +123,13 @@ const formatNumber = (num: number) => {
   return new Intl.NumberFormat('he-IL').format(Math.round(num));
 };
 
+type CRMClientFields = {
+  id: string;
+  tier?: string | null;
+  services?: string[] | null;
+  mood_status?: string | null;
+};
+
 // Leads Table Component
 function LeadsTable({ records, totals }: { records: CampaignRecord[]; totals: CampaignRecord }) {
   const getCPL = (spend: number, leads: number) => leads > 0 ? spend / leads : 0;
@@ -379,7 +386,7 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
   const crmRows = useMemo(() => {
     return clients.map((c: any) => {
       // Merge extended CRM fields if available
-      const ext = crmClientFields.find((f: any) => f.id === c.id) ?? {};
+      const ext = (crmClientFields.find((f: any) => f.id === c.id) ?? {}) as CRMClientFields;
       const merged = {
         ...c,
         tier: ext.tier ?? null,

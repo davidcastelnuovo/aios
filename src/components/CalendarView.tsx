@@ -1,12 +1,12 @@
+import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { checkCalendarConnection } from "@/lib/calendarApi";
+import { listenForUnifiedConnection, openUnifiedCalendarConnection } from "@/lib/unifiedCalendarConnection";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar as CalendarIcon, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useRef } from "react";
 
 export function CalendarView() {
   const { currentTenantId } = useTenant();
@@ -20,56 +20,28 @@ export function CalendarView() {
     enabled: !!currentTenantId,
   });
 
-  const popupRef = useRef<Window | null>(null);
+  const listenerCleanupRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    return () => listenerCleanupRef.current?.();
+  }, []);
 
   const handleConnect = async () => {
-    try {
-      // Pre-open a blank popup to avoid popup blockers
-      try {
-        popupRef.current = window.open('', 'google-calendar-auth', 'width=600,height=700,left=100,top=100,noopener,noreferrer');
-      } catch {}
+    if (!currentTenantId) return;
 
-      const { data, error } = await supabase.functions.invoke("google-calendar-auth", {
-        body: { action: "init" },
+    try {
+      listenerCleanupRef.current?.();
+      listenerCleanupRef.current = listenForUnifiedConnection(() => {
+        listenerCleanupRef.current = null;
+        window.location.reload();
       });
 
-      if (error) throw error;
-
-      if (data?.authUrl) {
-        if (popupRef.current && !popupRef.current.closed) {
-          popupRef.current.location.href = data.authUrl;
-        } else {
-          const popup = window.open(
-            data.authUrl,
-            'google-calendar-auth',
-            'width=600,height=700,left=100,top=100,noopener,noreferrer'
-          );
-          if (!popup) {
-            alert('חלון הקופץ נחסם. אנא אפשר חלונות קופצים עבור אתר זה.');
-            return;
-          }
-          popupRef.current = popup;
-        }
-
-        const messageHandler = (event: MessageEvent) => {
-          if (event.data?.type === 'calendar_connected') {
-            window.removeEventListener('message', messageHandler);
-            window.location.reload();
-            try { popupRef.current?.close(); } catch {}
-            popupRef.current = null;
-          }
-        };
-        window.addEventListener('message', messageHandler);
-      } else {
-        alert('לא התקבל קישור התחברות מהשרת. נסה שוב.');
-        try { popupRef.current?.close(); } catch {}
-        popupRef.current = null;
-      }
+      await openUnifiedCalendarConnection({ tenantId: currentTenantId });
     } catch (error) {
+      listenerCleanupRef.current?.();
+      listenerCleanupRef.current = null;
       console.error("Error connecting calendar:", error);
-      alert('שגיאה בהתחברות ליומן. אנא נסה שוב.');
-      try { popupRef.current?.close(); } catch {}
-      popupRef.current = null;
+      alert((error as Error).message || 'שגיאה בהתחברות ליומן. אנא נסה שוב.');
     }
   };
 
@@ -88,11 +60,11 @@ export function CalendarView() {
           <CalendarIcon className="h-16 w-16 text-muted-foreground" />
           <h3 className="text-xl font-semibold">התחבר ליומן</h3>
           <p className="text-muted-foreground text-center max-w-md">
-            כדי לצפות ביומן שלך, עליך להתחבר תחילה ליומן דרך הגדרות האינטגרציות או ישירות ל-Google Calendar
+            כדי לצפות ביומן שלך, עליך לחבר תחילה את Google Calendar דרך Unified
           </p>
           <Button onClick={handleConnect} size="lg">
             <CalendarIcon className="mr-2 h-5 w-5" />
-            התחבר ליומן
+            התחבר דרך Unified
           </Button>
         </CardContent>
       </Card>
