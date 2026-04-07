@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -11,6 +11,7 @@ import { he } from "date-fns/locale";
 import { SeoSnapshotCards } from "./seo/SeoSnapshotCards";
 import { SeoTrafficChart } from "./seo/SeoTrafficChart";
 import { SeoKeywordsTable } from "./seo/SeoKeywordsTable";
+import { GscIntegration, type GscKeywordData } from "./seo/GscIntegration";
 
 interface SeoDashboardViewProps {
   tenantId: string;
@@ -19,6 +20,11 @@ interface SeoDashboardViewProps {
 
 export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) {
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
+  const [gscData, setGscData] = useState<GscKeywordData[]>([]);
+
+  const handleGscDataLoaded = useCallback((data: GscKeywordData[]) => {
+    setGscData(data);
+  }, []);
 
   const { data: reports = [], isLoading } = useQuery({
     queryKey: ['seo-dashboard-reports', tenantId, clientId],
@@ -118,21 +124,36 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
   const rawOrganic = Array.isArray(reportData?.organic_keywords) ? reportData.organic_keywords : [];
   const rawTracked = Array.isArray(reportData?.tracked_keywords) ? reportData.tracked_keywords : [];
 
+  // Build GSC lookup map
+  const gscMap = useMemo(() => {
+    const map = new Map<string, GscKeywordData>();
+    for (const row of gscData) {
+      map.set(row.keyword.toLowerCase().trim(), row);
+    }
+    return map;
+  }, [gscData]);
+
   function enrichKeyword(kw: any): any {
     const normalized = normalizeKeyword(kw);
-    const kwLower = String(normalized.keyword).toLowerCase();
+    const kwLower = String(normalized.keyword).toLowerCase().trim();
     // Use inline data first, fallback to cross-report comparison
     const prevPos = normalized.position_prev_month ?? prevMonthMap.get(kwLower) ?? null;
     const campPos = normalized.position_campaign_start ?? campaignStartMap.get(kwLower) ?? null;
+    // Merge GSC data (clicks, impressions, CTR)
+    const gscRow = gscMap.get(kwLower);
     return {
       ...normalized,
       position_prev_month: prevPos,
       position_campaign_start: campPos,
+      gsc_clicks: gscRow?.clicks ?? null,
+      gsc_impressions: gscRow?.impressions ?? null,
+      gsc_ctr: gscRow?.ctr ?? null,
+      gsc_position: gscRow?.position ?? null,
     };
   }
 
-  const organicKeywords = useMemo(() => rawOrganic.map(enrichKeyword), [rawOrganic, prevMonthMap, campaignStartMap]);
-  const trackedKeywords = useMemo(() => rawTracked.map(enrichKeyword), [rawTracked, prevMonthMap, campaignStartMap]);
+  const organicKeywords = useMemo(() => rawOrganic.map(enrichKeyword), [rawOrganic, prevMonthMap, campaignStartMap, gscMap]);
+  const trackedKeywords = useMemo(() => rawTracked.map(enrichKeyword), [rawTracked, prevMonthMap, campaignStartMap, gscMap]);
 
   if (isLoading) {
     return (
@@ -213,10 +234,20 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
       {/* Traffic History Chart */}
       <SeoTrafficChart trafficHistory={trafficHistory} />
 
+      {/* Google Search Console Integration */}
+      <GscIntegration
+        tenantId={tenantId}
+        clientId={clientId}
+        domain={reportData?.domain || selectedReport?.domain}
+        keywords={[...organicKeywords, ...trackedKeywords].map((k: any) => k.keyword).filter(Boolean)}
+        onDataLoaded={handleGscDataLoaded}
+      />
+
       {/* Keywords — unified view with tabs */}
       <SeoKeywordsTable
         keywords={organicKeywords}
         trackedKeywords={trackedKeywords}
+        hasGscData={gscData.length > 0}
       />
 
       {/* HTML content fallback */}

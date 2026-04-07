@@ -1,11 +1,12 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowUp, ArrowDown, Trophy, TrendingUp, Calendar } from "lucide-react";
+import { ArrowUp, ArrowDown, Trophy, TrendingUp, Calendar, MousePointerClick, Eye } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface SeoKeywordsTableProps {
   keywords: any[];
   trackedKeywords?: any[];
+  hasGscData?: boolean;
 }
 
 function PositionChange({ value }: { value: number | null }) {
@@ -19,7 +20,7 @@ function PositionChange({ value }: { value: number | null }) {
   );
 }
 
-function KeywordRow({ kw, showCampaignStart, showPrevMonth }: { kw: any; showCampaignStart?: boolean; showPrevMonth?: boolean }) {
+function KeywordRow({ kw, showCampaignStart, showPrevMonth, showGsc }: { kw: any; showCampaignStart?: boolean; showPrevMonth?: boolean; showGsc?: boolean }) {
   const posChangeMonth = kw.position_prev_month != null && kw.position != null
     ? kw.position_prev_month - kw.position : null;
   const posChangeCampaign = kw.position_campaign_start != null && kw.position != null
@@ -41,6 +42,19 @@ function KeywordRow({ kw, showCampaignStart, showPrevMonth }: { kw: any; showCam
       {showCampaignStart && (
         <td className="p-3 text-center"><PositionChange value={posChangeCampaign} /></td>
       )}
+      {showGsc && (
+        <>
+          <td className="p-3 text-center text-xs">
+            {kw.gsc_clicks != null ? Number(kw.gsc_clicks).toLocaleString() : <span className="text-muted-foreground">—</span>}
+          </td>
+          <td className="p-3 text-center text-xs">
+            {kw.gsc_impressions != null ? Number(kw.gsc_impressions).toLocaleString() : <span className="text-muted-foreground">—</span>}
+          </td>
+          <td className="p-3 text-center text-xs">
+            {kw.gsc_ctr != null ? `${kw.gsc_ctr}%` : <span className="text-muted-foreground">—</span>}
+          </td>
+        </>
+      )}
       <td className="p-3 text-center">{kw.traffic != null ? Number(kw.traffic).toLocaleString() : '-'}</td>
       <td className="p-3 text-center">{kw.volume != null ? Number(kw.volume).toLocaleString() : '-'}</td>
       <td className="p-3 text-center">
@@ -61,12 +75,13 @@ function KeywordRow({ kw, showCampaignStart, showPrevMonth }: { kw: any; showCam
     </tr>
   );
 }
-function KeywordTable({ keywords, title, icon, showCampaignStart, showPrevMonth }: {
+function KeywordTable({ keywords, title, icon, showCampaignStart, showPrevMonth, showGsc }: {
   keywords: any[];
   title: string;
   icon: React.ReactNode;
   showCampaignStart?: boolean;
   showPrevMonth?: boolean;
+  showGsc?: boolean;
 }) {
   if (keywords.length === 0) return null;
 
@@ -91,6 +106,17 @@ function KeywordTable({ keywords, title, icon, showCampaignStart, showPrevMonth 
               {showCampaignStart && (
                 <th className="text-center p-3 font-medium">שינוי מיקום (קידום)</th>
               )}
+              {showGsc && (
+                <>
+                  <th className="text-center p-3 font-medium text-xs">
+                    <div className="flex items-center justify-center gap-1"><MousePointerClick className="h-3 w-3" />קליקים</div>
+                  </th>
+                  <th className="text-center p-3 font-medium text-xs">
+                    <div className="flex items-center justify-center gap-1"><Eye className="h-3 w-3" />חשיפות</div>
+                  </th>
+                  <th className="text-center p-3 font-medium text-xs">CTR</th>
+                </>
+              )}
               <th className="text-center p-3 font-medium">תנועה</th>
               <th className="text-center p-3 font-medium">נפח חיפוש</th>
               <th className="text-center p-3 font-medium">KD</th>
@@ -100,7 +126,7 @@ function KeywordTable({ keywords, title, icon, showCampaignStart, showPrevMonth 
           </thead>
           <tbody>
             {keywords.map((kw, idx) => (
-              <KeywordRow key={idx} kw={kw} showCampaignStart={showCampaignStart} showPrevMonth={showPrevMonth} />
+              <KeywordRow key={idx} kw={kw} showCampaignStart={showCampaignStart} showPrevMonth={showPrevMonth} showGsc={showGsc} />
             ))}
           </tbody>
         </table>
@@ -109,7 +135,7 @@ function KeywordTable({ keywords, title, icon, showCampaignStart, showPrevMonth 
   );
 }
 
-export function SeoKeywordsTable({ keywords, trackedKeywords = [] }: SeoKeywordsTableProps) {
+export function SeoKeywordsTable({ keywords, trackedKeywords = [], hasGscData = false }: SeoKeywordsTableProps) {
   // Merge all keywords (tracked + organic), deduplicate by keyword name
   const allKeywords = [...trackedKeywords];
   const trackedNames = new Set(trackedKeywords.map((k: any) => String(k.keyword || '').toLowerCase()));
@@ -181,6 +207,7 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [] }: SeoKeywords
               icon={<Trophy className="h-4 w-4 text-primary" />}
               showCampaignStart
               showPrevMonth
+              showGsc={hasGscData}
             />
           </TabsContent>
 
@@ -190,6 +217,7 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [] }: SeoKeywords
               title="כל הביטויים — שינוי מתחילת קידום"
               icon={<TrendingUp className="h-4 w-4 text-primary" />}
               showCampaignStart
+              showGsc={hasGscData}
             />
           </TabsContent>
 
@@ -199,6 +227,7 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [] }: SeoKeywords
               title="כל הביטויים — שינוי חודשי"
               icon={<Calendar className="h-4 w-4 text-primary" />}
               showPrevMonth
+              showGsc={hasGscData}
             />
           </TabsContent>
 
@@ -209,6 +238,7 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [] }: SeoKeywords
               icon={<span>📋</span>}
               showCampaignStart
               showPrevMonth
+              showGsc={hasGscData}
             />
           </TabsContent>
         </Tabs>
