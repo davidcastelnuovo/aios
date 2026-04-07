@@ -645,12 +645,10 @@ export function WeeklyTaskBoard() {
       // אם יש eventId - מחק גם מגוגל קלנדר
       if (googleCalendarEventId) {
         try {
-          await supabase.functions.invoke("delete-calendar-event", {
-            body: { eventId: googleCalendarEventId },
-          });
+          const { deleteCalendarEvent: delCalEvent } = await import("@/lib/calendarApi");
+          await delCalEvent(googleCalendarEventId, { tenantId: tenantId! });
         } catch (calendarError) {
           console.warn("לא הצלחנו למחוק מיומן גוגל:", calendarError);
-          // ממשיכים למחוק את המשימה גם אם מחיקת הגוגל נכשלה
         }
       }
       
