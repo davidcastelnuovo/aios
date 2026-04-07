@@ -217,6 +217,7 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], hasGscData = 
               title="כל הביטויים — שינוי מתחילת קידום"
               icon={<TrendingUp className="h-4 w-4 text-primary" />}
               showCampaignStart
+              showGsc={hasGscData}
             />
           </TabsContent>
 
