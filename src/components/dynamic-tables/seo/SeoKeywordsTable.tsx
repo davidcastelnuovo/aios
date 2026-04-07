@@ -177,8 +177,11 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [] }: SeoKeywords
           <TabsContent value="top10" className="mt-0">
             <KeywordTable
               keywords={top10}
-              title="10 הביטויים הכי מקודמים"
+              title={`${top10.length} ביטויים בעמוד הראשון`}
               icon={<Trophy className="h-4 w-4 text-primary" />}
+              showCampaignStart
+              showPrevMonth
+            />
               showCampaignStart
               showPrevMonth
             />
