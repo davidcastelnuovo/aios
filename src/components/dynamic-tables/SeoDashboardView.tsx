@@ -142,16 +142,31 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
     const kwLower = String(normalized.keyword).toLowerCase().trim();
     // Use inline data first, fallback to cross-report comparison
     let prevPos = normalized.position_prev_month ?? prevMonthMap.get(kwLower) ?? null;
-    let campPos = normalized.position_campaign_start ?? campaignStartMap.get(kwLower) ?? null;
     
-    // Enrich from Ahrefs API data if available
-    const apiRow = ahrefsApiData.get(kwLower);
+    // Enrich from Ahrefs API 3-month data
+    const api3m = comparisonData.threeMonth.get(kwLower);
+    const apiYear = comparisonData.yearly.get(kwLower);
+    
+    // 3-month position comparison
+    let pos3m: number | null = null;
+    if (api3m?.best_position_prev != null) {
+      pos3m = api3m.best_position_prev;
+    }
+    
+    // Yearly position comparison
+    let posYear: number | null = null;
+    if (apiYear?.best_position_prev != null) {
+      posYear = apiYear.best_position_prev;
+    }
+
+    // Fill missing prev month from 3m API data if needed
+    if (prevPos === null && api3m?.best_position_prev != null) {
+      prevPos = api3m.best_position_prev;
+    }
+    
+    // Fill volume/kd/cpc from API if missing
+    const apiRow = api3m || apiYear;
     if (apiRow) {
-      // If we have API comparison data, use it to fill missing prev month
-      if (prevPos === null && apiRow.best_position_prev != null && normalized.position != null) {
-        prevPos = apiRow.best_position_prev;
-      }
-      // Fill volume/traffic from API if missing
       if (normalized.volume == null && apiRow.volume != null) {
         normalized.volume = apiRow.volume;
       }
@@ -168,7 +183,8 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
     return {
       ...normalized,
       position_prev_month: prevPos,
-      position_campaign_start: campPos,
+      position_3month: pos3m,
+      position_yearly: posYear,
       gsc_clicks: gscRow?.clicks ?? null,
       gsc_impressions: gscRow?.impressions ?? null,
       gsc_ctr: gscRow?.ctr ?? null,
@@ -176,46 +192,26 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
     };
   }
 
-  const organicKeywords = useMemo(() => rawOrganic.map(enrichKeyword), [rawOrganic, prevMonthMap, campaignStartMap, gscMap, ahrefsApiData]);
-  const trackedKeywords = useMemo(() => rawTracked.map(enrichKeyword), [rawTracked, prevMonthMap, campaignStartMap, gscMap, ahrefsApiData]);
+  const organicKeywords = useMemo(() => rawOrganic.map(enrichKeyword), [rawOrganic, prevMonthMap, gscMap, comparisonData]);
+  const trackedKeywords = useMemo(() => rawTracked.map(enrichKeyword), [rawTracked, prevMonthMap, gscMap, comparisonData]);
 
-  // Auto-enrich: fetch comparison data from Ahrefs API when keywords lack it
+  // Auto-enrich: fetch comparison data from Ahrefs API
   const domain = reportData?.domain || selectedReport?.domain;
-  const needsEnrichment = useMemo(() => {
-    const allKw = [...rawOrganic, ...rawTracked];
-    if (allKw.length === 0) return false;
-    // Check if most keywords lack prev month data
-    const withPrev = allKw.filter(kw => 
-      (kw.position_prev_month != null) || (kw.best_position_prev != null)
-    );
-    return withPrev.length < allKw.length * 0.3;
-  }, [rawOrganic, rawTracked]);
 
   useEffect(() => {
-    if (domain && needsEnrichment && !hasAutoEnriched && !isEnriching && reports.length > 0) {
+    if (domain && !hasAutoEnriched && !isEnriching && reports.length > 0) {
       setHasAutoEnriched(true);
       const reportDate = selectedReport?.report_date || new Date().toISOString().split('T')[0];
-      // Compare with 3 months back
-      const compDate = (() => {
-        const d = new Date(reportDate);
-        d.setMonth(d.getMonth() - 3);
-        return d.toISOString().split('T')[0];
-      })();
-      fetchKeywords(domain, reportDate, compDate, 200);
+      fetchComparisons(domain, reportDate, 200);
     }
-  }, [domain, needsEnrichment, hasAutoEnriched, isEnriching, reports.length, selectedReport, fetchKeywords]);
+  }, [domain, hasAutoEnriched, isEnriching, reports.length, selectedReport, fetchComparisons]);
 
   const handleManualSync = useCallback(() => {
     if (!domain) return;
     setHasAutoEnriched(true);
     const reportDate = selectedReport?.report_date || new Date().toISOString().split('T')[0];
-    const compDate = (() => {
-      const d = new Date(reportDate);
-      d.setMonth(d.getMonth() - 3);
-      return d.toISOString().split('T')[0];
-    })();
-    fetchKeywords(domain, reportDate, compDate, 200);
-  }, [domain, selectedReport, fetchKeywords]);
+    fetchComparisons(domain, reportDate, 200);
+  }, [domain, selectedReport, fetchComparisons]);
 
   if (isLoading) {
     return (
