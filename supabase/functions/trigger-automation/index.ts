@@ -1030,7 +1030,7 @@ Deno.serve(async (req) => {
                         if (previousHistory.length > 0) {
                           carmenHistory = previousHistory
                           payloadData._carmen_history = previousHistory
-                          console.log(`[CARMEN] Restored ${previousHistory.length} history items from previous session ${previousSession.id}`)
+                          console.log(`[CARMEN] Restored ${previousHistory.length} history items from previous session ${previousSession?.id}`)
                         }
                       }
                     }
