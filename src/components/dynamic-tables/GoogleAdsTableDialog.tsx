@@ -40,6 +40,7 @@ interface GoogleAdsAccount {
   name: string;
   currency: string;
   manager: boolean;
+  manager_id?: string;
 }
 
 interface MakeConnection {
