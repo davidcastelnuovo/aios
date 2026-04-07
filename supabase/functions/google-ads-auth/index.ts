@@ -429,6 +429,7 @@ async function getGoogleAdsAccounts(supabase: any, tenantId: string) {
             name: customer?.descriptiveName || `Account ${customerId}`,
             currency: customer?.currencyCode || 'ILS',
             manager: Boolean(customer?.manager),
+            manager_id: mccId,
           });
           found = true;
           break;
@@ -488,13 +489,21 @@ async function getGoogleAdsAccounts(supabase: any, tenantId: string) {
           const client = row.customerClient;
           if (!client?.id) continue;
           const childId = String(client.id);
-          if (existingIds.has(childId)) continue;
+          if (existingIds.has(childId)) {
+            // Update existing account with manager_id if not set
+            const existing = accounts.find(a => a.id === childId);
+            if (existing && !existing.manager_id) {
+              existing.manager_id = mccId;
+            }
+            continue;
+          }
           existingIds.add(childId);
           accounts.push({
             id: childId,
             name: client.descriptiveName || `Account ${childId}`,
             currency: client.currencyCode || 'ILS',
             manager: Boolean(client.manager),
+            manager_id: mccId,
           });
         }
       }

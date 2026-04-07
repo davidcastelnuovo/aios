@@ -194,21 +194,76 @@ Deno.serve(async (req) => {
       ORDER BY segments.date DESC
     `;
 
-    const searchResponse = await fetch(
+    // Use manager_id (MCC) as login-customer-id if available, otherwise use customerId
+    let loginCustomerId = settings.manager_id || customerId;
+
+    let searchResponse = await fetch(
       `https://googleads.googleapis.com/v23/customers/${customerId}/googleAds:searchStream`,
       {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
           'developer-token': DEVELOPER_TOKEN,
-          'login-customer-id': customerId,
+          'login-customer-id': loginCustomerId,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ query }),
       }
     );
 
-    const searchData = await searchResponse.json();
+    let searchData = await searchResponse.json();
+
+    // If failed and no manager_id was set, try to discover the MCC
+    if (searchData.error && !settings.manager_id) {
+      console.log('First attempt failed, trying to discover MCC for account', customerId);
+      
+      const listResponse = await fetch('https://googleads.googleapis.com/v23/customers:listAccessibleCustomers', {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'developer-token': DEVELOPER_TOKEN,
+        },
+      });
+      const listData = await listResponse.json();
+      const resourceNames = listData?.resourceNames || [];
+      
+      for (const resourceName of resourceNames) {
+        const potentialMccId = typeof resourceName === 'string' ? resourceName.split('/')[1] : null;
+        if (!potentialMccId || potentialMccId === customerId) continue;
+        
+        const retryResponse = await fetch(
+          `https://googleads.googleapis.com/v23/customers/${customerId}/googleAds:searchStream`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'developer-token': DEVELOPER_TOKEN,
+              'login-customer-id': potentialMccId,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ query }),
+          }
+        );
+        const retryData = await retryResponse.json();
+        if (!retryData.error) {
+          console.log('Found working MCC:', potentialMccId);
+          searchData = retryData;
+          loginCustomerId = potentialMccId;
+          
+          // Save discovered manager_id for future syncs
+          const serviceSupabase = createClient(
+            Deno.env.get('SUPABASE_URL') ?? '',
+            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+          );
+          await serviceSupabase
+            .from('crm_tables')
+            .update({
+              integration_settings: { ...settings, manager_id: potentialMccId }
+            })
+            .eq('id', table_id);
+          break;
+        }
+      }
+    }
 
     if (searchData.error) {
       console.error('Google Ads API error:', searchData.error);
