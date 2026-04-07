@@ -91,18 +91,22 @@ export default function UnifiedProviderPicker({ open, onOpenChange, selectedCate
     setSelectedProvider(provider);
     setIsConnecting(true);
     try {
-      // Save pending connection context to sessionStorage (backup for callback page)
-      sessionStorage.setItem("unified_pending_connection", JSON.stringify({
+      const flowUid = crypto.randomUUID();
+      const pendingConnection = {
         category: selectedCategory!.key,
         integration_type: provider.type,
         tenant_id: tenantId,
-      }));
+        flow_uid: flowUid,
+      };
 
-      // Build callback URL with params
-      const callbackUrl = new URL("/unified-callback", window.location.origin);
-      callbackUrl.searchParams.set("category", selectedCategory!.key);
-      callbackUrl.searchParams.set("integration_type", provider.type);
-      callbackUrl.searchParams.set("tenant_id", tenantId);
+      sessionStorage.setItem("unified_pending_connection", JSON.stringify(pendingConnection));
+
+      const tenantSlugMatch = window.location.pathname.match(/^\/t\/([^/]+)/);
+      const callbackPath = tenantSlugMatch
+        ? `/t/${tenantSlugMatch[1]}/unified-callback`
+        : "/unified-callback";
+      const callbackUrl = new URL(callbackPath, window.location.origin);
+      const state = window.btoa(JSON.stringify(pendingConnection));
 
       const { data, error } = await supabase.functions.invoke("unified-connections", {
         body: {
@@ -112,6 +116,8 @@ export default function UnifiedProviderPicker({ open, onOpenChange, selectedCate
           integration_type: provider.type,
           success_redirect: callbackUrl.toString(),
           failure_redirect: window.location.href,
+          state,
+          uid: flowUid,
         },
       });
       if (error) throw error;
