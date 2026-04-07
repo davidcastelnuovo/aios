@@ -91,6 +91,7 @@ const GithubAgent = lazy(() => import("./pages/GithubAgent"));
 const SocialDashboard = lazy(() => import("./pages/SocialDashboard"));
 const WordPressSettings = lazy(() => import("./pages/WordPressSettings"));
 const UnifiedSettings = lazy(() => import("./pages/UnifiedSettings"));
+const UnifiedCallback = lazy(() => import("./pages/UnifiedCallback"));
 
 // QueryClient with optimized defaults for better caching
 const queryClient = new QueryClient({
