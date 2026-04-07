@@ -181,10 +181,7 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [] }: SeoKeywords
               icon={<Trophy className="h-4 w-4 text-primary" />}
               showCampaignStart
               showPrevMonth
-            />
-              showCampaignStart
-              showPrevMonth
-            />
+          </TabsContent>
           </TabsContent>
 
           <TabsContent value="campaign" className="mt-0">
