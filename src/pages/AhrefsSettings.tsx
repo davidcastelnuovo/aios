@@ -58,7 +58,7 @@ export default function AhrefsSettings() {
     mutationFn: async ({ reportId, clientId, domain }: { reportId: string; clientId: string; domain: string }) => {
       // Update report with client_id
       const { error: reportError } = await supabase
-        .from('ahrefs_reports' as any)
+        .from('ahrefs_reports')
         .update({ client_id: clientId })
         .eq('id', reportId);
       if (reportError) throw reportError;
