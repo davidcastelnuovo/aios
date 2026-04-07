@@ -548,25 +548,19 @@ export function WeeklyTaskBoard() {
           const endDateTime = new Date(startDateTime.getTime() + duration * 60000);
           
           if (googleCalendarEventId) {
-            // עדכון אירוע קיים
-            await supabase.functions.invoke("update-calendar-event", {
-              body: {
-                eventId: googleCalendarEventId,
-                summary: title,
-                start: startDateTime.toISOString(),
-                end: endDateTime.toISOString(),
-              },
-            });
+            // עדכון אירוע קיים דרך Unified
+            const { updateCalendarEvent: updateCalEvent } = await import("@/lib/calendarApi");
+            await updateCalEvent(
+              { eventId: googleCalendarEventId, summary: title, start: startDateTime.toISOString(), end: endDateTime.toISOString() },
+              { tenantId: tenantId! }
+            );
           } else {
-            // יצירת אירוע חדש ושמירת ה-eventId
-            const { data: calendarResult } = await supabase.functions.invoke("add-calendar-event", {
-              body: {
-                summary: title,
-                description: `משימה ממערכת Marketing Captain`,
-                start: startDateTime.toISOString(),
-                end: endDateTime.toISOString(),
-              },
-            });
+            // יצירת אירוע חדש דרך Unified
+            const { addCalendarEvent: addCalEvent } = await import("@/lib/calendarApi");
+            const calendarResult = await addCalEvent(
+              { summary: title, description: `משימה ממערכת Marketing Captain`, start: startDateTime.toISOString(), end: endDateTime.toISOString() },
+              { tenantId: tenantId! }
+            );
             
             if (calendarResult?.eventId) {
               await supabase.from("tasks")
