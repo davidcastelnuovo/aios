@@ -104,6 +104,8 @@ export function ClientsChatView({
 
   const [addingContact, setAddingContact] = useState(false);
   const [newContact, setNewContact] = useState({ contact_name: "", phone: "", email: "", role: "" });
+  const [editingContactId, setEditingContactId] = useState<string | null>(null);
+  const [editContactData, setEditContactData] = useState({ contact_name: "", phone: "", email: "", role: "" });
   const [groupSearch, setGroupSearch] = useState("");
   const [showGroupDropdown, setShowGroupDropdown] = useState(false);
 
