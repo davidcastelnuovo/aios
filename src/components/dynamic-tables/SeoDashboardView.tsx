@@ -100,29 +100,7 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
     return map;
   }
 
-  // Build lookup map for campaign start positions
-  // If the oldest report has inline position_campaign_start, use that (actual campaign start data)
-  // Otherwise fall back to the report's own position
-  function buildCampaignStartMap(report: any): Map<string, number | null> {
-    const rd = report?.report_data as any;
-    if (!rd) return new Map();
-    const map = new Map<string, number | null>();
-    const organic = Array.isArray(rd.organic_keywords) ? rd.organic_keywords : [];
-    const tracked = Array.isArray(rd.tracked_keywords) ? rd.tracked_keywords : [];
-    for (const kw of [...tracked, ...organic]) {
-      const name = String(kw.keyword || '').toLowerCase();
-      if (!map.has(name)) {
-        // Prefer the campaign_start position if available (carries historical data from source)
-        const campPos = kw.position_campaign_start ?? null;
-        const currentPos = kw.position ?? kw.best_position ?? null;
-        map.set(name, campPos ?? currentPos);
-      }
-    }
-    return map;
-  }
-
   const prevMonthMap = useMemo(() => buildPrevMonthMap(prevMonthReport), [prevMonthReport]);
-  const campaignStartMap = useMemo(() => buildCampaignStartMap(campaignStartReport), [campaignStartReport]);
 
   // Normalize and enrich keywords with comparison data
   const rawOrganic = Array.isArray(reportData?.organic_keywords) ? reportData.organic_keywords : [];
