@@ -854,12 +854,25 @@ Deno.serve(async (req) => {
     systemPrompt += `\n\n=== תאריך ושעה נוכחיים ===\nהיום: ${currentDate}, שעה: ${currentTime}\nתאריך ISO של היום: ${todayISO}\nתאריך ISO של מחר: ${tomorrowDate}\nחשוב: כשמבקשים "למחר" השתמש ב-${tomorrowDate}, כש"היום" השתמש ב-${todayISO}.`
     systemPrompt += `\n\n=== הקשר ארגוני ===\n${tenantContext}`
 
+    // Inject memory context
+    const memoryItems = memoryRes.data || []
+    if (memoryItems.length > 0) {
+      const memoryContext = memoryItems.map((m: any) => `[${m.category}] ${m.key}: ${m.content}`).join('\n')
+      systemPrompt += `\n\n🧠 === זיכרון מתמשך ===\n${memoryContext}`
+    }
+
     // Inject lead context
     if (lead_data) {
       const leadParts = Object.entries(lead_data)
         .filter(([, v]) => v)
         .map(([k, v]) => `${k}: ${v}`)
       if (leadParts.length) systemPrompt += `\n\nפרטי ליד:\n${leadParts.join('\n')}`
+    }
+
+    // WhatsApp context
+    if (isCarmen) {
+      systemPrompt += `\n\n💬 **כשעונה להודעות WhatsApp:** כתוב בסגנון קצר, ישיר וחברותי. הימנע מטקסט ארוך מדי. אל תשתמש ב-markdown בהודעות וואטסאפ.`
+      systemPrompt += `\n🧠 **זיכרון:** כשהמשתמש מספר לך העדפות, שמות פרויקטים, או מידע חשוב — שמור אותם אוטומטית באמצעות save_memory.`
     }
 
     // 4. Filter tools
@@ -872,13 +885,22 @@ Deno.serve(async (req) => {
 
     // 5. Run agent with tool loop
     const model = resolveModel(agent.engine || 'gemini-3-flash')
-    const maxRounds = agent.max_tool_rounds || 3
+    const maxRounds = agent.max_tool_rounds || 5
     const safeTemp = typeof temperature === 'number' ? Math.min(2, Math.max(0, temperature)) : undefined
 
-    let messages: any[] = [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: command_text },
-    ]
+    // Build messages with conversation history
+    let messages: any[] = [{ role: 'system', content: systemPrompt }]
+    
+    // Add conversation history from Carmen WhatsApp sessions
+    const history = Array.isArray(conversation_history) ? conversation_history : []
+    for (const h of history) {
+      if (h.role === 'user' || h.role === 'assistant') {
+        messages.push({ role: h.role, content: h.content })
+      }
+    }
+    
+    // Add current message
+    messages.push({ role: 'user', content: command_text })
 
     let finalOutput = ''
     const toolLog: any[] = []
