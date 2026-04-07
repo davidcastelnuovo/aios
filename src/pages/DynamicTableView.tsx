@@ -1040,7 +1040,8 @@ export default function DynamicTableView() {
         const fieldsList = (existingFields as any)?.fields || [];
         
         if (fieldsList.length === 0) {
-          const seoFields = allKeywords.length > 0
+          const hasKeywords = recordsToInsert.some((r: any) => r.data?.keyword);
+          const seoFields = hasKeywords
             ? [
                 { key: 'keyword', label: 'מילת מפתח', type: 'text' },
                 { key: 'position', label: 'מיקום', type: 'number' },
