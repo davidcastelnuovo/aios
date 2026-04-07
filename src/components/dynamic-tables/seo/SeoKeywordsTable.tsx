@@ -119,11 +119,10 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [] }: SeoKeywords
     }
   }
 
-  // 1. Top 10 by position (best ranked)
+  // 1. All keywords in top 10 positions (page 1)
   const top10 = [...allKeywords]
-    .filter(k => k.position != null)
-    .sort((a, b) => (a.position || 999) - (b.position || 999))
-    .slice(0, 10);
+    .filter(k => k.position != null && k.position <= 10)
+    .sort((a, b) => (a.position || 999) - (b.position || 999));
 
   // 2. All keywords sorted by campaign start change (biggest improvement first)
   const byCampaignChange = [...allKeywords]
@@ -162,7 +161,7 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [] }: SeoKeywords
         <Tabs defaultValue="top10" className="w-full">
           <TabsList dir="rtl" className="w-full justify-start rounded-none border-b bg-transparent h-auto p-0 gap-0">
             <TabsTrigger value="top10" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
-              🏆 Top 10 מקודמים
+              🏆 Top 10 מקודמים ({top10.length})
             </TabsTrigger>
             <TabsTrigger value="campaign" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
               📈 שינוי מתחילת קידום
@@ -178,7 +177,7 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [] }: SeoKeywords
           <TabsContent value="top10" className="mt-0">
             <KeywordTable
               keywords={top10}
-              title="10 הביטויים הכי מקודמים"
+              title={`${top10.length} ביטויים בעמוד הראשון`}
               icon={<Trophy className="h-4 w-4 text-primary" />}
               showCampaignStart
               showPrevMonth
