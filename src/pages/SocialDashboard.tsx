@@ -213,7 +213,7 @@ export default function SocialDashboard() {
               <CalendarRange className="h-3.5 w-3.5" />
               גאנט תוכן
               {ganttDraft > 0 && (
-                <Badge variant="secondary" className="h-4 px-1.5 text-[10px] ml-1">
+                <Badge variant="secondary" className="h-4 px-1.5 text-[10px] me-1">
                   {ganttDraft}
                 </Badge>
               )}
@@ -222,7 +222,7 @@ export default function SocialDashboard() {
               <ListChecks className="h-3.5 w-3.5" />
               פוסטים
               {schedulerPosts.length > 0 && (
-                <Badge variant="secondary" className="h-4 px-1.5 text-[10px] ml-1">
+                <Badge variant="secondary" className="h-4 px-1.5 text-[10px] me-1">
                   {schedulerPosts.length}
                 </Badge>
               )}
