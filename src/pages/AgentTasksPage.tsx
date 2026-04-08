@@ -572,7 +572,7 @@ export default function AgentTasksPage() {
             const { data } = await supabase.functions.invoke("run-ai-agent", {
               body: {
                 agent_id: task.agent_id,
-                command_text: `${sub.title}\n${sub.description || ""}`,
+                command_text: `=== משימה ראשית ===\n${task.title}\n${task.description || ""}\n\n=== תת-משימה נוכחית ===\n${sub.title}\n${sub.description || ""}`,
                 tenant_id: tenantId,
                 task_skills: task.task_skills,
                 task_mode: task.task_mode,
