@@ -323,7 +323,7 @@ export default function DMMDashboard() {
 
   // ── Build enriched client rows ─────────────────────────────────────────────
   const clients: ClientRow[] = useMemo(() => {
-    return rawClients.map((c: any) => {
+    return filteredByRole.map((c: any) => {
       // Merge CRM extended fields (tier, services, mood_status)
       // Falls back to null/empty if migration hasn't run yet
       const ext = (crmFields.find((f: any) => f.id === c.id) ?? {}) as CRMClientFields;
