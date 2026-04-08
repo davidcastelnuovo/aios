@@ -22,7 +22,7 @@ import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
-import { CalendarIcon, Save, Trash2, UserPlus, X, Send, Search, ListTodo, ExternalLink, Check } from "lucide-react";
+import { CalendarIcon, Save, Trash2, UserPlus, X, Send, Search, ListTodo, ExternalLink, Check, Bot, GitCommit, ArrowRightLeft, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -323,7 +323,8 @@ export function TaskDetailDialog({
         task_id: task!.id,
         content: newUpdate,
         user_id: user.id,
-      });
+        update_type: "comment",
+      } as any);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -750,24 +751,52 @@ export function TaskDetailDialog({
                     אין עדכונים עדיין
                   </p>
                 )}
-                {updates?.map((update) => (
-                  <div
-                    key={update.id}
-                    className="p-3 rounded-lg border bg-muted/30"
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-medium">
-                        {(update.profiles as any)?.full_name || "משתמש"}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {format(new Date(update.created_at), "dd/MM HH:mm", {
-                          locale: he,
-                        })}
-                      </span>
+                {updates?.map((update) => {
+                  const updateType = (update as any).update_type || "comment";
+                  const getUpdateTypeIcon = () => {
+                    switch (updateType) {
+                      case "agent_action": return <Bot className="h-3.5 w-3.5 text-purple-500" />;
+                      case "status_change": return <GitCommit className="h-3.5 w-3.5 text-blue-500" />;
+                      case "assignment": return <ArrowRightLeft className="h-3.5 w-3.5 text-orange-500" />;
+                      default: return <MessageCircle className="h-3.5 w-3.5 text-muted-foreground" />;
+                    }
+                  };
+                  const getUpdateTypeLabel = () => {
+                    switch (updateType) {
+                      case "agent_action": return "פעולת סוכן";
+                      case "status_change": return "שינוי סטטוס";
+                      case "assignment": return "שיוך";
+                      default: return "תגובה";
+                    }
+                  };
+                  return (
+                    <div
+                      key={update.id}
+                      className={cn(
+                        "p-3 rounded-lg border",
+                        updateType === "agent_action" ? "bg-purple-50/50 border-purple-200 dark:bg-purple-950/20 dark:border-purple-800" : "bg-muted/30"
+                      )}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-1.5">
+                          {getUpdateTypeIcon()}
+                          <span className="text-sm font-medium">
+                            {(update.profiles as any)?.full_name || "משתמש"}
+                          </span>
+                          <Badge variant="outline" className="text-[10px] h-4 px-1.5">
+                            {getUpdateTypeLabel()}
+                          </Badge>
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {format(new Date(update.created_at), "dd/MM HH:mm", {
+                            locale: he,
+                          })}
+                        </span>
+                      </div>
+                      <p className="text-sm whitespace-pre-wrap">{update.content}</p>
                     </div>
-                    <p className="text-sm whitespace-pre-wrap">{update.content}</p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </TabsContent>
           </ScrollArea>
