@@ -358,8 +358,9 @@ export default function AgentHub() {
     }
   };
 
-  const activeAgents = agents.filter(a => a.active);
-  const inactiveAgents = agents.filter(a => !a.active);
+  const isCarmen = (a: any) => ["כרמן", "carmen"].includes(a.name?.toLowerCase?.());
+  const activeAgents = agents.filter(a => a.active && !isCarmen(a));
+  const inactiveAgents = agents.filter(a => !a.active && !isCarmen(a));
 
   return (
     <div className="p-6 max-w-5xl mx-auto" dir="rtl">
