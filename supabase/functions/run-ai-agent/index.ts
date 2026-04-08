@@ -785,6 +785,7 @@ Deno.serve(async (req) => {
 
   try {
     const { agent_id, command_text, temperature, automation_id, user_name, lead_data, tenant_id, user_id, task_skills, task_mode, conversation_history } = await req.json()
+    console.log(`[AGENT] Starting run: agent=${agent_id}, command="${command_text?.substring(0, 80)}"`)
 
     if (!agent_id || !command_text) throw new Error('Missing agent_id or command_text')
     if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured')
