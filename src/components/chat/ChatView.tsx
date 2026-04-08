@@ -2,7 +2,7 @@ import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, AlertCircle, Ban } from "lucide-react";
+import { ArrowLeft, AlertCircle, Ban, Building2 } from "lucide-react";
 import ChatMessageList from "./ChatMessageList";
 import ChatInput from "./ChatInput";
 import { ManyChatControls } from "./ManyChatControls";
@@ -15,6 +15,7 @@ import { ConvertContactDialog } from "./ConvertContactDialog";
 import { LinkContactDialog } from "./LinkContactDialog";
 import { LinkPhoneDialog } from "./LinkPhoneDialog";
 import { LinkCampaignerDialog } from "./LinkCampaignerDialog";
+import { ChangeAgencyDialog } from "./ChangeAgencyDialog";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -60,6 +61,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [linkPhoneDialogOpen, setLinkPhoneDialogOpen] = useState(false);
   const [linkCampaignerDialogOpen, setLinkCampaignerDialogOpen] = useState(false);
+  const [changeAgencyDialogOpen, setChangeAgencyDialogOpen] = useState(false);
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
   const [replyToMessage, setReplyToMessage] = useState<ReplyToMessage | null>(null);
   const [messagePeriod, setMessagePeriod] = useState<'week' | 'month' | 'all'>('week');
@@ -676,6 +678,12 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
                       שייך טלפון לאחר
                     </Button>
                   )}
+                  {(contactType === 'client' || contactType === 'lead' || contactType === 'group') && (
+                    <Button variant="secondary" size="sm" className="h-7 text-xs" onClick={() => setChangeAgencyDialogOpen(true)}>
+                      <Building2 className="h-3 w-3 ml-1" />
+                      שנה סוכנות
+                    </Button>
+                  )}
                   
                   {/* Provider Controls - inline */}
                   {activeProvider === 'green_api' && (
@@ -804,6 +812,20 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
             }}
           />
         </>
+      )}
+
+      {contactType !== 'unknown' && (
+        <ChangeAgencyDialog
+          open={changeAgencyDialogOpen}
+          onOpenChange={setChangeAgencyDialogOpen}
+          contactId={contactId}
+          contactType={contactType}
+          currentAgencyId={contact?.agency_id}
+          contactName={contact?.name || ""}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ["contact", contactId, contactType] });
+          }}
+        />
       )}
     </div>
   );
