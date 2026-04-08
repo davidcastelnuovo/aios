@@ -213,7 +213,7 @@ export default function DMMDashboard() {
     staleTime: 60_000,
   });
 
-  const clientIds = rawClients.map((c: any) => c.id);
+  const clientIds = filteredByRole.map((c: any) => c.id);
 
   // ── Fetch latest communication log per client ──────────────────────────────
   const { data: commLogs = [] } = useQuery({
