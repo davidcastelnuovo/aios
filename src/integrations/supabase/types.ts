@@ -1873,11 +1873,13 @@ export type Database = {
           end_date: string | null
           folder_link: string | null
           folder_links: Json
+          google_ads_account_id: string | null
           health_score: number | null
           id: string
           industry: string | null
           is_seo_client: boolean | null
           manychat_subscriber_id: string | null
+          meta_ads_account_id: string | null
           monthly_budget: number | null
           mood_status: Database["public"]["Enums"]["client_mood_status"] | null
           name: string
@@ -1908,11 +1910,13 @@ export type Database = {
           end_date?: string | null
           folder_link?: string | null
           folder_links?: Json
+          google_ads_account_id?: string | null
           health_score?: number | null
           id?: string
           industry?: string | null
           is_seo_client?: boolean | null
           manychat_subscriber_id?: string | null
+          meta_ads_account_id?: string | null
           monthly_budget?: number | null
           mood_status?: Database["public"]["Enums"]["client_mood_status"] | null
           name: string
@@ -1943,11 +1947,13 @@ export type Database = {
           end_date?: string | null
           folder_link?: string | null
           folder_links?: Json
+          google_ads_account_id?: string | null
           health_score?: number | null
           id?: string
           industry?: string | null
           is_seo_client?: boolean | null
           manychat_subscriber_id?: string | null
+          meta_ads_account_id?: string | null
           monthly_budget?: number | null
           mood_status?: Database["public"]["Enums"]["client_mood_status"] | null
           name?: string
