@@ -5,7 +5,11 @@ import { he } from "date-fns/locale";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
-import { getCalendarEvents, updateCalendarEvent, deleteCalendarEvent } from "@/lib/calendarApi";
+import { getCalendarEvents, updateCalendarEvent, deleteCalendarEvent, CalendarProvider } from "@/lib/calendarApi";
+
+function getStoredProvider(): CalendarProvider {
+  return (localStorage.getItem("calendar_provider_mode") as CalendarProvider) || "direct";
+}
 import { listenForUnifiedConnection, openUnifiedCalendarConnection } from "@/lib/unifiedCalendarConnection";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -88,7 +92,7 @@ export function InteractiveCalendar() {
       return await getCalendarEvents(
         oneMonthAgo.toISOString(),
         twoMonthsLater.toISOString(),
-        { tenantId: tenantId! }
+        { tenantId: tenantId!, provider: getStoredProvider() }
       );
     },
     enabled: !!userId && !!tenantId,
@@ -99,7 +103,7 @@ export function InteractiveCalendar() {
   // Update event mutation
   const updateMutation = useMutation({
     mutationFn: async (params: { eventId: string; summary: string; description: string; start: string; end: string }) => {
-      return await updateCalendarEvent(params, { tenantId: tenantId! });
+      return await updateCalendarEvent(params, { tenantId: tenantId!, provider: getStoredProvider() });
     },
     onSuccess: () => {
       toast.success('האירוע עודכן בהצלחה');
@@ -115,7 +119,7 @@ export function InteractiveCalendar() {
   // Delete event mutation
   const deleteMutation = useMutation({
     mutationFn: async (eventId: string) => {
-      return await deleteCalendarEvent(eventId, { tenantId: tenantId! });
+      return await deleteCalendarEvent(eventId, { tenantId: tenantId!, provider: getStoredProvider() });
     },
     onSuccess: () => {
       toast.success('האירוע נמחק בהצלחה');
