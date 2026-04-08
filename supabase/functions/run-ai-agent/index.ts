@@ -422,6 +422,19 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         })
       if (logErr) throw logErr
 
+      // 3. Also create a client_update so it's visible in the client updates tab
+      const effectiveUserId = userId !== 'system' ? userId : null
+      if (effectiveUserId) {
+        await supabase
+          .from('client_updates')
+          .insert({
+            client_id: args.client_id,
+            tenant_id: tenantId,
+            user_id: effectiveUserId,
+            content: `[עדכון אוטומטי - כרמן] ${args.note}`,
+          })
+      }
+
       return { success: true, client_id: args.client_id, mood_status: args.mood_status, communication_status: commStatus }
     }
     case 'create_social_post': {
