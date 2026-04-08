@@ -399,6 +399,20 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return { count: results.length, clients: results }
     }
     case 'update_client_health': {
+      // Resolve an actor user for audit/update visibility even in background "system" runs
+      let effectiveUserId = userId !== 'system' ? userId : null
+      if (!effectiveUserId) {
+        const { data: ownerRole } = await supabase
+          .from('user_roles')
+          .select('user_id')
+          .eq('tenant_id', tenantId)
+          .eq('role', 'owner')
+          .limit(1)
+          .maybeSingle()
+
+        effectiveUserId = ownerRole?.user_id || null
+      }
+
       // 1. Update mood_status on client
       const updateData: any = { mood_status: args.mood_status }
       const { error: clientErr } = await supabase
@@ -418,14 +432,13 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
           status: commStatus,
           interaction_type: 'system_alert',
           note: args.note,
-          updated_by: userId !== 'system' ? userId : null,
+          updated_by: effectiveUserId,
         })
       if (logErr) throw logErr
 
       // 3. Also create a client_update so it's visible in the client updates tab
-      const effectiveUserId = userId !== 'system' ? userId : null
       if (effectiveUserId) {
-        await supabase
+        const { error: clientUpdateErr } = await supabase
           .from('client_updates')
           .insert({
             client_id: args.client_id,
@@ -433,9 +446,11 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
             user_id: effectiveUserId,
             content: `[עדכון אוטומטי - כרמן] ${args.note}`,
           })
+
+        if (clientUpdateErr) throw clientUpdateErr
       }
 
-      return { success: true, client_id: args.client_id, mood_status: args.mood_status, communication_status: commStatus }
+      return { success: true, client_id: args.client_id, mood_status: args.mood_status, communication_status: commStatus, user_id: effectiveUserId }
     }
     case 'create_social_post': {
       // Insert into both social_media_posts (for publishing) and social_gantt_posts (for planning view)
