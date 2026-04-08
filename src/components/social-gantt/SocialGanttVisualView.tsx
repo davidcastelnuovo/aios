@@ -95,18 +95,6 @@ function GanttView({ posts, selectedPostId, onSelectPost }: Pick<SocialGanttVisu
   const monthEnd = endOfMonth(firstDate);
   const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
 
-  if (posts.length === 0) {
-    return (
-      <div className="flex-1 flex items-center justify-center text-muted-foreground py-20">
-        <div className="text-center space-y-2">
-          <CalendarRange className="h-12 w-12 mx-auto opacity-20" />
-          <p className="text-base font-medium">אין פוסטים לתצוגה</p>
-          <p className="text-sm">צור פוסט חדש כדי להתחיל</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="flex-1 overflow-auto">
       <table className="w-full border-collapse text-sm" dir="rtl">
@@ -131,6 +119,17 @@ function GanttView({ posts, selectedPostId, onSelectPost }: Pick<SocialGanttVisu
           </tr>
         </thead>
         <tbody>
+          {posts.length === 0 && (
+            <tr>
+              <td colSpan={3 + days.length} className="py-16 text-center">
+                <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                  <CalendarRange className="h-10 w-10 opacity-20" />
+                  <p className="text-sm font-medium">אין פוסטים לחודש זה</p>
+                  <p className="text-xs">לחץ על "פוסט חדש" כדי להוסיף פרסום לגאנט</p>
+                </div>
+              </td>
+            </tr>
+          )}
           {weeks.map((week, wi) => {
             const color = weekColors[wi % weekColors.length];
             return (
