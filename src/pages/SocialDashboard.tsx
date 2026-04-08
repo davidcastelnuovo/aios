@@ -26,6 +26,7 @@ import {
   Share2,
   Plus,
 } from "lucide-react";
+import { Maximize2, Minimize2 } from "lucide-react";
 import { PostComposer } from "@/components/social-media/PostComposer";
 
 // Social Gantt components (content planning with AI)
