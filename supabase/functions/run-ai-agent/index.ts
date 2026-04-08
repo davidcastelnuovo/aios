@@ -1051,6 +1051,7 @@ Deno.serve(async (req) => {
       if (safeTemp !== undefined) payload.temperature = safeTemp
       if (toolsForAPI.length > 0) payload.tools = toolsForAPI
 
+      console.log(`[AGENT] Round ${round + 1}/${maxRounds}, model=${model}`)
       const res = await fetch(AI_GATEWAY_URL, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
@@ -1059,6 +1060,7 @@ Deno.serve(async (req) => {
 
       if (!res.ok) {
         const err = await res.text()
+        console.error(`[AGENT] AI error: ${res.status}`, err.substring(0, 200))
         if (res.status === 429) throw new Error('מגבלת קצב. נסה שוב.')
         throw new Error(`AI error: ${res.status} ${err}`)
       }
@@ -1074,6 +1076,7 @@ Deno.serve(async (req) => {
       // No tool calls → done
       if (!msg.tool_calls || msg.tool_calls.length === 0) {
         finalOutput = msg.content || ''
+        console.log(`[AGENT] Done after ${round + 1} rounds, output length=${finalOutput.length}`)
         break
       }
 
@@ -1084,12 +1087,14 @@ Deno.serve(async (req) => {
         let toolArgs: Record<string, any> = {}
         try { toolArgs = JSON.parse(tc.function.arguments || '{}') } catch { /* ignore */ }
 
-
+        console.log(`[AGENT] Tool call: ${toolName}`)
         let result: any
         try {
           result = await executeTool(toolName, toolArgs, supabase, resolvedTenantId, resolvedUserId, callerCampaignerId)
+          console.log(`[AGENT] Tool ${toolName} OK`)
         } catch (e: any) {
           result = { error: e.message }
+          console.error(`[AGENT] Tool ${toolName} ERROR: ${e.message}`)
         }
 
         toolLog.push({ tool: toolName, args: toolArgs, result })
