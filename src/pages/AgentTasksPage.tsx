@@ -833,6 +833,175 @@ export default function AgentTasksPage() {
                           </div>
                         </div>
                       )}
+                      {activeTab === "heartbeat" && (
+                        <div className="space-y-4">
+                          {/* Heartbeat Settings */}
+                          <div className="bg-muted/30 rounded-xl p-4 space-y-4">
+                            <div className="flex items-center justify-between">
+                              <h3 className="font-semibold text-sm flex items-center gap-2">
+                                <Heart className="h-4 w-4 text-red-500" />
+                                הגדרות Heartbeat
+                              </h3>
+                              <Switch
+                                checked={heartbeatSettings?.enabled || false}
+                                onCheckedChange={(enabled) => {
+                                  saveHeartbeatSettings.mutate({
+                                    enabled,
+                                    interval_hours: heartbeatSettings?.interval_hours || 8,
+                                    active_hours_start: heartbeatSettings?.active_hours_start || 7,
+                                    active_hours_end: heartbeatSettings?.active_hours_end || 22,
+                                    allowed_actions: (heartbeatSettings?.allowed_actions as string[]) || ["reminders", "status_update", "daily_summary"],
+                                  });
+                                }}
+                              />
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              כרמן סוקרת אוטומטית משימות פתוחות, מזהה חסומות, ושולחת תזכורות
+                            </p>
+
+                            <div className="grid grid-cols-3 gap-3">
+                              <div>
+                                <Label className="text-xs">תדירות (שעות)</Label>
+                                <Select
+                                  value={String(heartbeatSettings?.interval_hours || 8)}
+                                  onValueChange={(v) => {
+                                    saveHeartbeatSettings.mutate({
+                                      enabled: heartbeatSettings?.enabled || false,
+                                      interval_hours: parseInt(v),
+                                      active_hours_start: heartbeatSettings?.active_hours_start || 7,
+                                      active_hours_end: heartbeatSettings?.active_hours_end || 22,
+                                      allowed_actions: (heartbeatSettings?.allowed_actions as string[]) || ["reminders", "status_update", "daily_summary"],
+                                    });
+                                  }}
+                                >
+                                  <SelectTrigger className="h-8 text-xs mt-1"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="4">כל 4 שעות</SelectItem>
+                                    <SelectItem value="8">כל 8 שעות</SelectItem>
+                                    <SelectItem value="12">כל 12 שעות</SelectItem>
+                                    <SelectItem value="24">פעם ביום</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div>
+                                <Label className="text-xs">שעת התחלה</Label>
+                                <Input
+                                  type="number" min={0} max={23}
+                                  value={heartbeatSettings?.active_hours_start || 7}
+                                  onChange={(e) => {
+                                    saveHeartbeatSettings.mutate({
+                                      enabled: heartbeatSettings?.enabled || false,
+                                      interval_hours: heartbeatSettings?.interval_hours || 8,
+                                      active_hours_start: parseInt(e.target.value),
+                                      active_hours_end: heartbeatSettings?.active_hours_end || 22,
+                                      allowed_actions: (heartbeatSettings?.allowed_actions as string[]) || ["reminders", "status_update", "daily_summary"],
+                                    });
+                                  }}
+                                  className="h-8 text-xs mt-1"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">שעת סיום</Label>
+                                <Input
+                                  type="number" min={0} max={23}
+                                  value={heartbeatSettings?.active_hours_end || 22}
+                                  onChange={(e) => {
+                                    saveHeartbeatSettings.mutate({
+                                      enabled: heartbeatSettings?.enabled || false,
+                                      interval_hours: heartbeatSettings?.interval_hours || 8,
+                                      active_hours_start: heartbeatSettings?.active_hours_start || 7,
+                                      active_hours_end: parseInt(e.target.value),
+                                      allowed_actions: (heartbeatSettings?.allowed_actions as string[]) || ["reminders", "status_update", "daily_summary"],
+                                    });
+                                  }}
+                                  className="h-8 text-xs mt-1"
+                                />
+                              </div>
+                            </div>
+
+                            <div>
+                              <Label className="text-xs mb-2 block">פעולות מותרות</Label>
+                              <div className="flex flex-wrap gap-2">
+                                {[
+                                  { key: "reminders", label: "תזכורות WhatsApp", icon: "💬" },
+                                  { key: "status_update", label: "עדכון סטטוס", icon: "🔄" },
+                                  { key: "daily_summary", label: "סיכום יומי", icon: "📊" },
+                                ].map((action) => {
+                                  const allowed = (heartbeatSettings?.allowed_actions as string[]) || ["reminders", "status_update", "daily_summary"];
+                                  const isActive = allowed.includes(action.key);
+                                  return (
+                                    <button
+                                      key={action.key}
+                                      onClick={() => {
+                                        const newActions = isActive
+                                          ? allowed.filter((a: string) => a !== action.key)
+                                          : [...allowed, action.key];
+                                        saveHeartbeatSettings.mutate({
+                                          enabled: heartbeatSettings?.enabled || false,
+                                          interval_hours: heartbeatSettings?.interval_hours || 8,
+                                          active_hours_start: heartbeatSettings?.active_hours_start || 7,
+                                          active_hours_end: heartbeatSettings?.active_hours_end || 22,
+                                          allowed_actions: newActions,
+                                        });
+                                      }}
+                                      className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
+                                        isActive
+                                          ? "bg-primary/10 border-primary text-primary"
+                                          : "bg-muted border-border text-muted-foreground"
+                                      }`}
+                                    >
+                                      {action.icon} {action.label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Heartbeat Logs */}
+                          <div className="bg-muted/30 rounded-xl p-4">
+                            <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                              <Clock className="h-4 w-4" />
+                              הרצות אחרונות
+                            </h3>
+                            {heartbeatLogs.length === 0 ? (
+                              <p className="text-xs text-muted-foreground text-center py-4">
+                                אין הרצות עדיין
+                              </p>
+                            ) : (
+                              <div className="space-y-2">
+                                {heartbeatLogs.map((log: any) => (
+                                  <div key={log.id} className="border rounded-lg p-3 bg-background text-xs space-y-1">
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-medium">{format(new Date(log.triggered_at), "dd/MM/yyyy HH:mm")}</span>
+                                      <Badge variant="outline" className="text-[10px]">
+                                        {log.tasks_reviewed} משימות נסקרו
+                                      </Badge>
+                                    </div>
+                                    <p className="text-muted-foreground whitespace-pre-wrap">{log.summary}</p>
+                                    {log.actions_taken && (log.actions_taken as any[]).length > 0 && (
+                                      <div className="mt-1 pt-1 border-t">
+                                        {(log.actions_taken as any[]).map((action: any, i: number) => (
+                                          <div key={i} className="flex items-center gap-1 text-[11px]">
+                                            {action.type === "reminder_sent" ? (
+                                              <CheckCircle2 className="h-3 w-3 text-green-500" />
+                                            ) : action.type === "stale_task_released" ? (
+                                              <AlertTriangle className="h-3 w-3 text-amber-500" />
+                                            ) : (
+                                              <XCircle className="h-3 w-3 text-red-500" />
+                                            )}
+                                            <span>{action.task_title || action.type}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </>
                   )}
                 </div>
