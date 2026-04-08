@@ -367,12 +367,18 @@ export default function DynamicTables() {
       ad_account_name: editAdAccounts.find(a => a.id === editAdAccountId)?.name || editingTable.integration_settings?.ad_account_name || '',
     } : undefined;
 
+    // If it's an Ahrefs/SEO table and client changed, sync domain
+    const isAhrefs = editingTable.integration_type === 'ahrefs';
+    const domain = editingTable.integration_settings?.targetDomain;
+    const syncDomain = isAhrefs && editClientId && domain ? { clientId: editClientId, domain } : undefined;
+
     updateTableMutation.mutate({ 
       tableId: editingTable.id, 
       name: editName,
       agency_id: editAgencyId || null,
       client_id: editClientId || null,
       integration_settings: updatedSettings,
+      syncDomain,
     });
   };
 
