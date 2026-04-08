@@ -73,16 +73,16 @@ export function PostsList() {
                         ))}
                       </div>
                     )}
-                    <div className="flex items-start justify-between">
+                    <div className="flex items-start justify-between" dir="rtl">
                     <div className="flex-1 min-w-0">
                       {post.title && (
-                        <h4 className="font-medium truncate">{post.title}</h4>
+                        <h4 className="font-medium text-right">{post.title}</h4>
                       )}
-                      <p className="text-sm text-muted-foreground line-clamp-3 mt-1 whitespace-pre-line">
+                      <p className="text-sm text-muted-foreground mt-1 whitespace-pre-line text-right">
                         {post.content}
                       </p>
                     </div>
-                    <Badge variant={status.variant} className="ms-2 whitespace-nowrap">
+                    <Badge variant={status.variant} className="ms-2 whitespace-nowrap shrink-0">
                       <StatusIcon className={`h-3 w-3 me-1 ${post.status === "publishing" ? "animate-spin" : ""}`} />
                       {status.label}
                     </Badge>
