@@ -137,7 +137,7 @@ export function CreativeAgent({ post, onUpdatePost, onBack, tenantId }: Creative
               className="w-full justify-start text-muted-foreground"
               onClick={() => setPrompt(suggestedPrompt)}
             >
-              <Wand2 className="h-3.5 w-3.5 ml-2" />
+              <Wand2 className="h-3.5 w-3.5 me-2" />
               הצעה: {suggestedPrompt}
             </Button>
           )}
@@ -189,12 +189,12 @@ export function CreativeAgent({ post, onUpdatePost, onBack, tenantId }: Creative
           >
             {isGenerating ? (
               <>
-                <Loader2 className="h-4 w-4 ml-2 animate-spin" />
+                <Loader2 className="h-4 w-4 me-2 animate-spin" />
                 מייצר קריאייטיב...
               </>
             ) : (
               <>
-                <Sparkles className="h-4 w-4 ml-2" />
+                <Sparkles className="h-4 w-4 me-2" />
                 צור קריאייטיב
               </>
             )}

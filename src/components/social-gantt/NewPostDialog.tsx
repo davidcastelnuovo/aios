@@ -99,7 +99,7 @@ export function NewPostDialog({ open, onOpenChange, onCreatePost, tenantId, isCr
                     !date && "text-muted-foreground"
                   )}
                 >
-                  <CalendarIcon className="ml-2 h-4 w-4" />
+                  <CalendarIcon className="me-2 h-4 w-4" />
                   {date ? format(date, "PPP", { locale: he }) : "בחר תאריך"}
                 </Button>
               </PopoverTrigger>
@@ -122,7 +122,7 @@ export function NewPostDialog({ open, onOpenChange, onCreatePost, tenantId, isCr
           <Button onClick={handleCreate} disabled={!topic.trim() || !date || isCreating}>
             {isCreating ? (
               <>
-                <Loader2 className="h-4 w-4 ml-2 animate-spin" />
+                <Loader2 className="h-4 w-4 me-2 animate-spin" />
                 יוצר...
               </>
             ) : (

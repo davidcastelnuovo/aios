@@ -145,15 +145,15 @@ export function SocialGanttPreview({
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="w-full">
               <TabsTrigger value="preview" className="flex-1">
-                <Image className="h-4 w-4 ml-2" />
+                <Image className="h-4 w-4 me-2" />
                 תצוגה מקדימה
               </TabsTrigger>
               <TabsTrigger value="creative-agent" className="flex-1">
-                <Sparkles className="h-4 w-4 ml-2" />
+                <Sparkles className="h-4 w-4 me-2" />
                 סוכן קריאייטיב
               </TabsTrigger>
               <TabsTrigger value="copy-agent" className="flex-1">
-                <PenLine className="h-4 w-4 ml-2" />
+                <PenLine className="h-4 w-4 me-2" />
                 סוכן קופי
               </TabsTrigger>
             </TabsList>
