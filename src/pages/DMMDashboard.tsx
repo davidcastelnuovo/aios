@@ -137,26 +137,58 @@ export default function DMMDashboard() {
 
   // ── Fetch clients (base: always-safe fields) ──────────────────────────────
   const { data: rawClients = [], isLoading: clientsLoading, refetch } = useQuery({
-    queryKey: ["dmm-clients", tenantId],
+    queryKey: ["dmm-clients", tenantId, selectedAgency, userAgencyIds],
     queryFn: async () => {
       if (!tenantId) return [];
-      const { data, error } = await supabase
+      let query = supabase
         .from("clients")
         .select(`
-          id, name, status,
+          id, name, status, agency_id,
           client_team (
+            campaigner_id,
             campaigners ( full_name )
           )
         `)
         .eq("tenant_id", tenantId)
         .in("status", ["active", "onboarding"])
         .order("name");
+
+      // Agency filter
+      if (selectedAgency && selectedAgency !== "all") {
+        query = query.eq("agency_id", selectedAgency);
+      } else if (userAgencyIds && userAgencyIds.length > 0) {
+        // Non-owner users: restrict to their agencies
+        query = query.in("agency_id", userAgencyIds);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return data ?? [];
     },
     enabled: !!tenantId,
     staleTime: 30_000,
   });
+
+  // ── Campaigner client filtering ───────────────────────────────────────────
+  const needsCampaignerFilter = (isCampaigner || isSeo) && !isOwner && !isTeamManager && !isSuperAdmin;
+  
+  const campaignerClientIds = useMemo(() => {
+    if (!needsCampaignerFilter || !campaignerId) return null;
+    const ids = new Set<string>();
+    rawClients.forEach((c: any) => {
+      c.client_team?.forEach((ct: any) => {
+        if (ct.campaigner_id === campaignerId) {
+          ids.add(c.id);
+        }
+      });
+    });
+    return ids;
+  }, [rawClients, needsCampaignerFilter, campaignerId]);
+
+  const filteredByRole = useMemo(() => {
+    if (!needsCampaignerFilter || !campaignerClientIds) return rawClients;
+    return rawClients.filter((c: any) => campaignerClientIds.has(c.id));
+  }, [rawClients, needsCampaignerFilter, campaignerClientIds]);
 
   // ── Fetch CRM extended fields (tier, services, mood_status) ────────────────
   // These columns are added by migration 20260407_dmm_crm_adaptation.sql
