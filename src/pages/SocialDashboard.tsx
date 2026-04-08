@@ -149,6 +149,167 @@ export default function SocialDashboard() {
     },
   });
 
+  // ─── Demo seed ────────────────────────────────────────────────
+  const seedDemoPosts = useMutation({
+    mutationFn: async () => {
+      if (!tenantId) throw new Error("No tenant");
+      const base = "2026-04-";
+      const demos: Omit<SocialPost, "id" | "created_at" | "updated_at">[] = [
+        {
+          tenant_id: tenantId,
+          topic: "השקת קמפיין אביב",
+          scheduled_date: base + "07",
+          platform: "instagram",
+          status: "approved",
+          copy_text: "האביב הגיע ואיתו הזמן לחדש! 🌸 הכירו את הקולקציה החדשה שלנו — עיצובים רעננים שמחכים לכם. לחצו על הלינק בביו לגלות עוד.",
+          copy_prompt: "האביב מביא איתו אנרגיות חדשות. גם אנחנו לא עמדנו מנגד — הכנו בשבילכם קולקציה שלמה שתשדרג לכם את הסגנון. מה מחכה לכם? לחצו ותגלו 👇",
+          creative_url: null,
+          creative_prompt: "bright spring flowers, pastel colors, modern lifestyle product photography",
+          notes: JSON.stringify([{ id: "1", text: "לוודא שהלינק בביו מעודכן", color: "yellow" }]),
+        },
+        {
+          tenant_id: tenantId,
+          topic: "טיפ שבועי — פרודוקטיביות",
+          scheduled_date: base + "08",
+          platform: "linkedin",
+          status: "approved",
+          copy_text: "טיפ השבוע: תחילו את הבוקר עם 3 משימות קריטיות בלבד. מחקרים מראים שמיקוד בפחות משימות מגדיל פרודוקטיביות ב-40%. מה הטיפ שלכם לניהול זמן? ✍️",
+          copy_prompt: "הסוד לפרודוקטיביות גבוהה הוא לא לעשות יותר — אלא לעשות פחות, אבל נכון. השבוע אנחנו חולקים את הטיפ שהכי שינה לנו את אופן העבודה. מה דעתכם?",
+          creative_url: null,
+          creative_prompt: "clean minimal desk setup, morning coffee, notebook with tasks, productivity",
+          notes: null,
+        },
+        {
+          tenant_id: tenantId,
+          topic: "סטורי — מאחורי הקלעים",
+          scheduled_date: base + "09",
+          platform: "instagram",
+          status: "draft",
+          copy_text: "מה קורה מאחורי הקלעים? 👀 הצצה לתהליך העבודה שלנו — מהרעיון ועד למוצר המוגמר. שמרו את הסטורי לפני שייעלם!",
+          copy_prompt: "הכל מתחיל ברעיון קטן... ומסתיים במשהו שאתם אוהבים. הצטרפו אלינו למסע מאחורי הקלעים 🎬",
+          creative_url: null,
+          creative_prompt: "behind the scenes office work, team collaboration, creative process, candid photo",
+          notes: JSON.stringify([{ id: "2", text: "לצלם וידאו קצר ב-30 שניות", color: "blue" }]),
+        },
+        {
+          tenant_id: tenantId,
+          topic: "פוסט ערך — 5 טעויות נפוצות",
+          scheduled_date: base + "10",
+          platform: "facebook",
+          status: "in_review",
+          copy_text: "5 טעויות שכולם עושים בשיווק דיגיטלי (ואיך להימנע מהן):\n1️⃣ לא מגדירים קהל יעד ברור\n2️⃣ מתמקדים בכמות ולא באיכות\n3️⃣ מתעלמים מניתוח נתונים\n4️⃣ לא עקביים בפרסום\n5️⃣ מפחדים לנסות פורמטים חדשים\nאיזו טעות הכי מוכרת לכם? 👇",
+          copy_prompt: "שיווק דיגיטלי יכול להיות מורכב — אבל הטעויות הנפוצות ביותר ניתנות למניעה בקלות. הכנו לכם רשימה של 5 דברים שכדאי להפסיק לעשות עכשיו. שמרו את הפוסט!",
+          creative_url: null,
+          creative_prompt: "infographic style, 5 mistakes in digital marketing, clean design, Hebrew text",
+          notes: null,
+        },
+        {
+          tenant_id: tenantId,
+          topic: "ריל — טרנד השבוע",
+          scheduled_date: base + "11",
+          platform: "tiktok",
+          status: "draft",
+          copy_text: "הצטרפנו לטרנד הכי חם ברשת 🔥 ואתם? תייגו חבר שחייב לראות את זה! #טרנד #ויראלי",
+          copy_prompt: "כולם מדברים על הטרנד הזה — ואנחנו לא יכולנו להישאר מאחור 😄 צפו עד הסוף!",
+          creative_url: null,
+          creative_prompt: "trending reels style, dynamic movement, vibrant colors, social media trend",
+          notes: JSON.stringify([{ id: "3", text: "לבדוק איזה טרנד רלוונטי בשבוע הפרסום", color: "pink" }]),
+        },
+        {
+          tenant_id: tenantId,
+          topic: "לקוח מרוצה — עדות",
+          scheduled_date: base + "13",
+          platform: "instagram",
+          status: "approved",
+          copy_text: "\"השירות היה מעל ומעבר לציפיות שלנו. ממליצים בחום!\" — דנה כ., מנהלת שיווק ❤️\n\nאנחנו גאים בכל לקוח מרוצה. תודה על האמון! 🙏",
+          copy_prompt: "כשלקוח מרוצה כותב לנו ככה — זה הדלק שמניע אותנו קדימה. תודה דנה! ❤️ אם גם אתם עבדתם איתנו, נשמח שתשתפו את החוויה שלכם.",
+          creative_url: null,
+          creative_prompt: "happy customer testimonial, warm colors, quote card design, professional",
+          notes: null,
+        },
+        {
+          tenant_id: tenantId,
+          topic: "שאלה לקהל — סקר",
+          scheduled_date: base + "14",
+          platform: "instagram",
+          status: "draft",
+          copy_text: "שאלה לכם: מה הכלי הדיגיטלי שהכי עוזר לכם בעבודה? 🤔\nA. ChatGPT\nB. Notion\nC. Canva\nD. אחר (כתבו בתגובות!)\nהצביעו בסטורי! 👆",
+          copy_prompt: "אנחנו תמיד רוצים ללמוד מכם — אז הפעם אנחנו שואלים: איזה כלי דיגיטלי לא תוכלו לעבוד בלעדיו? שתפו אותנו! 💬",
+          creative_url: null,
+          creative_prompt: "poll question graphic, digital tools icons, clean modern design, engagement post",
+          notes: JSON.stringify([{ id: "4", text: "לפרסם גם בסטורי עם סקר", color: "green" }]),
+        },
+        {
+          tenant_id: tenantId,
+          topic: "תוכן חינוכי — מדריך",
+          scheduled_date: base + "15",
+          platform: "linkedin",
+          status: "in_review",
+          copy_text: "מדריך מהיר: איך לכתוב פוסט שמייצר מעורבות גבוהה?\n✅ פתחו עם שאלה או עובדה מפתיעה\n✅ השתמשו בפסקאות קצרות\n✅ הוסיפו CTA ברור בסוף\n✅ פרסמו בשעות הפעילות של הקהל\n\nשמרו את הפוסט לשימוש עתידי! 🔖",
+          copy_prompt: "הסוד לפוסטים שמקבלים אלפי לייקים הוא לא מזל — זה מתכון ברור שניתן ללמוד. הנה 4 כללים שאנחנו מיישמים בכל פוסט שאנחנו כותבים.",
+          creative_url: null,
+          creative_prompt: "educational content, step by step guide, clean infographic, social media tips",
+          notes: null,
+        },
+        {
+          tenant_id: tenantId,
+          topic: "פרסום מוצר — הכרזה",
+          scheduled_date: base + "16",
+          platform: "instagram",
+          status: "draft",
+          copy_text: "🎉 אנחנו נרגשים להכריז על המוצר החדש שלנו! אחרי חודשים של עבודה, הוא כאן. לחצו על הלינק בביו לגלות את כל הפרטים ולהזמין ראשונים.",
+          copy_prompt: "זה הרגע שחיכינו לו! 🚀 המוצר שעבדנו עליו בשקט כל כך הרבה זמן — סוף סוף מוכן. ואתם הראשונים לשמוע. לחצו ותגלו.",
+          creative_url: null,
+          creative_prompt: "product launch announcement, exciting reveal, modern design, celebration",
+          notes: JSON.stringify([{ id: "5", text: "לוודא שדף הנחיתה מוכן לפני הפרסום", color: "yellow" }]),
+        },
+        {
+          tenant_id: tenantId,
+          topic: "תוכן בידורי — מם",
+          scheduled_date: base + "17",
+          platform: "facebook",
+          status: "draft",
+          copy_text: "כשאתה מסביר ללקוח שהתקציב לא מספיק לכל מה שהוא רוצה 😅\n\nמי מזדהה? תייגו קולגה! 👇 #שיווק #חיי_שיווקן",
+          copy_prompt: "אנחנו כולנו היינו שם... אותו רגע שבו אתה מנסה להסביר מציאות תקציבית בנימוס 😂 מי מזדהה?",
+          creative_url: null,
+          creative_prompt: "funny marketing meme, relatable office humor, clean design",
+          notes: null,
+        },
+        {
+          tenant_id: tenantId,
+          topic: "שיתוף פעולה — קולאב",
+          scheduled_date: base + "21",
+          platform: "instagram",
+          status: "draft",
+          copy_text: "שמחים לבשר על שיתוף פעולה מיוחד עם @partner_brand! 🤝 ביחד נביא לכם תוכן, מוצרים ומבצעים שלא ראיתם עד היום. עקבו אחרינו לפרטים נוספים!",
+          copy_prompt: "כששני מותגים שמאמינים באותם ערכים מתחברים — קורה משהו מיוחד. אנחנו נרגשים לשתף אתכם בשיתוף הפעולה החדש שלנו. הישארו מחוברים! 🔔",
+          creative_url: null,
+          creative_prompt: "brand collaboration announcement, two logos together, partnership, modern design",
+          notes: JSON.stringify([{ id: "6", text: "לתאם עם השותף על תיוג הדדי", color: "blue" }]),
+        },
+        {
+          tenant_id: tenantId,
+          topic: "סיכום חודשי — אפריל",
+          scheduled_date: base + "28",
+          platform: "linkedin",
+          status: "draft",
+          copy_text: "אפריל 2026 בסיכום:\n📊 X% גידול בתנועה אורגנית\n💬 X% עלייה במעורבות\n🎯 השקנו X מוצרים חדשים\n\nתודה לכל מי שהיה איתנו בדרך! מה הייתה ההישג הגדול שלכם החודש? 👇",
+          copy_prompt: "חודש אפריל היה מלא הישגים עבורנו — ואנחנו רוצים לחלוק אותם איתכם. הנה המספרים שמספרים את הסיפור. מה הייתה ההצלחה הכי גדולה שלכם החודש?",
+          creative_url: null,
+          creative_prompt: "monthly recap infographic, statistics, achievements, professional design",
+          notes: null,
+        },
+      ];
+      const { error } = await (supabase as any).from("social_gantt_posts").insert(demos);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["social-gantt-posts"] });
+      toast.success("12 פוסטי דמו נטענו בהצלחה! 🎉");
+    },
+    onError: (err: any) => toast.error("שגיאה בטעינת הדמו: " + err.message),
+  });
+
   // ─── Scheduler data (for stats) ───────────────────────────────
   const { data: schedulerPosts = [] } = useSocialMediaPosts();
 
@@ -240,6 +401,8 @@ export default function SocialDashboard() {
                 filterStatus={filterStatus}
                 onFilterStatus={setFilterStatus}
                 totalPosts={ganttPosts.length}
+                onLoadDemo={() => seedDemoPosts.mutate()}
+                isLoadingDemo={seedDemoPosts.isPending}
               />
               <div className="flex-1 flex overflow-hidden min-h-0">
                 <SocialGanttVisualView

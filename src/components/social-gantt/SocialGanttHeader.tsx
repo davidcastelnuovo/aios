@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Calendar, Bot } from "lucide-react";
+import { Plus, Calendar, Bot, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
@@ -12,6 +12,8 @@ interface SocialGanttHeaderProps {
   filterStatus: string;
   onFilterStatus: (value: string) => void;
   totalPosts: number;
+  onLoadDemo?: () => void;
+  isLoadingDemo?: boolean;
 }
 
 const platforms = [
@@ -39,6 +41,8 @@ export function SocialGanttHeader({
   filterStatus,
   onFilterStatus,
   totalPosts,
+  onLoadDemo,
+  isLoadingDemo,
 }: SocialGanttHeaderProps) {
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
@@ -86,6 +90,13 @@ export function SocialGanttHeader({
             ))}
           </SelectContent>
         </Select>
+
+        {onLoadDemo && totalPosts === 0 && (
+          <Button variant="outline" onClick={onLoadDemo} disabled={isLoadingDemo}>
+            <Sparkles className="h-4 w-4 me-2" />
+            {isLoadingDemo ? "טוען..." : "טען דמו"}
+          </Button>
+        )}
 
         <Button onClick={onNewPost}>
           <Plus className="h-4 w-4 me-2" />
