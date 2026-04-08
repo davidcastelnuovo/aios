@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 import { 
   CheckCircle2, 
   Circle, 
@@ -21,7 +23,11 @@ import {
   Pencil,
   Trash2,
   X,
-  Check
+  Check,
+  Phone,
+  Mail,
+  Video,
+  AlertTriangle
 } from "lucide-react";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
@@ -38,6 +44,26 @@ interface ClientUpdatesTabProps {
 
 type DateFilter = "week" | "month" | "all";
 
+// ── CRM communication status config ──────────────────────────────────────────
+const COMM_STATUS_OPTIONS = [
+  { value: "normal",    label: "תקין",   color: "text-green-700",  bg: "bg-green-50 border-green-200" },
+  { value: "sensitive", label: "רגיש",   color: "text-yellow-700", bg: "bg-yellow-50 border-yellow-200" },
+  { value: "complaint", label: "תלונה",  color: "text-red-700",   bg: "bg-red-50 border-red-200" },
+];
+const INTERACTION_TYPES = [
+  { value: "call",     label: "שיחה",    icon: Phone },
+  { value: "email",    label: "מייל",    icon: Mail },
+  { value: "meeting",  label: "פגישה",   icon: Video },
+  { value: "whatsapp", label: "וואטסאפ", icon: MessageSquare },
+  { value: "other",    label: "אחר",     icon: AlertTriangle },
+];
+// Sync communication_status → mood_status on clients table
+const COMM_TO_MOOD: Record<string, string> = {
+  normal:    "happy",
+  sensitive: "wavering",
+  complaint: "churn_risk",
+};
+
 export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps) {
   const [dateFilter, setDateFilter] = useState<DateFilter>("month");
   const [editingTask, setEditingTask] = useState<any>(null);
@@ -45,6 +71,62 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
   const { user } = useCurrentUser();
+
+  // ── CRM: communication log state ──────────────────────────────────────────
+  const [commStatus, setCommStatus] = useState<string>("normal");
+  const [commInteraction, setCommInteraction] = useState<string>("call");
+  const [commNote, setCommNote] = useState("");
+
+  // Fetch latest communication log for this client
+  const { data: latestComm } = useQuery({
+    queryKey: ["comm-log-latest", clientId],
+    queryFn: async () => {
+      try {
+        const { data, error } = await supabase
+          .from("communication_logs")
+          .select("status, interaction_type, notes, created_at")
+          .eq("client_id", clientId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (error) return null;
+        return data;
+      } catch { return null; }
+    },
+    enabled: !!clientId,
+  });
+
+  // Save communication log mutation
+  const saveCommMutation = useMutation({
+    mutationFn: async () => {
+      if (!tenantId || !user?.id) throw new Error("Missing tenant or user");
+      if (!commNote.trim()) throw new Error("הערה חובה");
+      // Insert into communication_logs
+      const { error: logError } = await supabase
+        .from("communication_logs")
+        .insert({
+          client_id: clientId,
+          tenant_id: tenantId,
+          status: commStatus,
+          interaction_type: commInteraction,
+          notes: commNote.trim(),
+          created_by: user.id,
+        });
+      if (logError) throw logError;
+      // Sync mood_status on clients table
+      const newMood = COMM_TO_MOOD[commStatus] ?? "happy";
+      await supabase.from("clients").update({ mood_status: newMood }).eq("id", clientId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["comm-log-latest", clientId] });
+      queryClient.invalidateQueries({ queryKey: ["communication-logs-latest"] });
+      queryClient.invalidateQueries({ queryKey: ["comm-logs-agency"] });
+      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      setCommNote("");
+      toast.success("מצב תקשורת עודכן בהצלחה");
+    },
+    onError: (err: any) => toast.error(err?.message || "שגיאה בשמירת עדכון תקשורת"),
+  });
 
   // Fetch tasks
   const { data: tasks, isLoading: tasksLoading } = useQuery({
@@ -285,6 +367,83 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
 
   return (
     <div className="space-y-4 overflow-x-hidden w-full" dir="rtl">
+
+      {/* ── CRM: Communication Status Section ─────────────────────────── */}
+      <Card className="border-2 border-dashed border-muted-foreground/20">
+        <CardContent className="p-3 sm:p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <MessageSquare className="h-4 w-4 text-primary" />
+            <h3 className="font-semibold text-sm">עדכון מצב תקשורת</h3>
+            {latestComm && (
+              <span className="text-xs text-muted-foreground mr-auto">
+                עדכון אחרון: {format(new Date(latestComm.created_at), "d/M/yy", { locale: he })}
+                {" — "}
+                {COMM_STATUS_OPTIONS.find(o => o.value === latestComm.status)?.label ?? latestComm.status}
+              </span>
+            )}
+          </div>
+
+          {/* Status + Interaction type row */}
+          <div className="flex gap-2 flex-wrap">
+            <div className="flex-1 min-w-[120px]">
+              <Label className="text-xs text-muted-foreground mb-1 block">מצב תקשורת</Label>
+              <Select value={commStatus} onValueChange={setCommStatus}>
+                <SelectTrigger className="h-8 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {COMM_STATUS_OPTIONS.map(opt => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      <span className={opt.color}>{opt.label}</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex-1 min-w-[120px]">
+              <Label className="text-xs text-muted-foreground mb-1 block">סוג אינטראקציה</Label>
+              <Select value={commInteraction} onValueChange={setCommInteraction}>
+                <SelectTrigger className="h-8 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {INTERACTION_TYPES.map(opt => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Note (required) */}
+          <div>
+            <Label className="text-xs text-muted-foreground mb-1 block">הערה (חובה)</Label>
+            <div className="flex gap-2">
+              <Textarea
+                placeholder="מה סוכם השיחה / פגישה..."
+                value={commNote}
+                onChange={(e) => setCommNote(e.target.value)}
+                className="min-h-[50px] resize-none flex-1 text-sm"
+              />
+              <Button
+                size="sm"
+                onClick={() => saveCommMutation.mutate()}
+                disabled={!commNote.trim() || saveCommMutation.isPending}
+                className="self-end shrink-0"
+              >
+                {saveCommMutation.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Check className="h-3.5 w-3.5" />
+                )}
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Separator />
+
       {/* Add Update Form */}
       <Card>
         <CardContent className="p-3 sm:p-4">

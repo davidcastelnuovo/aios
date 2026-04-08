@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -64,6 +65,10 @@ export default function Clients() {
   const { userAgencyIds } = useUserAgencies();
   const { canViewFinance } = useUserPermissions();
   const { campaignerId, isCampaigner, isTeamManager, isOwner, isSuperAdmin } = useUserRole();
+  // Deep-link support: ?clientId=xxx&tab=updates (from DMMDashboard navigation)
+  const [searchParams] = useSearchParams();
+  const deepLinkClientId = searchParams.get("clientId") ?? undefined;
+  const deepLinkTab = (searchParams.get("tab") as "updates" | "details" | undefined) ?? undefined;
   const [viewMode, setViewMode] = useState<"grid" | "table" | "chat">("chat");
   const [editingClient, setEditingClient] = useState<any>(null);
   const [hideInactive, setHideInactive] = useState(true);
@@ -702,6 +707,8 @@ export default function Clients() {
           agencies={agencies}
           canViewFinance={canViewFinance()}
           getClientFinancialData={getClientFinancialData}
+          initialClientId={deepLinkClientId}
+          initialTab={deepLinkTab}
         />
       ) : viewMode === "grid" ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

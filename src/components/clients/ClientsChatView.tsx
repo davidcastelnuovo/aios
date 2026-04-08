@@ -24,6 +24,7 @@ import { FolderLinksField } from "@/components/forms/FolderLinksField";
 import { AttachmentsField } from "@/components/forms/AttachmentsField";
 import { useFolderLinksAndAttachments } from "@/hooks/useFolderLinksAndAttachments";
 import { ClientMeetingTab } from "@/components/clients/ClientMeetingTab";
+import { CRMSettingsSection } from "@/components/clients/CRMSettingsSection";
 import AddTaskForm from "@/components/forms/AddTaskForm";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -37,6 +38,8 @@ interface ClientsChatViewProps {
   agencies?: any[];
   canViewFinance?: boolean;
   getClientFinancialData?: (clientId: string) => any;
+  initialClientId?: string;  // deep-link: open this client on mount
+  initialTab?: "updates" | "details"; // deep-link: open this tab on mount
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -58,11 +61,15 @@ export function ClientsChatView({
   agencies,
   canViewFinance,
   getClientFinancialData,
+  initialClientId,
+  initialTab,
 }: ClientsChatViewProps) {
-  const [selectedClientId, setSelectedClientId] = useState<string | null>(clients[0]?.id || null);
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(
+    initialClientId ?? clients[0]?.id ?? null
+  );
   const [listSearch, setListSearch] = useState("");
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("details");
+  const [activeTab, setActiveTab] = useState(initialTab ?? "details");
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [selectedClientIds, setSelectedClientIds] = useState<Set<string>>(new Set());
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
@@ -973,6 +980,10 @@ export function ClientsChatView({
                     <h3 className="font-semibold text-sm mb-2">הערות</h3>
                     <EditableField label="" value={selectedClient.notes} field="notes" clientId={selectedClient.id} type="textarea" />
                   </div>
+
+                  {/* ── CRM Settings ──────────────────────────────────────────── */}
+                  <CRMSettingsSection client={selectedClient} onUpdate={() => queryClient.invalidateQueries({ queryKey: ["clients"] })} />
+
                 </TabsContent>
 
                 <TabsContent value="business" className="mt-0 space-y-6">

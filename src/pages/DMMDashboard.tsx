@@ -11,9 +11,11 @@
  */
 
 import { useState, useMemo } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useTenantPath } from "@/hooks/useTenantPath";
 import { differenceInDays, format } from "date-fns";
 import { he } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
@@ -36,9 +38,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { MessageSquare, Search, RefreshCw, TrendingUp, TrendingDown, Minus } from "lucide-react";
-import { CommunicationUpdateModal } from "@/components/clients/CommunicationUpdateModal";
-import { SeoUpdateModal } from "@/components/clients/SeoUpdateModal";
+import { ExternalLink, Search, RefreshCw, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import {
   calculateHealthScore,
   FLAG_LABELS,
@@ -116,14 +116,18 @@ function ScoreBadge({ score, status }: { score: number; status: OverallStatus })
 
 export default function DMMDashboard() {
   const { tenantId } = useCurrentTenant();
-  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const { buildPath } = useTenantPath();
 
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | OverallStatus>("all");
   const [filterTier, setFilterTier] = useState<"all" | "A" | "B" | "C">("all");
   const [filterService, setFilterService] = useState<"all" | "performance" | "seo" | "social">("all");
-  const [commModal, setCommModal] = useState<{ clientId: string; clientName: string } | null>(null);
-  const [seoModal, setSeoModal] = useState<{ clientId: string; clientName: string } | null>(null);
+
+  // Navigate to the client module with the selected client pre-opened
+  function openClientCard(clientId: string, tab: "updates" | "details" = "updates") {
+    navigate(buildPath(`/clients?clientId=${clientId}&tab=${tab}`));
+  }
 
   // ── Fetch clients (base: always-safe fields) ──────────────────────────────
   const { data: rawClients = [], isLoading: clientsLoading, refetch } = useQuery({
@@ -516,47 +520,24 @@ export default function DMMDashboard() {
                       </div>
                     </TableCell>
 
-                    {/* Actions */}
+                    {/* Actions — navigate to client card */}
                     <TableCell>
-                      <div className="flex gap-1">
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-8 px-2"
-                                onClick={() =>
-                                  setCommModal({ clientId: client.id, clientName: client.name })
-                                }
-                              >
-                                <MessageSquare className="h-3.5 w-3.5" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>עדכון תקשורת</TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-
-                        {client.services.includes("seo") && (
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-8 px-2"
-                                  onClick={() =>
-                                    setSeoModal({ clientId: client.id, clientName: client.name })
-                                  }
-                                >
-                                  🔍
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>עדכון SEO</TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        )}
-                      </div>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 px-2 gap-1"
+                              onClick={() => openClientCard(client.id, "updates")}
+                            >
+                              <ExternalLink className="h-3.5 w-3.5" />
+                              <span className="text-xs">פתח כרטיס</span>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>פתח כרטיס לקוח במודול לקוחות</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     </TableCell>
                   </TableRow>
                 ))
@@ -566,23 +547,6 @@ export default function DMMDashboard() {
         </CardContent>
       </Card>
 
-      {/* Modals */}
-      {commModal && (
-        <CommunicationUpdateModal
-          clientId={commModal.clientId}
-          clientName={commModal.clientName}
-          open={!!commModal}
-          onOpenChange={(open) => !open && setCommModal(null)}
-        />
-      )}
-      {seoModal && (
-        <SeoUpdateModal
-          clientId={seoModal.clientId}
-          clientName={seoModal.clientName}
-          open={!!seoModal}
-          onOpenChange={(open) => !open && setSeoModal(null)}
-        />
-      )}
     </div>
   );
 }
