@@ -40,7 +40,7 @@ export function ClientsMultiSelectToolbar({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const bulkUpdateStatusMutation = useMutation({
-    mutationFn: async (status: string) => {
+    mutationFn: async (status: "active" | "onboarding" | "paused" | "ended") => {
       const { error } = await supabase
         .from("clients")
         .update({ status })
