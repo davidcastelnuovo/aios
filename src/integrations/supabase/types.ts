@@ -140,6 +140,7 @@ export type Database = {
           parallel_subtasks: Json | null
           priority: number
           result: Json | null
+          run_count: number | null
           schedule_type: string | null
           scheduled_at: string | null
           started_at: string | null
@@ -164,6 +165,7 @@ export type Database = {
           parallel_subtasks?: Json | null
           priority?: number
           result?: Json | null
+          run_count?: number | null
           schedule_type?: string | null
           scheduled_at?: string | null
           started_at?: string | null
@@ -188,6 +190,7 @@ export type Database = {
           parallel_subtasks?: Json | null
           priority?: number
           result?: Json | null
+          run_count?: number | null
           schedule_type?: string | null
           scheduled_at?: string | null
           started_at?: string | null

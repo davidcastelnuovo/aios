@@ -315,7 +315,8 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return { count: data?.length || 0, campaigns: data || [], period: `${daysBack} days` }
     }
     case 'create_social_post': {
-      const { data, error } = await supabase.from('social_media_posts').insert({
+      // Insert into both social_media_posts (for publishing) and social_gantt_posts (for planning view)
+      const postData = {
         tenant_id: tenantId,
         title: args.title,
         content: args.content,
@@ -323,8 +324,20 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         media_urls: args.media_urls || [],
         status: 'draft',
         created_by: userId !== 'system' ? userId : null,
-      }).select('id, title, content, post_type, media_urls, status').single()
+      }
+      const { data, error } = await supabase.from('social_media_posts').insert(postData).select('id, title, content, post_type, media_urls, status').single()
       if (error) throw error
+      // Also create in gantt for visibility in the content calendar
+      const today = new Date().toISOString().split('T')[0]
+      await supabase.from('social_gantt_posts').insert({
+        tenant_id: tenantId,
+        topic: args.title,
+        copy_text: args.content,
+        platform: 'facebook',
+        status: 'draft',
+        scheduled_date: today,
+        creative_url: args.media_urls?.[0] || null,
+      }).catch(() => {}) // non-critical
       return { success: true, post_id: data.id, title: data.title, content: data.content, media_urls: data.media_urls, status: 'draft', message: 'הפוסט נוצר בהצלחה כטיוטה במודול סושיאל מדיה' }
     }
     case 'generate_ad_image': {
@@ -785,6 +798,7 @@ Deno.serve(async (req) => {
 
   try {
     const { agent_id, command_text, temperature, automation_id, user_name, lead_data, tenant_id, user_id, task_skills, task_mode, conversation_history } = await req.json()
+    console.log(`[AGENT] Starting run: agent=${agent_id}, command="${command_text?.substring(0, 80)}"`)
 
     if (!agent_id || !command_text) throw new Error('Missing agent_id or command_text')
     if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured')
@@ -1050,6 +1064,7 @@ Deno.serve(async (req) => {
       if (safeTemp !== undefined) payload.temperature = safeTemp
       if (toolsForAPI.length > 0) payload.tools = toolsForAPI
 
+      console.log(`[AGENT] Round ${round + 1}/${maxRounds}, model=${model}`)
       const res = await fetch(AI_GATEWAY_URL, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
@@ -1058,6 +1073,7 @@ Deno.serve(async (req) => {
 
       if (!res.ok) {
         const err = await res.text()
+        console.error(`[AGENT] AI error: ${res.status}`, err.substring(0, 200))
         if (res.status === 429) throw new Error('מגבלת קצב. נסה שוב.')
         throw new Error(`AI error: ${res.status} ${err}`)
       }
@@ -1073,6 +1089,7 @@ Deno.serve(async (req) => {
       // No tool calls → done
       if (!msg.tool_calls || msg.tool_calls.length === 0) {
         finalOutput = msg.content || ''
+        console.log(`[AGENT] Done after ${round + 1} rounds, output length=${finalOutput.length}`)
         break
       }
 
@@ -1083,12 +1100,14 @@ Deno.serve(async (req) => {
         let toolArgs: Record<string, any> = {}
         try { toolArgs = JSON.parse(tc.function.arguments || '{}') } catch { /* ignore */ }
 
-
+        console.log(`[AGENT] Tool call: ${toolName}`)
         let result: any
         try {
           result = await executeTool(toolName, toolArgs, supabase, resolvedTenantId, resolvedUserId, callerCampaignerId)
+          console.log(`[AGENT] Tool ${toolName} OK`)
         } catch (e: any) {
           result = { error: e.message }
+          console.error(`[AGENT] Tool ${toolName} ERROR: ${e.message}`)
         }
 
         toolLog.push({ tool: toolName, args: toolArgs, result })
