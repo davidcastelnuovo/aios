@@ -1864,6 +1864,7 @@ export type Database = {
           active_chat_provider:
             | Database["public"]["Enums"]["chat_provider"]
             | null
+          active_flags: Json | null
           agency_id: string
           attachments: Json
           contact_name: string | null
@@ -1872,6 +1873,7 @@ export type Database = {
           end_date: string | null
           folder_link: string | null
           folder_links: Json
+          health_score: number | null
           id: string
           industry: string | null
           is_seo_client: boolean | null
@@ -1880,11 +1882,14 @@ export type Database = {
           mood_status: Database["public"]["Enums"]["client_mood_status"] | null
           name: string
           notes: string | null
+          overall_status: string | null
           phone: string | null
           retainer: number | null
+          services: string[] | null
           start_date: string | null
           status: Database["public"]["Enums"]["client_status"]
           tenant_id: string | null
+          tier: Database["public"]["Enums"]["client_tier"] | null
           updated_at: string
           website: string | null
           whatsapp_avatar_url: string | null
@@ -1894,6 +1899,7 @@ export type Database = {
           active_chat_provider?:
             | Database["public"]["Enums"]["chat_provider"]
             | null
+          active_flags?: Json | null
           agency_id: string
           attachments?: Json
           contact_name?: string | null
@@ -1902,6 +1908,7 @@ export type Database = {
           end_date?: string | null
           folder_link?: string | null
           folder_links?: Json
+          health_score?: number | null
           id?: string
           industry?: string | null
           is_seo_client?: boolean | null
@@ -1910,11 +1917,14 @@ export type Database = {
           mood_status?: Database["public"]["Enums"]["client_mood_status"] | null
           name: string
           notes?: string | null
+          overall_status?: string | null
           phone?: string | null
           retainer?: number | null
+          services?: string[] | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["client_status"]
           tenant_id?: string | null
+          tier?: Database["public"]["Enums"]["client_tier"] | null
           updated_at?: string
           website?: string | null
           whatsapp_avatar_url?: string | null
@@ -1924,6 +1934,7 @@ export type Database = {
           active_chat_provider?:
             | Database["public"]["Enums"]["chat_provider"]
             | null
+          active_flags?: Json | null
           agency_id?: string
           attachments?: Json
           contact_name?: string | null
@@ -1932,6 +1943,7 @@ export type Database = {
           end_date?: string | null
           folder_link?: string | null
           folder_links?: Json
+          health_score?: number | null
           id?: string
           industry?: string | null
           is_seo_client?: boolean | null
@@ -1940,11 +1952,14 @@ export type Database = {
           mood_status?: Database["public"]["Enums"]["client_mood_status"] | null
           name?: string
           notes?: string | null
+          overall_status?: string | null
           phone?: string | null
           retainer?: number | null
+          services?: string[] | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["client_status"]
           tenant_id?: string | null
+          tier?: Database["public"]["Enums"]["client_tier"] | null
           updated_at?: string
           website?: string | null
           whatsapp_avatar_url?: string | null
@@ -4613,6 +4628,54 @@ export type Database = {
             columns: ["sales_person_id"]
             isOneToOne: false
             referencedRelation: "sales_people"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      seo_monthly_updates: {
+        Row: {
+          client_id: string
+          created_at: string
+          id: string
+          month: string
+          notes: string | null
+          status: Database["public"]["Enums"]["seo_monthly_status"]
+          tenant_id: string
+          updated_by: string | null
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          id?: string
+          month: string
+          notes?: string | null
+          status: Database["public"]["Enums"]["seo_monthly_status"]
+          tenant_id: string
+          updated_by?: string | null
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          id?: string
+          month?: string
+          notes?: string | null
+          status?: Database["public"]["Enums"]["seo_monthly_status"]
+          tenant_id?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "seo_monthly_updates_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "seo_monthly_updates_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -7638,7 +7701,16 @@ export type Database = {
         | "churn_risk"
         | "not_progressing"
       client_status: "active" | "paused" | "ended" | "onboarding"
+      client_tier: "A" | "B" | "C"
+      communication_status: "normal" | "sensitive" | "complaint"
       finance_type: "income" | "expense"
+      interaction_type:
+        | "client_initiated"
+        | "campaigner_initiated"
+        | "call"
+        | "whatsapp"
+        | "meeting"
+        | "other"
       job_priority: "critical" | "high" | "medium" | "low"
       job_status: "queued" | "running" | "done" | "failed" | "dead_letter"
       job_type: "user_action" | "workflow" | "integration" | "heavy_job"
@@ -7677,6 +7749,7 @@ export type Database = {
       org_type: "root" | "organization" | "sub_organization"
       payment_method: "cash" | "card" | "wire" | "check"
       priority_level: "high" | "medium" | "low"
+      seo_monthly_status: "up" | "stable" | "down"
       supplier_type:
         | "campaigner"
         | "media"
@@ -7865,7 +7938,17 @@ export const Constants = {
         "not_progressing",
       ],
       client_status: ["active", "paused", "ended", "onboarding"],
+      client_tier: ["A", "B", "C"],
+      communication_status: ["normal", "sensitive", "complaint"],
       finance_type: ["income", "expense"],
+      interaction_type: [
+        "client_initiated",
+        "campaigner_initiated",
+        "call",
+        "whatsapp",
+        "meeting",
+        "other",
+      ],
       job_priority: ["critical", "high", "medium", "low"],
       job_status: ["queued", "running", "done", "failed", "dead_letter"],
       job_type: ["user_action", "workflow", "integration", "heavy_job"],
@@ -7908,6 +7991,7 @@ export const Constants = {
       org_type: ["root", "organization", "sub_organization"],
       payment_method: ["cash", "card", "wire", "check"],
       priority_level: ["high", "medium", "low"],
+      seo_monthly_status: ["up", "stable", "down"],
       supplier_type: [
         "campaigner",
         "media",
