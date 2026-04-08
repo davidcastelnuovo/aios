@@ -1,22 +1,18 @@
 /**
- * SocialGanttVisualView — Full-month calendar Gantt
+ * SocialGanttVisualView — Full-month calendar grid (whiteboard style)
  *
- * Always shows every day of the current month.
- * - Days with posts: show post rows with platform icon + status
- * - Empty days: show a subtle "+ פוסט" click target
- * - Clicking any day (empty or post) opens the post panel / new-post flow
- * - Month navigation (prev / next)
+ * Shows a 7-column grid for every day of the month.
+ * Each cell shows mini-cards for scheduled posts.
+ * Clicking a day calls onSelectDay to open a dialog.
  */
 
 import { useState, useMemo } from "react";
 import {
   format, startOfMonth, endOfMonth, eachDayOfInterval,
-  getDay, isToday, parseISO, isSameDay, addMonths, subMonths,
+  getDay, isToday, addMonths, subMonths,
 } from "date-fns";
 import { he } from "date-fns/locale";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import {
   Instagram, Facebook, Linkedin, Twitter,
@@ -24,18 +20,9 @@ import {
 } from "lucide-react";
 import type { SocialPost } from "@/pages/SocialDashboard";
 
-// ─── Props ─────────────────────────────────────────────────────────────────
-export interface SocialGanttVisualViewProps {
-  posts: SocialPost[];
-  selectedPostId: string | null;
-  onSelectPost: (id: string) => void;
-  onSelectDay: (date: Date) => void;   // click on empty day → open new-post panel
-  isLoading: boolean;
-}
-
 // ─── Platform helpers ──────────────────────────────────────────────────────
 const TikTokIcon = () => (
-  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor">
+  <svg viewBox="0 0 24 24" className="h-3 w-3" fill="currentColor">
     <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.88-2.88 2.89 2.89 0 0 1 2.88-2.88c.28 0 .56.04.82.12v-3.5a6.37 6.37 0 0 0-.82-.05A6.34 6.34 0 0 0 3.15 15.3 6.34 6.34 0 0 0 9.49 21.64a6.34 6.34 0 0 0 6.34-6.34V8.73a8.19 8.19 0 0 0 4.76 1.52V6.8a4.84 4.84 0 0 1-1-.11z" />
   </svg>
 );
@@ -56,16 +43,25 @@ const platformColors: Record<string, string> = {
   twitter: "bg-sky-500",
 };
 
-const statusConfig: Record<string, { label: string; className: string }> = {
-  draft:     { label: "טיוטה",  className: "bg-muted text-muted-foreground" },
-  in_review: { label: "בבדיקה", className: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400" },
-  approved:  { label: "מאושר",  className: "bg-primary/15 text-primary" },
-  published: { label: "פורסם",  className: "bg-green-500/15 text-green-700 dark:text-green-400" },
-  rejected:  { label: "נדחה",   className: "bg-destructive/15 text-destructive" },
+const statusBarColors: Record<string, string> = {
+  draft: "bg-muted-foreground/40",
+  in_review: "bg-yellow-500",
+  approved: "bg-primary",
+  published: "bg-green-500",
+  rejected: "bg-destructive",
 };
 
 // Hebrew day names (Sun→Sat)
 const HE_DAYS = ["א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳"];
+
+// ─── Props ─────────────────────────────────────────────────────────────────
+export interface SocialGanttVisualViewProps {
+  posts: SocialPost[];
+  selectedPostId: string | null;
+  onSelectPost: (id: string) => void;
+  onSelectDay: (date: Date) => void;
+  isLoading: boolean;
+}
 
 // ─── Main export ───────────────────────────────────────────────────────────
 export function SocialGanttVisualView({
@@ -81,6 +77,9 @@ export function SocialGanttVisualView({
     () => eachDayOfInterval({ start: currentMonth, end: endOfMonth(currentMonth) }),
     [currentMonth],
   );
+
+  // Build grid with leading empty cells for alignment
+  const firstDayOfWeek = getDay(currentMonth); // 0=Sun
 
   // Index posts by date string for O(1) lookup
   const postsByDate = useMemo(() => {
@@ -101,9 +100,9 @@ export function SocialGanttVisualView({
   if (isLoading) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <div className="space-y-3 w-full max-w-lg px-8">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="h-10 rounded-lg bg-muted animate-pulse" />
+        <div className="grid grid-cols-7 gap-2 w-full max-w-4xl px-8">
+          {Array.from({ length: 35 }).map((_, i) => (
+            <div key={i} className="h-24 rounded-lg bg-muted animate-pulse" />
           ))}
         </div>
       </div>
@@ -111,9 +110,9 @@ export function SocialGanttVisualView({
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden border-s" dir="rtl">
-      {/* ── Sub-header ──────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-4 py-2 border-b bg-muted/20 shrink-0 gap-3">
+    <div className="flex-1 flex flex-col overflow-hidden" dir="rtl">
+      {/* ── Month navigation header ─────────────────────────────── */}
+      <div className="flex items-center justify-between px-4 py-2.5 border-b bg-muted/20 shrink-0 gap-3">
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
@@ -137,145 +136,114 @@ export function SocialGanttVisualView({
           <CalendarRange className="h-3.5 w-3.5" />
           <span>{totalThisMonth} פרסומים החודש</span>
         </div>
-        <div className="text-xs text-muted-foreground hidden sm:block">
-          לחץ על יום ריק להוספת פוסט
-        </div>
       </div>
 
-      {/* ── Calendar table ──────────────────────────────────────── */}
-      <ScrollArea className="flex-1">
-        <table className="w-full border-collapse text-sm min-w-[700px]">
-          <thead className="sticky top-0 z-10 bg-background border-b">
-            <tr>
-              <th className="text-right px-3 py-2 font-medium text-muted-foreground w-8 min-w-[36px]">יום</th>
-              <th className="text-right px-2 py-2 font-medium text-muted-foreground w-8 min-w-[28px]"></th>
-              <th className="text-right px-3 py-2 font-medium text-muted-foreground">פרסומים מתוכננים</th>
-              <th className="text-right px-3 py-2 font-medium text-muted-foreground w-[100px]">פלטפורמה</th>
-              <th className="text-right px-3 py-2 font-medium text-muted-foreground w-[80px]">סטטוס</th>
-            </tr>
-          </thead>
-          <tbody>
-            {days.map((day) => {
-              const dateKey = format(day, "yyyy-MM-dd");
-              const dayPosts = postsByDate.get(dateKey) || [];
-              const isWeekend = getDay(day) === 6 || getDay(day) === 0;
-              const isTodayDay = isToday(day);
-              const dayName = HE_DAYS[getDay(day)];
+      {/* ── Day names header ────────────────────────────────────── */}
+      <div className="grid grid-cols-7 border-b bg-muted/10 shrink-0">
+        {HE_DAYS.map((name) => (
+          <div key={name} className="text-center py-1.5 text-xs font-medium text-muted-foreground border-e last:border-e-0">
+            {name}
+          </div>
+        ))}
+      </div>
 
-              if (dayPosts.length === 0) {
-                // ── Empty day row ──
-                return (
-                  <tr
-                    key={dateKey}
-                    onClick={() => onSelectDay(day)}
-                    className={cn(
-                      "border-b border-border/30 cursor-pointer group transition-colors",
-                      isWeekend ? "bg-muted/20 hover:bg-muted/40" : "hover:bg-muted/30",
-                      isTodayDay && "bg-primary/5 hover:bg-primary/10"
-                    )}
-                  >
-                    {/* Day number */}
-                    <td className="px-3 py-2.5 text-right">
-                      <div className={cn(
-                        "inline-flex items-center justify-center w-7 h-7 rounded-full text-sm font-medium",
-                        isTodayDay
-                          ? "bg-primary text-primary-foreground"
-                          : "text-muted-foreground"
-                      )}>
-                        {format(day, "d")}
-                      </div>
-                    </td>
-                    {/* Day name */}
-                    <td className="px-2 py-2.5 text-[11px] text-muted-foreground/60">{dayName}</td>
-                    {/* Empty slot */}
-                    <td className="px-3 py-2.5" colSpan={3}>
-                      <span className="text-xs text-muted-foreground/40 group-hover:text-primary/60 transition-colors flex items-center gap-1">
-                        <Plus className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-                        <span className="opacity-0 group-hover:opacity-100 transition-opacity">הוסף פוסט</span>
-                      </span>
-                    </td>
-                  </tr>
-                );
-              }
+      {/* ── Calendar grid ───────────────────────────────────────── */}
+      <div className="flex-1 grid grid-cols-7 auto-rows-fr overflow-y-auto min-h-0">
+        {/* Leading empty cells */}
+        {Array.from({ length: firstDayOfWeek }).map((_, i) => (
+          <div key={`empty-${i}`} className="border-e border-b bg-muted/5" />
+        ))}
 
-              // ── Day with posts ── (one row per post, first row shows date)
-              return dayPosts.map((post, pi) => {
-                const PlatformIcon = platformIcons[post.platform] || Instagram;
-                const status = statusConfig[post.status] || statusConfig.draft;
-                const isSelected = selectedPostId === post.id;
+        {/* Day cells */}
+        {days.map((day) => {
+          const dateKey = format(day, "yyyy-MM-dd");
+          const dayPosts = postsByDate.get(dateKey) || [];
+          const isTodayDay = isToday(day);
+          const isWeekend = getDay(day) === 6 || getDay(day) === 0;
 
-                return (
-                  <tr
-                    key={post.id}
-                    onClick={() => onSelectPost(post.id)}
-                    className={cn(
-                      "border-b border-border/40 cursor-pointer transition-colors",
-                      isWeekend ? "bg-muted/20" : "",
-                      isTodayDay && "bg-primary/5",
-                      isSelected ? "bg-primary/10 hover:bg-primary/15" : "hover:bg-muted/50"
-                    )}
-                  >
-                    {/* Day number — only on first post of the day */}
-                    <td className="px-3 py-2.5 text-right align-top">
-                      {pi === 0 && (
-                        <div className={cn(
-                          "inline-flex items-center justify-center w-7 h-7 rounded-full text-sm font-semibold",
-                          isTodayDay
-                            ? "bg-primary text-primary-foreground"
-                            : "text-foreground"
-                        )}>
-                          {format(day, "d")}
-                        </div>
+          return (
+            <div
+              key={dateKey}
+              onClick={() => onSelectDay(day)}
+              className={cn(
+                "border-e border-b p-1.5 cursor-pointer transition-colors group flex flex-col min-h-[90px]",
+                isWeekend ? "bg-muted/15" : "bg-background",
+                isTodayDay && "bg-primary/5",
+                "hover:bg-accent/50"
+              )}
+            >
+              {/* Day number */}
+              <div className="flex items-center justify-between mb-1">
+                <span
+                  className={cn(
+                    "inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-semibold",
+                    isTodayDay
+                      ? "bg-primary text-primary-foreground"
+                      : "text-foreground"
+                  )}
+                >
+                  {format(day, "d")}
+                </span>
+                {dayPosts.length === 0 && (
+                  <Plus className="h-3.5 w-3.5 text-muted-foreground/30 opacity-0 group-hover:opacity-100 transition-opacity" />
+                )}
+              </div>
+
+              {/* Post mini-cards */}
+              <div className="flex-1 space-y-1 overflow-hidden">
+                {dayPosts.slice(0, 3).map((post) => {
+                  const PlatformIcon = platformIcons[post.platform] || Instagram;
+                  const statusColor = statusBarColors[post.status] || statusBarColors.draft;
+
+                  return (
+                    <div
+                      key={post.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectDay(day);
+                      }}
+                      className={cn(
+                        "flex items-center gap-1 px-1.5 py-1 rounded text-[11px] leading-tight transition-colors",
+                        "bg-card border border-border/50 hover:border-border",
+                        selectedPostId === post.id && "ring-1 ring-primary border-primary"
                       )}
-                    </td>
-                    {/* Day name — only on first post */}
-                    <td className="px-2 py-2.5 text-[11px] text-muted-foreground/60 align-top">
-                      {pi === 0 && dayName}
-                    </td>
-                    {/* Topic + copy preview */}
-                    <td className="px-3 py-2.5">
-                      <div className="flex items-center gap-2">
-                        {isSelected && (
-                          <div className="w-1 h-5 rounded-full bg-primary shrink-0" />
-                        )}
-                        <span className={cn(
-                          "font-medium text-sm line-clamp-1",
-                          isSelected && "text-primary"
-                        )}>
-                          {post.topic}
-                        </span>
-                      </div>
-                      {post.copy_text && (
-                        <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5 ps-3">
-                          {post.copy_text}
-                        </p>
-                      )}
-                    </td>
-                    {/* Platform */}
-                    <td className="px-3 py-2.5">
+                    >
+                      {/* Status bar */}
+                      <div className={cn("w-0.5 h-4 rounded-full shrink-0", statusColor)} />
+                      {/* Platform icon */}
                       <div className={cn(
-                        "w-6 h-6 rounded flex items-center justify-center text-white",
+                        "w-4 h-4 rounded flex items-center justify-center text-white shrink-0",
                         platformColors[post.platform]
                       )}>
-                        <PlatformIcon className="h-3.5 w-3.5" />
+                        <PlatformIcon className="h-2.5 w-2.5" />
                       </div>
-                    </td>
-                    {/* Status */}
-                    <td className="px-3 py-2.5">
-                      <span className={cn(
-                        "text-[10px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap",
-                        status.className
-                      )}>
-                        {status.label}
+                      {/* Title */}
+                      <span className="truncate text-foreground/80 font-medium">
+                        {post.topic}
                       </span>
-                    </td>
-                  </tr>
-                );
-              });
-            })}
-          </tbody>
-        </table>
-      </ScrollArea>
+                    </div>
+                  );
+                })}
+                {dayPosts.length > 3 && (
+                  <span className="text-[10px] text-muted-foreground px-1">
+                    +{dayPosts.length - 3} נוספים
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Trailing empty cells to complete the last row */}
+        {(() => {
+          const totalCells = firstDayOfWeek + days.length;
+          const remainder = totalCells % 7;
+          if (remainder === 0) return null;
+          return Array.from({ length: 7 - remainder }).map((_, i) => (
+            <div key={`trail-${i}`} className="border-e border-b bg-muted/5" />
+          ));
+        })()}
+      </div>
     </div>
   );
 }
