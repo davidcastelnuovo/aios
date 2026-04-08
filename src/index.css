@@ -163,6 +163,10 @@ html {
   .shadow-lg {
     box-shadow: var(--shadow-lg);
   }
+
+  .direction-ltr {
+    direction: ltr;
+  }
 }
 
 /* React Big Calendar mobile optimizations */

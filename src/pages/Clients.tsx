@@ -740,7 +740,7 @@ export default function Clients() {
                     <Users className="h-5 w-5 text-accent" />
                   </div>
                   <div>
-                    <CardTitle className="text-lg">{client.name}</CardTitle>
+                    <CardTitle className="text-lg truncate max-w-[200px] direction-ltr text-right">{client.name}</CardTitle>
                     {client.agencies && (
                       <p className="text-sm text-muted-foreground flex items-center gap-1">
                         <Building2 className="h-3 w-3" />
@@ -1006,7 +1006,7 @@ export default function Clients() {
                       </Button>
                     </div>
                   </TableCell>
-                  <TableCell className="font-semibold py-4">{client.name}</TableCell>
+                  <TableCell className="font-semibold py-4 truncate max-w-[200px] direction-ltr text-right">{client.name}</TableCell>
                   <TableCell className="py-4">
                     {client.agencies ? (
                       <div className="flex items-center gap-2 text-muted-foreground">
