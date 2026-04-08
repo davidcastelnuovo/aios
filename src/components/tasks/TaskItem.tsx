@@ -1,7 +1,7 @@
 import { useDraggable } from "@dnd-kit/core";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Users, GripVertical, Calendar, CalendarClock, Megaphone, Search } from "lucide-react";
+import { MessageSquare, Users, GripVertical, Calendar, CalendarClock, Megaphone, Search, Bot } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useState, useMemo } from "react";
@@ -16,6 +16,7 @@ interface TaskItemProps {
     status: string;
     client_id: string | null;
     campaigner_id?: string | null;
+    assigned_agent?: string | null;
     created_at?: string;
     due_date?: string | null;
     clients?: { name: string } | null;
@@ -225,6 +226,13 @@ export function TaskItem({ task, onToggleComplete, onClick, clientsList, campaig
             <Badge variant="outline" className="text-xs px-1.5 py-0 h-5 gap-0.5">
               <Users className="h-3 w-3" />
               {collaboratorsCount}
+            </Badge>
+          )}
+
+          {task.assigned_agent && (
+            <Badge variant="outline" className="text-xs px-1.5 py-0 h-5 gap-0.5 bg-purple-50 border-purple-200 text-purple-700 dark:bg-purple-950/30 dark:border-purple-800 dark:text-purple-300">
+              <Bot className="h-3 w-3" />
+              {task.assigned_agent}
             </Badge>
           )}
         </div>

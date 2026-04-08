@@ -69,7 +69,7 @@ export function ClientsChatView({
   );
   const [listSearch, setListSearch] = useState("");
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState(initialTab ?? "details");
+  const [activeTab, setActiveTab] = useState<string>(initialTab ?? "details");
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [selectedClientIds, setSelectedClientIds] = useState<Set<string>>(new Set());
   const [bulkActionLoading, setBulkActionLoading] = useState(false);

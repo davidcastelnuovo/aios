@@ -72,7 +72,7 @@ export function CRMSettingsSection({ client, onUpdate }: CRMSettingsSectionProps
     queryKey: ["seo-history", client.id],
     queryFn: async () => {
       try {
-        const { data, error } = await supabase
+        const { data, error } = await (supabase as any)
           .from("seo_monthly_updates")
           .select("month, status, notes, updated_at")
           .eq("client_id", client.id)
@@ -129,7 +129,7 @@ export function CRMSettingsSection({ client, onUpdate }: CRMSettingsSectionProps
   const saveSeoMutation = useMutation({
     mutationFn: async () => {
       if (!tenantId || !user?.id) throw new Error("Missing tenant or user");
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from("seo_monthly_updates")
         .upsert({
           client_id: client.id,
