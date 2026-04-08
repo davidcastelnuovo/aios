@@ -839,6 +839,8 @@ export default function AgentTasksPage() {
                               onRun={t => runTask.mutate(t)}
                               onDelete={id => deleteTask.mutate(id)}
                               onToggleEnabled={t => toggleEnabled.mutate(t)}
+                              onEdit={handleEdit}
+                              onRerun={handleRerun}
                               isRunning={runTask.isPending}
                             />
                           ))
@@ -860,6 +862,8 @@ export default function AgentTasksPage() {
                               onRun={t => runTask.mutate(t)}
                               onDelete={id => deleteTask.mutate(id)}
                               onToggleEnabled={t => toggleEnabled.mutate(t)}
+                              onEdit={handleEdit}
+                              onRerun={handleRerun}
                               isRunning={runTask.isPending}
                             />
                           ))
