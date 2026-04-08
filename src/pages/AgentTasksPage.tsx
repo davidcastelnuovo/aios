@@ -1380,6 +1380,80 @@ export default function AgentTasksPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Task Dialog */}
+      <Dialog open={!!editingTask} onOpenChange={(open) => !open && setEditingTask(null)}>
+        <DialogContent className="max-w-md" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>עריכת משימה</DialogTitle>
+          </DialogHeader>
+          {editingTask && (
+            <div className="space-y-4">
+              <div>
+                <Label>כותרת</Label>
+                <Input
+                  value={editingTask.title}
+                  onChange={e => setEditingTask({ ...editingTask, title: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>תיאור</Label>
+                <Textarea
+                  value={editingTask.description || ""}
+                  onChange={e => setEditingTask({ ...editingTask, description: e.target.value })}
+                  rows={3}
+                />
+              </div>
+              <div>
+                <Label>עדיפות (1-10)</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={editingTask.priority}
+                  onChange={e => setEditingTask({ ...editingTask, priority: Number(e.target.value) })}
+                />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => setEditingTask(null)}>ביטול</Button>
+                <Button
+                  onClick={() => updateTask.mutate({
+                    id: editingTask.id,
+                    updates: {
+                      title: editingTask.title,
+                      description: editingTask.description,
+                      priority: editingTask.priority,
+                    },
+                  })}
+                  disabled={updateTask.isPending}
+                >
+                  {updateTask.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "שמור"}
+                </Button>
+                <Button
+                  variant="default"
+                  className="gap-1"
+                  onClick={() => {
+                    updateTask.mutate({
+                      id: editingTask.id,
+                      updates: {
+                        title: editingTask.title,
+                        description: editingTask.description,
+                        priority: editingTask.priority,
+                      },
+                    }, {
+                      onSuccess: () => handleRerun(editingTask),
+                    });
+                  }}
+                  disabled={updateTask.isPending}
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  שמור והרץ שוב
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
