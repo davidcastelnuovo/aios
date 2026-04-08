@@ -1,51 +1,24 @@
 
 
-# תיקון: טעינת דמו לא עובדת — טבלה חסרה
+# למידה עצמית של כרמן — שמירת הנחיות אוטומטית
 
 ## הבעיה
-הטבלה `social_gantt_posts` לא קיימת בבסיס הנתונים. קובץ המיגרציה קיים בפרויקט אבל מעולם לא הורץ בפועל. כל הפעולות בדשבורד הסושיאל (טעינת דמו, יצירת פוסטים, עדכון) נכשלות בשקט.
+כרמן כבר יש לה כלי `save_memory` וזיכרון מתמשך, אבל היא לא מונחית לשמור באופן אוטומטי הסברים/הוראות שהמשתמש נותן לה. המשתמש צריך לבקש ממנה לזכור כל פעם מחדש.
 
 ## הפתרון
-הרצת מיגרציה ליצירת הטבלה עם כל האינדקסים ומדיניות RLS.
+שני שינויים בקובץ `supabase/functions/run-ai-agent/index.ts`:
 
-### מיגרציה
-```sql
-CREATE TABLE IF NOT EXISTS public.social_gantt_posts (
-  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-  tenant_id uuid NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
-  topic text NOT NULL,
-  scheduled_date date NOT NULL,
-  platform text NOT NULL CHECK (platform IN ('instagram','facebook','tiktok','linkedin','twitter')),
-  status text NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','in_review','approved','published','rejected')),
-  copy_text text,
-  creative_url text,
-  creative_prompt text,
-  copy_prompt text,
-  notes text,
-  created_at timestamptz DEFAULT now() NOT NULL,
-  updated_at timestamptz DEFAULT now() NOT NULL
-);
+### 1. הוספת קטגוריה `instructions` לכלי save_memory
+הוספת `'instructions'` לרשימת הקטגוריות ב-enum של `save_memory` (שורה 99), כדי שהנחיות יישמרו בקטגוריה ייעודית.
 
-CREATE INDEX idx_social_gantt_posts_tenant ON public.social_gantt_posts(tenant_id);
-CREATE INDEX idx_social_gantt_posts_date ON public.social_gantt_posts(scheduled_date);
-CREATE INDEX idx_social_gantt_posts_status ON public.social_gantt_posts(status);
+### 2. הנחיה ב-system prompt של כרמן
+הוספה לפרומפט של כרמן (שורה ~991) של הנחיה מפורשת:
 
-ALTER TABLE public.social_gantt_posts ENABLE ROW LEVEL SECURITY;
+> **כלל למידה עצמית:** כשמשתמש מסביר לך איך לבצע משימה, נותן הנחיות, מתקן אותך, או מלמד אותך דרך עבודה חדשה — שמרי את זה מיד בזיכרון עם `save_memory` בקטגוריה `instructions` עם מפתח תיאורי. בפעם הבאה שתתבקשי לבצע משימה דומה, פעלי לפי ההנחיות ששמרת. אם ההנחיות השתנו — עדכני את הזיכרון הקיים.
 
--- RLS: tenant isolation
-CREATE POLICY "select_own_tenant" ON public.social_gantt_posts FOR SELECT
-  USING (tenant_id IN (SELECT tenant_id FROM public.tenant_users WHERE user_id = auth.uid()));
-
-CREATE POLICY "insert_own_tenant" ON public.social_gantt_posts FOR INSERT
-  WITH CHECK (tenant_id IN (SELECT tenant_id FROM public.tenant_users WHERE user_id = auth.uid()));
-
-CREATE POLICY "update_own_tenant" ON public.social_gantt_posts FOR UPDATE
-  USING (tenant_id IN (SELECT tenant_id FROM public.tenant_users WHERE user_id = auth.uid()));
-
-CREATE POLICY "delete_own_tenant" ON public.social_gantt_posts FOR DELETE
-  USING (tenant_id IN (SELECT tenant_id FROM public.tenant_users WHERE user_id = auth.uid()));
-```
+### קבצים לעריכה
+- `supabase/functions/run-ai-agent/index.ts` — שורות 99, 991
 
 ### תוצאה
-אחרי הרצת המיגרציה, כפתור "טען דמו" יעבוד ויטען 12 פוסטים לגאנט.
+כשמשתמש יגיד לכרמן "כשאני מבקש דוח קמפיינים, תמשכי נתונים מ-X ותציגי ב-Y" — היא תשמור את זה אוטומטית כזיכרון, ובפעם הבאה תפעל לפי ההנחיות בלי שיצטרכו לחזור עליהן.
 
