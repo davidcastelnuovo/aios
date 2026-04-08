@@ -381,7 +381,7 @@ export default function DMMDashboard() {
         mood_status,
         status: c.status,
         campaignerName,
-        communicationStatus: latestComm?.status ?? mood_status ?? null,
+        communicationStatus: latestComm?.status ?? mappedMood,
         lastCommDate: latestComm?.created_at ?? null,
         daysSinceComm,
         seoHistory,
