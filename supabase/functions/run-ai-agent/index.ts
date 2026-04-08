@@ -424,6 +424,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
 
       return { success: true, client_id: args.client_id, mood_status: args.mood_status, communication_status: commStatus }
     }
+    case 'create_social_post': {
       // Insert into both social_media_posts (for publishing) and social_gantt_posts (for planning view)
       const postData = {
         tenant_id: tenantId,
