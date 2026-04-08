@@ -115,6 +115,10 @@ const ALL_TOOLS = [
   { name: 'take_task', description: 'כרמן לוקחת בעלות על משימה - מעדכנת assigned_agent וסטטוס ל-agent_working', parameters: { type: 'object', properties: { task_id: { type: 'string' }, agent_name: { type: 'string', description: 'שם הסוכן שלוקח את המשימה (ברירת מחדל: כרמן)' } }, required: ['task_id'] } },
   { name: 'complete_task_step', description: 'כרמן מדווחת על השלמת שלב במשימה ומוסיפה עדכון מסוג agent_action', parameters: { type: 'object', properties: { task_id: { type: 'string' }, step_description: { type: 'string' }, mark_complete: { type: 'boolean', description: 'האם לסמן את המשימה כהושלמה' } }, required: ['task_id', 'step_description'] } },
   { name: 'prioritize_tasks', description: 'ניתוח משימות פתוחות והצעת סדר עדיפויות לפי דדליינים, יעדים ועומס', parameters: { type: 'object', properties: { limit: { type: 'integer' } } } },
+  // FACEBOOK AD ACCOUNTS
+  { name: 'list_facebook_ad_accounts', description: 'שליפת כל חשבונות המודעות מפייסבוק. מחזיר id, name, status, currency.', parameters: { type: 'object', properties: {} } },
+  { name: 'create_facebook_report_table', description: 'חיבור חשבון מודעות פייסבוק ללקוח — יוצר טבלת דוח facebook_insights ב-CRM', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח' }, ad_account_id: { type: 'string', description: 'מזהה חשבון מודעות פייסבוק (act_XXXXX)' }, ad_account_name: { type: 'string', description: 'שם חשבון המודעות' } }, required: ['client_id', 'ad_account_id', 'ad_account_name'] } },
+  { name: 'list_unconnected_clients', description: 'רשימת לקוחות פעילים שאין להם עדיין טבלת דוח פייסבוק (facebook_insights) ב-CRM. שימושי לזיהוי לקוחות שצריכים חיבור.', parameters: { type: 'object', properties: {} } },
 ]
 
 // ===========================
@@ -924,6 +928,104 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         return { ...t, urgency_score: score, client_name: t.clients?.name, lead_name: t.leads?.company_name, campaigner_name: t.campaigners?.full_name }
       }).sort((a: any, b: any) => b.urgency_score - a.urgency_score)
       return { count: scored.length, prioritized_tasks: scored }
+    }
+    // FACEBOOK AD ACCOUNTS
+    case 'list_facebook_ad_accounts': {
+      // Get Facebook access token from tenant_integrations (including shared)
+      let { data: integration } = await supabase
+        .from('tenant_integrations')
+        .select('api_key, settings, shared_from_integration_id')
+        .eq('tenant_id', tenantId)
+        .in('integration_type', ['facebook', 'facebook_lead_ads'])
+        .eq('is_active', true)
+        .limit(1)
+        .maybeSingle()
+
+      if (integration?.shared_from_integration_id && !integration?.api_key) {
+        const { data: sourceIntegration } = await supabase
+          .from('tenant_integrations')
+          .select('api_key, settings')
+          .eq('id', integration.shared_from_integration_id)
+          .eq('is_active', true)
+          .maybeSingle()
+        if (sourceIntegration?.api_key) {
+          integration = { ...integration, api_key: sourceIntegration.api_key }
+        }
+      }
+
+      if (!integration?.api_key) {
+        return { error: 'אין אינטגרציית פייסבוק מוגדרת לטננט הזה. יש להגדיר קודם.' }
+      }
+
+      const accessToken = integration.api_key
+      let allAccounts: any[] = []
+      let nextUrl = `https://graph.facebook.com/v21.0/me/adaccounts?fields=id,name,account_status,currency&limit=100&access_token=${accessToken}`
+      while (nextUrl) {
+        const resp = await fetch(nextUrl)
+        const data = await resp.json()
+        if (data.error) return { error: `Facebook API: ${data.error.message}` }
+        if (data.data) allAccounts = [...allAccounts, ...data.data]
+        nextUrl = data.paging?.next || null
+      }
+      return { count: allAccounts.length, ad_accounts: allAccounts.map((a: any) => ({ id: a.id, name: a.name, status: a.account_status, currency: a.currency })) }
+    }
+    case 'create_facebook_report_table': {
+      const { client_id, ad_account_id, ad_account_name } = args
+      // Check if table already exists for this client
+      const { data: existing } = await supabase
+        .from('crm_tables')
+        .select('id, name')
+        .eq('tenant_id', tenantId)
+        .eq('client_id', client_id)
+        .eq('integration_type', 'facebook_insights')
+        .maybeSingle()
+      if (existing) {
+        return { already_exists: true, table_id: existing.id, name: existing.name, message: `כבר קיימת טבלת דוח פייסבוק ללקוח זה: ${existing.name}` }
+      }
+      // Get client name for the table name
+      const { data: client } = await supabase.from('clients').select('name, agency_id').eq('id', client_id).single()
+      if (!client) return { error: 'לקוח לא נמצא' }
+
+      const tableName = `דוח פייסבוק - ${client.name}`
+      const slug = `facebook-${client_id.substring(0, 8)}`
+      const { data: table, error } = await supabase.from('crm_tables').insert({
+        tenant_id: tenantId,
+        name: tableName,
+        slug,
+        description: `דוח ביצועי מודעות פייסבוק עבור ${client.name} (${ad_account_name})`,
+        icon: 'BarChart3',
+        category: 'דוחות',
+        integration_type: 'facebook_insights',
+        integration_settings: { ad_account_id, ad_account_name },
+        agency_id: client.agency_id || null,
+        client_id,
+        created_by: userId !== 'system' ? userId : null,
+      }).select('id, name, slug').single()
+      if (error) throw error
+      return { success: true, table_id: table.id, name: table.name, slug: table.slug, ad_account_id, client_name: client.name }
+    }
+    case 'list_unconnected_clients': {
+      // Get active clients that don't have a facebook_insights table
+      const { data: allClients, error: clientsErr } = await supabase
+        .from('clients')
+        .select('id, name, agency_id, agencies(name)')
+        .eq('tenant_id', tenantId)
+        .in('status', ['active', 'onboarding'])
+        .order('name')
+      if (clientsErr) throw clientsErr
+
+      const { data: connectedTables } = await supabase
+        .from('crm_tables')
+        .select('client_id')
+        .eq('tenant_id', tenantId)
+        .eq('integration_type', 'facebook_insights')
+        .not('client_id', 'is', null)
+
+      const connectedClientIds = new Set((connectedTables || []).map((t: any) => t.client_id))
+      const unconnected = (allClients || []).filter((c: any) => !connectedClientIds.has(c.id))
+        .map((c: any) => ({ id: c.id, name: c.name, agency_name: c.agencies?.name }))
+
+      return { count: unconnected.length, unconnected_clients: unconnected }
     }
     default:
       throw new Error(`Unknown tool: ${name}`)
