@@ -24,9 +24,13 @@ const TIER_OPTIONS = [
 ];
 
 const SERVICE_OPTIONS = [
-  { value: "performance", label: "Performance (קמפיינים)", icon: BarChart3 },
-  { value: "seo",         label: "SEO",                   icon: Search },
-  { value: "social",      label: "Social",                icon: Share2 },
+  { value: "ppc_google",  label: "PPC Google",  icon: BarChart3 },
+  { value: "ppc_meta",    label: "PPC Meta",    icon: BarChart3 },
+  { value: "seo",         label: "SEO",         icon: Search },
+  { value: "social",      label: "Social",      icon: Share2 },
+  { value: "full_social", label: "Full Social", icon: Share2 },
+  { value: "social_meta", label: "Social Meta", icon: Share2 },
+  { value: "automation",  label: "Automation",  icon: Settings2 },
 ];
 
 const SEO_STATUS_OPTIONS = [
