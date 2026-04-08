@@ -376,9 +376,9 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
             <h3 className="font-semibold text-sm">עדכון מצב תקשורת</h3>
             {latestComm && (
               <span className="text-xs text-muted-foreground mr-auto">
-                עדכון אחרון: {format(new Date(latestComm.created_at), "d/M/yy", { locale: he })}
+                עדכון אחרון: {format(new Date((latestComm as any).created_at), "d/M/yy", { locale: he })}
                 {" — "}
-                {COMM_STATUS_OPTIONS.find(o => o.value === latestComm.status)?.label ?? latestComm.status}
+                {COMM_STATUS_OPTIONS.find(o => o.value === (latestComm as any).status)?.label ?? (latestComm as any).status}
               </span>
             )}
           </div>
