@@ -235,6 +235,7 @@ const MENU_TABS: MenuTab[] = [
       {
         label: "הגדרות",
         items: [
+          { key: "my-profile", label: "אזור אישי", route: "/my-profile", icon: User },
           { key: "branding", label: "התאמת מערכת", route: "/branding", icon: Palette },
           { key: "menu-management", label: "ניהול תפריטים", route: "/menu-management", icon: Menu },
           { key: "fields-management", label: "ניהול שדות", route: "/fields-management", icon: ListTree },
