@@ -101,7 +101,7 @@ export default function SocialDashboard() {
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [filterPlatform, setFilterPlatform] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
-  const [ganttFullscreen, setGanttFullscreen] = useState(false);
+  
 
   // ─── Gantt data ────────────────────────────────────────────────
   const { data: ganttPosts = [], isLoading: ganttLoading } = useQuery({
