@@ -500,7 +500,6 @@ export default function SocialDashboard() {
                                   onDeletePost={(id) => deleteGanttPost.mutate(id)}
                                   isUpdating={updateGanttPost.isPending}
                                   tenantId={tenantId}
-                                  embedded
                                 />
                               </div>
                             )}
@@ -521,7 +520,6 @@ export default function SocialDashboard() {
                       onCreatePost={(post) => createGanttPost.mutate(post)}
                       isCreating={createGanttPost.isPending}
                       onClose={() => {}}
-                      embedded
                     />
                   </div>
                 );
