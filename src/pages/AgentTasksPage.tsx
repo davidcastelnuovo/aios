@@ -17,12 +17,13 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import {
   Plus, Play, CheckCircle2, XCircle, Clock, Loader2, ArrowRight,
   Image, ExternalLink, Calendar, Repeat, Zap, GitFork, ChevronDown,
-  ChevronUp, Trash2, ToggleLeft, ToggleRight, Timer, ListTodo
+  ChevronUp, Trash2, ToggleLeft, ToggleRight, Timer, ListTodo, Target
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
+import { GoalTree } from "@/components/tasks/GoalTree";
 import { format } from "date-fns";
 import agentGeneral from "@/assets/agents/agent-general.png";
 import agentCreative from "@/assets/agents/agent-creative.png";
@@ -626,6 +627,9 @@ export default function AgentTasksPage() {
                   <TabsTrigger value="recurring" className="text-xs gap-1">
                     <Repeat className="h-3 w-3" /> חוזרות ({recurringTasks.length})
                   </TabsTrigger>
+                  <TabsTrigger value="goals" className="text-xs gap-1">
+                    <Target className="h-3 w-3" /> יעדים
+                  </TabsTrigger>
                   <TabsTrigger value="stats" className="text-xs gap-1">
                     <Zap className="h-3 w-3" /> סטטיסטיקות
                   </TabsTrigger>
@@ -707,6 +711,11 @@ export default function AgentTasksPage() {
                             />
                           ))
                         )
+                      )}
+                      {activeTab === "goals" && (
+                        <div className="py-2">
+                          <GoalTree />
+                        </div>
                       )}
                       {activeTab === "stats" && (
                         <div className="space-y-4">
