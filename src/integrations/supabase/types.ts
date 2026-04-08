@@ -7711,6 +7711,7 @@ export type Database = {
         | "whatsapp"
         | "meeting"
         | "other"
+        | "system_alert"
       job_priority: "critical" | "high" | "medium" | "low"
       job_status: "queued" | "running" | "done" | "failed" | "dead_letter"
       job_type: "user_action" | "workflow" | "integration" | "heavy_job"
@@ -7948,6 +7949,7 @@ export const Constants = {
         "whatsapp",
         "meeting",
         "other",
+        "system_alert",
       ],
       job_priority: ["critical", "high", "medium", "low"],
       job_status: ["queued", "running", "done", "failed", "dead_letter"],
