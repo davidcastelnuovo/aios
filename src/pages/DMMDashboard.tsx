@@ -363,8 +363,9 @@ export default function DMMDashboard() {
       const performanceChangePct = (perfData as Record<string, number | null>)[c.id] ?? null;
 
       // Health score — uses mood_status as fallback comm status if no log exists
+      const mappedMood = mapMoodToCommStatus(mood_status);
       const result = calculateHealthScore({
-        communicationStatus: latestComm?.status ?? mood_status ?? null,
+        communicationStatus: latestComm?.status ?? mappedMood,
         daysSinceLastCommunication: daysSinceComm,
         services,
         performanceChangePct,
