@@ -1,30 +1,81 @@
 
+# תיקון: עדכוני כרמן לא מופיעים בדשבורד + שגיאת בנייה
 
-# כרמן מדברת על תצוגה שלא נראית — תיקון
+## 1. תיקון שגיאת בנייה ב-SocialDashboard
+**קובץ:** `src/pages/SocialDashboard.tsx` שורה 131
+- החלפת `setIsNewPostOpen(false)` ב-`setIsComposerOpen(false)` (המשתנה הנכון שמוגדר כ-state)
 
-## מה קורה
-כרמן משתמשת בכלי `display_data` שמציג וידג'טים ויזואליים (טבלאות, סטטיסטיקות, כרטיסים) — אבל **הם מוצגים רק בממשק AIOS** (מצב שורת הפקודה). כשהמשתמש נמצא בדשבורד DMM או בצ'אט רגיל, הוידג'טים האלה לא מוצגים בכלל.
+## 2. מיגרציה — הפעלת Realtime
+```sql
+ALTER PUBLICATION supabase_realtime ADD TABLE public.communication_logs;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.clients;
+```
 
-כרמן לא יודעת באיזה ממשק המשתמש נמצא, ולכן היא "מבטיחה" תצוגה ויזואלית שהמשתמש לא רואה.
+## 3. עדכון DMMDashboard — Realtime + mood mapping + staleTime
+**קובץ:** `src/pages/DMMDashboard.tsx`
 
-## הפתרון
+### 3a. ייבואים חדשים
+הוספת `useEffect` ו-`useQueryClient` לייבואים:
+```typescript
+import { useState, useMemo, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+```
 
-### עדכון הפרומפט של כרמן (`ai-support-chat/index.ts`)
-הוסיף הנחיה שמגבילה את השימוש ב-`display_data`:
-- **אל תדברי על "תצוגה ויזואלית" או "וידג'טים" אלא אם המשתמש נמצא במצב AIOS**
-- כשהמשתמש שואל שאלה רגילה — תעני בטקסט תמציתי עם המספרים, בלי להבטיח וידג'טים
-- כלי `display_data` רלוונטי רק כשה-context מזהה מצב AIOS
+### 3b. הוספת פונקציית מיפוי mood_status
+לפני הקומפוננטה הראשית, הוספת:
+```typescript
+function mapMoodToCommStatus(mood: string | null): "normal" | "sensitive" | "complaint" | null {
+  if (!mood) return null;
+  switch (mood) {
+    case "churn_risk": return "complaint";
+    case "wavering": return "sensitive";
+    case "happy": case "normal": return "normal";
+    default: return null;
+  }
+}
+```
 
-### איך מזהים את המצב
-בקריאה ל-edge function, כבר מועבר ה-`ui_mode` מהפרופיל. נוסיף תנאי בפרומפט:
-- אם `ui_mode === 'aios'` → מותר להשתמש ב-`display_data` ולהזכיר וידג'טים
-- אחרת → תענה בטקסט בלבד, בלי להזכיר תצוגות ויזואליות
+### 3c. הפחתת staleTime
+- `crmFields` query: `staleTime: 60_000` → `staleTime: 10_000`
+- `commLogs` query: `staleTime: 60_000` → `staleTime: 10_000`
+- `seoUpdates` query: `staleTime: 60_000` → `staleTime: 10_000`
 
-### קובץ לעריכה
+### 3d. הוספת Realtime subscription
+בתוך הקומפוננטה, אחרי ההגדרה של `queryClient`:
+```typescript
+const queryClient = useQueryClient();
+
+useEffect(() => {
+  if (!tenantId) return;
+  const channel = supabase
+    .channel("dmm-realtime")
+    .on("postgres_changes", { event: "*", schema: "public", table: "communication_logs", filter: `tenant_id=eq.${tenantId}` }, () => {
+      queryClient.invalidateQueries({ queryKey: ["communication-logs-latest"] });
+      queryClient.invalidateQueries({ queryKey: ["dmm-clients-crm-fields"] });
+    })
+    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "clients", filter: `tenant_id=eq.${tenantId}` }, () => {
+      queryClient.invalidateQueries({ queryKey: ["dmm-clients"] });
+      queryClient.invalidateQueries({ queryKey: ["dmm-clients-crm-fields"] });
+    })
+    .subscribe();
+  return () => { supabase.removeChannel(channel); };
+}, [tenantId, queryClient]);
+```
+
+### 3e. שימוש ב-mapMoodToCommStatus
+בשורה ~317, שינוי:
+```typescript
+communicationStatus: latestComm?.status ?? mood_status ?? null,
+```
+ל:
+```typescript
+communicationStatus: latestComm?.status ?? mapMoodToCommStatus(mood_status) ?? null,
+```
+וגם בשורה ~333 באותו אופן.
+
+## קבצים לעריכה
 | קובץ | שינוי |
 |---|---|
-| `supabase/functions/ai-support-chat/index.ts` | הוספת הנחיית מצב לפרומפט — display_data רק ב-AIOS |
-
-## תוצאה
-כרמן תפסיק להבטיח וידג'טים כשהמשתמש לא נמצא בממשק שמציג אותם, ותענה בטקסט ישיר במקום.
-
+| `src/pages/SocialDashboard.tsx` | תיקון שם משתנה (שגיאת בנייה) |
+| `src/pages/DMMDashboard.tsx` | Realtime + mood mapping + staleTime |
+| מיגרציה | Realtime publication |
