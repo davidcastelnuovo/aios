@@ -144,7 +144,7 @@ export default function DynamicTables() {
       if (!tenantId) return [];
       const { data, error } = await supabase
         .from('clients')
-        .select('id, name, agency_id');
+        .select('id, name, agency_id, website');
       if (error) throw error;
       return data || [];
     },
@@ -294,7 +294,7 @@ export default function DynamicTables() {
   });
 
   const updateTableMutation = useMutation({
-    mutationFn: async ({ tableId, name, agency_id, client_id, integration_settings }: { tableId: string; name: string; agency_id: string | null; client_id: string | null; integration_settings?: any }) => {
+    mutationFn: async ({ tableId, name, agency_id, client_id, integration_settings, syncDomain }: { tableId: string; name: string; agency_id: string | null; client_id: string | null; integration_settings?: any; syncDomain?: { clientId: string; domain: string } }) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
       
@@ -318,11 +318,24 @@ export default function DynamicTables() {
         const error = await response.json();
         throw new Error(error.error || 'Failed to update table');
       }
+
+      // Sync domain to client's website field if empty
+      if (syncDomain) {
+        const client = clients.find(c => c.id === syncDomain.clientId);
+        if (client && !client.website) {
+          const websiteUrl = syncDomain.domain.startsWith('http') ? syncDomain.domain : `https://${syncDomain.domain}`;
+          await supabase
+            .from('clients')
+            .update({ website: websiteUrl })
+            .eq('id', syncDomain.clientId);
+        }
+      }
       
       return await response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
       setEditingTable(null);
       toast.success('הדוח עודכן בהצלחה');
     },
@@ -354,12 +367,18 @@ export default function DynamicTables() {
       ad_account_name: editAdAccounts.find(a => a.id === editAdAccountId)?.name || editingTable.integration_settings?.ad_account_name || '',
     } : undefined;
 
+    // If it's an Ahrefs/SEO table and client changed, sync domain
+    const isAhrefs = editingTable.integration_type === 'ahrefs';
+    const domain = editingTable.integration_settings?.targetDomain;
+    const syncDomain = isAhrefs && editClientId && domain ? { clientId: editClientId, domain } : undefined;
+
     updateTableMutation.mutate({ 
       tableId: editingTable.id, 
       name: editName,
       agency_id: editAgencyId || null,
       client_id: editClientId || null,
       integration_settings: updatedSettings,
+      syncDomain,
     });
   };
 
