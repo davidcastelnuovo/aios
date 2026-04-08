@@ -1,19 +1,17 @@
 /**
  * SocialDashboard — דשבורד סושיאל מאוחד
  *
- * מאחד את SocialMediaScheduler (social_media_posts) ו-SocialGantt (social_gantt_posts)
- * לממשק אחד עם 5 טאבים:
+ * 3 טאבים:
  *   1. גאנט — תכנון תוכן (social_gantt_posts) עם AI agents
  *   2. פוסטים — ניהול פוסטים מוכנים (social_media_posts)
- *   3. לוח שנה — תצוגת לוח שנה מאוחדת
- *   4. ערוצים — ניהול ערוצי פרסום
- *   5. הגדרות — WordPress ועוד
+ *   3. ערוצים — ניהול ערוצי פרסום + הגדרות WordPress
  */
 
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import {
   Dialog,
   DialogContent,
@@ -23,9 +21,7 @@ import {
 import {
   CalendarRange,
   ListChecks,
-  Calendar,
   Settings,
-  Globe,
   Share2,
   Plus,
 } from "lucide-react";
@@ -39,8 +35,6 @@ import { NewPostDialog } from "@/components/social-gantt/NewPostDialog";
 
 // Social Media Scheduler components (publishing)
 import { PostsList } from "@/components/social-media/PostsList";
-import { ScheduleCalendar } from "@/components/social-media/ScheduleCalendar";
-import { VisualPostCalendar } from "@/components/social-media/VisualPostCalendar";
 import { ChannelManager } from "@/components/social-media/ChannelManager";
 import { WordPressSettings } from "@/components/social-media/WordPressSettings";
 
@@ -206,9 +200,10 @@ export default function SocialDashboard() {
         value={activeTab}
         onValueChange={setActiveTab}
         className="flex flex-col flex-1 min-h-0"
+        dir="rtl"
       >
         <div className="px-6 pt-3 shrink-0 border-b">
-          <TabsList className="h-9">
+          <TabsList className="h-9" dir="rtl">
             <TabsTrigger value="gantt" className="flex items-center gap-1.5 text-sm">
               <CalendarRange className="h-3.5 w-3.5" />
               גאנט תוכן
@@ -227,53 +222,49 @@ export default function SocialDashboard() {
                 </Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="calendar" className="flex items-center gap-1.5 text-sm">
-              <Calendar className="h-3.5 w-3.5" />
-              לוח שנה
-            </TabsTrigger>
             <TabsTrigger value="channels" className="flex items-center gap-1.5 text-sm">
               <Settings className="h-3.5 w-3.5" />
               ערוצים
-            </TabsTrigger>
-            <TabsTrigger value="wordpress" className="flex items-center gap-1.5 text-sm">
-              <Globe className="h-3.5 w-3.5" />
-              וורדפרס
             </TabsTrigger>
           </TabsList>
         </div>
 
         {/* ── Gantt Tab ──────────────────────────────────────────── */}
-        <TabsContent value="gantt" className="flex-1 overflow-hidden mt-0 flex flex-col">
-          <SocialGanttHeader
-            onNewPost={() => setIsNewPostOpen(true)}
-            filterPlatform={filterPlatform}
-            onFilterPlatform={setFilterPlatform}
-            filterStatus={filterStatus}
-            onFilterStatus={setFilterStatus}
-            totalPosts={ganttPosts.length}
-          />
-          <div className="flex-1 flex overflow-hidden">
-            <SocialGanttSidebar
-              posts={filteredGanttPosts}
-              selectedPostId={selectedPostId}
-              onSelectPost={setSelectedPostId}
-              isLoading={ganttLoading}
-            />
-            <SocialGanttPreview
-              post={selectedPost}
-              onUpdatePost={(updates) => updateGanttPost.mutate(updates)}
-              onDeletePost={(id) => deleteGanttPost.mutate(id)}
-              isUpdating={updateGanttPost.isPending}
-              tenantId={tenantId}
-            />
-          </div>
-          <NewPostDialog
-            open={isNewPostOpen}
-            onOpenChange={setIsNewPostOpen}
-            onCreatePost={(post) => createGanttPost.mutate(post)}
-            tenantId={tenantId || ""}
-            isCreating={createGanttPost.isPending}
-          />
+        <TabsContent value="gantt" className="flex-1 overflow-hidden mt-0" forceMount>
+          {activeTab === "gantt" && (
+            <div className="flex flex-col h-[calc(100vh-12rem)]">
+              <SocialGanttHeader
+                onNewPost={() => setIsNewPostOpen(true)}
+                filterPlatform={filterPlatform}
+                onFilterPlatform={setFilterPlatform}
+                filterStatus={filterStatus}
+                onFilterStatus={setFilterStatus}
+                totalPosts={ganttPosts.length}
+              />
+              <div className="flex-1 flex overflow-hidden min-h-0">
+                <SocialGanttSidebar
+                  posts={filteredGanttPosts}
+                  selectedPostId={selectedPostId}
+                  onSelectPost={setSelectedPostId}
+                  isLoading={ganttLoading}
+                />
+                <SocialGanttPreview
+                  post={selectedPost}
+                  onUpdatePost={(updates) => updateGanttPost.mutate(updates)}
+                  onDeletePost={(id) => deleteGanttPost.mutate(id)}
+                  isUpdating={updateGanttPost.isPending}
+                  tenantId={tenantId}
+                />
+              </div>
+              <NewPostDialog
+                open={isNewPostOpen}
+                onOpenChange={setIsNewPostOpen}
+                onCreatePost={(post) => createGanttPost.mutate(post)}
+                tenantId={tenantId || ""}
+                isCreating={createGanttPost.isPending}
+              />
+            </div>
+          )}
         </TabsContent>
 
         {/* ── Posts Tab ──────────────────────────────────────────── */}
@@ -302,19 +293,15 @@ export default function SocialDashboard() {
           </Dialog>
         </TabsContent>
 
-        {/* ── Calendar Tab ───────────────────────────────────────── */}
-        <TabsContent value="calendar" className="m-0 h-[calc(100vh-4rem)] flex flex-col">
-          <VisualPostCalendar />
-        </TabsContent>
-
-        {/* ── Channels Tab ───────────────────────────────────────── */}
-        <TabsContent value="channels" className="flex-1 overflow-auto mt-0 p-6">
-          <ChannelManager />
-        </TabsContent>
-
-        {/* ── WordPress Tab ──────────────────────────────────────── */}
-        <TabsContent value="wordpress" className="flex-1 overflow-auto mt-0 p-6">
-          <WordPressSettings />
+        {/* ── Channels Tab (includes WordPress) ──────────────────── */}
+        <TabsContent value="channels" className="mt-0" forceMount>
+          {activeTab === "channels" && (
+            <div className="h-[calc(100vh-12rem)] overflow-y-auto p-6">
+              <ChannelManager />
+              <Separator className="my-8" />
+              <WordPressSettings />
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>
