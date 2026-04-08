@@ -432,6 +432,7 @@ export default function AgentTasksPage() {
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<any>(null);
   const [filterAgent, setFilterAgent] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [form, setForm] = useState({ ...defaultForm });
