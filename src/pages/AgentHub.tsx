@@ -25,6 +25,9 @@ import agentGithub from "@/assets/agents/agent-github.png";
 const CARMEN_AVATAR = "https://d2xsxph8kpxj0f.cloudfront.net/310419663030948028/XGJWpzb5zh76ZdoV37Q3K8/carmen-agents-avatar_17945787.png";
 
 const AGENT_AVATARS: Record<string, string> = {
+  "כרמן": CARMEN_AVATAR,
+  "carmen": CARMEN_AVATAR,
+  "Carmen": CARMEN_AVATAR,
   "סוכן כללי": agentGeneral,
   "סוכן קריאייטיב": agentCreative,
   "ceo": agentCeo,
