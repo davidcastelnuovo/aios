@@ -2739,6 +2739,117 @@ export type Database = {
           },
         ]
       }
+      goals: {
+        Row: {
+          created_at: string
+          description: string | null
+          due_date: string | null
+          id: string
+          owner_id: string | null
+          owner_type: string
+          parent_goal_id: string | null
+          progress_percent: number | null
+          status: string
+          tenant_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          owner_id?: string | null
+          owner_type?: string
+          parent_goal_id?: string | null
+          progress_percent?: number | null
+          status?: string
+          tenant_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          owner_id?: string | null
+          owner_type?: string
+          parent_goal_id?: string | null
+          progress_percent?: number | null
+          status?: string
+          tenant_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goals_parent_goal_id_fkey"
+            columns: ["parent_goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "goals_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      heartbeat_logs: {
+        Row: {
+          actions_taken: Json | null
+          agent_id: string | null
+          created_at: string
+          duration_ms: number | null
+          id: string
+          summary: string | null
+          tasks_reviewed: number | null
+          tenant_id: string
+          triggered_at: string
+        }
+        Insert: {
+          actions_taken?: Json | null
+          agent_id?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          id?: string
+          summary?: string | null
+          tasks_reviewed?: number | null
+          tenant_id: string
+          triggered_at?: string
+        }
+        Update: {
+          actions_taken?: Json | null
+          agent_id?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          id?: string
+          summary?: string | null
+          tasks_reviewed?: number | null
+          tenant_id?: string
+          triggered_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "heartbeat_logs_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "heartbeat_logs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hidden_chats: {
         Row: {
           client_id: string | null
@@ -5411,6 +5522,7 @@ export type Database = {
           created_at: string
           id: string
           task_id: string
+          update_type: string
           updated_at: string
           user_id: string
         }
@@ -5420,6 +5532,7 @@ export type Database = {
           created_at?: string
           id?: string
           task_id: string
+          update_type?: string
           updated_at?: string
           user_id: string
         }
@@ -5429,6 +5542,7 @@ export type Database = {
           created_at?: string
           id?: string
           task_id?: string
+          update_type?: string
           updated_at?: string
           user_id?: string
         }
@@ -5452,6 +5566,7 @@ export type Database = {
       tasks: {
         Row: {
           agency_id: string
+          assigned_agent: string | null
           campaigner_id: string | null
           client_id: string | null
           created_at: string
@@ -5459,6 +5574,7 @@ export type Database = {
           due_date: string | null
           due_time: string | null
           duration_minutes: number | null
+          goal_id: string | null
           google_calendar_event_id: string | null
           id: string
           lead_id: string | null
@@ -5475,6 +5591,7 @@ export type Database = {
         }
         Insert: {
           agency_id: string
+          assigned_agent?: string | null
           campaigner_id?: string | null
           client_id?: string | null
           created_at?: string
@@ -5482,6 +5599,7 @@ export type Database = {
           due_date?: string | null
           due_time?: string | null
           duration_minutes?: number | null
+          goal_id?: string | null
           google_calendar_event_id?: string | null
           id?: string
           lead_id?: string | null
@@ -5498,6 +5616,7 @@ export type Database = {
         }
         Update: {
           agency_id?: string
+          assigned_agent?: string | null
           campaigner_id?: string | null
           client_id?: string | null
           created_at?: string
@@ -5505,6 +5624,7 @@ export type Database = {
           due_date?: string | null
           due_time?: string | null
           duration_minutes?: number | null
+          goal_id?: string | null
           google_calendar_event_id?: string | null
           id?: string
           lead_id?: string | null
@@ -5539,6 +5659,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
             referencedColumns: ["id"]
           },
           {
