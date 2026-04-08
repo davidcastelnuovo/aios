@@ -199,6 +199,7 @@ const BUILT_IN_SKILLS = [
   { id: 'churn-predictor', icon: '⚠️', name: 'זיהוי נטישה', description: 'מזהה לקוחות בסיכון נטישה', prompt: 'נתח את דפוסי הלקוחות וזהה סימני אזהרה לנטישה פוטנציאלית. הצע פעולות שימור מתאימות.' },
   { id: 'campaign-optimizer', icon: '🎯', name: 'אופטימיזציית קמפיינים', description: 'מנתח ומשפר קמפייני פרסום', prompt: 'נתח נתוני קמפיינים מהמערכת, זהה מה עובד ומה לא, והצע שיפורים קונקרטיים.' },
   { id: 'smart-summarizer', icon: '📚', name: 'סיכום חכם', description: 'מסכם שיחות, מסמכים ונתונים', prompt: 'כשמתבקשת סיכום, שלוף את כל המידע הרלוונטי והצג את העיקריות בצורה קצרה וברורה.' },
+  { id: 'facebook-account-setup', icon: '📘', name: 'חיבור חשבונות פייסבוק', description: 'מזהה לקוחות ללא חיבור פייסבוק ומחברת אותם אוטומטית', prompt: 'הריצי list_unconnected_clients, אז list_facebook_ad_accounts, התאימי לפי שם וחברי עם create_facebook_report_table. אם אין התאמה ברורה — צרי משימה.' },
 ];
 
 const DEFAULT_CARMEN_ACCESS: Record<string, "none" | "view" | "edit"> = Object.fromEntries(

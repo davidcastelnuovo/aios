@@ -67,6 +67,7 @@ const BUILT_IN_SKILLS = [
   { id: "churn-predictor",     icon: "⚠️", name: "זיהוי נטישה",            description: "לקוחות בסיכון נטישה" },
   { id: "campaign-optimizer",  icon: "🎯", name: "אופטימיזציית קמפיינים",  description: "מנתח ומשפר קמפיינים" },
   { id: "smart-summarizer",    icon: "📚", name: "סיכום חכם",              description: "מסכם שיחות ומסמכים" },
+  { id: "facebook-account-setup", icon: "📘", name: "חיבור חשבונות פייסבוק", description: "מחבר חשבונות מודעות ללקוחות" },
 ];
 
 const CARMEN_MODES = [
