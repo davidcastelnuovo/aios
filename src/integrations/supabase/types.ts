@@ -131,12 +131,21 @@ export type Database = {
           completed_at: string | null
           created_at: string
           created_by: string | null
+          cron_expression: string | null
           description: string | null
+          enabled: boolean | null
           id: string
+          last_run: string | null
+          parallel_execution: boolean | null
+          parallel_subtasks: Json | null
           priority: number
           result: Json | null
+          schedule_type: string | null
+          scheduled_at: string | null
           started_at: string | null
           status: string
+          task_mode: string | null
+          task_skills: Json | null
           tenant_id: string
           title: string
           updated_at: string
@@ -146,12 +155,21 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
+          cron_expression?: string | null
           description?: string | null
+          enabled?: boolean | null
           id?: string
+          last_run?: string | null
+          parallel_execution?: boolean | null
+          parallel_subtasks?: Json | null
           priority?: number
           result?: Json | null
+          schedule_type?: string | null
+          scheduled_at?: string | null
           started_at?: string | null
           status?: string
+          task_mode?: string | null
+          task_skills?: Json | null
           tenant_id: string
           title: string
           updated_at?: string
@@ -161,12 +179,21 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
+          cron_expression?: string | null
           description?: string | null
+          enabled?: boolean | null
           id?: string
+          last_run?: string | null
+          parallel_execution?: boolean | null
+          parallel_subtasks?: Json | null
           priority?: number
           result?: Json | null
+          schedule_type?: string | null
+          scheduled_at?: string | null
           started_at?: string | null
           status?: string
+          task_mode?: string | null
+          task_skills?: Json | null
           tenant_id?: string
           title?: string
           updated_at?: string
