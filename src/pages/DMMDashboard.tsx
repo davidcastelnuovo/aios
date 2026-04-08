@@ -340,7 +340,7 @@ export default function DMMDashboard() {
         flags: result.flags,
       } as ClientRow;
     });
-  }, [rawClients, crmFields, commLogs, seoUpdates]);
+  }, [rawClients, crmFields, commLogs, seoUpdates, perfData]);
 
   // ── Filtered list ──────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
