@@ -88,6 +88,18 @@ type CRMClientFields = {
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
+/** Map mood_status values from Carmen to communication status for health score */
+function mapMoodToCommStatus(mood: string | null): 'normal' | 'sensitive' | 'complaint' | null {
+  if (!mood) return null;
+  switch (mood) {
+    case 'normal': case 'sensitive': case 'complaint': return mood;
+    case 'happy': return 'normal';
+    case 'wavering': return 'sensitive';
+    case 'churn_risk': return 'complaint';
+    default: return null;
+  }
+}
+
 function StatusDot({ status }: { status: OverallStatus }) {
   const cfg = OVERALL_STATUS_CONFIG[status];
   return (
