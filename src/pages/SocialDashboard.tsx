@@ -8,6 +8,8 @@
  */
 
 import { useState } from "react";
+import { format } from "date-fns";
+import { he } from "date-fns/locale";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,14 +20,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 import {
   CalendarRange,
+  Instagram,
   ListChecks,
   Settings,
   Share2,
   Plus,
-  Maximize2,
-  Minimize2,
 } from "lucide-react";
 
 import { PostComposer } from "@/components/social-media/PostComposer";
