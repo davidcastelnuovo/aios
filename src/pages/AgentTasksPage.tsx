@@ -23,6 +23,7 @@ import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
+import { GoalTree } from "@/components/tasks/GoalTree";
 import { format } from "date-fns";
 import agentGeneral from "@/assets/agents/agent-general.png";
 import agentCreative from "@/assets/agents/agent-creative.png";
