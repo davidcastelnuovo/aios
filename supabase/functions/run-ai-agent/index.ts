@@ -106,6 +106,13 @@ const ALL_TOOLS = [
   { name: 'get_finance_summary', description: 'סיכום כספי חודשי', parameters: { type: 'object', properties: { month: { type: 'string', description: 'YYYY-MM' } } } },
   // UPDATES
   { name: 'list_updates', description: 'רשימת עדכונים ללקוח או ליד', parameters: { type: 'object', properties: { entity_type: { type: 'string', enum: ['client', 'lead'] }, entity_id: { type: 'string' }, limit: { type: 'integer' } }, required: ['entity_type', 'entity_id'] } },
+  // GOALS
+  { name: 'create_goal', description: 'יצירת יעד חדש במערכת היעדים ההיררכית', parameters: { type: 'object', properties: { title: { type: 'string' }, description: { type: 'string' }, parent_goal_id: { type: 'string', description: 'מזהה יעד-אב (אופציונלי)' }, due_date: { type: 'string' }, owner_type: { type: 'string', enum: ['agent', 'campaigner'] }, owner_id: { type: 'string' } }, required: ['title'] } },
+  { name: 'list_goals', description: 'רשימת יעדים עם אחוז התקדמות', parameters: { type: 'object', properties: { status: { type: 'string' }, limit: { type: 'integer' } } } },
+  // AGENT TASK OWNERSHIP
+  { name: 'take_task', description: 'כרמן לוקחת בעלות על משימה - מעדכנת assigned_agent וסטטוס ל-agent_working', parameters: { type: 'object', properties: { task_id: { type: 'string' }, agent_name: { type: 'string', description: 'שם הסוכן שלוקח את המשימה (ברירת מחדל: כרמן)' } }, required: ['task_id'] } },
+  { name: 'complete_task_step', description: 'כרמן מדווחת על השלמת שלב במשימה ומוסיפה עדכון מסוג agent_action', parameters: { type: 'object', properties: { task_id: { type: 'string' }, step_description: { type: 'string' }, mark_complete: { type: 'boolean', description: 'האם לסמן את המשימה כהושלמה' } }, required: ['task_id', 'step_description'] } },
+  { name: 'prioritize_tasks', description: 'ניתוח משימות פתוחות והצעת סדר עדיפויות לפי דדליינים, יעדים ועומס', parameters: { type: 'object', properties: { limit: { type: 'integer' } } } },
 ]
 
 // ===========================
@@ -682,6 +689,88 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const { data, error } = await supabase.from(table).select('id, content, created_at').eq(idCol, args.entity_id).order('created_at', { ascending: false }).limit(args.limit || 10)
       if (error) throw error
       return { count: data.length, updates: data }
+    }
+    // GOALS
+    case 'create_goal': {
+      const { data, error } = await supabase.from('goals').insert({
+        tenant_id: tenantId,
+        title: args.title,
+        description: args.description || null,
+        parent_goal_id: args.parent_goal_id || null,
+        due_date: args.due_date || null,
+        owner_type: args.owner_type || 'agent',
+        owner_id: args.owner_id || null,
+        status: 'active',
+        progress_percent: 0,
+      }).select('id, title, status').single()
+      if (error) throw error
+      return { goal_id: data.id, title: data.title, status: data.status }
+    }
+    case 'list_goals': {
+      let query = supabase.from('goals').select('id, title, description, status, progress_percent, parent_goal_id, due_date, owner_type, owner_id, created_at')
+        .eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(args.limit || 20)
+      if (args.status) query = query.eq('status', args.status)
+      const { data, error } = await query
+      if (error) throw error
+      return { count: data.length, goals: data }
+    }
+    // AGENT TASK OWNERSHIP
+    case 'take_task': {
+      const agentName = args.agent_name || 'carmen'
+      const { data, error } = await supabase.from('tasks')
+        .update({ assigned_agent: agentName, status: 'in_progress' })
+        .eq('id', args.task_id).eq('tenant_id', tenantId)
+        .select('id, title, status, assigned_agent').single()
+      if (error) throw error
+      // Log the action
+      await supabase.from('task_updates').insert({
+        task_id: args.task_id, user_id: userId, tenant_id: tenantId,
+        content: `הסוכן ${agentName} לקח בעלות על המשימה`,
+        update_type: 'agent_action',
+      })
+      return { success: true, task: data }
+    }
+    case 'complete_task_step': {
+      // Add agent_action update
+      await supabase.from('task_updates').insert({
+        task_id: args.task_id, user_id: userId, tenant_id: tenantId,
+        content: args.step_description,
+        update_type: 'agent_action',
+      })
+      // Optionally mark as complete
+      if (args.mark_complete) {
+        await supabase.from('tasks')
+          .update({ status: 'done', assigned_agent: null })
+          .eq('id', args.task_id).eq('tenant_id', tenantId)
+      }
+      return { success: true, task_id: args.task_id, completed: !!args.mark_complete }
+    }
+    case 'prioritize_tasks': {
+      // Fetch open tasks with their goals
+      const { data: openTasks, error } = await supabase.from('tasks')
+        .select('id, title, status, priority, due_date, due_time, assigned_agent, goal_id, clients(name), leads(company_name), campaigners(full_name)')
+        .eq('tenant_id', tenantId)
+        .in('status', ['open', 'in_progress'])
+        .order('priority', { ascending: false })
+        .limit(args.limit || 30)
+      if (error) throw error
+      // Score each task
+      const now = new Date()
+      const scored = (openTasks || []).map((t: any) => {
+        let score = t.priority || 5
+        if (t.due_date) {
+          const due = new Date(t.due_date)
+          const daysLeft = (due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+          if (daysLeft < 0) score += 10 // overdue
+          else if (daysLeft < 1) score += 7
+          else if (daysLeft < 3) score += 4
+          else if (daysLeft < 7) score += 2
+        }
+        if (t.goal_id) score += 2 // goal-linked tasks get a boost
+        if (t.assigned_agent) score -= 3 // already being worked on
+        return { ...t, urgency_score: score, client_name: t.clients?.name, lead_name: t.leads?.company_name, campaigner_name: t.campaigners?.full_name }
+      }).sort((a: any, b: any) => b.urgency_score - a.urgency_score)
+      return { count: scored.length, prioritized_tasks: scored }
     }
     default:
       throw new Error(`Unknown tool: ${name}`)

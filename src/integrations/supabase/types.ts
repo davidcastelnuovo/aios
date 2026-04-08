@@ -6311,6 +6311,44 @@ export type Database = {
           },
         ]
       }
+      tenant_heartbeat_settings: {
+        Row: {
+          active_hours_end: number
+          active_hours_start: number
+          allowed_actions: Json
+          enabled: boolean
+          interval_hours: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          active_hours_end?: number
+          active_hours_start?: number
+          allowed_actions?: Json
+          enabled?: boolean
+          interval_hours?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          active_hours_end?: number
+          active_hours_start?: number
+          allowed_actions?: Json
+          enabled?: boolean
+          interval_hours?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_heartbeat_settings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenant_integrations: {
         Row: {
           api_key: string | null
