@@ -13,6 +13,7 @@ import { useUserRole } from "./useUserRole";
 export type ModulePermission =
   // ── ניהול שוטף ────────────────────────────────────────────────────────
   | "dashboard"
+  | "crm_dashboard"
   | "clients"
   | "client_onboarding"
   | "tasks"
@@ -33,6 +34,8 @@ export type ModulePermission =
   | "social_media"
   | "reports"
   | "dynamic_tables"
+  | "site_analytics"
+  | "rank_tracking"
   | "ai_detection"
   // ── ניהול ארגון ───────────────────────────────────────────────────────
   | "agencies"
