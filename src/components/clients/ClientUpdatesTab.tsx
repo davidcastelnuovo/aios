@@ -82,7 +82,7 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
     queryKey: ["comm-log-latest", clientId],
     queryFn: async () => {
       try {
-        const { data, error } = await supabase
+        const { data, error } = await (supabase as any)
           .from("communication_logs")
           .select("status, interaction_type, notes, created_at")
           .eq("client_id", clientId)
@@ -102,7 +102,7 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
       if (!tenantId || !user?.id) throw new Error("Missing tenant or user");
       if (!commNote.trim()) throw new Error("הערה חובה");
       // Insert into communication_logs
-      const { error: logError } = await supabase
+      const { error: logError } = await (supabase as any)
         .from("communication_logs")
         .insert({
           client_id: clientId,
@@ -115,7 +115,7 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
       if (logError) throw logError;
       // Sync mood_status on clients table
       const newMood = COMM_TO_MOOD[commStatus] ?? "happy";
-      await supabase.from("clients").update({ mood_status: newMood }).eq("id", clientId);
+      await supabase.from("clients").update({ mood_status: newMood } as any).eq("id", clientId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["comm-log-latest", clientId] });
