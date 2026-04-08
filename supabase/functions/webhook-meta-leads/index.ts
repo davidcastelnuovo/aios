@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
     const url = new URL(req.url);
     const tenantId = url.searchParams.get('tenant_id');
     const agencyId = url.searchParams.get('agency_id');
-    const source = url.searchParams.get('source') || 'meta_lead_ads';
+    const source = url.searchParams.get('source') || 'paid_ads';
 
     const rawBody = await req.json();
     console.log('Meta leads webhook received:', JSON.stringify(rawBody).substring(0, 500));
