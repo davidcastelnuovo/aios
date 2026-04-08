@@ -103,7 +103,7 @@ export function InteractiveCalendar() {
   // Update event mutation
   const updateMutation = useMutation({
     mutationFn: async (params: { eventId: string; summary: string; description: string; start: string; end: string }) => {
-      return await updateCalendarEvent(params, { tenantId: tenantId! });
+      return await updateCalendarEvent(params, { tenantId: tenantId!, provider: getStoredProvider() });
     },
     onSuccess: () => {
       toast.success('האירוע עודכן בהצלחה');
@@ -119,7 +119,7 @@ export function InteractiveCalendar() {
   // Delete event mutation
   const deleteMutation = useMutation({
     mutationFn: async (eventId: string) => {
-      return await deleteCalendarEvent(eventId, { tenantId: tenantId! });
+      return await deleteCalendarEvent(eventId, { tenantId: tenantId!, provider: getStoredProvider() });
     },
     onSuccess: () => {
       toast.success('האירוע נמחק בהצלחה');
