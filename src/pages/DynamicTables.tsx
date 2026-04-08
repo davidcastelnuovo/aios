@@ -294,7 +294,7 @@ export default function DynamicTables() {
   });
 
   const updateTableMutation = useMutation({
-    mutationFn: async ({ tableId, name, agency_id, client_id, integration_settings }: { tableId: string; name: string; agency_id: string | null; client_id: string | null; integration_settings?: any }) => {
+    mutationFn: async ({ tableId, name, agency_id, client_id, integration_settings, syncDomain }: { tableId: string; name: string; agency_id: string | null; client_id: string | null; integration_settings?: any; syncDomain?: { clientId: string; domain: string } }) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
       
@@ -318,11 +318,24 @@ export default function DynamicTables() {
         const error = await response.json();
         throw new Error(error.error || 'Failed to update table');
       }
+
+      // Sync domain to client's website field if empty
+      if (syncDomain) {
+        const client = clients.find(c => c.id === syncDomain.clientId);
+        if (client && !client.website) {
+          const websiteUrl = syncDomain.domain.startsWith('http') ? syncDomain.domain : `https://${syncDomain.domain}`;
+          await supabase
+            .from('clients')
+            .update({ website: websiteUrl })
+            .eq('id', syncDomain.clientId);
+        }
+      }
       
       return await response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
       setEditingTable(null);
       toast.success('הדוח עודכן בהצלחה');
     },
