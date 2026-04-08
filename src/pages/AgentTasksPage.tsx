@@ -17,7 +17,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import {
   Plus, Play, CheckCircle2, XCircle, Clock, Loader2, ArrowRight,
   Image, ExternalLink, Calendar, Repeat, Zap, GitFork, ChevronDown,
-  ChevronUp, Trash2, ToggleLeft, ToggleRight, Timer, ListTodo
+  ChevronUp, Trash2, ToggleLeft, ToggleRight, Timer, ListTodo, Target
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
@@ -710,6 +710,11 @@ export default function AgentTasksPage() {
                             />
                           ))
                         )
+                      )}
+                      {activeTab === "goals" && (
+                        <div className="py-2">
+                          <GoalTree />
+                        </div>
                       )}
                       {activeTab === "stats" && (
                         <div className="space-y-4">
