@@ -16,6 +16,9 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useTenantPath } from "@/hooks/useTenantPath";
+import { useAgency } from "@/contexts/AgencyContext";
+import { useUserRole } from "@/hooks/useUserRole";
+import { useUserAgencies } from "@/hooks/useUserAgencies";
 import { differenceInDays, format } from "date-fns";
 import { he } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
@@ -118,6 +121,9 @@ export default function DMMDashboard() {
   const { tenantId } = useCurrentTenant();
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
+  const { selectedAgency, setSelectedAgency, agencies } = useAgency();
+  const { isOwner, isTeamManager, isSuperAdmin, isCampaigner, isSeo, campaignerId } = useUserRole();
+  const { userAgencyIds } = useUserAgencies();
 
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | OverallStatus>("all");
@@ -131,26 +137,58 @@ export default function DMMDashboard() {
 
   // ── Fetch clients (base: always-safe fields) ──────────────────────────────
   const { data: rawClients = [], isLoading: clientsLoading, refetch } = useQuery({
-    queryKey: ["dmm-clients", tenantId],
+    queryKey: ["dmm-clients", tenantId, selectedAgency, userAgencyIds],
     queryFn: async () => {
       if (!tenantId) return [];
-      const { data, error } = await supabase
+      let query = supabase
         .from("clients")
         .select(`
-          id, name, status,
+          id, name, status, agency_id,
           client_team (
+            campaigner_id,
             campaigners ( full_name )
           )
         `)
         .eq("tenant_id", tenantId)
         .in("status", ["active", "onboarding"])
         .order("name");
+
+      // Agency filter
+      if (selectedAgency && selectedAgency !== "all") {
+        query = query.eq("agency_id", selectedAgency);
+      } else if (userAgencyIds && userAgencyIds.length > 0) {
+        // Non-owner users: restrict to their agencies
+        query = query.in("agency_id", userAgencyIds);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return data ?? [];
     },
     enabled: !!tenantId,
     staleTime: 30_000,
   });
+
+  // ── Campaigner client filtering ───────────────────────────────────────────
+  const needsCampaignerFilter = (isCampaigner || isSeo) && !isOwner && !isTeamManager && !isSuperAdmin;
+  
+  const campaignerClientIds = useMemo(() => {
+    if (!needsCampaignerFilter || !campaignerId) return null;
+    const ids = new Set<string>();
+    rawClients.forEach((c: any) => {
+      c.client_team?.forEach((ct: any) => {
+        if (ct.campaigner_id === campaignerId) {
+          ids.add(c.id);
+        }
+      });
+    });
+    return ids;
+  }, [rawClients, needsCampaignerFilter, campaignerId]);
+
+  const filteredByRole = useMemo(() => {
+    if (!needsCampaignerFilter || !campaignerClientIds) return rawClients;
+    return rawClients.filter((c: any) => campaignerClientIds.has(c.id));
+  }, [rawClients, needsCampaignerFilter, campaignerClientIds]);
 
   // ── Fetch CRM extended fields (tier, services, mood_status) ────────────────
   // These columns are added by migration 20260407_dmm_crm_adaptation.sql
@@ -175,7 +213,7 @@ export default function DMMDashboard() {
     staleTime: 60_000,
   });
 
-  const clientIds = rawClients.map((c: any) => c.id);
+  const clientIds = filteredByRole.map((c: any) => c.id);
 
   // ── Fetch latest communication log per client ──────────────────────────────
   const { data: commLogs = [] } = useQuery({
@@ -285,7 +323,7 @@ export default function DMMDashboard() {
 
   // ── Build enriched client rows ─────────────────────────────────────────────
   const clients: ClientRow[] = useMemo(() => {
-    return rawClients.map((c: any) => {
+    return filteredByRole.map((c: any) => {
       // Merge CRM extended fields (tier, services, mood_status)
       // Falls back to null/empty if migration hasn't run yet
       const ext = (crmFields.find((f: any) => f.id === c.id) ?? {}) as CRMClientFields;
@@ -340,7 +378,7 @@ export default function DMMDashboard() {
         flags: result.flags,
       } as ClientRow;
     });
-  }, [rawClients, crmFields, commLogs, seoUpdates, perfData]);
+  }, [filteredByRole, crmFields, commLogs, seoUpdates, perfData]);
 
   // ── Filtered list ──────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -426,6 +464,20 @@ export default function DMMDashboard() {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2 items-center">
+        {/* Agency filter - uses global AgencyContext */}
+        {agencies && agencies.length > 1 && (
+          <Select value={selectedAgency} onValueChange={setSelectedAgency}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="כל הסוכנויות" />
+            </SelectTrigger>
+            <SelectContent className="bg-background">
+              <SelectItem value="all">כל הסוכנויות</SelectItem>
+              {agencies.map((a) => (
+                <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
