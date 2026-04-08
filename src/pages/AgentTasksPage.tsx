@@ -626,6 +626,9 @@ export default function AgentTasksPage() {
                   <TabsTrigger value="recurring" className="text-xs gap-1">
                     <Repeat className="h-3 w-3" /> חוזרות ({recurringTasks.length})
                   </TabsTrigger>
+                  <TabsTrigger value="goals" className="text-xs gap-1">
+                    <Target className="h-3 w-3" /> יעדים
+                  </TabsTrigger>
                   <TabsTrigger value="stats" className="text-xs gap-1">
                     <Zap className="h-3 w-3" /> סטטיסטיקות
                   </TabsTrigger>
