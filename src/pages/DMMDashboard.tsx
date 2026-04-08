@@ -464,6 +464,23 @@ export default function DMMDashboard() {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2 items-center">
+        {/* Agency filter - uses global AgencyContext */}
+        {agencies && agencies.length > 1 && (
+          <Select value={selectedAgency} onValueChange={(v) => {
+            const { setSelectedAgency } = useAgency();
+            setSelectedAgency(v);
+          }}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="כל הסוכנויות" />
+            </SelectTrigger>
+            <SelectContent className="bg-background">
+              <SelectItem value="all">כל הסוכנויות</SelectItem>
+              {agencies.map((a) => (
+                <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
