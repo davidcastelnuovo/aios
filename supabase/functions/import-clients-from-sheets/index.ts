@@ -14,6 +14,46 @@ interface SheetRow {
   monthly_budget?: string | null;
   website?: string | null;
   notes?: string | null;
+  tier?: string | null;
+  services?: string[] | null;
+  meta_ads_account_id?: string | null;
+  google_ads_account_id?: string | null;
+}
+
+// Map platform strings from the sheet to service keys
+function mapPlatformToServices(platformStr: string | null): string[] {
+  if (!platformStr) return []
+  const services: string[] = []
+  const parts = platformStr.split('+').map(p => p.trim().toUpperCase())
+  for (const part of parts) {
+    switch (part) {
+      case 'SEO':
+        services.push('seo')
+        break
+      case 'PPC GOOGLE':
+      case 'PPC GOOLE': // typo in sheet
+        services.push('ppc_google')
+        break
+      case 'PPC META':
+      case 'META':
+        services.push('ppc_meta')
+        break
+      case 'SOCIAL':
+        services.push('social')
+        break
+      case 'FULL SOCIAL':
+      case 'FULLSOCIAL':
+        services.push('full_social')
+        break
+      case 'SOCIAL META':
+        services.push('social_meta')
+        break
+      case 'AUTOMATION':
+        services.push('automation')
+        break
+    }
+  }
+  return [...new Set(services)] // deduplicate
 }
 
 Deno.serve(async (req) => {
@@ -68,7 +108,7 @@ Deno.serve(async (req) => {
       throw new Error('Google API key not configured')
     }
 
-    const sheetRange = !range || String(range).trim() === '' ? 'Sheet1!A:I' : String(range).trim()
+    const sheetRange = !range || String(range).trim() === '' ? 'Sheet1!A:J' : String(range).trim()
 
     // Fetch data from Google Sheets
     const sheetsUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetRange}?key=${googleApiKey}`
@@ -86,7 +126,6 @@ Deno.serve(async (req) => {
     if (!rows || rows.length === 0) {
       throw new Error('No data found in the sheet')
     }
-
 
     // First row is headers
     const headers = rows[0].map((h: string) => h.toLowerCase().trim())
@@ -114,6 +153,7 @@ Deno.serve(async (req) => {
         switch (header) {
           case 'name':
           case 'שם':
+          case 'שם עסק':
             client.name = value
             break
           case 'agency_id':
@@ -145,6 +185,30 @@ Deno.serve(async (req) => {
           case 'הערות':
             client.notes = value
             break
+          case 'tier':
+          case 'רמת חשיבות':
+            // Accept A, B, C only
+            if (value && ['A', 'B', 'C'].includes(value.toUpperCase())) {
+              client.tier = value.toUpperCase()
+            }
+            break
+          case 'platform':
+          case 'פלטפורמה':
+          case 'פלפרמה':
+            client.services = mapPlatformToServices(value)
+            break
+          case 'meta_ads_account_id':
+          case 'חשבון מודעות meta':
+          case 'חשבון מודעות META':
+            client.meta_ads_account_id = value
+            break
+          case 'google_ads_account_id':
+          case 'חשבון google':
+          case ' חשבון google':
+          case 'חשבון GOOGLE':
+          case ' חשבון GOOGLE':
+            client.google_ads_account_id = value
+            break
         }
       })
 
@@ -161,7 +225,6 @@ Deno.serve(async (req) => {
       clients.push(client)
     }
 
-
     // Insert clients into database with tenant_id
     const { data, error } = await serviceClient
       .from('clients')
@@ -174,6 +237,10 @@ Deno.serve(async (req) => {
         monthly_budget: c.monthly_budget ? parseFloat(c.monthly_budget) : null,
         website: c.website || null,
         notes: c.notes || null,
+        tier: c.tier || null,
+        services: c.services && c.services.length > 0 ? c.services : null,
+        meta_ads_account_id: c.meta_ads_account_id || null,
+        google_ads_account_id: c.google_ads_account_id || null,
         tenant_id: tenantId,
       })))
       .select()
@@ -182,7 +249,6 @@ Deno.serve(async (req) => {
       console.error('Database error:', error)
       throw error
     }
-
 
     return new Response(
       JSON.stringify({

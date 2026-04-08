@@ -50,6 +50,9 @@ const formSchema = z.object({
   website: z.string().url("כתובת אתר לא תקינה").optional().or(z.literal("")),
   notes: z.string().optional(),
   is_seo_client: z.boolean().default(false),
+  services: z.array(z.string()).default([]),
+  meta_ads_account_id: z.string().optional(),
+  google_ads_account_id: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -127,6 +130,9 @@ export function AddClientForm() {
       website: "",
       notes: "",
       is_seo_client: false,
+      services: [],
+      meta_ads_account_id: "",
+      google_ads_account_id: "",
     },
   });
 
@@ -155,6 +161,9 @@ export function AddClientForm() {
         website: values.website || null,
         notes: values.notes || null,
         is_seo_client: values.is_seo_client,
+        services: values.services || [],
+        meta_ads_account_id: values.meta_ads_account_id || null,
+        google_ads_account_id: values.google_ads_account_id || null,
       }).select("id").single();
       if (error) throw error;
 
@@ -345,6 +354,69 @@ export function AddClientForm() {
                   <FormLabel>הערות</FormLabel>
                   <FormControl>
                     <Textarea {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="services"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>שירותים פעילים</FormLabel>
+                  <div className="flex flex-col gap-2 mt-1">
+                    {([
+                      { key: "ppc_google", label: "PPC Google" },
+                      { key: "ppc_meta", label: "PPC Meta" },
+                      { key: "seo", label: "SEO" },
+                      { key: "social", label: "Social" },
+                      { key: "full_social", label: "Full Social" },
+                      { key: "social_meta", label: "Social Meta" },
+                      { key: "automation", label: "Automation" },
+                    ] as { key: string; label: string }[]).map((svc) => (
+                      <label key={svc.key} className="flex items-center gap-2 cursor-pointer">
+                        <Checkbox
+                          checked={field.value?.includes(svc.key)}
+                          onCheckedChange={(checked) => {
+                            const current = field.value || [];
+                            field.onChange(
+                              checked ? [...current, svc.key] : current.filter((s: string) => s !== svc.key)
+                            );
+                          }}
+                        />
+                        <span className="text-sm">{svc.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="meta_ads_account_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>חשבון מודעות META</FormLabel>
+                  <FormControl>
+                    <Input placeholder="מזהה חשבון Meta Ads" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="google_ads_account_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>חשבון Google Ads</FormLabel>
+                  <FormControl>
+                    <Input placeholder="מזהה חשבון Google Ads" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

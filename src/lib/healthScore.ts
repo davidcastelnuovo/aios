@@ -208,9 +208,13 @@ export const OVERALL_STATUS_CONFIG: Record<OverallStatus, { label: string; dot: 
 };
 
 export const SERVICE_LABELS: Record<string, string> = {
-  performance: 'Performance',
+  ppc_google: 'PPC Google',
+  ppc_meta: 'PPC Meta',
   seo: 'SEO',
   social: 'Social',
+  full_social: 'Full Social',
+  social_meta: 'Social Meta',
+  automation: 'Automation',
 };
 
 export const TIER_COLORS: Record<string, string> = {

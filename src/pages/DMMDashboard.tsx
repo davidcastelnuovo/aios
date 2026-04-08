@@ -140,7 +140,7 @@ export default function DMMDashboard() {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | OverallStatus>("all");
   const [filterTier, setFilterTier] = useState<"all" | "A" | "B" | "C">("all");
-  const [filterService, setFilterService] = useState<"all" | "performance" | "seo" | "social">("all");
+  const [filterService, setFilterService] = useState<"all" | "ppc_google" | "ppc_meta" | "seo" | "social" | "full_social" | "social_meta" | "automation">("all");
 
   // Navigate to the client module with the selected client pre-opened
   function openClientCard(clientId: string, tab: "updates" | "details" = "updates") {
@@ -528,9 +528,13 @@ export default function DMMDashboard() {
           </SelectTrigger>
           <SelectContent className="bg-background">
             <SelectItem value="all">כל השירותים</SelectItem>
-            <SelectItem value="performance">Performance</SelectItem>
+            <SelectItem value="ppc_google">PPC Google</SelectItem>
+            <SelectItem value="ppc_meta">PPC Meta</SelectItem>
             <SelectItem value="seo">SEO</SelectItem>
             <SelectItem value="social">Social</SelectItem>
+            <SelectItem value="full_social">Full Social</SelectItem>
+            <SelectItem value="social_meta">Social Meta</SelectItem>
+            <SelectItem value="automation">Automation</SelectItem>
           </SelectContent>
         </Select>
       </div>

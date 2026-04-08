@@ -64,6 +64,8 @@ const formSchema = z.object({
   is_seo_client: z.boolean().default(false),
   tier: z.enum(["A", "B", "C"]).optional().nullable(),
   services: z.array(z.string()).default([]),
+  meta_ads_account_id: z.string().optional(),
+  google_ads_account_id: z.string().optional(),
 });
 
 interface EditClientDialogProps {
@@ -336,6 +338,8 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
       is_seo_client: client.is_seo_client || false,
       tier: client.tier || null,
       services: client.services || [],
+      meta_ads_account_id: client.meta_ads_account_id || "",
+      google_ads_account_id: client.google_ads_account_id || "",
     },
   });
   
@@ -395,6 +399,8 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
           is_seo_client: values.is_seo_client,
           tier: values.tier || null,
           services: values.services || [],
+          meta_ads_account_id: values.meta_ads_account_id || null,
+          google_ads_account_id: values.google_ads_account_id || null,
         })
         .eq("id", client.id);
 
@@ -825,18 +831,26 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                   <FormItem>
                     <FormLabel>שירותים פעילים</FormLabel>
                     <div className="flex flex-col gap-2 mt-1">
-                      {["performance", "seo", "social"].map((svc) => (
-                        <label key={svc} className="flex items-center gap-2 cursor-pointer">
+                      {([
+                        { key: "ppc_google", label: "PPC Google" },
+                        { key: "ppc_meta", label: "PPC Meta" },
+                        { key: "seo", label: "SEO" },
+                        { key: "social", label: "Social" },
+                        { key: "full_social", label: "Full Social" },
+                        { key: "social_meta", label: "Social Meta" },
+                        { key: "automation", label: "Automation" },
+                      ] as { key: string; label: string }[]).map((svc) => (
+                        <label key={svc.key} className="flex items-center gap-2 cursor-pointer">
                           <Checkbox
-                            checked={field.value?.includes(svc)}
+                            checked={field.value?.includes(svc.key)}
                             onCheckedChange={(checked) => {
                               const current = field.value || [];
                               field.onChange(
-                                checked ? [...current, svc] : current.filter((s: string) => s !== svc)
+                                checked ? [...current, svc.key] : current.filter((s: string) => s !== svc.key)
                               );
                             }}
                           />
-                          <span className="text-sm">{svc === "performance" ? "Performance" : svc === "seo" ? "SEO" : "Social"}</span>
+                          <span className="text-sm">{svc.label}</span>
                         </label>
                       ))}
                     </div>
@@ -865,6 +879,36 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                 </FormItem>
               )}
             />
+
+            {/* Ads Account IDs */}
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="meta_ads_account_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>חשבון מודעות META</FormLabel>
+                    <FormControl>
+                      <Input placeholder="מזהה חשבון Meta Ads" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="google_ads_account_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>חשבון Google Ads</FormLabel>
+                    <FormControl>
+                      <Input placeholder="מזהה חשבון Google Ads" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <div className="space-y-3 pt-4 border-t">
               <div>
