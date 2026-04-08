@@ -1,0 +1,1 @@
+ALTER TABLE public.agent_tasks ADD COLUMN IF NOT EXISTS run_count INTEGER DEFAULT 0;
