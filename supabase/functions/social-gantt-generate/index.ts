@@ -24,7 +24,8 @@ Deno.serve(async (req) => {
     const { data: { user }, error: authError } = await supabase.auth.getUser(token)
     if (authError || !user) throw new Error('Unauthorized')
 
-    const { action, post_id, tenant_id, prompt, style, additional_notes, tone, target_audience, call_to_action } = await req.json()
+    const body = await req.json()
+    const { action, post_id, tenant_id, prompt, style, additional_notes, tone, target_audience, call_to_action, date } = body
 
     if (!LOVABLE_API_KEY) {
       throw new Error('LOVABLE_API_KEY not configured')
@@ -36,6 +37,8 @@ Deno.serve(async (req) => {
       result = await generateCopy({ prompt, tone, target_audience, call_to_action, post_id, tenant_id }, supabase)
     } else if (action === 'generate_creative_prompt') {
       result = await generateCreativePrompt({ prompt, style, additional_notes, post_id, tenant_id }, supabase)
+    } else if (action === 'generate_day_ideas') {
+      result = await generateDayIdeas({ date, tenant_id }, supabase)
     } else {
       throw new Error(`Unknown action: ${action}`)
     }
@@ -52,6 +55,84 @@ Deno.serve(async (req) => {
   }
 })
 
+// ─── generate_day_ideas ────────────────────────────────────────────────────
+async function generateDayIdeas(params: { date: string; tenant_id: string }, _supabase: any) {
+  const { date } = params
+
+  // Parse the date to understand context (day of week, month, upcoming events)
+  const d = new Date(date)
+  const dayNames = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת']
+  const monthNames = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר']
+  const dayOfWeek = dayNames[d.getDay()]
+  const monthName = monthNames[d.getMonth()]
+  const dayNum = d.getDate()
+  const year = d.getFullYear()
+
+  const systemPrompt = `אתה מנהל תוכן סושיאל מדיה מנוסה בישראל.
+תפקידך להציע רעיונות לפוסטים לפי תאריך ספציפי, תוך התחשבות ב:
+- אקטואליה ישראלית ועולמית (חגים, אירועים, מגמות)
+- ימים מיוחדים בלוח השנה הישראלי והבינלאומי
+- טרנדים עונתיים ותרבותיים
+- ימי המודעות הבינלאומיים
+- אירועי ספורט, תרבות, כלכלה
+
+כל רעיון צריך להיות ספציפי, אקטואלי ורלוונטי לתאריך.
+כתוב בעברית.`
+
+  const userPrompt = `תאריך: יום ${dayOfWeek}, ${dayNum} ב${monthName} ${year}
+
+צור 4 רעיונות לפוסטים סושיאל שמתאימים לתאריך הזה.
+חשוב על: מה קורה בישראל ובעולם בתקופה הזו? אילו חגים/אירועים/ימי מודעות קרובים?
+מה הטרנדים הרלוונטיים לחודש הזה?
+
+החזר JSON בפורמט הבא (בלי markdown, רק JSON טהור):
+{
+  "ideas": [
+    {
+      "topic": "נושא קצר ומדויק",
+      "rationale": "למה הרעיון הזה רלוונטי לתאריך הזה (1-2 משפטים)",
+      "platform": "instagram",
+      "hook": "פתיח קצר לפוסט (משפט אחד מושך)"
+    }
+  ]
+}`
+
+  const response = await fetch(AI_GATEWAY_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'google/gemini-2.5-flash',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: 0.85,
+    }),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`AI Gateway error: ${response.status} - ${errorText}`)
+  }
+
+  const data = await response.json()
+  const content = data.choices?.[0]?.message?.content || ''
+
+  let parsed
+  try {
+    const jsonMatch = content.match(/\{[\s\S]*\}/)
+    parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : { ideas: [] }
+  } catch {
+    parsed = { ideas: [] }
+  }
+
+  return { ideas: parsed.ideas || [] }
+}
+
+// ─── generate_copy ─────────────────────────────────────────────────────────
 async function generateCopy(params: {
   prompt: string
   tone: string
@@ -62,7 +143,6 @@ async function generateCopy(params: {
 }, supabase: any) {
   const { prompt, tone, target_audience, call_to_action, post_id, tenant_id } = params
 
-  // Fetch post context
   const { data: post } = await supabase
     .from('social_gantt_posts')
     .select('*')
@@ -128,13 +208,11 @@ ${prompt ? `הנחיות נוספות: ${prompt}` : ''}
   const data = await response.json()
   const content = data.choices?.[0]?.message?.content || ''
 
-  // Parse JSON from response (handle potential markdown wrapping)
   let parsed
   try {
     const jsonMatch = content.match(/\{[\s\S]*\}/)
     parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : { options: [] }
   } catch {
-    // If parsing fails, create structured response from raw text
     parsed = {
       options: [
         { text: content, tone_label: toneMap[tone] || tone },
@@ -145,6 +223,7 @@ ${prompt ? `הנחיות נוספות: ${prompt}` : ''}
   return { options: parsed.options || [] }
 }
 
+// ─── generate_creative_prompt ──────────────────────────────────────────────
 async function generateCreativePrompt(params: {
   prompt: string
   style: string
@@ -152,9 +231,8 @@ async function generateCreativePrompt(params: {
   post_id: string
   tenant_id: string
 }, supabase: any) {
-  const { prompt, style, additional_notes, post_id, tenant_id } = params
+  const { prompt, style, additional_notes, post_id } = params
 
-  // Fetch post context
   const { data: post } = await supabase
     .from('social_gantt_posts')
     .select('*')

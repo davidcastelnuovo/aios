@@ -31,7 +31,7 @@ import { PostComposer } from "@/components/social-media/PostComposer";
 import { SocialGanttVisualView } from "@/components/social-gantt/SocialGanttVisualView";
 import { SocialGanttPostPanel } from "@/components/social-gantt/SocialGanttPostPanel";
 import { SocialGanttHeader } from "@/components/social-gantt/SocialGanttHeader";
-import { NewPostDialog } from "@/components/social-gantt/NewPostDialog";
+import { DayIdeaPanel } from "@/components/social-gantt/DayIdeaPanel";
 
 // Social Media Scheduler components (publishing)
 import { PostsList } from "@/components/social-media/PostsList";
@@ -84,7 +84,7 @@ export default function SocialDashboard() {
 
   // ─── Gantt state ───────────────────────────────────────────────
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
-  const [isNewPostOpen, setIsNewPostOpen] = useState(false);
+  const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [filterPlatform, setFilterPlatform] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -395,7 +395,7 @@ export default function SocialDashboard() {
           {activeTab === "gantt" && (
             <div className="flex flex-col h-[calc(100vh-12rem)]">
               <SocialGanttHeader
-                onNewPost={() => setIsNewPostOpen(true)}
+                onNewPost={() => setSelectedDay(new Date())}
                 filterPlatform={filterPlatform}
                 onFilterPlatform={setFilterPlatform}
                 filterStatus={filterStatus}
@@ -408,24 +408,28 @@ export default function SocialDashboard() {
                 <SocialGanttVisualView
                   posts={filteredGanttPosts}
                   selectedPostId={selectedPostId}
-                  onSelectPost={setSelectedPostId}
+                  onSelectPost={(id) => { setSelectedPostId(id); setSelectedDay(null); }}
+                  onSelectDay={(day) => { setSelectedDay(day); setSelectedPostId(null); }}
                   isLoading={ganttLoading}
                 />
-                <SocialGanttPostPanel
-                  post={selectedPost}
-                  onUpdatePost={(updates) => updateGanttPost.mutate(updates)}
-                  onDeletePost={(id) => deleteGanttPost.mutate(id)}
-                  isUpdating={updateGanttPost.isPending}
-                  tenantId={tenantId}
-                />
+                {selectedDay ? (
+                  <DayIdeaPanel
+                    date={selectedDay}
+                    tenantId={tenantId}
+                    onCreatePost={(post) => createGanttPost.mutate(post)}
+                    isCreating={createGanttPost.isPending}
+                    onClose={() => setSelectedDay(null)}
+                  />
+                ) : (
+                  <SocialGanttPostPanel
+                    post={selectedPost}
+                    onUpdatePost={(updates) => updateGanttPost.mutate(updates)}
+                    onDeletePost={(id) => deleteGanttPost.mutate(id)}
+                    isUpdating={updateGanttPost.isPending}
+                    tenantId={tenantId}
+                  />
+                )}
               </div>
-              <NewPostDialog
-                open={isNewPostOpen}
-                onOpenChange={setIsNewPostOpen}
-                onCreatePost={(post) => createGanttPost.mutate(post)}
-                tenantId={tenantId || ""}
-                isCreating={createGanttPost.isPending}
-              />
             </div>
           )}
         </TabsContent>
