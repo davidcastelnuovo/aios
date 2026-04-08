@@ -400,6 +400,69 @@ export default function AgentTasksPage() {
   const [form, setForm] = useState({ ...defaultForm });
   const [activeTab, setActiveTab] = useState("tasks");
 
+  // Heartbeat settings
+  const { data: heartbeatSettings } = useQuery({
+    queryKey: ["heartbeat_settings", tenantId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("tenant_heartbeat_settings")
+        .select("*")
+        .eq("tenant_id", tenantId!)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!tenantId,
+  });
+
+  // Heartbeat logs
+  const { data: heartbeatLogs = [] } = useQuery({
+    queryKey: ["heartbeat_logs", tenantId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("heartbeat_logs")
+        .select("*")
+        .eq("tenant_id", tenantId!)
+        .order("triggered_at", { ascending: false })
+        .limit(10);
+      return (data as any[]) || [];
+    },
+    enabled: !!tenantId && activeTab === "heartbeat",
+  });
+
+  // Next urgent task
+  const { data: nextTask } = useQuery({
+    queryKey: ["next_urgent_task", tenantId],
+    queryFn: async () => {
+      const today = new Date().toISOString().split("T")[0];
+      const { data } = await supabase
+        .from("tasks")
+        .select("id, title, due_date, priority, status, assigned_agent, clients(name)")
+        .eq("tenant_id", tenantId!)
+        .in("status", ["open", "in_progress"])
+        .is("assigned_agent", null)
+        .order("due_date", { ascending: true, nullsFirst: false })
+        .order("priority", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data as any;
+    },
+    enabled: !!tenantId,
+  });
+
+  const saveHeartbeatSettings = useMutation({
+    mutationFn: async (settings: { enabled: boolean; interval_hours: number; active_hours_start: number; active_hours_end: number; allowed_actions: string[] }) => {
+      const { error } = await supabase
+        .from("tenant_heartbeat_settings")
+        .upsert({ tenant_id: tenantId!, ...settings, updated_at: new Date().toISOString() });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["heartbeat_settings"] });
+      toast.success("הגדרות Heartbeat נשמרו");
+    },
+    onError: () => toast.error("שגיאה בשמירת הגדרות"),
+  });
+
   const { data: agents = [] } = useQuery({
     queryKey: ["ai_agents", tenantId],
     queryFn: async () => {
