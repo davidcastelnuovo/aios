@@ -54,6 +54,8 @@ const ALL_TOOLS = [
   // MANUS AI - Complex task delegation
   { name: 'delegate_to_manus', description: 'שליחת משימה מורכבת ל-Manus AI לביצוע ברקע (מחקר שוק, ניתוח קמפיינים, יצירת תוכן, ניתוח נתונים). המשימה רצה ברקע ועשויה לקחת דקות עד שעות.', parameters: { type: 'object', properties: { prompt: { type: 'string', description: 'תיאור מפורט של המשימה לביצוע' }, context_data: { type: 'string', description: 'נתוני הקשר רלוונטיים (למשל נתוני קמפיינים)' } }, required: ['prompt'] } },
   { name: 'get_facebook_campaign_data', description: 'שליפת נתוני קמפיינים מפייסבוק לצורך ניתוח', parameters: { type: 'object', properties: { client_id: { type: 'string' }, days: { type: 'integer', description: 'מספר ימים אחורה (ברירת מחדל 30)' } } } },
+  { name: 'analyze_campaign_performance', description: 'ניתוח ביצועי קמפיינים מטבלאות CRM: משווה 7 ימים אחרונים מול 30 ימים עבור כל לקוח. מחזיר אחוזי שינוי בהוצאות, עלות לליד, ו-ROAS. השתמש בכלי הזה כדי לזהות התייקרויות וירידות ביצועים.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה לקוח ספציפי (אופציונלי — ללא = כל הלקוחות)' } } } },
+  { name: 'update_client_health', description: 'עדכון מצב בריאות לקוח: מעדכן mood_status בטבלת clients ויוצר רשומה ב-communication_logs. השתמש בכלי הזה כדי להדליק דגל על לקוח כשמזהים בעיה (התייקרות, ירידה בביצועים).', parameters: { type: 'object', properties: { client_id: { type: 'string' }, mood_status: { type: 'string', enum: ['happy', 'wavering', 'churn_risk'], description: 'מצב הלקוח: happy=תקין, wavering=מתלבט, churn_risk=סיכון נטישה' }, communication_status: { type: 'string', enum: ['normal', 'sensitive', 'complaint'], description: 'סטטוס תקשורת לרשומת communication_logs' }, note: { type: 'string', description: 'הערה/סיכום — מה הבעיה שזוהתה' } }, required: ['client_id', 'mood_status', 'note'] } },
   // CLIENTS - full CRUD
   { name: 'create_client', description: 'יצירת לקוח חדש במערכת', parameters: { type: 'object', properties: { name: { type: 'string', description: 'שם העסק/לקוח' }, contact_name: { type: 'string' }, phone: { type: 'string' }, email: { type: 'string' }, agency_id: { type: 'string', description: 'מזהה סוכנות (אופציונלי)' }, notes: { type: 'string' } }, required: ['name'] } },
   { name: 'update_client', description: 'עדכון פרטי לקוח קיים', parameters: { type: 'object', properties: { client_id: { type: 'string' }, name: { type: 'string' }, contact_name: { type: 'string' }, phone: { type: 'string' }, email: { type: 'string' }, status: { type: 'string', enum: ['active', 'inactive', 'lead'] }, notes: { type: 'string' } }, required: ['client_id'] } },
@@ -313,6 +315,114 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const { data, error } = await query
       if (error) throw error
       return { count: data?.length || 0, campaigns: data || [], period: `${daysBack} days` }
+    }
+    case 'analyze_campaign_performance': {
+      // Fetch all Facebook CRM tables for this tenant
+      const { data: crmTables, error: tablesErr } = await supabase
+        .from('crm_tables')
+        .select('id, client_id, slug, name')
+        .eq('tenant_id', tenantId)
+        .ilike('slug', '%facebook%')
+      if (tablesErr) throw tablesErr
+      if (!crmTables || crmTables.length === 0) {
+        return { message: 'לא נמצאו טבלאות קמפיינים מסונכרנות', clients: [] }
+      }
+
+      // Filter to specific client if requested
+      const tables = args.client_id 
+        ? crmTables.filter((t: any) => t.client_id === args.client_id)
+        : crmTables
+
+      const now = new Date()
+      const d7 = new Date(now); d7.setDate(d7.getDate() - 7)
+      const d30 = new Date(now); d30.setDate(d30.getDate() - 30)
+      const d7Str = d7.toISOString().split('T')[0]
+      const d30Str = d30.toISOString().split('T')[0]
+
+      const results: any[] = []
+      for (const table of tables) {
+        // Fetch last 30 days of records
+        const { data: records } = await supabase
+          .from('crm_records')
+          .select('data')
+          .eq('table_id', table.id)
+          .eq('tenant_id', tenantId)
+
+        if (!records || records.length === 0) continue
+
+        // Split into 7d and 30d
+        const last7d = records.filter((r: any) => r.data?.date >= d7Str)
+        const last30d = records.filter((r: any) => r.data?.date >= d30Str)
+        const older = last30d.filter((r: any) => r.data?.date < d7Str)
+
+        const sum = (arr: any[], field: string) => arr.reduce((s: number, r: any) => s + (parseFloat(r.data?.[field]) || 0), 0)
+        
+        const spend7 = sum(last7d, 'spend')
+        const spend_older = sum(older, 'spend')
+        const leads7 = sum(last7d, 'leads')
+        const leads_older = sum(older, 'leads')
+
+        // Calculate daily averages for comparison
+        const days7 = Math.max(last7d.length, 1)
+        const daysOlder = Math.max(older.length, 1)
+        
+        const dailySpend7 = spend7 / days7
+        const dailySpendOlder = spend_older / daysOlder
+        const spendChangePct = dailySpendOlder > 0 ? ((dailySpend7 - dailySpendOlder) / dailySpendOlder * 100) : null
+
+        const cpl7 = leads7 > 0 ? spend7 / leads7 : null
+        const cplOlder = leads_older > 0 ? spend_older / leads_older : null
+        const cplChangePct = cplOlder && cpl7 ? ((cpl7 - cplOlder) / cplOlder * 100) : null
+
+        // Get client name
+        const { data: clientData } = await supabase.from('clients').select('name').eq('id', table.client_id).single()
+
+        results.push({
+          client_id: table.client_id,
+          client_name: clientData?.name || table.name,
+          spend_7d: Math.round(spend7 * 100) / 100,
+          spend_30d: Math.round((spend7 + spend_older) * 100) / 100,
+          leads_7d: leads7,
+          leads_30d: leads7 + leads_older,
+          cpl_7d: cpl7 ? Math.round(cpl7 * 100) / 100 : null,
+          cpl_30d_avg: cplOlder ? Math.round(cplOlder * 100) / 100 : null,
+          spend_change_pct: spendChangePct ? Math.round(spendChangePct * 10) / 10 : null,
+          cpl_change_pct: cplChangePct ? Math.round(cplChangePct * 10) / 10 : null,
+          records_7d: last7d.length,
+          records_30d: last30d.length,
+          alert: spendChangePct !== null && spendChangePct > 15 ? '🔴 התייקרות' : (cplChangePct !== null && cplChangePct > 20 ? '🟡 עלייה בעלות לליד' : '🟢 תקין'),
+        })
+      }
+
+      // Sort by spend change (highest first = most alarming)
+      results.sort((a: any, b: any) => (b.spend_change_pct || 0) - (a.spend_change_pct || 0))
+      return { count: results.length, clients: results }
+    }
+    case 'update_client_health': {
+      // 1. Update mood_status on client
+      const updateData: any = { mood_status: args.mood_status }
+      const { error: clientErr } = await supabase
+        .from('clients')
+        .update(updateData)
+        .eq('id', args.client_id)
+        .eq('tenant_id', tenantId)
+      if (clientErr) throw clientErr
+
+      // 2. Create communication_log entry
+      const commStatus = args.communication_status || (args.mood_status === 'happy' ? 'normal' : args.mood_status === 'wavering' ? 'sensitive' : 'complaint')
+      const { error: logErr } = await supabase
+        .from('communication_logs')
+        .insert({
+          client_id: args.client_id,
+          tenant_id: tenantId,
+          status: commStatus,
+          interaction_type: 'system_alert',
+          note: args.note,
+          updated_by: userId !== 'system' ? userId : null,
+        })
+      if (logErr) throw logErr
+
+      return { success: true, client_id: args.client_id, mood_status: args.mood_status, communication_status: commStatus }
     }
     case 'create_social_post': {
       // Insert into both social_media_posts (for publishing) and social_gantt_posts (for planning view)

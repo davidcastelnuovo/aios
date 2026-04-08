@@ -213,6 +213,76 @@ export default function DMMDashboard() {
     staleTime: 60_000,
   });
 
+  // ── Fetch campaign performance data from CRM tables ────────────────────────
+  const { data: perfData = {} } = useQuery({
+    queryKey: ["dmm-performance-data", clientIds.join(","), tenantId],
+    queryFn: async () => {
+      if (!clientIds.length || !tenantId) return {};
+      // 1. Get all Facebook CRM tables for this tenant
+      const { data: crmTables } = await supabase
+        .from("crm_tables")
+        .select("id, client_id")
+        .eq("tenant_id", tenantId)
+        .ilike("slug", "%facebook%");
+      if (!crmTables?.length) return {};
+
+      // 2. Get records for those tables
+      const tableIds = crmTables.map((t: any) => t.id);
+      const { data: records } = await supabase
+        .from("crm_records")
+        .select("table_id, data")
+        .in("table_id", tableIds)
+        .eq("tenant_id", tenantId);
+      if (!records?.length) return {};
+
+      // 3. Build client→table mapping
+      const tableToClient: Record<string, string> = {};
+      for (const t of crmTables) {
+        if (t.client_id) tableToClient[t.id] = t.client_id;
+      }
+
+      // 4. Group records by client and compute 7d vs older daily avg spend change
+      const now = new Date();
+      const d7 = new Date(now); d7.setDate(d7.getDate() - 7);
+      const d30 = new Date(now); d30.setDate(d30.getDate() - 30);
+      const d7Str = d7.toISOString().split("T")[0];
+      const d30Str = d30.toISOString().split("T")[0];
+
+      const byClient: Record<string, { spend7: number; spendOlder: number; days7: number; daysOlder: number }> = {};
+      for (const r of records) {
+        const clientId = tableToClient[r.table_id];
+        if (!clientId) continue;
+        const date = (r.data as any)?.date;
+        if (!date || date < d30Str) continue;
+        if (!byClient[clientId]) byClient[clientId] = { spend7: 0, spendOlder: 0, days7: 0, daysOlder: 0 };
+        const spend = parseFloat((r.data as any)?.spend) || 0;
+        if (date >= d7Str) {
+          byClient[clientId].spend7 += spend;
+          byClient[clientId].days7++;
+        } else {
+          byClient[clientId].spendOlder += spend;
+          byClient[clientId].daysOlder++;
+        }
+      }
+
+      const result: Record<string, number | null> = {};
+      for (const [cid, d] of Object.entries(byClient)) {
+        if (d.daysOlder > 0 && d.days7 > 0) {
+          const dailyAvg7 = d.spend7 / d.days7;
+          const dailyAvgOlder = d.spendOlder / d.daysOlder;
+          result[cid] = dailyAvgOlder > 0
+            ? Math.round((dailyAvg7 - dailyAvgOlder) / dailyAvgOlder * 1000) / 10
+            : null;
+        } else {
+          result[cid] = null;
+        }
+      }
+      return result;
+    },
+    enabled: clientIds.length > 0 && !!tenantId,
+    staleTime: 120_000,
+  });
+
   // ── Build enriched client rows ─────────────────────────────────────────────
   const clients: ClientRow[] = useMemo(() => {
     return rawClients.map((c: any) => {
@@ -239,12 +309,15 @@ export default function DMMDashboard() {
       const campaignerName =
         c.client_team?.[0]?.campaigners?.full_name ?? "—";
 
+      // Performance change from CRM records
+      const performanceChangePct = (perfData as Record<string, number | null>)[c.id] ?? null;
+
       // Health score — uses mood_status as fallback comm status if no log exists
       const result = calculateHealthScore({
         communicationStatus: latestComm?.status ?? mood_status ?? null,
         daysSinceLastCommunication: daysSinceComm,
         services,
-        performanceChangePct: null, // TODO: wire from crm_records
+        performanceChangePct,
         daysSinceLastCampaignTouch: null,
         seoHistory,
       });
@@ -261,13 +334,13 @@ export default function DMMDashboard() {
         lastCommDate: latestComm?.created_at ?? null,
         daysSinceComm,
         seoHistory,
-        performanceChangePct: null,
+        performanceChangePct,
         healthScore: result.score,
         overallStatus: result.status,
         flags: result.flags,
       } as ClientRow;
     });
-  }, [rawClients, crmFields, commLogs, seoUpdates]);
+  }, [rawClients, crmFields, commLogs, seoUpdates, perfData]);
 
   // ── Filtered list ──────────────────────────────────────────────────────────
   const filtered = useMemo(() => {

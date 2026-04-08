@@ -1974,6 +1974,54 @@ export type Database = {
           },
         ]
       }
+      communication_logs: {
+        Row: {
+          client_id: string
+          created_at: string | null
+          id: string
+          interaction_type: string | null
+          note: string | null
+          status: string
+          tenant_id: string
+          updated_by: string | null
+        }
+        Insert: {
+          client_id: string
+          created_at?: string | null
+          id?: string
+          interaction_type?: string | null
+          note?: string | null
+          status?: string
+          tenant_id: string
+          updated_by?: string | null
+        }
+        Update: {
+          client_id?: string
+          created_at?: string | null
+          id?: string
+          interaction_type?: string | null
+          note?: string | null
+          status?: string
+          tenant_id?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "communication_logs_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "communication_logs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_dashboards: {
         Row: {
           agency_id: string | null
