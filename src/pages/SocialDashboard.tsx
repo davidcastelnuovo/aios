@@ -24,6 +24,8 @@ import {
   Settings,
   Share2,
   Plus,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 import { Maximize2, Minimize2 } from "lucide-react";
 import { PostComposer } from "@/components/social-media/PostComposer";
