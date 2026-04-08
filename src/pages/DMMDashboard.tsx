@@ -334,7 +334,7 @@ export default function DMMDashboard() {
         lastCommDate: latestComm?.created_at ?? null,
         daysSinceComm,
         seoHistory,
-        performanceChangePct: null,
+        performanceChangePct,
         healthScore: result.score,
         overallStatus: result.status,
         flags: result.flags,
