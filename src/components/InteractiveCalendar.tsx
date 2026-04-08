@@ -5,7 +5,11 @@ import { he } from "date-fns/locale";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
-import { getCalendarEvents, updateCalendarEvent, deleteCalendarEvent } from "@/lib/calendarApi";
+import { getCalendarEvents, updateCalendarEvent, deleteCalendarEvent, CalendarProvider } from "@/lib/calendarApi";
+
+function getStoredProvider(): CalendarProvider {
+  return (localStorage.getItem("calendar_provider_mode") as CalendarProvider) || "direct";
+}
 import { listenForUnifiedConnection, openUnifiedCalendarConnection } from "@/lib/unifiedCalendarConnection";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
