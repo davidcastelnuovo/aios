@@ -277,17 +277,21 @@ export default function SocialDashboard() {
         </TabsContent>
 
         {/* ── Posts Tab ──────────────────────────────────────────── */}
-        <TabsContent value="posts" className="mt-0 flex-1 overflow-y-auto" style={{ minHeight: 0 }}>
-          <div className="flex items-center justify-between px-6 py-3 border-b sticky top-0 bg-background z-10 shrink-0">
-            <h2 className="text-base font-semibold">פוסטים מוכנים לפרסום</h2>
-            <Button size="sm" onClick={() => setIsComposerOpen(true)}>
-              <Plus className="h-4 w-4 me-1" />
-              פוסט חדש
-            </Button>
-          </div>
-          <div className="p-6">
-            <PostsList />
-          </div>
+        <TabsContent value="posts" className="mt-0" forceMount>
+          {activeTab === "posts" && (
+            <div className="h-[calc(100vh-12rem)] overflow-y-auto">
+              <div className="flex items-center justify-between px-6 py-3 border-b sticky top-0 bg-background z-10 shrink-0">
+                <h2 className="text-base font-semibold">פוסטים מוכנים לפרסום</h2>
+                <Button size="sm" onClick={() => setIsComposerOpen(true)}>
+                  <Plus className="h-4 w-4 me-1" />
+                  פוסט חדש
+                </Button>
+              </div>
+              <div className="p-6">
+                <PostsList />
+              </div>
+            </div>
+          )}
           <Dialog open={isComposerOpen} onOpenChange={setIsComposerOpen}>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
               <DialogHeader>
