@@ -18,7 +18,7 @@ import {
   Plus, Play, CheckCircle2, XCircle, Clock, Loader2, ArrowRight,
   Image, ExternalLink, Calendar, Repeat, Zap, GitFork, ChevronDown,
   ChevronUp, Trash2, ToggleLeft, ToggleRight, Timer, ListTodo, Target,
-  Settings, Bot, AlertTriangle, Sparkles, Heart
+  Settings, Bot, AlertTriangle, Sparkles, Heart, Pencil, RotateCcw
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
@@ -225,6 +225,8 @@ function TaskCard({
   onRun,
   onDelete,
   onToggleEnabled,
+  onEdit,
+  onRerun,
   isRunning,
 }: {
   task: any;
@@ -232,6 +234,8 @@ function TaskCard({
   onRun: (task: any) => void;
   onDelete: (id: string) => void;
   onToggleEnabled: (task: any) => void;
+  onEdit: (task: any) => void;
+  onRerun: (task: any) => void;
   isRunning: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
