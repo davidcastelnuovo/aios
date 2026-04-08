@@ -200,10 +200,10 @@ const App = () => (
                   <Route path="/t/:tenantSlug/google-search-console-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><GoogleSearchConsoleSettings /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/ahrefs-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><AhrefsSettings /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/make-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><MakeSettings /></AppLayout></ProtectedRoute>} />
-                  <Route path="/t/:tenantSlug/site-analytics" element={<ProtectedRoute requiredPermission="clients"><AppLayout><SiteAnalytics /></AppLayout></ProtectedRoute>} />
-                  <Route path="/t/:tenantSlug/rank-tracking" element={<ProtectedRoute requiredPermission="clients"><AppLayout><RankTracking /></AppLayout></ProtectedRoute>} />
-                  <Route path="/t/:tenantSlug/rank-tracking/:projectId" element={<ProtectedRoute requiredPermission="clients"><AppLayout><RankTrackingProject /></AppLayout></ProtectedRoute>} />
-                  <Route path="/t/:tenantSlug/dmm-dashboard" element={<ProtectedRoute requiredPermission="clients"><AppLayout><DMMDashboard /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/site-analytics" element={<ProtectedRoute requiredPermission="site_analytics"><AppLayout><SiteAnalytics /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/rank-tracking" element={<ProtectedRoute requiredPermission="rank_tracking"><AppLayout><RankTracking /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/rank-tracking/:projectId" element={<ProtectedRoute requiredPermission="rank_tracking"><AppLayout><RankTrackingProject /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/dmm-dashboard" element={<ProtectedRoute requiredPermission="crm_dashboard"><AppLayout><DMMDashboard /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/integrations/serpapi" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><SerpApiSettings /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/zoom-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><ZoomSettings /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/recordings" element={<ProtectedRoute requiredPermission="recordings"><AppLayout><Recordings /></AppLayout></ProtectedRoute>} />

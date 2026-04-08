@@ -300,9 +300,11 @@ const modulePermissions: Record<string, string> = {
   // ── כספים ───────────────────────────────────────────────────────────
   finance: "finance",
   // ── מיפויים לתאימות לאחור ────────────────────────────────────────────
-  site_analytics: "clients",
-  rank_tracking: "clients",
-  "dmm-dashboard": "clients",
+  site_analytics: "site_analytics",
+  "site-analytics": "site_analytics",
+  rank_tracking: "rank_tracking",
+  "rank-tracking": "rank_tracking",
+  "dmm-dashboard": "crm_dashboard",
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
