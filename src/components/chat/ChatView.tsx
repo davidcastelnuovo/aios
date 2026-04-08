@@ -61,6 +61,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [linkPhoneDialogOpen, setLinkPhoneDialogOpen] = useState(false);
   const [linkCampaignerDialogOpen, setLinkCampaignerDialogOpen] = useState(false);
+  const [changeAgencyDialogOpen, setChangeAgencyDialogOpen] = useState(false);
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
   const [replyToMessage, setReplyToMessage] = useState<ReplyToMessage | null>(null);
   const [messagePeriod, setMessagePeriod] = useState<'week' | 'month' | 'all'>('week');
