@@ -28,8 +28,8 @@ import {
 import { PostComposer } from "@/components/social-media/PostComposer";
 
 // Social Gantt components (content planning with AI)
-import { SocialGanttSidebar } from "@/components/social-gantt/SocialGanttSidebar";
-import { SocialGanttPreview } from "@/components/social-gantt/SocialGanttPreview";
+import { SocialGanttVisualView } from "@/components/social-gantt/SocialGanttVisualView";
+import { SocialGanttPostPanel } from "@/components/social-gantt/SocialGanttPostPanel";
 import { SocialGanttHeader } from "@/components/social-gantt/SocialGanttHeader";
 import { NewPostDialog } from "@/components/social-gantt/NewPostDialog";
 
@@ -242,13 +242,13 @@ export default function SocialDashboard() {
                 totalPosts={ganttPosts.length}
               />
               <div className="flex-1 flex overflow-hidden min-h-0">
-                <SocialGanttSidebar
+                <SocialGanttVisualView
                   posts={filteredGanttPosts}
                   selectedPostId={selectedPostId}
                   onSelectPost={setSelectedPostId}
                   isLoading={ganttLoading}
                 />
-                <SocialGanttPreview
+                <SocialGanttPostPanel
                   post={selectedPost}
                   onUpdatePost={(updates) => updateGanttPost.mutate(updates)}
                   onDeletePost={(id) => deleteGanttPost.mutate(id)}
