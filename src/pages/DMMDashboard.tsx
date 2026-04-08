@@ -121,7 +121,7 @@ export default function DMMDashboard() {
   const { tenantId } = useCurrentTenant();
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
-  const { selectedAgency, agencies } = useAgency();
+  const { selectedAgency, setSelectedAgency, agencies } = useAgency();
   const { isOwner, isTeamManager, isSuperAdmin, isCampaigner, isSeo, campaignerId } = useUserRole();
   const { userAgencyIds } = useUserAgencies();
 
