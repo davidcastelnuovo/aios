@@ -205,7 +205,7 @@ export default function SocialDashboard() {
       <Tabs
         value={activeTab}
         onValueChange={setActiveTab}
-        className="flex flex-col flex-1 min-h-0 overflow-hidden"
+        className="flex flex-col flex-1 min-h-0"
       >
         <div className="px-6 pt-3 shrink-0 border-b">
           <TabsList className="h-9">
@@ -277,7 +277,7 @@ export default function SocialDashboard() {
         </TabsContent>
 
         {/* ── Posts Tab ──────────────────────────────────────────── */}
-        <TabsContent value="posts" className="mt-0 data-[state=active]:flex data-[state=active]:flex-col flex-1 min-h-0 overflow-y-auto">
+        <TabsContent value="posts" className="mt-0 flex-1 overflow-y-auto" style={{ minHeight: 0 }}>
           <div className="flex items-center justify-between px-6 py-3 border-b sticky top-0 bg-background z-10 shrink-0">
             <h2 className="text-base font-semibold">פוסטים מוכנים לפרסום</h2>
             <Button size="sm" onClick={() => setIsComposerOpen(true)}>
