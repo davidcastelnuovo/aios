@@ -92,7 +92,7 @@ export function InteractiveCalendar() {
       return await getCalendarEvents(
         oneMonthAgo.toISOString(),
         twoMonthsLater.toISOString(),
-        { tenantId: tenantId! }
+        { tenantId: tenantId!, provider: getStoredProvider() }
       );
     },
     enabled: !!userId && !!tenantId,
