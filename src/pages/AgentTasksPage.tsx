@@ -683,6 +683,34 @@ export default function AgentTasksPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["agent_tasks"] }),
   });
 
+  const updateTask = useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: any }) => {
+      const { error } = await supabase.from("agent_tasks").update(updates).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["agent_tasks"] });
+      setEditingTask(null);
+      toast.success("המשימה עודכנה");
+    },
+    onError: () => toast.error("שגיאה בעדכון המשימה"),
+  });
+
+  const handleEdit = (task: any) => {
+    setEditingTask(task);
+  };
+
+  const handleRerun = (task: any) => {
+    // Reset status to pending then run
+    supabase.from("agent_tasks")
+      .update({ status: "pending", result: null, completed_at: null, started_at: null })
+      .eq("id", task.id)
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: ["agent_tasks"] });
+        runTask.mutate({ ...task, status: "pending" });
+      });
+  };
+
   const agentStats = agents.map(agent => {
     const agentTasks = tasks.filter(t => t.agent_id === agent.id);
     return {
