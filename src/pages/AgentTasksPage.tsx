@@ -371,6 +371,29 @@ function TaskCard({
                 הרץ
               </Button>
             )}
+            {(task.status === "completed" || task.status === "failed") && (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1 h-7 text-xs"
+                  onClick={() => onEdit(task)}
+                >
+                  <Pencil className="h-3 w-3" />
+                  ערוך
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1 h-7 text-xs"
+                  onClick={() => onRerun(task)}
+                  disabled={isRunning}
+                >
+                  {isRunning ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+                  הרץ שוב
+                </Button>
+              </>
+            )}
             <Button
               size="icon"
               variant="ghost"
