@@ -700,15 +700,16 @@ export default function AgentTasksPage() {
     setEditingTask(task);
   };
 
-  const handleRerun = (task: any) => {
-    // Reset status to pending then run
-    supabase.from("agent_tasks")
+  const handleRerun = async (task: any) => {
+    const { error } = await supabase.from("agent_tasks")
       .update({ status: "pending", result: null, completed_at: null, started_at: null })
-      .eq("id", task.id)
-      .then(() => {
-        queryClient.invalidateQueries({ queryKey: ["agent_tasks"] });
-        runTask.mutate({ ...task, status: "pending" });
-      });
+      .eq("id", task.id);
+    if (error) {
+      toast.error("שגיאה באיפוס המשימה");
+      return;
+    }
+    await queryClient.invalidateQueries({ queryKey: ["agent_tasks"] });
+    runTask.mutate({ ...task, status: "pending" });
   };
 
   const agentStats = agents.map(agent => {
