@@ -5,12 +5,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Users, Building2, Globe, Coins, Phone, Mail, LayoutGrid, Table as TableIcon, MessageCircle, Edit, Search, Plus, Trash2, FolderOpen, ExternalLink, Download, Filter, FileSpreadsheet, Upload } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { AddClientForm } from "@/components/forms/AddClientForm";
 import { ImportClientsSheet } from "@/components/forms/ImportClientsSheet";
 import { ImportClientsCSV } from "@/components/forms/ImportClientsCSV";
 import { EditClientDialog } from "@/components/forms/EditClientDialog";
 import AddTaskForm from "@/components/forms/AddTaskForm";
 import { ClientsChatView } from "@/components/clients/ClientsChatView";
+import { ClientsMultiSelectToolbar } from "@/components/clients/ClientsMultiSelectToolbar";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
@@ -83,6 +85,7 @@ export default function Clients() {
   const [showFiltersDialog, setShowFiltersDialog] = useState(false);
   const [showImportCSV, setShowImportCSV] = useState(false);
   const [showImportSheet, setShowImportSheet] = useState(false);
+  const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
 
   // Track active filter count for badge
   const activeFilterCount = [
@@ -964,9 +967,31 @@ export default function Clients() {
         </div>
       ) : (
         <div className="bg-card rounded-lg border shadow-sm overflow-x-auto">
+          {selectedClientIds.length > 0 && (
+            <div className="p-2">
+              <ClientsMultiSelectToolbar
+                selectedIds={selectedClientIds}
+                onClearSelection={() => setSelectedClientIds([])}
+                onSelectAll={() => setSelectedClientIds((visibleClients || []).map(c => c.id))}
+                totalCount={visibleClients?.length || 0}
+              />
+            </div>
+          )}
           <Table className="relative">
             <TableHeader>
               <TableRow className="bg-muted/50 hover:bg-muted/50 border-b">
+                <TableHead className="w-10">
+                  <Checkbox
+                    checked={visibleClients && visibleClients.length > 0 && selectedClientIds.length === visibleClients.length}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setSelectedClientIds((visibleClients || []).map(c => c.id));
+                      } else {
+                        setSelectedClientIds([]);
+                      }
+                    }}
+                  />
+                </TableHead>
                 <TableHead className="text-right font-semibold h-12">פעולות</TableHead>
                 <TableHead className="text-right font-semibold">{getFieldLabel('name', 'שם')}</TableHead>
                 <TableHead className="text-right font-semibold">{getFieldLabel('agency_id', 'סוכנות')}</TableHead>
@@ -984,8 +1009,20 @@ export default function Clients() {
               {visibleClients?.map((client) => (
                 <TableRow 
                   key={client.id}
-                  className="hover:bg-accent/5 transition-colors border-b border-border/50"
+                  className={`hover:bg-accent/5 transition-colors border-b border-border/50 ${selectedClientIds.includes(client.id) ? 'bg-primary/5' : ''}`}
                 >
+                  <TableCell className="py-4 w-10">
+                    <Checkbox
+                      checked={selectedClientIds.includes(client.id)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSelectedClientIds(prev => [...prev, client.id]);
+                        } else {
+                          setSelectedClientIds(prev => prev.filter(id => id !== client.id));
+                        }
+                      }}
+                    />
+                  </TableCell>
                   <TableCell className="py-4">
                     <div className="flex gap-2">
                       <Button 
