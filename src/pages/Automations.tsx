@@ -348,7 +348,7 @@ export default function Automations() {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => handleViewLogs(automation.id)}
+                  onClick={(e) => { e.stopPropagation(); handleViewLogs(automation.id); }}
                   className="flex-1 min-w-0"
                 >
                   <Activity className="h-3 w-3 ml-1" />
@@ -357,7 +357,7 @@ export default function Automations() {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => handleTest(automation)}
+                  onClick={(e) => { e.stopPropagation(); handleTest(automation); }}
                 >
                   <TestTube className="h-3 w-3 ml-1" />
                   בדיקה
@@ -365,7 +365,7 @@ export default function Automations() {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => handleEdit(automation)}
+                  onClick={(e) => { e.stopPropagation(); handleEdit(automation); }}
                 >
                   <Edit className="h-3 w-3 ml-1" />
                   עריכה
@@ -373,7 +373,8 @@ export default function Automations() {
                 <Button
                   size="sm"
                   variant="destructive"
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation();
                     if (confirm("האם למחוק אוטומציה זו?")) {
                       deleteMutation.mutate(automation.id);
                     }
