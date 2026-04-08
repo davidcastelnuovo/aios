@@ -54,6 +54,12 @@ export const PERMISSION_CATEGORIES: PermissionCategory[] = [
         category: "daily",
       },
       {
+        id: "crm_dashboard",
+        label: "דשבורד CRM סוכנות",
+        description: "דשבורד ניהול לקוחות עם Health Score ודגלים",
+        category: "daily",
+      },
+      {
         id: "clients",
         label: "ניהול לקוחות",
         description: "צפייה ועריכת לקוחות",
@@ -180,6 +186,18 @@ export const PERMISSION_CATEGORIES: PermissionCategory[] = [
         id: "dynamic_tables",
         label: "דשבורדים ודוחות",
         description: "יצירת דשבורדים וטבלאות מותאמות אישית",
+        category: "marketing",
+      },
+      {
+        id: "site_analytics",
+        label: "אנליטיקס אתרים",
+        description: "מעקב אנליטיקס ונתוני אתר",
+        category: "marketing",
+      },
+      {
+        id: "rank_tracking",
+        label: "מעקב דירוגים",
+        description: "מעקב דירוגי מילות מפתח בגוגל",
         category: "marketing",
       },
       {
