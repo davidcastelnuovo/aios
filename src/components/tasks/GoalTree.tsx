@@ -218,9 +218,9 @@ export function GoalTree() {
               onChange={(e) => setNewGoalTitle(e.target.value)}
               placeholder="שם היעד..."
               className="flex-1"
-              onKeyDown={(e) => e.key === "Enter" && createGoalMutation.mutate()}
+              onKeyDown={(e) => e.key === "Enter" && createGoalMutation.mutate(undefined)}
             />
-            <Button size="sm" onClick={() => createGoalMutation.mutate()} disabled={!newGoalTitle.trim()}>
+            <Button size="sm" onClick={() => createGoalMutation.mutate(undefined)} disabled={!newGoalTitle.trim()}>
               צור
             </Button>
           </div>
