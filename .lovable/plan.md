@@ -1,84 +1,46 @@
 
 
-# תוכנית השלמת שדרוג מודול סוכנים - Paperclip
+# שיפור מנגנון ביצוע משימות סוכן — הוראות כלליות + תת-משימות מקביליות
 
-## מה חסר
+## מה הבעיה
 
-הDB מוכן (goals, heartbeat_logs, assigned_agent, update_type) אבל רוב הלוגיקה והממשק לא מומשו. הנה מה שנבנה:
+1. **ההוראה לעקוב אחרי הפקודה** קשורה רק לסושיאל (שורה 887) — אין הנחיה כללית שאומרת לסוכן "בצע בדיוק מה שנכתב ב-command_text"
+2. **תת-משימות מקביליות** — כבר קיים מנגנון `parallel_execution` + `parallel_subtasks`, אבל כל תת-משימה לא מקבלת את ההקשר של המשימה הראשית (title + description) ולכן פועלת ללא הקשר
 
----
+## מה ישתנה
 
-## 1. כלים חדשים לכרמן ב-`run-ai-agent`
+### שינוי 1: הוראה כללית ב-System Prompt
+**קובץ:** `supabase/functions/run-ai-agent/index.ts` (שורות 887-888)
 
-הוספת 5 כלים חדשים ל-ALL_TOOLS + executeTool:
+החלפת ההוראה הספציפית לסושיאל בהוראה כללית:
 
-- **`create_goal`** — יצירת יעד חדש (title, parent_goal_id, description, due_date)
-- **`list_goals`** — רשימת יעדים עם אחוז התקדמות
-- **`take_task`** — כרמן "לוקחת" משימה (מעדכנת assigned_agent + status ל-agent_working)
-- **`complete_task_step`** — כרמן מדווחת התקדמות + מוסיפה task_update מסוג agent_action
-- **`prioritize_tasks`** — מנתחת משימות פתוחות, מחזירה סדר עדיפויות מומלץ לפי דדליינים, יעדים, ועומס
+```
+חובה! כשמקבלת משימה (command_text), בצעי בדיוק את מה שנתבקשת. קראי את הפקודה בעיון, הביני מה המטרה, והשתמשי בכלים המתאימים לביצוע המשימה עד הסוף.
+אם המשימה כוללת יצירת תוכן לסושיאל: 1) צרי תמונה עם generate_ad_image עם תיאור מפורט באנגלית 2) צרי פוסט עם create_social_post והכניסי את ה-image_url ל-media_urls. אסור ליצור פוסט בלי תמונה.
+```
 
-## 2. Edge Function `agent-heartbeat`
+### שינוי 2: הקשר משימה ראשית לתת-משימות
+**קובץ:** `src/pages/AgentTasksPage.tsx` (שורות 572-579)
 
-פונקציה חדשה שרצה לפי תזמון ומבצעת:
-- סריקת משימות פתוחות/באיחור לכל tenant
-- זיהוי משימות חסומות (assigned_agent קיים אבל אין עדכונים 24 שעות+)
-- שליחת תזכורות WhatsApp לקמפיינרים (דרך send-chat-message)
-- רישום ל-heartbeat_logs (tasks_reviewed, actions_taken, summary)
+כל תת-משימה תקבל את ההקשר של המשימה הראשית ב-command_text:
 
-## 3. הגדרות Heartbeat בדף הסוכנים
+```
+command_text: `=== משימה ראשית ===\n${task.title}\n${task.description || ""}\n\n=== תת-משימה נוכחית ===\n${sub.title}\n${sub.description || ""}`
+```
 
-הוספת טאב "הגדרות" ב-AgentTasksPage עם:
-- תדירות Heartbeat (כל 4/8/12/24 שעות)
-- שעות פעילות (מ-שעה עד-שעה)
-- פעולות מותרות (תזכורות WhatsApp, עדכון סטטוס, סיכום יומי)
-- לוג Heartbeats אחרונים מ-heartbeat_logs
+### שינוי 3: חיזוק skill של social-planner
+**קובץ:** `supabase/functions/run-ai-agent/index.ts` (שורה 917 ו-962)
 
-## 4. שדרוג ממשק דף הסוכנים
+עדכון הטקסט של `social-planner` בשני המקומות (task skills ו-active skills):
 
-- **Badge "כרמן עובדת"** על כרטיסי משימות שיש בהן assigned_agent
-- **כפתור "קח משימה"** — מאפשר לסוכן AI לקחת בעלות על משימה
-- **תצוגת Heartbeat אחרון** בכרטיס הסוכן (מתי הרצה אחרונה, כמה משימות נסקרו)
-- **"המשימה הבאה"** — בנר בראש הדף שמציע את המשימה הדחופה ביותר
+```
+כשמתבקשת תוכן לסושיאל: 1) התייחסי בדיוק לנושא שנתבקש בפקודת המשימה 2) צרי תמונה עם generate_ad_image 3) כתבי קופי מותאם לפלטפורמה עם קריאה לפעולה 4) שמרי עם create_social_post כולל ה-image_url. חובה ליצור תמונה.
+```
 
-## 5. שדרוג Thread View
-
-הthread כבר עובד ב-TaskDetailDialog אבל נוסיף:
-- אייקון ייעודי לפעולות agent_action (רובוט)
-- תצוגת tool call log (איזה כלי כרמן הפעילה)
-- Badge על כרטיס משימה בדף הסוכנים עם מספר עדכונים חדשים
-
----
-
-## פירוט טכני
-
-### קבצים שישתנו
+## סיכום
 
 | קובץ | שינוי |
 |---|---|
-| `supabase/functions/run-ai-agent/index.ts` | הוספת 5 כלים חדשים (goals, take_task, prioritize) |
-| `supabase/functions/agent-heartbeat/index.ts` | **חדש** — לולאת סקירה אוטונומית |
-| `src/pages/AgentTasksPage.tsx` | טאב הגדרות Heartbeat, badge "כרמן עובדת", בנר "המשימה הבאה" |
-| `src/components/tasks/TaskDetailDialog.tsx` | שדרוג thread view עם agent_action icons |
-
-### מיגרציה נדרשת
-טבלת הגדרות heartbeat per-tenant:
-```text
-CREATE TABLE tenant_heartbeat_settings (
-  tenant_id UUID PRIMARY KEY REFERENCES tenants(id),
-  enabled BOOLEAN DEFAULT false,
-  interval_hours INT DEFAULT 8,
-  active_hours_start INT DEFAULT 7,
-  active_hours_end INT DEFAULT 22,
-  allowed_actions JSONB DEFAULT '["reminders","status_update","daily_summary"]',
-  updated_at TIMESTAMPTZ DEFAULT now()
-)
-```
-
-### סדר ביצוע
-1. מיגרציית tenant_heartbeat_settings
-2. כלים חדשים ב-run-ai-agent
-3. Edge Function agent-heartbeat
-4. שדרוג AgentTasksPage (הגדרות + badges + בנר)
-5. שדרוג TaskDetailDialog thread
+| `run-ai-agent/index.ts` | הוראה כללית לעקוב אחרי הפקודה + חיזוק social-planner |
+| `AgentTasksPage.tsx` | הזרקת הקשר משימה ראשית לתת-משימות מקביליות |
 
