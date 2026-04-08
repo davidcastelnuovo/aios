@@ -144,7 +144,7 @@ export default function DynamicTables() {
       if (!tenantId) return [];
       const { data, error } = await supabase
         .from('clients')
-        .select('id, name, agency_id');
+        .select('id, name, agency_id, website');
       if (error) throw error;
       return data || [];
     },
