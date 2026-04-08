@@ -18,7 +18,7 @@ import {
   Plus, Play, CheckCircle2, XCircle, Clock, Loader2, ArrowRight,
   Image, ExternalLink, Calendar, Repeat, Zap, GitFork, ChevronDown,
   ChevronUp, Trash2, ToggleLeft, ToggleRight, Timer, ListTodo, Target,
-  Settings, Bot, AlertTriangle, Sparkles, Heart
+  Settings, Bot, AlertTriangle, Sparkles, Heart, Pencil, RotateCcw
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
@@ -225,6 +225,8 @@ function TaskCard({
   onRun,
   onDelete,
   onToggleEnabled,
+  onEdit,
+  onRerun,
   isRunning,
 }: {
   task: any;
@@ -232,6 +234,8 @@ function TaskCard({
   onRun: (task: any) => void;
   onDelete: (id: string) => void;
   onToggleEnabled: (task: any) => void;
+  onEdit: (task: any) => void;
+  onRerun: (task: any) => void;
   isRunning: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -367,6 +371,29 @@ function TaskCard({
                 הרץ
               </Button>
             )}
+            {(task.status === "completed" || task.status === "failed") && (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1 h-7 text-xs"
+                  onClick={() => onEdit(task)}
+                >
+                  <Pencil className="h-3 w-3" />
+                  ערוך
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1 h-7 text-xs"
+                  onClick={() => onRerun(task)}
+                  disabled={isRunning}
+                >
+                  {isRunning ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+                  הרץ שוב
+                </Button>
+              </>
+            )}
             <Button
               size="icon"
               variant="ghost"
@@ -405,6 +432,7 @@ export default function AgentTasksPage() {
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<any>(null);
   const [filterAgent, setFilterAgent] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [form, setForm] = useState({ ...defaultForm });
@@ -655,6 +683,34 @@ export default function AgentTasksPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["agent_tasks"] }),
   });
 
+  const updateTask = useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: any }) => {
+      const { error } = await supabase.from("agent_tasks").update(updates).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["agent_tasks"] });
+      setEditingTask(null);
+      toast.success("המשימה עודכנה");
+    },
+    onError: () => toast.error("שגיאה בעדכון המשימה"),
+  });
+
+  const handleEdit = (task: any) => {
+    setEditingTask(task);
+  };
+
+  const handleRerun = (task: any) => {
+    // Reset status to pending then run
+    supabase.from("agent_tasks")
+      .update({ status: "pending", result: null, completed_at: null, started_at: null })
+      .eq("id", task.id)
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: ["agent_tasks"] });
+        runTask.mutate({ ...task, status: "pending" });
+      });
+  };
+
   const agentStats = agents.map(agent => {
     const agentTasks = tasks.filter(t => t.agent_id === agent.id);
     return {
@@ -783,6 +839,8 @@ export default function AgentTasksPage() {
                               onRun={t => runTask.mutate(t)}
                               onDelete={id => deleteTask.mutate(id)}
                               onToggleEnabled={t => toggleEnabled.mutate(t)}
+                              onEdit={handleEdit}
+                              onRerun={handleRerun}
                               isRunning={runTask.isPending}
                             />
                           ))
@@ -804,6 +862,8 @@ export default function AgentTasksPage() {
                               onRun={t => runTask.mutate(t)}
                               onDelete={id => deleteTask.mutate(id)}
                               onToggleEnabled={t => toggleEnabled.mutate(t)}
+                              onEdit={handleEdit}
+                              onRerun={handleRerun}
                               isRunning={runTask.isPending}
                             />
                           ))
@@ -1318,6 +1378,80 @@ export default function AgentTasksPage() {
               )}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Task Dialog */}
+      <Dialog open={!!editingTask} onOpenChange={(open) => !open && setEditingTask(null)}>
+        <DialogContent className="max-w-md" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>עריכת משימה</DialogTitle>
+          </DialogHeader>
+          {editingTask && (
+            <div className="space-y-4">
+              <div>
+                <Label>כותרת</Label>
+                <Input
+                  value={editingTask.title}
+                  onChange={e => setEditingTask({ ...editingTask, title: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>תיאור</Label>
+                <Textarea
+                  value={editingTask.description || ""}
+                  onChange={e => setEditingTask({ ...editingTask, description: e.target.value })}
+                  rows={3}
+                />
+              </div>
+              <div>
+                <Label>עדיפות (1-10)</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={editingTask.priority}
+                  onChange={e => setEditingTask({ ...editingTask, priority: Number(e.target.value) })}
+                />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => setEditingTask(null)}>ביטול</Button>
+                <Button
+                  onClick={() => updateTask.mutate({
+                    id: editingTask.id,
+                    updates: {
+                      title: editingTask.title,
+                      description: editingTask.description,
+                      priority: editingTask.priority,
+                    },
+                  })}
+                  disabled={updateTask.isPending}
+                >
+                  {updateTask.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "שמור"}
+                </Button>
+                <Button
+                  variant="default"
+                  className="gap-1"
+                  onClick={() => {
+                    updateTask.mutate({
+                      id: editingTask.id,
+                      updates: {
+                        title: editingTask.title,
+                        description: editingTask.description,
+                        priority: editingTask.priority,
+                      },
+                    }, {
+                      onSuccess: () => handleRerun(editingTask),
+                    });
+                  }}
+                  disabled={updateTask.isPending}
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  שמור והרץ שוב
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
