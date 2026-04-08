@@ -264,6 +264,11 @@ function TaskCard({
                   <GitFork className="h-2.5 w-2.5" /> מקבילי
                 </Badge>
               )}
+              {task.assigned_agent && (
+                <Badge variant="outline" className="text-[10px] gap-1 bg-violet-50 text-violet-700 border-violet-200">
+                  <Bot className="h-2.5 w-2.5" /> כרמן עובדת
+                </Badge>
+              )}
             </div>
             {task.description && (
               <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{task.description}</p>
