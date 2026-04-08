@@ -466,10 +466,7 @@ export default function DMMDashboard() {
       <div className="flex flex-wrap gap-2 items-center">
         {/* Agency filter - uses global AgencyContext */}
         {agencies && agencies.length > 1 && (
-          <Select value={selectedAgency} onValueChange={(v) => {
-            const { setSelectedAgency } = useAgency();
-            setSelectedAgency(v);
-          }}>
+          <Select value={selectedAgency} onValueChange={setSelectedAgency}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="כל הסוכנויות" />
             </SelectTrigger>
