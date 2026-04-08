@@ -813,6 +813,20 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
           />
         </>
       )}
+
+      {contactType !== 'unknown' && (
+        <ChangeAgencyDialog
+          open={changeAgencyDialogOpen}
+          onOpenChange={setChangeAgencyDialogOpen}
+          contactId={contactId}
+          contactType={contactType}
+          currentAgencyId={contact?.agency_id}
+          contactName={contact?.name || ""}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ["contact", contactId, contactType] });
+          }}
+        />
+      )}
     </div>
   );
 }
