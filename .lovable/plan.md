@@ -1,81 +1,51 @@
 
-# תיקון: עדכוני כרמן לא מופיעים בדשבורד + שגיאת בנייה
 
-## 1. תיקון שגיאת בנייה ב-SocialDashboard
-**קובץ:** `src/pages/SocialDashboard.tsx` שורה 131
-- החלפת `setIsNewPostOpen(false)` ב-`setIsComposerOpen(false)` (המשתנה הנכון שמוגדר כ-state)
+# תיקון: טעינת דמו לא עובדת — טבלה חסרה
 
-## 2. מיגרציה — הפעלת Realtime
+## הבעיה
+הטבלה `social_gantt_posts` לא קיימת בבסיס הנתונים. קובץ המיגרציה קיים בפרויקט אבל מעולם לא הורץ בפועל. כל הפעולות בדשבורד הסושיאל (טעינת דמו, יצירת פוסטים, עדכון) נכשלות בשקט.
+
+## הפתרון
+הרצת מיגרציה ליצירת הטבלה עם כל האינדקסים ומדיניות RLS.
+
+### מיגרציה
 ```sql
-ALTER PUBLICATION supabase_realtime ADD TABLE public.communication_logs;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.clients;
+CREATE TABLE IF NOT EXISTS public.social_gantt_posts (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  tenant_id uuid NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
+  topic text NOT NULL,
+  scheduled_date date NOT NULL,
+  platform text NOT NULL CHECK (platform IN ('instagram','facebook','tiktok','linkedin','twitter')),
+  status text NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','in_review','approved','published','rejected')),
+  copy_text text,
+  creative_url text,
+  creative_prompt text,
+  copy_prompt text,
+  notes text,
+  created_at timestamptz DEFAULT now() NOT NULL,
+  updated_at timestamptz DEFAULT now() NOT NULL
+);
+
+CREATE INDEX idx_social_gantt_posts_tenant ON public.social_gantt_posts(tenant_id);
+CREATE INDEX idx_social_gantt_posts_date ON public.social_gantt_posts(scheduled_date);
+CREATE INDEX idx_social_gantt_posts_status ON public.social_gantt_posts(status);
+
+ALTER TABLE public.social_gantt_posts ENABLE ROW LEVEL SECURITY;
+
+-- RLS: tenant isolation
+CREATE POLICY "select_own_tenant" ON public.social_gantt_posts FOR SELECT
+  USING (tenant_id IN (SELECT tenant_id FROM public.tenant_users WHERE user_id = auth.uid()));
+
+CREATE POLICY "insert_own_tenant" ON public.social_gantt_posts FOR INSERT
+  WITH CHECK (tenant_id IN (SELECT tenant_id FROM public.tenant_users WHERE user_id = auth.uid()));
+
+CREATE POLICY "update_own_tenant" ON public.social_gantt_posts FOR UPDATE
+  USING (tenant_id IN (SELECT tenant_id FROM public.tenant_users WHERE user_id = auth.uid()));
+
+CREATE POLICY "delete_own_tenant" ON public.social_gantt_posts FOR DELETE
+  USING (tenant_id IN (SELECT tenant_id FROM public.tenant_users WHERE user_id = auth.uid()));
 ```
 
-## 3. עדכון DMMDashboard — Realtime + mood mapping + staleTime
-**קובץ:** `src/pages/DMMDashboard.tsx`
+### תוצאה
+אחרי הרצת המיגרציה, כפתור "טען דמו" יעבוד ויטען 12 פוסטים לגאנט.
 
-### 3a. ייבואים חדשים
-הוספת `useEffect` ו-`useQueryClient` לייבואים:
-```typescript
-import { useState, useMemo, useEffect } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-```
-
-### 3b. הוספת פונקציית מיפוי mood_status
-לפני הקומפוננטה הראשית, הוספת:
-```typescript
-function mapMoodToCommStatus(mood: string | null): "normal" | "sensitive" | "complaint" | null {
-  if (!mood) return null;
-  switch (mood) {
-    case "churn_risk": return "complaint";
-    case "wavering": return "sensitive";
-    case "happy": case "normal": return "normal";
-    default: return null;
-  }
-}
-```
-
-### 3c. הפחתת staleTime
-- `crmFields` query: `staleTime: 60_000` → `staleTime: 10_000`
-- `commLogs` query: `staleTime: 60_000` → `staleTime: 10_000`
-- `seoUpdates` query: `staleTime: 60_000` → `staleTime: 10_000`
-
-### 3d. הוספת Realtime subscription
-בתוך הקומפוננטה, אחרי ההגדרה של `queryClient`:
-```typescript
-const queryClient = useQueryClient();
-
-useEffect(() => {
-  if (!tenantId) return;
-  const channel = supabase
-    .channel("dmm-realtime")
-    .on("postgres_changes", { event: "*", schema: "public", table: "communication_logs", filter: `tenant_id=eq.${tenantId}` }, () => {
-      queryClient.invalidateQueries({ queryKey: ["communication-logs-latest"] });
-      queryClient.invalidateQueries({ queryKey: ["dmm-clients-crm-fields"] });
-    })
-    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "clients", filter: `tenant_id=eq.${tenantId}` }, () => {
-      queryClient.invalidateQueries({ queryKey: ["dmm-clients"] });
-      queryClient.invalidateQueries({ queryKey: ["dmm-clients-crm-fields"] });
-    })
-    .subscribe();
-  return () => { supabase.removeChannel(channel); };
-}, [tenantId, queryClient]);
-```
-
-### 3e. שימוש ב-mapMoodToCommStatus
-בשורה ~317, שינוי:
-```typescript
-communicationStatus: latestComm?.status ?? mood_status ?? null,
-```
-ל:
-```typescript
-communicationStatus: latestComm?.status ?? mapMoodToCommStatus(mood_status) ?? null,
-```
-וגם בשורה ~333 באותו אופן.
-
-## קבצים לעריכה
-| קובץ | שינוי |
-|---|---|
-| `src/pages/SocialDashboard.tsx` | תיקון שם משתנה (שגיאת בנייה) |
-| `src/pages/DMMDashboard.tsx` | Realtime + mood mapping + staleTime |
-| מיגרציה | Realtime publication |
