@@ -172,7 +172,7 @@ export default function SocialDashboard() {
   const schedulerScheduled = schedulerPosts.filter((p) => p.status === "scheduled").length;
 
   return (
-    <div className="flex flex-col h-full overflow-hidden" dir="rtl">
+    <div className="flex flex-col h-[calc(100vh-4rem)]" dir="rtl">
       {/* ── Page Header ─────────────────────────────────────────── */}
       <div className="flex items-start justify-between px-6 py-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shrink-0">
         <div>
@@ -205,7 +205,7 @@ export default function SocialDashboard() {
       <Tabs
         value={activeTab}
         onValueChange={setActiveTab}
-        className="flex flex-col flex-1 min-h-0"
+        className="flex flex-col flex-1 min-h-0 overflow-hidden"
       >
         <div className="px-6 pt-3 shrink-0 border-b">
           <TabsList className="h-9">
