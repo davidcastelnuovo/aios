@@ -1009,8 +1009,20 @@ export default function Clients() {
               {visibleClients?.map((client) => (
                 <TableRow 
                   key={client.id}
-                  className="hover:bg-accent/5 transition-colors border-b border-border/50"
+                  className={`hover:bg-accent/5 transition-colors border-b border-border/50 ${selectedClientIds.includes(client.id) ? 'bg-primary/5' : ''}`}
                 >
+                  <TableCell className="py-4 w-10">
+                    <Checkbox
+                      checked={selectedClientIds.includes(client.id)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSelectedClientIds(prev => [...prev, client.id]);
+                        } else {
+                          setSelectedClientIds(prev => prev.filter(id => id !== client.id));
+                        }
+                      }}
+                    />
+                  </TableCell>
                   <TableCell className="py-4">
                     <div className="flex gap-2">
                       <Button 
