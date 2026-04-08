@@ -717,6 +717,9 @@ export default function AgentTasksPage() {
                   <TabsTrigger value="stats" className="text-xs gap-1">
                     <Zap className="h-3 w-3" /> סטטיסטיקות
                   </TabsTrigger>
+                  <TabsTrigger value="heartbeat" className="text-xs gap-1">
+                    <Heart className="h-3 w-3" /> Heartbeat
+                  </TabsTrigger>
                 </TabsList>
               </Tabs>
 
