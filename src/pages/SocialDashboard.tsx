@@ -128,7 +128,7 @@ export default function SocialDashboard() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["social-gantt-posts"] });
-      setIsNewPostOpen(false);
+      setIsComposerOpen(false);
       toast.success("פוסט חדש נוצר");
     },
     onError: () => toast.error("שגיאה ביצירת הפוסט"),
