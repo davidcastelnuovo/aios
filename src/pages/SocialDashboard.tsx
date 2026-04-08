@@ -66,6 +66,14 @@ export interface SocialPost {
   updated_at: string;
 }
 
+const platformIcons: Record<string, React.ElementType> = {
+  instagram: Instagram,
+  facebook: Instagram, // reuse icon placeholder
+  linkedin: Instagram,
+  twitter: Instagram,
+  tiktok: Instagram,
+};
+
 const platformColors: Record<string, string> = {
   instagram: "bg-pink-500",
   facebook: "bg-blue-600",
