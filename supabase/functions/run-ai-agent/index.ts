@@ -329,15 +329,17 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (error) throw error
       // Also create in gantt for visibility in the content calendar
       const today = new Date().toISOString().split('T')[0]
-      await supabase.from('social_gantt_posts').insert({
-        tenant_id: tenantId,
-        topic: args.title,
-        copy_text: args.content,
-        platform: 'facebook',
-        status: 'draft',
-        scheduled_date: today,
-        creative_url: args.media_urls?.[0] || null,
-      }).catch(() => {}) // non-critical
+      try {
+        await supabase.from('social_gantt_posts').insert({
+          tenant_id: tenantId,
+          topic: args.title,
+          copy_text: args.content,
+          platform: 'facebook',
+          status: 'draft',
+          scheduled_date: today,
+          creative_url: args.media_urls?.[0] || null,
+        })
+      } catch (_e) { /* non-critical */ }
       return { success: true, post_id: data.id, title: data.title, content: data.content, media_urls: data.media_urls, status: 'draft', message: 'הפוסט נוצר בהצלחה כטיוטה במודול סושיאל מדיה' }
     }
     case 'generate_ad_image': {
