@@ -206,7 +206,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
             onClick={() => handleSubmit("draft")}
             disabled={createPost.isPending}
           >
-            {createPost.isPending ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <Save className="h-4 w-4 ml-2" />}
+            {createPost.isPending ? <Loader2 className="h-4 w-4 animate-spin me-2" /> : <Save className="h-4 w-4 me-2" />}
             שמור כטיוטה
           </Button>
           <Button
@@ -214,14 +214,14 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
             onClick={() => handleSubmit("scheduled")}
             disabled={createPost.isPending || !scheduledAt}
           >
-            <Clock className="h-4 w-4 ml-2" />
+            <Clock className="h-4 w-4 me-2" />
             תזמן פרסום
           </Button>
           <Button
             onClick={() => handleSubmit("publishing")}
             disabled={createPost.isPending}
           >
-            <Send className="h-4 w-4 ml-2" />
+            <Send className="h-4 w-4 me-2" />
             פרסם עכשיו
           </Button>
         </div>

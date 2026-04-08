@@ -62,7 +62,7 @@ function formatDateLabel(dateStr: string) {
 export function SocialGanttSidebar({ posts, selectedPostId, onSelectPost, isLoading }: SocialGanttSidebarProps) {
   if (isLoading) {
     return (
-      <div className="w-[360px] border-l p-4 space-y-3">
+      <div className="w-[360px] border-s p-4 space-y-3">
         {Array.from({ length: 5 }).map((_, i) => (
           <Skeleton key={i} className="h-20 w-full" />
         ))}
@@ -73,7 +73,7 @@ export function SocialGanttSidebar({ posts, selectedPostId, onSelectPost, isLoad
   const grouped = groupPostsByDate(posts);
 
   return (
-    <div className="w-[360px] border-l flex flex-col bg-muted/30">
+    <div className="w-[360px] border-s flex flex-col bg-muted/30">
       <ScrollArea className="flex-1">
         <div className="p-3 space-y-4">
           {grouped.length === 0 && (
