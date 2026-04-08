@@ -111,7 +111,7 @@ export function CRMSettingsSection({ client, onUpdate }: CRMSettingsSectionProps
     mutationFn: async (services: string[]) => {
       const { error } = await supabase
         .from("clients")
-        .update({ services: JSON.stringify(services) } as any)
+        .update({ services } as any)
         .eq("id", client.id);
       if (error) throw error;
     },
