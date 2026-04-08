@@ -676,7 +676,27 @@ export default function AgentTasksPage() {
         </Button>
       </div>
 
-      {/* Main content */}
+      {/* Next Task Banner */}
+      {nextTask && (
+        <div className="mx-4 mb-2 p-3 rounded-xl border border-amber-200 bg-amber-50/80 flex items-center gap-3 shrink-0">
+          <Sparkles className="h-5 w-5 text-amber-600 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <span className="text-xs font-semibold text-amber-800">המשימה הבאה המומלצת:</span>
+            <span className="text-sm font-medium text-amber-900 mr-2 truncate">{nextTask.title}</span>
+            {nextTask.due_date && (
+              <span className="text-xs text-amber-600 mr-2">
+                {new Date(nextTask.due_date) < new Date() ? "⚠️ באיחור!" : `עד ${format(new Date(nextTask.due_date), "dd/MM")}`}
+              </span>
+            )}
+            {(nextTask as any).clients?.name && (
+              <span className="text-xs text-amber-600 mr-1">· {(nextTask as any).clients.name}</span>
+            )}
+          </div>
+          <Badge variant="outline" className="text-[10px] border-amber-300 text-amber-700 shrink-0">
+            עדיפות {nextTask.priority}
+          </Badge>
+        </div>
+      )}
       <div className="flex-1 min-h-0 px-4 pb-4">
         <ResizablePanelGroup direction="horizontal" className="h-full rounded-xl border bg-background">
           {/* Right panel – Tasks */}
