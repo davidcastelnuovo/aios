@@ -678,6 +678,12 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
                       שייך טלפון לאחר
                     </Button>
                   )}
+                  {(contactType === 'client' || contactType === 'lead' || contactType === 'group') && (
+                    <Button variant="secondary" size="sm" className="h-7 text-xs" onClick={() => setChangeAgencyDialogOpen(true)}>
+                      <Building2 className="h-3 w-3 ml-1" />
+                      שנה סוכנות
+                    </Button>
+                  )}
                   
                   {/* Provider Controls - inline */}
                   {activeProvider === 'green_api' && (
