@@ -82,8 +82,8 @@ export function PostsList() {
                         {post.content}
                       </p>
                     </div>
-                    <Badge variant={status.variant} className="mr-2 whitespace-nowrap">
-                      <StatusIcon className={`h-3 w-3 ml-1 ${post.status === "publishing" ? "animate-spin" : ""}`} />
+                    <Badge variant={status.variant} className="ms-2 whitespace-nowrap">
+                      <StatusIcon className={`h-3 w-3 me-1 ${post.status === "publishing" ? "animate-spin" : ""}`} />
                       {status.label}
                     </Badge>
                   </div>
@@ -112,7 +112,7 @@ export function PostsList() {
                           onClick={() => publishPost.mutate(post.id)}
                           disabled={publishPost.isPending}
                         >
-                          <Send className="h-3 w-3 ml-1" />
+                          <Send className="h-3 w-3 me-1" />
                           פרסם
                         </Button>
                       )}
@@ -122,7 +122,7 @@ export function PostsList() {
                           size="sm"
                           onClick={() => updateStatus.mutate({ postId: post.id, status: "cancelled" })}
                         >
-                          <Ban className="h-3 w-3 ml-1" />
+                          <Ban className="h-3 w-3 me-1" />
                           בטל
                         </Button>
                       )}

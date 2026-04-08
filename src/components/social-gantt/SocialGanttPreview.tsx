@@ -145,15 +145,15 @@ export function SocialGanttPreview({
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="w-full">
               <TabsTrigger value="preview" className="flex-1">
-                <Image className="h-4 w-4 ml-2" />
+                <Image className="h-4 w-4 me-2" />
                 תצוגה מקדימה
               </TabsTrigger>
               <TabsTrigger value="creative-agent" className="flex-1">
-                <Sparkles className="h-4 w-4 ml-2" />
+                <Sparkles className="h-4 w-4 me-2" />
                 סוכן קריאייטיב
               </TabsTrigger>
               <TabsTrigger value="copy-agent" className="flex-1">
-                <PenLine className="h-4 w-4 ml-2" />
+                <PenLine className="h-4 w-4 me-2" />
                 סוכן קופי
               </TabsTrigger>
             </TabsList>
@@ -169,7 +169,7 @@ export function SocialGanttPreview({
                       size="sm"
                       onClick={() => setActiveTab("creative-agent")}
                     >
-                      <RefreshCw className="h-3.5 w-3.5 ml-1" />
+                      <RefreshCw className="h-3.5 w-3.5 me-1" />
                       בקש קריאייטיב חדש
                     </Button>
                     <CardTitle className="text-base flex items-center gap-2">
@@ -199,7 +199,7 @@ export function SocialGanttPreview({
                           size="sm"
                           onClick={() => setActiveTab("creative-agent")}
                         >
-                          <Sparkles className="h-3.5 w-3.5 ml-1" />
+                          <Sparkles className="h-3.5 w-3.5 me-1" />
                           צור קריאייטיב עם AI
                         </Button>
                       </div>
@@ -216,7 +216,7 @@ export function SocialGanttPreview({
                       {!editingCopy && (
                         <>
                           <Button variant="outline" size="sm" onClick={handleStartEditCopy}>
-                            <PenLine className="h-3.5 w-3.5 ml-1" />
+                            <PenLine className="h-3.5 w-3.5 me-1" />
                             ערוך
                           </Button>
                           <Button
@@ -224,7 +224,7 @@ export function SocialGanttPreview({
                             size="sm"
                             onClick={() => setActiveTab("copy-agent")}
                           >
-                            <RefreshCw className="h-3.5 w-3.5 ml-1" />
+                            <RefreshCw className="h-3.5 w-3.5 me-1" />
                             בקש קופי חדש
                           </Button>
                         </>
@@ -249,7 +249,7 @@ export function SocialGanttPreview({
                       />
                       <div className="flex gap-2 justify-start">
                         <Button size="sm" onClick={handleSaveCopy} disabled={isUpdating}>
-                          <Save className="h-3.5 w-3.5 ml-1" />
+                          <Save className="h-3.5 w-3.5 me-1" />
                           שמור
                         </Button>
                         <Button size="sm" variant="ghost" onClick={handleCancelEditCopy}>
@@ -271,7 +271,7 @@ export function SocialGanttPreview({
                           size="sm"
                           onClick={() => setActiveTab("copy-agent")}
                         >
-                          <Sparkles className="h-3.5 w-3.5 ml-1" />
+                          <Sparkles className="h-3.5 w-3.5 me-1" />
                           צור קופי עם AI
                         </Button>
                       </div>

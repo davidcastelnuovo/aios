@@ -115,7 +115,7 @@ export function CreativeAgent({ post, onUpdatePost, onBack, tenantId }: Creative
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <Button variant="ghost" size="sm" onClick={onBack}>
-          <ArrowRight className="h-4 w-4 ml-1" />
+          <ArrowRight className="h-4 w-4 me-1" />
           חזרה לתצוגה
         </Button>
         <div className="flex items-center gap-2">
@@ -137,7 +137,7 @@ export function CreativeAgent({ post, onUpdatePost, onBack, tenantId }: Creative
               className="w-full justify-start text-muted-foreground"
               onClick={() => setPrompt(suggestedPrompt)}
             >
-              <Wand2 className="h-3.5 w-3.5 ml-2" />
+              <Wand2 className="h-3.5 w-3.5 me-2" />
               הצעה: {suggestedPrompt}
             </Button>
           )}
@@ -189,12 +189,12 @@ export function CreativeAgent({ post, onUpdatePost, onBack, tenantId }: Creative
           >
             {isGenerating ? (
               <>
-                <Loader2 className="h-4 w-4 ml-2 animate-spin" />
+                <Loader2 className="h-4 w-4 me-2 animate-spin" />
                 מייצר קריאייטיב...
               </>
             ) : (
               <>
-                <Sparkles className="h-4 w-4 ml-2" />
+                <Sparkles className="h-4 w-4 me-2" />
                 צור קריאייטיב
               </>
             )}
@@ -214,15 +214,15 @@ export function CreativeAgent({ post, onUpdatePost, onBack, tenantId }: Creative
                   onClick={handleApprove}
                   disabled={selectedIndex === null}
                 >
-                  <Check className="h-3.5 w-3.5 ml-1" />
+                  <Check className="h-3.5 w-3.5 me-1" />
                   אשר בחירה
                 </Button>
                 <Button variant="destructive" size="sm" onClick={handleReject}>
-                  <X className="h-3.5 w-3.5 ml-1" />
+                  <X className="h-3.5 w-3.5 me-1" />
                   דחה הכל
                 </Button>
                 <Button variant="outline" size="sm" onClick={handleGenerate}>
-                  <RefreshCw className="h-3.5 w-3.5 ml-1" />
+                  <RefreshCw className="h-3.5 w-3.5 me-1" />
                   ייצר מחדש
                 </Button>
               </div>

@@ -306,7 +306,7 @@ function PostEditorDialog({
                 className={cn("text-xs px-2 py-0.5 border", cfg.bg, cfg.color)}
                 variant="outline"
               >
-                <span className={cn("h-1.5 w-1.5 rounded-full ml-1.5", cfg.dot)} />
+                <span className={cn("h-1.5 w-1.5 rounded-full me-1.5", cfg.dot)} />
                 {cfg.label}
               </Badge>
             )}
@@ -586,7 +586,7 @@ export function VisualPostCalendar() {
           {Array.from({ length: startDayOfWeek }).map((_, i) => (
             <div
               key={`empty-${i}`}
-              className="border-b border-l bg-muted/10 min-h-[100px]"
+              className="border-b border-s bg-muted/10 min-h-[100px]"
             />
           ))}
 
@@ -600,7 +600,7 @@ export function VisualPostCalendar() {
                 key={day.toISOString()}
                 onClick={() => handleDayClick(day)}
                 className={cn(
-                  "border-b border-l min-h-[100px] p-1.5 flex flex-col gap-1 cursor-pointer group",
+                  "border-b border-s min-h-[100px] p-1.5 flex flex-col gap-1 cursor-pointer group",
                   today ? "bg-primary/5" : "bg-background hover:bg-muted/20",
                   "transition-colors"
                 )}

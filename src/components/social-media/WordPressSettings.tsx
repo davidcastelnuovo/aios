@@ -46,7 +46,7 @@ export function WordPressSettings() {
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button size="sm">
-              <Plus className="h-4 w-4 ml-2" />
+              <Plus className="h-4 w-4 me-2" />
               הוסף אתר
             </Button>
           </DialogTrigger>
@@ -99,7 +99,7 @@ export function WordPressSettings() {
                 onClick={handleCreate}
                 disabled={!form.site_url || !form.username || !form.app_password || createSite.isPending}
               >
-                {createSite.isPending && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
+                {createSite.isPending && <Loader2 className="h-4 w-4 animate-spin me-2" />}
                 הוסף אתר
               </Button>
             </div>

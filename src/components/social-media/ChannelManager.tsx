@@ -51,7 +51,7 @@ export function ChannelManager() {
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button size="sm">
-              <Plus className="h-4 w-4 ml-2" />
+              <Plus className="h-4 w-4 me-2" />
               הוסף ערוץ
             </Button>
           </DialogTrigger>
@@ -111,7 +111,7 @@ export function ChannelManager() {
                 onClick={handleCreate}
                 disabled={!form.platform || !form.channel_name || createChannel.isPending}
               >
-                {createChannel.isPending && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
+                {createChannel.isPending && <Loader2 className="h-4 w-4 animate-spin me-2" />}
                 הוסף ערוץ
               </Button>
             </div>
