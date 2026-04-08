@@ -397,35 +397,20 @@ export default function SocialDashboard() {
         {/* ── Gantt Tab ──────────────────────────────────────────── */}
         <TabsContent value="gantt" className="flex-1 overflow-hidden mt-0" forceMount>
           {activeTab === "gantt" && (
-            <div className={
-              ganttFullscreen
-                ? "fixed inset-0 z-50 bg-background flex flex-col"
-                : "flex flex-col h-[calc(100vh-12rem)]"
-            }>
-              <div className="flex items-center shrink-0">
-                <div className="flex-1">
-                  <SocialGanttHeader
-                    onNewPost={() => setSelectedDay(new Date())}
-                    filterPlatform={filterPlatform}
-                    onFilterPlatform={setFilterPlatform}
-                    filterStatus={filterStatus}
-                    onFilterStatus={setFilterStatus}
-                    totalPosts={ganttPosts.length}
-                    onLoadDemo={() => seedDemoPosts.mutate()}
-                    isLoadingDemo={seedDemoPosts.isPending}
-                  />
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 me-2 shrink-0"
-                  onClick={() => setGanttFullscreen(!ganttFullscreen)}
-                  title={ganttFullscreen ? "צמצם" : "מסך מלא"}
-                >
-                  {ganttFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-                </Button>
+            <div className="flex flex-col h-full min-h-0">
+              <div className="shrink-0">
+                <SocialGanttHeader
+                  onNewPost={() => setSelectedDay(new Date())}
+                  filterPlatform={filterPlatform}
+                  onFilterPlatform={setFilterPlatform}
+                  filterStatus={filterStatus}
+                  onFilterStatus={setFilterStatus}
+                  totalPosts={ganttPosts.length}
+                  onLoadDemo={() => seedDemoPosts.mutate()}
+                  isLoadingDemo={seedDemoPosts.isPending}
+                />
               </div>
-              <div className="flex-1 flex overflow-hidden min-h-0">
+              <div className="flex-1 min-h-0">
                 <SocialGanttVisualView
                   posts={filteredGanttPosts}
                   selectedPostId={selectedPostId}
@@ -433,26 +418,106 @@ export default function SocialDashboard() {
                   onSelectDay={(day) => { setSelectedDay(day); setSelectedPostId(null); }}
                   isLoading={ganttLoading}
                 />
-                {selectedDay ? (
-                  <DayIdeaPanel
-                    date={selectedDay}
-                    tenantId={tenantId}
-                    onCreatePost={(post) => createGanttPost.mutate(post)}
-                    isCreating={createGanttPost.isPending}
-                    onClose={() => setSelectedDay(null)}
-                  />
-                ) : (
-                  <SocialGanttPostPanel
-                    post={selectedPost}
-                    onUpdatePost={(updates) => updateGanttPost.mutate(updates)}
-                    onDeletePost={(id) => deleteGanttPost.mutate(id)}
-                    isUpdating={updateGanttPost.isPending}
-                    tenantId={tenantId}
-                  />
-                )}
               </div>
             </div>
           )}
+
+          {/* ── Day Dialog (popup) ──────────────────────────────── */}
+          <Dialog open={!!selectedDay && activeTab === "gantt"} onOpenChange={(open) => { if (!open) { setSelectedDay(null); setSelectedPostId(null); } }}>
+            <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" dir="rtl">
+              <DialogHeader>
+                <DialogTitle>
+                  {selectedDay ? format(selectedDay, "EEEE, d בMMMM yyyy", { locale: he }) : ""}
+                </DialogTitle>
+              </DialogHeader>
+
+              {selectedDay && (() => {
+                const dayPosts = ganttPosts.filter(
+                  (p) => p.scheduled_date.slice(0, 10) === format(selectedDay, "yyyy-MM-dd")
+                );
+
+                return (
+                  <div className="space-y-4">
+                    {/* Posts list for this day */}
+                    {dayPosts.length > 0 ? (
+                      <div className="space-y-2">
+                        {dayPosts.map((post) => (
+                          <div
+                            key={post.id}
+                            className={cn(
+                              "border rounded-lg p-3 cursor-pointer transition-colors",
+                              selectedPostId === post.id
+                                ? "border-primary bg-primary/5"
+                                : "hover:bg-muted/50"
+                            )}
+                            onClick={() =>
+                              setSelectedPostId(
+                                selectedPostId === post.id ? null : post.id
+                              )
+                            }
+                          >
+                            <div className="flex items-center gap-2">
+                              <div className={cn(
+                                "w-5 h-5 rounded flex items-center justify-center text-white shrink-0",
+                                platformColors[post.platform]
+                              )}>
+                                {(() => {
+                                  const Icon = platformIcons[post.platform] || Instagram;
+                                  return <Icon className="h-3 w-3" />;
+                                })()}
+                              </div>
+                              <span className="font-medium text-sm">{post.topic}</span>
+                              <span className={cn(
+                                "text-[10px] font-medium px-1.5 py-0.5 rounded-full ms-auto whitespace-nowrap",
+                                statusLabels[post.status]?.variant === "destructive"
+                                  ? "bg-destructive/15 text-destructive"
+                                  : post.status === "approved" || post.status === "published"
+                                  ? "bg-green-500/15 text-green-700 dark:text-green-400"
+                                  : post.status === "in_review"
+                                  ? "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400"
+                                  : "bg-muted text-muted-foreground"
+                              )}>
+                                {statusLabels[post.status]?.label || post.status}
+                              </span>
+                            </div>
+
+                            {/* Expanded post editor */}
+                            {selectedPostId === post.id && (
+                              <div className="mt-3 border-t pt-3" onClick={(e) => e.stopPropagation()}>
+                                <SocialGanttPostPanel
+                                  post={post}
+                                  onUpdatePost={(updates) => updateGanttPost.mutate(updates)}
+                                  onDeletePost={(id) => deleteGanttPost.mutate(id)}
+                                  isUpdating={updateGanttPost.isPending}
+                                  tenantId={tenantId}
+                                  embedded
+                                />
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        אין פוסטים מתוכננים ליום הזה
+                      </p>
+                    )}
+
+                    {/* Create new post for this day */}
+                    <Separator />
+                    <DayIdeaPanel
+                      date={selectedDay}
+                      tenantId={tenantId}
+                      onCreatePost={(post) => createGanttPost.mutate(post)}
+                      isCreating={createGanttPost.isPending}
+                      onClose={() => {}}
+                      embedded
+                    />
+                  </div>
+                );
+              })()}
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         {/* ── Posts Tab ──────────────────────────────────────────── */}
