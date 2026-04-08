@@ -21,6 +21,7 @@ function buildSystemPrompt(
   memoryContext: string,
   campaignerName?: string,
   campaignerId?: string,
+  uiMode?: string,
 ) {
   return `אתה **AIOS** - עוזר AI חכם ומרכזי של מערכת CRM לניהול סוכנויות שיווק.
 
@@ -73,11 +74,15 @@ ${memoryContext}
 19. **עדכוני לקוחות/לידים** - הוספה, רשימה
 20. **Manus AI** - יצירת משימות AI מורכבות (מחקר, מצגות, ניתוח), צפייה בתוצאות
 
-📊 **חשוב לגבי תצוגת נתונים (display_data):**
+${uiMode === 'aios' ? `📊 **חשוב לגבי תצוגת נתונים (display_data):**
 - כשהמשתמש מבקש לראות רשימות (לידים, משימות, לקוחות) - **תמיד** השתמש ב-display_data אחרי שליפת הנתונים
 - בחר את view_type המתאים: "table" לרשימות, "stats" למספרים/סיכומים, "cards" לכרטיסי מידע
 - ציין columns בסדר הנכון עבור טבלאות
-- הנתונים יוצגו באזור הויזואלי ליד הצ'אט
+- הנתונים יוצגו באזור הויזואלי ליד הצ'אט` : `📊 **חשוב — אתה לא במצב AIOS:**
+- **אסור** להשתמש בכלי display_data — המשתמש לא רואה וידג'טים ויזואליים
+- **אסור** לדבר על "תצוגה ויזואלית", "וידג'טים", "כרטיסים" או "טבלה שמוצגת"
+- כשהמשתמש מבקש נתונים — תן את התשובה בטקסט ישיר בצ'אט עם המספרים והפרטים
+- דוגמה: במקום "הנה תצוגה של הלידים", כתוב "יש 12 לידים חדשים: 5 בסוכנות X, 7 בסוכנות Y"`}
 
 📅 **חשוב לגבי משימות ויומן:**
 - כשאתה יוצר או מעדכן משימה עם תאריך, תמיד נסה לסנכרן אותה ליומן
@@ -1765,7 +1770,7 @@ serve(async (req) => {
     if (!tenantId) throw new Error('אין לך גישה למערכת');
 
     // Get user profile
-    const { data: profileData } = await supabaseClient.from('profiles').select('full_name, email, campaigner_id').eq('id', user.id).single();
+    const { data: profileData } = await supabaseClient.from('profiles').select('full_name, email, campaigner_id, ui_mode').eq('id', user.id).single();
     let campaignerName: string | null = null;
     let campaignerId: string | null = null;
 
@@ -1839,7 +1844,7 @@ serve(async (req) => {
       body: JSON.stringify({
         model: AI_MODEL,
         messages: [
-          { role: 'system', content: buildSystemPrompt(userName, userEmail, currentDateContext, memoryContext, campaignerName || undefined, campaignerId || undefined) },
+          { role: 'system', content: buildSystemPrompt(userName, userEmail, currentDateContext, memoryContext, campaignerName || undefined, campaignerId || undefined, profileData?.ui_mode || 'classic') },
           ...aiMessages,
         ],
         tools,
