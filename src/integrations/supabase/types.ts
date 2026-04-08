@@ -5134,6 +5134,62 @@ export type Database = {
           },
         ]
       }
+      social_gantt_posts: {
+        Row: {
+          copy_prompt: string | null
+          copy_text: string | null
+          created_at: string
+          creative_prompt: string | null
+          creative_url: string | null
+          id: string
+          notes: string | null
+          platform: string
+          scheduled_date: string
+          status: string
+          tenant_id: string
+          topic: string
+          updated_at: string
+        }
+        Insert: {
+          copy_prompt?: string | null
+          copy_text?: string | null
+          created_at?: string
+          creative_prompt?: string | null
+          creative_url?: string | null
+          id?: string
+          notes?: string | null
+          platform: string
+          scheduled_date: string
+          status?: string
+          tenant_id: string
+          topic: string
+          updated_at?: string
+        }
+        Update: {
+          copy_prompt?: string | null
+          copy_text?: string | null
+          created_at?: string
+          creative_prompt?: string | null
+          creative_url?: string | null
+          id?: string
+          notes?: string | null
+          platform?: string
+          scheduled_date?: string
+          status?: string
+          tenant_id?: string
+          topic?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_gantt_posts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       social_media_channels: {
         Row: {
           access_token: string | null
