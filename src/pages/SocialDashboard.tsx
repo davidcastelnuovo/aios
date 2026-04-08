@@ -24,7 +24,10 @@ import {
   Settings,
   Share2,
   Plus,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
+
 import { PostComposer } from "@/components/social-media/PostComposer";
 
 // Social Gantt components (content planning with AI)
@@ -88,6 +91,7 @@ export default function SocialDashboard() {
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [filterPlatform, setFilterPlatform] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [ganttFullscreen, setGanttFullscreen] = useState(false);
 
   // ─── Gantt data ────────────────────────────────────────────────
   const { data: ganttPosts = [], isLoading: ganttLoading } = useQuery({
@@ -393,17 +397,34 @@ export default function SocialDashboard() {
         {/* ── Gantt Tab ──────────────────────────────────────────── */}
         <TabsContent value="gantt" className="flex-1 overflow-hidden mt-0" forceMount>
           {activeTab === "gantt" && (
-            <div className="flex flex-col h-[calc(100vh-12rem)]">
-              <SocialGanttHeader
-                onNewPost={() => setSelectedDay(new Date())}
-                filterPlatform={filterPlatform}
-                onFilterPlatform={setFilterPlatform}
-                filterStatus={filterStatus}
-                onFilterStatus={setFilterStatus}
-                totalPosts={ganttPosts.length}
-                onLoadDemo={() => seedDemoPosts.mutate()}
-                isLoadingDemo={seedDemoPosts.isPending}
-              />
+            <div className={
+              ganttFullscreen
+                ? "fixed inset-0 z-50 bg-background flex flex-col"
+                : "flex flex-col h-[calc(100vh-12rem)]"
+            }>
+              <div className="flex items-center shrink-0">
+                <div className="flex-1">
+                  <SocialGanttHeader
+                    onNewPost={() => setSelectedDay(new Date())}
+                    filterPlatform={filterPlatform}
+                    onFilterPlatform={setFilterPlatform}
+                    filterStatus={filterStatus}
+                    onFilterStatus={setFilterStatus}
+                    totalPosts={ganttPosts.length}
+                    onLoadDemo={() => seedDemoPosts.mutate()}
+                    isLoadingDemo={seedDemoPosts.isPending}
+                  />
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 me-2 shrink-0"
+                  onClick={() => setGanttFullscreen(!ganttFullscreen)}
+                  title={ganttFullscreen ? "צמצם" : "מסך מלא"}
+                >
+                  {ganttFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                </Button>
+              </div>
               <div className="flex-1 flex overflow-hidden min-h-0">
                 <SocialGanttVisualView
                   posts={filteredGanttPosts}
