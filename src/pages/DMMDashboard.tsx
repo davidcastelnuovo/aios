@@ -88,6 +88,18 @@ type CRMClientFields = {
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
+/** Map mood_status values from Carmen to communication status for health score */
+function mapMoodToCommStatus(mood: string | null): 'normal' | 'sensitive' | 'complaint' | null {
+  if (!mood) return null;
+  switch (mood) {
+    case 'normal': case 'sensitive': case 'complaint': return mood;
+    case 'happy': return 'normal';
+    case 'wavering': return 'sensitive';
+    case 'churn_risk': return 'complaint';
+    default: return null;
+  }
+}
+
 function StatusDot({ status }: { status: OverallStatus }) {
   const cfg = OVERALL_STATUS_CONFIG[status];
   return (
@@ -351,8 +363,9 @@ export default function DMMDashboard() {
       const performanceChangePct = (perfData as Record<string, number | null>)[c.id] ?? null;
 
       // Health score — uses mood_status as fallback comm status if no log exists
+      const mappedMood = mapMoodToCommStatus(mood_status);
       const result = calculateHealthScore({
-        communicationStatus: latestComm?.status ?? mood_status ?? null,
+        communicationStatus: latestComm?.status ?? mappedMood,
         daysSinceLastCommunication: daysSinceComm,
         services,
         performanceChangePct,
@@ -368,7 +381,7 @@ export default function DMMDashboard() {
         mood_status,
         status: c.status,
         campaignerName,
-        communicationStatus: latestComm?.status ?? mood_status ?? null,
+        communicationStatus: latestComm?.status ?? mappedMood,
         lastCommDate: latestComm?.created_at ?? null,
         daysSinceComm,
         seoHistory,
