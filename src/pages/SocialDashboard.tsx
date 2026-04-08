@@ -205,7 +205,7 @@ export default function SocialDashboard() {
       <Tabs
         value={activeTab}
         onValueChange={setActiveTab}
-        className="flex flex-col flex-1 overflow-hidden"
+        className="flex flex-col flex-1 min-h-0 overflow-hidden"
       >
         <div className="px-6 pt-3 shrink-0 border-b">
           <TabsList className="h-9">
