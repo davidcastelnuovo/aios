@@ -967,9 +967,31 @@ export default function Clients() {
         </div>
       ) : (
         <div className="bg-card rounded-lg border shadow-sm overflow-x-auto">
+          {selectedClientIds.length > 0 && (
+            <div className="p-2">
+              <ClientsMultiSelectToolbar
+                selectedIds={selectedClientIds}
+                onClearSelection={() => setSelectedClientIds([])}
+                onSelectAll={() => setSelectedClientIds((visibleClients || []).map(c => c.id))}
+                totalCount={visibleClients?.length || 0}
+              />
+            </div>
+          )}
           <Table className="relative">
             <TableHeader>
               <TableRow className="bg-muted/50 hover:bg-muted/50 border-b">
+                <TableHead className="w-10">
+                  <Checkbox
+                    checked={visibleClients && visibleClients.length > 0 && selectedClientIds.length === visibleClients.length}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setSelectedClientIds((visibleClients || []).map(c => c.id));
+                      } else {
+                        setSelectedClientIds([]);
+                      }
+                    }}
+                  />
+                </TableHead>
                 <TableHead className="text-right font-semibold h-12">פעולות</TableHead>
                 <TableHead className="text-right font-semibold">{getFieldLabel('name', 'שם')}</TableHead>
                 <TableHead className="text-right font-semibold">{getFieldLabel('agency_id', 'סוכנות')}</TableHead>
