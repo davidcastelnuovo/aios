@@ -196,6 +196,27 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (error) throw error
       return { task_id: data.id, title: data.title, status: data.status }
     }
+    case 'create_agent_task': {
+      // Create task in agent_tasks table (for Carmen herself)
+      const taskData: any = {
+        agent_id: agent_id,
+        tenant_id: tenantId,
+        title: args.title,
+        description: args.description || null,
+        priority: args.priority || 5,
+        status: 'pending',
+        schedule_type: args.schedule_type || 'once',
+        scheduled_at: args.scheduled_at || null,
+        cron_expression: args.cron_expression || null,
+        task_skills: args.task_skills ? JSON.stringify(args.task_skills) : null,
+        task_mode: 'agent',
+        enabled: true,
+        created_by: userId !== 'system' ? userId : null,
+      }
+      const { data, error } = await supabase.from('agent_tasks').insert(taskData).select('id, title, status, schedule_type').single()
+      if (error) throw error
+      return { agent_task_id: data.id, title: data.title, status: data.status, schedule_type: data.schedule_type }
+    }
     case 'search_tasks': {
       let query = supabase.from('tasks').select('id, title, status, priority, due_date, due_time, notes, duration_minutes, clients(name), leads(company_name), campaigners(full_name)')
         .eq('tenant_id', tenantId)
