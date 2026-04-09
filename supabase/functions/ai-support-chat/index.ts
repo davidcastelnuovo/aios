@@ -1437,6 +1437,77 @@ async function executeTool(
         return { success: true, result: { client_id: toolCall.args.client_id, mood_status: toolCall.args.mood_status, communication_status: commStatus } };
       }
 
+      // === SKILLS TOOLS ===
+      case 'save_skill': {
+        const { name, description, steps, trigger_phrases } = toolCall.args;
+        const { data, error } = await supabaseClient
+          .from('ai_skills')
+          .upsert({
+            user_id: userId,
+            tenant_id: tenantId,
+            name,
+            description,
+            steps,
+            trigger_phrases: trigger_phrases || [],
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'user_id,tenant_id,name' })
+          .select()
+          .single();
+        if (error) throw error;
+        return { success: true, result: { id: data.id, name: data.name, message: `הסקיל "${name}" נשמר בהצלחה` } };
+      }
+
+      case 'list_skills': {
+        const { data, error } = await supabaseClient
+          .from('ai_skills')
+          .select('id, name, description, trigger_phrases, updated_at')
+          .eq('user_id', userId)
+          .eq('tenant_id', tenantId)
+          .order('updated_at', { ascending: false });
+        if (error) throw error;
+        return { success: true, result: { skills: data || [], count: data?.length || 0 } };
+      }
+
+      case 'execute_skill': {
+        const { name: skillName } = toolCall.args;
+        const { data, error } = await supabaseClient
+          .from('ai_skills')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('tenant_id', tenantId)
+          .ilike('name', skillName)
+          .single();
+        if (error || !data) return { success: false, error: `לא נמצא סקיל בשם "${skillName}"` };
+        return { success: true, result: { skill_name: data.name, description: data.description, steps: data.steps, instruction: 'בצע את הצעדים המפורטים ב-steps באמצעות הכלים שלך. כל שורה היא צעד שצריך לבצע.' } };
+      }
+
+      case 'update_skill': {
+        const { skill_id, name, description, steps, trigger_phrases } = toolCall.args;
+        const updateData: any = { updated_at: new Date().toISOString() };
+        if (name) updateData.name = name;
+        if (description) updateData.description = description;
+        if (steps) updateData.steps = steps;
+        if (trigger_phrases) updateData.trigger_phrases = trigger_phrases;
+        const { error } = await supabaseClient
+          .from('ai_skills')
+          .update(updateData)
+          .eq('id', skill_id)
+          .eq('user_id', userId);
+        if (error) throw error;
+        return { success: true, result: { message: 'הסקיל עודכן בהצלחה' } };
+      }
+
+      case 'delete_skill': {
+        const { skill_id } = toolCall.args;
+        const { error } = await supabaseClient
+          .from('ai_skills')
+          .delete()
+          .eq('id', skill_id)
+          .eq('user_id', userId);
+        if (error) throw error;
+        return { success: true, result: { message: 'הסקיל נמחק בהצלחה' } };
+      }
+
       default:
         return { success: false, error: `Unknown tool: ${toolCall.name}` };
     }
@@ -1866,6 +1937,12 @@ const tools = [
   // === GROUP 5: CAMPAIGN ANALYSIS & HEALTH TOOLS ===
   { type: 'function', function: { name: 'analyze_campaign_performance', description: 'ניתוח ביצועי קמפיינים מטבלאות CRM: משווה 7 ימים אחרונים מול 30 ימים עבור כל לקוח. מחזיר אחוזי שינוי בהוצאות, עלות לליד, ו-ROAS. השתמש בכלי הזה כדי לזהות התייקרויות וירידות ביצועים.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה לקוח ספציפי (אופציונלי — ללא = כל הלקוחות)' } } } } },
   { type: 'function', function: { name: 'update_client_health', description: 'עדכון מצב בריאות לקוח: מעדכן mood_status בטבלת clients ויוצר רשומה ב-communication_logs. השתמש בכלי הזה כדי להדליק דגל על לקוח כשמזהים בעיה (התייקרות, ירידה בביצועים).', parameters: { type: 'object', properties: { client_id: { type: 'string' }, mood_status: { type: 'string', enum: ['happy', 'wavering', 'churn_risk'], description: 'מצב הלקוח: happy=תקין, wavering=מתלבט, churn_risk=סיכון נטישה' }, communication_status: { type: 'string', enum: ['normal', 'sensitive', 'complaint'], description: 'סטטוס תקשורת לרשומת communication_logs' }, note: { type: 'string', description: 'הערה/סיכום — מה הבעיה שזוהתה' } }, required: ['client_id', 'mood_status', 'note'] } } },
+  // === GROUP 6: SKILLS TOOLS ===
+  { type: 'function', function: { name: 'save_skill', description: 'שמירת סקיל (מיומנות) חדש — תהליך עבודה שלם שכרמן למדה. כשהמשתמש אומר "תשמרי סקיל" / "שמרי את זה כ-skill", סכם את התהליך שבוצע ושמור אותו.', parameters: { type: 'object', properties: { name: { type: 'string', description: 'שם קצר לסקיל (למשל "דוחות", "עדכון דגלים")' }, description: { type: 'string', description: 'תיאור קצר מה הסקיל עושה' }, steps: { type: 'string', description: 'הוראות מפורטות צעד-אחר-צעד שכרמן תבצע כשמפעילים את הסקיל. כל שורה = צעד אחד.' }, trigger_phrases: { type: 'array', items: { type: 'string' }, description: 'מילות מפתח שיפעילו את הסקיל (למשל ["דוחות", "ביצועים"])' } }, required: ['name', 'description', 'steps'] } } },
+  { type: 'function', function: { name: 'list_skills', description: 'הצגת רשימת כל הסקילים (מיומנויות) השמורים של המשתמש', parameters: { type: 'object', properties: {} } } },
+  { type: 'function', function: { name: 'execute_skill', description: 'טעינת סקיל לפי שם והפעלת הצעדים שלו. כשמשתמש מזכיר שם סקיל או אומר "תפעילי סקיל X", טען את הסקיל ובצע את הצעדים.', parameters: { type: 'object', properties: { name: { type: 'string', description: 'שם הסקיל להפעלה' } }, required: ['name'] } } },
+  { type: 'function', function: { name: 'update_skill', description: 'עדכון סקיל קיים', parameters: { type: 'object', properties: { skill_id: { type: 'string', description: 'מזהה הסקיל (UUID)' }, name: { type: 'string' }, description: { type: 'string' }, steps: { type: 'string' }, trigger_phrases: { type: 'array', items: { type: 'string' } } }, required: ['skill_id'] } } },
+  { type: 'function', function: { name: 'delete_skill', description: 'מחיקת סקיל', parameters: { type: 'object', properties: { skill_id: { type: 'string', description: 'מזהה הסקיל (UUID)' } }, required: ['skill_id'] } } },
 ];
 
 serve(async (req) => {
