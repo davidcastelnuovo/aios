@@ -177,16 +177,38 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
     return campaigners;
   }, [campaigners, canSelectAnyCampaigner, isCampaigner, userCampaignerId]);
 
-  const { data: clients } = useQuery({
-    queryKey: ["clients"],
+  // Fetch cross-tenant agency IDs for visibility
+  const { data: crossTenantAgencyIds } = useQuery({
+    queryKey: ["cross-tenant-agency-ids", currentTenantId],
     queryFn: async () => {
+      if (!currentTenantId) return [];
       const { data, error } = await supabase
-        .from("clients")
-        .select("*")
-        .order("name");
+        .from("agency_tenant_access")
+        .select("agency_id")
+        .eq("accessing_tenant_id", currentTenantId);
+      if (error) throw error;
+      return data?.map(r => r.agency_id) || [];
+    },
+    enabled: !!currentTenantId,
+  });
+
+  const { data: clients } = useQuery({
+    queryKey: ["clients", currentTenantId, crossTenantAgencyIds],
+    queryFn: async () => {
+      if (!currentTenantId) return [];
+      let query = supabase.from("clients").select("*").order("name");
+      
+      if (crossTenantAgencyIds && crossTenantAgencyIds.length > 0) {
+        query = query.or(`tenant_id.eq.${currentTenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+      } else {
+        query = query.eq("tenant_id", currentTenantId);
+      }
+      
+      const { data, error } = await query;
       if (error) throw error;
       return data;
     },
+    enabled: !!currentTenantId,
   });
 
   const { data: agencies } = useQuery({
