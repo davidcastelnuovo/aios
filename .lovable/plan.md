@@ -1,18 +1,28 @@
 
 
-## תיקון שמות ארוכים בדף לקוחות — גלישה לשתי שורות
+## הוספת אפשרות שינוי סוכנות בתצוגת לקוחות
 
 ### הבעיה
-שמות לקוחות ארוכים נחתכים (`truncate`) במקום לעבור לשורה חדשה.
+1. בתצוגת הצ'אט של לקוחות (ClientsChatView) אין כפתור לשינוי סוכנות
+2. בבחירה מרובה של לקוחות (ClientsMultiSelectToolbar) אין אפשרות לשנות סוכנות
 
 ### הפתרון
-בשני המקומות בקובץ `src/pages/Clients.tsx`:
 
-**1. תצוגת כרטיסים (שורה 746)**
-- הסרת `truncate max-w-[200px]` מ-`CardTitle`
-- הוספת `line-clamp-2` כדי להגביל ל-2 שורות מקסימום
+**1. `src/components/clients/ClientsChatView.tsx`**
+- בשורה 996-998 (אזור "מידע עסקי") — הוספת כפתור "שנה סוכנות" ליד שם הסוכנות
+- שימוש ב-`ChangeAgencyDialog` הקיים (כבר קיים ב-chat)
+- הוספת state לניהול פתיחת הדיאלוג + import של הקומפוננטה
 
-**2. תצוגת טבלה (שורה 1046)**
-- הסרת `truncate max-w-[200px]` מ-`TableCell`
-- הוספת `line-clamp-2 max-w-[200px]` כדי לאפשר גלישה ל-2 שורות
+**2. `src/components/clients/ClientsMultiSelectToolbar.tsx`**
+- הוספת כפתור "שנה סוכנות" בטולבר הבחירה המרובה
+- הוספת Select לבחירת סוכנות יעד מרשימת הסוכנויות של הטנאנט
+- mutation שמעדכן את `agency_id` לכל הלקוחות שנבחרו בבת אחת
+- הוספת prop של `tenantId` מ-Clients.tsx כדי לשלוף את רשימת הסוכנויות
+
+**3. `src/pages/Clients.tsx`**
+- העברת `tenantId` ל-`ClientsMultiSelectToolbar`
+
+### פרטים טכניים
+- ה-`ChangeAgencyDialog` הקיים תומך ב-client בודד — נשתמש בו ישירות ב-ClientsChatView
+- ל-bulk נבנה Popover עם Select של סוכנויות + mutation שעושה `.update({ agency_id }).in("id", selectedIds)`
 
