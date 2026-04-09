@@ -11,7 +11,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { differenceInDays } from "date-fns";
 import { calculateHealthScore, FLAG_LABELS, FLAG_COLORS, OVERALL_STATUS_CONFIG, TIER_COLORS, SERVICE_LABELS, COMMUNICATION_STATUS_LABELS, COMMUNICATION_STATUS_COLORS, type FlagKey, type OverallStatus } from "@/lib/healthScore";
-import { CommunicationUpdateModal } from "@/components/clients/CommunicationUpdateModal";
+
 import { SeoUpdateModal } from "@/components/clients/SeoUpdateModal";
 import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
@@ -1045,14 +1045,6 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
       </Tabs>
 
       {/* Modals */}
-      {commModal && (
-        <CommunicationUpdateModal
-          clientId={commModal.clientId}
-          clientName={commModal.clientName}
-          open={!!commModal}
-          onOpenChange={(open) => !open && setCommModal(null)}
-        />
-      )}
       {seoModal && (
         <SeoUpdateModal
           clientId={seoModal.clientId}
