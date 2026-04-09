@@ -291,7 +291,6 @@ export default function DMMDashboard() {
         .from("seo_monthly_updates")
         .select("client_id, month, status")
         .in("client_id", clientIds)
-        .eq("tenant_id", tenantId)
         .order("month", { ascending: false });
       if (error) throw error;
       return data ?? [];
