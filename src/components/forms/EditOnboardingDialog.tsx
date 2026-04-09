@@ -15,6 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 
 const formSchema = z.object({
   title: z.string().min(1, "כותרת היא שדה חובה"),
