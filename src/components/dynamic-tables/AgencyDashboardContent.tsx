@@ -1057,6 +1057,18 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
           onOpenChange={(open) => !open && setSeoModal(null)}
         />
       )}
+      {editingClient && (
+        <ManualHealthEditDialog
+          open={!!editingClient}
+          onOpenChange={(open) => { if (!open) setEditingClient(null); }}
+          clientId={editingClient.id}
+          clientName={editingClient.name}
+          currentScore={editingClient.score}
+          currentFlags={editingClient.flags}
+          currentMood={editingClient.mood_status}
+          onSaved={() => {}}
+        />
+      )}
     </div>
   );
 }
