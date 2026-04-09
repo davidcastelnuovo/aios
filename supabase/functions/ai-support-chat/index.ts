@@ -1463,7 +1463,7 @@ async function executeTool(
           .from('crm_tables')
           .select('id, name, client_id, integration_type, integration_settings')
           .eq('tenant_id', tenantId)
-          .eq('integration_type', 'meta_ads');
+          .in('integration_type', ['meta_ads', 'facebook_insights', 'facebook_ecommerce']);
 
         if (toolCall.args.client_id) {
           query = query.eq('client_id', toolCall.args.client_id);
