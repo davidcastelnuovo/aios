@@ -1,28 +1,33 @@
 
 
-## הוספת אפשרות שינוי סוכנות בתצוגת לקוחות
+## הבעיה: כלי עדכון דשבורד CRM חסרים ב-AIOS
 
-### הבעיה
-1. בתצוגת הצ'אט של לקוחות (ClientsChatView) אין כפתור לשינוי סוכנות
-2. בבחירה מרובה של לקוחות (ClientsMultiSelectToolbar) אין אפשרות לשנות סוכנות
+כרמן דרך ממשק ה-AIOS (`ai-support-chat`) **לא מכילה** את הכלים הבאים שקיימים רק ב-`run-ai-agent`:
+- `analyze_campaign_performance` — ניתוח ביצועי קמפיינים (השוואת 7 ימים מול 30 יום)
+- `update_client_health` — עדכון mood_status, health score ויצירת רשומת communication_logs
 
-### הפתרון
+לכן כרמן יכולה לקרוא נתונים מטבלאות דינמיות (`get_table_data`) ולהציג דוח, אבל **לא יכולה לעדכן** את הדשבורד.
 
-**1. `src/components/clients/ClientsChatView.tsx`**
-- בשורה 996-998 (אזור "מידע עסקי") — הוספת כפתור "שנה סוכנות" ליד שם הסוכנות
-- שימוש ב-`ChangeAgencyDialog` הקיים (כבר קיים ב-chat)
-- הוספת state לניהול פתיחת הדיאלוג + import של הקומפוננטה
+## הפתרון
 
-**2. `src/components/clients/ClientsMultiSelectToolbar.tsx`**
-- הוספת כפתור "שנה סוכנות" בטולבר הבחירה המרובה
-- הוספת Select לבחירת סוכנות יעד מרשימת הסוכנויות של הטנאנט
-- mutation שמעדכן את `agency_id` לכל הלקוחות שנבחרו בבת אחת
-- הוספת prop של `tenantId` מ-Clients.tsx כדי לשלוף את רשימת הסוכנויות
+הוספת שני הכלים ל-`supabase/functions/ai-support-chat/index.ts`:
 
-**3. `src/pages/Clients.tsx`**
-- העברת `tenantId` ל-`ClientsMultiSelectToolbar`
+### 1. הוספת כלי `analyze_campaign_performance` (tool definition + handler)
+- **הגדרת הכלי**: עם פרמטר אופציונלי `client_id`
+- **Handler**: העתקת הלוגיקה מ-`run-ai-agent` — שליפת CRM tables מסוג facebook, השוואת ממוצעי 7 ימים מול 30 יום (spend, CPL, ROAS), חישוב אחוזי שינוי
+
+### 2. הוספת כלי `update_client_health` (tool definition + handler)
+- **הגדרת הכלי**: עם `client_id`, `mood_status` (happy/wavering/churn_risk), `communication_status`, `note`
+- **Handler**: העתקת הלוגיקה מ-`run-ai-agent`:
+  1. עדכון `mood_status` בטבלת `clients`
+  2. יצירת רשומה ב-`communication_logs` עם `interaction_type: system_alert`
+  3. יצירת רשומה ב-`client_updates` עם prefix `[עדכון אוטומטי - כרמן]`
+  4. שימוש ב-owner כ-fallback user ID
+
+### 3. עדכון System Prompt
+- הוספת סעיפים 21-22 לרשימת הפעולות: "ניתוח קמפיינים" ו-"עדכון בריאות לקוח בדשבורד CRM"
 
 ### פרטים טכניים
-- ה-`ChangeAgencyDialog` הקיים תומך ב-client בודד — נשתמש בו ישירות ב-ClientsChatView
-- ל-bulk נבנה Popover עם Select של סוכנויות + mutation שעושה `.update({ agency_id }).in("id", selectedIds)`
+- **קובץ**: `supabase/functions/ai-support-chat/index.ts`
+- הלוגיקה תועתק מ-`run-ai-agent/index.ts` (שורות 323-457) עם התאמות ל-context של ai-support-chat (userId מהאימות, tenantId מה-resolution הקיים)
 
