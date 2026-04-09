@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useIsMobile } from "@/hooks/use-mobile";
 import ReactMarkdown from "react-markdown";
+import { invalidateAIEntityQueries } from "@/lib/aiInvalidation";
 
 interface Message {
   role: 'user' | 'assistant' | 'tool_call';
@@ -180,6 +181,8 @@ export function AIOSDialog({ open, onOpenChange }: AIOSDialogProps) {
               setMessages(prev => [...prev, toolMessage]);
             } else if (parsed.type === 'conversation_id') {
               setCurrentConversationId(parsed.id);
+            } else if (parsed.type === 'invalidate') {
+              invalidateAIEntityQueries(queryClient, parsed.entity);
             } else if (parsed.type === 'done') {
               if (assistantContent) {
                 setMessages(prev => [...prev, {
@@ -372,6 +375,8 @@ export function AIOSDialog({ open, onOpenChange }: AIOSDialogProps) {
               }]);
             } else if (parsed.type === 'conversation_id') {
               setCurrentConversationId(parsed.id);
+            } else if (parsed.type === 'invalidate') {
+              invalidateAIEntityQueries(queryClient, parsed.entity);
             } else if (parsed.type === 'done') {
               if (assistantContent) {
                 setMessages(prev => [...prev, { role: 'assistant', content: assistantContent, timestamp: new Date().toISOString() }]);
