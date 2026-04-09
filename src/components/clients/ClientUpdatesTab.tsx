@@ -44,11 +44,12 @@ interface ClientUpdatesTabProps {
 
 type DateFilter = "week" | "month" | "all";
 
-// ── CRM communication status config ──────────────────────────────────────────
-const COMM_STATUS_OPTIONS = [
-  { value: "normal",    label: "תקין",   color: "text-green-700",  bg: "bg-green-50 border-green-200" },
-  { value: "sensitive", label: "רגיש",   color: "text-yellow-700", bg: "bg-yellow-50 border-yellow-200" },
-  { value: "complaint", label: "תלונה",  color: "text-red-700",   bg: "bg-red-50 border-red-200" },
+// ── Unified mood/status config ───────────────────────────────────────────────
+const MOOD_STATUS_OPTIONS = [
+  { value: "happy",           label: "😊 מבסוט / תקין",        color: "text-green-700",  bg: "bg-green-50 border-green-200" },
+  { value: "wavering",        label: "😐 מתנדנד / רגיש",       color: "text-yellow-700", bg: "bg-yellow-50 border-yellow-200" },
+  { value: "churn_risk",      label: "😟 סכנת נטישה / תלונה",  color: "text-red-700",    bg: "bg-red-50 border-red-200" },
+  { value: "not_progressing", label: "😔 לא מתקדם",            color: "text-orange-700", bg: "bg-orange-50 border-orange-200" },
 ];
 const INTERACTION_TYPES = [
   { value: "call",     label: "שיחה",    icon: Phone },
@@ -57,12 +58,6 @@ const INTERACTION_TYPES = [
   { value: "whatsapp", label: "וואטסאפ", icon: MessageSquare },
   { value: "other",    label: "אחר",     icon: AlertTriangle },
 ];
-// Sync communication_status → mood_status on clients table
-const COMM_TO_MOOD: Record<string, string> = {
-  normal:    "happy",
-  sensitive: "wavering",
-  complaint: "churn_risk",
-};
 
 export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps) {
   const [dateFilter, setDateFilter] = useState<DateFilter>("month");
@@ -73,7 +68,7 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
   const { user } = useCurrentUser();
 
   // ── CRM: communication log state ──────────────────────────────────────────
-  const [commStatus, setCommStatus] = useState<string>("normal");
+  const [commStatus, setCommStatus] = useState<string>("happy");
   const [commInteraction, setCommInteraction] = useState<string>("call");
   const [commNote, setCommNote] = useState("");
 
@@ -113,9 +108,8 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
           created_by: user.id,
         });
       if (logError) throw logError;
-      // Sync mood_status on clients table
-      const newMood = COMM_TO_MOOD[commStatus] ?? "happy";
-      await supabase.from("clients").update({ mood_status: newMood } as any).eq("id", clientId);
+      // Update mood_status directly (unified values)
+      await supabase.from("clients").update({ mood_status: commStatus } as any).eq("id", clientId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["comm-log-latest", clientId] });
@@ -373,12 +367,12 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
         <CardContent className="p-3 sm:p-4 space-y-3">
           <div className="flex items-center gap-2">
             <MessageSquare className="h-4 w-4 text-primary" />
-            <h3 className="font-semibold text-sm">עדכון מצב תקשורת</h3>
+            <h3 className="font-semibold text-sm">עדכון מצב לקוח</h3>
             {latestComm && (
               <span className="text-xs text-muted-foreground mr-auto">
                 עדכון אחרון: {format(new Date((latestComm as any).created_at), "d/M/yy", { locale: he })}
                 {" — "}
-                {COMM_STATUS_OPTIONS.find(o => o.value === (latestComm as any).status)?.label ?? (latestComm as any).status}
+                {MOOD_STATUS_OPTIONS.find(o => o.value === (latestComm as any).status)?.label ?? (latestComm as any).status}
               </span>
             )}
           </div>
@@ -386,13 +380,13 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
           {/* Status + Interaction type row */}
           <div className="flex gap-2 flex-wrap">
             <div className="flex-1 min-w-[120px]">
-              <Label className="text-xs text-muted-foreground mb-1 block">מצב תקשורת</Label>
+              <Label className="text-xs text-muted-foreground mb-1 block">מצב לקוח</Label>
               <Select value={commStatus} onValueChange={setCommStatus}>
                 <SelectTrigger className="h-8 text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {COMM_STATUS_OPTIONS.map(opt => (
+                  {MOOD_STATUS_OPTIONS.map(opt => (
                     <SelectItem key={opt.value} value={opt.value}>
                       <span className={opt.color}>{opt.label}</span>
                     </SelectItem>
