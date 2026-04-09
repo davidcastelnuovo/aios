@@ -38,8 +38,10 @@ const ALL_TOOLS = [
   { name: 'list_leads', description: 'רשימת לידים', parameters: { type: 'object', properties: { status: { type: 'string' }, limit: { type: 'integer' } } } },
   { name: 'update_lead_status', description: 'עדכון סטטוס ליד', parameters: { type: 'object', properties: { lead_id: { type: 'string' }, status: { type: 'string' } }, required: ['lead_id', 'status'] } },
   { name: 'add_lead_update', description: 'הוספת עדכון לליד', parameters: { type: 'object', properties: { lead_id: { type: 'string' }, content: { type: 'string' } }, required: ['lead_id', 'content'] } },
-  // TASKS
-  { name: 'create_task', description: 'יצירת משימה חדשה', parameters: { type: 'object', properties: { title: { type: 'string' }, client_id: { type: 'string' }, lead_id: { type: 'string' }, campaigner_id: { type: 'string', description: 'מזהה קמפיינר לשיוך המשימה' }, priority: { type: 'integer' }, due_date: { type: 'string' }, due_time: { type: 'string' }, notes: { type: 'string' }, duration_minutes: { type: 'integer', description: 'משך המשימה בדקות' } }, required: ['title'] } },
+  // TASKS (team tasks - for campaigners/team members)
+  { name: 'create_task', description: 'יצירת משימה לצוות (קמפיינרים/אנשי צוות). השתמש בכלי הזה רק כשרוצים ליצור משימה לאדם אחר בצוות. אם המשימה היא לכרמן עצמה — השתמש ב-create_agent_task במקום!', parameters: { type: 'object', properties: { title: { type: 'string' }, client_id: { type: 'string' }, lead_id: { type: 'string' }, campaigner_id: { type: 'string', description: 'מזהה קמפיינר לשיוך המשימה' }, priority: { type: 'integer' }, due_date: { type: 'string' }, due_time: { type: 'string' }, notes: { type: 'string' }, duration_minutes: { type: 'integer', description: 'משך המשימה בדקות' } }, required: ['title'] } },
+  // AGENT TASKS (for Carmen herself)
+  { name: 'create_agent_task', description: 'יצירת משימה לכרמן עצמה (ניהול משימות סוכנים). השתמש בכלי הזה כשהמשתמש מבקש מכרמן ליצור משימה לעצמה, משימה חוזרת, או תזכורת. המשימה תופיע בלוח "ניהול משימות סוכנים".', parameters: { type: 'object', properties: { title: { type: 'string', description: 'כותרת המשימה' }, description: { type: 'string', description: 'תיאור מפורט של המשימה' }, priority: { type: 'integer', description: 'עדיפות 1-10 (ברירת מחדל 5)' }, schedule_type: { type: 'string', enum: ['once', 'daily', 'weekly'], description: 'סוג תזמון' }, scheduled_at: { type: 'string', description: 'תאריך ושעה לביצוע (ISO format)' }, cron_expression: { type: 'string', description: 'ביטוי CRON למשימות חוזרות' }, task_skills: { type: 'array', items: { type: 'string' }, description: 'רשימת סקילים להפעלה' } }, required: ['title'] } },
   { name: 'search_tasks', description: 'חיפוש משימות לפי שם/כותרת. חשוב! השתמש בכלי הזה לפני יצירת משימה כדי לוודא שהיא לא קיימת כבר', parameters: { type: 'object', properties: { search_term: { type: 'string', description: 'מילת חיפוש בכותרת המשימה' }, status: { type: 'string' }, client_id: { type: 'string' } }, required: ['search_term'] } },
   { name: 'list_tasks', description: 'רשימת משימות', parameters: { type: 'object', properties: { status: { type: 'string' }, client_id: { type: 'string' }, limit: { type: 'integer' } } } },
   { name: 'update_task_status', description: 'עדכון סטטוס משימה', parameters: { type: 'object', properties: { task_id: { type: 'string' }, status: { type: 'string', enum: ['open', 'in_progress', 'completed', 'cancelled'] } }, required: ['task_id', 'status'] } },
@@ -193,6 +195,27 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       }).select('id, title, status').single()
       if (error) throw error
       return { task_id: data.id, title: data.title, status: data.status }
+    }
+    case 'create_agent_task': {
+      // Create task in agent_tasks table (for Carmen herself)
+      const taskData: any = {
+        agent_id: agent_id,
+        tenant_id: tenantId,
+        title: args.title,
+        description: args.description || null,
+        priority: args.priority || 5,
+        status: 'pending',
+        schedule_type: args.schedule_type || 'once',
+        scheduled_at: args.scheduled_at || null,
+        cron_expression: args.cron_expression || null,
+        task_skills: args.task_skills ? JSON.stringify(args.task_skills) : null,
+        task_mode: 'agent',
+        enabled: true,
+        created_by: userId !== 'system' ? userId : null,
+      }
+      const { data, error } = await supabase.from('agent_tasks').insert(taskData).select('id, title, status, schedule_type').single()
+      if (error) throw error
+      return { agent_task_id: data.id, title: data.title, status: data.status, schedule_type: data.schedule_type }
     }
     case 'search_tasks': {
       let query = supabase.from('tasks').select('id, title, status, priority, due_date, due_time, notes, duration_minutes, clients(name), leads(company_name), campaigners(full_name)')
@@ -1130,6 +1153,7 @@ Deno.serve(async (req) => {
             'יש לך גישה מלאה לכל מודולי המערכת: לידים, לקוחות, משימות, קמפיינרים, אנשי מכירות, סוכנויות, ספקים, מוצרים, אוטומציות, ועוד.',
             'את יכולה לבצע כל פעולה שמשתמש יכול לבצע ידנית במערכת.',
             'חשוב מאוד: לפני יצירת משימה חדשה, תמיד חפשי קודם עם search_tasks כדי לוודא שהמשימה לא קיימת כבר. אם היא קיימת - עדכני אותה במקום ליצור חדשה.',
+            'הבדל בין סוגי משימות: create_task = משימה לצוות (קמפיינרים). create_agent_task = משימה לכרמן עצמה (מופיעה בניהול משימות סוכנים). כשמבקשים ממך ליצור משימה לעצמך, סריקה תקופתית, או משימה חוזרת — השתמשי ב-create_agent_task.',
             'ענה בעברית. היי תמציתית, מקצועית, ויעילה. כשמבצעים פעולה — אשרי את הביצוע בקצרה (2-3 משפטים מקסימום). אין צורך בהסברים ארוכים, סיכומים מפורטים או רשימות — תיאור קצר של מה נעשה מספיק. אל תציעי הצעות נוספות אלא אם נתבקשת.',
             'חשוב: כשמדברים על "דשבורד CRM" או "דשבורד סוכנות" — הכוונה לדשבורד CRM הסוכנות שמציג Health Score, דגלים (flags), סטטוס תקשורת (mood_status), וכרטיסי "דורשים טיפול" ו"לתשומת לב" לכל לקוח. כשמבקשים ממך לעדכן את הדשבורד, השתמשי בכלי update_client_health כדי לעדכן mood_status ולייצר רשומת communication_logs — זה מה שמשנה את הדגלים והסטטוס בדשבורד.',
             'כלל למידה עצמית: כשמשתמש מסביר לך איך לבצע משימה, נותן הנחיות, מתקן אותך, או מלמד אותך דרך עבודה חדשה — שמרי את זה מיד בזיכרון עם save_memory בקטגוריה instructions עם מפתח תיאורי (למשל: "how_to_update_dashboard", "report_format_preference"). בפעם הבאה שתתבקשי לבצע משימה דומה, פעלי לפי ההנחיות ששמרת. אם ההנחיות השתנו — עדכני את הזיכרון הקיים באותו מפתח. תמיד בתחילת עבודה, בדקי עם recall_memory אם יש הנחיות רלוונטיות שנשמרו.',

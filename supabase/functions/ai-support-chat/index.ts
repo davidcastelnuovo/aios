@@ -137,6 +137,11 @@ ${uiMode === 'aios' ? `📊 **חשוב לגבי תצוגת נתונים (display
 - כאשר אתה מחפש ישות ומקבל תוצאות, חובה להשתמש ב-UUID המדויק מהתוצאה!
 - **אל תמציא** IDs - חפש קודם ואז השתמש ב-ID האמיתי.
 
+📌 **חשוב מאוד - הבדל בין סוגי משימות:**
+- **create_task** = משימה לצוות (קמפיינרים, אנשי מכירות). מופיעה ב"משימות" הרגילות. השתמשי בזה כשרוצים לתת משימה לאדם בצוות.
+- **create_agent_task** = משימה לכרמן עצמה. מופיעה ב"ניהול משימות סוכנים". השתמשי בזה כשמבקשים ממך ליצור משימה לעצמך, סריקה תקופתית, תזכורת, או משימה חוזרת.
+- כלל אצבע: אם המשתמש אומר "תקימי לעצמך", "תיצרי לך משימה", "תעקבי אחרי", "הקימי משימה חוזרת" → **create_agent_task**. אם המשתמש אומר "תיצרי משימה ל-X" (שם של קמפיינר) → **create_task**.
+
 ⚠️ **לפני יצירת אוטומציה:**
 - וודא שהמשתמש ציין trigger_type ו-action_type ברורים
 - שאל לפרטים חסרים אם צריך
@@ -356,6 +361,70 @@ async function executeTool(
             calendar_html_link: calendarHtmlLink,
             calendar_google_email: calendarGoogleEmail,
             calendar_start_iso: scheduledStartIso,
+          },
+        };
+      }
+
+      case 'create_agent_task': {
+        const { title, description, priority, schedule_type, scheduled_at, cron_expression, task_skills } = toolCall.args;
+
+        // Find Carmen agent for this tenant
+        const { data: agentData } = await supabaseClient
+          .from('ai_agents')
+          .select('id')
+          .eq('tenant_id', tenantId)
+          .ilike('name', '%carmen%')
+          .limit(1)
+          .maybeSingle();
+
+        if (!agentData?.id) {
+          // Fallback: get any active agent
+          const { data: fallbackAgent } = await supabaseClient
+            .from('ai_agents')
+            .select('id')
+            .eq('tenant_id', tenantId)
+            .eq('active', true)
+            .limit(1)
+            .maybeSingle();
+          if (!fallbackAgent?.id) {
+            return { success: false, error: 'לא נמצא סוכן AI בארגון.' };
+          }
+          agentData.id = fallbackAgent.id;
+        }
+
+        const agentTaskData: any = {
+          agent_id: agentData.id,
+          tenant_id: tenantId,
+          title,
+          description: description || null,
+          priority: priority || 5,
+          status: 'pending',
+          schedule_type: schedule_type || 'once',
+          scheduled_at: scheduled_at || null,
+          cron_expression: cron_expression || null,
+          task_skills: task_skills ? JSON.stringify(task_skills) : null,
+          task_mode: 'agent',
+          enabled: true,
+          created_by: userId,
+        };
+
+        const { data: agentTask, error: agentTaskError } = await supabaseClient
+          .from('agent_tasks')
+          .insert(agentTaskData)
+          .select('id, title, status, schedule_type')
+          .single();
+        if (agentTaskError) throw agentTaskError;
+
+        modifiedEntities.add('agent_tasks');
+
+        return {
+          success: true,
+          result: {
+            agent_task_id: agentTask.id,
+            title: agentTask.title,
+            status: agentTask.status,
+            schedule_type: agentTask.schedule_type,
+            message: 'המשימה נוצרה בהצלחה בניהול משימות סוכנים',
           },
         };
       }
@@ -1608,7 +1677,7 @@ const tools = [
     type: 'function',
     function: {
       name: 'create_task',
-      description: 'יצירת משימה חדשה במערכת. כשמגדירים תאריך, המשימה מסונכרנת אוטומטית ליומן Google.',
+      description: 'יצירת משימה לצוות (קמפיינרים/אנשי צוות). השתמש בכלי הזה רק כשרוצים ליצור משימה לאדם אחר בצוות. אם המשימה היא לכרמן עצמה — השתמש ב-create_agent_task במקום! כשמגדירים תאריך, המשימה מסונכרנת אוטומטית ליומן Google.',
       parameters: {
         type: 'object',
         properties: {
@@ -1618,6 +1687,26 @@ const tools = [
           due_date: { type: 'string', format: 'date', description: 'תאריך יעד עתידי בפורמט YYYY-MM-DD (אלא אם המשתמש ביקש מפורשות תאריך עבר)' },
           due_time: { type: 'string', description: 'שעת יעד בפורמט HH:MM (לדוגמה: 09:00, 14:30). אם לא צוין, ברירת מחדל 09:00' },
           notes: { type: 'string', description: 'הערות' },
+        },
+        required: ['title'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_agent_task',
+      description: 'יצירת משימה לכרמן עצמה (ניהול משימות סוכנים). השתמש בכלי הזה כשהמשתמש מבקש מכרמן ליצור משימה לעצמה, משימה חוזרת, תזכורת, או סריקה תקופתית. המשימה תופיע בלוח "ניהול משימות סוכנים" ולא במשימות הצוות.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'כותרת המשימה' },
+          description: { type: 'string', description: 'תיאור מפורט של המשימה' },
+          priority: { type: 'integer', description: 'עדיפות 1-10 (ברירת מחדל 5)', minimum: 1, maximum: 10 },
+          schedule_type: { type: 'string', enum: ['once', 'daily', 'weekly'], description: 'סוג תזמון: once=פעם אחת, daily=יומי, weekly=שבועי' },
+          scheduled_at: { type: 'string', description: 'תאריך ושעה לביצוע (ISO format)' },
+          cron_expression: { type: 'string', description: 'ביטוי CRON למשימות חוזרות (לדוגמה: 0 9 * * * = כל יום ב-9:00)' },
+          task_skills: { type: 'array', items: { type: 'string' }, description: 'רשימת שמות סקילים להפעלה בעת ביצוע המשימה' },
         },
         required: ['title'],
       },
