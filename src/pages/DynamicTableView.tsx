@@ -168,7 +168,7 @@ export default function DynamicTableView() {
         };
       }
       case 'last_7_days':
-        return { startDate: format(subDays(today, 7), 'yyyy-MM-dd'), endDate };
+        return { startDate: format(subDays(today, 6), 'yyyy-MM-dd'), endDate };
       case 'last_14_days':
         return { startDate: format(subDays(today, 14), 'yyyy-MM-dd'), endDate };
       case 'last_30_days':
@@ -295,7 +295,7 @@ export default function DynamicTableView() {
         break;
       }
       case 'last_7_days':
-        startDate = format(subDays(today, 7), 'yyyy-MM-dd');
+        startDate = format(subDays(today, 6), 'yyyy-MM-dd');
         endDate = format(today, 'yyyy-MM-dd');
         break;
       case 'last_14_days':

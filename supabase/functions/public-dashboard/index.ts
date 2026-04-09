@@ -24,7 +24,7 @@ function getDateRange(filter: string): { startDate: string | null; endDate: stri
       break;
     }
     case "last_7_days":
-      startDate = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+      startDate = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
       endDate = today.toISOString().split("T")[0];
       break;
     case "this_month":
