@@ -26,7 +26,7 @@ import {
   type FlagKey,
   type OverallStatus,
 } from "@/lib/healthScore";
-import { CommunicationUpdateModal } from "@/components/clients/CommunicationUpdateModal";
+
 import { SeoUpdateModal } from "@/components/clients/SeoUpdateModal";
 
 export function CRMAlerts() {
@@ -244,14 +244,6 @@ export function CRMAlerts() {
       )}
 
       {/* Modals */}
-      {commModal && (
-        <CommunicationUpdateModal
-          clientId={commModal.clientId}
-          clientName={commModal.clientName}
-          open={!!commModal}
-          onOpenChange={(open) => !open && setCommModal(null)}
-        />
-      )}
       {seoModal && (
         <SeoUpdateModal
           clientId={seoModal.clientId}
