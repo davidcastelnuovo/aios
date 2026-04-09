@@ -2035,6 +2035,26 @@ serve(async (req) => {
       console.error('Failed to load memory:', memErr);
     }
 
+    // Load skills for system prompt
+    let skillsContext = '';
+    try {
+      const { data: skills } = await supabaseClient
+        .from('ai_skills')
+        .select('name, description, trigger_phrases')
+        .eq('user_id', user.id)
+        .eq('tenant_id', tenantId)
+        .order('updated_at', { ascending: false });
+
+      if (skills && skills.length > 0) {
+        skillsContext = skills.map(s => {
+          const triggers = s.trigger_phrases?.length ? ` (טריגרים: ${s.trigger_phrases.join(', ')})` : '';
+          return `• **${s.name}**: ${s.description}${triggers}`;
+        }).join('\n');
+      }
+    } catch (skillErr) {
+      console.error('Failed to load skills:', skillErr);
+    }
+
     // Clear modified entities tracker for this request
     modifiedEntities.clear();
 
