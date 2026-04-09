@@ -994,6 +994,10 @@ export function ClientsChatView({
                     </h3>
                     <div className="space-y-2 text-sm">
                       <div className="flex items-center justify-end gap-2">
+                        <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setChangeAgencyOpen(true)}>
+                          <Edit className="h-3 w-3 ml-1" />
+                          שנה
+                        </Button>
                         <span className="font-medium">{selectedClient.agencies?.name || "—"}</span>
                         <span className="text-muted-foreground">:סוכנות</span>
                       </div>

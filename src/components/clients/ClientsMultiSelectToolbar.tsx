@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { X, CheckSquare, Trash2, RefreshCw } from "lucide-react";
+import { X, CheckSquare, Trash2, RefreshCw, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -21,6 +21,7 @@ interface ClientsMultiSelectToolbarProps {
   onClearSelection: () => void;
   onSelectAll?: () => void;
   totalCount: number;
+  tenantId?: string;
 }
 
 const STATUS_OPTIONS = [
