@@ -19,6 +19,7 @@ function buildSystemPrompt(
   userEmail: string,
   currentDateContext: string,
   memoryContext: string,
+  skillsContext: string,
   campaignerName?: string,
   campaignerId?: string,
   uiMode?: string,
