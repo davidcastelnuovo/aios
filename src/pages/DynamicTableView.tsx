@@ -590,7 +590,26 @@ export default function DynamicTableView() {
     },
   });
 
-  const syncFacebookMutation = useMutation({
+  const deleteTableMutation = useMutation({
+    mutationFn: async () => {
+      if (!table?.id) throw new Error('No table');
+      // Delete records first
+      await supabase.from('crm_records').delete().eq('table_id', table.id);
+      // Delete fields
+      await supabase.from('crm_fields').delete().eq('table_id', table.id);
+      // Delete the table
+      const { error } = await supabase.from('crm_tables').delete().eq('id', table.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('הטבלה נמחקה בהצלחה');
+      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      navigate(buildPath('/dynamic-tables'));
+    },
+    onError: (error: any) => {
+      toast.error('שגיאה במחיקת טבלה: ' + error.message);
+    },
+  });
     mutationFn: async () => {
       if (!table?.id) throw new Error('No table');
       
