@@ -146,7 +146,29 @@ export function ClientsMultiSelectToolbar({
             </PopoverContent>
           </Popover>
 
-          {/* Bulk delete */}
+          {/* Bulk agency change */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button size="sm" variant="ghost">
+                <Building2 className="h-4 w-4 ml-1" />
+                שנה סוכנות
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-48 p-2" align="start" dir="rtl">
+              <div className="space-y-1">
+                {agencies.map((agency) => (
+                  <div
+                    key={agency.id}
+                    className="flex items-center gap-2 p-2 rounded-md hover:bg-muted cursor-pointer"
+                    onClick={() => bulkChangeAgencyMutation.mutate(agency.id)}
+                  >
+                    <span className="text-sm">{agency.name}</span>
+                  </div>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+
           <Button
             size="sm"
             variant="ghost"
