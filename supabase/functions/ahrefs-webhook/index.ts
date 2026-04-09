@@ -162,19 +162,29 @@ Deno.serve(async (req) => {
           try {
             const { data: existingTables } = await supabase
               .from("crm_tables")
-              .select("id")
+              .select("id, integration_settings")
               .eq("client_id", resolved_client_id)
               .eq("integration_type", "ahrefs");
 
-            if (!existingTables || existingTables.length === 0) {
+            const domainTableExists = existingTables?.some((t: any) => {
+              const settings = t.integration_settings as any;
+              return settings?.targetDomain === domain;
+            });
+
+            if (!domainTableExists) {
               await supabase.from("crm_tables").insert({
                 tenant_id,
                 client_id: resolved_client_id,
                 name: `דוח SEO - ${domain}`,
-                slug: `seo-${domain.replace(/\./g, "-")}`,
+                slug: `seo-${domain.replace(/\./g, "-")}-${Date.now()}`,
                 integration_type: "ahrefs",
                 category: "seo",
                 description: `דוח SEO אוטומטי עבור ${domain}`,
+                integration_settings: {
+                  data_source: "ahrefs_reports",
+                  targetDomain: domain,
+                  clientId: resolved_client_id,
+                },
               });
             }
           } catch (e) {
@@ -185,12 +195,18 @@ Deno.serve(async (req) => {
           try {
             const { data: crmTables } = await supabase
               .from("crm_tables")
-              .select("id")
+              .select("id, integration_settings")
               .eq("client_id", resolved_client_id)
               .eq("integration_type", "ahrefs");
 
-            if (crmTables && crmTables.length > 0) {
-              const crmTableId = crmTables[0].id;
+            // Find the table matching this specific domain
+            const matchingTable = crmTables?.find((t: any) => {
+              const settings = t.integration_settings as any;
+              return settings?.targetDomain === domain;
+            }) || (crmTables && crmTables.length > 0 ? crmTables[0] : null);
+
+            if (matchingTable) {
+              const crmTableId = matchingTable.id;
               const rd = report_data as any || {};
               const snapshot = rd.snapshot || {};
               const organicKeywords = Array.isArray(rd.organic_keywords) ? rd.organic_keywords : [];

@@ -67,11 +67,11 @@ export default function AhrefsSettings() {
   // Link report to client mutation
   const linkClientMutation = useMutation({
     mutationFn: async ({ reportId, clientId, domain }: { reportId: string; clientId: string; domain: string }) => {
-      // Update report with client_id
+      // Update ALL reports for the same domain with this client_id
       const { error: reportError } = await supabase
         .from('ahrefs_reports')
         .update({ client_id: clientId })
-        .eq('id', reportId);
+        .eq('domain', domain);
       if (reportError) throw reportError;
 
       // Update client website if not set
@@ -84,18 +84,22 @@ export default function AhrefsSettings() {
           .eq('id', clientId);
       }
 
-      // Auto-create SEO report table if one doesn't exist for this client
+      // Auto-create SEO report table per domain+client (not just per client)
       const { data: existingTables } = await supabase
         .from('crm_tables')
-        .select('id')
+        .select('id, integration_settings')
         .eq('client_id', clientId)
-        .eq('integration_type', 'ahrefs')
-        .limit(1);
+        .eq('integration_type', 'ahrefs');
 
-      if (!existingTables || existingTables.length === 0) {
+      const domainTableExists = existingTables?.some((t: any) => {
+        const settings = t.integration_settings as any;
+        return settings?.targetDomain === domain;
+      });
+
+      if (!domainTableExists) {
         const clientName = client?.name || clients.find(c => c.id === clientId)?.name || '';
-        const tableName = `דוח SEO - ${clientName}`;
-        const slug = `seo-report-${clientId}-${Date.now()}`;
+        const tableName = `דוח SEO - ${clientName} - ${domain}`;
+        const slug = `seo-report-${clientId}-${domain.replace(/\./g, '-')}-${Date.now()}`;
 
         await supabase.functions.invoke('crm-tables', {
           body: {
