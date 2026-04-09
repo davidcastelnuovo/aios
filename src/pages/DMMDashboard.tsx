@@ -147,11 +147,34 @@ export default function DMMDashboard() {
     navigate(buildPath(`/clients?clientId=${clientId}&tab=${tab}`));
   }
 
-  // ── Fetch clients (base: always-safe fields) ──────────────────────────────
-  const { data: rawClients = [], isLoading: clientsLoading, refetch } = useQuery({
-    queryKey: ["dmm-clients", tenantId, selectedAgency, userAgencyIds],
+  // ── Fetch cross-tenant agency IDs ──────────────────────────────────────────
+  const { data: crossTenantAgencyIds = [] } = useQuery({
+    queryKey: ["cross-tenant-agencies", tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from("agency_tenant_access")
+        .select("agency_id")
+        .eq("accessing_tenant_id", tenantId);
+      if (error) return [];
+      return data?.map((d) => d.agency_id) ?? [];
+    },
+    enabled: !!tenantId,
+    staleTime: 300_000,
+  });
+
+  // ── Fetch clients (base: always-safe fields) ──────────────────────────────
+  const { data: rawClients = [], isLoading: clientsLoading, refetch } = useQuery({
+    queryKey: ["dmm-clients", tenantId, selectedAgency, userAgencyIds, crossTenantAgencyIds],
+    queryFn: async () => {
+      if (!tenantId) return [];
+
+      // Build list of all agency IDs the user can access (own tenant + cross-tenant)
+      const allAccessibleAgencyIds = [
+        ...(userAgencyIds ?? []),
+        ...crossTenantAgencyIds,
+      ];
+
       let query = supabase
         .from("clients")
         .select(`
@@ -161,16 +184,24 @@ export default function DMMDashboard() {
             campaigners ( full_name )
           )
         `)
-        .eq("tenant_id", tenantId)
         .in("status", ["active", "onboarding"])
         .order("name");
 
       // Agency filter
       if (selectedAgency && selectedAgency !== "all") {
         query = query.eq("agency_id", selectedAgency);
-      } else if (userAgencyIds && userAgencyIds.length > 0) {
-        // Non-owner users: restrict to their agencies
-        query = query.in("agency_id", userAgencyIds);
+      } else if (isOwner || isSuperAdmin) {
+        // Owners/super admins: show own tenant + cross-tenant agencies
+        if (crossTenantAgencyIds.length > 0) {
+          query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+        } else {
+          query = query.eq("tenant_id", tenantId);
+        }
+      } else if (allAccessibleAgencyIds.length > 0) {
+        // Non-owner users: restrict to their agencies (includes cross-tenant)
+        query = query.in("agency_id", allAccessibleAgencyIds);
+      } else {
+        query = query.eq("tenant_id", tenantId);
       }
 
       const { data, error } = await query;
