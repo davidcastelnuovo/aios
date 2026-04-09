@@ -15,6 +15,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 
 const WEBHOOK_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ahrefs-webhook`;
 
@@ -32,17 +33,27 @@ const REPORT_TYPE_LABELS: Record<string, string> = {
 export default function AhrefsSettings() {
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
+  const { crossTenantAgencyIds, hasCrossTenantAccess, buildCrossTenantFilter } = useCrossTenantAgencyIds();
   const [isConnecting, setIsConnecting] = useState(false);
   const [filterReportType, setFilterReportType] = useState<string>("all");
   const [selectedReport, setSelectedReport] = useState<AhrefsReport | null>(null);
   const [clientSearchOpen, setClientSearchOpen] = useState<string | null>(null);
   const [clientSearch, setClientSearch] = useState("");
 
-  // Fetch clients for association
+  // Fetch clients for association — include cross-tenant shared agency clients
   const { data: clients = [] } = useQuery({
-    queryKey: ['clients-for-ahrefs', tenantId],
+    queryKey: ['clients-for-ahrefs', tenantId, crossTenantAgencyIds],
     queryFn: async () => {
       if (!tenantId) return [];
+      const crossFilter = buildCrossTenantFilter();
+      if (crossFilter) {
+        const { data } = await supabase
+          .from('clients')
+          .select('id, name, website, agency_id')
+          .or(crossFilter)
+          .order('name');
+        return data || [];
+      }
       const { data } = await supabase
         .from('clients')
         .select('id, name, website, agency_id')
