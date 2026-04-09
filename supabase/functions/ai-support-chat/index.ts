@@ -360,6 +360,70 @@ async function executeTool(
         };
       }
 
+      case 'create_agent_task': {
+        const { title, description, priority, schedule_type, scheduled_at, cron_expression, task_skills } = toolCall.args;
+
+        // Find Carmen agent for this tenant
+        const { data: agentData } = await supabaseClient
+          .from('ai_agents')
+          .select('id')
+          .eq('tenant_id', tenantId)
+          .ilike('name', '%carmen%')
+          .limit(1)
+          .maybeSingle();
+
+        if (!agentData?.id) {
+          // Fallback: get any active agent
+          const { data: fallbackAgent } = await supabaseClient
+            .from('ai_agents')
+            .select('id')
+            .eq('tenant_id', tenantId)
+            .eq('active', true)
+            .limit(1)
+            .maybeSingle();
+          if (!fallbackAgent?.id) {
+            return { success: false, error: 'לא נמצא סוכן AI בארגון.' };
+          }
+          agentData.id = fallbackAgent.id;
+        }
+
+        const agentTaskData: any = {
+          agent_id: agentData.id,
+          tenant_id: tenantId,
+          title,
+          description: description || null,
+          priority: priority || 5,
+          status: 'pending',
+          schedule_type: schedule_type || 'once',
+          scheduled_at: scheduled_at || null,
+          cron_expression: cron_expression || null,
+          task_skills: task_skills ? JSON.stringify(task_skills) : null,
+          task_mode: 'agent',
+          enabled: true,
+          created_by: userId,
+        };
+
+        const { data: agentTask, error: agentTaskError } = await supabaseClient
+          .from('agent_tasks')
+          .insert(agentTaskData)
+          .select('id, title, status, schedule_type')
+          .single();
+        if (agentTaskError) throw agentTaskError;
+
+        modifiedEntities.add('agent_tasks');
+
+        return {
+          success: true,
+          result: {
+            agent_task_id: agentTask.id,
+            title: agentTask.title,
+            status: agentTask.status,
+            schedule_type: agentTask.schedule_type,
+            message: 'המשימה נוצרה בהצלחה בניהול משימות סוכנים',
+          },
+        };
+      }
+
       case 'update_task': {
         const { task_id, title, priority, due_date, due_time, notes, status } = toolCall.args;
 
