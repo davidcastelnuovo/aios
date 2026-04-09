@@ -619,7 +619,7 @@ export default function DMMDashboard() {
                   >
                     {/* Status dot */}
                     <TableCell className="text-center">
-                      <StatusDot status={client.overallStatus} />
+                      <StatusDot status={client.effectiveStatus} />
                     </TableCell>
 
                     {/* Client name + tier */}
@@ -655,7 +655,7 @@ export default function DMMDashboard() {
 
                     {/* Health Score */}
                     <TableCell>
-                      <ScoreBadge score={client.healthScore} status={client.overallStatus} />
+                      <ScoreBadge score={client.healthScore} status={client.effectiveStatus} />
                     </TableCell>
 
                     {/* Flags */}
@@ -705,24 +705,41 @@ export default function DMMDashboard() {
                       </div>
                     </TableCell>
 
-                    {/* Actions — navigate to client card */}
+                    {/* Actions */}
                     <TableCell>
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-8 px-2 gap-1"
-                              onClick={() => openClientCard(client.id, "updates")}
-                            >
-                              <ExternalLink className="h-3.5 w-3.5" />
-                              <span className="text-xs">פתח כרטיס</span>
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>פתח כרטיס לקוח במודול לקוחות</TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
+                      <div className="flex gap-1">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 px-2"
+                                onClick={() => setEditingClient(client)}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>עריכה ידנית</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 px-2 gap-1"
+                                onClick={() => openClientCard(client.id, "updates")}
+                              >
+                                <ExternalLink className="h-3.5 w-3.5" />
+                                <span className="text-xs">פתח כרטיס</span>
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>פתח כרטיס לקוח במודול לקוחות</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))
