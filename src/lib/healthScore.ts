@@ -14,6 +14,7 @@ export type OverallStatus = 'green' | 'yellow' | 'red';
 export type FlagKey =
   | 'sensitive'
   | 'complaint'
+  | 'urgent_treatment'
   | 'performance_medium_drop'
   | 'performance_significant_drop'
   | 'performance_sharp_drop'
@@ -59,7 +60,7 @@ export function calculateHealthScore(input: HealthInput): HealthResult {
     flags.push('sensitive');
   } else if (input.communicationStatus === 'complaint') {
     score -= 50;
-    flags.push('complaint');
+    flags.push('urgent_treatment');
   }
 
   if (input.daysSinceLastCommunication !== null) {
@@ -141,6 +142,7 @@ export function calculateHealthScore(input: HealthInput): HealthResult {
 export const FLAG_LABELS: Record<FlagKey, string> = {
   sensitive: 'רגיש',
   complaint: 'תלונה',
+  urgent_treatment: 'דרוש טיפול דחוף',
   performance_medium_drop: 'ירידה בינונית',
   performance_significant_drop: 'ירידה משמעותית',
   performance_sharp_drop: 'ירידה חדה',
@@ -156,6 +158,7 @@ export const FLAG_LABELS: Record<FlagKey, string> = {
 export const FLAG_COLORS: Record<FlagKey, string> = {
   sensitive: 'bg-yellow-100 text-yellow-800 border-yellow-300',
   complaint: 'bg-red-100 text-red-800 border-red-300',
+  urgent_treatment: 'bg-red-200 text-red-900 border-red-400',
   performance_medium_drop: 'bg-orange-100 text-orange-800 border-orange-300',
   performance_significant_drop: 'bg-red-100 text-red-800 border-red-300',
   performance_sharp_drop: 'bg-red-200 text-red-900 border-red-400',
@@ -235,7 +238,7 @@ export const TIER_COLORS: Record<string, string> = {
 
 // ─── Effective status (flag-aware) ────────────────────────────────────────────
 
-const RED_FLAGS: FlagKey[] = ['complaint', 'performance_sharp_drop', 'drop_no_action'];
+const RED_FLAGS: FlagKey[] = ['urgent_treatment', 'complaint', 'performance_sharp_drop', 'drop_no_action'];
 const YELLOW_FLAGS: FlagKey[] = ['sensitive', 'no_communication_30d', 'no_communication_45d', 'seo_stable', 'performance_medium_drop', 'performance_significant_drop', 'no_touch_campaign', 'seo_no_up_2months'];
 
 /**
