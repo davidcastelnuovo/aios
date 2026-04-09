@@ -107,6 +107,7 @@ export default function DynamicTableView() {
   const [selectedGoogleAccount, setSelectedGoogleAccount] = useState<string>("");
   const [showAlertsDialog, setShowAlertsDialog] = useState(false);
   const [showMakeWebhookDialog, setShowMakeWebhookDialog] = useState(false);
+  const [showDeleteTableDialog, setShowDeleteTableDialog] = useState(false);
   const [campaignSearch, setCampaignSearch] = useState("");
   const [isCloning, setIsCloning] = useState(false);
   const cellInputRef = useRef<HTMLInputElement>(null);
