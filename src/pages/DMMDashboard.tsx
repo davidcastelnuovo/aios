@@ -413,6 +413,8 @@ export default function DMMDashboard() {
         seoHistory,
       });
 
+      const effectiveStatus = getEffectiveStatus(result);
+
       return {
         id: c.id,
         name: c.name,
@@ -428,6 +430,7 @@ export default function DMMDashboard() {
         performanceChangePct,
         healthScore: result.score,
         overallStatus: result.status,
+        effectiveStatus,
         flags: result.flags,
       } as ClientRow;
     });
