@@ -1424,7 +1424,7 @@ Deno.serve(async (req) => {
 
     // 5. Run agent with tool loop
     const model = resolveModel(agent.engine || 'gemini-3-flash')
-    const maxRounds = agent.max_tool_rounds || 5
+    const maxRounds = agent.max_tool_rounds || 25
     const safeTemp = typeof temperature === 'number' ? Math.min(2, Math.max(0, temperature)) : undefined
 
     // Build messages with conversation history
