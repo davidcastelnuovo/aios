@@ -41,9 +41,11 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ExternalLink, Search, RefreshCw, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { ExternalLink, Search, RefreshCw, TrendingUp, TrendingDown, Minus, Pencil } from "lucide-react";
+import { ManualHealthEditDialog } from "@/components/clients/ManualHealthEditDialog";
 import {
   calculateHealthScore,
+  getEffectiveStatus,
   FLAG_LABELS,
   FLAG_COLORS,
   OVERALL_STATUS_CONFIG,
