@@ -594,7 +594,7 @@ export default function DMMDashboard() {
                 <TableHead className="text-right">שירותים</TableHead>
                 <TableHead className="text-right w-16">ציון</TableHead>
                 <TableHead className="text-right">Flags</TableHead>
-                <TableHead className="text-right">תקשורת</TableHead>
+                <TableHead className="text-right">בדיקת דופק</TableHead>
                 <TableHead className="text-right">פעולות</TableHead>
               </TableRow>
             </TableHeader>
@@ -610,9 +610,9 @@ export default function DMMDashboard() {
                   <TableRow
                     key={client.id}
                     className={
-                      client.overallStatus === "red"
+                      client.effectiveStatus === "red"
                         ? "bg-red-50/40"
-                        : client.overallStatus === "yellow"
+                        : client.effectiveStatus === "yellow"
                         ? "bg-yellow-50/30"
                         : ""
                     }
