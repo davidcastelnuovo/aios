@@ -183,7 +183,7 @@ const App = () => (
                   <Route path="/t/:tenantSlug/ai-support" element={<ProtectedRoute><AppLayout><DashboardRouter /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/menu-management" element={<ProtectedRoute requiredPermission="menu_management"><AppLayout><MenuManagement /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/fields-management" element={<ProtectedRoute requiredPermission="fields_management"><AppLayout><FieldsManagement /></AppLayout></ProtectedRoute>} />
-                  <Route path="/t/:tenantSlug/dynamic-tables" <Route path="/t/:tenantSlug/dynamic-tables" element={<ProtectedRoute requiredPermission="dynamic_tables"><AppLayout><DynamicTables /></AppLayout></ProtectedRoute>} /> />
+                  <Route path="/t/:tenantSlug/dynamic-tables" element={<ProtectedRoute requiredPermission="dynamic_tables"><AppLayout><DynamicTables /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/table/:tableSlug" element={<ProtectedRoute><AppLayout><DynamicTableView /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/dashboard/:dashboardId" element={<ProtectedRoute><AppLayout><DashboardView /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/chat" element={<ProtectedRoute requiredPermission="chat"><AppLayout><Chat /></AppLayout></ProtectedRoute>} />
