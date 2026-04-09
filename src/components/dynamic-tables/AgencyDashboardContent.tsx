@@ -6,13 +6,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Facebook, FileSpreadsheet, TrendingUp, TrendingDown, Minus, ShoppingCart, LayoutGrid, Activity, MessageSquare } from "lucide-react";
+import { Facebook, FileSpreadsheet, TrendingUp, TrendingDown, Minus, ShoppingCart, LayoutGrid, Activity, MessageSquare, Pencil } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LineChart, Line, ComposedChart, Area } from "recharts";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { differenceInDays } from "date-fns";
-import { calculateHealthScore, FLAG_LABELS, FLAG_COLORS, OVERALL_STATUS_CONFIG, TIER_COLORS, SERVICE_LABELS, COMMUNICATION_STATUS_LABELS, COMMUNICATION_STATUS_COLORS, type FlagKey, type OverallStatus } from "@/lib/healthScore";
+import { calculateHealthScore, getEffectiveStatus, FLAG_LABELS, FLAG_COLORS, OVERALL_STATUS_CONFIG, TIER_COLORS, SERVICE_LABELS, COMMUNICATION_STATUS_LABELS, COMMUNICATION_STATUS_COLORS, type FlagKey, type OverallStatus } from "@/lib/healthScore";
 
 import { SeoUpdateModal } from "@/components/clients/SeoUpdateModal";
+import { ManualHealthEditDialog } from "@/components/clients/ManualHealthEditDialog";
 import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 
@@ -307,6 +308,7 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
   const { tenantId } = useCurrentTenant();
   const [commModal, setCommModal] = useState<{ clientId: string; clientName: string } | null>(null);
   const [seoModal, setSeoModal] = useState<{ clientId: string; clientName: string } | null>(null);
+  const [editingClient, setEditingClient] = useState<any>(null);
 
   // Fetch clients for this agency — base query (id + name only, safe without migration)
   const { data: clients = [], isLoading: clientsLoading } = useQuery({
@@ -408,10 +410,12 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
         daysSinceLastCampaignTouch: null,
         seoHistory,
       });
+      const effectiveStatus = getEffectiveStatus(result);
       return {
         ...merged,
         score: result.score,
         overallStatus: result.status,
+        effectiveStatus,
         flags: result.flags,
         daysSinceComm,
         lastCommDate: latestComm?.created_at ?? null,
@@ -793,7 +797,7 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
             {/* Summary */}
             <div className="grid grid-cols-3 gap-3">
               {(['red', 'yellow', 'green'] as OverallStatus[]).map((s) => {
-                const count = crmRows.filter((r: any) => r.overallStatus === s).length;
+                const count = crmRows.filter((r: any) => r.effectiveStatus === s).length;
                 const cfg = OVERALL_STATUS_CONFIG[s];
                 return (
                   <Card key={s} className="p-4 flex items-center gap-3">
@@ -817,8 +821,8 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
                       <TableHead className="text-right">לקוח</TableHead>
                       <TableHead className="text-right w-16">ציון</TableHead>
                       <TableHead className="text-right">Flags</TableHead>
-                      <TableHead className="text-right">תקשורת</TableHead>
-                      <TableHead className="text-right">פעולות</TableHead>
+                       <TableHead className="text-right">בדיקת דופק</TableHead>
+                       <TableHead className="text-right">פעולות</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -833,8 +837,8 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
                         <TableRow
                           key={client.id}
                           className={
-                            client.overallStatus === 'red' ? 'bg-red-50/40' :
-                            client.overallStatus === 'yellow' ? 'bg-yellow-50/30' : ''
+                            client.effectiveStatus === 'red' ? 'bg-red-50/40' :
+                            client.effectiveStatus === 'yellow' ? 'bg-yellow-50/30' : ''
                           }
                         >
                           <TableCell className="text-center">
@@ -842,11 +846,11 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
                               <UITooltip>
                                 <TooltipTrigger asChild>
                                   <span className="text-xl cursor-default">
-                                    {OVERALL_STATUS_CONFIG[client.overallStatus as OverallStatus]?.dot}
+                                    {OVERALL_STATUS_CONFIG[client.effectiveStatus as OverallStatus]?.dot}
                                   </span>
                                 </TooltipTrigger>
                                 <TooltipContent>
-                                  {OVERALL_STATUS_CONFIG[client.overallStatus as OverallStatus]?.label}
+                                  {OVERALL_STATUS_CONFIG[client.effectiveStatus as OverallStatus]?.label}
                                 </TooltipContent>
                               </UITooltip>
                             </TooltipProvider>
@@ -865,8 +869,8 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
                             <Badge
                               variant="outline"
                               className={`font-bold ${
-                                client.overallStatus === 'green' ? 'bg-green-100 text-green-800 border-green-300' :
-                                client.overallStatus === 'yellow' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' :
+                                client.effectiveStatus === 'green' ? 'bg-green-100 text-green-800 border-green-300' :
+                                client.effectiveStatus === 'yellow' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' :
                                 'bg-red-100 text-red-800 border-red-300'
                               }`}
                             >
@@ -906,12 +910,12 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
                                   <TooltipTrigger asChild>
                                     <Button
                                       variant="outline" size="sm" className="h-8 px-2"
-                                      onClick={() => setCommModal({ clientId: client.id, clientName: client.name })}
+                                      onClick={() => setEditingClient(client)}
                                     >
-                                      <MessageSquare className="h-3.5 w-3.5" />
+                                      <Pencil className="h-3.5 w-3.5" />
                                     </Button>
                                   </TooltipTrigger>
-                                  <TooltipContent>עדכון תקשורת</TooltipContent>
+                                  <TooltipContent>עריכה ידנית</TooltipContent>
                                 </UITooltip>
                               </TooltipProvider>
                               {(client.services ?? []).includes('seo') && (
@@ -1051,6 +1055,18 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
           clientName={seoModal.clientName}
           open={!!seoModal}
           onOpenChange={(open) => !open && setSeoModal(null)}
+        />
+      )}
+      {editingClient && (
+        <ManualHealthEditDialog
+          open={!!editingClient}
+          onOpenChange={(open) => { if (!open) setEditingClient(null); }}
+          clientId={editingClient.id}
+          clientName={editingClient.name}
+          currentScore={editingClient.score}
+          currentFlags={editingClient.flags}
+          currentMood={editingClient.mood_status}
+          onSaved={() => {}}
         />
       )}
     </div>

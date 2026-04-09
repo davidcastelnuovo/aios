@@ -41,9 +41,11 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ExternalLink, Search, RefreshCw, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { ExternalLink, Search, RefreshCw, TrendingUp, TrendingDown, Minus, Pencil } from "lucide-react";
+import { ManualHealthEditDialog } from "@/components/clients/ManualHealthEditDialog";
 import {
   calculateHealthScore,
+  getEffectiveStatus,
   FLAG_LABELS,
   FLAG_COLORS,
   OVERALL_STATUS_CONFIG,
@@ -76,6 +78,7 @@ interface ClientRow {
   performanceChangePct: number | null;
   healthScore: number;
   overallStatus: OverallStatus;
+  effectiveStatus: OverallStatus;
   flags: FlagKey[];
 }
 
@@ -141,6 +144,7 @@ export default function DMMDashboard() {
   const [filterStatus, setFilterStatus] = useState<"all" | OverallStatus>("all");
   const [filterTier, setFilterTier] = useState<"all" | "A" | "B" | "C">("all");
   const [filterService, setFilterService] = useState<"all" | "ppc_google" | "ppc_meta" | "seo" | "social" | "full_social" | "social_meta" | "automation">("all");
+  const [editingClient, setEditingClient] = useState<ClientRow | null>(null);
 
   // Navigate to the client module with the selected client pre-opened
   function openClientCard(clientId: string, tab: "updates" | "details" = "updates") {
@@ -409,6 +413,8 @@ export default function DMMDashboard() {
         seoHistory,
       });
 
+      const effectiveStatus = getEffectiveStatus(result);
+
       return {
         id: c.id,
         name: c.name,
@@ -424,6 +430,7 @@ export default function DMMDashboard() {
         performanceChangePct,
         healthScore: result.score,
         overallStatus: result.status,
+        effectiveStatus,
         flags: result.flags,
       } as ClientRow;
     });
@@ -434,7 +441,7 @@ export default function DMMDashboard() {
     return clients
       .filter((c) => {
         if (search && !c.name.toLowerCase().includes(search.toLowerCase())) return false;
-        if (filterStatus !== "all" && c.overallStatus !== filterStatus) return false;
+        if (filterStatus !== "all" && c.effectiveStatus !== filterStatus) return false;
         if (filterTier !== "all" && c.tier !== filterTier) return false;
         if (filterService !== "all" && !c.services.includes(filterService)) return false;
         return true;
@@ -444,9 +451,9 @@ export default function DMMDashboard() {
 
   // ── Summary counts ─────────────────────────────────────────────────────────
   const summary = useMemo(() => ({
-    red: clients.filter((c) => c.overallStatus === "red").length,
-    yellow: clients.filter((c) => c.overallStatus === "yellow").length,
-    green: clients.filter((c) => c.overallStatus === "green").length,
+    red: clients.filter((c) => c.effectiveStatus === "red").length,
+    yellow: clients.filter((c) => c.effectiveStatus === "yellow").length,
+    green: clients.filter((c) => c.effectiveStatus === "green").length,
   }), [clients]);
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -587,7 +594,7 @@ export default function DMMDashboard() {
                 <TableHead className="text-right">שירותים</TableHead>
                 <TableHead className="text-right w-16">ציון</TableHead>
                 <TableHead className="text-right">Flags</TableHead>
-                <TableHead className="text-right">תקשורת</TableHead>
+                <TableHead className="text-right">בדיקת דופק</TableHead>
                 <TableHead className="text-right">פעולות</TableHead>
               </TableRow>
             </TableHeader>
@@ -603,16 +610,16 @@ export default function DMMDashboard() {
                   <TableRow
                     key={client.id}
                     className={
-                      client.overallStatus === "red"
+                      client.effectiveStatus === "red"
                         ? "bg-red-50/40"
-                        : client.overallStatus === "yellow"
+                        : client.effectiveStatus === "yellow"
                         ? "bg-yellow-50/30"
                         : ""
                     }
                   >
                     {/* Status dot */}
                     <TableCell className="text-center">
-                      <StatusDot status={client.overallStatus} />
+                      <StatusDot status={client.effectiveStatus} />
                     </TableCell>
 
                     {/* Client name + tier */}
@@ -648,7 +655,7 @@ export default function DMMDashboard() {
 
                     {/* Health Score */}
                     <TableCell>
-                      <ScoreBadge score={client.healthScore} status={client.overallStatus} />
+                      <ScoreBadge score={client.healthScore} status={client.effectiveStatus} />
                     </TableCell>
 
                     {/* Flags */}
@@ -698,24 +705,41 @@ export default function DMMDashboard() {
                       </div>
                     </TableCell>
 
-                    {/* Actions — navigate to client card */}
+                    {/* Actions */}
                     <TableCell>
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-8 px-2 gap-1"
-                              onClick={() => openClientCard(client.id, "updates")}
-                            >
-                              <ExternalLink className="h-3.5 w-3.5" />
-                              <span className="text-xs">פתח כרטיס</span>
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>פתח כרטיס לקוח במודול לקוחות</TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
+                      <div className="flex gap-1">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 px-2"
+                                onClick={() => setEditingClient(client)}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>עריכה ידנית</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 px-2 gap-1"
+                                onClick={() => openClientCard(client.id, "updates")}
+                              >
+                                <ExternalLink className="h-3.5 w-3.5" />
+                                <span className="text-xs">פתח כרטיס</span>
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>פתח כרטיס לקוח במודול לקוחות</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))
@@ -724,6 +748,20 @@ export default function DMMDashboard() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Manual Health Edit Dialog */}
+      {editingClient && (
+        <ManualHealthEditDialog
+          open={!!editingClient}
+          onOpenChange={(open) => { if (!open) setEditingClient(null); }}
+          clientId={editingClient.id}
+          clientName={editingClient.name}
+          currentScore={editingClient.healthScore}
+          currentFlags={editingClient.flags}
+          currentMood={editingClient.mood_status}
+          onSaved={() => refetch()}
+        />
+      )}
 
     </div>
   );
