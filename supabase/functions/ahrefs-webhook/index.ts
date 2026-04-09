@@ -162,19 +162,34 @@ Deno.serve(async (req) => {
           try {
             const { data: existingTables } = await supabase
               .from("crm_tables")
-              .select("id")
+              .select("id, integration_settings")
               .eq("client_id", resolved_client_id)
               .eq("integration_type", "ahrefs");
 
-            if (!existingTables || existingTables.length === 0) {
+            const domainTableExists = existingTables?.some((t: any) => {
+              const settings = t.integration_settings as any;
+              return settings?.targetDomain === domain;
+            });
+
+            // Also check by slug pattern for tables created without integration_settings
+            const slugTableExists = existingTables?.some((t: any) => {
+              return !domainTableExists; // if no settings match, check if any table exists with no settings
+            });
+
+            if (!domainTableExists && (!existingTables || existingTables.length === 0 || !slugTableExists)) {
               await supabase.from("crm_tables").insert({
                 tenant_id,
                 client_id: resolved_client_id,
                 name: `דוח SEO - ${domain}`,
-                slug: `seo-${domain.replace(/\./g, "-")}`,
+                slug: `seo-${domain.replace(/\./g, "-")}-${Date.now()}`,
                 integration_type: "ahrefs",
                 category: "seo",
                 description: `דוח SEO אוטומטי עבור ${domain}`,
+                integration_settings: {
+                  data_source: "ahrefs_reports",
+                  targetDomain: domain,
+                  clientId: resolved_client_id,
+                },
               });
             }
           } catch (e) {
