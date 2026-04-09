@@ -1,33 +1,33 @@
 
-# תיקון: כרמן לא מזהה טבלאות Facebook קיימות
+
+# תיקון: קמפיינים של וואטסאפ מציגים 0 לידים
 
 ## הבעיה
-הכלי `sync_meta_ads` מחפש `integration_type = 'meta_ads'`, אבל כל הטבלאות בבסיס הנתונים מוגדרות כ-`facebook_insights` או `facebook_ecommerce`. לכן כרמן תמיד מחזירה "לא נמצאו טבלאות".
+קמפיינים מסוג WhatsApp/Messaging משתמשים בסוגי המרות שונים מקמפייני לידים רגילים. פייסבוק מדווח עליהם כ-`onsite_conversion.messaging_conversation_started_7d`, `messaging_conversation_started_7d` וכדומה — אבל הסנכרון לא סופר אותם כ"לידים".
 
 ## התיקון
-### קובץ: `supabase/functions/ai-support-chat/index.ts`
 
-**שורה 1466** — שינוי הפילטר מ:
+### קובץ: `supabase/functions/sync-facebook-insights/index.ts`
+
+**הוספת סוגי המרות messaging ל-`leadActionTypes`** (שורה ~242):
+
 ```typescript
-.eq('integration_type', 'meta_ads')
-```
-ל:
-```typescript
-.in('integration_type', ['meta_ads', 'facebook_insights', 'facebook_ecommerce'])
+const leadActionTypes = [
+  'lead',
+  'leadgen_grouped',
+  'offsite_conversion.fb_pixel_lead',
+  'onsite_conversion.lead_grouped',
+  'app_custom_event.fb_mobile_lead',
+  // WhatsApp / Messaging conversions
+  'onsite_conversion.messaging_conversation_started_7d',
+  'messaging_conversation_started_7d',
+  'onsite_conversion.messaging_first_reply',
+  'messaging_first_reply',
+];
 ```
 
-**שורה 1499** — גם ב-`sync-meta-ads-data` Edge Function, צריך לתמוך ב-`facebook_insights` בנוסף ל-`meta_ads`.
-
-### קובץ: `supabase/functions/sync-meta-ads-data/index.ts`
-
-**שורה ~59** — שינוי הבדיקה מ:
-```typescript
-if (table.integration_type !== 'meta_ads')
-```
-ל:
-```typescript
-if (!['meta_ads', 'facebook_insights', 'facebook_ecommerce'].includes(table.integration_type))
-```
+כך קמפיינים של וואטסאפ/מסנג'ר ייספרו כלידים, ועלות לליד תחושב בהתאם.
 
 ## תוצאה
-כרמן תזהה את כל טבלאות הפייסבוק הקיימות ותוכל לסנכרן אותן בהצלחה.
+קמפיין "וואטסאפ חדש" יציג את מספר שיחות הוואטסאפ שנפתחו כלידים במקום 0.
+
