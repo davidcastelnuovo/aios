@@ -1570,26 +1570,37 @@ async function executeTool(
           return { success: true, result: { message: 'לא נמצאו טבלאות Meta Ads לסנכרון', synced: 0 } };
         }
 
-        // Fire-and-forget: dispatch all sync requests in parallel without waiting
-        // This prevents timeout when syncing many tables
+        // Dispatch all sync requests in parallel and await results
         const authHeader2 = `Bearer ${userToken}`;
-        for (const table of filteredTables) {
+        const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || '';
+        const syncPromises = filteredTables.map(async (table: any) => {
           let syncFunctionName = 'sync-meta-ads-data';
           if (table.integration_type === 'facebook_insights') {
             syncFunctionName = 'sync-facebook-insights';
           } else if (table.integration_type === 'facebook_ecommerce') {
             syncFunctionName = 'sync-facebook-ecommerce';
           }
-          // Fire and forget - don't await
-          fetch(`${SUPABASE_URL}/functions/v1/${syncFunctionName}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': authHeader2 },
-            body: JSON.stringify({ table_id: table.id }),
-          }).catch((e: any) => console.error(`Sync failed for table ${table.name}:`, e.message));
-        }
+          try {
+            const resp = await fetch(`${SUPABASE_URL}/functions/v1/${syncFunctionName}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': authHeader2, 'apikey': ANON_KEY },
+              body: JSON.stringify({ table_id: table.id }),
+            });
+            const result = await resp.json();
+            return { table_name: table.name, client_id: table.client_id, status: resp.ok ? 'success' : 'error', records_synced: result.records_synced || 0, error: result.error || null };
+          } catch (e: any) {
+            console.error(`Sync failed for table ${table.name}:`, e.message);
+            return { table_name: table.name, client_id: table.client_id, status: 'error', error: e.message };
+          }
+        });
+
+        const syncResults = await Promise.all(syncPromises);
+        const successCount = syncResults.filter((r: any) => r.status === 'success').length;
+        const failCount = syncResults.filter((r: any) => r.status === 'error').length;
+        const totalRecords = syncResults.reduce((sum: number, r: any) => sum + (r.records_synced || 0), 0);
 
         modifiedEntities.add('crm_records');
-        return { success: true, result: { message: `הסנכרון הופעל ברקע עבור ${filteredTables.length} טבלאות. הנתונים יתעדכנו תוך מספר דקות. אתה יכול לצאת מהצ'אט - הסנכרון ימשיך לעבוד.`, total_tables: filteredTables.length, table_names: filteredTables.map((t: any) => t.name) } };
+        return { success: true, result: { message: `סנכרון הושלם: ${successCount} טבלאות הצליחו, ${failCount} נכשלו. סה"כ ${totalRecords} רשומות סונכרנו.`, total_tables: filteredTables.length, success_count: successCount, fail_count: failCount, total_records: totalRecords, details: syncResults } };
       }
 
       // === SKILLS TOOLS ===
