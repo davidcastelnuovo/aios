@@ -147,11 +147,34 @@ export default function DMMDashboard() {
     navigate(buildPath(`/clients?clientId=${clientId}&tab=${tab}`));
   }
 
-  // ── Fetch clients (base: always-safe fields) ──────────────────────────────
-  const { data: rawClients = [], isLoading: clientsLoading, refetch } = useQuery({
-    queryKey: ["dmm-clients", tenantId, selectedAgency, userAgencyIds],
+  // ── Fetch cross-tenant agency IDs ──────────────────────────────────────────
+  const { data: crossTenantAgencyIds = [] } = useQuery({
+    queryKey: ["cross-tenant-agencies", tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from("agency_tenant_access")
+        .select("agency_id")
+        .eq("accessing_tenant_id", tenantId);
+      if (error) return [];
+      return data?.map((d) => d.agency_id) ?? [];
+    },
+    enabled: !!tenantId,
+    staleTime: 300_000,
+  });
+
+  // ── Fetch clients (base: always-safe fields) ──────────────────────────────
+  const { data: rawClients = [], isLoading: clientsLoading, refetch } = useQuery({
+    queryKey: ["dmm-clients", tenantId, selectedAgency, userAgencyIds, crossTenantAgencyIds],
+    queryFn: async () => {
+      if (!tenantId) return [];
+
+      // Build list of all agency IDs the user can access (own tenant + cross-tenant)
+      const allAccessibleAgencyIds = [
+        ...(userAgencyIds ?? []),
+        ...crossTenantAgencyIds,
+      ];
+
       let query = supabase
         .from("clients")
         .select(`
@@ -161,16 +184,24 @@ export default function DMMDashboard() {
             campaigners ( full_name )
           )
         `)
-        .eq("tenant_id", tenantId)
         .in("status", ["active", "onboarding"])
         .order("name");
 
       // Agency filter
       if (selectedAgency && selectedAgency !== "all") {
         query = query.eq("agency_id", selectedAgency);
-      } else if (userAgencyIds && userAgencyIds.length > 0) {
-        // Non-owner users: restrict to their agencies
-        query = query.in("agency_id", userAgencyIds);
+      } else if (isOwner || isSuperAdmin) {
+        // Owners/super admins: show own tenant + cross-tenant agencies
+        if (crossTenantAgencyIds.length > 0) {
+          query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+        } else {
+          query = query.eq("tenant_id", tenantId);
+        }
+      } else if (allAccessibleAgencyIds.length > 0) {
+        // Non-owner users: restrict to their agencies (includes cross-tenant)
+        query = query.in("agency_id", allAccessibleAgencyIds);
+      } else {
+        query = query.eq("tenant_id", tenantId);
       }
 
       const { data, error } = await query;
@@ -206,16 +237,23 @@ export default function DMMDashboard() {
   // These columns are added by migration 20260407_dmm_crm_adaptation.sql
   // If migration hasn't run yet, errors are silently ignored — fields stay null/empty
   const { data: crmFields = [] } = useQuery({
-    queryKey: ["dmm-clients-crm-fields", tenantId],
+    queryKey: ["dmm-clients-crm-fields", tenantId, crossTenantAgencyIds],
     queryFn: async () => {
       if (!tenantId) return [];
       try {
-        const { data, error } = await supabase
+        let query = supabase
           .from("clients")
           .select("id, tier, services, mood_status")
-          .eq("tenant_id", tenantId)
           .in("status", ["active", "onboarding"]);
-        if (error) return []; // columns not yet created — graceful fallback
+        
+        if (crossTenantAgencyIds.length > 0) {
+          query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+        } else {
+          query = query.eq("tenant_id", tenantId);
+        }
+        
+        const { data, error } = await query;
+        if (error) return [];
         return data ?? [];
       } catch {
         return [];
@@ -236,7 +274,6 @@ export default function DMMDashboard() {
         .from("communication_logs")
         .select("client_id, status, created_at")
         .in("client_id", clientIds)
-        .eq("tenant_id", tenantId)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data ?? [];
@@ -254,7 +291,6 @@ export default function DMMDashboard() {
         .from("seo_monthly_updates")
         .select("client_id, month, status")
         .in("client_id", clientIds)
-        .eq("tenant_id", tenantId)
         .order("month", { ascending: false });
       if (error) throw error;
       return data ?? [];
