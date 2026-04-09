@@ -237,16 +237,23 @@ export default function DMMDashboard() {
   // These columns are added by migration 20260407_dmm_crm_adaptation.sql
   // If migration hasn't run yet, errors are silently ignored — fields stay null/empty
   const { data: crmFields = [] } = useQuery({
-    queryKey: ["dmm-clients-crm-fields", tenantId],
+    queryKey: ["dmm-clients-crm-fields", tenantId, crossTenantAgencyIds],
     queryFn: async () => {
       if (!tenantId) return [];
       try {
-        const { data, error } = await supabase
+        let query = supabase
           .from("clients")
           .select("id, tier, services, mood_status")
-          .eq("tenant_id", tenantId)
           .in("status", ["active", "onboarding"]);
-        if (error) return []; // columns not yet created — graceful fallback
+        
+        if (crossTenantAgencyIds.length > 0) {
+          query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+        } else {
+          query = query.eq("tenant_id", tenantId);
+        }
+        
+        const { data, error } = await query;
+        if (error) return [];
         return data ?? [];
       } catch {
         return [];
