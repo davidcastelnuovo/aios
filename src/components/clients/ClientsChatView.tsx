@@ -365,7 +365,11 @@ export function ClientsChatView({
           {currentName}
           <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
         </h2>
-        {agencyName && <p className="text-xs text-muted-foreground truncate">{agencyName}</p>}
+        {agencyName && (
+          <p className="text-xs text-muted-foreground truncate cursor-pointer hover:text-primary transition-colors" onClick={(e) => { e.stopPropagation(); setChangeAgencyOpen(true); }}>
+            {agencyName} ✎
+          </p>
+        )}
       </>
     );
   };
