@@ -837,8 +837,8 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
                         <TableRow
                           key={client.id}
                           className={
-                            client.overallStatus === 'red' ? 'bg-red-50/40' :
-                            client.overallStatus === 'yellow' ? 'bg-yellow-50/30' : ''
+                            client.effectiveStatus === 'red' ? 'bg-red-50/40' :
+                            client.effectiveStatus === 'yellow' ? 'bg-yellow-50/30' : ''
                           }
                         >
                           <TableCell className="text-center">
@@ -846,11 +846,11 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
                               <UITooltip>
                                 <TooltipTrigger asChild>
                                   <span className="text-xl cursor-default">
-                                    {OVERALL_STATUS_CONFIG[client.overallStatus as OverallStatus]?.dot}
+                                    {OVERALL_STATUS_CONFIG[client.effectiveStatus as OverallStatus]?.dot}
                                   </span>
                                 </TooltipTrigger>
                                 <TooltipContent>
-                                  {OVERALL_STATUS_CONFIG[client.overallStatus as OverallStatus]?.label}
+                                  {OVERALL_STATUS_CONFIG[client.effectiveStatus as OverallStatus]?.label}
                                 </TooltipContent>
                               </UITooltip>
                             </TooltipProvider>
@@ -869,8 +869,8 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
                             <Badge
                               variant="outline"
                               className={`font-bold ${
-                                client.overallStatus === 'green' ? 'bg-green-100 text-green-800 border-green-300' :
-                                client.overallStatus === 'yellow' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' :
+                                client.effectiveStatus === 'green' ? 'bg-green-100 text-green-800 border-green-300' :
+                                client.effectiveStatus === 'yellow' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' :
                                 'bg-red-100 text-red-800 border-red-300'
                               }`}
                             >
@@ -910,12 +910,12 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
                                   <TooltipTrigger asChild>
                                     <Button
                                       variant="outline" size="sm" className="h-8 px-2"
-                                      onClick={() => setCommModal({ clientId: client.id, clientName: client.name })}
+                                      onClick={() => setEditingClient(client)}
                                     >
-                                      <MessageSquare className="h-3.5 w-3.5" />
+                                      <Pencil className="h-3.5 w-3.5" />
                                     </Button>
                                   </TooltipTrigger>
-                                  <TooltipContent>עדכון תקשורת</TooltipContent>
+                                  <TooltipContent>עריכה ידנית</TooltipContent>
                                 </UITooltip>
                               </TooltipProvider>
                               {(client.services ?? []).includes('seo') && (
