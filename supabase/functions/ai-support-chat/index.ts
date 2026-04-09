@@ -19,6 +19,7 @@ function buildSystemPrompt(
   userEmail: string,
   currentDateContext: string,
   memoryContext: string,
+  skillsContext: string,
   campaignerName?: string,
   campaignerId?: string,
   uiMode?: string,
@@ -75,6 +76,13 @@ ${memoryContext}
 20. **Manus AI** - יצירת משימות AI מורכבות (מחקר, מצגות, ניתוח), צפייה בתוצאות
 21. **ניתוח קמפיינים** - ניתוח ביצועי קמפיינים (השוואת 7 ימים מול 30 יום), זיהוי התייקרויות וירידות ביצועים
 22. **עדכון בריאות לקוח** - עדכון mood_status בדשבורד CRM, יצירת התראות ב-communication_logs
+23. **סקילים (Skills)** - שמירת תהליכי עבודה כקיצורי דרך, הפעלת סקילים שמורים, ניהול ספריית מיומנויות
+
+${skillsContext ? `🎯 **סקילים שמורים (Skills) — קיצורי דרך לתהליכים:**
+${skillsContext}
+
+כשהמשתמש מזכיר שם סקיל או ביטוי שמתאים ל-trigger_phrases — טען את הסקיל עם execute_skill ובצע את הצעדים שלו.
+` : ''}
 
 ${uiMode === 'aios' ? `📊 **חשוב לגבי תצוגת נתונים (display_data):**
 - כשהמשתמש מבקש לראות רשימות (לידים, משימות, לקוחות) - **תמיד** השתמש ב-display_data אחרי שליפת הנתונים
@@ -114,6 +122,11 @@ ${uiMode === 'aios' ? `📊 **חשוב לגבי תצוגת נתונים (display
 - השתמש ב-markdown לעיצוב התשובות
 
 ⚠️ **קריטי - שימוש ב-IDs:**
+
+🎓 **חשוב לגבי סקילים (Skills):**
+- כשהמשתמש אומר "תשמרי סקיל", "שמרי את זה כ-skill", "תשמרי מיומנות" → סכם את התהליך שבוצע בשיחה ושמור עם save_skill
+- כשהמשתמש מזכיר שם סקיל שמור או אומר "תפעילי סקיל X", "תריצי את X" → טען עם execute_skill ובצע את הצעדים
+- אחרי טעינת סקיל עם execute_skill, **חובה לבצע** את כל הצעדים המפורטים ב-steps באמצעות הכלים הקיימים שלך
 - כאשר אתה מחפש ישות ומקבל תוצאות, חובה להשתמש ב-UUID המדויק מהתוצאה!
 - **אל תמציא** IDs - חפש קודם ואז השתמש ב-ID האמיתי.
 
@@ -1437,6 +1450,77 @@ async function executeTool(
         return { success: true, result: { client_id: toolCall.args.client_id, mood_status: toolCall.args.mood_status, communication_status: commStatus } };
       }
 
+      // === SKILLS TOOLS ===
+      case 'save_skill': {
+        const { name, description, steps, trigger_phrases } = toolCall.args;
+        const { data, error } = await supabaseClient
+          .from('ai_skills')
+          .upsert({
+            user_id: userId,
+            tenant_id: tenantId,
+            name,
+            description,
+            steps,
+            trigger_phrases: trigger_phrases || [],
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'user_id,tenant_id,name' })
+          .select()
+          .single();
+        if (error) throw error;
+        return { success: true, result: { id: data.id, name: data.name, message: `הסקיל "${name}" נשמר בהצלחה` } };
+      }
+
+      case 'list_skills': {
+        const { data, error } = await supabaseClient
+          .from('ai_skills')
+          .select('id, name, description, trigger_phrases, updated_at')
+          .eq('user_id', userId)
+          .eq('tenant_id', tenantId)
+          .order('updated_at', { ascending: false });
+        if (error) throw error;
+        return { success: true, result: { skills: data || [], count: data?.length || 0 } };
+      }
+
+      case 'execute_skill': {
+        const { name: skillName } = toolCall.args;
+        const { data, error } = await supabaseClient
+          .from('ai_skills')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('tenant_id', tenantId)
+          .ilike('name', skillName)
+          .single();
+        if (error || !data) return { success: false, error: `לא נמצא סקיל בשם "${skillName}"` };
+        return { success: true, result: { skill_name: data.name, description: data.description, steps: data.steps, instruction: 'בצע את הצעדים המפורטים ב-steps באמצעות הכלים שלך. כל שורה היא צעד שצריך לבצע.' } };
+      }
+
+      case 'update_skill': {
+        const { skill_id, name, description, steps, trigger_phrases } = toolCall.args;
+        const updateData: any = { updated_at: new Date().toISOString() };
+        if (name) updateData.name = name;
+        if (description) updateData.description = description;
+        if (steps) updateData.steps = steps;
+        if (trigger_phrases) updateData.trigger_phrases = trigger_phrases;
+        const { error } = await supabaseClient
+          .from('ai_skills')
+          .update(updateData)
+          .eq('id', skill_id)
+          .eq('user_id', userId);
+        if (error) throw error;
+        return { success: true, result: { message: 'הסקיל עודכן בהצלחה' } };
+      }
+
+      case 'delete_skill': {
+        const { skill_id } = toolCall.args;
+        const { error } = await supabaseClient
+          .from('ai_skills')
+          .delete()
+          .eq('id', skill_id)
+          .eq('user_id', userId);
+        if (error) throw error;
+        return { success: true, result: { message: 'הסקיל נמחק בהצלחה' } };
+      }
+
       default:
         return { success: false, error: `Unknown tool: ${toolCall.name}` };
     }
@@ -1866,6 +1950,12 @@ const tools = [
   // === GROUP 5: CAMPAIGN ANALYSIS & HEALTH TOOLS ===
   { type: 'function', function: { name: 'analyze_campaign_performance', description: 'ניתוח ביצועי קמפיינים מטבלאות CRM: משווה 7 ימים אחרונים מול 30 ימים עבור כל לקוח. מחזיר אחוזי שינוי בהוצאות, עלות לליד, ו-ROAS. השתמש בכלי הזה כדי לזהות התייקרויות וירידות ביצועים.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה לקוח ספציפי (אופציונלי — ללא = כל הלקוחות)' } } } } },
   { type: 'function', function: { name: 'update_client_health', description: 'עדכון מצב בריאות לקוח: מעדכן mood_status בטבלת clients ויוצר רשומה ב-communication_logs. השתמש בכלי הזה כדי להדליק דגל על לקוח כשמזהים בעיה (התייקרות, ירידה בביצועים).', parameters: { type: 'object', properties: { client_id: { type: 'string' }, mood_status: { type: 'string', enum: ['happy', 'wavering', 'churn_risk'], description: 'מצב הלקוח: happy=תקין, wavering=מתלבט, churn_risk=סיכון נטישה' }, communication_status: { type: 'string', enum: ['normal', 'sensitive', 'complaint'], description: 'סטטוס תקשורת לרשומת communication_logs' }, note: { type: 'string', description: 'הערה/סיכום — מה הבעיה שזוהתה' } }, required: ['client_id', 'mood_status', 'note'] } } },
+  // === GROUP 6: SKILLS TOOLS ===
+  { type: 'function', function: { name: 'save_skill', description: 'שמירת סקיל (מיומנות) חדש — תהליך עבודה שלם שכרמן למדה. כשהמשתמש אומר "תשמרי סקיל" / "שמרי את זה כ-skill", סכם את התהליך שבוצע ושמור אותו.', parameters: { type: 'object', properties: { name: { type: 'string', description: 'שם קצר לסקיל (למשל "דוחות", "עדכון דגלים")' }, description: { type: 'string', description: 'תיאור קצר מה הסקיל עושה' }, steps: { type: 'string', description: 'הוראות מפורטות צעד-אחר-צעד שכרמן תבצע כשמפעילים את הסקיל. כל שורה = צעד אחד.' }, trigger_phrases: { type: 'array', items: { type: 'string' }, description: 'מילות מפתח שיפעילו את הסקיל (למשל ["דוחות", "ביצועים"])' } }, required: ['name', 'description', 'steps'] } } },
+  { type: 'function', function: { name: 'list_skills', description: 'הצגת רשימת כל הסקילים (מיומנויות) השמורים של המשתמש', parameters: { type: 'object', properties: {} } } },
+  { type: 'function', function: { name: 'execute_skill', description: 'טעינת סקיל לפי שם והפעלת הצעדים שלו. כשמשתמש מזכיר שם סקיל או אומר "תפעילי סקיל X", טען את הסקיל ובצע את הצעדים.', parameters: { type: 'object', properties: { name: { type: 'string', description: 'שם הסקיל להפעלה' } }, required: ['name'] } } },
+  { type: 'function', function: { name: 'update_skill', description: 'עדכון סקיל קיים', parameters: { type: 'object', properties: { skill_id: { type: 'string', description: 'מזהה הסקיל (UUID)' }, name: { type: 'string' }, description: { type: 'string' }, steps: { type: 'string' }, trigger_phrases: { type: 'array', items: { type: 'string' } } }, required: ['skill_id'] } } },
+  { type: 'function', function: { name: 'delete_skill', description: 'מחיקת סקיל', parameters: { type: 'object', properties: { skill_id: { type: 'string', description: 'מזהה הסקיל (UUID)' } }, required: ['skill_id'] } } },
 ];
 
 serve(async (req) => {
@@ -1950,6 +2040,26 @@ serve(async (req) => {
       console.error('Failed to load memory:', memErr);
     }
 
+    // Load skills for system prompt
+    let skillsContext = '';
+    try {
+      const { data: skills } = await supabaseClient
+        .from('ai_skills')
+        .select('name, description, trigger_phrases')
+        .eq('user_id', user.id)
+        .eq('tenant_id', tenantId)
+        .order('updated_at', { ascending: false });
+
+      if (skills && skills.length > 0) {
+        skillsContext = skills.map(s => {
+          const triggers = s.trigger_phrases?.length ? ` (טריגרים: ${s.trigger_phrases.join(', ')})` : '';
+          return `• **${s.name}**: ${s.description}${triggers}`;
+        }).join('\n');
+      }
+    } catch (skillErr) {
+      console.error('Failed to load skills:', skillErr);
+    }
+
     // Clear modified entities tracker for this request
     modifiedEntities.clear();
 
@@ -1979,7 +2089,7 @@ serve(async (req) => {
       body: JSON.stringify({
         model: AI_MODEL,
         messages: [
-          { role: 'system', content: buildSystemPrompt(userName, userEmail, currentDateContext, memoryContext, campaignerName || undefined, campaignerId || undefined, profileData?.ui_mode || 'classic') },
+          { role: 'system', content: buildSystemPrompt(userName, userEmail, currentDateContext, memoryContext, skillsContext, campaignerName || undefined, campaignerId || undefined, profileData?.ui_mode || 'classic') },
           ...aiMessages,
         ],
         tools,
@@ -2051,7 +2161,7 @@ serve(async (req) => {
 
           // Build running conversation for follow-ups
           let followUpMessages: any[] = [
-            { role: 'system', content: buildSystemPrompt(userName, userEmail, currentDateContext, memoryContext, campaignerName || undefined, campaignerId || undefined) },
+            { role: 'system', content: buildSystemPrompt(userName, userEmail, currentDateContext, memoryContext, skillsContext, campaignerName || undefined, campaignerId || undefined) },
             ...aiMessages,
           ];
 
