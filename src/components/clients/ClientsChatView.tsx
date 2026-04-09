@@ -95,6 +95,23 @@ export function ClientsChatView({
     enabled: !!tenantId,
   });
 
+  // Fetch all campaigners for assignment
+  const { data: allCampaigners = [] } = useQuery({
+    queryKey: ["campaigners-for-team", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from("campaigners")
+        .select("id, full_name")
+        .eq("tenant_id", tenantId)
+        .eq("active", true)
+        .order("full_name");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenantId,
+  });
+
   const selectedClientIdForContacts = selectedClientId;
   const { data: clientContacts = [] } = useQuery({
     queryKey: ["client-contacts", selectedClientIdForContacts],
