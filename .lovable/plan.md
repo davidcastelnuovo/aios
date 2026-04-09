@@ -1,34 +1,47 @@
 
 
-## תוכנית: איחוד דיאלוגי עדכון תקשורת + זיהוי סטטוסים בכרמן
+## תוכנית: שיפורי דשבורד CRM — ספירת סטטוסים, עריכה ידנית, ושינוי שמות
 
-### הבעיה
-1. יש שני מקומות שונים לעדכון מצב תקשורת: אחד inline ב-`ClientUpdatesTab` ואחד ב-`CommunicationUpdateModal` — כפילות מיותרת.
-2. כרמן משתמשת במונחים `happy/wavering/churn_risk` אבל לא מכירה את המונחים העבריים "תלונה" ו"רגיש" שהמשתמש רואה בממשק.
+### הבעיות
+1. **ספירת "לתשומת לב" שגויה** — לקוח עם flag "רגיש" מקבל ציון 80 (100-20) שנחשב "ירוק". צריך שהנוכחות של flags מסוימים (sensitive, complaint) תשפיע על הספירה בכרטיסי הסיכום גם אם הציון עצמו ירוק.
+2. **אין אפשרות לעריכה ידנית** — הציון, הסטטוס וה-Flags ניתנים לעדכון רק דרך כרמן. צריך כפתור עריכה ישירה בטבלה.
+3. **שם עמודה** — "תקשורת" צריך להיקרא "בדיקת דופק" ולהציג תאריך אחרון.
 
-### הפתרון
+### פתרון
 
-**1. איחוד הדיאלוגים**
-- הסרת ה-`CommunicationUpdateModal` הנפרד (קובץ שלם)
-- שימוש בסקשן ה-inline שב-`ClientUpdatesTab` בלבד כממשק היחיד לעדכון מצב תקשורת
-- עדכון כל המקומות שפותחים את `CommunicationUpdateModal` כדי שיפנו לטאב "עדכונים" במקום
+**1. תיקון ספירת סיכום — לוגיקה חדשה**
 
-**2. עדכון System Prompt של כרמן**
-- הוספת מיפוי מפורש בהנחיות: "תלונה" = complaint = churn_risk, "רגיש" = sensitive = wavering, "תקין" = normal = happy
-- כשמשתמש אומר "תעדכני את בריפלקט ל-תלונה" או "הלקוח רגיש", כרמן תדע לקרוא ל-`update_client_health` עם הערכים המתאימים
+במקום לסמוך רק על `overallStatus` מהציון המספרי, הסיכום ייקח בחשבון גם flags:
+- לקוח עם flag `sensitive` / `no_communication_30d` / `seo_stable` → נספר כ-"לתשומת לב" (צהוב) גם אם הציון ≥80
+- לקוח עם flag `complaint` / `performance_sharp_drop` / `drop_no_action` → נספר כ-"דורש טיפול" (אדום) גם אם הציון ≥60
 
-### שלבי ביצוע
+שינוי ב-`DMMDashboard.tsx` ו-`AgencyDashboardContent.tsx`: הוספת פונקציית `getEffectiveStatus()` שמחזירה את הסטטוס האפקטיבי (worst of score-status and flag-status).
 
-1. **עדכון System Prompt** ב-`ai-support-chat/index.ts` — הוספת פסקת הנחיות שממפה בין המונחים העבריים (תקין/רגיש/תלונה) לערכי ה-API (`mood_status` + `communication_status`)
+**2. עריכה ידנית של ציון, סטטוס ו-Flags**
 
-2. **עדכון כלי `update_client_health`** — הוספת enum description בעברית כך שכרמן תבין: `happy=תקין, wavering=רגיש, churn_risk=תלונה`
+הוספת דיאלוג `ManualHealthEditDialog` שיאפשר:
+- עריכת ציון (0-100) עם slider או input
+- בחירת Flags ידנית (multi-select checkboxes)
+- עדכון `communication_status` (תקין/רגיש/תלונה)
+- שמירה ישירה לטבלת `clients` (שדות `health_score`, `overall_status`, `active_flags`, `mood_status`)
 
-3. **הסרת `CommunicationUpdateModal`** — מחיקת הקובץ `src/components/clients/CommunicationUpdateModal.tsx`
+כפתור עריכה (עיפרון) בעמודת "פעולות" בכל שורה — גם ב-`DMMDashboard.tsx` וגם ב-`AgencyDashboardContent.tsx`.
 
-4. **עדכון ייבואים** — הסרת כל ההפניות ל-`CommunicationUpdateModal` בקבצים שמשתמשים בו (צריך לבדוק היכן הוא נפתח)
+**3. שינוי שם "תקשורת" → "בדיקת דופק"**
+
+- שינוי כותרת העמודה בשני הקבצים
+- שינוי tooltip מ-"עדכון תקשורת" ל-"בדיקת דופק"
+- הצגת תאריך הבדיקה האחרונה (מ-`communication_logs`) עם תיאור "היום" / "לפני X ימים"
 
 ### קבצים שישתנו
-- `supabase/functions/ai-support-chat/index.ts` — system prompt + tool description
-- `src/components/clients/CommunicationUpdateModal.tsx` — מחיקה
-- קבצים שמייבאים את המודל (צריך בדיקה)
+1. `src/pages/DMMDashboard.tsx` — ספירת סיכום, שם עמודה, כפתור עריכה
+2. `src/components/dynamic-tables/AgencyDashboardContent.tsx` — אותם שינויים
+3. `src/components/clients/ManualHealthEditDialog.tsx` — **קובץ חדש** — דיאלוג עריכה ידנית
+4. `src/lib/healthScore.ts` — הוספת פונקציית `getEffectiveStatus()` + הוספת `FLAG_SEVERITY` mapping
+
+### שלבי ביצוע
+1. הוספת `getEffectiveStatus()` ל-`healthScore.ts` — מיפוי flags לרמות חומרה
+2. יצירת `ManualHealthEditDialog` — דיאלוג עם שדות ציון, flags, וסטטוס תקשורת
+3. עדכון `DMMDashboard.tsx` — ספירת סיכום חדשה, שם עמודה, כפתור עריכה
+4. עדכון `AgencyDashboardContent.tsx` — אותם שינויים
 
