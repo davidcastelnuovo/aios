@@ -116,9 +116,10 @@ ${uiMode === 'aios' ? `📊 **חשוב לגבי תצוגת נתונים (display
 - היה פרו-אקטיבי - הצע דברים שיכולים לעזור
 - תמיד הסבר מה עשית אחרי ביצוע פעולה
 - **כשמבקשים לקוחות/לידים של סוכנות ספציפית** — השתמש ישירות ב-list_clients או list_leads עם הפרמטר agency_name. **אין צורך** לחפש קודם ב-search_entities — הכלי מחפש את הסוכנות אוטומטית
-- **חשוב מאוד:** כשמדברים על "דשבורד CRM", "דשבורד סוכנות", "דגלים", "flags", "בריאות לקוח" או "לעדכן את הדשבורד" — הכוונה לעדכון אמיתי של mood_status ותקשורת הלקוח. במקרה כזה חובה להשתמש ב-**update_client_health** בפועל עבור כל לקוח רלוונטי.
-- אם המשתמש מבקש לעדכן דשבורד/דגלים על בסיס ביצועי קמפיינים — קודם השתמש ב-**analyze_campaign_performance**, ואז קרא ל-**update_client_health** לכל לקוח שצריך שינוי.
-- **אסור** לכתוב "עדכנתי", "בוצע עדכון", "הדלקתי דגל" או ניסוח דומה אם לא הייתה קריאת **update_client_health** מוצלחת בפועל.
+- **חשוב מאוד:** כשמדברים על "דשבורד CRM", "דשבורד סוכנות", "דגלים", "flags", "בריאות לקוח" או "לעדכן את הדשבורד" — הכוונה לעדכון אמיתי של mood_status ותקשורת הלקוח. במקרה כזה חובה להשתמש ב-**batch_update_client_health** (עדיף) או **update_client_health** בפועל עבור כל לקוח רלוונטי.
+- אם המשתמש מבקש לעדכן דשבורד/דגלים על בסיס ביצועי קמפיינים — קודם השתמש ב-**analyze_campaign_performance**, ואז קרא ל-**batch_update_client_health** עם כל הלקוחות בקריאה אחת.
+- **אסור** לכתוב "עדכנתי", "בוצע עדכון", "הדלקתי דגל" או ניסוח דומה אם לא הייתה קריאת **update_client_health** או **batch_update_client_health** מוצלחת בפועל.
+- **כשמבצעים בדיקת דופק או עדכון דשבורד:** השתמשי ב-**batch_update_client_health** כדי לעדכן את כל הלקוחות בקריאה אחת. **תמיד** דווחי בדיוק כמה לקוחות עודכנו מתוך כמה. **אסור** לדווח "עברתי על כל הלקוחות" אם לא ביצעת update בפועל לכל אחד מהם.
 
 📋 **מיפוי סטטוסי תקשורת (עברית ↔ API):**
 - **תקין** / **רגוע** / **הכל בסדר** → mood_status: \`happy\`, communication_status: \`normal\`
@@ -1539,6 +1540,80 @@ async function executeTool(
         return { success: true, result: { client_id: toolCall.args.client_id, mood_status: toolCall.args.mood_status, communication_status: commStatus } };
       }
 
+      case 'batch_update_client_health': {
+        const updates = toolCall.args.updates || [];
+        if (!Array.isArray(updates) || updates.length === 0) {
+          return { success: false, error: 'updates array is required and must not be empty' };
+        }
+
+        let effectiveUserId = userId;
+        if (!effectiveUserId) {
+          const { data: ownerRole } = await supabaseClient
+            .from('user_roles')
+            .select('user_id')
+            .eq('tenant_id', tenantId)
+            .eq('role', 'owner')
+            .limit(1)
+            .maybeSingle();
+          effectiveUserId = ownerRole?.user_id || null;
+        }
+
+        let successCount = 0;
+        let failCount = 0;
+        const results: any[] = [];
+
+        for (const update of updates) {
+          try {
+            const updateData: any = { mood_status: update.mood_status };
+            const { error: clientErr } = await supabaseClient
+              .from('clients')
+              .update(updateData)
+              .eq('id', update.client_id)
+              .eq('tenant_id', tenantId);
+            if (clientErr) throw clientErr;
+
+            const commStatus = update.communication_status || (update.mood_status === 'happy' ? 'normal' : update.mood_status === 'wavering' ? 'sensitive' : 'complaint');
+            await supabaseClient
+              .from('communication_logs')
+              .insert({
+                client_id: update.client_id,
+                tenant_id: tenantId,
+                status: commStatus,
+                interaction_type: 'system_alert',
+                note: update.note,
+                updated_by: effectiveUserId,
+              });
+
+            if (effectiveUserId) {
+              await supabaseClient
+                .from('client_updates')
+                .insert({
+                  client_id: update.client_id,
+                  tenant_id: tenantId,
+                  user_id: effectiveUserId,
+                  content: `[עדכון אוטומטי - כרמן] ${update.note}`,
+                });
+            }
+
+            successCount++;
+            results.push({ client_id: update.client_id, status: 'success', mood_status: update.mood_status });
+          } catch (err) {
+            failCount++;
+            results.push({ client_id: update.client_id, status: 'failed', error: String(err) });
+          }
+        }
+
+        modifiedEntities.add('clients');
+        modifiedEntities.add('communication_logs');
+        return { 
+          success: true, 
+          total: updates.length,
+          success_count: successCount, 
+          fail_count: failCount,
+          results 
+        };
+      }
+
       case 'sync_meta_ads': {
         // Find meta_ads CRM tables
         let query = supabaseClient
@@ -2122,7 +2197,8 @@ const tools = [
   { type: 'function', function: { name: 'get_manus_task_result', description: 'שליפת תוצאות של משימת Manus לפי מזהה', parameters: { type: 'object', properties: { taskId: { type: 'string', description: 'מזהה המשימה ב-Manus' } }, required: ['taskId'] } } },
   // === GROUP 5: CAMPAIGN ANALYSIS & HEALTH TOOLS ===
   { type: 'function', function: { name: 'analyze_campaign_performance', description: 'ניתוח ביצועי קמפיינים מטבלאות CRM: משווה 7 ימים אחרונים מול 30 ימים עבור כל לקוח. מחזיר אחוזי שינוי בהוצאות, עלות לליד, ו-ROAS, וגם תאריך עדכון אחרון בקמפיין (last_campaign_update) ומספר ימים מאז (days_since_last_campaign_touch). השתמש בכלי הזה כדי לזהות התייקרויות, ירידות ביצועים, וקמפיינים שלא נגעו בהם.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה לקוח ספציפי (אופציונלי — ללא = כל הלקוחות)' } } } } },
-  { type: 'function', function: { name: 'update_client_health', description: 'עדכון מצב בריאות לקוח: מעדכן mood_status בטבלת clients ויוצר רשומה ב-communication_logs. השתמש בכלי הזה כדי להדליק דגל על לקוח כשמזהים בעיה (התייקרות, ירידה בביצועים). מיפוי סטטוסים: תקין=happy/normal, רגיש=wavering/sensitive, תלונה=churn_risk/complaint.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, mood_status: { type: 'string', enum: ['happy', 'wavering', 'churn_risk'], description: 'מצב הלקוח: happy=תקין (הכל בסדר), wavering=רגיש (צריך תשומת לב), churn_risk=תלונה (סיכון נטישה)' }, communication_status: { type: 'string', enum: ['normal', 'sensitive', 'complaint'], description: 'סטטוס תקשורת: normal=תקין, sensitive=רגיש, complaint=תלונה' }, note: { type: 'string', description: 'הערה/סיכום — מה הבעיה שזוהתה' } }, required: ['client_id', 'mood_status', 'note'] } } },
+  { type: 'function', function: { name: 'update_client_health', description: 'עדכון מצב בריאות לקוח בודד: מעדכן mood_status בטבלת clients ויוצר רשומה ב-communication_logs. לעדכון מרובה של לקוחות — השתמשי ב-batch_update_client_health במקום!', parameters: { type: 'object', properties: { client_id: { type: 'string' }, mood_status: { type: 'string', enum: ['happy', 'wavering', 'churn_risk'], description: 'מצב הלקוח: happy=תקין (הכל בסדר), wavering=רגיש (צריך תשומת לב), churn_risk=תלונה (סיכון נטישה)' }, communication_status: { type: 'string', enum: ['normal', 'sensitive', 'complaint'], description: 'סטטוס תקשורת: normal=תקין, sensitive=רגיש, complaint=תלונה' }, note: { type: 'string', description: 'הערה/סיכום — מה הבעיה שזוהתה' } }, required: ['client_id', 'mood_status', 'note'] } } },
+  { type: 'function', function: { name: 'batch_update_client_health', description: 'עדכון מצב בריאות של מספר לקוחות בבת אחת. **השתמשי בכלי הזה תמיד כשצריך לעדכן יותר מלקוח אחד** (למשל בדיקת דופק, עדכון דשבורד). מקבל מערך של עדכונים ומבצע את כולם בקריאה אחת.', parameters: { type: 'object', properties: { updates: { type: 'array', items: { type: 'object', properties: { client_id: { type: 'string' }, mood_status: { type: 'string', enum: ['happy', 'wavering', 'churn_risk'] }, communication_status: { type: 'string', enum: ['normal', 'sensitive', 'complaint'] }, note: { type: 'string' } }, required: ['client_id', 'mood_status', 'note'] }, description: 'מערך של עדכוני לקוחות' } }, required: ['updates'] } } },
   { type: 'function', function: { name: 'sync_meta_ads', description: 'סנכרון נתוני Meta Ads (פייסבוק) מטבלאות CRM. מפעיל סנכרון מול Meta Ads API עבור לקוח ספציפי או כל הלקוחות שיש להם טבלת meta_ads. השתמש בכלי הזה כשהמשתמש מבקש לסנכרן/לרענן נתוני פייסבוק.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה לקוח ספציפי (אופציונלי — ללא = כל הטבלאות)' }, client_name: { type: 'string', description: 'שם לקוח לחיפוש (אופציונלי)' } } } } },
   // === GROUP 6: SKILLS TOOLS ===
   { type: 'function', function: { name: 'save_skill', description: 'שמירת סקיל (מיומנות) חדש — תהליך עבודה שלם שכרמן למדה. כשהמשתמש אומר "תשמרי סקיל" / "שמרי את זה כ-skill", סכם את התהליך שבוצע ושמור אותו.', parameters: { type: 'object', properties: { name: { type: 'string', description: 'שם קצר לסקיל (למשל "דוחות", "עדכון דגלים")' }, description: { type: 'string', description: 'תיאור קצר מה הסקיל עושה' }, steps: { type: 'string', description: 'הוראות מפורטות צעד-אחר-צעד שכרמן תבצע כשמפעילים את הסקיל. כל שורה = צעד אחד.' }, trigger_phrases: { type: 'array', items: { type: 'string' }, description: 'מילות מפתח שיפעילו את הסקיל (למשל ["דוחות", "ביצועים"])' } }, required: ['name', 'description', 'steps'] } } },
@@ -2328,7 +2404,7 @@ serve(async (req) => {
           }
           
           // Execute accumulated tool calls with recursive support (up to 3 rounds)
-          const MAX_TOOL_ROUNDS = 5;
+          const MAX_TOOL_ROUNDS = 25;
           let toolRound = 0;
           let currentToolCalls = { ...toolCallAccumulators };
           let currentFinishReason = finishReason;
