@@ -48,8 +48,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (table.integration_type !== 'meta_ads') {
-      return new Response(JSON.stringify({ error: 'Table is not a Meta Ads table' }), {
+    const validTypes = ['meta_ads', 'facebook_insights', 'facebook_ecommerce'];
+    if (!validTypes.includes(table.integration_type)) {
+      return new Response(JSON.stringify({ error: 'Table is not a Meta Ads / Facebook table' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
