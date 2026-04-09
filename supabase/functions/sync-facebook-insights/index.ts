@@ -26,6 +26,7 @@ interface InsightRecord {
   campaign_type: 'lead' | 'ecommerce' | 'other';
   effective_status?: string;
   configured_status?: string;
+  updated_time?: string | null;
 }
 
 interface CampaignStatus {
@@ -34,6 +35,7 @@ interface CampaignStatus {
   effective_status: string;
   configured_status: string;
   objective?: string | null;
+  updated_time?: string | null;
 }
 
 Deno.serve(async (req) => {
@@ -182,7 +184,7 @@ Deno.serve(async (req) => {
 
 
     // First, fetch campaign statuses to detect real blocks
-    const campaignsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/campaigns?fields=id,name,effective_status,configured_status,objective&limit=500&access_token=${accessToken}`;
+    const campaignsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/campaigns?fields=id,name,effective_status,configured_status,objective,updated_time&limit=500&access_token=${accessToken}`;
     const campaignsResponse = await fetch(campaignsUrl);
     const campaignsData = await campaignsResponse.json();
     
@@ -195,6 +197,7 @@ Deno.serve(async (req) => {
           effective_status: campaign.effective_status,
           configured_status: campaign.configured_status,
           objective: campaign.objective || null,
+          updated_time: campaign.updated_time || null,
         };
       }
     }
@@ -373,14 +376,15 @@ Deno.serve(async (req) => {
         campaign_type: campaignType,
         effective_status: campaignStatus?.effective_status || null,
         configured_status: campaignStatus?.configured_status || null,
+        updated_time: campaignStatus?.updated_time || null,
       };
     });
 
 
     // Make sure fields exist for Facebook Insights table
-    const fieldKeys = ['date', 'campaign_name', 'campaign_id', 'impressions', 'clicks', 'lp_or_form_views', 'cpm', 'ctr', 'leads', 'cost_per_lead', 'spend', 'purchases', 'purchase_value', 'add_to_cart', 'roas', 'campaign_objective', 'campaign_type', 'effective_status', 'configured_status'];
-    const fieldNames = ['תאריך', 'שם הקמפיין', 'מזהה קמפיין', 'חשיפות', 'קליקים', 'צפיות LP / פתיחות טופס', 'עלות ל-1000 חשיפות', 'אחוז קליקים', 'לידים', 'עלות לליד', 'הוצאה', 'רכישות', 'ערך רכישות', 'הוספות לעגלה', 'ROAS', 'מטרת קמפיין', 'סוג קמפיין', 'סטטוס בפועל', 'סטטוס מוגדר'];
-    const fieldTypes = ['date', 'text', 'text', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'text', 'text', 'text', 'text'];
+    const fieldKeys = ['date', 'campaign_name', 'campaign_id', 'impressions', 'clicks', 'lp_or_form_views', 'cpm', 'ctr', 'leads', 'cost_per_lead', 'spend', 'purchases', 'purchase_value', 'add_to_cart', 'roas', 'campaign_objective', 'campaign_type', 'effective_status', 'configured_status', 'updated_time'];
+    const fieldNames = ['תאריך', 'שם הקמפיין', 'מזהה קמפיין', 'חשיפות', 'קליקים', 'צפיות LP / פתיחות טופס', 'עלות ל-1000 חשיפות', 'אחוז קליקים', 'לידים', 'עלות לליד', 'הוצאה', 'רכישות', 'ערך רכישות', 'הוספות לעגלה', 'ROAS', 'מטרת קמפיין', 'סוג קמפיין', 'סטטוס בפועל', 'סטטוס מוגדר', 'עדכון אחרון בקמפיין'];
+    const fieldTypes = ['date', 'text', 'text', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'text', 'text', 'text', 'text', 'text'];
     
     for (let i = 0; i < fieldKeys.length; i++) {
       const { data: existingField } = await supabase
