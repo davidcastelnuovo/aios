@@ -26,6 +26,7 @@ import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { useAgency } from "@/contexts/AgencyContext";
 import { LinkFileToEntityDialog } from "@/components/chat/LinkFileToEntityDialog";
+import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 
 const getPublicOrigin = () => {
   const origin = window.location.origin;
@@ -147,11 +148,18 @@ function CreateChannelDialog({ tenantId, onCreated }: { tenantId: string; onCrea
     enabled: !!tenantId && open,
   });
 
+  const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
+
   // Fetch clients for selected agency
   const { data: clients = [] } = useQuery({
-    queryKey: ["clients-for-channel", tenantId, selectedAgencyId],
+    queryKey: ["clients-for-channel", tenantId, selectedAgencyId, crossTenantAgencyIds],
     queryFn: async () => {
-      let q = supabase.from("clients").select("id, name").eq("tenant_id", tenantId);
+      let q = supabase.from("clients").select("id, name");
+      if (crossTenantAgencyIds.length > 0) {
+        q = q.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+      } else {
+        q = q.eq("tenant_id", tenantId);
+      }
       if (selectedAgencyId) q = q.eq("agency_id", selectedAgencyId);
       const { data } = await q.order("name");
       return data || [];

@@ -68,6 +68,7 @@ import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useTerminology } from "@/hooks/useTerminology";
+import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 
 const formSchema = z.object({
   title: z.string().min(1, "שם המשימה הוא שדה חובה"),
@@ -188,13 +189,20 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
     },
   });
 
+  const { crossTenantAgencyIds, tenantId: ctTenantId } = useCrossTenantAgencyIds();
+
   const { data: clients } = useQuery({
-    queryKey: ["clients"],
+    queryKey: ["clients", ctTenantId, crossTenantAgencyIds],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("clients")
-        .select("*")
-        .order("name");
+      let query = supabase.from("clients").select("*");
+      if (ctTenantId) {
+        if (crossTenantAgencyIds.length > 0) {
+          query = query.or(`tenant_id.eq.${ctTenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+        } else {
+          query = query.eq("tenant_id", ctTenantId);
+        }
+      }
+      const { data, error } = await query.order("name");
       if (error) throw error;
       return data;
     },

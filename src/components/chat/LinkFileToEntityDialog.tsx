@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { User, Target } from "lucide-react";
+import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 
 interface UploadedFile {
   id: string;
@@ -26,11 +27,18 @@ export function LinkFileToEntityDialog({ open, onOpenChange, tenantId, files, on
   const [clientId, setClientId] = useState("");
   const [leadId, setLeadId] = useState("");
   const [saving, setSaving] = useState(false);
+  const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
 
   const { data: clients = [] } = useQuery({
-    queryKey: ["clients-for-link", tenantId],
+    queryKey: ["clients-for-link", tenantId, crossTenantAgencyIds],
     queryFn: async () => {
-      const { data } = await supabase.from("clients").select("id, name").eq("tenant_id", tenantId).order("name");
+      let query = supabase.from("clients").select("id, name");
+      if (crossTenantAgencyIds.length > 0) {
+        query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+      } else {
+        query = query.eq("tenant_id", tenantId);
+      }
+      const { data } = await query.order("name");
       return data || [];
     },
     enabled: !!tenantId && open,

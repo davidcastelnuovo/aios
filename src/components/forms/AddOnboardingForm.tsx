@@ -17,6 +17,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 
 const formSchema = z.object({
   title: z.string().min(1, "כותרת היא שדה חובה"),
@@ -65,16 +66,22 @@ export default function AddOnboardingForm({ clientId, agencyId }: AddOnboardingF
     },
   });
 
+  const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
+
   const { data: clients } = useQuery({
-    queryKey: ["clients-for-onboarding", agencyId],
+    queryKey: ["clients-for-onboarding", agencyId, tenantId, crossTenantAgencyIds],
     queryFn: async () => {
-      let query = supabase.from("clients").select("id, name, agency_id").order("name");
-      
+      let query = supabase.from("clients").select("id, name, agency_id");
       if (agencyId) {
         query = query.eq("agency_id", agencyId);
+      } else if (tenantId) {
+        if (crossTenantAgencyIds.length > 0) {
+          query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+        } else {
+          query = query.eq("tenant_id", tenantId);
+        }
       }
-
-      const { data, error } = await query;
+      const { data, error } = await query.order("name");
       if (error) throw error;
       return data;
     },

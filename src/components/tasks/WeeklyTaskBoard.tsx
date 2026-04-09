@@ -32,6 +32,7 @@ import { TaskBacklogPanel } from "./OverdueTasksPanel";
 import { CalendarEventEditDialog } from "./CalendarEventEditDialog";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { useTerminology } from "@/hooks/useTerminology";
 import { toast } from "sonner";
 import confetti from "canvas-confetti";
@@ -93,14 +94,18 @@ export function WeeklyTaskBoard() {
   });
 
   // Fetch clients for inline selector
+  const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
+
   const { data: clientsList = [] } = useQuery({
-    queryKey: ["clients-for-task-selector", tenantId],
+    queryKey: ["clients-for-task-selector", tenantId, crossTenantAgencyIds],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("clients")
-        .select("id, name")
-        .eq("tenant_id", tenantId!)
-        .order("name");
+      let query = supabase.from("clients").select("id, name");
+      if (crossTenantAgencyIds.length > 0) {
+        query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+      } else {
+        query = query.eq("tenant_id", tenantId!);
+      }
+      const { data, error } = await query.order("name");
       if (error) throw error;
       return data;
     },

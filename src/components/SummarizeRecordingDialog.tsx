@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { Loader2, FileText, Sparkles, Download, ExternalLink, Mic, RotateCcw } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 
 interface SummarizeRecordingDialogProps {
   open: boolean;
@@ -249,11 +250,19 @@ export default function SummarizeRecordingDialog({
     }, 5000);
   }, [toast, stopPolling]);
 
+  const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
+
   const { data: clients = [] } = useQuery({
-    queryKey: ["clients-summary", currentTenantId],
+    queryKey: ["clients-summary", currentTenantId, crossTenantAgencyIds],
     queryFn: async () => {
       if (!currentTenantId) return [];
-      const { data } = await supabase.from("clients").select("id, name").eq("tenant_id", currentTenantId).order("name");
+      let query = supabase.from("clients").select("id, name");
+      if (crossTenantAgencyIds.length > 0) {
+        query = query.or(`tenant_id.eq.${currentTenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+      } else {
+        query = query.eq("tenant_id", currentTenantId);
+      }
+      const { data } = await query.order("name");
       return data || [];
     },
     enabled: !!currentTenantId && open,

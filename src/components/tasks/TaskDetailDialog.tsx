@@ -26,6 +26,7 @@ import { CalendarIcon, Save, Trash2, UserPlus, X, Send, Search, ListTodo, Extern
 import { cn } from "@/lib/utils";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { TimeSlotPicker } from "./TimeSlotPicker";
 import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
 
@@ -129,15 +130,19 @@ export function TaskDetailDialog({
     }
   }, [task, open]);
 
+  const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
+
   // Fetch clients
   const { data: clients } = useQuery({
-    queryKey: ["clients-for-tasks", tenantId],
+    queryKey: ["clients-for-tasks", tenantId, crossTenantAgencyIds],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("clients")
-        .select("id, name")
-        .eq("tenant_id", tenantId)
-        .order("name");
+      let query = supabase.from("clients").select("id, name");
+      if (crossTenantAgencyIds.length > 0) {
+        query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+      } else {
+        query = query.eq("tenant_id", tenantId);
+      }
+      const { data } = await query.order("name");
       return data || [];
     },
     enabled: !!tenantId && open,
