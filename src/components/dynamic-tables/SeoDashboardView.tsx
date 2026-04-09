@@ -124,6 +124,7 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
   const gscMap = useMemo(() => {
     const map = new Map<string, GscKeywordData>();
     for (const row of gscData) {
+      if (!row.keyword) continue;
       map.set(row.keyword.toLowerCase().trim(), row);
     }
     return map;
