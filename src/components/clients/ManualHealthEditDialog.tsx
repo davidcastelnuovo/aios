@@ -25,9 +25,10 @@ const ALL_FLAGS: FlagKey[] = [
 ];
 
 const MOOD_OPTIONS = [
-  { value: 'happy', label: 'תקין' },
-  { value: 'wavering', label: 'רגיש' },
-  { value: 'churn_risk', label: 'תלונה' },
+  { value: 'happy', label: '😊 מבסוט / תקין' },
+  { value: 'wavering', label: '😐 מתנדנד / רגיש' },
+  { value: 'churn_risk', label: '😟 סכנת נטישה / תלונה' },
+  { value: 'not_progressing', label: '😔 לא מתקדם' },
 ];
 
 interface ManualHealthEditDialogProps {

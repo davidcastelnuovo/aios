@@ -169,12 +169,22 @@ export const FLAG_COLORS: Record<FlagKey, string> = {
 };
 
 export const COMMUNICATION_STATUS_LABELS: Record<string, string> = {
-  normal: 'תקין',
-  sensitive: 'רגיש',
-  complaint: 'תלונה',
+  happy: '😊 מבסוט / תקין',
+  wavering: '😐 מתנדנד / רגיש',
+  churn_risk: '😟 סכנת נטישה / תלונה',
+  not_progressing: '😔 לא מתקדם',
+  // Legacy mappings for old data
+  normal: '😊 מבסוט / תקין',
+  sensitive: '😐 מתנדנד / רגיש',
+  complaint: '😟 סכנת נטישה / תלונה',
 };
 
 export const COMMUNICATION_STATUS_COLORS: Record<string, string> = {
+  happy: 'bg-green-100 text-green-800 border-green-300',
+  wavering: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+  churn_risk: 'bg-red-100 text-red-800 border-red-300',
+  not_progressing: 'bg-orange-100 text-orange-800 border-orange-300',
+  // Legacy mappings
   normal: 'bg-green-100 text-green-800 border-green-300',
   sensitive: 'bg-yellow-100 text-yellow-800 border-yellow-300',
   complaint: 'bg-red-100 text-red-800 border-red-300',
