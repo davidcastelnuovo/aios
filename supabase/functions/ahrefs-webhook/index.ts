@@ -171,12 +171,7 @@ Deno.serve(async (req) => {
               return settings?.targetDomain === domain;
             });
 
-            // Also check by slug pattern for tables created without integration_settings
-            const slugTableExists = existingTables?.some((t: any) => {
-              return !domainTableExists; // if no settings match, check if any table exists with no settings
-            });
-
-            if (!domainTableExists && (!existingTables || existingTables.length === 0 || !slugTableExists)) {
+            if (!domainTableExists) {
               await supabase.from("crm_tables").insert({
                 tenant_id,
                 client_id: resolved_client_id,
