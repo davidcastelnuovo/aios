@@ -6,13 +6,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Facebook, FileSpreadsheet, TrendingUp, TrendingDown, Minus, ShoppingCart, LayoutGrid, Activity, MessageSquare } from "lucide-react";
+import { Facebook, FileSpreadsheet, TrendingUp, TrendingDown, Minus, ShoppingCart, LayoutGrid, Activity, MessageSquare, Pencil } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LineChart, Line, ComposedChart, Area } from "recharts";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { differenceInDays } from "date-fns";
-import { calculateHealthScore, FLAG_LABELS, FLAG_COLORS, OVERALL_STATUS_CONFIG, TIER_COLORS, SERVICE_LABELS, COMMUNICATION_STATUS_LABELS, COMMUNICATION_STATUS_COLORS, type FlagKey, type OverallStatus } from "@/lib/healthScore";
+import { calculateHealthScore, getEffectiveStatus, FLAG_LABELS, FLAG_COLORS, OVERALL_STATUS_CONFIG, TIER_COLORS, SERVICE_LABELS, COMMUNICATION_STATUS_LABELS, COMMUNICATION_STATUS_COLORS, type FlagKey, type OverallStatus } from "@/lib/healthScore";
 
 import { SeoUpdateModal } from "@/components/clients/SeoUpdateModal";
+import { ManualHealthEditDialog } from "@/components/clients/ManualHealthEditDialog";
 import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 
