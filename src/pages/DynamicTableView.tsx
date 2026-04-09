@@ -2813,6 +2813,34 @@ export default function DynamicTableView() {
           />
         </DialogContent>
       </Dialog>
+
+      {/* Delete Table Confirmation Dialog */}
+      <Dialog open={showDeleteTableDialog} onOpenChange={setShowDeleteTableDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>מחיקת טבלה</DialogTitle>
+            <DialogDescription>
+              האם אתה בטוח שברצונך למחוק את הטבלה "{table?.name}"? פעולה זו תמחק את כל הנתונים, העמודות והרשומות ולא ניתן לשחזר אותה.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={() => setShowDeleteTableDialog(false)}>
+              ביטול
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={() => deleteTableMutation.mutate()}
+              disabled={deleteTableMutation.isPending}
+            >
+              {deleteTableMutation.isPending ? (
+                <><Loader2 className="ml-2 h-4 w-4 animate-spin" />מוחק...</>
+              ) : (
+                <><Trash2 className="ml-2 h-4 w-4" />מחק טבלה</>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
