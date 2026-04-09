@@ -1492,14 +1492,21 @@ async function executeTool(
         for (const table of filteredTables) {
           try {
             const authHeader2 = `Bearer ${userToken}`;
-            const res = await fetch(`${SUPABASE_URL}/functions/v1/sync-meta-ads-data`, {
+            // Choose the correct sync function based on integration_type
+            let syncFunctionName = 'sync-meta-ads-data';
+            if (table.integration_type === 'facebook_insights') {
+              syncFunctionName = 'sync-facebook-insights';
+            } else if (table.integration_type === 'facebook_ecommerce') {
+              syncFunctionName = 'sync-facebook-ecommerce';
+            }
+            const res = await fetch(`${SUPABASE_URL}/functions/v1/${syncFunctionName}`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': authHeader2 },
               body: JSON.stringify({ table_id: table.id }),
             });
             const result = await res.json();
             if (res.ok) {
-              syncResults.push({ table_id: table.id, table_name: table.name, success: true, records_synced: result.records_synced || 0 });
+              syncResults.push({ table_id: table.id, table_name: table.name, success: true, records_synced: result.records_synced || result.records || 0 });
             } else {
               syncResults.push({ table_id: table.id, table_name: table.name, success: false, error: result.error || 'Unknown error' });
             }
