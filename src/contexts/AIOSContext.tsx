@@ -4,6 +4,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useQueryClient } from "@tanstack/react-query";
 import type { DisplayData } from "@/components/aios/AIOSChatBar";
+import { invalidateAIEntityQueries } from "@/lib/aiInvalidation";
 
 interface AIOSState {
   isLoading: boolean;
@@ -99,7 +100,7 @@ export function AIOSProvider({ children }: { children: React.ReactNode }) {
             }
 
             if (parsed.type === "invalidate" && parsed.entity) {
-              queryClient.invalidateQueries({ queryKey: [parsed.entity] });
+              invalidateAIEntityQueries(queryClient, parsed.entity);
               continue;
             }
 

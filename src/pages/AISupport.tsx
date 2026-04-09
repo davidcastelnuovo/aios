@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useIsMobile } from "@/hooks/use-mobile";
 import ReactMarkdown from "react-markdown";
+import { invalidateAIEntityQueries } from "@/lib/aiInvalidation";
 
 interface Message {
   role: 'user' | 'assistant' | 'tool_call';
@@ -195,15 +196,7 @@ export default function AISupport() {
               // Title was auto-generated, refresh conversation list
               queryClient.invalidateQueries({ queryKey: ['ai-conversations'] });
             } else if (parsed.type === 'invalidate') {
-              // Auto-refresh UI when agent modifies data
-              const entity = parsed.entity;
-              if (entity) {
-                queryClient.invalidateQueries({ queryKey: [entity] });
-                // Also invalidate related query keys
-                if (entity === 'tasks') {
-                  queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
-                }
-              }
+              invalidateAIEntityQueries(queryClient, parsed.entity);
             } else if (parsed.type === 'done') {
               if (assistantContent) {
                 setMessages(prev => [...prev, {
