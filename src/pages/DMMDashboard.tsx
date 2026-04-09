@@ -441,7 +441,7 @@ export default function DMMDashboard() {
     return clients
       .filter((c) => {
         if (search && !c.name.toLowerCase().includes(search.toLowerCase())) return false;
-        if (filterStatus !== "all" && c.overallStatus !== filterStatus) return false;
+        if (filterStatus !== "all" && c.effectiveStatus !== filterStatus) return false;
         if (filterTier !== "all" && c.tier !== filterTier) return false;
         if (filterService !== "all" && !c.services.includes(filterService)) return false;
         return true;
@@ -451,9 +451,9 @@ export default function DMMDashboard() {
 
   // ── Summary counts ─────────────────────────────────────────────────────────
   const summary = useMemo(() => ({
-    red: clients.filter((c) => c.overallStatus === "red").length,
-    yellow: clients.filter((c) => c.overallStatus === "yellow").length,
-    green: clients.filter((c) => c.overallStatus === "green").length,
+    red: clients.filter((c) => c.effectiveStatus === "red").length,
+    yellow: clients.filter((c) => c.effectiveStatus === "yellow").length,
+    green: clients.filter((c) => c.effectiveStatus === "green").length,
   }), [clients]);
 
   // ─────────────────────────────────────────────────────────────────────────────
