@@ -1,33 +1,22 @@
 
 
-# תיקון: קמפיינים של וואטסאפ מציגים 0 לידים
+# תיקון: הפרדה בין "תלונה" ל"דרוש טיפול דחוף"
 
 ## הבעיה
-קמפיינים מסוג WhatsApp/Messaging משתמשים בסוגי המרות שונים מקמפייני לידים רגילים. פייסבוק מדווח עליהם כ-`onsite_conversion.messaging_conversation_started_7d`, `messaging_conversation_started_7d` וכדומה — אבל הסנכרון לא סופר אותם כ"לידים".
+כרגע דגל אדום מציג "תלונה" בדשבורד, אבל "תלונה" צריך להיות דגל ידני שנקבע רק מתוך כרטיס לקוח. דגל אדום אוטומטי צריך להציג "דרוש טיפול דחוף".
 
 ## התיקון
 
-### קובץ: `supabase/functions/sync-facebook-insights/index.ts`
+### קובץ: `src/lib/healthScore.ts`
 
-**הוספת סוגי המרות messaging ל-`leadActionTypes`** (שורה ~242):
+1. **הוספת FlagKey חדש**: `urgent_treatment` — דגל אדום אוטומטי
+2. **עדכון FLAG_LABELS**: `urgent_treatment: 'דרוש טיפול דחוף'`
+3. **עדכון FLAG_COLORS**: צבע אדום כמו complaint
+4. **הוספה ל-RED_FLAGS**: `urgent_treatment` יחליף את `complaint` ברשימת הדגלים האדומים האוטומטיים
+5. **`complaint` יישאר** כדגל ידני בלבד — ללא שינוי בהיגיון החישוב, אבל ייכנס לרשימה רק דרך ManualHealthEditDialog
 
-```typescript
-const leadActionTypes = [
-  'lead',
-  'leadgen_grouped',
-  'offsite_conversion.fb_pixel_lead',
-  'onsite_conversion.lead_grouped',
-  'app_custom_event.fb_mobile_lead',
-  // WhatsApp / Messaging conversions
-  'onsite_conversion.messaging_conversation_started_7d',
-  'messaging_conversation_started_7d',
-  'onsite_conversion.messaging_first_reply',
-  'messaging_first_reply',
-];
-```
-
-כך קמפיינים של וואטסאפ/מסנג'ר ייספרו כלידים, ועלות לליד תחושב בהתאם.
-
-## תוצאה
-קמפיין "וואטסאפ חדש" יציג את מספר שיחות הוואטסאפ שנפתחו כלידים במקום 0.
+### לוגיקה:
+- `complaint` נשאר ב-FlagKey וב-ManualHealthEditDialog כדגל ידני
+- ב-`calculateHealthScore()` — שורה 60-62: כשיש `communicationStatus === 'complaint'`, במקום להוסיף flag `complaint` ← יוסיף `urgent_treatment`
+- כך הדשבורד יציג "דרוש טיפול דחוף" כשהציון יורד אוטומטית, ו"תלונה" רק כשזה נקבע ידנית
 
