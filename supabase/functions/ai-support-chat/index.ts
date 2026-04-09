@@ -2084,7 +2084,7 @@ serve(async (req) => {
       body: JSON.stringify({
         model: AI_MODEL,
         messages: [
-          { role: 'system', content: buildSystemPrompt(userName, userEmail, currentDateContext, memoryContext, campaignerName || undefined, campaignerId || undefined, profileData?.ui_mode || 'classic') },
+          { role: 'system', content: buildSystemPrompt(userName, userEmail, currentDateContext, memoryContext, skillsContext, campaignerName || undefined, campaignerId || undefined, profileData?.ui_mode || 'classic') },
           ...aiMessages,
         ],
         tools,
@@ -2156,7 +2156,7 @@ serve(async (req) => {
 
           // Build running conversation for follow-ups
           let followUpMessages: any[] = [
-            { role: 'system', content: buildSystemPrompt(userName, userEmail, currentDateContext, memoryContext, campaignerName || undefined, campaignerId || undefined) },
+            { role: 'system', content: buildSystemPrompt(userName, userEmail, currentDateContext, memoryContext, skillsContext, campaignerName || undefined, campaignerId || undefined) },
             ...aiMessages,
           ];
 
