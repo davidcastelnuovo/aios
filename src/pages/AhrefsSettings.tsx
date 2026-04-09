@@ -461,57 +461,59 @@ export default function AhrefsSettings() {
                         )}
                       </TableCell>
                       <TableCell>
-                        {linkedClient ? (
-                          <Badge variant="outline" className="bg-primary/10">
-                            {linkedClient.name}
-                          </Badge>
-                        ) : (
-                          <Popover 
-                            open={clientSearchOpen === report.id} 
-                            onOpenChange={(open) => {
-                              setClientSearchOpen(open ? report.id : null);
-                              if (!open) setClientSearch("");
-                            }}
-                          >
-                            <PopoverTrigger asChild>
+                        <Popover 
+                          open={clientSearchOpen === report.id} 
+                          onOpenChange={(open) => {
+                            setClientSearchOpen(open ? report.id : null);
+                            if (!open) setClientSearch("");
+                          }}
+                        >
+                          <PopoverTrigger asChild>
+                            {linkedClient ? (
+                              <Button variant="ghost" size="sm" className="p-1 h-auto">
+                                <Badge variant="outline" className="bg-primary/10 cursor-pointer">
+                                  {linkedClient.name}
+                                </Badge>
+                              </Button>
+                            ) : (
                               <Button variant="ghost" size="sm" className="text-muted-foreground">
                                 <UserPlus className="h-3 w-3 ml-1" />
                                 שייך ללקוח
                               </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-64 p-2" align="start">
-                              <Input
-                                placeholder="חפש לקוח..."
-                                value={clientSearch}
-                                onChange={(e) => setClientSearch(e.target.value)}
-                                className="mb-2"
-                                autoFocus
-                              />
-                              <ScrollArea className="max-h-48">
-                                {filteredClients.length === 0 ? (
-                                  <p className="text-sm text-muted-foreground p-2">לא נמצאו לקוחות</p>
-                                ) : (
-                                  filteredClients.map((client) => (
-                                    <button
-                                      key={client.id}
-                                      className="w-full text-right px-2 py-1.5 text-sm rounded hover:bg-accent transition-colors"
-                                      onClick={() => linkClientMutation.mutate({
-                                        reportId: report.id,
-                                        clientId: client.id,
-                                        domain: report.domain,
-                                      })}
-                                    >
-                                      {client.name}
-                                      {!client.website && (
-                                        <span className="text-xs text-muted-foreground mr-1">(ללא אתר)</span>
-                                      )}
-                                    </button>
-                                  ))
-                                )}
-                              </ScrollArea>
-                            </PopoverContent>
-                          </Popover>
-                        )}
+                            )}
+                          </PopoverTrigger>
+                          <PopoverContent className="w-64 p-2" align="start">
+                            <Input
+                              placeholder="חפש לקוח..."
+                              value={clientSearch}
+                              onChange={(e) => setClientSearch(e.target.value)}
+                              className="mb-2"
+                              autoFocus
+                            />
+                            <ScrollArea className="max-h-48">
+                              {filteredClients.length === 0 ? (
+                                <p className="text-sm text-muted-foreground p-2">לא נמצאו לקוחות</p>
+                              ) : (
+                                filteredClients.map((client) => (
+                                  <button
+                                    key={client.id}
+                                    className="w-full text-right px-2 py-1.5 text-sm rounded hover:bg-accent transition-colors"
+                                    onClick={() => linkClientMutation.mutate({
+                                      reportId: report.id,
+                                      clientId: client.id,
+                                      domain: report.domain,
+                                    })}
+                                  >
+                                    {client.name}
+                                    {!client.website && (
+                                      <span className="text-xs text-muted-foreground mr-1">(ללא אתר)</span>
+                                    )}
+                                  </button>
+                                ))
+                              )}
+                            </ScrollArea>
+                          </PopoverContent>
+                        </Popover>
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
                         {format(new Date(report.received_at), "dd/MM/yyyy HH:mm")}
