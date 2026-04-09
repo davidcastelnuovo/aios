@@ -1,49 +1,34 @@
 
 
-## תוכנית: מערכת Skills לכרמן
+## תוכנית: איחוד דיאלוגי עדכון תקשורת + זיהוי סטטוסים בכרמן
 
-### הרעיון
-כרמן תוכל לשמור "מיומנויות" (Skills) — תהליכי עבודה שלמים שהיא למדה — ולהפעיל אותם בקיצור דרך. במקום להסביר מחדש בכל פעם "תעשי דוחות ביצועים ותעדכני דגלים", המשתמש יגיד "תפעילי את הסקיל דוחות" והיא תדע בדיוק מה לעשות.
+### הבעיה
+1. יש שני מקומות שונים לעדכון מצב תקשורת: אחד inline ב-`ClientUpdatesTab` ואחד ב-`CommunicationUpdateModal` — כפילות מיותרת.
+2. כרמן משתמשת במונחים `happy/wavering/churn_risk` אבל לא מכירה את המונחים העבריים "תלונה" ו"רגיש" שהמשתמש רואה בממשק.
 
-### מבנה טכני
+### הפתרון
 
-**1. טבלה חדשה: `ai_skills`**
-- `id` (uuid, PK)
-- `user_id` (uuid, FK → auth.users)
-- `tenant_id` (uuid, FK → tenants)
-- `name` (text) — שם קצר לקיצור דרך (למשל "דוחות")
-- `description` (text) — תיאור מה הסקיל עושה
-- `steps` (text) — הוראות מפורטות שכרמן תבצע כשמפעילים את הסקיל
-- `trigger_phrases` (text[]) — מילות מפתח שמפעילות אוטומטית (למשל ["דוחות", "עדכון דגלים"])
-- `created_at`, `updated_at`
-- RLS: כל משתמש רואה רק סקילים שלו בטנאנט שלו
-- UNIQUE על `(user_id, tenant_id, name)`
+**1. איחוד הדיאלוגים**
+- הסרת ה-`CommunicationUpdateModal` הנפרד (קובץ שלם)
+- שימוש בסקשן ה-inline שב-`ClientUpdatesTab` בלבד כממשק היחיד לעדכון מצב תקשורת
+- עדכון כל המקומות שפותחים את `CommunicationUpdateModal` כדי שיפנו לטאב "עדכונים" במקום
 
-**2. כלים חדשים לכרמן (Edge Function)**
-
-| כלי | תיאור |
-|-----|--------|
-| `save_skill` | שמירת סקיל חדש — שם, תיאור, צעדים, מילות מפתח |
-| `list_skills` | הצגת כל הסקילים השמורים |
-| `execute_skill` | טעינת סקיל לפי שם והפעלת הצעדים שלו |
-| `update_skill` | עדכון סקיל קיים |
-| `delete_skill` | מחיקת סקיל |
-
-**3. עדכון System Prompt**
-
-הוספת הנחיות לכרמן:
-- כשהמשתמש אומר "תשמרי סקיל" / "שמרי את זה כ-skill" → לסכם את התהליך שבוצע ולשמור עם `save_skill`
-- כשהמשתמש מזכיר שם סקיל או אומר "תפעילי סקיל X" → לטעון עם `execute_skill` ולבצע את הצעדים
-- בתחילת כל שיחה → לטעון את רשימת הסקילים כדי לזהות קיצורי דרך
-
-**4. לוגיקת `execute_skill`**
-
-כשמפעילים סקיל, כרמן מקבלת את ה-`steps` (ההוראות המפורטות) ומבצעת אותן צעד אחר צעד באמצעות הכלים הקיימים שלה. זה לא קוד — זה "מתכון" בשפה טבעית שכרמן יודעת לפרש.
+**2. עדכון System Prompt של כרמן**
+- הוספת מיפוי מפורש בהנחיות: "תלונה" = complaint = churn_risk, "רגיש" = sensitive = wavering, "תקין" = normal = happy
+- כשמשתמש אומר "תעדכני את בריפלקט ל-תלונה" או "הלקוח רגיש", כרמן תדע לקרוא ל-`update_client_health` עם הערכים המתאימים
 
 ### שלבי ביצוע
 
-1. יצירת טבלת `ai_skills` עם RLS
-2. הוספת 5 כלים חדשים ל-Edge Function (`save_skill`, `list_skills`, `execute_skill`, `update_skill`, `delete_skill`)
-3. עדכון System Prompt עם הנחיות Skills
-4. הוספת טעינת סקילים אוטומטית בתחילת שיחה
+1. **עדכון System Prompt** ב-`ai-support-chat/index.ts` — הוספת פסקת הנחיות שממפה בין המונחים העבריים (תקין/רגיש/תלונה) לערכי ה-API (`mood_status` + `communication_status`)
+
+2. **עדכון כלי `update_client_health`** — הוספת enum description בעברית כך שכרמן תבין: `happy=תקין, wavering=רגיש, churn_risk=תלונה`
+
+3. **הסרת `CommunicationUpdateModal`** — מחיקת הקובץ `src/components/clients/CommunicationUpdateModal.tsx`
+
+4. **עדכון ייבואים** — הסרת כל ההפניות ל-`CommunicationUpdateModal` בקבצים שמשתמשים בו (צריך לבדוק היכן הוא נפתח)
+
+### קבצים שישתנו
+- `supabase/functions/ai-support-chat/index.ts` — system prompt + tool description
+- `src/components/clients/CommunicationUpdateModal.tsx` — מחיקה
+- קבצים שמייבאים את המודל (צריך בדיקה)
 
