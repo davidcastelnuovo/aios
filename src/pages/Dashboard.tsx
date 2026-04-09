@@ -9,6 +9,7 @@ import { useUserAgencies } from "@/hooks/useUserAgencies";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useTerminology } from "@/hooks/useTerminology";
+import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 
 export default function Dashboard() {
   const { selectedAgency } = useAgency();
@@ -16,6 +17,7 @@ export default function Dashboard() {
   const { userAgencyIds } = useUserAgencies();
   const { isOwner } = useUserRole();
   const { t } = useTerminology();
+  const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
   const [selectedClient, setSelectedClient] = useState<string>("all");
   const [selectedSupplier, setSelectedSupplier] = useState<string>("all");
   const queryClient = useQueryClient();
@@ -136,15 +138,16 @@ export default function Dashboard() {
   });
 
   const { data: clients } = useQuery({
-    queryKey: ["clients", tenantId],
+    queryKey: ["clients", tenantId, crossTenantAgencyIds],
     queryFn: async () => {
       if (!tenantId) return [];
-      const { data, error } = await supabase
-        .from("clients")
-        .select("id, name, agency_id")
-        .eq("tenant_id", tenantId)
-        .in("status", ["active", "onboarding"])
-        .order("name");
+      let query = supabase.from("clients").select("id, name, agency_id");
+      if (crossTenantAgencyIds.length > 0) {
+        query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+      } else {
+        query = query.eq("tenant_id", tenantId);
+      }
+      const { data, error } = await query.in("status", ["active", "onboarding"]).order("name");
       if (error) throw error;
       return data;
     },
@@ -171,10 +174,21 @@ export default function Dashboard() {
     queryFn: async () => {
       if (!tenantId) return null;
       let agencyQuery = supabase.from("agencies").select("*", { count: "exact", head: true }).eq("tenant_id", tenantId);
-      let clientQuery = supabase.from("clients").select("*", { count: "exact", head: true }).eq("tenant_id", tenantId);
+      let clientQuery = supabase.from("clients").select("*", { count: "exact", head: true });
+      if (crossTenantAgencyIds.length > 0) {
+        clientQuery = clientQuery.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+      } else {
+        clientQuery = clientQuery.eq("tenant_id", tenantId);
+      }
       let campaignerQuery = supabase.from("campaigners").select("*", { count: "exact", head: true }).eq("tenant_id", tenantId);
       let taskQuery = supabase.from("tasks").select("*").eq("tenant_id", tenantId).eq("status", "open");
-      let activeClientsQuery = supabase.from("clients").select("id, agency_id, retainer").eq("tenant_id", tenantId).in("status", ["active", "onboarding"]);
+      let activeClientsQuery = supabase.from("clients").select("id, agency_id, retainer");
+      if (crossTenantAgencyIds.length > 0) {
+        activeClientsQuery = activeClientsQuery.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+      } else {
+        activeClientsQuery = activeClientsQuery.eq("tenant_id", tenantId);
+      }
+      activeClientsQuery = activeClientsQuery.in("status", ["active", "onboarding"]);
       let leadsQuery = supabase.from("leads").select("estimated_deal_value, monthly_budget, three_month_budget, status").eq("tenant_id", tenantId);
       
       // אם בחרנו ספק, נמצא את הקמפיינר הקשור אליו

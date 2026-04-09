@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useToast } from "@/hooks/use-toast";
+import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { useLeadStatuses } from "@/hooks/useLeadStatuses";
 import {
   Dialog,
@@ -87,17 +88,20 @@ export function TestAutomationDialog({ automation, open, onOpenChange }: TestAut
     enabled: open && !!tenantId,
   });
 
+  const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
+
   // Fetch clients
   const { data: clients = [] } = useQuery({
-    queryKey: ["clients-for-test", tenantId],
+    queryKey: ["clients-for-test", tenantId, crossTenantAgencyIds],
     queryFn: async () => {
       if (!tenantId) return [];
-      const { data, error } = await supabase
-        .from("clients")
-        .select("id, name, contact_name, phone")
-        .eq("tenant_id", tenantId)
-        .order("created_at", { ascending: false })
-        .limit(100);
+      let query = supabase.from("clients").select("id, name, contact_name, phone");
+      if (crossTenantAgencyIds.length > 0) {
+        query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+      } else {
+        query = query.eq("tenant_id", tenantId);
+      }
+      const { data, error } = await query.order("created_at", { ascending: false }).limit(100);
       if (error) throw error;
       return data || [];
     },

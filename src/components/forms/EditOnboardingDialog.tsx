@@ -60,13 +60,20 @@ export default function EditOnboardingDialog({ item, open, onOpenChange }: EditO
     },
   });
 
+  const { crossTenantAgencyIds, tenantId: ctTenantId } = useCrossTenantAgencyIds();
+
   const { data: clients } = useQuery({
-    queryKey: ["clients-for-onboarding"],
+    queryKey: ["clients-for-onboarding", ctTenantId, crossTenantAgencyIds],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("clients")
-        .select("id, name")
-        .order("name");
+      let query = supabase.from("clients").select("id, name");
+      if (ctTenantId) {
+        if (crossTenantAgencyIds.length > 0) {
+          query = query.or(`tenant_id.eq.${ctTenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+        } else {
+          query = query.eq("tenant_id", ctTenantId);
+        }
+      }
+      const { data, error } = await query.order("name");
       if (error) throw error;
       return data;
     },
