@@ -683,6 +683,50 @@ export type Database = {
           },
         ]
       }
+      ai_skills: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          name: string
+          steps: string
+          tenant_id: string
+          trigger_phrases: string[] | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          id?: string
+          name: string
+          steps: string
+          tenant_id: string
+          trigger_phrases?: string[] | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          name?: string
+          steps?: string
+          tenant_id?: string
+          trigger_phrases?: string[] | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_skills_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       automation_executions: {
         Row: {
           actions_count: number
