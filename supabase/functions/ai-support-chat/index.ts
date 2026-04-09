@@ -73,6 +73,8 @@ ${memoryContext}
 18. **טבלאות דינמיות** - רשימה, נתונים
 19. **עדכוני לקוחות/לידים** - הוספה, רשימה
 20. **Manus AI** - יצירת משימות AI מורכבות (מחקר, מצגות, ניתוח), צפייה בתוצאות
+21. **ניתוח קמפיינים** - ניתוח ביצועי קמפיינים (השוואת 7 ימים מול 30 יום), זיהוי התייקרויות וירידות ביצועים
+22. **עדכון בריאות לקוח** - עדכון mood_status בדשבורד CRM, יצירת התראות ב-communication_logs
 
 ${uiMode === 'aios' ? `📊 **חשוב לגבי תצוגת נתונים (display_data):**
 - כשהמשתמש מבקש לראות רשימות (לידים, משימות, לקוחות) - **תמיד** השתמש ב-display_data אחרי שליפת הנתונים
@@ -1305,6 +1307,133 @@ async function executeTool(
         return { success: true, result: manusResult };
       }
 
+      case 'analyze_campaign_performance': {
+        const { data: crmTables, error: tablesErr } = await supabaseClient
+          .from('crm_tables')
+          .select('id, client_id, slug, name')
+          .eq('tenant_id', tenantId)
+          .ilike('slug', '%facebook%');
+        if (tablesErr) throw tablesErr;
+        if (!crmTables || crmTables.length === 0) {
+          return { success: true, result: { message: 'לא נמצאו טבלאות קמפיינים מסונכרנות', clients: [] } };
+        }
+
+        const tables = toolCall.args.client_id
+          ? crmTables.filter((t: any) => t.client_id === toolCall.args.client_id)
+          : crmTables;
+
+        const now = new Date();
+        const d7 = new Date(now); d7.setDate(d7.getDate() - 7);
+        const d30 = new Date(now); d30.setDate(d30.getDate() - 30);
+        const d7Str = d7.toISOString().split('T')[0];
+        const d30Str = d30.toISOString().split('T')[0];
+
+        const campResults: any[] = [];
+        for (const table of tables) {
+          const { data: records } = await supabaseClient
+            .from('crm_records')
+            .select('data')
+            .eq('table_id', table.id)
+            .eq('tenant_id', tenantId);
+
+          if (!records || records.length === 0) continue;
+
+          const last7d = records.filter((r: any) => r.data?.date >= d7Str);
+          const last30d = records.filter((r: any) => r.data?.date >= d30Str);
+          const older = last30d.filter((r: any) => r.data?.date < d7Str);
+
+          const sum = (arr: any[], field: string) => arr.reduce((s: number, r: any) => s + (parseFloat(r.data?.[field]) || 0), 0);
+
+          const spend7 = sum(last7d, 'spend');
+          const spend_older = sum(older, 'spend');
+          const leads7 = sum(last7d, 'leads');
+          const leads_older = sum(older, 'leads');
+
+          const days7 = Math.max(last7d.length, 1);
+          const daysOlder = Math.max(older.length, 1);
+
+          const dailySpend7 = spend7 / days7;
+          const dailySpendOlder = spend_older / daysOlder;
+          const spendChangePct = dailySpendOlder > 0 ? ((dailySpend7 - dailySpendOlder) / dailySpendOlder * 100) : null;
+
+          const cpl7 = leads7 > 0 ? spend7 / leads7 : null;
+          const cplOlder = leads_older > 0 ? spend_older / leads_older : null;
+          const cplChangePct = cplOlder && cpl7 ? ((cpl7 - cplOlder) / cplOlder * 100) : null;
+
+          const { data: clientData } = await supabaseClient.from('clients').select('name').eq('id', table.client_id).single();
+
+          campResults.push({
+            client_id: table.client_id,
+            client_name: clientData?.name || table.name,
+            spend_7d: Math.round(spend7 * 100) / 100,
+            spend_30d: Math.round((spend7 + spend_older) * 100) / 100,
+            leads_7d: leads7,
+            leads_30d: leads7 + leads_older,
+            cpl_7d: cpl7 ? Math.round(cpl7 * 100) / 100 : null,
+            cpl_30d_avg: cplOlder ? Math.round(cplOlder * 100) / 100 : null,
+            spend_change_pct: spendChangePct ? Math.round(spendChangePct * 10) / 10 : null,
+            cpl_change_pct: cplChangePct ? Math.round(cplChangePct * 10) / 10 : null,
+            records_7d: last7d.length,
+            records_30d: last30d.length,
+            alert: spendChangePct !== null && spendChangePct > 15 ? '🔴 התייקרות' : (cplChangePct !== null && cplChangePct > 20 ? '🟡 עלייה בעלות לליד' : '🟢 תקין'),
+          });
+        }
+
+        campResults.sort((a: any, b: any) => (b.spend_change_pct || 0) - (a.spend_change_pct || 0));
+        modifiedEntities.add('clients');
+        return { success: true, result: { count: campResults.length, clients: campResults } };
+      }
+
+      case 'update_client_health': {
+        let effectiveUserId = userId;
+        if (!effectiveUserId) {
+          const { data: ownerRole } = await supabaseClient
+            .from('user_roles')
+            .select('user_id')
+            .eq('tenant_id', tenantId)
+            .eq('role', 'owner')
+            .limit(1)
+            .maybeSingle();
+          effectiveUserId = ownerRole?.user_id || null;
+        }
+
+        const updateData: any = { mood_status: toolCall.args.mood_status };
+        const { error: clientErr } = await supabaseClient
+          .from('clients')
+          .update(updateData)
+          .eq('id', toolCall.args.client_id)
+          .eq('tenant_id', tenantId);
+        if (clientErr) throw clientErr;
+
+        const commStatus = toolCall.args.communication_status || (toolCall.args.mood_status === 'happy' ? 'normal' : toolCall.args.mood_status === 'wavering' ? 'sensitive' : 'complaint');
+        const { error: logErr } = await supabaseClient
+          .from('communication_logs')
+          .insert({
+            client_id: toolCall.args.client_id,
+            tenant_id: tenantId,
+            status: commStatus,
+            interaction_type: 'system_alert',
+            note: toolCall.args.note,
+            updated_by: effectiveUserId,
+          });
+        if (logErr) throw logErr;
+
+        if (effectiveUserId) {
+          await supabaseClient
+            .from('client_updates')
+            .insert({
+              client_id: toolCall.args.client_id,
+              tenant_id: tenantId,
+              user_id: effectiveUserId,
+              content: `[עדכון אוטומטי - כרמן] ${toolCall.args.note}`,
+            });
+        }
+
+        modifiedEntities.add('clients');
+        modifiedEntities.add('communication_logs');
+        return { success: true, result: { client_id: toolCall.args.client_id, mood_status: toolCall.args.mood_status, communication_status: commStatus } };
+      }
+
       default:
         return { success: false, error: `Unknown tool: ${toolCall.name}` };
     }
@@ -1731,6 +1860,9 @@ const tools = [
   { type: 'function', function: { name: 'create_manus_task', description: 'יצירת משימה חדשה ב-Manus AI - סוכן שיכול לבצע מחקר, ליצור מצגות, לנתח נתונים ועוד', parameters: { type: 'object', properties: { prompt: { type: 'string', description: 'תיאור המשימה ל-Manus' }, agentProfile: { type: 'string', enum: ['manus-1.6', 'manus-1.6-lite', 'manus-1.6-max'], description: 'מודל (ברירת מחדל: manus-1.6)' }, taskMode: { type: 'string', enum: ['agent', 'chat', 'adaptive'], description: 'מצב עבודה (ברירת מחדל: agent)' } }, required: ['prompt'] } } },
   { type: 'function', function: { name: 'list_manus_tasks', description: 'הצגת רשימת משימות Manus AI', parameters: { type: 'object', properties: { limit: { type: 'integer' }, status: { type: 'string', enum: ['pending', 'running', 'completed', 'failed'] } } } } },
   { type: 'function', function: { name: 'get_manus_task_result', description: 'שליפת תוצאות של משימת Manus לפי מזהה', parameters: { type: 'object', properties: { taskId: { type: 'string', description: 'מזהה המשימה ב-Manus' } }, required: ['taskId'] } } },
+  // === GROUP 5: CAMPAIGN ANALYSIS & HEALTH TOOLS ===
+  { type: 'function', function: { name: 'analyze_campaign_performance', description: 'ניתוח ביצועי קמפיינים מטבלאות CRM: משווה 7 ימים אחרונים מול 30 ימים עבור כל לקוח. מחזיר אחוזי שינוי בהוצאות, עלות לליד, ו-ROAS. השתמש בכלי הזה כדי לזהות התייקרויות וירידות ביצועים.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה לקוח ספציפי (אופציונלי — ללא = כל הלקוחות)' } } } } },
+  { type: 'function', function: { name: 'update_client_health', description: 'עדכון מצב בריאות לקוח: מעדכן mood_status בטבלת clients ויוצר רשומה ב-communication_logs. השתמש בכלי הזה כדי להדליק דגל על לקוח כשמזהים בעיה (התייקרות, ירידה בביצועים).', parameters: { type: 'object', properties: { client_id: { type: 'string' }, mood_status: { type: 'string', enum: ['happy', 'wavering', 'churn_risk'], description: 'מצב הלקוח: happy=תקין, wavering=מתלבט, churn_risk=סיכון נטישה' }, communication_status: { type: 'string', enum: ['normal', 'sensitive', 'complaint'], description: 'סטטוס תקשורת לרשומת communication_logs' }, note: { type: 'string', description: 'הערה/סיכום — מה הבעיה שזוהתה' } }, required: ['client_id', 'mood_status', 'note'] } } },
 ];
 
 serve(async (req) => {
