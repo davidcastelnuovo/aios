@@ -678,31 +678,17 @@ export default function DMMDashboard() {
                       </div>
                     </TableCell>
 
-                    {/* Communication status + date */}
+                    {/* Pulse check – date only */}
                     <TableCell>
-                      <div className="space-y-1">
-                        {client.communicationStatus ? (
-                          <Badge
-                            variant="outline"
-                            className={`text-xs ${
-                              COMMUNICATION_STATUS_COLORS[client.communicationStatus] || ""
-                            }`}
-                          >
-                            {COMMUNICATION_STATUS_LABELS[client.communicationStatus]}
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-xs text-muted-foreground">
-                            אין רשומה
-                          </Badge>
-                        )}
-                        {client.lastCommDate && (
-                          <p className="text-xs text-muted-foreground">
-                            {client.daysSinceComm === 0
-                              ? "היום"
-                              : `לפני ${client.daysSinceComm} ימים`}
-                          </p>
-                        )}
-                      </div>
+                      {client.lastCommDate ? (
+                        <span className="text-xs text-muted-foreground">
+                          {client.daysSinceComm === 0
+                            ? "היום"
+                            : `לפני ${client.daysSinceComm} ימים`}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
                     </TableCell>
 
                     {/* Actions */}
