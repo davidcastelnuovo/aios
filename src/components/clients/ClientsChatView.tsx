@@ -25,6 +25,7 @@ import { AttachmentsField } from "@/components/forms/AttachmentsField";
 import { useFolderLinksAndAttachments } from "@/hooks/useFolderLinksAndAttachments";
 import { ClientMeetingTab } from "@/components/clients/ClientMeetingTab";
 import { CRMSettingsSection } from "@/components/clients/CRMSettingsSection";
+import { ChangeAgencyDialog } from "@/components/chat/ChangeAgencyDialog";
 import AddTaskForm from "@/components/forms/AddTaskForm";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -74,6 +75,7 @@ export function ClientsChatView({
   const [selectedClientIds, setSelectedClientIds] = useState<Set<string>>(new Set());
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [callDialogOpen, setCallDialogOpen] = useState(false);
+  const [changeAgencyOpen, setChangeAgencyOpen] = useState(false);
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
 
@@ -1075,6 +1077,19 @@ export function ClientsChatView({
           phoneNumber={selectedClient.phone}
           contactName={selectedClient.name || "לקוח"}
           clientId={selectedClient.id}
+        />
+      )}
+
+      {/* Change Agency dialog */}
+      {selectedClient && (
+        <ChangeAgencyDialog
+          open={changeAgencyOpen}
+          onOpenChange={setChangeAgencyOpen}
+          contactId={selectedClient.id}
+          contactType="client"
+          currentAgencyId={selectedClient.agency_id}
+          contactName={selectedClient.name}
+          onSuccess={() => queryClient.invalidateQueries({ queryKey: ["clients"] })}
         />
       )}
     </div>

@@ -974,6 +974,7 @@ export default function Clients() {
                 onClearSelection={() => setSelectedClientIds([])}
                 onSelectAll={() => setSelectedClientIds((visibleClients || []).map(c => c.id))}
                 totalCount={visibleClients?.length || 0}
+                tenantId={tenantId}
               />
             </div>
           )}

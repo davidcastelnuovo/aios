@@ -36,9 +36,42 @@ export function ClientsMultiSelectToolbar({
   onClearSelection,
   onSelectAll,
   totalCount,
+  tenantId,
 }: ClientsMultiSelectToolbarProps) {
   const queryClient = useQueryClient();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  const { data: agencies = [] } = useQuery({
+    queryKey: ["agencies-for-bulk", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from("agencies")
+        .select("id, name")
+        .eq("tenant_id", tenantId)
+        .order("name");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenantId,
+  });
+
+  const bulkChangeAgencyMutation = useMutation({
+    mutationFn: async (agencyId: string) => {
+      const { error } = await supabase
+        .from("clients")
+        .update({ agency_id: agencyId })
+        .in("id", selectedIds);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      queryClient.invalidateQueries({ queryKey: ["client-onboarding"] });
+      toast.success(`הסוכנות עודכנה ל-${selectedIds.length} לקוחות`);
+      onClearSelection();
+    },
+    onError: () => toast.error("שגיאה בעדכון הסוכנות"),
+  });
 
   const bulkUpdateStatusMutation = useMutation({
     mutationFn: async (status: "active" | "onboarding" | "paused" | "ended") => {
