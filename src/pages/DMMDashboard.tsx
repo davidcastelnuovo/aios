@@ -78,6 +78,7 @@ interface ClientRow {
   performanceChangePct: number | null;
   healthScore: number;
   overallStatus: OverallStatus;
+  effectiveStatus: OverallStatus;
   flags: FlagKey[];
 }
 
@@ -143,6 +144,7 @@ export default function DMMDashboard() {
   const [filterStatus, setFilterStatus] = useState<"all" | OverallStatus>("all");
   const [filterTier, setFilterTier] = useState<"all" | "A" | "B" | "C">("all");
   const [filterService, setFilterService] = useState<"all" | "ppc_google" | "ppc_meta" | "seo" | "social" | "full_social" | "social_meta" | "automation">("all");
+  const [editingClient, setEditingClient] = useState<ClientRow | null>(null);
 
   // Navigate to the client module with the selected client pre-opened
   function openClientCard(clientId: string, tab: "updates" | "details" = "updates") {
