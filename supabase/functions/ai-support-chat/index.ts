@@ -1608,7 +1608,7 @@ const tools = [
     type: 'function',
     function: {
       name: 'create_task',
-      description: 'יצירת משימה חדשה במערכת. כשמגדירים תאריך, המשימה מסונכרנת אוטומטית ליומן Google.',
+      description: 'יצירת משימה לצוות (קמפיינרים/אנשי צוות). השתמש בכלי הזה רק כשרוצים ליצור משימה לאדם אחר בצוות. אם המשימה היא לכרמן עצמה — השתמש ב-create_agent_task במקום! כשמגדירים תאריך, המשימה מסונכרנת אוטומטית ליומן Google.',
       parameters: {
         type: 'object',
         properties: {
@@ -1618,6 +1618,26 @@ const tools = [
           due_date: { type: 'string', format: 'date', description: 'תאריך יעד עתידי בפורמט YYYY-MM-DD (אלא אם המשתמש ביקש מפורשות תאריך עבר)' },
           due_time: { type: 'string', description: 'שעת יעד בפורמט HH:MM (לדוגמה: 09:00, 14:30). אם לא צוין, ברירת מחדל 09:00' },
           notes: { type: 'string', description: 'הערות' },
+        },
+        required: ['title'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_agent_task',
+      description: 'יצירת משימה לכרמן עצמה (ניהול משימות סוכנים). השתמש בכלי הזה כשהמשתמש מבקש מכרמן ליצור משימה לעצמה, משימה חוזרת, תזכורת, או סריקה תקופתית. המשימה תופיע בלוח "ניהול משימות סוכנים" ולא במשימות הצוות.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'כותרת המשימה' },
+          description: { type: 'string', description: 'תיאור מפורט של המשימה' },
+          priority: { type: 'integer', description: 'עדיפות 1-10 (ברירת מחדל 5)', minimum: 1, maximum: 10 },
+          schedule_type: { type: 'string', enum: ['once', 'daily', 'weekly'], description: 'סוג תזמון: once=פעם אחת, daily=יומי, weekly=שבועי' },
+          scheduled_at: { type: 'string', description: 'תאריך ושעה לביצוע (ISO format)' },
+          cron_expression: { type: 'string', description: 'ביטוי CRON למשימות חוזרות (לדוגמה: 0 9 * * * = כל יום ב-9:00)' },
+          task_skills: { type: 'array', items: { type: 'string' }, description: 'רשימת שמות סקילים להפעלה בעת ביצוע המשימה' },
         },
         required: ['title'],
       },
