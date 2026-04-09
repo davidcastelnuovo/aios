@@ -1,47 +1,45 @@
 
 
-## תוכנית: שיפורי דשבורד CRM — ספירת סטטוסים, עריכה ידנית, ושינוי שמות
+## תוכנית: איחוד סטטוסי Mood ו-Communication Status
 
-### הבעיות
-1. **ספירת "לתשומת לב" שגויה** — לקוח עם flag "רגיש" מקבל ציון 80 (100-20) שנחשב "ירוק". צריך שהנוכחות של flags מסוימים (sensitive, complaint) תשפיע על הספירה בכרטיסי הסיכום גם אם הציון עצמו ירוק.
-2. **אין אפשרות לעריכה ידנית** — הציון, הסטטוס וה-Flags ניתנים לעדכון רק דרך כרמן. צריך כפתור עריכה ישירה בטבלה.
-3. **שם עמודה** — "תקשורת" צריך להיקרא "בדיקת דופק" ולהציג תאריך אחרון.
+### הבעיה
+יש שני סטי סטטוסים שונים שחופפים חלקית:
 
-### פתרון
+```text
+Mood (בצ'אט/כרטיס לקוח)         Communication (בטאב עדכונים)
+──────────────────────────       ──────────────────────────
+😊 מבסוט (happy)                 תקין (normal)
+😐 מתנדנד (wavering)             רגיש (sensitive)
+😟 סכנת נטישה (churn_risk)       תלונה (complaint)
+😔 לא מתקדם (not_progressing)    — אין מקביל —
+```
 
-**1. תיקון ספירת סיכום — לוגיקה חדשה**
+כשמעדכנים communication status, המערכת ממפה אותו ל-mood — אבל הם מוצגים בשני מקומות עם שמות שונים וללא עקביות.
 
-במקום לסמוך רק על `overallStatus` מהציון המספרי, הסיכום ייקח בחשבון גם flags:
-- לקוח עם flag `sensitive` / `no_communication_30d` / `seo_stable` → נספר כ-"לתשומת לב" (צהוב) גם אם הציון ≥80
-- לקוח עם flag `complaint` / `performance_sharp_drop` / `drop_no_action` → נספר כ-"דורש טיפול" (אדום) גם אם הציון ≥60
+### הפתרון
 
-שינוי ב-`DMMDashboard.tsx` ו-`AgencyDashboardContent.tsx`: הוספת פונקציית `getEffectiveStatus()` שמחזירה את הסטטוס האפקטיבי (worst of score-status and flag-status).
+**איחוד לסט אחד** — שמירה על ערכי ה-mood הקיימים בבסיס הנתונים (`happy`, `wavering`, `churn_risk`, `not_progressing`) כערכים הקנוניים, ושינוי ה-UI בכל המקומות להציג את אותם שמות ואימוג'ים:
 
-**2. עריכה ידנית של ציון, סטטוס ו-Flags**
+| ערך DB | תצוגה |
+|--------|--------|
+| `happy` | 😊 מבסוט / תקין |
+| `wavering` | 😐 מתנדנד / רגיש |
+| `churn_risk` | 😟 סכנת נטישה / תלונה |
+| `not_progressing` | 😔 לא מתקדם |
 
-הוספת דיאלוג `ManualHealthEditDialog` שיאפשר:
-- עריכת ציון (0-100) עם slider או input
-- בחירת Flags ידנית (multi-select checkboxes)
-- עדכון `communication_status` (תקין/רגיש/תלונה)
-- שמירה ישירה לטבלת `clients` (שדות `health_score`, `overall_status`, `active_flags`, `mood_status`)
+### שינויים
 
-כפתור עריכה (עיפרון) בעמודת "פעולות" בכל שורה — גם ב-`DMMDashboard.tsx` וגם ב-`AgencyDashboardContent.tsx`.
+1. **`ClientUpdatesTab.tsx`** — החלפת `COMM_STATUS_OPTIONS` (normal/sensitive/complaint) בערכי mood ישירים (happy/wavering/churn_risk/not_progressing). הסרת `COMM_TO_MOOD` mapping — שמירה ישירה של `mood_status` בלי תרגום. שינוי הכותרת מ-"עדכון מצב תקשורת" ל-"עדכון מצב לקוח"
 
-**3. שינוי שם "תקשורת" → "בדיקת דופק"**
+2. **`ClientsChatView.tsx`** — הדרופדאון כבר עובד עם mood values — ללא שינוי נדרש
 
-- שינוי כותרת העמודה בשני הקבצים
-- שינוי tooltip מ-"עדכון תקשורת" ל-"בדיקת דופק"
-- הצגת תאריך הבדיקה האחרונה (מ-`communication_logs`) עם תיאור "היום" / "לפני X ימים"
+3. **`ManualHealthEditDialog.tsx`** — כבר עובד עם mood values — לוודא עקביות בשמות
+
+4. **`Clients.tsx`** — הדרופדאון בטבלה ובעריכה כבר עובד עם mood — ללא שינוי
+
+5. **`communication_logs` table** — שדה `status` ישמור mood value ישירות (`happy`/`wavering`/`churn_risk`/`not_progressing`) במקום `normal`/`sensitive`/`complaint`
 
 ### קבצים שישתנו
-1. `src/pages/DMMDashboard.tsx` — ספירת סיכום, שם עמודה, כפתור עריכה
-2. `src/components/dynamic-tables/AgencyDashboardContent.tsx` — אותם שינויים
-3. `src/components/clients/ManualHealthEditDialog.tsx` — **קובץ חדש** — דיאלוג עריכה ידנית
-4. `src/lib/healthScore.ts` — הוספת פונקציית `getEffectiveStatus()` + הוספת `FLAG_SEVERITY` mapping
-
-### שלבי ביצוע
-1. הוספת `getEffectiveStatus()` ל-`healthScore.ts` — מיפוי flags לרמות חומרה
-2. יצירת `ManualHealthEditDialog` — דיאלוג עם שדות ציון, flags, וסטטוס תקשורת
-3. עדכון `DMMDashboard.tsx` — ספירת סיכום חדשה, שם עמודה, כפתור עריכה
-4. עדכון `AgencyDashboardContent.tsx` — אותם שינויים
+- `src/components/clients/ClientUpdatesTab.tsx` — עיקר השינוי
+- `src/lib/healthScore.ts` — עדכון `COMMUNICATION_STATUS_LABELS` לתאימות (או הסרה אם לא נדרש)
 
