@@ -984,19 +984,69 @@ export function ClientsChatView({
                     )}
                   </div>
 
-                  {/* Team */}
-                  {selectedClient.client_team && selectedClient.client_team.length > 0 && (
-                    <div className="bg-card border border-border/60 rounded-xl p-4 text-right shadow-sm">
-                      <h3 className="font-semibold text-sm mb-2">קמפיינרים משויכים</h3>
-                      <div className="flex flex-wrap gap-2">
-                        {selectedClient.client_team.map((ct: any, i: number) => (
-                          <Badge key={i} variant="secondary">
-                            {ct?.campaigners?.full_name ?? "—"}
-                          </Badge>
-                        ))}
-                      </div>
+                  {/* Team - editable */}
+                  <div className="bg-card border border-border/60 rounded-xl p-4 text-right shadow-sm">
+                    <h3 className="font-semibold text-sm mb-2 flex items-center gap-2 justify-end">
+                      קמפיינרים משויכים
+                      <Users className="h-4 w-4 text-primary" />
+                    </h3>
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {selectedClient.client_team?.map((ct: any, i: number) => (
+                        <Badge key={i} variant="secondary" className="flex items-center gap-1">
+                          {ct?.campaigners?.full_name ?? "—"}
+                          <X
+                            className="h-3 w-3 cursor-pointer hover:text-destructive"
+                            onClick={async () => {
+                              const { error } = await supabase
+                                .from("client_team")
+                                .delete()
+                                .eq("client_id", selectedClient.id)
+                                .eq("campaigner_id", ct.campaigner_id);
+                              if (error) {
+                                toast.error("שגיאה בהסרת קמפיינר");
+                              } else {
+                                toast.success("הקמפיינר הוסר");
+                                queryClient.invalidateQueries({ queryKey: ["clients"] });
+                              }
+                            }}
+                          />
+                        </Badge>
+                      ))}
                     </div>
-                  )}
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" size="sm" className="h-7 text-xs">
+                          <Plus className="h-3 w-3 ml-1" />
+                          הוסף קמפיינר
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-48 p-2" align="start" dir="rtl">
+                        <div className="space-y-1 max-h-48 overflow-y-auto">
+                          {allCampaigners
+                            .filter((c: any) => !selectedClient.client_team?.some((ct: any) => ct.campaigner_id === c.id))
+                            .map((c: any) => (
+                              <div
+                                key={c.id}
+                                className="p-2 rounded-md hover:bg-muted cursor-pointer text-sm"
+                                onClick={async () => {
+                                  const { error } = await supabase
+                                    .from("client_team")
+                                    .insert({ client_id: selectedClient.id, campaigner_id: c.id });
+                                  if (error) {
+                                    toast.error("שגיאה בשיוך קמפיינר");
+                                  } else {
+                                    toast.success("הקמפיינר שויך בהצלחה");
+                                    queryClient.invalidateQueries({ queryKey: ["clients"] });
+                                  }
+                                }}
+                              >
+                                {c.full_name}
+                              </div>
+                            ))}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
 
                   {/* Notes */}
                   <div className="bg-card border border-border/60 rounded-xl p-4 text-right shadow-sm">
