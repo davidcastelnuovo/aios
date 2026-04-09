@@ -1488,35 +1488,24 @@ async function executeTool(
           return { success: true, result: { message: 'לא נמצאו טבלאות Meta Ads לסנכרון', synced: 0 } };
         }
 
-        const syncResults: any[] = [];
+        // Fire-and-forget: dispatch all sync requests in parallel without waiting
+        // This prevents timeout when syncing many tables
+        const authHeader2 = `Bearer ${userToken}`;
         for (const table of filteredTables) {
-          try {
-            const authHeader2 = `Bearer ${userToken}`;
-            // Choose the correct sync function based on integration_type
-            let syncFunctionName = 'sync-meta-ads-data';
-            if (table.integration_type === 'facebook_insights') {
-              syncFunctionName = 'sync-facebook-insights';
-            } else if (table.integration_type === 'facebook_ecommerce') {
-              syncFunctionName = 'sync-facebook-ecommerce';
-            }
-            const res = await fetch(`${SUPABASE_URL}/functions/v1/${syncFunctionName}`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': authHeader2 },
-              body: JSON.stringify({ table_id: table.id }),
-            });
-            const result = await res.json();
-            if (res.ok) {
-              syncResults.push({ table_id: table.id, table_name: table.name, success: true, records_synced: result.records_synced || result.records || 0 });
-            } else {
-              syncResults.push({ table_id: table.id, table_name: table.name, success: false, error: result.error || 'Unknown error' });
-            }
-          } catch (e: any) {
-            syncResults.push({ table_id: table.id, table_name: table.name, success: false, error: e.message });
+          let syncFunctionName = 'sync-meta-ads-data';
+          if (table.integration_type === 'facebook_insights') {
+            syncFunctionName = 'sync-facebook-insights';
+          } else if (table.integration_type === 'facebook_ecommerce') {
+            syncFunctionName = 'sync-facebook-ecommerce';
           }
+          // Fire and forget - don't await
+          fetch(`${SUPABASE_URL}/functions/v1/${syncFunctionName}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': authHeader2 },
+            body: JSON.stringify({ table_id: table.id }),
+          }).catch((e: any) => console.error(`Sync failed for table ${table.name}:`, e.message));
         }
 
-        const successCount = syncResults.filter((r: any) => r.success).length;
-        const totalRecords = syncResults.reduce((s: number, r: any) => s + (r.records_synced || 0), 0);
         modifiedEntities.add('crm_records');
         return { success: true, result: { synced_tables: successCount, total_tables: filteredTables.length, total_records: totalRecords, details: syncResults } };
       }
