@@ -308,6 +308,7 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
   const { tenantId } = useCurrentTenant();
   const [commModal, setCommModal] = useState<{ clientId: string; clientName: string } | null>(null);
   const [seoModal, setSeoModal] = useState<{ clientId: string; clientName: string } | null>(null);
+  const [editingClient, setEditingClient] = useState<any>(null);
 
   // Fetch clients for this agency — base query (id + name only, safe without migration)
   const { data: clients = [], isLoading: clientsLoading } = useQuery({
@@ -409,10 +410,12 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
         daysSinceLastCampaignTouch: null,
         seoHistory,
       });
+      const effectiveStatus = getEffectiveStatus(result);
       return {
         ...merged,
         score: result.score,
         overallStatus: result.status,
+        effectiveStatus,
         flags: result.flags,
         daysSinceComm,
         lastCommDate: latestComm?.created_at ?? null,
