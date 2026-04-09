@@ -274,7 +274,6 @@ export default function DMMDashboard() {
         .from("communication_logs")
         .select("client_id, status, created_at")
         .in("client_id", clientIds)
-        .eq("tenant_id", tenantId)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data ?? [];
