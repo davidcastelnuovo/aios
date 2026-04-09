@@ -1385,6 +1385,17 @@ async function executeTool(
 
           const { data: clientData } = await supabaseClient.from('clients').select('name').eq('id', table.client_id).single();
 
+          // Find the most recent updated_time across all campaigns for this client
+          const updatedTimes = records
+            .map((r: any) => r.data?.updated_time)
+            .filter((t: any) => t)
+            .sort()
+            .reverse();
+          const lastCampaignUpdate = updatedTimes.length > 0 ? updatedTimes[0] : null;
+          const daysSinceLastCampaignTouch = lastCampaignUpdate
+            ? Math.floor((now.getTime() - new Date(lastCampaignUpdate).getTime()) / (1000 * 60 * 60 * 24))
+            : null;
+
           campResults.push({
             client_id: table.client_id,
             client_name: clientData?.name || table.name,
@@ -1398,6 +1409,8 @@ async function executeTool(
             cpl_change_pct: cplChangePct ? Math.round(cplChangePct * 10) / 10 : null,
             records_7d: last7d.length,
             records_30d: last30d.length,
+            last_campaign_update: lastCampaignUpdate,
+            days_since_last_campaign_touch: daysSinceLastCampaignTouch,
             alert: spendChangePct !== null && spendChangePct > 15 ? '🔴 התייקרות' : (cplChangePct !== null && cplChangePct > 20 ? '🟡 עלייה בעלות לליד' : '🟢 תקין'),
           });
         }
