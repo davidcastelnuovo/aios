@@ -77,6 +77,7 @@ ${memoryContext}
 21. **ניתוח קמפיינים** - ניתוח ביצועי קמפיינים (השוואת 7 ימים מול 30 יום), זיהוי התייקרויות וירידות ביצועים
 22. **עדכון בריאות לקוח** - עדכון mood_status בדשבורד CRM, יצירת התראות ב-communication_logs
 23. **סקילים (Skills)** - שמירת תהליכי עבודה כקיצורי דרך, הפעלת סקילים שמורים, ניהול ספריית מיומנויות
+24. **סנכרון Meta Ads** - סנכרון נתוני פייסבוק/מטה מטבלאות CRM, רענון נתוני קמפיינים
 
 ${skillsContext ? `🎯 **סקילים שמורים (Skills) — קיצורי דרך לתהליכים:**
 ${skillsContext}
@@ -1456,6 +1457,63 @@ async function executeTool(
         return { success: true, result: { client_id: toolCall.args.client_id, mood_status: toolCall.args.mood_status, communication_status: commStatus } };
       }
 
+      case 'sync_meta_ads': {
+        // Find meta_ads CRM tables
+        let query = supabaseClient
+          .from('crm_tables')
+          .select('id, name, client_id, integration_type, integration_settings')
+          .eq('tenant_id', tenantId)
+          .eq('integration_type', 'meta_ads');
+
+        if (toolCall.args.client_id) {
+          query = query.eq('client_id', toolCall.args.client_id);
+        }
+
+        const { data: metaTables, error: mtErr } = await query;
+        if (mtErr) throw mtErr;
+
+        // If client_name provided, find matching client first
+        let filteredTables = metaTables || [];
+        if (toolCall.args.client_name && !toolCall.args.client_id) {
+          const { data: matchingClients } = await supabaseClient
+            .from('clients')
+            .select('id')
+            .eq('tenant_id', tenantId)
+            .ilike('name', `%${toolCall.args.client_name}%`);
+          const clientIds = (matchingClients || []).map((c: any) => c.id);
+          filteredTables = filteredTables.filter((t: any) => clientIds.includes(t.client_id));
+        }
+
+        if (filteredTables.length === 0) {
+          return { success: true, result: { message: 'לא נמצאו טבלאות Meta Ads לסנכרון', synced: 0 } };
+        }
+
+        const syncResults: any[] = [];
+        for (const table of filteredTables) {
+          try {
+            const authHeader2 = `Bearer ${userToken}`;
+            const res = await fetch(`${SUPABASE_URL}/functions/v1/sync-meta-ads-data`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': authHeader2 },
+              body: JSON.stringify({ table_id: table.id }),
+            });
+            const result = await res.json();
+            if (res.ok) {
+              syncResults.push({ table_id: table.id, table_name: table.name, success: true, records_synced: result.records_synced || 0 });
+            } else {
+              syncResults.push({ table_id: table.id, table_name: table.name, success: false, error: result.error || 'Unknown error' });
+            }
+          } catch (e: any) {
+            syncResults.push({ table_id: table.id, table_name: table.name, success: false, error: e.message });
+          }
+        }
+
+        const successCount = syncResults.filter((r: any) => r.success).length;
+        const totalRecords = syncResults.reduce((s: number, r: any) => s + (r.records_synced || 0), 0);
+        modifiedEntities.add('crm_records');
+        return { success: true, result: { synced_tables: successCount, total_tables: filteredTables.length, total_records: totalRecords, details: syncResults } };
+      }
+
       // === SKILLS TOOLS ===
       case 'save_skill': {
         const { name, description, steps, trigger_phrases } = toolCall.args;
@@ -1956,6 +2014,7 @@ const tools = [
   // === GROUP 5: CAMPAIGN ANALYSIS & HEALTH TOOLS ===
   { type: 'function', function: { name: 'analyze_campaign_performance', description: 'ניתוח ביצועי קמפיינים מטבלאות CRM: משווה 7 ימים אחרונים מול 30 ימים עבור כל לקוח. מחזיר אחוזי שינוי בהוצאות, עלות לליד, ו-ROAS. השתמש בכלי הזה כדי לזהות התייקרויות וירידות ביצועים.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה לקוח ספציפי (אופציונלי — ללא = כל הלקוחות)' } } } } },
   { type: 'function', function: { name: 'update_client_health', description: 'עדכון מצב בריאות לקוח: מעדכן mood_status בטבלת clients ויוצר רשומה ב-communication_logs. השתמש בכלי הזה כדי להדליק דגל על לקוח כשמזהים בעיה (התייקרות, ירידה בביצועים). מיפוי סטטוסים: תקין=happy/normal, רגיש=wavering/sensitive, תלונה=churn_risk/complaint.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, mood_status: { type: 'string', enum: ['happy', 'wavering', 'churn_risk'], description: 'מצב הלקוח: happy=תקין (הכל בסדר), wavering=רגיש (צריך תשומת לב), churn_risk=תלונה (סיכון נטישה)' }, communication_status: { type: 'string', enum: ['normal', 'sensitive', 'complaint'], description: 'סטטוס תקשורת: normal=תקין, sensitive=רגיש, complaint=תלונה' }, note: { type: 'string', description: 'הערה/סיכום — מה הבעיה שזוהתה' } }, required: ['client_id', 'mood_status', 'note'] } } },
+  { type: 'function', function: { name: 'sync_meta_ads', description: 'סנכרון נתוני Meta Ads (פייסבוק) מטבלאות CRM. מפעיל סנכרון מול Meta Ads API עבור לקוח ספציפי או כל הלקוחות שיש להם טבלת meta_ads. השתמש בכלי הזה כשהמשתמש מבקש לסנכרן/לרענן נתוני פייסבוק.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה לקוח ספציפי (אופציונלי — ללא = כל הטבלאות)' }, client_name: { type: 'string', description: 'שם לקוח לחיפוש (אופציונלי)' } } } } },
   // === GROUP 6: SKILLS TOOLS ===
   { type: 'function', function: { name: 'save_skill', description: 'שמירת סקיל (מיומנות) חדש — תהליך עבודה שלם שכרמן למדה. כשהמשתמש אומר "תשמרי סקיל" / "שמרי את זה כ-skill", סכם את התהליך שבוצע ושמור אותו.', parameters: { type: 'object', properties: { name: { type: 'string', description: 'שם קצר לסקיל (למשל "דוחות", "עדכון דגלים")' }, description: { type: 'string', description: 'תיאור קצר מה הסקיל עושה' }, steps: { type: 'string', description: 'הוראות מפורטות צעד-אחר-צעד שכרמן תבצע כשמפעילים את הסקיל. כל שורה = צעד אחד.' }, trigger_phrases: { type: 'array', items: { type: 'string' }, description: 'מילות מפתח שיפעילו את הסקיל (למשל ["דוחות", "ביצועים"])' } }, required: ['name', 'description', 'steps'] } } },
   { type: 'function', function: { name: 'list_skills', description: 'הצגת רשימת כל הסקילים (מיומנויות) השמורים של המשתמש', parameters: { type: 'object', properties: {} } } },
