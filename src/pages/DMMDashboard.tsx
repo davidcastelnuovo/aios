@@ -749,6 +749,20 @@ export default function DMMDashboard() {
         </CardContent>
       </Card>
 
+      {/* Manual Health Edit Dialog */}
+      {editingClient && (
+        <ManualHealthEditDialog
+          open={!!editingClient}
+          onOpenChange={(open) => { if (!open) setEditingClient(null); }}
+          clientId={editingClient.id}
+          clientName={editingClient.name}
+          currentScore={editingClient.healthScore}
+          currentFlags={editingClient.flags}
+          currentMood={editingClient.mood_status}
+          onSaved={() => refetch()}
+        />
+      )}
+
     </div>
   );
 }
