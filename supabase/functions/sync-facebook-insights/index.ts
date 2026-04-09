@@ -245,6 +245,11 @@ Deno.serve(async (req) => {
       'offsite_conversion.fb_pixel_lead', // Landing page leads (standard pixel event)
       'onsite_conversion.lead_grouped', // On-site leads
       'app_custom_event.fb_mobile_lead', // App leads
+      // WhatsApp / Messaging conversions
+      'onsite_conversion.messaging_conversation_started_7d',
+      'messaging_conversation_started_7d',
+      'onsite_conversion.messaging_first_reply',
+      'messaging_first_reply',
     ];
     const purchaseActionTypes = ['purchase', 'omni_purchase', 'offsite_conversion.fb_pixel_purchase'];
     const addToCartActionTypes = ['add_to_cart', 'offsite_conversion.fb_pixel_add_to_cart'];
