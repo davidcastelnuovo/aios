@@ -1,33 +1,31 @@
 
 
-## הבעיה: כלי עדכון דשבורד CRM חסרים ב-AIOS
+## תוכנית: יצירת טבלאות Facebook דינמיות לכל לקוחות DMM עם מזהה מטא
 
-כרמן דרך ממשק ה-AIOS (`ai-support-chat`) **לא מכילה** את הכלים הבאים שקיימים רק ב-`run-ai-agent`:
-- `analyze_campaign_performance` — ניתוח ביצועי קמפיינים (השוואת 7 ימים מול 30 יום)
-- `update_client_health` — עדכון mood_status, health score ויצירת רשומת communication_logs
+### הבעיה
+ב-DMM יש כ-40 לקוחות עם `meta_ads_account_id` מוגדר, אבל אין אף טבלה דינמית (`crm_tables`) מסוג `facebook_insights` שמשויכת אליהם.
 
-לכן כרמן יכולה לקרוא נתונים מטבלאות דינמיות (`get_table_data`) ולהציג דוח, אבל **לא יכולה לעדכן** את הדשבורד.
+### הפתרון
+יצירת סקריפט חד-פעמי (Edge Function invocation או ישירות בDB) שיעבור על כל לקוחות DMM עם `meta_ads_account_id`, וייצור לכל אחד טבלת `crm_tables` עם:
+- `integration_type: 'facebook_insights'`
+- `integration_settings` עם ה-`ad_account_id` של הלקוח
+- שיוך ל-`agency_id` ו-`client_id` הנכונים
+- שם אוטומטי: `"Facebook - [שם לקוח]"`
 
-## הפתרון
+### שלבים
 
-הוספת שני הכלים ל-`supabase/functions/ai-support-chat/index.ts`:
+1. **יצירת סקריפט Edge Function חד-פעמי** (`bulk-create-facebook-tables`)
+   - שולף את כל הלקוחות ב-DMM tenant שיש להם `meta_ads_account_id` ואין להם עדיין טבלת `facebook_insights`
+   - יוצר `crm_tables` record לכל אחד דרך ה-Edge Function `crm-tables` (או ישירות INSERT)
+   - מפעיל סנכרון ראשוני (`sync-facebook-insights`) לכל טבלה שנוצרה
 
-### 1. הוספת כלי `analyze_campaign_performance` (tool definition + handler)
-- **הגדרת הכלי**: עם פרמטר אופציונלי `client_id`
-- **Handler**: העתקת הלוגיקה מ-`run-ai-agent` — שליפת CRM tables מסוג facebook, השוואת ממוצעי 7 ימים מול 30 יום (spend, CPL, ROAS), חישוב אחוזי שינוי
-
-### 2. הוספת כלי `update_client_health` (tool definition + handler)
-- **הגדרת הכלי**: עם `client_id`, `mood_status` (happy/wavering/churn_risk), `communication_status`, `note`
-- **Handler**: העתקת הלוגיקה מ-`run-ai-agent`:
-  1. עדכון `mood_status` בטבלת `clients`
-  2. יצירת רשומה ב-`communication_logs` עם `interaction_type: system_alert`
-  3. יצירת רשומה ב-`client_updates` עם prefix `[עדכון אוטומטי - כרמן]`
-  4. שימוש ב-owner כ-fallback user ID
-
-### 3. עדכון System Prompt
-- הוספת סעיפים 21-22 לרשימת הפעולות: "ניתוח קמפיינים" ו-"עדכון בריאות לקוח בדשבורד CRM"
+2. **הפעלת הסקריפט** — קריאה חד-פעמית שתיצור את כל הטבלאות
 
 ### פרטים טכניים
-- **קובץ**: `supabase/functions/ai-support-chat/index.ts`
-- הלוגיקה תועתק מ-`run-ai-agent/index.ts` (שורות 323-457) עם התאמות ל-context של ai-support-chat (userId מהאימות, tenantId מה-resolution הקיים)
+- **Tenant ID**: `6ad8f321-25db-4a04-8e44-e57a7c8961b2`
+- **סוכנויות**: DMM-MC (`38cf0e62...`) ו-DMM-LTD (`25b9754c...`)
+- **כ-40 לקוחות** צריכים טבלה חדשה
+- כל טבלה תכיל `slug` ייחודי מבוסס שם + timestamp
+- ה-`category` יהיה `'Facebook Insights'`
+- ה-`date_range` ברירת מחדל: `'last_30_days'`
 
