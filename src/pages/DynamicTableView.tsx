@@ -107,6 +107,7 @@ export default function DynamicTableView() {
   const [selectedGoogleAccount, setSelectedGoogleAccount] = useState<string>("");
   const [showAlertsDialog, setShowAlertsDialog] = useState(false);
   const [showMakeWebhookDialog, setShowMakeWebhookDialog] = useState(false);
+  const [showDeleteTableDialog, setShowDeleteTableDialog] = useState(false);
   const [campaignSearch, setCampaignSearch] = useState("");
   const [isCloning, setIsCloning] = useState(false);
   const cellInputRef = useRef<HTMLInputElement>(null);
@@ -586,6 +587,27 @@ export default function DynamicTableView() {
     },
     onError: (error: any) => {
       toast.error('שגיאה בשליחה ל-Webhook: ' + error.message);
+    },
+  });
+
+  const deleteTableMutation = useMutation({
+    mutationFn: async () => {
+      if (!table?.id) throw new Error('No table');
+      // Delete records first
+      await supabase.from('crm_records').delete().eq('table_id', table.id);
+      // Delete fields
+      await supabase.from('crm_fields').delete().eq('table_id', table.id);
+      // Delete the table
+      const { error } = await supabase.from('crm_tables').delete().eq('id', table.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('הטבלה נמחקה בהצלחה');
+      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      navigate(buildPath('/dynamic-tables'));
+    },
+    onError: (error: any) => {
+      toast.error('שגיאה במחיקת טבלה: ' + error.message);
     },
   });
 
@@ -1634,11 +1656,28 @@ export default function DynamicTableView() {
         
         {/* Controls Row */}
         <div className="flex flex-col md:flex-row items-center md:justify-between gap-3">
-          <Button variant="ghost" size="sm" onClick={() => navigate(buildPath('/dynamic-tables'))} className="w-full md:w-auto">
-            <ArrowRight className="ml-2 h-4 w-4" />
-            חזור
-          </Button>
-        
+          <div className="flex items-center gap-2 w-full md:w-auto">
+            <Button variant="ghost" size="sm" onClick={() => navigate(buildPath('/dynamic-tables'))} className="flex-1 md:flex-none">
+              <ArrowRight className="ml-2 h-4 w-4" />
+              חזור
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem 
+                  className="text-destructive focus:text-destructive"
+                  onClick={() => setShowDeleteTableDialog(true)}
+                >
+                  <Trash2 className="ml-2 h-4 w-4" />
+                  מחק טבלה
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
           {/* Facebook Insights Sync Controls */}
           {hasFacebook && (
             <div className="flex items-center gap-2 w-full md:w-auto justify-center">
@@ -2772,6 +2811,34 @@ export default function DynamicTableView() {
             }}
             isSyncing={syncMakeGoogleAdsMutation.isPending}
           />
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Table Confirmation Dialog */}
+      <Dialog open={showDeleteTableDialog} onOpenChange={setShowDeleteTableDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>מחיקת טבלה</DialogTitle>
+            <DialogDescription>
+              האם אתה בטוח שברצונך למחוק את הטבלה "{table?.name}"? פעולה זו תמחק את כל הנתונים, העמודות והרשומות ולא ניתן לשחזר אותה.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={() => setShowDeleteTableDialog(false)}>
+              ביטול
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={() => deleteTableMutation.mutate()}
+              disabled={deleteTableMutation.isPending}
+            >
+              {deleteTableMutation.isPending ? (
+                <><Loader2 className="ml-2 h-4 w-4 animate-spin" />מוחק...</>
+              ) : (
+                <><Trash2 className="ml-2 h-4 w-4" />מחק טבלה</>
+              )}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
