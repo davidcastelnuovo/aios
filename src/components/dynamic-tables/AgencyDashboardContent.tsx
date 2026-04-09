@@ -797,7 +797,7 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
             {/* Summary */}
             <div className="grid grid-cols-3 gap-3">
               {(['red', 'yellow', 'green'] as OverallStatus[]).map((s) => {
-                const count = crmRows.filter((r: any) => r.overallStatus === s).length;
+                const count = crmRows.filter((r: any) => r.effectiveStatus === s).length;
                 const cfg = OVERALL_STATUS_CONFIG[s];
                 return (
                   <Card key={s} className="p-4 flex items-center gap-3">
@@ -821,8 +821,8 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
                       <TableHead className="text-right">לקוח</TableHead>
                       <TableHead className="text-right w-16">ציון</TableHead>
                       <TableHead className="text-right">Flags</TableHead>
-                      <TableHead className="text-right">תקשורת</TableHead>
-                      <TableHead className="text-right">פעולות</TableHead>
+                       <TableHead className="text-right">בדיקת דופק</TableHead>
+                       <TableHead className="text-right">פעולות</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
