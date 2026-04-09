@@ -610,6 +610,8 @@ export default function DynamicTableView() {
       toast.error('שגיאה במחיקת טבלה: ' + error.message);
     },
   });
+
+  const syncFacebookMutation = useMutation({
     mutationFn: async () => {
       if (!table?.id) throw new Error('No table');
       
