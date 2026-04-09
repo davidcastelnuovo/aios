@@ -1507,7 +1507,7 @@ async function executeTool(
         }
 
         modifiedEntities.add('crm_records');
-        return { success: true, result: { synced_tables: successCount, total_tables: filteredTables.length, total_records: totalRecords, details: syncResults } };
+        return { success: true, result: { message: `הסנכרון הופעל ברקע עבור ${filteredTables.length} טבלאות. הנתונים יתעדכנו תוך מספר דקות. אתה יכול לצאת מהצ'אט - הסנכרון ימשיך לעבוד.`, total_tables: filteredTables.length, table_names: filteredTables.map((t: any) => t.name) } };
       }
 
       // === SKILLS TOOLS ===
