@@ -222,3 +222,23 @@ export const TIER_COLORS: Record<string, string> = {
   B: 'bg-blue-100 text-blue-800 border-blue-300',
   C: 'bg-gray-100 text-gray-700 border-gray-300',
 };
+
+// ─── Effective status (flag-aware) ────────────────────────────────────────────
+
+const RED_FLAGS: FlagKey[] = ['complaint', 'performance_sharp_drop', 'drop_no_action'];
+const YELLOW_FLAGS: FlagKey[] = ['sensitive', 'no_communication_30d', 'no_communication_45d', 'seo_stable', 'performance_medium_drop', 'performance_significant_drop', 'no_touch_campaign', 'seo_no_up_2months'];
+
+/**
+ * Returns the effective status considering both the numeric score AND the active flags.
+ * A client with flag "sensitive" will be at least "yellow" even if score >= 80.
+ */
+export function getEffectiveStatus(result: HealthResult): OverallStatus {
+  let status = result.status;
+  for (const flag of result.flags) {
+    if (RED_FLAGS.includes(flag)) return 'red';
+    if (YELLOW_FLAGS.includes(flag) && status === 'green') {
+      status = 'yellow';
+    }
+  }
+  return status;
+}
