@@ -1656,11 +1656,28 @@ export default function DynamicTableView() {
         
         {/* Controls Row */}
         <div className="flex flex-col md:flex-row items-center md:justify-between gap-3">
-          <Button variant="ghost" size="sm" onClick={() => navigate(buildPath('/dynamic-tables'))} className="w-full md:w-auto">
-            <ArrowRight className="ml-2 h-4 w-4" />
-            חזור
-          </Button>
-        
+          <div className="flex items-center gap-2 w-full md:w-auto">
+            <Button variant="ghost" size="sm" onClick={() => navigate(buildPath('/dynamic-tables'))} className="flex-1 md:flex-none">
+              <ArrowRight className="ml-2 h-4 w-4" />
+              חזור
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem 
+                  className="text-destructive focus:text-destructive"
+                  onClick={() => setShowDeleteTableDialog(true)}
+                >
+                  <Trash2 className="ml-2 h-4 w-4" />
+                  מחק טבלה
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
           {/* Facebook Insights Sync Controls */}
           {hasFacebook && (
             <div className="flex items-center gap-2 w-full md:w-auto justify-center">
