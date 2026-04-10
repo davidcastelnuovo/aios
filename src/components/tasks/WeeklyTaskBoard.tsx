@@ -1351,6 +1351,7 @@ export function WeeklyTaskBoard() {
           ) : null}
         </DragOverlay>
       </DndContext>
+      </div>
 
       {/* Task Detail Dialog */}
       <TaskDetailDialog
