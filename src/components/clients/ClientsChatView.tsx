@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import ChatViewComponent from "@/components/chat/ChatView";
 import { User, Phone, PhoneCall, Building2, Clock, Search, Mail, Globe, CheckSquare, Trash2, MessageSquare, FileText, DollarSign, X, Edit, Pencil, Check, Users, Plus, UserPlus, BarChart3, FolderOpen, Link, KeyRound, Calendar as CalendarIcon } from "lucide-react";
+import { AssignPhoneFromWhatsAppDialog } from "@/components/chat/AssignPhoneFromWhatsAppDialog";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CallDialog } from "@/components/telephony/CallDialog";
