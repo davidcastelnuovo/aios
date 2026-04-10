@@ -228,33 +228,54 @@ async function executeTool(
   try {
     switch (toolCall.name) {
       case 'create_task': {
-        const { title, client_id, priority, due_date, due_time, notes } = toolCall.args;
+        const { title, client_id, priority, due_date, due_time, notes, campaigner_id: targetCampaignerId } = toolCall.args;
         
-        const { data: profileData } = await supabaseClient
-          .from('profiles')
-          .select('campaigner_id')
-          .eq('id', userId)
-          .single();
-        
-        if (!profileData?.campaigner_id) {
-          return { success: false, error: 'לא נמצא קמפיינר מקושר למשתמש שלך.' };
-        }
+        // Determine which campaigner to assign to
+        let assignCampaignerId: string;
+        let assignAgencyId: string;
 
-        const { data: campaignerAgency } = await supabaseClient
-          .from('campaigner_agencies')
-          .select('agency_id')
-          .eq('campaigner_id', profileData.campaigner_id)
-          .limit(1)
-          .single();
+        if (targetCampaignerId) {
+          // Assign to specific campaigner
+          assignCampaignerId = targetCampaignerId;
+          const { data: targetAgency } = await supabaseClient
+            .from('campaigner_agencies')
+            .select('agency_id')
+            .eq('campaigner_id', targetCampaignerId)
+            .limit(1)
+            .single();
+          if (!targetAgency?.agency_id) {
+            return { success: false, error: 'לא נמצאה סוכנות מקושרת לקמפיינר המבוקש.' };
+          }
+          assignAgencyId = targetAgency.agency_id;
+        } else {
+          // Default: assign to current user
+          const { data: profileData } = await supabaseClient
+            .from('profiles')
+            .select('campaigner_id')
+            .eq('id', userId)
+            .single();
+          
+          if (!profileData?.campaigner_id) {
+            return { success: false, error: 'לא נמצא קמפיינר מקושר למשתמש שלך.' };
+          }
+          assignCampaignerId = profileData.campaigner_id;
 
-        if (!campaignerAgency?.agency_id) {
-          return { success: false, error: 'לא נמצאה סוכנות מקושרת לקמפיינר שלך.' };
+          const { data: campaignerAgency } = await supabaseClient
+            .from('campaigner_agencies')
+            .select('agency_id')
+            .eq('campaigner_id', assignCampaignerId)
+            .limit(1)
+            .single();
+          if (!campaignerAgency?.agency_id) {
+            return { success: false, error: 'לא נמצאה סוכנות מקושרת לקמפיינר שלך.' };
+          }
+          assignAgencyId = campaignerAgency.agency_id;
         }
 
         const taskData: any = {
           title,
-          agency_id: campaignerAgency.agency_id,
-          campaigner_id: profileData.campaigner_id,
+          agency_id: assignAgencyId,
+          campaigner_id: assignCampaignerId,
           tenant_id: tenantId,
           priority: priority || 5,
           status: 'open',
@@ -1774,6 +1795,7 @@ const tools = [
         properties: {
           title: { type: 'string', description: 'כותרת המשימה' },
           client_id: { type: 'string', description: 'מזהה הלקוח (UUID, אופציונלי)' },
+          campaigner_id: { type: 'string', description: 'מזהה הקמפיינר לשיוך המשימה (UUID). אם לא צוין, המשימה תשויך למשתמש הנוכחי. **חשוב**: כשמבקשים לשייך משימה לאדם ספציפי (לדוגמה "שימי משימה לדוד"), חפשי את ה-campaigner_id שלו ברשימת הקמפיינרים.' },
           priority: { type: 'integer', description: 'עדיפות 1-10', minimum: 1, maximum: 10 },
           due_date: { type: 'string', format: 'date', description: 'תאריך יעד עתידי בפורמט YYYY-MM-DD (אלא אם המשתמש ביקש מפורשות תאריך עבר)' },
           due_time: { type: 'string', description: 'שעת יעד בפורמט HH:MM (לדוגמה: 09:00, 14:30). אם לא צוין, ברירת מחדל 09:00' },
