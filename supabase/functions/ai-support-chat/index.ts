@@ -382,7 +382,8 @@ async function executeTool(
           .limit(1)
           .maybeSingle();
 
-        if (!agentData?.id) {
+        let agentId = agentData?.id;
+        if (!agentId) {
           // Fallback: get any active agent
           const { data: fallbackAgent } = await supabaseClient
             .from('ai_agents')
@@ -394,11 +395,11 @@ async function executeTool(
           if (!fallbackAgent?.id) {
             return { success: false, error: 'לא נמצא סוכן AI בארגון.' };
           }
-          agentData.id = fallbackAgent.id;
+          agentId = fallbackAgent.id;
         }
 
         const agentTaskData: any = {
-          agent_id: agentData.id,
+          agent_id: agentId,
           tenant_id: tenantId,
           title,
           description: description || null,
@@ -1831,7 +1832,7 @@ const tools = [
         type: 'object',
         properties: {
           task_id: { type: 'string', description: 'מזהה המשימה (UUID)' },
-          status: { type: 'string', enum: ['open', 'in_progress', 'completed', 'cancelled'], description: 'סטטוס חדש' },
+          status: { type: 'string', enum: ['open', 'in_progress', 'done'], description: 'סטטוס חדש. השתמשי ב-done במקום completed.' },
         },
         required: ['task_id', 'status'],
       },
