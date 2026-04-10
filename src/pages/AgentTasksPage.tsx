@@ -18,7 +18,7 @@ import {
   Plus, Play, CheckCircle2, XCircle, Clock, Loader2, ArrowRight,
   Image, ExternalLink, Calendar, Repeat, Zap, GitFork, ChevronDown,
   ChevronUp, Trash2, ToggleLeft, ToggleRight, Timer, ListTodo, Target,
-  Settings, Bot, AlertTriangle, Sparkles, Heart, Pencil, RotateCcw
+  Settings, Bot, AlertTriangle, Heart, Pencil, RotateCcw
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
