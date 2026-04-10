@@ -34,6 +34,7 @@ import { CalendarEventEditDialog } from "./CalendarEventEditDialog";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
+import { useAgency } from "@/contexts/AgencyContext";
 import { useTerminology } from "@/hooks/useTerminology";
 import { toast } from "sonner";
 import confetti from "canvas-confetti";
