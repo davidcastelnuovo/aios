@@ -97,6 +97,7 @@ export function WeeklyTaskBoard() {
 
   // Fetch clients for inline selector
   const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
+  const { selectedAgency } = useAgency();
 
   const { data: clientsList = [] } = useQuery({
     queryKey: ["clients-for-task-selector", tenantId, crossTenantAgencyIds],
