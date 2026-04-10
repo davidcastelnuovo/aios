@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ChevronRight, ChevronLeft, CalendarDays, Filter, LayoutGrid, Calendar, List, Plus, RefreshCw, Users } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { DayColumn } from "./DayColumn";
@@ -1016,71 +1017,9 @@ export function WeeklyTaskBoard() {
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      {/* Header - Desktop only */}
-      <div className="hidden md:flex md:items-center md:justify-between mb-4 gap-3">
-        {/* Navigation controls */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <Button variant="outline" size="icon" onClick={goToPrev}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-          <Button variant="outline" size="icon" onClick={goToNext}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <Button variant="outline" onClick={goToToday} className="gap-2">
-            <CalendarDays className="h-4 w-4" />
-            היום
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => setFiltersDialogOpen(true)}
-            className="gap-2"
-          >
-            <Filter className="h-4 w-4" />
-            פילטרים
-            {activeFiltersCount > 0 && (
-              <Badge variant="secondary" className="h-5 w-5 p-0 justify-center">
-                {activeFiltersCount}
-              </Badge>
-            )}
-          </Button>
-          {/* Quick campaigner filter */}
-          <Select
-            value={filters.campaignerId}
-            onValueChange={(val) => setFilters((prev) => ({ ...prev, campaignerId: val }))}
-          >
-            <SelectTrigger className="w-[180px] gap-2">
-              <Users className="h-4 w-4 shrink-0" />
-              <SelectValue placeholder={t('role_campaigner')} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="mine">שלי בלבד</SelectItem>
-              <SelectItem value="all">כל ה{t('role_campaigner', true)}</SelectItem>
-              <SelectItem value="none">ללא שיוך</SelectItem>
-              {campaignersList.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.full_name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            variant="outline"
-            onClick={() => syncToCalendar.mutate()}
-            disabled={syncToCalendar.isPending}
-            className="gap-2"
-          >
-            <RefreshCw className={`h-4 w-4 ${syncToCalendar.isPending ? 'animate-spin' : ''}`} />
-            סנכרן ליומן
-          </Button>
-        </div>
-        
-        {/* View mode and date */}
-        <div className="flex items-center gap-4">
-          <h2 className="text-lg font-semibold">
-            {viewMode === "daily" && format(currentDate, "EEEE, dd MMMM yyyy", { locale: he })}
-            {viewMode === "weekly" && format(currentDate, "MMMM yyyy", { locale: he })}
-            {viewMode === "monthly" && format(currentDate, "MMMM yyyy", { locale: he })}
-          </h2>
+      {/* Header - Desktop only - single compact row */}
+      <div className="hidden md:flex md:items-center md:justify-between mb-2 gap-3">
+        <div className="flex items-center gap-3">
           <ToggleGroup
             type="single"
             value={viewMode}
@@ -1100,6 +1039,85 @@ export function WeeklyTaskBoard() {
               <span>חודשי</span>
             </ToggleGroupItem>
           </ToggleGroup>
+          <h2 className="text-lg font-semibold">
+            {viewMode === "daily" && format(currentDate, "EEEE, dd MMMM yyyy", { locale: he })}
+            {viewMode === "weekly" && format(currentDate, "MMMM yyyy", { locale: he })}
+            {viewMode === "monthly" && format(currentDate, "MMMM yyyy", { locale: he })}
+          </h2>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" onClick={goToNext}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" size="icon" onClick={goToPrev}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" onClick={goToToday} className="gap-2">
+            <CalendarDays className="h-4 w-4" />
+            היום
+          </Button>
+
+          {/* Filters popover */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="gap-2 relative">
+                <Filter className="h-4 w-4" />
+                פילטרים
+                {(activeFiltersCount > 0 || filters.campaignerId !== "mine") && (
+                  <Badge variant="secondary" className="h-5 w-5 p-0 justify-center">
+                    {activeFiltersCount + (filters.campaignerId !== "mine" ? 1 : 0)}
+                  </Badge>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-72 space-y-3" align="end">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">{t('role_campaigner')}</label>
+                <Select
+                  value={filters.campaignerId}
+                  onValueChange={(val) => setFilters((prev) => ({ ...prev, campaignerId: val }))}
+                >
+                  <SelectTrigger className="w-full gap-2">
+                    <Users className="h-4 w-4 shrink-0" />
+                    <SelectValue placeholder={t('role_campaigner')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="mine">שלי בלבד</SelectItem>
+                    <SelectItem value="all">כל ה{t('role_campaigner', true)}</SelectItem>
+                    <SelectItem value="none">ללא שיוך</SelectItem>
+                    {campaignersList.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.full_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                variant="outline"
+                className="w-full gap-2"
+                onClick={() => setFiltersDialogOpen(true)}
+              >
+                <Filter className="h-4 w-4" />
+                פילטרים מתקדמים
+                {activeFiltersCount > 0 && (
+                  <Badge variant="secondary" className="h-5 w-5 p-0 justify-center">
+                    {activeFiltersCount}
+                  </Badge>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full gap-2"
+                onClick={() => syncToCalendar.mutate()}
+                disabled={syncToCalendar.isPending}
+              >
+                <RefreshCw className={`h-4 w-4 ${syncToCalendar.isPending ? 'animate-spin' : ''}`} />
+                סנכרן ליומן
+              </Button>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 
