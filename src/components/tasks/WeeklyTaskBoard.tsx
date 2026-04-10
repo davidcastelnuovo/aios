@@ -227,7 +227,7 @@ export function WeeklyTaskBoard() {
 
   // Fetch tasks for the current view + overdue tasks
   const { data: fetchedTasks = [], isLoading } = useQuery({
-    queryKey: ["tasks", tenantId, format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd"), filters, viewMode, userProfile?.campaigner_id],
+    queryKey: ["tasks", tenantId, crossTenantAgencyIds, format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd"), filters, viewMode, userProfile?.campaigner_id],
     enabled: !!tenantId && !!user?.id,
     queryFn: async () => {
       const today = format(startOfDay(new Date()), "yyyy-MM-dd");
@@ -242,8 +242,14 @@ export function WeeklyTaskBoard() {
           campaigners (full_name),
           task_updates (id),
           task_collaborators (id)
-        `)
-        .eq("tenant_id", tenantId);
+        `);
+
+      // Cross-tenant: include tasks from shared agencies
+      if (crossTenantAgencyIds.length > 0) {
+        query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+      } else {
+        query = query.eq("tenant_id", tenantId);
+      }
 
       // Include: current range OR overdue (past due_date with status != done) OR null due_date
       // Overdue = due_date < today AND status != 'done'
