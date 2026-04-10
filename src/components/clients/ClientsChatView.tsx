@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import ChatViewComponent from "@/components/chat/ChatView";
 import { User, Phone, PhoneCall, Building2, Clock, Search, Mail, Globe, CheckSquare, Trash2, MessageSquare, FileText, DollarSign, X, Edit, Pencil, Check, Users, Plus, UserPlus, BarChart3, FolderOpen, Link, KeyRound, Calendar as CalendarIcon } from "lucide-react";
+import { AssignPhoneFromWhatsAppDialog } from "@/components/chat/AssignPhoneFromWhatsAppDialog";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CallDialog } from "@/components/telephony/CallDialog";
@@ -76,6 +77,7 @@ export function ClientsChatView({
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [callDialogOpen, setCallDialogOpen] = useState(false);
   const [changeAgencyOpen, setChangeAgencyOpen] = useState(false);
+  const [assignPhoneDialogOpen, setAssignPhoneDialogOpen] = useState(false);
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
 
@@ -1122,8 +1124,27 @@ export function ClientsChatView({
                       contactName={selectedClient.name || "לקוח"}
                     />
                   ) : (
-                    <div className="text-center py-8 text-sm text-muted-foreground">
-                      אין מספר טלפון ללקוח זה
+                    <div className="flex-1 flex flex-col items-center justify-center gap-3 py-8">
+                      <Phone className="h-10 w-10 text-muted-foreground/30" />
+                      <p className="text-sm text-muted-foreground">אין מספר טלפון ללקוח זה</p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        onClick={() => setAssignPhoneDialogOpen(true)}
+                      >
+                        <MessageSquare className="h-4 w-4" />
+                        חפש שיחה בוואטסאפ ושייך מספר
+                      </Button>
+                      <AssignPhoneFromWhatsAppDialog
+                        open={assignPhoneDialogOpen}
+                        onOpenChange={setAssignPhoneDialogOpen}
+                        clientId={selectedClient.id}
+                        clientName={selectedClient.name || "לקוח"}
+                        onSuccess={() => {
+                          queryClient.invalidateQueries({ queryKey: ["clients"] });
+                        }}
+                      />
                     </div>
                   )}
                 </div>
