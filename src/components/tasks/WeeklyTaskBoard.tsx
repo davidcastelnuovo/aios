@@ -312,6 +312,28 @@ export function WeeklyTaskBoard() {
         query = query.is("client_id", null).is("lead_id", null);
       }
 
+      // Apply agency filter from header
+      if (selectedAgency && selectedAgency !== "all") {
+        // Get client IDs belonging to the selected agency
+        const { data: agencyClients } = await supabase
+          .from("clients")
+          .select("id")
+          .eq("agency_id", selectedAgency);
+        
+        const clientIds = agencyClients?.map(c => c.id) || [];
+        
+        if (clientIds.length > 0) {
+          // Show tasks where client belongs to agency OR task itself belongs to agency (for non-client tasks)
+          query = query.or(
+            `client_id.in.(${clientIds.join(",")}),and(client_id.is.null,agency_id.eq.${selectedAgency})`
+          );
+        } else {
+          // No clients in this agency, only show tasks directly assigned to agency
+          query = query.is("client_id", null).eq("agency_id", selectedAgency);
+        }
+      }
+
+
       const { data, error } = await query
         .order("due_date", { ascending: true })
         .order("created_at", { ascending: true })
