@@ -8,7 +8,7 @@ export default function Tasks() {
   const [showGoals, setShowGoals] = useState(false);
 
   return (
-    <div className="p-4 md:p-6 h-[calc(100vh-4rem)] flex flex-col min-h-0 overflow-hidden" style={{ overscrollBehavior: 'none' }}>
+    <div className="p-4 md:p-6 h-full flex flex-col min-h-0 overflow-hidden" style={{ overscrollBehavior: 'none' }}>
       <div className="flex items-center justify-between mb-4 shrink-0">
         <h1 className="text-2xl font-bold hidden md:block">משימות</h1>
         <Button
