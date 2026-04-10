@@ -34,6 +34,7 @@ import { CalendarEventEditDialog } from "./CalendarEventEditDialog";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
+import { useAgency } from "@/contexts/AgencyContext";
 import { useTerminology } from "@/hooks/useTerminology";
 import { toast } from "sonner";
 import confetti from "canvas-confetti";
@@ -96,6 +97,7 @@ export function WeeklyTaskBoard() {
 
   // Fetch clients for inline selector
   const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
+  const { selectedAgency } = useAgency();
 
   const { data: clientsList = [] } = useQuery({
     queryKey: ["clients-for-task-selector", tenantId, crossTenantAgencyIds],
@@ -228,7 +230,7 @@ export function WeeklyTaskBoard() {
 
   // Fetch tasks for the current view + overdue tasks
   const { data: fetchedTasks = [], isLoading } = useQuery({
-    queryKey: ["tasks", tenantId, crossTenantAgencyIds, format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd"), filters, viewMode, userProfile?.campaigner_id],
+    queryKey: ["tasks", tenantId, crossTenantAgencyIds, format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd"), filters, viewMode, userProfile?.campaigner_id, selectedAgency],
     enabled: !!tenantId && !!user?.id,
     queryFn: async () => {
       const today = format(startOfDay(new Date()), "yyyy-MM-dd");
@@ -309,6 +311,28 @@ export function WeeklyTaskBoard() {
       } else if (filters.association === "general") {
         query = query.is("client_id", null).is("lead_id", null);
       }
+
+      // Apply agency filter from header
+      if (selectedAgency && selectedAgency !== "all") {
+        // Get client IDs belonging to the selected agency
+        const { data: agencyClients } = await supabase
+          .from("clients")
+          .select("id")
+          .eq("agency_id", selectedAgency);
+        
+        const clientIds = agencyClients?.map(c => c.id) || [];
+        
+        if (clientIds.length > 0) {
+          // Show tasks where client belongs to agency OR task itself belongs to agency (for non-client tasks)
+          query = query.or(
+            `client_id.in.(${clientIds.join(",")}),and(client_id.is.null,agency_id.eq.${selectedAgency})`
+          );
+        } else {
+          // No clients in this agency, only show tasks directly assigned to agency
+          query = query.is("client_id", null).eq("agency_id", selectedAgency);
+        }
+      }
+
 
       const { data, error } = await query
         .order("due_date", { ascending: true })
