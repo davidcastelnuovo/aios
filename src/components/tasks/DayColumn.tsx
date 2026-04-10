@@ -288,7 +288,7 @@ export function DayColumn({
       </div>
 
       {/* Time Slots */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto overscroll-contain">
         {TIME_SLOTS.map((time) => (
           <TimeSlotDroppable
             key={time}
