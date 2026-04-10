@@ -1100,7 +1100,7 @@ export function WeeklyTaskBoard() {
       {/* Board with Overdue Panel */}
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         {/* Mobile Layout */}
-        <div className="flex flex-col md:hidden gap-2">
+        <div className="flex flex-col md:hidden gap-2 flex-1 min-h-0 overflow-hidden">
           {/* Header: Title + Navigation + Filters */}
           <div className="flex flex-wrap items-center gap-2 justify-between">
             {/* Quick campaigner filter - mobile */}
@@ -1175,8 +1175,8 @@ export function WeeklyTaskBoard() {
             </div>
           </div>
 
-          {/* Task Backlog Panel - full width, max 45vh with internal scroll */}
-          <div className="w-full max-h-[45vh] overflow-y-auto overscroll-contain border rounded-xl bg-muted/30 [&>div]:!w-full [&>div]:!min-w-0">
+          {/* Task Backlog Panel - full width, max 40% with internal scroll */}
+          <div className="w-full max-h-[40%] overflow-y-auto overscroll-contain border rounded-xl bg-muted/30 [&>div]:!w-full [&>div]:!min-w-0 shrink-0">
             <TaskBacklogPanel
               tasks={backlogTasks}
               onToggleComplete={(taskId, completed) =>
@@ -1196,7 +1196,7 @@ export function WeeklyTaskBoard() {
           </div>
           
           {/* Calendar - single day in weekly mode, full width */}
-          <div className="min-h-[300px] flex-1 overscroll-contain">
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
             {viewMode === "daily" && (
               <DailyView
                 date={currentDate}
@@ -1259,7 +1259,7 @@ export function WeeklyTaskBoard() {
         </div>
 
         {/* Desktop: Side by side with sticky panel */}
-        <div className="hidden md:block flex-1 relative min-h-0 overflow-x-auto overflow-y-auto overscroll-contain">
+        <div className="hidden md:flex md:flex-col flex-1 relative min-h-0 overflow-x-auto overflow-y-auto overscroll-contain">
           <div className="flex gap-2 pb-4 min-h-0 w-fit">
             {/* Task Backlog Panel - Sticky on desktop, first in DOM for RTL (appears on right) */}
             <div className="sticky left-0 top-0 z-20 shrink-0 self-start">
