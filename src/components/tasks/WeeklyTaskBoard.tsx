@@ -1098,6 +1098,7 @@ export function WeeklyTaskBoard() {
       </div>
 
       {/* Board with Overdue Panel */}
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         {/* Mobile Layout */}
         <div className="flex flex-col md:hidden gap-2 flex-1 min-h-0 overflow-hidden">
@@ -1350,6 +1351,7 @@ export function WeeklyTaskBoard() {
           ) : null}
         </DragOverlay>
       </DndContext>
+      </div>
 
       {/* Task Detail Dialog */}
       <TaskDetailDialog
