@@ -230,7 +230,7 @@ export function WeeklyTaskBoard() {
 
   // Fetch tasks for the current view + overdue tasks
   const { data: fetchedTasks = [], isLoading } = useQuery({
-    queryKey: ["tasks", tenantId, crossTenantAgencyIds, format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd"), filters, viewMode, userProfile?.campaigner_id],
+    queryKey: ["tasks", tenantId, crossTenantAgencyIds, format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd"), filters, viewMode, userProfile?.campaigner_id, selectedAgency],
     enabled: !!tenantId && !!user?.id,
     queryFn: async () => {
       const today = format(startOfDay(new Date()), "yyyy-MM-dd");
