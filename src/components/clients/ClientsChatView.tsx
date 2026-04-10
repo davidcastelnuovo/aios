@@ -77,6 +77,7 @@ export function ClientsChatView({
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [callDialogOpen, setCallDialogOpen] = useState(false);
   const [changeAgencyOpen, setChangeAgencyOpen] = useState(false);
+  const [assignPhoneDialogOpen, setAssignPhoneDialogOpen] = useState(false);
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
 
