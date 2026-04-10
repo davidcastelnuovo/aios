@@ -1,43 +1,42 @@
 
 
-# תיקון: כרמן לא מצליחה ליצור משימת סוכן
+## תוכנית: חיבור פילטר סוכנות מההדר ללוח המשימות
 
-## הבעיה
-שתי שגיאות בלוגים:
+### הבעיה
+1. **לוח המשימות לא מתייחס כלל לפילטר הסוכנות מההדר** — ה-`selectedAgency` מ-`AgencyContext` לא נמצא בשימוש ב-`WeeklyTaskBoard.tsx`
+2. **משימות נוצרו עם `agency_id` שגוי** — למשל, משימות של הלקוח "פ.ד פסגות" (ששייך ל-MarketingCaptain) נוצרו עם `agency_id` של "promo" — כנראה בגלל שיוך ישן
+3. **הפילטר צריך לעבוד לפי הסוכנות של הלקוח**, לא לפי ה-`agency_id` של המשימה עצמה
 
-1. **`Cannot set properties of null (setting 'id')`** — בשורה 397, כשאין סוכן בשם "carmen" ב-`ai_agents`, המשתנה `agentData` הוא `null`. הקוד מנסה לעשות `agentData.id = fallbackAgent.id` על אובייקט null.
+### מה ישתנה
 
-2. **`invalid input value for enum task_status: "completed"`** — כרמן מנסה לעדכן סטטוס משימה לערך שלא קיים ב-enum.
+**קובץ: `src/components/tasks/WeeklyTaskBoard.tsx`**
+- ייבוא `useAgency` מ-`AgencyContext`
+- כשה-`selectedAgency` שונה מ-"all", הוספת פילטר לשאילתה:
+  - שליפת רשימת `client_id` ששייכים לסוכנות הנבחרת
+  - סינון המשימות כך שיוצגו רק משימות עם `client_id` מהרשימה הזו, **או** משימות עם `agency_id` תואם (למשימות ללא לקוח)
+- הוספת `selectedAgency` ל-`queryKey` כדי שהנתונים יתרעננו בעת שינוי הפילטר
 
-## התיקון
+**קובץ: תיקון נתונים (migration)**
+- עדכון ה-`agency_id` של המשימות הקיימות של "פ.ד פסגות" כך שיתאימו לסוכנות של הלקוח (MarketingCaptain) במקום promo
 
-### קובץ: `supabase/functions/ai-support-chat/index.ts`
+### פרטים טכניים
 
-**שורות 385-398** — תיקון הלוגיקה של fallback agent:
-```typescript
-// לפני (באגי):
-if (!agentData?.id) {
-  const { data: fallbackAgent } = ...
-  if (!fallbackAgent?.id) {
-    return { success: false, error: '...' };
-  }
-  agentData.id = fallbackAgent.id;  // 💥 agentData is null!
-}
+```text
+שאילתת המשימות הנוכחית:
+  tasks WHERE tenant_id = X (+ cross-tenant)
+        AND date filters
+        AND campaigner filters
 
-// אחרי (מתוקן):
-let agentId = agentData?.id;
-if (!agentId) {
-  const { data: fallbackAgent } = ...
-  if (!fallbackAgent?.id) {
-    return { success: false, error: '...' };
-  }
-  agentId = fallbackAgent.id;
-}
-// שימוש ב-agentId במקום agentData.id
+לאחר התיקון:
+  tasks WHERE tenant_id = X (+ cross-tenant)
+        AND date filters
+        AND campaigner filters
+        AND (client.agency_id = selectedAgency 
+             OR (client_id IS NULL AND agency_id = selectedAgency))
+        // רק כש-selectedAgency !== "all"
 ```
 
-**שגיאת enum** — בודק אילו ערכים חוקיים ב-`task_status` ומעדכן את ה-system prompt או הכלי כך שכרמן תשתמש בערכים הנכונים בלבד.
-
-## תוצאה
-כרמן תוכל ליצור משימות סוכן ולעדכן סטטוסים ללא שגיאות.
+הפילטור ייעשה ב-2 שלבים:
+1. שליפת client_ids ששייכים לסוכנות → `clients WHERE agency_id = selectedAgency`
+2. סינון משימות → `task.client_id IN (clientIds) OR (task.client_id IS NULL AND task.agency_id = selectedAgency)`
 
