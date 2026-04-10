@@ -1656,7 +1656,9 @@ Deno.serve(async (req) => {
           activeSession.agent_id,
           tenantId,
           messageText,
-          history
+          history,
+          activeSession.phone || phoneNumber,
+          activeSession.sender_name || senderData.senderName
         );
         
         // Add Carmen's response to history
@@ -1762,7 +1764,8 @@ Deno.serve(async (req) => {
                 const contentAfterKeyword = messageText.replace(new RegExp(triggerKeyword, 'gi'), '').trim();
                 if (contentAfterKeyword.length > 2) {
                   const carmenResponse = await runCarmenAI(
-                    supabaseClient, agentId, tenantId, contentAfterKeyword, []
+                    supabaseClient, agentId, tenantId, contentAfterKeyword, [],
+                    phoneNumber, senderData.senderName
                   );
                   await supabaseClient
                     .from('carmen_whatsapp_sessions')
