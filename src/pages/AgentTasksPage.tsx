@@ -18,7 +18,7 @@ import {
   Plus, Play, CheckCircle2, XCircle, Clock, Loader2, ArrowRight,
   Image, ExternalLink, Calendar, Repeat, Zap, GitFork, ChevronDown,
   ChevronUp, Trash2, ToggleLeft, ToggleRight, Timer, ListTodo, Target,
-  Settings, Bot, AlertTriangle, Sparkles, Heart, Pencil, RotateCcw
+  Settings, Bot, AlertTriangle, Heart, Pencil, RotateCcw
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
@@ -468,25 +468,6 @@ export default function AgentTasksPage() {
     enabled: !!tenantId && activeTab === "heartbeat",
   });
 
-  // Next urgent task
-  const { data: nextTask } = useQuery({
-    queryKey: ["next_urgent_task", tenantId],
-    queryFn: async () => {
-      const today = new Date().toISOString().split("T")[0];
-      const { data } = await supabase
-        .from("tasks")
-        .select("id, title, due_date, priority, status, assigned_agent, clients(name)")
-        .eq("tenant_id", tenantId!)
-        .in("status", ["open", "in_progress"])
-        .is("assigned_agent", null)
-        .order("due_date", { ascending: true, nullsFirst: false })
-        .order("priority", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      return data as any;
-    },
-    enabled: !!tenantId,
-  });
 
   const saveHeartbeatSettings = useMutation({
     mutationFn: async (settings: { enabled: boolean; interval_hours: number; active_hours_start: number; active_hours_end: number; allowed_actions: string[] }) => {
@@ -744,27 +725,6 @@ export default function AgentTasksPage() {
         </Button>
       </div>
 
-      {/* Next Task Banner */}
-      {nextTask && (
-        <div className="mx-4 mb-2 p-3 rounded-xl border border-amber-200 bg-amber-50/80 flex items-center gap-3 shrink-0">
-          <Sparkles className="h-5 w-5 text-amber-600 shrink-0" />
-          <div className="flex-1 min-w-0">
-            <span className="text-xs font-semibold text-amber-800">המשימה הבאה המומלצת:</span>
-            <span className="text-sm font-medium text-amber-900 mr-2 truncate">{nextTask.title}</span>
-            {nextTask.due_date && (
-              <span className="text-xs text-amber-600 mr-2">
-                {new Date(nextTask.due_date) < new Date() ? "⚠️ באיחור!" : `עד ${format(new Date(nextTask.due_date), "dd/MM")}`}
-              </span>
-            )}
-            {(nextTask as any).clients?.name && (
-              <span className="text-xs text-amber-600 mr-1">· {(nextTask as any).clients.name}</span>
-            )}
-          </div>
-          <Badge variant="outline" className="text-[10px] border-amber-300 text-amber-700 shrink-0">
-            עדיפות {nextTask.priority}
-          </Badge>
-        </div>
-      )}
       <div className="flex-1 min-h-0 px-4 pb-4">
         <ResizablePanelGroup direction="horizontal" className="h-full rounded-xl border bg-background">
           {/* Right panel – Tasks */}
