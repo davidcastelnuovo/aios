@@ -404,7 +404,9 @@ async function runCarmenAI(
   agentId: string,
   tenantId: string,
   userMessage: string,
-  conversationHistory: any[]
+  conversationHistory: any[],
+  senderPhone?: string | null,
+  senderName?: string | null
 ): Promise<string> {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
@@ -429,7 +431,8 @@ async function runCarmenAI(
         agent_id: agentId,
         command_text: commandWithHistory,
         tenant_id: tenantId,
-        user_name: 'WhatsApp',
+        user_name: senderName || 'WhatsApp',
+        lead_data: senderPhone ? { phone: senderPhone } : undefined,
       }),
     });
     
