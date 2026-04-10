@@ -469,8 +469,6 @@ export default function AgentTasksPage() {
   });
 
 
-
-
   const saveHeartbeatSettings = useMutation({
     mutationFn: async (settings: { enabled: boolean; interval_hours: number; active_hours_start: number; active_hours_end: number; allowed_actions: string[] }) => {
       const { error } = await supabase
@@ -727,7 +725,526 @@ export default function AgentTasksPage() {
         </Button>
       </div>
 
+      <div className="flex-1 min-h-0 px-4 pb-4">
+        <ResizablePanelGroup direction="horizontal" className="h-full rounded-xl border bg-background">
+          {/* Right panel – Tasks */}
+          <ResizablePanel defaultSize={65} minSize={40}>
+            <div className="h-full flex flex-col p-4">
+              {/* Tabs */}
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-3">
+                <TabsList className="h-8">
+                  <TabsTrigger value="tasks" className="text-xs gap-1">
+                    <ListTodo className="h-3 w-3" /> כל המשימות ({tasks.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="recurring" className="text-xs gap-1">
+                    <Repeat className="h-3 w-3" /> חוזרות ({recurringTasks.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="goals" className="text-xs gap-1">
+                    <Target className="h-3 w-3" /> יעדים
+                  </TabsTrigger>
+                  <TabsTrigger value="stats" className="text-xs gap-1">
+                    <Zap className="h-3 w-3" /> סטטיסטיקות
+                  </TabsTrigger>
+                  <TabsTrigger value="heartbeat" className="text-xs gap-1">
+                    <Heart className="h-3 w-3" /> Heartbeat
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
 
+              {/* Filters */}
+              <div className="flex gap-2 mb-4 shrink-0 flex-wrap">
+                <Select value={filterAgent} onValueChange={setFilterAgent}>
+                  <SelectTrigger className="w-[160px] h-8 text-xs">
+                    <SelectValue placeholder="כל הסוכנים" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">כל הסוכנים</SelectItem>
+                    {agents.map(a => (
+                      <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                  <SelectTrigger className="w-[130px] h-8 text-xs">
+                    <SelectValue placeholder="כל הסטטוסים" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">כל הסטטוסים</SelectItem>
+                    <SelectItem value="pending">ממתין</SelectItem>
+                    <SelectItem value="running">רץ</SelectItem>
+                    <SelectItem value="completed">הושלם</SelectItem>
+                    <SelectItem value="failed">נכשל</SelectItem>
+                    <SelectItem value="scheduled">מתוזמן</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Task list */}
+              <ScrollArea className="flex-1">
+                <div className="space-y-3 pl-1">
+                  {isLoading ? (
+                    <div className="text-center py-12 text-muted-foreground">טוען...</div>
+                  ) : (
+                    <>
+                      {activeTab === "tasks" && (
+                        tasks.length === 0 ? (
+                          <div className="text-center py-12 text-muted-foreground">
+                            <p className="text-lg mb-2">אין משימות עדיין</p>
+                            <p className="text-sm">צור משימה חדשה כדי להתחיל</p>
+                          </div>
+                        ) : (
+                          tasks.map(task => (
+                            <TaskCard
+                              key={task.id}
+                              task={task}
+                              avatarFor={avatarFor}
+                              onRun={t => runTask.mutate(t)}
+                              onDelete={id => deleteTask.mutate(id)}
+                              onToggleEnabled={t => toggleEnabled.mutate(t)}
+                              onEdit={handleEdit}
+                              onRerun={handleRerun}
+                              isRunning={runTask.isPending}
+                            />
+                          ))
+                        )
+                      )}
+                      {activeTab === "recurring" && (
+                        recurringTasks.length === 0 ? (
+                          <div className="text-center py-12 text-muted-foreground">
+                            <Repeat className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                            <p className="text-lg mb-2">אין משימות חוזרות</p>
+                            <p className="text-sm">צור משימה עם תזמון חוזר</p>
+                          </div>
+                        ) : (
+                          recurringTasks.map(task => (
+                            <TaskCard
+                              key={task.id}
+                              task={task}
+                              avatarFor={avatarFor}
+                              onRun={t => runTask.mutate(t)}
+                              onDelete={id => deleteTask.mutate(id)}
+                              onToggleEnabled={t => toggleEnabled.mutate(t)}
+                              onEdit={handleEdit}
+                              onRerun={handleRerun}
+                              isRunning={runTask.isPending}
+                            />
+                          ))
+                        )
+                      )}
+                      {activeTab === "goals" && (
+                        <div className="py-2">
+                          <GoalTree />
+                        </div>
+                      )}
+                      {activeTab === "stats" && (
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-2 gap-3">
+                            {[
+                              { label: "סה״כ משימות",       value: tasks.length,                                          color: "bg-blue-50 text-blue-700" },
+                              { label: "הושלמו",             value: tasks.filter(t => t.status === "completed").length,   color: "bg-green-50 text-green-700" },
+                              { label: "נכשלו",              value: tasks.filter(t => t.status === "failed").length,      color: "bg-red-50 text-red-700" },
+                              { label: "חוזרות פעילות",     value: recurringTasks.filter(t => t.enabled).length,         color: "bg-purple-50 text-purple-700" },
+                            ].map((stat, i) => (
+                              <div key={i} className={`rounded-xl p-4 ${stat.color}`}>
+                                <div className="text-2xl font-bold">{stat.value}</div>
+                                <div className="text-xs mt-1">{stat.label}</div>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="bg-muted/30 rounded-xl p-4">
+                            <h3 className="font-semibold text-sm mb-3">סקילז פופולריים</h3>
+                            {BUILT_IN_SKILLS.slice(0, 6).map(skill => {
+                              const count = tasks.filter(t => (t.task_skills || []).includes(skill.id)).length;
+                              return (
+                                <div key={skill.id} className="flex items-center justify-between py-1.5 border-b last:border-0 text-xs">
+                                  <span>{skill.icon} {skill.name}</span>
+                                  <span className="font-semibold">{count} משימות</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      {activeTab === "heartbeat" && (
+                        <div className="space-y-4">
+                          {/* Heartbeat Settings */}
+                          <div className="bg-muted/30 rounded-xl p-4 space-y-4">
+                            <div className="flex items-center justify-between">
+                              <h3 className="font-semibold text-sm flex items-center gap-2">
+                                <Heart className="h-4 w-4 text-red-500" />
+                                הגדרות Heartbeat
+                              </h3>
+                              <Switch
+                                checked={heartbeatSettings?.enabled || false}
+                                onCheckedChange={(enabled) => {
+                                  saveHeartbeatSettings.mutate({
+                                    enabled,
+                                    interval_hours: heartbeatSettings?.interval_hours || 8,
+                                    active_hours_start: heartbeatSettings?.active_hours_start || 7,
+                                    active_hours_end: heartbeatSettings?.active_hours_end || 22,
+                                    allowed_actions: (heartbeatSettings?.allowed_actions as string[]) || ["reminders", "status_update", "daily_summary"],
+                                  });
+                                }}
+                              />
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              כרמן סוקרת אוטומטית משימות פתוחות, מזהה חסומות, ושולחת תזכורות
+                            </p>
+
+                            <div className="grid grid-cols-3 gap-3">
+                              <div>
+                                <Label className="text-xs">תדירות (שעות)</Label>
+                                <Select
+                                  value={String(heartbeatSettings?.interval_hours || 8)}
+                                  onValueChange={(v) => {
+                                    saveHeartbeatSettings.mutate({
+                                      enabled: heartbeatSettings?.enabled || false,
+                                      interval_hours: parseInt(v),
+                                      active_hours_start: heartbeatSettings?.active_hours_start || 7,
+                                      active_hours_end: heartbeatSettings?.active_hours_end || 22,
+                                      allowed_actions: (heartbeatSettings?.allowed_actions as string[]) || ["reminders", "status_update", "daily_summary"],
+                                    });
+                                  }}
+                                >
+                                  <SelectTrigger className="h-8 text-xs mt-1"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="4">כל 4 שעות</SelectItem>
+                                    <SelectItem value="8">כל 8 שעות</SelectItem>
+                                    <SelectItem value="12">כל 12 שעות</SelectItem>
+                                    <SelectItem value="24">פעם ביום</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div>
+                                <Label className="text-xs">שעת התחלה</Label>
+                                <Input
+                                  type="number" min={0} max={23}
+                                  value={heartbeatSettings?.active_hours_start || 7}
+                                  onChange={(e) => {
+                                    saveHeartbeatSettings.mutate({
+                                      enabled: heartbeatSettings?.enabled || false,
+                                      interval_hours: heartbeatSettings?.interval_hours || 8,
+                                      active_hours_start: parseInt(e.target.value),
+                                      active_hours_end: heartbeatSettings?.active_hours_end || 22,
+                                      allowed_actions: (heartbeatSettings?.allowed_actions as string[]) || ["reminders", "status_update", "daily_summary"],
+                                    });
+                                  }}
+                                  className="h-8 text-xs mt-1"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">שעת סיום</Label>
+                                <Input
+                                  type="number" min={0} max={23}
+                                  value={heartbeatSettings?.active_hours_end || 22}
+                                  onChange={(e) => {
+                                    saveHeartbeatSettings.mutate({
+                                      enabled: heartbeatSettings?.enabled || false,
+                                      interval_hours: heartbeatSettings?.interval_hours || 8,
+                                      active_hours_start: heartbeatSettings?.active_hours_start || 7,
+                                      active_hours_end: parseInt(e.target.value),
+                                      allowed_actions: (heartbeatSettings?.allowed_actions as string[]) || ["reminders", "status_update", "daily_summary"],
+                                    });
+                                  }}
+                                  className="h-8 text-xs mt-1"
+                                />
+                              </div>
+                            </div>
+
+                            <div>
+                              <Label className="text-xs mb-2 block">פעולות מותרות</Label>
+                              <div className="flex flex-wrap gap-2">
+                                {[
+                                  { key: "reminders", label: "תזכורות WhatsApp", icon: "💬" },
+                                  { key: "status_update", label: "עדכון סטטוס", icon: "🔄" },
+                                  { key: "daily_summary", label: "סיכום יומי", icon: "📊" },
+                                ].map((action) => {
+                                  const allowed = (heartbeatSettings?.allowed_actions as string[]) || ["reminders", "status_update", "daily_summary"];
+                                  const isActive = allowed.includes(action.key);
+                                  return (
+                                    <button
+                                      key={action.key}
+                                      onClick={() => {
+                                        const newActions = isActive
+                                          ? allowed.filter((a: string) => a !== action.key)
+                                          : [...allowed, action.key];
+                                        saveHeartbeatSettings.mutate({
+                                          enabled: heartbeatSettings?.enabled || false,
+                                          interval_hours: heartbeatSettings?.interval_hours || 8,
+                                          active_hours_start: heartbeatSettings?.active_hours_start || 7,
+                                          active_hours_end: heartbeatSettings?.active_hours_end || 22,
+                                          allowed_actions: newActions,
+                                        });
+                                      }}
+                                      className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
+                                        isActive
+                                          ? "bg-primary/10 border-primary text-primary"
+                                          : "bg-muted border-border text-muted-foreground"
+                                      }`}
+                                    >
+                                      {action.icon} {action.label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Heartbeat Logs */}
+                          <div className="bg-muted/30 rounded-xl p-4">
+                            <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                              <Clock className="h-4 w-4" />
+                              הרצות אחרונות
+                            </h3>
+                            {heartbeatLogs.length === 0 ? (
+                              <p className="text-xs text-muted-foreground text-center py-4">
+                                אין הרצות עדיין
+                              </p>
+                            ) : (
+                              <div className="space-y-2">
+                                {heartbeatLogs.map((log: any) => (
+                                  <div key={log.id} className="border rounded-lg p-3 bg-background text-xs space-y-1">
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-medium">{format(new Date(log.triggered_at), "dd/MM/yyyy HH:mm")}</span>
+                                      <Badge variant="outline" className="text-[10px]">
+                                        {log.tasks_reviewed} משימות נסקרו
+                                      </Badge>
+                                    </div>
+                                    <p className="text-muted-foreground whitespace-pre-wrap">{log.summary}</p>
+                                    {log.actions_taken && (log.actions_taken as any[]).length > 0 && (
+                                      <div className="mt-1 pt-1 border-t">
+                                        {(log.actions_taken as any[]).map((action: any, i: number) => (
+                                          <div key={i} className="flex items-center gap-1 text-[11px]">
+                                            {action.type === "reminder_sent" ? (
+                                              <CheckCircle2 className="h-3 w-3 text-green-500" />
+                                            ) : action.type === "stale_task_released" ? (
+                                              <AlertTriangle className="h-3 w-3 text-amber-500" />
+                                            ) : (
+                                              <XCircle className="h-3 w-3 text-red-500" />
+                                            )}
+                                            <span>{action.task_title || action.type}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </ScrollArea>
+            </div>
+          </ResizablePanel>
+
+          <ResizableHandle withHandle />
+
+          {/* Left panel – Agents in action */}
+          <ResizablePanel defaultSize={35} minSize={25}>
+            <div className="h-full flex flex-col p-4 bg-muted/30">
+              <h2 className="font-bold text-base mb-4">סוכנים בפעולה</h2>
+              <ScrollArea className="flex-1">
+                <div className="space-y-3 pr-2">
+                  {agentStats.map(agent => (
+                    <div key={agent.id} className="bg-white rounded-xl border p-4 shadow-sm">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="relative">
+                          <img src={avatarFor(agent.name)} className="w-10 h-10 rounded-xl object-cover" />
+                          {agent.running > 0 && (
+                            <span className="absolute -top-1 -left-1 w-3.5 h-3.5 bg-blue-500 rounded-full border-2 border-white animate-pulse" />
+                          )}
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-sm">{agent.name}</h3>
+                          <p className="text-xs text-muted-foreground">{agent.engine}</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-4 gap-2 text-center">
+                        <div className="bg-muted/50 rounded-lg p-1.5">
+                          <div className="text-sm font-bold">{agent.total}</div>
+                          <div className="text-[10px] text-muted-foreground">סה״כ</div>
+                        </div>
+                        <div className="bg-green-50 rounded-lg p-1.5">
+                          <div className="text-sm font-bold text-green-700">{agent.completed}</div>
+                          <div className="text-[10px] text-green-600">הושלם</div>
+                        </div>
+                        <div className="bg-blue-50 rounded-lg p-1.5">
+                          <div className="text-sm font-bold text-blue-700">{agent.running}</div>
+                          <div className="text-[10px] text-blue-600">רץ</div>
+                        </div>
+                        <div className="bg-purple-50 rounded-lg p-1.5">
+                          <div className="text-sm font-bold text-purple-700">{agent.recurring}</div>
+                          <div className="text-[10px] text-purple-600">חוזר</div>
+                        </div>
+                      </div>
+                      {tasks
+                        .filter(t => t.agent_id === agent.id && (t.status === "completed" || t.status === "failed"))
+                        .slice(0, 3)
+                        .map(t => (
+                          <div key={t.id} className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                            {t.status === "completed" ? (
+                              <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0" />
+                            ) : (
+                              <XCircle className="h-3 w-3 text-red-500 shrink-0" />
+                            )}
+                            <span className="truncate">{t.title}</span>
+                            {t.completed_at && (
+                              <span className="shrink-0 mr-auto">{format(new Date(t.completed_at), "dd/MM HH:mm")}</span>
+                            )}
+                          </div>
+                        ))}
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            </div>
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      </div>
+
+      {/* ─── New Task Dialog ──────────────────────────────────────────────────── */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Zap className="h-5 w-5 text-[#36d399]" />
+              משימה חדשה לסוכן
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-5 pt-2">
+            {/* Agent */}
+            <div>
+              <Label className="text-sm font-semibold">סוכן</Label>
+              <Select value={form.agent_id} onValueChange={v => setForm(f => ({ ...f, agent_id: v }))}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="בחר סוכן" />
+                </SelectTrigger>
+                <SelectContent>
+                  {agents.filter(a => a.active).map(a => (
+                    <SelectItem key={a.id} value={a.id}>
+                      <div className="flex items-center gap-2">
+                        <img src={avatarFor(a.name)} className="w-5 h-5 rounded" />
+                        {a.name}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Title */}
+            <div>
+              <Label className="text-sm font-semibold">כותרת המשימה</Label>
+              <Input
+                className="mt-1"
+                value={form.title}
+                onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                placeholder="מה הסוכן צריך לעשות? (למשל: עדכון סטטוס קמפיינים)"
+              />
+            </div>
+
+            {/* Description */}
+            <div>
+              <Label className="text-sm font-semibold">תיאור מפורט (אופציונלי)</Label>
+              <Textarea
+                className="mt-1"
+                value={form.description}
+                onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                placeholder="פרטים נוספים, הנחיות ספציפיות, מה לכלול בדוח..."
+                rows={3}
+              />
+            </div>
+
+            {/* Mode */}
+            <div>
+              <Label className="text-sm font-semibold">מוד סוכן (אופציונלי)</Label>
+              <p className="text-xs text-muted-foreground mt-0.5 mb-2">בחר מוד שיפעיל הנחיות מיוחדות לסוכן</p>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setForm(f => ({ ...f, task_mode: "" }))}
+                  className={`flex items-center gap-2 p-2 rounded-lg border text-xs transition-all ${
+                    !form.task_mode ? "border-[#36d399] bg-[#36d399]/10" : "border-border hover:border-[#36d399]/50"
+                  }`}
+                >
+                  <span>🤖</span> ברירת מחדל
+                </button>
+                {CARMEN_MODES.map(mode => (
+                  <button
+                    key={mode.id}
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, task_mode: f.task_mode === mode.id ? "" : mode.id }))}
+                    className={`flex items-center gap-2 p-2 rounded-lg border text-xs transition-all ${
+                      form.task_mode === mode.id
+                        ? "border-indigo-400 bg-indigo-50 text-indigo-700"
+                        : "border-border hover:border-indigo-300"
+                    }`}
+                  >
+                    <span>{mode.icon}</span>
+                    <span className="truncate">{mode.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Skills */}
+            <div>
+              <Label className="text-sm font-semibold">
+                סקילז למשימה זו
+                {form.task_skills.length > 0 && (
+                  <span className="text-[#36d399] font-medium mr-2">({form.task_skills.length} נבחרו)</span>
+                )}
+              </Label>
+              <p className="text-xs text-muted-foreground mt-0.5 mb-2">בחר סקילז ספציפיים שיוזרקו לסוכן רק למשימה זו</p>
+              <SkillPicker
+                selected={form.task_skills}
+                onChange={skills => setForm(f => ({ ...f, task_skills: skills }))}
+              />
+            </div>
+
+            {/* Schedule type */}
+            <div>
+              <Label className="text-sm font-semibold">תזמון</Label>
+              <div className="grid grid-cols-3 gap-2 mt-2">
+                {[
+                  { value: "once",      icon: <Play className="h-4 w-4" />,     label: "חד-פעמי",  desc: "הרץ מיד או ידנית" },
+                  { value: "scheduled", icon: <Calendar className="h-4 w-4" />, label: "מתוזמן",   desc: "בתאריך ושעה ספציפיים" },
+                  { value: "recurring", icon: <Repeat className="h-4 w-4" />,   label: "חוזר",     desc: "לפי Cron" },
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, schedule_type: opt.value as any }))}
+                    className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border text-xs transition-all ${
+                      form.schedule_type === opt.value
+                        ? "border-[#36d399] bg-[#36d399]/10 text-foreground"
+                        : "border-border hover:border-[#36d399]/50 text-muted-foreground"
+                    }`}
+                  >
+                    {opt.icon}
+                    <span className="font-semibold">{opt.label}</span>
+                    <span className="text-[10px] text-center">{opt.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Scheduled at */}
+            {form.schedule_type === "scheduled" && (
+              <div>
+                <Label className="text-sm font-semibold">תאריך ושעה</Label>
+                <Input
+                  type="datetime-local"
+                  className="mt-1"
+                  value={form.scheduled_at}
+                  onChange={e => setForm(f => ({ ...f, scheduled_at: e.target.value }))}
+                />
+              </div>
+            )}
 
             {/* Cron */}
             {form.schedule_type === "recurring" && (
