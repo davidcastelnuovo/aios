@@ -288,6 +288,8 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["client-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-events"] });
       toast.success("המשימה עודכנה בהצלחה");
       onOpenChange(false);
     },
@@ -307,6 +309,8 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["client-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-events"] });
       toast.success("המשימה נמחקה בהצלחה");
       onOpenChange(false);
     },
