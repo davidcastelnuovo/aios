@@ -87,6 +87,7 @@ const SharedDashboard = lazy(() => import("./pages/SharedDashboard"));
 const SharedTable = lazy(() => import("./pages/SharedTable"));
 const AiDetection = lazy(() => import("./pages/AiDetection"));
 const TelephonySettings = lazy(() => import("./pages/TelephonySettings"));
+const TelegramSettings = lazy(() => import("./pages/TelegramSettings"));
 const GithubAgent = lazy(() => import("./pages/GithubAgent"));
 const SocialDashboard = lazy(() => import("./pages/SocialDashboard"));
 const WordPressSettings = lazy(() => import("./pages/WordPressSettings"));
@@ -191,6 +192,7 @@ const App = () => (
                   <Route path="/t/:tenantSlug/chat-integrations" element={<ProtectedRoute requiredPermission="chat_integrations"><AppLayout><ChatIntegrations /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/manychat-settings" element={<ProtectedRoute requiredPermission="manychat_settings"><AppLayout><ManyChatSettings /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/green-api-settings" element={<ProtectedRoute requiredPermission="green_api_settings"><AppLayout><GreenAPISettings /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/telegram-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><TelegramSettings /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/integrations" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><Integrations /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/integrations/facebook" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><FacebookSettings /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/facebook-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><FacebookSettings /></AppLayout></ProtectedRoute>} />

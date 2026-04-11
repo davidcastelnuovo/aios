@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Webhook, Facebook, MessageCircle, ArrowLeft, Settings, TrendingUp, Calculator, Zap, Search, Video, Mail, Brain, Phone, Globe, ShoppingCart, Link2 } from "lucide-react";
+import { Webhook, Facebook, MessageCircle, ArrowLeft, Settings, TrendingUp, Calculator, Zap, Search, Video, Mail, Brain, Phone, Globe, ShoppingCart, Link2, Send } from "lucide-react";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -320,6 +320,22 @@ export default function Integrations() {
     enabled: !!currentTenantId,
   });
 
+  // Check Telegram bot state
+  const { data: telegramBotState } = useQuery({
+    queryKey: ['telegram-bot-state', currentTenantId],
+    queryFn: async () => {
+      if (!currentTenantId) return null;
+      const { data } = await supabase
+        .from('telegram_bot_state')
+        .select('*')
+        .eq('tenant_id', currentTenantId)
+        .eq('is_active', true)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!currentTenantId,
+  });
+
   const integrations: IntegrationCardProps[] = [
     {
       icon: <Webhook className="h-6 w-6" />,
@@ -547,6 +563,19 @@ export default function Integrations() {
       isConnected: false,
       route: "telephony-settings",
       gradient: "bg-gradient-to-r from-teal-600 to-cyan-700",
+    },
+    {
+      icon: <Send className="h-6 w-6" />,
+      title: "Telegram",
+      description: "חיבור בוט טלגרם לשליחה וקבלה של הודעות",
+      features: [
+        "שליחה וקבלה דו-כיוונית",
+        "סנכרון הודעות בזמן אמת",
+        "חיבור ללקוחות ולידים",
+      ],
+      isConnected: !!telegramBotState,
+      route: "telegram-settings",
+      gradient: "bg-gradient-to-r from-sky-500 to-blue-600",
     },
     {
       icon: <Link2 className="h-6 w-6" />,
