@@ -482,31 +482,41 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
     if (!contact) return;
 
     try {
-      // Check session first
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         toast.error("נא להתחבר מחדש למערכת");
         return;
       }
 
-      // Check if provider is configured
+      // Telegram send
+      if (contactType === 'telegram' && telegramChatId) {
+        const { error } = await supabase.functions.invoke("telegram-send", {
+          body: {
+            chat_id: telegramChatId,
+            text: message,
+            tenant_id: tenantId,
+          },
+        });
+        if (error) throw error;
+        queryClient.invalidateQueries({ queryKey: ["chat-messages", contactId] });
+        toast.success("ההודעה נשלחה בהצלחה");
+        return;
+      }
+
       if (!activeProvider) {
         toast.error("לא מוגדר ספק צ'אט פעיל");
         return;
       }
 
-      // Validate required contact details
       if (activeProvider === 'manychat') {
         if (contactType === 'group') {
           toast.error("קבוצות לא נתמכות ב-ManyChat");
           return;
         }
-        
         if (!contact.manychat_subscriber_id) {
           toast.error("חסר Subscriber ID למניצ'אט. אנא הוסף ב-ManyChat Settings.");
           return;
         }
-
         const { error } = await supabase.functions.invoke("send-chat-message", {
           body: {
             [contactType === "client" ? "clientId" : "leadId"]: contactId,
@@ -515,37 +525,24 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
             provider: "manychat",
           },
         });
-
         if (error) throw error;
       } else if (activeProvider === 'green_api') {
         if (!contact.phone && contactType !== 'group' && contactType !== 'unknown') {
           toast.error("חסר מספר טלפון ל-Green API. אנא הוסף באיש הקשר.");
           return;
         }
-
         const body: any = {
           message,
           phoneNumber: senderPhone || contact.phone,
           provider: "green_api",
           quotedMessageId,
         };
+        if (contactType === "client") body.clientId = contactId;
+        else if (contactType === "lead") body.leadId = contactId;
+        else if (contactType === "group") body.groupId = contactId;
+        else if (contactType === "unknown") body.tenantId = tenantId;
 
-        // Only add IDs for known contact types
-        if (contactType === "client") {
-          body.clientId = contactId;
-        } else if (contactType === "lead") {
-          body.leadId = contactId;
-        } else if (contactType === "group") {
-          body.groupId = contactId;
-        } else if (contactType === "unknown") {
-          // For unknown contacts, pass the tenant ID explicitly
-          body.tenantId = tenantId;
-        }
-
-        const { error } = await supabase.functions.invoke("send-green-api-message", {
-          body,
-        });
-
+        const { error } = await supabase.functions.invoke("send-green-api-message", { body });
         if (error) throw error;
       }
 
