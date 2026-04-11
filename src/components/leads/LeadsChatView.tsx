@@ -191,7 +191,7 @@ export function LeadsChatView({
   const getLeadStatusInfo = (statusKey: string) => leadStatuses.find(s => s.status_key === statusKey);
 
   return (
-    <div className="flex h-[calc(100vh-220px)] border rounded-lg overflow-hidden bg-background" dir="rtl">
+    <div className="flex flex-row-reverse h-[calc(100vh-220px)] border rounded-lg overflow-hidden bg-background">
       {/* Right side - Lead list */}
       {(!isMobile || !selectedLeadId) && (
       <div className={cn("border-s flex flex-col bg-muted/20", isMobile ? "w-full" : "w-[25%] min-w-[240px]")}>
@@ -304,22 +304,13 @@ export function LeadsChatView({
                       setActiveTab("details");
                     }
                   }}
-                  className={cn(
-                    "w-full text-right p-3 hover:bg-muted/50 transition-colors cursor-pointer",
-                    isSelected && !multiSelectMode && "bg-primary/10 border-e-4 border-e-primary",
+                   className={cn(
+                    "w-full p-3 hover:bg-muted/50 transition-colors cursor-pointer overflow-hidden",
+                    isSelected && !multiSelectMode && "bg-primary/10 border-r-4 border-r-primary",
                     isChecked && multiSelectMode && "bg-primary/10"
                   )}
                 >
-                  <div className="flex items-start gap-2 flex-row-reverse">
-                    {/* Checkbox in multi-select mode */}
-                    {multiSelectMode && (
-                      <div className="pt-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-                        <Checkbox
-                          checked={isChecked}
-                          onCheckedChange={() => toggleLeadSelection(lead.id)}
-                        />
-                      </div>
-                    )}
+                  <div className="flex items-start gap-2">
                     {/* Avatar circle */}
                     <div
                       className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
@@ -327,19 +318,20 @@ export function LeadsChatView({
                     >
                       {(lead.contact_name || "?")[0]}
                     </div>
-                    <div className="flex-1 min-w-0 text-right">
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                          {lead.created_at && format(new Date(lead.created_at), "dd/MM", { locale: he })}
-                        </span>
-                        <span className="font-semibold text-sm truncate">
+                    {/* Name & info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1">
+                        <span className="font-semibold text-sm truncate flex-1 min-w-0">
                           {lead.contact_name || "ללא שם"}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
+                          {lead.created_at && format(new Date(lead.created_at), "dd/MM", { locale: he })}
                         </span>
                       </div>
                       {isCompanyNameVisible && lead.company_name && (
                         <p className="text-xs text-muted-foreground truncate">{lead.company_name}</p>
                       )}
-                      <div className="flex items-center gap-1 mt-1 flex-wrap justify-end">
+                      <div className="flex items-center gap-1 mt-1 flex-wrap">
                         {stageInfo && (
                           <Badge
                             variant="outline"
@@ -365,6 +357,15 @@ export function LeadsChatView({
                         </div>
                       )}
                     </div>
+                    {/* Checkbox in multi-select mode */}
+                    {multiSelectMode && (
+                      <div className="pt-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={isChecked}
+                          onCheckedChange={() => toggleLeadSelection(lead.id)}
+                        />
+                      </div>
+                    )}
                   </div>
                 </button>
               );
