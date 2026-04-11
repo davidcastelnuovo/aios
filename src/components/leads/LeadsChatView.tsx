@@ -191,10 +191,10 @@ export function LeadsChatView({
   const getLeadStatusInfo = (statusKey: string) => leadStatuses.find(s => s.status_key === statusKey);
 
   return (
-    <div className="flex flex-row-reverse h-[calc(100vh-220px)] border rounded-lg overflow-hidden bg-background">
+    <div dir="ltr" className="flex flex-row-reverse h-[calc(100vh-220px)] border rounded-lg overflow-hidden bg-background">
       {/* Right side - Lead list */}
       {(!isMobile || !selectedLeadId) && (
-      <div className={cn("border-s flex flex-col bg-muted/20", isMobile ? "w-full" : "w-[25%] min-w-[240px]")}>
+      <div dir="rtl" className={cn("border-l flex flex-col bg-muted/20", isMobile ? "w-full" : "w-[25%] min-w-[240px]")}>
         {/* List header with search */}
         <div className="p-3 border-b bg-background/80 backdrop-blur-sm">
           <div className="flex items-center gap-2">
@@ -204,7 +204,7 @@ export function LeadsChatView({
                 placeholder="חיפוש ליד..."
                 value={listSearch}
                 onChange={(e) => setListSearch(e.target.value)}
-                className="pr-9 h-9 text-sm"
+                className="pr-9 h-9 text-sm text-right"
               />
             </div>
             <Button
@@ -319,9 +319,9 @@ export function LeadsChatView({
                       {(lead.contact_name || "?")[0]}
                     </div>
                     {/* Name & info */}
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 text-right">
                       <div className="flex items-center gap-1">
-                        <span className="font-semibold text-sm truncate flex-1 min-w-0">
+                        <span dir="rtl" className="block font-semibold text-sm truncate flex-1 min-w-0 text-right">
                           {lead.contact_name || "ללא שם"}
                         </span>
                         <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
@@ -329,7 +329,7 @@ export function LeadsChatView({
                         </span>
                       </div>
                       {isCompanyNameVisible && lead.company_name && (
-                        <p className="text-xs text-muted-foreground truncate">{lead.company_name}</p>
+                        <p dir="rtl" className="text-xs text-muted-foreground truncate text-right">{lead.company_name}</p>
                       )}
                       <div className="flex items-center gap-1 mt-1 flex-wrap">
                         {stageInfo && (
@@ -382,7 +382,7 @@ export function LeadsChatView({
 
       {/* Left side - Lead detail panel */}
       {(!isMobile || selectedLeadId) && (
-      <div className="flex-1 flex flex-col min-w-0">
+      <div dir="rtl" className="flex-1 flex flex-col min-w-0">
         {selectedLead ? (
           <>
             {/* Toolbar */}
@@ -401,10 +401,10 @@ export function LeadsChatView({
                 >
                   {(selectedLead.contact_name || "?")[0]}
                 </div>
-                <div className="min-w-0">
-                  <h2 className="font-bold text-base truncate">{selectedLead.contact_name || "ללא שם"}</h2>
+                <div className="min-w-0 text-right">
+                  <h2 dir="rtl" className="block font-bold text-base truncate text-right">{selectedLead.contact_name || "ללא שם"}</h2>
                   {isCompanyNameVisible && selectedLead.company_name && (
-                    <p className="text-xs text-muted-foreground truncate">{selectedLead.company_name}</p>
+                    <p dir="rtl" className="text-xs text-muted-foreground truncate text-right">{selectedLead.company_name}</p>
                   )}
                 </div>
               </div>
