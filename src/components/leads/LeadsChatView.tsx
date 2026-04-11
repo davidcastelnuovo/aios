@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback } from "react";
 import ChatViewComponent from "@/components/chat/ChatView";
-import { User, Phone, PhoneCall, Building2, Clock, Search, Tag, Mail, ExternalLink, CheckSquare, Trash2, Settings2, MessageSquare, FileText, DollarSign, Paperclip, Users, ChevronRight, X } from "lucide-react";
+import { User, Phone, PhoneCall, Building2, Clock, Search, Tag, Mail, ExternalLink, CheckSquare, Trash2, Settings2, MessageSquare, FileText, DollarSign, Paperclip, Users, ChevronRight, X, ArrowRight } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { CallDialog } from "@/components/telephony/CallDialog";
 import { CallHistoryTab } from "@/components/telephony/CallHistoryTab";
 import { Badge } from "@/components/ui/badge";
