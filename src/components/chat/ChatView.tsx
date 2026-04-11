@@ -44,13 +44,14 @@ interface ReplyToMessage {
 
 interface ChatViewProps {
   contactId: string;
-  contactType: "client" | "lead" | "group" | "unknown";
+  contactType: "client" | "lead" | "group" | "unknown" | "telegram";
   senderPhone?: string;
   contactName?: string;
+  telegramChatId?: string;
   onBack?: () => void;
 }
 
-export default function ChatView({ contactId, contactType, senderPhone, contactName, onBack }: ChatViewProps) {
+export default function ChatView({ contactId, contactType, senderPhone, contactName, telegramChatId, onBack }: ChatViewProps) {
   const queryClient = useQueryClient();
   const { tenant: currentTenant, tenantId } = useCurrentTenant();
   const { userId } = useCurrentUser();
