@@ -636,6 +636,9 @@ export default function Chat() {
                 <SelectItem value="leads">לידים ({leadsCount})</SelectItem>
                 <SelectItem value="groups">קבוצות ({groupsCount})</SelectItem>
                 <SelectItem value="unknown">לא משויכים ({unknownCount})</SelectItem>
+                {telegramCount > 0 && (
+                  <SelectItem value="telegram">טלגרם ({telegramCount})</SelectItem>
+                )}
               </SelectContent>
             </Select>
 
