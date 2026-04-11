@@ -32,7 +32,7 @@ interface ChatMessageListProps {
   messages: Message[];
   isLoading: boolean;
   contactId?: string;
-  contactType?: 'client' | 'lead' | 'group' | 'unknown';
+  contactType?: 'client' | 'lead' | 'group' | 'unknown' | 'telegram';
   agencyId?: string;
   anchorMessageId?: string;
   currentPeriod?: 'week' | 'month' | 'all';

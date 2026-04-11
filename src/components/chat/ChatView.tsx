@@ -815,7 +815,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
         </>
       )}
 
-      {contactType !== 'unknown' && (
+      {contactType !== 'unknown' && contactType !== 'telegram' && (
         <ChangeAgencyDialog
           open={changeAgencyDialogOpen}
           onOpenChange={setChangeAgencyDialogOpen}
