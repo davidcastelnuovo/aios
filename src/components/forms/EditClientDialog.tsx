@@ -918,7 +918,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                     assignedCampaigners.map((assignment: any) => (
                       <div key={assignment.id} className="flex items-center gap-2 p-2 rounded-md bg-muted/50">
                         <Badge variant="secondary" className="text-sm flex items-center gap-1">
-                          {assignment.campaigners.full_name}
+                          {assignment.campaigners?.full_name ?? "—"}
                           <button
                             type="button"
                             onClick={() => removeCampaignerMutation.mutate(assignment.id)}
