@@ -191,7 +191,7 @@ export function LeadsChatView({
   const getLeadStatusInfo = (statusKey: string) => leadStatuses.find(s => s.status_key === statusKey);
 
   return (
-    <div className="flex h-[calc(100vh-220px)] border rounded-lg overflow-hidden bg-background" dir="rtl">
+    <div className="flex h-[calc(100vh-220px)] border rounded-lg overflow-hidden bg-background">
       {/* Right side - Lead list */}
       {(!isMobile || !selectedLeadId) && (
       <div className={cn("border-s flex flex-col bg-muted/20", isMobile ? "w-full" : "w-[25%] min-w-[240px]")}>
