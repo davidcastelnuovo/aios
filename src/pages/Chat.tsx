@@ -78,6 +78,7 @@ export default function Chat() {
   const [searchTerm, setSearchTerm] = useState("");
   const debouncedSearch = useDebouncedValue(searchTerm, 300);
   const [contactFilter, setContactFilter] = useState<"all" | "clients" | "leads" | "groups" | "unknown" | "telegram">("all");
+  const [platformFilter, setPlatformFilter] = useState<"all" | "whatsapp" | "telegram" | "manychat">("all");
   const [showTodayOnly, setShowTodayOnly] = useState(false);
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
   const [selectedContact, setSelectedContact] = useState<{ id: string; type: 'client' | 'lead' | 'group' | 'unknown' | 'telegram'; senderPhone?: string; name?: string; telegramChatId?: string } | null>(
@@ -542,7 +543,17 @@ export default function Chat() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <MessageCircle className="h-5 w-5" />
-              <h2 className="text-lg font-semibold">צ'אט</h2>
+              <Select value={platformFilter} onValueChange={(v: any) => setPlatformFilter(v)}>
+                <SelectTrigger className="h-8 w-auto gap-1 border-none shadow-none text-lg font-semibold px-1 hover:bg-accent">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-background z-50">
+                  <SelectItem value="all">צ'אט</SelectItem>
+                  <SelectItem value="whatsapp">וואטסאפ</SelectItem>
+                  <SelectItem value="telegram">טלגרם</SelectItem>
+                  <SelectItem value="manychat">ManyChat</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex items-center gap-1">
               <Button 
