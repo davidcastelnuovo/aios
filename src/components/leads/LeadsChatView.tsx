@@ -327,9 +327,9 @@ export function LeadsChatView({
                     >
                       {(lead.contact_name || "?")[0]}
                     </div>
-                    <div className="flex-1 min-w-0 text-right" dir="rtl">
-                      <div className="flex items-center gap-1">
-                        <span className="font-semibold text-sm truncate flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 text-right">
+                      <div className="flex items-center gap-1 flex-row-reverse">
+                        <span className="font-semibold text-sm truncate flex-1 min-w-0 text-right">
                           {lead.contact_name || "ללא שם"}
                         </span>
                         <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
@@ -337,7 +337,7 @@ export function LeadsChatView({
                         </span>
                       </div>
                       {isCompanyNameVisible && lead.company_name && (
-                        <p className="text-xs text-muted-foreground truncate">{lead.company_name}</p>
+                        <p className="text-xs text-muted-foreground truncate text-right">{lead.company_name}</p>
                       )}
                       <div className="flex items-center gap-1 mt-1 flex-wrap justify-end">
                         {stageInfo && (
