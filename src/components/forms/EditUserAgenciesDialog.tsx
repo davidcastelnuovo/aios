@@ -48,13 +48,27 @@ export function EditUserAgenciesDialog({
       const isOwnerRole = roles.includes("owner");
       
       if (isOwnerRole) {
-        const { data, error } = await supabase
+        // Get owned agencies
+        const { data: owned, error: ownedErr } = await supabase
           .from("agencies")
           .select("id, name")
           .eq("tenant_id", currentTenant.id)
           .order("name");
-        if (error) throw error;
-        return data;
+        if (ownedErr) throw ownedErr;
+
+        // Get shared agencies via agency_tenant_access
+        const { data: shared, error: sharedErr } = await supabase
+          .from("agency_tenant_access")
+          .select("agency_id, agencies(id, name)")
+          .eq("accessing_tenant_id", currentTenant.id);
+        if (sharedErr) throw sharedErr;
+
+        const sharedAgencies = shared?.map(s => s.agencies).filter(Boolean) || [];
+        const uniqueMap = new Map<string, { id: string; name: string }>();
+        [...(owned || []), ...sharedAgencies].forEach(a => {
+          if (a && a.id) uniqueMap.set(a.id, a as { id: string; name: string });
+        });
+        return Array.from(uniqueMap.values()).sort((a, b) => a.name.localeCompare(b.name));
       }
       return [];
     },
