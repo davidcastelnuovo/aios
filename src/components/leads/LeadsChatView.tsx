@@ -70,6 +70,13 @@ export function LeadsChatView({
   const [callDialogOpen, setCallDialogOpen] = useState(false);
   const queryClient = useQueryClient();
 
+  // Auto-select first lead on desktop only
+  useEffect(() => {
+    if (!isMobile && !selectedLeadId && leads.length > 0) {
+      setSelectedLeadId(leads[0].id);
+    }
+  }, [isMobile, leads, selectedLeadId]);
+
   const filteredListLeads = useMemo(() => {
     if (!listSearch.trim()) return leads;
     const q = listSearch.toLowerCase();
