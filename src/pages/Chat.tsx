@@ -387,6 +387,15 @@ export default function Chat() {
     // Filter out blocked contacts
     allContacts = allContacts.filter(contact => !contact.is_blocked);
 
+    // Apply platform filter
+    if (platformFilter === 'whatsapp') {
+      allContacts = allContacts.filter(c => c.active_chat_provider === 'green_api' || (!c.active_chat_provider && c.contact_type !== 'telegram'));
+    } else if (platformFilter === 'telegram') {
+      allContacts = allContacts.filter(c => c.contact_type === 'telegram' || c.active_chat_provider === 'telegram');
+    } else if (platformFilter === 'manychat') {
+      allContacts = allContacts.filter(c => c.active_chat_provider === 'manychat');
+    }
+
     // Apply contact type filter
     if (contactFilter !== "all") {
       const typeToMatch = contactFilter === 'groups' ? 'group' : 
