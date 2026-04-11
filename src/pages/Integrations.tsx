@@ -320,6 +320,22 @@ export default function Integrations() {
     enabled: !!currentTenantId,
   });
 
+  // Check Telegram bot state
+  const { data: telegramBotState } = useQuery({
+    queryKey: ['telegram-bot-state', currentTenantId],
+    queryFn: async () => {
+      if (!currentTenantId) return null;
+      const { data } = await supabase
+        .from('telegram_bot_state')
+        .select('*')
+        .eq('tenant_id', currentTenantId)
+        .eq('is_active', true)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!currentTenantId,
+  });
+
   const integrations: IntegrationCardProps[] = [
     {
       icon: <Webhook className="h-6 w-6" />,
