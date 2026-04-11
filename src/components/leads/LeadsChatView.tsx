@@ -370,9 +370,11 @@ export function LeadsChatView({
           </div>
         </ScrollArea>
       </div>
+      )}
 
-      {/* Left side - Lead detail panel (75%) */}
-      <div className="flex-1 flex flex-col">
+      {/* Left side - Lead detail panel */}
+      {(!isMobile || selectedLeadId) && (
+      <div className="flex-1 flex flex-col min-w-0">
         {selectedLead ? (
           <>
             {/* Toolbar */}
