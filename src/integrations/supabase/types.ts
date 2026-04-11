@@ -6559,6 +6559,114 @@ export type Database = {
           },
         ]
       }
+      telegram_bot_state: {
+        Row: {
+          bot_name: string | null
+          bot_username: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          tenant_id: string
+          update_offset: number
+          updated_at: string
+        }
+        Insert: {
+          bot_name?: string | null
+          bot_username?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          tenant_id: string
+          update_offset?: number
+          updated_at?: string
+        }
+        Update: {
+          bot_name?: string | null
+          bot_username?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          tenant_id?: string
+          update_offset?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "telegram_bot_state_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      telegram_messages: {
+        Row: {
+          chat_id: number
+          client_id: string | null
+          created_at: string
+          direction: string
+          id: string
+          lead_id: string | null
+          raw_update: Json | null
+          sender_name: string | null
+          sender_username: string | null
+          tenant_id: string
+          text: string | null
+          update_id: number | null
+        }
+        Insert: {
+          chat_id: number
+          client_id?: string | null
+          created_at?: string
+          direction?: string
+          id?: string
+          lead_id?: string | null
+          raw_update?: Json | null
+          sender_name?: string | null
+          sender_username?: string | null
+          tenant_id: string
+          text?: string | null
+          update_id?: number | null
+        }
+        Update: {
+          chat_id?: number
+          client_id?: string | null
+          created_at?: string
+          direction?: string
+          id?: string
+          lead_id?: string | null
+          raw_update?: Json | null
+          sender_name?: string | null
+          sender_username?: string | null
+          tenant_id?: string
+          text?: string | null
+          update_id?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "telegram_messages_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "telegram_messages_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "telegram_messages_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       telephony_settings: {
         Row: {
           auto_record: boolean | null
