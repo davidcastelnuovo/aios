@@ -19,7 +19,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { MessageCircle, Search, Settings, Pencil, Trash2, Tags, SquareCheck, CheckCheck } from "lucide-react";
+import { MessageCircle, Search, Settings, Pencil, Trash2, Tags, SquareCheck, CheckCheck, SlidersHorizontal } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -634,75 +635,85 @@ export default function Chat() {
             />
           )}
 
-          <div className="relative">
-            <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="חיפוש איש קשר..."
-              value={searchTerm}
-              onChange={handleSearchChange}
-              className="pr-10"
-            />
-          </div>
-
-          <div className="space-y-3">
-            <Select value={contactFilter || "all"} onValueChange={(value: any) => setContactFilter(value)}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-background z-50">
-                <SelectItem value="all">הכל ({filteredContacts.length})</SelectItem>
-                <SelectItem value="clients">לקוחות ({clientsCount})</SelectItem>
-                <SelectItem value="leads">לידים ({leadsCount})</SelectItem>
-                <SelectItem value="groups">קבוצות ({groupsCount})</SelectItem>
-                <SelectItem value="unknown">לא משויכים ({unknownCount})</SelectItem>
-                {telegramCount > 0 && (
-                  <SelectItem value="telegram">טלגרם ({telegramCount})</SelectItem>
-                )}
-              </SelectContent>
-            </Select>
-
-            {/* Tag filter */}
-            {allTags.length > 0 && (
-              <Select value={selectedTagFilter || "all"} onValueChange={(value) => setSelectedTagFilter(value === "all" ? null : value)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="סינון לפי תג" />
-                </SelectTrigger>
-                <SelectContent className="bg-background z-50">
-                  <SelectItem value="all">כל התגיות</SelectItem>
-                  {allTags.map((tag: any) => (
-                    <SelectItem key={tag.id} value={tag.id}>
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: tag.color }} />
-                        {tag.name}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2 px-2">
-                <Switch
-                  id="today-filter"
-                  checked={showTodayOnly}
-                  onCheckedChange={setShowTodayOnly}
-                />
-                <Label htmlFor="today-filter" className="text-sm cursor-pointer">
-                  הצג רק שיחות מהיום
-                </Label>
-              </div>
-              <div className="flex items-center gap-2 px-2">
-                <Switch
-                  id="unread-filter"
-                  checked={showUnreadOnly}
-                  onCheckedChange={setShowUnreadOnly}
-                />
-                <Label htmlFor="unread-filter" className="text-sm cursor-pointer">
-                  הצג רק שיחות לא נקראות
-                </Label>
-              </div>
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="חיפוש איש קשר..."
+                value={searchTerm}
+                onChange={handleSearchChange}
+                className="pr-10"
+              />
             </div>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="icon" className="shrink-0 relative">
+                  <SlidersHorizontal className="h-4 w-4" />
+                  {(contactFilter !== "all" || selectedTagFilter || showTodayOnly || showUnreadOnly) && (
+                    <span className="absolute -top-1 -left-1 h-2.5 w-2.5 rounded-full bg-primary" />
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-64 space-y-3">
+                <Select value={contactFilter || "all"} onValueChange={(value: any) => setContactFilter(value)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background z-50">
+                    <SelectItem value="all">הכל ({filteredContacts.length})</SelectItem>
+                    <SelectItem value="clients">לקוחות ({clientsCount})</SelectItem>
+                    <SelectItem value="leads">לידים ({leadsCount})</SelectItem>
+                    <SelectItem value="groups">קבוצות ({groupsCount})</SelectItem>
+                    <SelectItem value="unknown">לא משויכים ({unknownCount})</SelectItem>
+                    {telegramCount > 0 && (
+                      <SelectItem value="telegram">טלגרם ({telegramCount})</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+
+                {allTags.length > 0 && (
+                  <Select value={selectedTagFilter || "all"} onValueChange={(value) => setSelectedTagFilter(value === "all" ? null : value)}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="סינון לפי תג" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background z-50">
+                      <SelectItem value="all">כל התגיות</SelectItem>
+                      {allTags.map((tag: any) => (
+                        <SelectItem key={tag.id} value={tag.id}>
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: tag.color }} />
+                            {tag.name}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      id="today-filter"
+                      checked={showTodayOnly}
+                      onCheckedChange={setShowTodayOnly}
+                    />
+                    <Label htmlFor="today-filter" className="text-sm cursor-pointer">
+                      הצג רק שיחות מהיום
+                    </Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      id="unread-filter"
+                      checked={showUnreadOnly}
+                      onCheckedChange={setShowUnreadOnly}
+                    />
+                    <Label htmlFor="unread-filter" className="text-sm cursor-pointer">
+                      הצג רק שיחות לא נקראות
+                    </Label>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
 
           <div className="text-muted-foreground text-sm px-2">
