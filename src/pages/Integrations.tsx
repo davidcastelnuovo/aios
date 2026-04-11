@@ -565,6 +565,19 @@ export default function Integrations() {
       gradient: "bg-gradient-to-r from-teal-600 to-cyan-700",
     },
     {
+      icon: <Send className="h-6 w-6" />,
+      title: "Telegram",
+      description: "חיבור בוט טלגרם לשליחה וקבלה של הודעות",
+      features: [
+        "שליחה וקבלה דו-כיוונית",
+        "סנכרון הודעות בזמן אמת",
+        "חיבור ללקוחות ולידים",
+      ],
+      isConnected: !!telegramBotState,
+      route: "telegram-settings",
+      gradient: "bg-gradient-to-r from-sky-500 to-blue-600",
+    },
+    {
       icon: <Link2 className="h-6 w-6" />,
       title: "Unified.to",
       description: "גישה ל-420+ אינטגרציות דרך API אחד — CRM, ATS, Ticketing ועוד",
