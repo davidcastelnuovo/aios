@@ -245,7 +245,7 @@ function LeadCardContent({
     <Card
       ref={innerRef}
       style={style}
-      className="mb-3 hover:shadow-lg transition-all"
+      className="mb-3 hover:shadow-lg transition-all overflow-hidden min-w-0"
     >
       <CardHeader className="pb-2 pt-3">
         <CardTitle className="text-sm flex items-center justify-between gap-2">
@@ -268,7 +268,7 @@ function LeadCardContent({
         {isCompanyNameVisible && lead.company_name && (
           <div className="flex items-center gap-2 mt-1">
             <Building2 className="h-3 w-3 text-muted-foreground shrink-0" />
-            <span className="text-xs text-muted-foreground">{lead.company_name}</span>
+            <span className="text-xs text-muted-foreground truncate">{lead.company_name}</span>
           </div>
         )}
         {/* Tag Badges */}
@@ -2668,7 +2668,7 @@ export default function Leads() {
                 return (
                   <div 
                     key={stage.id}
-                    className="relative"
+                    className="relative min-w-0 overflow-hidden"
                     style={{
                       zIndex: PIPELINE_STAGES.length - index,
                     }}
