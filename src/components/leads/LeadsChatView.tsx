@@ -310,7 +310,7 @@ export function LeadsChatView({
                     isChecked && multiSelectMode && "bg-primary/10"
                   )}
                 >
-                  <div className="flex items-start gap-2" dir="rtl">
+                  <div className="flex items-start gap-2 flex-row-reverse">
                     {/* Checkbox in multi-select mode */}
                     {multiSelectMode && (
                       <div className="pt-1 shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -327,7 +327,7 @@ export function LeadsChatView({
                     >
                       {(lead.contact_name || "?")[0]}
                     </div>
-                    <div className="flex-1 min-w-0 text-right">
+                    <div className="flex-1 min-w-0 text-right" dir="rtl">
                       <div className="flex items-center gap-1">
                         <span className="font-semibold text-sm truncate flex-1 min-w-0">
                           {lead.contact_name || "ללא שם"}
