@@ -749,6 +749,7 @@ export function LeadsChatView({
           </div>
         )}
       </div>
+      )}
 
       {/* Management dialogs */}
       <ManagePipelineStagesDialog open={manageStagesOpen} onOpenChange={setManageStagesOpen} showTrigger={false} />
