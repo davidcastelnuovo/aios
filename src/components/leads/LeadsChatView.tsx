@@ -1,6 +1,7 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import ChatViewComponent from "@/components/chat/ChatView";
-import { User, Phone, PhoneCall, Building2, Clock, Search, Tag, Mail, ExternalLink, CheckSquare, Trash2, Settings2, MessageSquare, FileText, DollarSign, Paperclip, Users, ChevronRight, X } from "lucide-react";
+import { User, Phone, PhoneCall, Building2, Clock, Search, Tag, Mail, ExternalLink, CheckSquare, Trash2, Settings2, MessageSquare, FileText, DollarSign, Paperclip, Users, ChevronRight, X, ArrowRight } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { CallDialog } from "@/components/telephony/CallDialog";
 import { CallHistoryTab } from "@/components/telephony/CallHistoryTab";
 import { Badge } from "@/components/ui/badge";
@@ -56,7 +57,8 @@ export function LeadsChatView({
   isCompanyNameVisible,
   searchQuery,
 }: LeadsChatViewProps) {
-  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(leads[0]?.id || null);
+  const isMobile = useIsMobile();
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [listSearch, setListSearch] = useState("");
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("details");
@@ -67,6 +69,13 @@ export function LeadsChatView({
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [callDialogOpen, setCallDialogOpen] = useState(false);
   const queryClient = useQueryClient();
+
+  // Auto-select first lead on desktop only
+  useEffect(() => {
+    if (!isMobile && !selectedLeadId && leads.length > 0) {
+      setSelectedLeadId(leads[0].id);
+    }
+  }, [isMobile, leads, selectedLeadId]);
 
   const filteredListLeads = useMemo(() => {
     if (!listSearch.trim()) return leads;
@@ -183,8 +192,9 @@ export function LeadsChatView({
 
   return (
     <div className="flex h-[calc(100vh-220px)] border rounded-lg overflow-hidden bg-background" dir="rtl">
-      {/* Right side - Lead list (25%) */}
-      <div className="w-[25%] min-w-[240px] border-s flex flex-col bg-muted/20">
+      {/* Right side - Lead list */}
+      {(!isMobile || !selectedLeadId) && (
+      <div className={cn("border-s flex flex-col bg-muted/20", isMobile ? "w-full" : "w-[25%] min-w-[240px]")}>
         {/* List header with search */}
         <div className="p-3 border-b bg-background/80 backdrop-blur-sm">
           <div className="flex items-center gap-2">
@@ -367,13 +377,21 @@ export function LeadsChatView({
           </div>
         </ScrollArea>
       </div>
+      )}
 
-      {/* Left side - Lead detail panel (75%) */}
-      <div className="flex-1 flex flex-col">
+      {/* Left side - Lead detail panel */}
+      {(!isMobile || selectedLeadId) && (
+      <div className="flex-1 flex flex-col min-w-0">
         {selectedLead ? (
           <>
             {/* Toolbar */}
             <div className="flex items-center gap-2 p-3 border-b bg-background/95 backdrop-blur-sm flex-wrap">
+              {/* Back button on mobile */}
+              {isMobile && (
+                <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => setSelectedLeadId(null)}>
+                  <ArrowRight className="h-5 w-5" />
+                </Button>
+              )}
               {/* Lead name & company */}
               <div className="flex items-center gap-3 flex-1 min-w-0">
                 <div
@@ -744,6 +762,7 @@ export function LeadsChatView({
           </div>
         )}
       </div>
+      )}
 
       {/* Management dialogs */}
       <ManagePipelineStagesDialog open={manageStagesOpen} onOpenChange={setManageStagesOpen} showTrigger={false} />
