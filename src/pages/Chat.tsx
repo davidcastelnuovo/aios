@@ -835,6 +835,7 @@ export default function Chat() {
             contactType={selectedContact.type}
             senderPhone={selectedContact.senderPhone}
             contactName={selectedContact.name}
+            telegramChatId={selectedContact.telegramChatId}
             onBack={isMobile ? () => setSelectedContact(null) : undefined}
           />
         ) : (
