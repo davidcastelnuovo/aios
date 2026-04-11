@@ -113,6 +113,7 @@ const TRIGGER_OPTIONS = TRIGGER_CATEGORIES.flatMap(c => c.options);
 const ACTION_OPTIONS = [
   { value: "send_whatsapp", label: "שלח WhatsApp (ManyChat)" },
   { value: "send_greenapi_message", label: "שלח WhatsApp (Green API)" },
+  { value: "send_telegram", label: "שלח הודעת Telegram" },
   { value: "create_task", label: "צור משימה" },
   { value: "add_lead_update", label: "הוסף עדכון לליד" },
   { value: "add_client_update", label: "הוסף עדכון ללקוח" },
