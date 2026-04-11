@@ -379,6 +379,12 @@ export function LeadsChatView({
           <>
             {/* Toolbar */}
             <div className="flex items-center gap-2 p-3 border-b bg-background/95 backdrop-blur-sm flex-wrap">
+              {/* Back button on mobile */}
+              {isMobile && (
+                <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => setSelectedLeadId(null)}>
+                  <ArrowRight className="h-5 w-5" />
+                </Button>
+              )}
               {/* Lead name & company */}
               <div className="flex items-center gap-3 flex-1 min-w-0">
                 <div
