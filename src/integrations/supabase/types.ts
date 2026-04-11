@@ -7775,6 +7775,10 @@ export type Database = {
         Args: { _agency_id: string; _user_id: string }
         Returns: boolean
       }
+      user_has_cross_tenant_client_access: {
+        Args: { p_client_id: string; p_user_id: string }
+        Returns: boolean
+      }
       user_has_integration_access: {
         Args: { p_integration_id: string }
         Returns: boolean
