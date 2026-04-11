@@ -304,13 +304,32 @@ export function LeadsChatView({
                       setActiveTab("details");
                     }
                   }}
-                  className={cn(
-                    "w-full text-right p-3 hover:bg-muted/50 transition-colors cursor-pointer",
-                    isSelected && !multiSelectMode && "bg-primary/10 border-e-4 border-e-primary",
+                   className={cn(
+                    "w-full p-3 hover:bg-muted/50 transition-colors cursor-pointer overflow-hidden",
+                    isSelected && !multiSelectMode && "bg-primary/10 border-r-4 border-r-primary",
                     isChecked && multiSelectMode && "bg-primary/10"
                   )}
                 >
-                  <div className="flex items-start gap-2 flex-row-reverse">
+                  <div className="flex items-start gap-2">
+                    {/* Avatar circle */}
+                    <div
+                      className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
+                      style={{ backgroundColor: stageInfo?.hexColor || "hsl(var(--primary))" }}
+                    >
+                      {(lead.contact_name || "?")[0]}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1">
+                        <span className="font-semibold text-sm truncate flex-1 min-w-0">
+                          {lead.contact_name || "ללא שם"}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
+                          {lead.created_at && format(new Date(lead.created_at), "dd/MM", { locale: he })}
+                        </span>
+                      </div>
+                      {isCompanyNameVisible && lead.company_name && (
+                        <p className="text-xs text-muted-foreground truncate">{lead.company_name}</p>
+                      )}
                     {/* Checkbox in multi-select mode */}
                     {multiSelectMode && (
                       <div className="pt-1 shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -320,26 +339,7 @@ export function LeadsChatView({
                         />
                       </div>
                     )}
-                    {/* Avatar circle */}
-                    <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
-                      style={{ backgroundColor: stageInfo?.hexColor || "hsl(var(--primary))" }}
-                    >
-                      {(lead.contact_name || "?")[0]}
-                    </div>
-                    <div className="flex-1 min-w-0 text-right">
-                      <div className="flex items-center gap-1 flex-row-reverse">
-                        <span className="font-semibold text-sm truncate flex-1 min-w-0 text-right">
-                          {lead.contact_name || "ללא שם"}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
-                          {lead.created_at && format(new Date(lead.created_at), "dd/MM", { locale: he })}
-                        </span>
-                      </div>
-                      {isCompanyNameVisible && lead.company_name && (
-                        <p className="text-xs text-muted-foreground truncate text-right">{lead.company_name}</p>
-                      )}
-                      <div className="flex items-center gap-1 mt-1 flex-wrap justify-end">
+                      <div className="flex items-center gap-1 mt-1 flex-wrap">
                         {stageInfo && (
                           <Badge
                             variant="outline"
