@@ -471,7 +471,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
 
   // Calculate anchor message for scroll
   const firstUnreadIndex = messagesData?.findIndex(
-    (msg) => msg.direction === 'inbound' && !msg.read_at
+    (msg: any) => msg.direction === 'inbound' && !msg.read_at
   ) ?? -1;
   
   const anchorMessageId = firstUnreadIndex >= 0 
