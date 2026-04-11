@@ -278,11 +278,10 @@ export default function Chat() {
     queryKey: ['telegram-contacts', tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
-      // Get distinct chat_ids from telegram_messages for this tenant
+      // Get distinct chat_ids from telegram_messages for all user's tenants (RLS handles filtering)
       const { data, error } = await supabase
         .from('telegram_messages')
-        .select('chat_id, sender_name, sender_username, created_at, text, direction')
-        .eq('tenant_id', tenantId)
+        .select('chat_id, sender_name, sender_username, created_at, text, direction, tenant_id')
         .order('created_at', { ascending: false });
       
       if (error || !data) return [];
