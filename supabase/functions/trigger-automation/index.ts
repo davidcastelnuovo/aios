@@ -1138,7 +1138,65 @@ Deno.serve(async (req) => {
                 } else if (effectiveActionType === 'send_greenapi_to_campaigner') {
                   stepResponse = await executeGreenApiToCampaigner(supabase, stepConfig, stepData, tenantId)
                   previousStepOutput = stepResponse
-                } else if (step.step_type === 'whatsapp_session') {
+                } else if (effectiveActionType === 'send_telegram') {
+                  // Replace dynamic variables in message template
+                  if (stepConfig.message_template && previousStepOutput) {
+                    const agentText = previousStepOutput?.output || (typeof previousStepOutput === 'string' ? previousStepOutput : JSON.stringify(previousStepOutput))
+                    stepConfig.message_template = stepConfig.message_template.replace(/\{\{agent_output\}\}/g, agentText)
+                    stepConfig.message_template = stepConfig.message_template.replace(/\{\{previous_step_output\}\}/g, agentText)
+                  }
+                  // Replace contact_name variable
+                  const contactName = stepData?.contact_name || stepData?.sender_name || stepData?.name || ''
+                  if (stepConfig.message_template) {
+                    stepConfig.message_template = stepConfig.message_template.replace(/\{\{contact_name\}\}/g, contactName)
+                  }
+                  // Resolve chat_id - could be dynamic variable
+                  let telegramChatId = stepConfig.telegram_chat_id || ''
+                  if (telegramChatId === '{{chat_id}}') {
+                    telegramChatId = stepData?.chat_id || stepData?.telegram_chat_id || ''
+                  }
+                  
+                  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')
+                  const TELEGRAM_API_KEY = Deno.env.get('TELEGRAM_API_KEY')
+                  
+                  if (!LOVABLE_API_KEY || !TELEGRAM_API_KEY) {
+                    throw new Error('Telegram integration not configured (missing API keys)')
+                  }
+                  if (!telegramChatId) {
+                    throw new Error('Telegram chat_id is required')
+                  }
+                  
+                  const GATEWAY_URL = 'https://connector-gateway.lovable.dev/telegram'
+                  const telegramResponse = await fetch(`${GATEWAY_URL}/sendMessage`, {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+                      'X-Connection-Api-Key': TELEGRAM_API_KEY,
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      chat_id: telegramChatId,
+                      text: stepConfig.message_template || 'No message configured',
+                      parse_mode: stepConfig.telegram_parse_mode || 'HTML',
+                    }),
+                  })
+                  
+                  const telegramData = await telegramResponse.json()
+                  if (!telegramResponse.ok) {
+                    throw new Error(`Telegram API failed [${telegramResponse.status}]: ${JSON.stringify(telegramData)}`)
+                  }
+                  
+                  // Store outbound message
+                  await supabase.from('telegram_messages').insert({
+                    tenant_id: tenantId,
+                    chat_id: parseInt(telegramChatId),
+                    text: stepConfig.message_template,
+                    direction: 'outbound',
+                    raw_update: telegramData.result,
+                  })
+                  
+                  stepResponse = { success: true, message_id: telegramData.result?.message_id }
+                  previousStepOutput = stepResponse
                   // WHATSAPP SESSION STEP: save/update conversation history by chat_id
                   const chatId = payloadData?.chat_id || payloadData?.sender_phone || ''
                   const agentOutput = previousStepOutput?.output || ''
