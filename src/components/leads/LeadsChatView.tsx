@@ -185,8 +185,9 @@ export function LeadsChatView({
 
   return (
     <div className="flex h-[calc(100vh-220px)] border rounded-lg overflow-hidden bg-background" dir="rtl">
-      {/* Right side - Lead list (25%) */}
-      <div className="w-[25%] min-w-[240px] border-s flex flex-col bg-muted/20">
+      {/* Right side - Lead list */}
+      {(!isMobile || !selectedLeadId) && (
+      <div className={cn("border-s flex flex-col bg-muted/20", isMobile ? "w-full" : "w-[25%] min-w-[240px]")}>
         {/* List header with search */}
         <div className="p-3 border-b bg-background/80 backdrop-blur-sm">
           <div className="flex items-center gap-2">
