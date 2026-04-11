@@ -373,14 +373,11 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
       
       // Telegram messages come from telegram_messages table
       if (contactType === "telegram" && telegramChatId) {
+        // Don't filter by tenant_id - RLS allows viewing from all user's tenants
         let query = supabase
           .from("telegram_messages")
           .select("*")
           .eq("chat_id", parseInt(telegramChatId));
-        
-        if (tenantId) {
-          query = query.eq("tenant_id", tenantId);
-        }
         if (dateFilter) {
           query = query.gte("created_at", dateFilter);
         }
