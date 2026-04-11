@@ -318,6 +318,7 @@ export function LeadsChatView({
                     >
                       {(lead.contact_name || "?")[0]}
                     </div>
+                    {/* Name & info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1">
                         <span className="font-semibold text-sm truncate flex-1 min-w-0">
@@ -330,15 +331,6 @@ export function LeadsChatView({
                       {isCompanyNameVisible && lead.company_name && (
                         <p className="text-xs text-muted-foreground truncate">{lead.company_name}</p>
                       )}
-                    {/* Checkbox in multi-select mode */}
-                    {multiSelectMode && (
-                      <div className="pt-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-                        <Checkbox
-                          checked={isChecked}
-                          onCheckedChange={() => toggleLeadSelection(lead.id)}
-                        />
-                      </div>
-                    )}
                       <div className="flex items-center gap-1 mt-1 flex-wrap">
                         {stageInfo && (
                           <Badge
@@ -365,6 +357,15 @@ export function LeadsChatView({
                         </div>
                       )}
                     </div>
+                    {/* Checkbox in multi-select mode */}
+                    {multiSelectMode && (
+                      <div className="pt-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={isChecked}
+                          onCheckedChange={() => toggleLeadSelection(lead.id)}
+                        />
+                      </div>
+                    )}
                   </div>
                 </button>
               );
