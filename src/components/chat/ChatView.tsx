@@ -367,10 +367,38 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
 
   // Fetch chat messages
   const { data: messagesData, isLoading: isLoadingMessages } = useQuery({
-    queryKey: ["chat-messages", contactId, contactType, senderPhone, connectionUserId, messagePeriod],
+    queryKey: ["chat-messages", contactId, contactType, senderPhone, connectionUserId, messagePeriod, telegramChatId],
     queryFn: async () => {
       const dateFilter = getDateFilter();
       
+      // Telegram messages come from telegram_messages table
+      if (contactType === "telegram" && telegramChatId) {
+        let query = supabase
+          .from("telegram_messages")
+          .select("*")
+          .eq("chat_id", parseInt(telegramChatId));
+        
+        if (tenantId) {
+          query = query.eq("tenant_id", tenantId);
+        }
+        if (dateFilter) {
+          query = query.gte("created_at", dateFilter);
+        }
+        
+        const { data, error } = await query.order("created_at", { ascending: false }).limit(2000);
+        if (error) throw error;
+        
+        // Transform telegram messages to match chat_messages format
+        return (data || []).reverse().map((msg: any) => ({
+          id: msg.id || `tg-${msg.update_id}`,
+          direction: msg.direction || 'inbound',
+          message_text: msg.text || '',
+          created_at: msg.created_at,
+          sender_name: msg.sender_name,
+          raw_provider_data: msg.raw_update,
+        }));
+      }
+
       if (contactType === "unknown") {
         let query = supabase
           .from("chat_messages")
