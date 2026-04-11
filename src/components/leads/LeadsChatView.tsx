@@ -57,7 +57,8 @@ export function LeadsChatView({
   isCompanyNameVisible,
   searchQuery,
 }: LeadsChatViewProps) {
-  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(leads[0]?.id || null);
+  const isMobile = useIsMobile();
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [listSearch, setListSearch] = useState("");
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("details");
