@@ -328,12 +328,12 @@ export function LeadsChatView({
                       {(lead.contact_name || "?")[0]}
                     </div>
                     <div className="flex-1 min-w-0 text-right">
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                          {lead.created_at && format(new Date(lead.created_at), "dd/MM", { locale: he })}
-                        </span>
-                        <span className="font-semibold text-sm truncate">
+                      <div className="flex items-center gap-1">
+                        <span className="font-semibold text-sm truncate flex-1 min-w-0">
                           {lead.contact_name || "ללא שם"}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
+                          {lead.created_at && format(new Date(lead.created_at), "dd/MM", { locale: he })}
                         </span>
                       </div>
                       {isCompanyNameVisible && lead.company_name && (
