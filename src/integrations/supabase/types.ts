@@ -2447,6 +2447,51 @@ export type Database = {
           },
         ]
       }
+      error_logs: {
+        Row: {
+          colno: number | null
+          created_at: string | null
+          error_message: string | null
+          error_type: string | null
+          filename: string | null
+          has_blank_screen: boolean | null
+          id: string
+          lineno: number | null
+          source: string | null
+          stack: string | null
+          timestamp: number | null
+          url: string | null
+        }
+        Insert: {
+          colno?: number | null
+          created_at?: string | null
+          error_message?: string | null
+          error_type?: string | null
+          filename?: string | null
+          has_blank_screen?: boolean | null
+          id?: string
+          lineno?: number | null
+          source?: string | null
+          stack?: string | null
+          timestamp?: number | null
+          url?: string | null
+        }
+        Update: {
+          colno?: number | null
+          created_at?: string | null
+          error_message?: string | null
+          error_type?: string | null
+          filename?: string | null
+          has_blank_screen?: boolean | null
+          id?: string
+          lineno?: number | null
+          source?: string | null
+          stack?: string | null
+          timestamp?: number | null
+          url?: string | null
+        }
+        Relationships: []
+      }
       expense_payments: {
         Row: {
           amount: number
