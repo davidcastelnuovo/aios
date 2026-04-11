@@ -420,6 +420,7 @@ export default function Chat() {
   const leadsCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'lead').length;
   const groupsCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'group').length;
   const unknownCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'unknown').length;
+  const telegramCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'telegram').length;
 
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
