@@ -80,7 +80,7 @@ export default function Chat() {
   const [contactFilter, setContactFilter] = useState<"all" | "clients" | "leads" | "groups" | "unknown">("all");
   const [showTodayOnly, setShowTodayOnly] = useState(false);
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
-  const [selectedContact, setSelectedContact] = useState<{ id: string; type: 'client' | 'lead' | 'group' | 'unknown'; senderPhone?: string; name?: string } | null>(
+  const [selectedContact, setSelectedContact] = useState<{ id: string; type: 'client' | 'lead' | 'group' | 'unknown' | 'telegram'; senderPhone?: string; name?: string; telegramChatId?: string } | null>(
     clientId ? { id: clientId, type: 'client' } : null
   );
   const [editingContact, setEditingContact] = useState<{ id: string; type: 'client' | 'lead'; data: any } | null>(null);
@@ -737,7 +737,8 @@ export default function Chat() {
                             id: contact.id,
                             type: contact.contact_type,
                             senderPhone: contact.sender_phone,
-                            name: contact.name
+                            name: contact.name,
+                            telegramChatId: (contact as any).telegram_chat_id,
                           });
                         }
                       }}
