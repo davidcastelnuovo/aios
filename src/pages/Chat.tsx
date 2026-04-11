@@ -49,12 +49,13 @@ interface Contact {
   manychat_subscriber_id: string | null;
   active_chat_provider: string | null;
   unread_count: number;
-  contact_type: 'client' | 'lead' | 'group' | 'unknown';
+  contact_type: 'client' | 'lead' | 'group' | 'unknown' | 'telegram';
   last_message_at: string | null;
   sender_phone?: string;
   is_blocked?: boolean;
   has_messages?: boolean;
   whatsapp_avatar_url?: string | null;
+  telegram_chat_id?: string;
 }
 
 const normalizePhone = (phone?: string | null) => {
@@ -271,6 +272,41 @@ export default function Chat() {
     refetchInterval: 30000,
   });
 
+  // Fetch Telegram contacts
+  const { data: telegramContacts = [] } = useQuery({
+    queryKey: ['telegram-contacts', tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      // Get distinct chat_ids from telegram_messages for this tenant
+      const { data, error } = await supabase
+        .from('telegram_messages')
+        .select('chat_id, sender_name, sender_username, created_at, text, direction')
+        .eq('tenant_id', tenantId)
+        .order('created_at', { ascending: false });
+      
+      if (error || !data) return [];
+      
+      // Group by chat_id to get unique contacts
+      const chatMap = new Map<string, any>();
+      for (const msg of data) {
+        const chatIdStr = String(msg.chat_id);
+        if (!chatMap.has(chatIdStr)) {
+          // Count unread (inbound messages) - for now all are "read"
+          chatMap.set(chatIdStr, {
+            chat_id: chatIdStr,
+            name: msg.sender_name || msg.sender_username || chatIdStr,
+            last_message_at: msg.created_at,
+            unread_count: 0,
+          });
+        }
+      }
+      
+      return Array.from(chatMap.values());
+    },
+    enabled: !!tenantId && !debouncedSearch,
+    refetchInterval: 30000,
+  });
+
   // Combine all contacts
   const allContactsBeforeTypeFilter = useMemo(() => {
     let base = contacts || [];
@@ -295,17 +331,41 @@ export default function Chat() {
         whatsapp_avatar_url: uc.whatsapp_avatar_url || null,
       }));
       
-      const combined = [...base, ...normalizedUnknown];
-      // Sort combined list by last_message_at descending (newest first)
-      return combined.sort((a, b) => {
-        const aTime = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
-        const bTime = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
-        return bTime - aTime;
-      });
+      base = [...base, ...normalizedUnknown];
     }
-    
-    return base;
-  }, [contacts, unknownContacts, debouncedSearch]);
+
+    // Add Telegram contacts
+    if (!debouncedSearch && telegramContacts && telegramContacts.length > 0) {
+      const normalizedTelegram = telegramContacts.map((tc: any) => ({
+        id: `telegram-${tc.chat_id}`,
+        name: tc.name,
+        contact_name: null,
+        phone: null,
+        email: null,
+        agency_id: null,
+        agency_name: null,
+        manychat_subscriber_id: null,
+        active_chat_provider: 'telegram',
+        contact_type: 'telegram' as const,
+        unread_count: tc.unread_count || 0,
+        last_message_at: tc.last_message_at,
+        sender_phone: undefined,
+        is_blocked: false,
+        has_messages: true,
+        whatsapp_avatar_url: null,
+        telegram_chat_id: tc.chat_id,
+      }));
+      
+      base = [...base, ...normalizedTelegram];
+    }
+
+    // Sort combined list by last_message_at descending (newest first)
+    return base.sort((a, b) => {
+      const aTime = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
+      const bTime = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
+      return bTime - aTime;
+    });
+  }, [contacts, unknownContacts, telegramContacts, debouncedSearch]);
 
   const todayParts = useMemo(() => {
     const t = new Date();
