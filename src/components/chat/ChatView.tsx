@@ -71,6 +71,18 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
   const { data: contact, isLoading: isLoadingContact } = useQuery({
     queryKey: ["contact", contactId, contactType, senderPhone],
     queryFn: async () => {
+      if (contactType === "telegram") {
+        return {
+          id: contactId,
+          name: contactName || telegramChatId || contactId,
+          phone: null,
+          email: null,
+          agency_id: null,
+          tenant_id: tenantId,
+          manychat_subscriber_id: null,
+          active_chat_provider: 'telegram' as const,
+        };
+      }
       if (contactType === "unknown") {
         // For unknown contacts, use the passed name or fallback to phone
         return {
