@@ -8,7 +8,7 @@ import { useState } from "react";
 
 interface Contact {
   id: string;
-  contact_type: 'client' | 'lead' | 'group' | 'unknown';
+  contact_type: 'client' | 'lead' | 'group' | 'unknown' | 'telegram';
   sender_phone?: string;
 }
 

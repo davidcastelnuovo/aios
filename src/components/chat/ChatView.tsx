@@ -44,13 +44,14 @@ interface ReplyToMessage {
 
 interface ChatViewProps {
   contactId: string;
-  contactType: "client" | "lead" | "group" | "unknown";
+  contactType: "client" | "lead" | "group" | "unknown" | "telegram";
   senderPhone?: string;
   contactName?: string;
+  telegramChatId?: string;
   onBack?: () => void;
 }
 
-export default function ChatView({ contactId, contactType, senderPhone, contactName, onBack }: ChatViewProps) {
+export default function ChatView({ contactId, contactType, senderPhone, contactName, telegramChatId, onBack }: ChatViewProps) {
   const queryClient = useQueryClient();
   const { tenant: currentTenant, tenantId } = useCurrentTenant();
   const { userId } = useCurrentUser();
@@ -70,6 +71,18 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
   const { data: contact, isLoading: isLoadingContact } = useQuery({
     queryKey: ["contact", contactId, contactType, senderPhone],
     queryFn: async () => {
+      if (contactType === "telegram") {
+        return {
+          id: contactId,
+          name: contactName || telegramChatId || contactId,
+          phone: null,
+          email: null,
+          agency_id: null,
+          tenant_id: tenantId,
+          manychat_subscriber_id: null,
+          active_chat_provider: 'telegram' as const,
+        };
+      }
       if (contactType === "unknown") {
         // For unknown contacts, use the passed name or fallback to phone
         return {
@@ -354,10 +367,38 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
 
   // Fetch chat messages
   const { data: messagesData, isLoading: isLoadingMessages } = useQuery({
-    queryKey: ["chat-messages", contactId, contactType, senderPhone, connectionUserId, messagePeriod],
+    queryKey: ["chat-messages", contactId, contactType, senderPhone, connectionUserId, messagePeriod, telegramChatId],
     queryFn: async () => {
       const dateFilter = getDateFilter();
       
+      // Telegram messages come from telegram_messages table
+      if (contactType === "telegram" && telegramChatId) {
+        let query = supabase
+          .from("telegram_messages")
+          .select("*")
+          .eq("chat_id", parseInt(telegramChatId));
+        
+        if (tenantId) {
+          query = query.eq("tenant_id", tenantId);
+        }
+        if (dateFilter) {
+          query = query.gte("created_at", dateFilter);
+        }
+        
+        const { data, error } = await query.order("created_at", { ascending: false }).limit(2000);
+        if (error) throw error;
+        
+        // Transform telegram messages to match chat_messages format
+        return (data || []).reverse().map((msg: any) => ({
+          id: msg.id || `tg-${msg.update_id}`,
+          direction: msg.direction || 'inbound',
+          message_text: msg.text || '',
+          created_at: msg.created_at,
+          sender_name: msg.sender_name,
+          raw_provider_data: msg.raw_update,
+        }));
+      }
+
       if (contactType === "unknown") {
         let query = supabase
           .from("chat_messages")
@@ -430,7 +471,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
 
   // Calculate anchor message for scroll
   const firstUnreadIndex = messagesData?.findIndex(
-    (msg) => msg.direction === 'inbound' && !msg.read_at
+    (msg: any) => msg.direction === 'inbound' && !msg.read_at
   ) ?? -1;
   
   const anchorMessageId = firstUnreadIndex >= 0 
@@ -441,31 +482,41 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
     if (!contact) return;
 
     try {
-      // Check session first
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         toast.error("נא להתחבר מחדש למערכת");
         return;
       }
 
-      // Check if provider is configured
+      // Telegram send
+      if (contactType === 'telegram' && telegramChatId) {
+        const { error } = await supabase.functions.invoke("telegram-send", {
+          body: {
+            chat_id: telegramChatId,
+            text: message,
+            tenant_id: tenantId,
+          },
+        });
+        if (error) throw error;
+        queryClient.invalidateQueries({ queryKey: ["chat-messages", contactId] });
+        toast.success("ההודעה נשלחה בהצלחה");
+        return;
+      }
+
       if (!activeProvider) {
         toast.error("לא מוגדר ספק צ'אט פעיל");
         return;
       }
 
-      // Validate required contact details
       if (activeProvider === 'manychat') {
         if (contactType === 'group') {
           toast.error("קבוצות לא נתמכות ב-ManyChat");
           return;
         }
-        
         if (!contact.manychat_subscriber_id) {
           toast.error("חסר Subscriber ID למניצ'אט. אנא הוסף ב-ManyChat Settings.");
           return;
         }
-
         const { error } = await supabase.functions.invoke("send-chat-message", {
           body: {
             [contactType === "client" ? "clientId" : "leadId"]: contactId,
@@ -474,37 +525,24 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
             provider: "manychat",
           },
         });
-
         if (error) throw error;
       } else if (activeProvider === 'green_api') {
         if (!contact.phone && contactType !== 'group' && contactType !== 'unknown') {
           toast.error("חסר מספר טלפון ל-Green API. אנא הוסף באיש הקשר.");
           return;
         }
-
         const body: any = {
           message,
           phoneNumber: senderPhone || contact.phone,
           provider: "green_api",
           quotedMessageId,
         };
+        if (contactType === "client") body.clientId = contactId;
+        else if (contactType === "lead") body.leadId = contactId;
+        else if (contactType === "group") body.groupId = contactId;
+        else if (contactType === "unknown") body.tenantId = tenantId;
 
-        // Only add IDs for known contact types
-        if (contactType === "client") {
-          body.clientId = contactId;
-        } else if (contactType === "lead") {
-          body.leadId = contactId;
-        } else if (contactType === "group") {
-          body.groupId = contactId;
-        } else if (contactType === "unknown") {
-          // For unknown contacts, pass the tenant ID explicitly
-          body.tenantId = tenantId;
-        }
-
-        const { error } = await supabase.functions.invoke("send-green-api-message", {
-          body,
-        });
-
+        const { error } = await supabase.functions.invoke("send-green-api-message", { body });
         if (error) throw error;
       }
 
@@ -814,7 +852,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
         </>
       )}
 
-      {contactType !== 'unknown' && (
+      {contactType !== 'unknown' && contactType !== 'telegram' && (
         <ChangeAgencyDialog
           open={changeAgencyDialogOpen}
           onOpenChange={setChangeAgencyDialogOpen}
