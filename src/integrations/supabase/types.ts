@@ -7939,6 +7939,7 @@ export type Database = {
         | "send_greenapi_to_campaigner"
         | "create_task"
         | "create_lead"
+        | "send_telegram"
       automation_trigger:
         | "task_assigned"
         | "task_status_changed"
@@ -7957,6 +7958,7 @@ export type Database = {
         | "manual_command"
         | "whatsapp_message_received"
         | "carmen_whatsapp_session"
+        | "telegram_message_received"
       chat_provider: "manychat" | "green_api" | "internal"
       client_mood_status:
         | "happy"
@@ -8174,6 +8176,7 @@ export const Constants = {
         "send_greenapi_to_campaigner",
         "create_task",
         "create_lead",
+        "send_telegram",
       ],
       automation_trigger: [
         "task_assigned",
@@ -8193,6 +8196,7 @@ export const Constants = {
         "manual_command",
         "whatsapp_message_received",
         "carmen_whatsapp_session",
+        "telegram_message_received",
       ],
       chat_provider: ["manychat", "green_api", "internal"],
       client_mood_status: [

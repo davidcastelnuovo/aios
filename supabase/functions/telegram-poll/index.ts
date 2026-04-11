@@ -92,6 +92,28 @@ Deno.serve(async () => {
             break;
           }
           totalProcessed += rows.length;
+
+          // Trigger automations for each incoming message
+          for (const row of rows) {
+            if (!row.text) continue;
+            try {
+              await supabase.functions.invoke('trigger-automation', {
+                body: {
+                  trigger_type: 'telegram_message_received',
+                  tenant_id: bot.tenant_id,
+                  chat_id: String(row.chat_id),
+                  telegram_chat_id: String(row.chat_id),
+                  message_text: row.text,
+                  text: row.text,
+                  sender_name: row.sender_name,
+                  sender_username: row.sender_username,
+                  contact_name: row.sender_name,
+                },
+              });
+            } catch (triggerErr) {
+              console.error('Trigger automation error:', triggerErr);
+            }
+          }
         }
 
         const newOffset = Math.max(...updates.map((u: any) => u.update_id)) + 1;
