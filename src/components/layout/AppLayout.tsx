@@ -228,10 +228,10 @@ export function AppLayout({ children }: AppLayoutProps) {
             </main>
           </div>
 
-          {/* Carmen floating button — bottom left */}
+          {/* Carmen floating button — bottom right */}
           <button
             onClick={() => setCarmenOpen(true)}
-            className="fixed bottom-6 left-6 z-50 group"
+            className="fixed bottom-6 right-6 z-50 group"
             title="כרמן — עוזרת AI"
             aria-label="פתח את כרמן"
           >
