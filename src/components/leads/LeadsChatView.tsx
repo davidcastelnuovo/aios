@@ -310,7 +310,7 @@ export function LeadsChatView({
                     isChecked && multiSelectMode && "bg-primary/10"
                   )}
                 >
-                  <div className="flex items-start gap-2">
+                  <div className="flex items-start gap-2" dir="rtl">
                     {/* Checkbox in multi-select mode */}
                     {multiSelectMode && (
                       <div className="pt-1 shrink-0" onClick={(e) => e.stopPropagation()}>
