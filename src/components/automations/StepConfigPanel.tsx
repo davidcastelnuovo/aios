@@ -872,7 +872,55 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [] }
             />
           )}
 
-          {/* Create Task config */}
+          {/* Telegram send config */}
+          {node.action_type === "send_telegram" && (
+            <div className="space-y-3 bg-sky-500/10 border border-sky-500/30 rounded-lg p-3">
+              <p className="text-xs font-semibold text-sky-600">הגדרת שליחת Telegram</p>
+              <div className="space-y-2">
+                <Label className="text-right block">Chat ID (מספר טלגרם של היעד)</Label>
+                <Input
+                  value={node.configuration?.telegram_chat_id || ""}
+                  onChange={(e) => handleConfigChange("telegram_chat_id", e.target.value)}
+                  placeholder="למשל: 123456789 או {{chat_id}}"
+                  dir="ltr"
+                  className="font-mono text-xs"
+                />
+                <p className="text-xs text-muted-foreground text-right">
+                  ניתן להשתמש ב-{'{{chat_id}}'} כדי לשלוח לאותו צ'אט שהטריגר הגיע ממנו
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-right block">תבנית הודעה</Label>
+                <textarea
+                  value={node.configuration?.message_template || ""}
+                  onChange={(e) => handleConfigChange("message_template", e.target.value)}
+                  placeholder="שלום {{contact_name}}, ..."
+                  className="w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm text-right"
+                  dir="rtl"
+                />
+                <p className="text-xs text-muted-foreground text-right">
+                  משתנים זמינים: {'{{contact_name}}'}, {'{{agent_output}}'}, {'{{previous_step_output}}'}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-right block">Parse Mode</Label>
+                <Select
+                  value={node.configuration?.telegram_parse_mode || "HTML"}
+                  onValueChange={(v) => handleConfigChange("telegram_parse_mode", v)}
+                >
+                  <SelectTrigger className="text-left" dir="ltr">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="HTML">HTML</SelectItem>
+                    <SelectItem value="Markdown">Markdown</SelectItem>
+                    <SelectItem value="MarkdownV2">MarkdownV2</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+
           {node.action_type === "create_task" && (
             <CreateTaskActionConfig
               tenantId={tenantId}
