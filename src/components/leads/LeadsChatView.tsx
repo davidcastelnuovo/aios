@@ -285,7 +285,7 @@ export function LeadsChatView({
 
         {/* Lead list */}
         <ScrollArea className="flex-1">
-          <div className="divide-y">
+          <div className="divide-y overflow-hidden">
             {filteredListLeads.map((lead) => {
               const isSelected = lead.id === selectedLeadId;
               const isChecked = selectedLeadIds.has(lead.id);
