@@ -284,8 +284,8 @@ export function LeadsChatView({
         )}
 
         {/* Lead list */}
-        <ScrollArea className="flex-1" style={{ overflowX: 'hidden' }}>
-          <div className="divide-y" style={{ width: '100%', maxWidth: '100%' }}>
+        <div className="flex-1 overflow-y-auto overflow-x-hidden">
+          <div className="divide-y w-full">
             {filteredListLeads.map((lead) => {
               const isSelected = lead.id === selectedLeadId;
               const isChecked = selectedLeadIds.has(lead.id);
@@ -377,10 +377,9 @@ export function LeadsChatView({
               </div>
             )}
           </div>
-        </ScrollArea>
+        </div>
       </div>
       )}
-
       {/* Left side - Lead detail panel */}
       {(!isMobile || selectedLeadId) && (
       <div dir="rtl" className="flex-1 flex flex-col min-w-0">
