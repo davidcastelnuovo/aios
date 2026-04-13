@@ -307,27 +307,45 @@ export default function ChatMessageList({
 
     const messageType = messageData.typeMessage;
     
+    const downloadButton = (url: string, fileName?: string) => (
+      <a
+        href={url}
+        download={fileName || true}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="absolute top-2 left-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1.5 transition-opacity opacity-0 group-hover:opacity-100 z-10"
+        title="הורד"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <Download className="h-4 w-4" />
+      </a>
+    );
+
     if (messageType === 'imageMessage') {
       return (
-        <img
-          src={fileData.downloadUrl}
-          alt="תמונה מצורפת"
-          loading="lazy"
-          className={`rounded-md mb-1 ${isMobile ? 'max-w-[250px]' : 'max-w-[300px]'} max-h-[400px] object-cover`}
-        />
+        <div className="relative group">
+          {downloadButton(fileData.downloadUrl, fileData.fileName || 'image.jpg')}
+          <img
+            src={fileData.downloadUrl}
+            alt="תמונה מצורפת"
+            loading="lazy"
+            className={`rounded-md mb-1 ${isMobile ? 'max-w-[250px]' : 'max-w-[300px]'} max-h-[400px] object-cover`}
+          />
+        </div>
       );
     }
     
     if (messageType === 'videoMessage') {
       return (
-        <video
-          src={fileData.downloadUrl}
-          controls
-          playsInline
-          controlsList="nodownload noplaybackrate noremoteplayback"
-          className={`rounded-md mb-1 ${isMobile ? 'max-w-[250px]' : 'max-w-[300px]'} max-h-[400px]`}
-          onContextMenu={(e) => e.preventDefault()}
-        />
+        <div className="relative group">
+          {downloadButton(fileData.downloadUrl, fileData.fileName || 'video.mp4')}
+          <video
+            src={fileData.downloadUrl}
+            controls
+            playsInline
+            className={`rounded-md mb-1 ${isMobile ? 'max-w-[250px]' : 'max-w-[300px]'} max-h-[400px]`}
+          />
+        </div>
       );
     }
     
