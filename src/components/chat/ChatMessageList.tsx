@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useMemo } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
-import { Loader2, MoreVertical, Copy, CheckSquare, Reply, AlertCircle, History } from "lucide-react";
+import { Loader2, MoreVertical, Copy, CheckSquare, Reply, AlertCircle, History, Download } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 import CustomAudioPlayer from "./CustomAudioPlayer";
