@@ -1633,7 +1633,6 @@ async function executeTool(
         modifiedEntities.add('communication_logs');
         return { 
           success: true, 
-          total: updates.length,
           success_count: successCount, 
           fail_count: failCount,
           results 

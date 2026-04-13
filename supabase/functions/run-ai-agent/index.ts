@@ -126,7 +126,7 @@ const ALL_TOOLS = [
 // ===========================
 // TOOL EXECUTOR
 // ===========================
-async function executeTool(name: string, args: Record<string, any>, supabase: any, tenantId: string, userId: string, callerCampaignerId?: string | null): Promise<any> {
+async function executeTool(name: string, args: Record<string, any>, supabase: any, tenantId: string, userId: string, callerCampaignerId?: string | null, agentId?: string | null): Promise<any> {
   switch (name) {
     case 'create_lead': {
       const { data: agency } = await supabase.from('agencies').select('id').eq('tenant_id', tenantId).limit(1).single()
@@ -199,7 +199,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     case 'create_agent_task': {
       // Create task in agent_tasks table (for Carmen herself)
       const taskData: any = {
-        agent_id: agent_id,
+        agent_id: agentId || args.agent_id,
         tenant_id: tenantId,
         title: args.title,
         description: args.description || null,
@@ -1489,7 +1489,7 @@ Deno.serve(async (req) => {
         console.log(`[AGENT] Tool call: ${toolName}`)
         let result: any
         try {
-          result = await executeTool(toolName, toolArgs, supabase, resolvedTenantId, resolvedUserId, callerCampaignerId)
+          result = await executeTool(toolName, toolArgs, supabase, resolvedTenantId, resolvedUserId, callerCampaignerId, agent_id)
           console.log(`[AGENT] Tool ${toolName} OK`)
         } catch (e: any) {
           result = { error: e.message }
