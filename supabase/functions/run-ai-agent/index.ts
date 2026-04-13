@@ -126,7 +126,7 @@ const ALL_TOOLS = [
 // ===========================
 // TOOL EXECUTOR
 // ===========================
-async function executeTool(name: string, args: Record<string, any>, supabase: any, tenantId: string, userId: string, callerCampaignerId?: string | null): Promise<any> {
+async function executeTool(name: string, args: Record<string, any>, supabase: any, tenantId: string, userId: string, callerCampaignerId?: string | null, agentId?: string | null): Promise<any> {
   switch (name) {
     case 'create_lead': {
       const { data: agency } = await supabase.from('agencies').select('id').eq('tenant_id', tenantId).limit(1).single()
