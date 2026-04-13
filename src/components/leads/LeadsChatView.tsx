@@ -191,10 +191,10 @@ export function LeadsChatView({
   const getLeadStatusInfo = (statusKey: string) => leadStatuses.find(s => s.status_key === statusKey);
 
   return (
-    <div dir="ltr" className="flex flex-row-reverse h-[calc(100vh-220px)] border rounded-lg overflow-hidden bg-background">
+    <div dir="ltr" className="flex flex-row-reverse h-[calc(100vh-220px)] border rounded-lg overflow-hidden bg-background w-full max-w-full">
       {/* Right side - Lead list */}
       {(!isMobile || !selectedLeadId) && (
-      <div dir="rtl" className={cn("border-l flex flex-col bg-muted/20", isMobile ? "w-full" : "w-[25%] min-w-[240px]")}>
+      <div dir="rtl" className={cn("border-l flex flex-col bg-muted/20 overflow-hidden", isMobile ? "w-full" : "w-[25%] min-w-[240px] max-w-[25%]")}>
         {/* List header with search */}
         <div className="p-3 border-b bg-background/80 backdrop-blur-sm">
           <div className="flex items-center gap-2">
@@ -284,8 +284,8 @@ export function LeadsChatView({
         )}
 
         {/* Lead list */}
-        <ScrollArea className="flex-1">
-          <div className="divide-y overflow-hidden">
+        <ScrollArea className="flex-1" style={{ overflowX: 'hidden' }}>
+          <div className="divide-y" style={{ width: '100%', maxWidth: '100%' }}>
             {filteredListLeads.map((lead) => {
               const isSelected = lead.id === selectedLeadId;
               const isChecked = selectedLeadIds.has(lead.id);
@@ -304,6 +304,7 @@ export function LeadsChatView({
                       setActiveTab("details");
                     }
                   }}
+                   style={{ maxWidth: '100%', boxSizing: 'border-box' }}
                    className={cn(
                     "w-full p-3 hover:bg-muted/50 transition-colors cursor-pointer overflow-hidden",
                     isSelected && !multiSelectMode && "bg-primary/10 border-r-4 border-r-primary",
