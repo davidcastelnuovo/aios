@@ -199,7 +199,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     case 'create_agent_task': {
       // Create task in agent_tasks table (for Carmen herself)
       const taskData: any = {
-        agent_id: agent_id,
+        agent_id: agentId || args.agent_id,
         tenant_id: tenantId,
         title: args.title,
         description: args.description || null,
@@ -1489,7 +1489,7 @@ Deno.serve(async (req) => {
         console.log(`[AGENT] Tool call: ${toolName}`)
         let result: any
         try {
-          result = await executeTool(toolName, toolArgs, supabase, resolvedTenantId, resolvedUserId, callerCampaignerId)
+          result = await executeTool(toolName, toolArgs, supabase, resolvedTenantId, resolvedUserId, callerCampaignerId, agent_id)
           console.log(`[AGENT] Tool ${toolName} OK`)
         } catch (e: any) {
           result = { error: e.message }
