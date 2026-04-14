@@ -46,7 +46,7 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('crm_tables')
-        .select('id, name, slug, integration_type, integration_settings')
+        .select('id, name, slug, integration_type, integration_settings, client_id')
         .eq('tenant_id', tenantId)
         .in('integration_type', ['google_search_console', 'google_analytics']);
       if (error) throw error;
@@ -71,13 +71,31 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
 
   useEffect(() => {
     if (savedGaTableId) setSelectedGaTableId(savedGaTableId);
-    else if (gaTables.length === 1) setSelectedGaTableId(gaTables[0].id);
-  }, [savedGaTableId, gaTables]);
+    else {
+      // Auto-match by client_id
+      const matchByClient = gaTables.find(t => t.client_id === clientId);
+      if (matchByClient) {
+        setSelectedGaTableId(matchByClient.id);
+        // Auto-save the link
+        if (seoTable?.id) saveLinkMutation.mutate({ key: 'linkedGaTableId', value: matchByClient.id });
+      } else if (gaTables.length === 1) {
+        setSelectedGaTableId(gaTables[0].id);
+      }
+    }
+  }, [savedGaTableId, gaTables, clientId]);
 
   useEffect(() => {
     if (savedGscTableId) setSelectedGscTableId(savedGscTableId);
-    else if (gscTables.length === 1) setSelectedGscTableId(gscTables[0].id);
-  }, [savedGscTableId, gscTables]);
+    else {
+      const matchByClient = gscTables.find(t => t.client_id === clientId);
+      if (matchByClient) {
+        setSelectedGscTableId(matchByClient.id);
+        if (seoTable?.id) saveLinkMutation.mutate({ key: 'linkedGscTableId', value: matchByClient.id });
+      } else if (gscTables.length === 1) {
+        setSelectedGscTableId(gscTables[0].id);
+      }
+    }
+  }, [savedGscTableId, gscTables, clientId]);
 
   // Save linked table ID to SEO table's integration_settings
   const saveLinkMutation = useMutation({
