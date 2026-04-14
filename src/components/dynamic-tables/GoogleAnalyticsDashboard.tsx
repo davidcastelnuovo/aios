@@ -259,7 +259,7 @@ export function GoogleAnalyticsDashboard({
     return name;
   };
 
-  const { trafficSources, dailyData, topPages, totals, prevTotals } = useMemo(() => {
+  const { trafficSources, dailyData, topPages, totals, prevTotals, trafficBreakdown } = useMemo(() => {
     const aggregateTrafficSources = (sourceRecords: CrmRecord[]) => {
       const sourceMap = new Map<string, {
         sessions: number;
