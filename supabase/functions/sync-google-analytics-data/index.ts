@@ -472,7 +472,76 @@ serve(async (req) => {
       }
     }
 
-    if (records.length > 0) {
+    // ====== REPORT 6: Events by Source/Medium (for phone call tracking) ======
+    const eventsRequest = {
+      dateRanges: [{ startDate: actualStartDate, endDate: actualEndDate }],
+      dimensions: [
+        { name: 'eventName' },
+        { name: 'sessionDefaultChannelGrouping' },
+      ],
+      metrics: [
+        { name: 'eventCount' },
+      ],
+      orderBys: [{ metric: { metricName: 'eventCount' }, desc: true }],
+      limit: 500,
+    };
+
+    let eventsData: any = { rows: [] };
+    try {
+      const eventsResponse = await fetch(
+        `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(eventsRequest),
+        }
+      );
+      eventsData = await eventsResponse.json();
+      if (eventsData.error) {
+        console.error('Events report error:', eventsData.error);
+        eventsData = { rows: [] };
+      }
+    } catch (e) {
+      console.error('Events report fetch error:', e);
+    }
+
+    // Process event data
+    if (eventsData.rows) {
+      for (const row of eventsData.rows) {
+        const eventName = row.dimensionValues[0].value;
+        const channelGroup = row.dimensionValues[1].value;
+        const eventCount = parseInt(row.metricValues[0].value) || 0;
+
+        records.push({
+          table_id: tableId,
+          tenant_id: table.tenant_id,
+          agency_id: table.agency_id,
+          data: {
+            report_type: 'event_by_channel',
+            event_name: eventName,
+            channel_group: channelGroup,
+            event_count: eventCount,
+            source_medium: null,
+            date: null,
+            page_path: null,
+            sessions: null,
+            users: null,
+            new_users: null,
+            pageviews: null,
+            bounce_rate: null,
+            avg_session_duration: null,
+            conversions: null,
+            add_to_cart: null,
+            purchases: null,
+            purchase_value: null,
+          },
+        });
+      }
+    }
+
       const { error: insertError } = await supabase
         .from('crm_records')
         .insert(records);
