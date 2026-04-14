@@ -1,38 +1,46 @@
 
-מה מצאתי:
-- Do I know what the issue is? כן.
-- התיקון הקודם כבר קיים ב-`src/pages/Leads.tsx`, אבל הוא מטפל בכרטיסי קנבן.
-- בצילום שלך אתה בכלל ב-`viewMode === "chat"`, כלומר ברכיב `src/components/leads/LeadsChatView.tsx`.
-- שם עדיין יש לייאאוט דסקטופי במובייל: תצוגה דו-עמודית קבועה + sidebar עם `min-w-[240px]`, ובנוסף הליד הראשון נבחר אוטומטית. על מסך מובייל זה דוחס את הרשימה והכותרות ולכן השמות כמעט לא קריאים.
+# תוכנית: הוספת לשוניות Google Search Console ו-Analytics לדוח SEO
 
-מה אבנה:
-1. להפוך את `LeadsChatView` לרספונסיבי אמיתי במובייל לפי הדפוס שכבר קיים ב-`src/pages/Chat.tsx`:
-   - במובייל יוצג קודם רק רשימת הלידים ברוחב מלא.
-   - בלחיצה על ליד ייפתח פאנל הפרטים/WhatsApp ברוחב מלא.
-   - אוסיף כפתור חזרה לרשימה.
-   - בדסקטופ אשאיר את 2 העמודות כמו היום.
+## סקירה
+כרגע דוח ה-SEO (Ahrefs) מוצג כעמוד יחיד ב-`DynamicTableView`. המטרה היא להוסיף מערכת לשוניות (Tabs) בתוך תצוגת דוח SEO, כך שהמשתמש יוכל לעבור בין:
+1. **SEO (Ahrefs)** — הדוח הקיים
+2. **Google Search Console** — נתוני GSC מלאים
+3. **Google Analytics** — נתוני אנליטיקס
 
-2. להסיר את הגורמים שדוחסים את הטקסט:
-   - `min-w-[240px]` יהיה רק ב-`md+`, לא במובייל.
-   - אחזק `min-w-0` ו-`truncate` בכל נקודות השם/חברה ברשימה ובכותרת הליד הנבחר.
-   - אם צריך, אשבור את שורת הפעולות/סטטוסים במובייל לשורה נפרדת כדי שלא תלחץ על שם הליד.
+## איך זה יעבוד
+- כשנכנסים לדוח SEO, מעל התוכן תופיע שורת לשוניות
+- לשוניות GSC ו-Analytics יופיעו רק אם יש אינטגרציה מחוברת (tenant_integrations) או טבלאות קשורות לאותו לקוח
+- הלשונית הראשונה (SEO) תהיה ברירת מחדל
 
-3. לתקן את בחירת ברירת המחדל:
-   - במובייל לא אבחר אוטומטית את הליד הראשון.
-   - בדסקטופ כן אשאיר בחירה אוטומטית כדי לא לשנות את החוויה שם.
+## שינויים טכניים
 
-איך אבדוק לפני שאגיד שזה תוקן:
-1. בדיקה ב-390x844 וב-360x800.
-2. וידוא שאין split view דחוס במובייל.
-3. וידוא שרואים את השמות ברשימה וששם ארוך נחתך עם `...` במקום לצאת מהמסגרת.
-4. וידוא שכפתור חזרה עובד ושבחירה בליד פותחת את המסך המלא כמו שצריך.
+### 1. יצירת קומפוננטה עוטפת — `SeoReportTabs.tsx`
+קומפוננטה חדשה ב-`src/components/dynamic-tables/SeoReportTabs.tsx` שתכיל:
+- `Tabs` מ-shadcn/ui עם שלוש לשוניות
+- שליפת טבלאות GSC ו-GA קשורות לאותו `clientId`/`tenant_id` מ-`crm_tables`
+- הצגת `SeoDashboardView` בלשונית SEO
+- הצגת `SearchConsoleDashboard` בלשונית GSC (אם קיימת טבלת GSC ללקוח)
+- הצגת `GoogleAnalyticsDashboard` בלשונית Analytics (אם קיימת טבלת GA ללקוח)
+- לשוניות שאין להן נתונים יוצגו כלא פעילות או יוסתרו
 
-פרטים טכניים:
-- קובץ עיקרי לתיקון: `src/components/leads/LeadsChatView.tsx`
-- בעיות שאותרו שם:
-  - `selectedLeadId` מאותחל ל-`leads[0]?.id`
-  - ה-root נשאר `flex` דו-עמודי בכל רוחב
-  - לרשימה יש `w-[25%] min-w-[240px]`
-- דפוס ייחוס שכבר עובד במערכת: `src/pages/Chat.tsx` עם `useIsMobile` והסתרת רשימה כשנבחר פריט במובייל
+### 2. עדכון `DynamicTableView.tsx`
+- החלפת הרינדור הישיר של `SeoDashboardView` בקומפוננטה החדשה `SeoReportTabs`
+- העברת ה-props הקיימים (`tenantId`, `clientId`)
 
-אין כאן שינויי backend או database — זה תיקון UI/UX ממוקד.
+### 3. שליפת טבלאות קשורות
+Query חדש שמחפש ב-`crm_tables` טבלאות עם:
+- `integration_type = 'google_search_console'` ו-`integration_settings->clientId` תואם
+- `integration_type = 'google_analytics'` ו-`integration_settings->clientId` תואם
+- באותו `tenant_id`
+
+אם לא נמצאות טבלאות קשורות לפי `clientId`, נחפש לפי `tenant_id` בלבד (כל טבלאות GSC/GA של הטנאנט).
+
+### 4. התאמת `GoogleAnalyticsDashboard`
+כרגע הקומפוננטה מקבלת `records` כ-prop. נצטרך לשלוף את הרשומות (`crm_records`) של טבלת ה-GA הרלוונטית ולהעביר אותן.
+
+## קבצים שישתנו
+- **חדש**: `src/components/dynamic-tables/SeoReportTabs.tsx`
+- **עדכון**: `src/pages/DynamicTableView.tsx` — החלפת `SeoDashboardView` ב-`SeoReportTabs`
+
+## ללא שינויי מסד נתונים
+אין צורך בשינויי DB — הנתונים כבר קיימים בטבלאות `crm_tables` ו-`crm_records`.
