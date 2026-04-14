@@ -4,11 +4,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { SeoDashboardView } from "./SeoDashboardView";
 import { SearchConsoleDashboard } from "./SearchConsoleDashboard";
 import { GoogleAnalyticsDashboard } from "./GoogleAnalyticsDashboard";
 import { GscIntegration } from "./seo/GscIntegration";
-import { TrendingUp, Search, BarChart3, Settings2 } from "lucide-react";
+import { TrendingUp, Search, BarChart3, Settings2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 
