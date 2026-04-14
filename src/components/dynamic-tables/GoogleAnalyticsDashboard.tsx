@@ -259,7 +259,7 @@ export function GoogleAnalyticsDashboard({
     return name;
   };
 
-  const { trafficSources, dailyData, topPages, totals, prevTotals, trafficBreakdown } = useMemo(() => {
+  const { trafficSources, dailyData, topPages, totals, prevTotals, trafficBreakdown, phoneCallEvents } = useMemo(() => {
     const aggregateTrafficSources = (sourceRecords: CrmRecord[]) => {
       const sourceMap = new Map<string, {
         sessions: number;
@@ -491,7 +491,44 @@ export function GoogleAnalyticsDashboard({
 
     const trafficBreakdown = { organicSessions, paidSessions, otherSessions, organicUsers, paidUsers, organicConversions, paidConversions };
 
-    return { trafficSources, dailyData, topPages, totals, prevTotals, trafficBreakdown };
+    // Phone call events by channel
+    const eventRecords = records.filter(r => r.data.report_type === 'event_by_channel');
+    const phoneCallEvents: { eventName: string; organic: number; paid: number; other: number; total: number }[] = [];
+    
+    // Find phone-call-like events
+    const phoneEventMap = new Map<string, { organic: number; paid: number; other: number }>();
+    for (const r of eventRecords) {
+      const eventName = (r.data.event_name || '').toLowerCase();
+      // Match phone call events (flexible matching)
+      if (eventName.includes('phone') || eventName.includes('call') || eventName.includes('tel') || eventName.includes('click_to_call')) {
+        const displayName = r.data.event_name || 'Unknown';
+        const channel = (r.data.channel_group || '').toLowerCase();
+        const count = Number(r.data.event_count) || 0;
+        
+        const existing = phoneEventMap.get(displayName) || { organic: 0, paid: 0, other: 0 };
+        if (channel.includes('organic')) {
+          existing.organic += count;
+        } else if (channel.includes('paid') || channel.includes('cpc') || channel.includes('display')) {
+          existing.paid += count;
+        } else {
+          existing.other += count;
+        }
+        phoneEventMap.set(displayName, existing);
+      }
+    }
+    
+    for (const [eventName, counts] of phoneEventMap.entries()) {
+      phoneCallEvents.push({
+        eventName,
+        organic: counts.organic,
+        paid: counts.paid,
+        other: counts.other,
+        total: counts.organic + counts.paid + counts.other,
+      });
+    }
+    phoneCallEvents.sort((a, b) => b.total - a.total);
+
+    return { trafficSources, dailyData, topPages, totals, prevTotals, trafficBreakdown, phoneCallEvents };
   }, [records, currentRange.start, currentRange.end, previousRange.start, previousRange.end, showComparison, datePreset]);
 
   const formatNumber = (num: number) => {
@@ -826,6 +863,50 @@ export function GoogleAnalyticsDashboard({
                 </div>
                 <p className="text-xl font-bold text-blue-700 dark:text-blue-400">{formatNumber(trafficBreakdown.paidConversions)}</p>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Phone Call Events by Channel */}
+      {phoneCallEvents.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg flex items-center gap-2">
+              📞 אירועי שיחות טלפון לפי ערוץ
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {phoneCallEvents.map((event) => (
+                <div key={event.eventName} className="p-3 rounded-lg border bg-muted/20">
+                  <div className="font-medium text-sm mb-2">{event.eventName}</div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="text-center p-2 rounded bg-background border">
+                      <span className="text-xs text-muted-foreground block">סה״כ</span>
+                      <span className="text-lg font-bold">{formatNumber(event.total)}</span>
+                    </div>
+                    <div className="text-center p-2 rounded bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800">
+                      <div className="flex items-center justify-center gap-1">
+                        <Leaf className="h-3 w-3 text-green-600" />
+                        <span className="text-xs text-muted-foreground">אורגני</span>
+                      </div>
+                      <span className="text-lg font-bold text-green-700 dark:text-green-400">{formatNumber(event.organic)}</span>
+                    </div>
+                    <div className="text-center p-2 rounded bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
+                      <div className="flex items-center justify-center gap-1">
+                        <Megaphone className="h-3 w-3 text-blue-600" />
+                        <span className="text-xs text-muted-foreground">ממומן</span>
+                      </div>
+                      <span className="text-lg font-bold text-blue-700 dark:text-blue-400">{formatNumber(event.paid)}</span>
+                    </div>
+                    <div className="text-center p-2 rounded bg-background border">
+                      <span className="text-xs text-muted-foreground block">אחר</span>
+                      <span className="text-lg font-bold text-muted-foreground">{formatNumber(event.other)}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>
