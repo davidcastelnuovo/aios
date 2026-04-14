@@ -478,6 +478,7 @@ serve(async (req) => {
     const eventsRequest = {
       dateRanges: [{ startDate: actualStartDate, endDate: actualEndDate }],
       dimensions: [
+        { name: 'date' },
         { name: 'eventName' },
         { name: 'sessionDefaultChannelGrouping' },
       ],
@@ -485,7 +486,7 @@ serve(async (req) => {
         { name: 'eventCount' },
       ],
       orderBys: [{ metric: { metricName: 'eventCount' }, desc: true }],
-      limit: 500,
+      limit: 5000,
     };
 
     let eventsData: any = { rows: [] };
@@ -513,9 +514,11 @@ serve(async (req) => {
     // Process event data
     if (eventsData.rows) {
       for (const row of eventsData.rows) {
-        const eventName = row.dimensionValues[0].value;
-        const channelGroup = row.dimensionValues[1].value;
+        const rawDate = row.dimensionValues[0].value;
+        const eventName = row.dimensionValues[1].value;
+        const channelGroup = row.dimensionValues[2].value;
         const eventCount = parseInt(row.metricValues[0].value) || 0;
+        const formattedDate = rawDate ? `${rawDate.slice(0,4)}-${rawDate.slice(4,6)}-${rawDate.slice(6,8)}` : null;
 
         records.push({
           table_id: tableId,
@@ -527,7 +530,7 @@ serve(async (req) => {
             channel_group: channelGroup,
             event_count: eventCount,
             source_medium: null,
-            date: null,
+            date: formattedDate,
             page_path: null,
             sessions: null,
             users: null,
