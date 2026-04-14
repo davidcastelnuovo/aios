@@ -130,6 +130,35 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
     staleTime: 5 * 60 * 1000,
   });
 
+  // GA sync mutation
+  const syncGaMutation = useMutation({
+    mutationFn: async (tableId: string) => {
+      const now = new Date();
+      const endDate = now.toISOString().split('T')[0];
+      const startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const response = await supabase.functions.invoke('sync-google-analytics-data', {
+        method: 'POST',
+        body: { tableId, startDate, endDate },
+      });
+      if (response.error) throw response.error;
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['crm-records', selectedGaTableId] });
+      toast.success(`נתוני Analytics סונכרנו (${data?.records_synced || 0} שורות)`);
+    },
+    onError: (error: any) => {
+      toast.error('שגיאה בסנכרון Analytics: ' + error.message);
+    },
+  });
+
+  // Auto-sync GA if table is selected but has no records
+  useEffect(() => {
+    if (selectedGaTableId && gaRecords && gaRecords.length === 0 && !syncGaMutation.isPending) {
+      syncGaMutation.mutate(selectedGaTableId);
+    }
+  }, [selectedGaTableId, gaRecords]);
+
   // Check GSC integration exists
   const { data: gscIntegration } = useQuery({
     queryKey: ['gsc-integration', tenantId],
