@@ -312,8 +312,25 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                 />
               ) : selectedGaTableId ? (
                 <Card>
-                  <CardContent className="p-8 text-center text-muted-foreground">
-                    אין נתונים זמינים עבור חשבון Analytics זה
+                  <CardContent className="p-8 text-center text-muted-foreground space-y-3">
+                    {syncGaMutation.isPending ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <RefreshCw className="h-5 w-5 animate-spin" />
+                        <span>מסנכרן נתוני Analytics...</span>
+                      </div>
+                    ) : (
+                      <>
+                        <p>אין נתונים זמינים עבור חשבון Analytics זה</p>
+                        <Button
+                          variant="outline"
+                          onClick={() => syncGaMutation.mutate(selectedGaTableId)}
+                          className="gap-2"
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                          סנכרן נתונים
+                        </Button>
+                      </>
+                    )}
                   </CardContent>
                 </Card>
               ) : (
