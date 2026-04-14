@@ -544,18 +544,17 @@ serve(async (req) => {
       }
     }
 
-      // Insert in batches to avoid payload size limits
-      const batchSize = 200;
-      for (let i = 0; i < records.length; i += batchSize) {
-        const batch = records.slice(i, i + batchSize);
-        const { error: insertError } = await supabase
-          .from('crm_records')
-          .insert(batch);
+    // Insert in batches to avoid payload size limits
+    const batchSize = 200;
+    for (let i = 0; i < records.length; i += batchSize) {
+      const batch = records.slice(i, i + batchSize);
+      const { error: insertError } = await supabase
+        .from('crm_records')
+        .insert(batch);
 
-        if (insertError) {
-          console.error(`Error inserting batch ${i / batchSize + 1}:`, insertError);
-          throw insertError;
-        }
+      if (insertError) {
+        console.error(`Error inserting batch ${i / batchSize + 1}:`, insertError);
+        throw insertError;
       }
     }
 
