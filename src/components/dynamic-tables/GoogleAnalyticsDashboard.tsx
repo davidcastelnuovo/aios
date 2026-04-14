@@ -491,7 +491,44 @@ export function GoogleAnalyticsDashboard({
 
     const trafficBreakdown = { organicSessions, paidSessions, otherSessions, organicUsers, paidUsers, organicConversions, paidConversions };
 
-    return { trafficSources, dailyData, topPages, totals, prevTotals, trafficBreakdown };
+    // Phone call events by channel
+    const eventRecords = records.filter(r => r.data.report_type === 'event_by_channel');
+    const phoneCallEvents: { eventName: string; organic: number; paid: number; other: number; total: number }[] = [];
+    
+    // Find phone-call-like events
+    const phoneEventMap = new Map<string, { organic: number; paid: number; other: number }>();
+    for (const r of eventRecords) {
+      const eventName = (r.data.event_name || '').toLowerCase();
+      // Match phone call events (flexible matching)
+      if (eventName.includes('phone') || eventName.includes('call') || eventName.includes('tel') || eventName.includes('click_to_call')) {
+        const displayName = r.data.event_name || 'Unknown';
+        const channel = (r.data.channel_group || '').toLowerCase();
+        const count = Number(r.data.event_count) || 0;
+        
+        const existing = phoneEventMap.get(displayName) || { organic: 0, paid: 0, other: 0 };
+        if (channel.includes('organic')) {
+          existing.organic += count;
+        } else if (channel.includes('paid') || channel.includes('cpc') || channel.includes('display')) {
+          existing.paid += count;
+        } else {
+          existing.other += count;
+        }
+        phoneEventMap.set(displayName, existing);
+      }
+    }
+    
+    for (const [eventName, counts] of phoneEventMap.entries()) {
+      phoneCallEvents.push({
+        eventName,
+        organic: counts.organic,
+        paid: counts.paid,
+        other: counts.other,
+        total: counts.organic + counts.paid + counts.other,
+      });
+    }
+    phoneCallEvents.sort((a, b) => b.total - a.total);
+
+    return { trafficSources, dailyData, topPages, totals, prevTotals, trafficBreakdown, phoneCallEvents };
   }, [records, currentRange.start, currentRange.end, previousRange.start, previousRange.end, showComparison, datePreset]);
 
   const formatNumber = (num: number) => {
