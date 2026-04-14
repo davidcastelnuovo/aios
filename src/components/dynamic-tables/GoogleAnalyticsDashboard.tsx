@@ -518,7 +518,10 @@ export function GoogleAnalyticsDashboard({
       // Match phone call events (flexible matching)
       if (eventName.includes('phone') || eventName.includes('call') || eventName.includes('tel') || eventName.includes('click_to_call')) {
         const displayName = r.data.event_name || 'Unknown';
-        const count = Number(r.data.event_count) || 0;
+        // Use key_events if available (for GA4 key events/conversions), fallback to event_count
+        const keyEvents = Number(r.data.key_events) || 0;
+        const eventCount = Number(r.data.event_count) || 0;
+        const count = Math.max(eventCount, keyEvents);
         phoneEventMap.set(displayName, (phoneEventMap.get(displayName) ?? 0) + count);
       }
     }
