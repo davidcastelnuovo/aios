@@ -4,9 +4,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { toast } from "sonner";
-import { Link2, RefreshCw, Search, MousePointerClick, Eye, Target } from "lucide-react";
+import { Link2, RefreshCw, Search, MousePointerClick, Eye, Target, ChevronsUpDown, Check } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface GscIntegrationProps {
   tenantId: string;
@@ -41,6 +43,7 @@ function normalizeDomain(value?: string) {
 export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoaded }: GscIntegrationProps) {
   const queryClient = useQueryClient();
   const [selectedSite, setSelectedSite] = useState<string>("");
+  const [sitePopoverOpen, setSitePopoverOpen] = useState(false);
 
   const { data: gscIntegration, isLoading: isLoadingIntegration } = useQuery({
     queryKey: ["gsc-integration", tenantId],
@@ -225,24 +228,44 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
           </div>
           <div className="flex items-center gap-2">
             {availableSites.length > 0 && (
-              <Select
-                value={effectiveSiteUrl}
-                onValueChange={(value) => {
-                  setSelectedSite(value);
-                  updateSiteMutation.mutate(value);
-                }}
-              >
-                <SelectTrigger className="h-7 text-xs w-[220px]">
-                  <SelectValue placeholder="בחר נכס Search Console" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableSites.map((site) => (
-                    <SelectItem key={site.siteUrl} value={site.siteUrl}>
-                      {site.siteUrl.replace("sc-domain:", "").replace("https://", "")}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={sitePopoverOpen} onOpenChange={setSitePopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" role="combobox" className="h-7 text-xs w-[220px] justify-between">
+                    {effectiveSiteUrl
+                      ? effectiveSiteUrl.replace("sc-domain:", "").replace("https://", "")
+                      : "בחר נכס Search Console"}
+                    <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[260px] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="חפש נכס..." className="h-8 text-xs" />
+                    <CommandList>
+                      <CommandEmpty>לא נמצאו נכסים</CommandEmpty>
+                      <CommandGroup>
+                        {availableSites.map((site) => {
+                          const label = site.siteUrl.replace("sc-domain:", "").replace("https://", "");
+                          return (
+                            <CommandItem
+                              key={site.siteUrl}
+                              value={label}
+                              onSelect={() => {
+                                setSelectedSite(site.siteUrl);
+                                updateSiteMutation.mutate(site.siteUrl);
+                                setSitePopoverOpen(false);
+                              }}
+                              className="text-xs"
+                            >
+                              <Check className={cn("mr-2 h-3 w-3", effectiveSiteUrl === site.siteUrl ? "opacity-100" : "opacity-0")} />
+                              {label}
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             )}
             <Button
               variant="ghost"
