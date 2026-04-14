@@ -483,6 +483,7 @@ serve(async (req) => {
       ],
       metrics: [
         { name: 'eventCount' },
+        { name: 'keyEvents' },
       ],
       orderBys: [{ metric: { metricName: 'eventCount' }, desc: true }],
       limit: 5000,
@@ -516,6 +517,9 @@ serve(async (req) => {
         const rawDate = row.dimensionValues[0].value;
         const eventName = row.dimensionValues[1].value;
         const eventCount = parseInt(row.metricValues[0].value) || 0;
+        const keyEvents = parseInt(row.metricValues[1]?.value) || 0;
+        // Use the higher of eventCount and keyEvents to capture key events properly
+        const finalCount = Math.max(eventCount, keyEvents);
         const formattedDate = rawDate ? `${rawDate.slice(0,4)}-${rawDate.slice(4,6)}-${rawDate.slice(6,8)}` : null;
 
         records.push({
@@ -526,7 +530,8 @@ serve(async (req) => {
             report_type: 'event_total',
             event_name: eventName,
             channel_group: null,
-            event_count: eventCount,
+            event_count: finalCount,
+            key_events: keyEvents,
             source_medium: null,
             date: formattedDate,
             page_path: null,
