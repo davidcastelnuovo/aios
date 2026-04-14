@@ -468,7 +468,30 @@ export function GoogleAnalyticsDashboard({
       ? calculateTotalsFromDaily(prevDailyData as any)
       : null;
 
-    return { trafficSources, dailyData, topPages, totals, prevTotals };
+    // Classify traffic into organic vs paid
+    const classifyTraffic = (sourceName: string): 'organic' | 'paid' | 'other' => {
+      const lower = sourceName.toLowerCase();
+      if (lower.includes('organic') || lower.includes('אורגני')) return 'organic';
+      if (lower.includes('cpc') || lower.includes('paid') || lower.includes('ppc') || lower.includes('ממומן') || lower.includes('cpm') || lower.includes('cpv') || lower.includes('display') || lower.includes('retargeting') || lower.includes('remarketing')) return 'paid';
+      if (lower.includes('google') && !lower.includes('organic')) {
+        if (lower.includes('cpc') || lower.includes('paid')) return 'paid';
+      }
+      return 'other';
+    };
+
+    const organicSessions = trafficSources.filter(s => classifyTraffic(s.name) === 'organic').reduce((sum, s) => sum + s.sessions, 0);
+    const paidSessions = trafficSources.filter(s => classifyTraffic(s.name) === 'paid').reduce((sum, s) => sum + s.sessions, 0);
+    const otherSessions = trafficSources.filter(s => classifyTraffic(s.name) === 'other').reduce((sum, s) => sum + s.sessions, 0);
+
+    const organicUsers = trafficSources.filter(s => classifyTraffic(s.name) === 'organic').reduce((sum, s) => sum + s.users, 0);
+    const paidUsers = trafficSources.filter(s => classifyTraffic(s.name) === 'paid').reduce((sum, s) => sum + s.users, 0);
+
+    const organicConversions = trafficSources.filter(s => classifyTraffic(s.name) === 'organic').reduce((sum, s) => sum + s.conversions, 0);
+    const paidConversions = trafficSources.filter(s => classifyTraffic(s.name) === 'paid').reduce((sum, s) => sum + s.conversions, 0);
+
+    const trafficBreakdown = { organicSessions, paidSessions, otherSessions, organicUsers, paidUsers, organicConversions, paidConversions };
+
+    return { trafficSources, dailyData, topPages, totals, prevTotals, trafficBreakdown };
   }, [records, currentRange.start, currentRange.end, previousRange.start, previousRange.end, showComparison, datePreset]);
 
   const formatNumber = (num: number) => {
