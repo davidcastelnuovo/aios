@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +25,7 @@ export function GoogleSearchConsoleTableDialog({ open, onOpenChange, assignedCli
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { currentTenant, currentTenantId: activeTenantId } = useTenant();
-  
+
   const [tableName, setTableName] = useState("");
   const [category, setCategory] = useState("seo");
   const [selectedSite, setSelectedSite] = useState("");
@@ -33,76 +33,83 @@ export function GoogleSearchConsoleTableDialog({ open, onOpenChange, assignedCli
   const [selectedClient, setSelectedClient] = useState("");
   const [isCreating, setIsCreating] = useState(false);
 
-  // Fetch GSC integration
   const { data: integration, isLoading: integrationLoading } = useQuery({
-    queryKey: ['gsc-integration', activeTenantId],
+    queryKey: ["gsc-integration", activeTenantId],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return null;
-      
-      const { data } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', activeTenantId)
-        .eq('integration_type', 'google_search_console')
-        .eq('user_id', user.id)
-        .eq('is_active', true)
+      const { data, error } = await supabase
+        .from("tenant_integrations")
+        .select("*")
+        .eq("tenant_id", activeTenantId)
+        .eq("integration_type", "google_search_console")
+        .eq("is_active", true)
+        .order("updated_at", { ascending: false })
+        .limit(1)
         .maybeSingle();
-      
+
+      if (error) throw error;
       return data;
     },
     enabled: open && !!activeTenantId,
+    refetchOnMount: "always",
   });
 
-  // Fetch sites
-  const { data: sites, isLoading: sitesLoading } = useQuery({
-    queryKey: ['gsc-sites', integration?.id],
+  const { data: sites = [], isLoading: sitesLoading } = useQuery({
+    queryKey: ["gsc-sites", integration?.id],
     queryFn: async () => {
-      if (!integration) return [];
-      
-      const { data, error } = await supabase.functions.invoke('google-search-console-auth?action=get_sites', {
-        body: { 
-          integrationId: integration.id
-        }
+      if (!integration?.id) return [] as GSCSite[];
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
+      const { data, error } = await supabase.functions.invoke("google-search-console-auth?action=get_sites", {
+        body: {
+          integrationId: integration.id,
+        },
+        headers: { Authorization: `Bearer ${session.access_token}` },
       });
-      
+
       if (error) throw error;
-      return (data?.sites || []) as GSCSite[];
+      return Array.isArray(data?.sites) ? (data.sites as GSCSite[]) : [];
     },
-    enabled: !!integration,
+    enabled: !!integration?.id,
+    staleTime: 5 * 60 * 1000,
   });
 
-  // Fetch agencies
+  useEffect(() => {
+    if (!selectedSite && sites.length === 1) {
+      setSelectedSite(sites[0].siteUrl);
+    }
+  }, [sites, selectedSite]);
+
   const { data: agencies } = useQuery({
-    queryKey: ['agencies-for-table', activeTenantId],
+    queryKey: ["agencies-for-table", activeTenantId],
     queryFn: async () => {
       const { data } = await supabase
-        .from('agencies')
-        .select('id, name')
-        .eq('tenant_id', activeTenantId)
-        .order('name');
+        .from("agencies")
+        .select("id, name")
+        .eq("tenant_id", activeTenantId)
+        .order("name");
       return data || [];
     },
     enabled: open && !!activeTenantId,
   });
 
-  // Fetch clients based on selected agency
   const { data: rawClients } = useQuery({
-    queryKey: ['clients-for-table', selectedAgency],
+    queryKey: ["clients-for-table", selectedAgency],
     queryFn: async () => {
       if (!selectedAgency) return [];
       const { data } = await supabase
-        .from('clients')
-        .select('id, name')
-        .eq('agency_id', selectedAgency)
-        .order('name');
+        .from("clients")
+        .select("id, name")
+        .eq("agency_id", selectedAgency)
+        .order("name");
       return data || [];
     },
     enabled: !!selectedAgency,
   });
 
   const clients = assignedClientIds
-    ? (rawClients || []).filter(c => assignedClientIds.includes(c.id))
+    ? (rawClients || []).filter((client) => assignedClientIds.includes(client.id))
     : rawClients;
 
   const handleCreate = async () => {
@@ -113,36 +120,38 @@ export function GoogleSearchConsoleTableDialog({ open, onOpenChange, assignedCli
 
     setIsCreating(true);
     try {
-      const slug = tableName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      const slug = tableName.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
 
-      const { data, error } = await supabase.functions.invoke('crm-tables', {
+      const { error } = await supabase.functions.invoke("crm-tables", {
         body: {
-          action: 'create',
+          action: "create",
           tenantId: activeTenantId,
           name: tableName,
           slug: `gsc-${slug}-${Date.now()}`,
           description: `Search Console - ${selectedSite}`,
           category,
-          icon: 'Search',
+          icon: "Search",
           agencyId: selectedAgency || null,
           clientId: selectedClient || null,
-          integration_type: 'google_search_console',
+          integration_type: "google_search_console",
           integration_settings: {
             integrationId: integration.id,
             siteUrl: selectedSite,
           },
-          integrations: [{
-            type: 'google_search_console',
-            integrationId: integration.id,
-            siteUrl: selectedSite,
-          }]
-        }
+          integrations: [
+            {
+              type: "google_search_console",
+              integrationId: integration.id,
+              siteUrl: selectedSite,
+            },
+          ],
+        },
       });
 
       if (error) throw error;
 
       toast({ title: "טבלת Search Console נוצרה בהצלחה!" });
-      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      queryClient.invalidateQueries({ queryKey: ["crm-tables"] });
       onOpenChange(false);
       resetForm();
     } catch (error: any) {
@@ -167,7 +176,7 @@ export function GoogleSearchConsoleTableDialog({ open, onOpenChange, assignedCli
       <DialogContent className="max-w-md" dir="rtl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Search className="h-5 w-5 text-blue-500" />
+            <Search className="h-5 w-5 text-primary" />
             טבלת Search Console חדשה
           </DialogTitle>
           <DialogDescription>
@@ -181,13 +190,21 @@ export function GoogleSearchConsoleTableDialog({ open, onOpenChange, assignedCli
           </div>
         ) : !integration ? (
           <div className="text-center py-6 space-y-4">
-            <p className="text-muted-foreground">
-              לא נמצא חיבור Search Console פעיל
-            </p>
+            <p className="text-muted-foreground">לא נמצא חיבור Search Console פעיל</p>
             <Button variant="outline" asChild>
               <a href={`/t/${currentTenant?.slug}/google-search-console-settings`}>
                 <ExternalLink className="h-4 w-4 ml-2" />
                 חבר Search Console
+              </a>
+            </Button>
+          </div>
+        ) : sites.length === 0 ? (
+          <div className="text-center py-6 space-y-4">
+            <p className="text-muted-foreground">החיבור קיים אבל לא נטענו נכסים מ-Search Console</p>
+            <Button variant="outline" asChild>
+              <a href={`/t/${currentTenant?.slug}/google-search-console-settings`}>
+                <ExternalLink className="h-4 w-4 ml-2" />
+                חבר מחדש Search Console
               </a>
             </Button>
           </div>
@@ -203,15 +220,15 @@ export function GoogleSearchConsoleTableDialog({ open, onOpenChange, assignedCli
             </div>
 
             <div className="space-y-2">
-              <Label>אתר *</Label>
+              <Label>נכס Search Console *</Label>
               <Select value={selectedSite} onValueChange={setSelectedSite}>
                 <SelectTrigger>
-                  <SelectValue placeholder="בחר אתר" />
+                  <SelectValue placeholder="בחר נכס" />
                 </SelectTrigger>
                 <SelectContent>
-                  {sites?.map((site) => (
+                  {sites.map((site) => (
                     <SelectItem key={site.siteUrl} value={site.siteUrl}>
-                      {site.siteUrl}
+                      {site.siteUrl.replace("sc-domain:", "").replace("https://", "")}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -234,7 +251,13 @@ export function GoogleSearchConsoleTableDialog({ open, onOpenChange, assignedCli
 
             <div className="space-y-2">
               <Label>סוכנות (אופציונלי)</Label>
-              <Select value={selectedAgency || "all"} onValueChange={(v) => { setSelectedAgency(v === "all" ? "" : v); setSelectedClient(""); }}>
+              <Select
+                value={selectedAgency || "all"}
+                onValueChange={(value) => {
+                  setSelectedAgency(value === "all" ? "" : value);
+                  setSelectedClient("");
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="כל הסוכנויות" />
                 </SelectTrigger>
@@ -252,7 +275,7 @@ export function GoogleSearchConsoleTableDialog({ open, onOpenChange, assignedCli
             {selectedAgency && (
               <div className="space-y-2">
                 <Label>לקוח (אופציונלי)</Label>
-                <Select value={selectedClient || "all"} onValueChange={(v) => setSelectedClient(v === "all" ? "" : v)}>
+                <Select value={selectedClient || "all"} onValueChange={(value) => setSelectedClient(value === "all" ? "" : value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="כל הלקוחות" />
                   </SelectTrigger>
