@@ -474,13 +474,12 @@ serve(async (req) => {
       }
     }
 
-    // ====== REPORT 6: Events by Source/Medium (for phone call tracking) ======
+    // ====== REPORT 6: Event totals by day (for phone call tracking) ======
     const eventsRequest = {
       dateRanges: [{ startDate: actualStartDate, endDate: actualEndDate }],
       dimensions: [
         { name: 'date' },
         { name: 'eventName' },
-        { name: 'sessionDefaultChannelGrouping' },
       ],
       metrics: [
         { name: 'eventCount' },
@@ -516,7 +515,6 @@ serve(async (req) => {
       for (const row of eventsData.rows) {
         const rawDate = row.dimensionValues[0].value;
         const eventName = row.dimensionValues[1].value;
-        const channelGroup = row.dimensionValues[2].value;
         const eventCount = parseInt(row.metricValues[0].value) || 0;
         const formattedDate = rawDate ? `${rawDate.slice(0,4)}-${rawDate.slice(4,6)}-${rawDate.slice(6,8)}` : null;
 
@@ -525,9 +523,9 @@ serve(async (req) => {
           tenant_id: table.tenant_id,
           agency_id: table.agency_id,
           data: {
-            report_type: 'event_by_channel',
+            report_type: 'event_total',
             event_name: eventName,
-            channel_group: channelGroup,
+            channel_group: null,
             event_count: eventCount,
             source_medium: null,
             date: formattedDate,
