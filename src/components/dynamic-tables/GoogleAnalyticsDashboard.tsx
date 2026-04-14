@@ -33,7 +33,7 @@ import {
   Line,
   Legend,
 } from "recharts";
-import { Users, Eye, MousePointerClick, Clock, TrendingUp, Globe, CalendarIcon, ArrowUp, ArrowDown, ShoppingCart, CreditCard, UserCheck, Target } from "lucide-react";
+import { Users, Eye, MousePointerClick, Clock, TrendingUp, Globe, CalendarIcon, ArrowUp, ArrowDown, ShoppingCart, CreditCard, UserCheck, Target, Leaf, Megaphone } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths, isWithinInterval, parseISO } from "date-fns";
 import { he } from "date-fns/locale";
@@ -259,7 +259,7 @@ export function GoogleAnalyticsDashboard({
     return name;
   };
 
-  const { trafficSources, dailyData, topPages, totals, prevTotals } = useMemo(() => {
+  const { trafficSources, dailyData, topPages, totals, prevTotals, trafficBreakdown } = useMemo(() => {
     const aggregateTrafficSources = (sourceRecords: CrmRecord[]) => {
       const sourceMap = new Map<string, {
         sessions: number;
@@ -468,7 +468,30 @@ export function GoogleAnalyticsDashboard({
       ? calculateTotalsFromDaily(prevDailyData as any)
       : null;
 
-    return { trafficSources, dailyData, topPages, totals, prevTotals };
+    // Classify traffic into organic vs paid
+    const classifyTraffic = (sourceName: string): 'organic' | 'paid' | 'other' => {
+      const lower = sourceName.toLowerCase();
+      if (lower.includes('organic') || lower.includes('אורגני')) return 'organic';
+      if (lower.includes('cpc') || lower.includes('paid') || lower.includes('ppc') || lower.includes('ממומן') || lower.includes('cpm') || lower.includes('cpv') || lower.includes('display') || lower.includes('retargeting') || lower.includes('remarketing')) return 'paid';
+      if (lower.includes('google') && !lower.includes('organic')) {
+        if (lower.includes('cpc') || lower.includes('paid')) return 'paid';
+      }
+      return 'other';
+    };
+
+    const organicSessions = trafficSources.filter(s => classifyTraffic(s.name) === 'organic').reduce((sum, s) => sum + s.sessions, 0);
+    const paidSessions = trafficSources.filter(s => classifyTraffic(s.name) === 'paid').reduce((sum, s) => sum + s.sessions, 0);
+    const otherSessions = trafficSources.filter(s => classifyTraffic(s.name) === 'other').reduce((sum, s) => sum + s.sessions, 0);
+
+    const organicUsers = trafficSources.filter(s => classifyTraffic(s.name) === 'organic').reduce((sum, s) => sum + s.users, 0);
+    const paidUsers = trafficSources.filter(s => classifyTraffic(s.name) === 'paid').reduce((sum, s) => sum + s.users, 0);
+
+    const organicConversions = trafficSources.filter(s => classifyTraffic(s.name) === 'organic').reduce((sum, s) => sum + s.conversions, 0);
+    const paidConversions = trafficSources.filter(s => classifyTraffic(s.name) === 'paid').reduce((sum, s) => sum + s.conversions, 0);
+
+    const trafficBreakdown = { organicSessions, paidSessions, otherSessions, organicUsers, paidUsers, organicConversions, paidConversions };
+
+    return { trafficSources, dailyData, topPages, totals, prevTotals, trafficBreakdown };
   }, [records, currentRange.start, currentRange.end, previousRange.start, previousRange.end, showComparison, datePreset]);
 
   const formatNumber = (num: number) => {
@@ -757,7 +780,57 @@ export function GoogleAnalyticsDashboard({
         )}
       </div>
 
-      {/* Charts Row */}
+      {/* Organic vs Paid Breakdown */}
+      {(trafficBreakdown.organicSessions > 0 || trafficBreakdown.paidSessions > 0) && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">אורגני מול ממומן</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="text-center p-3 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800">
+                <div className="flex items-center justify-center gap-1.5 mb-1">
+                  <Leaf className="h-4 w-4 text-green-600" />
+                  <span className="text-sm text-muted-foreground">סשנים אורגני</span>
+                </div>
+                <p className="text-xl font-bold text-green-700 dark:text-green-400">{formatNumber(trafficBreakdown.organicSessions)}</p>
+                {totals.sessions > 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {((trafficBreakdown.organicSessions / totals.sessions) * 100).toFixed(1)}%
+                  </p>
+                )}
+              </div>
+              <div className="text-center p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
+                <div className="flex items-center justify-center gap-1.5 mb-1">
+                  <Megaphone className="h-4 w-4 text-blue-600" />
+                  <span className="text-sm text-muted-foreground">סשנים ממומן</span>
+                </div>
+                <p className="text-xl font-bold text-blue-700 dark:text-blue-400">{formatNumber(trafficBreakdown.paidSessions)}</p>
+                {totals.sessions > 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {((trafficBreakdown.paidSessions / totals.sessions) * 100).toFixed(1)}%
+                  </p>
+                )}
+              </div>
+              <div className="text-center p-3 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800">
+                <div className="flex items-center justify-center gap-1.5 mb-1">
+                  <Leaf className="h-4 w-4 text-green-600" />
+                  <span className="text-sm text-muted-foreground">המרות אורגני</span>
+                </div>
+                <p className="text-xl font-bold text-green-700 dark:text-green-400">{formatNumber(trafficBreakdown.organicConversions)}</p>
+              </div>
+              <div className="text-center p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
+                <div className="flex items-center justify-center gap-1.5 mb-1">
+                  <Megaphone className="h-4 w-4 text-blue-600" />
+                  <span className="text-sm text-muted-foreground">המרות ממומן</span>
+                </div>
+                <p className="text-xl font-bold text-blue-700 dark:text-blue-400">{formatNumber(trafficBreakdown.paidConversions)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Traffic Sources Pie Chart with Legend Below */}
         <Card>
