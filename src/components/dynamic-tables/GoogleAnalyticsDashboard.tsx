@@ -868,45 +868,25 @@ export function GoogleAnalyticsDashboard({
         </Card>
       )}
 
-      {/* Phone Call Events by Channel */}
+      {/* Total Phone Calls */}
       {phoneCallEvents.length > 0 && (
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center gap-2">
-              📞 אירועי שיחות טלפון לפי ערוץ
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {phoneCallEvents.map((event) => (
-                <div key={event.eventName} className="p-3 rounded-lg border bg-muted/20">
-                  <div className="font-medium text-sm mb-2">{event.eventName}</div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div className="text-center p-2 rounded bg-background border">
-                      <span className="text-xs text-muted-foreground block">סה״כ</span>
-                      <span className="text-lg font-bold">{formatNumber(event.total)}</span>
-                    </div>
-                    <div className="text-center p-2 rounded bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800">
-                      <div className="flex items-center justify-center gap-1">
-                        <Leaf className="h-3 w-3 text-green-600" />
-                        <span className="text-xs text-muted-foreground">אורגני</span>
-                      </div>
-                      <span className="text-lg font-bold text-green-700 dark:text-green-400">{formatNumber(event.organic)}</span>
-                    </div>
-                    <div className="text-center p-2 rounded bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
-                      <div className="flex items-center justify-center gap-1">
-                        <Megaphone className="h-3 w-3 text-blue-600" />
-                        <span className="text-xs text-muted-foreground">ממומן</span>
-                      </div>
-                      <span className="text-lg font-bold text-blue-700 dark:text-blue-400">{formatNumber(event.paid)}</span>
-                    </div>
-                    <div className="text-center p-2 rounded bg-background border">
-                      <span className="text-xs text-muted-foreground block">אחר</span>
-                      <span className="text-lg font-bold text-muted-foreground">{formatNumber(event.other)}</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-xl bg-orange-100 dark:bg-orange-950/40">
+                <MousePointerClick className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">📞 סה״כ שיחות טלפון מהאתר</p>
+                <p className="text-3xl font-bold">
+                  {formatNumber(phoneCallEvents.reduce((sum, e) => sum + e.total, 0))}
+                </p>
+                {phoneCallEvents.length > 1 && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {phoneCallEvents.map(e => `${e.eventName}: ${formatNumber(e.total)}`).join(' | ')}
+                  </p>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>
