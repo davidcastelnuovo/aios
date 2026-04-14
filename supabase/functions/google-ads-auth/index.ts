@@ -224,8 +224,14 @@ async function handleOAuthCallback(url: URL) {
   }
 }
 
-async function refreshAccessToken(supabase: any, tenantId: string) {
-  const { data: integration } = await supabase
+async function refreshAccessToken(_supabase: any, tenantId: string) {
+  // Use service role client for token refresh to avoid RLS issues
+  const serviceClient = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  );
+
+  const { data: integration } = await serviceClient
     .from('tenant_integrations')
     .select('*')
     .eq('tenant_id', tenantId)
@@ -254,6 +260,7 @@ async function refreshAccessToken(supabase: any, tenantId: string) {
   const tokens = await tokenResponse.json();
 
   if (tokens.error) {
+    console.error('Token refresh failed:', tokens.error, tokens.error_description);
     return new Response(JSON.stringify({ error: tokens.error_description || tokens.error }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -262,7 +269,7 @@ async function refreshAccessToken(supabase: any, tenantId: string) {
 
   const expiresAt = new Date(Date.now() + (tokens.expires_in * 1000)).toISOString();
 
-  await supabase
+  await serviceClient
     .from('tenant_integrations')
     .update({
       api_key: tokens.access_token,
@@ -279,8 +286,14 @@ async function refreshAccessToken(supabase: any, tenantId: string) {
 }
 
 async function getGoogleAdsAccounts(supabase: any, tenantId: string) {
+  // Use service role client to reliably read/update tokens
+  const serviceClient = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  );
+
   // Get access token
-  const { data: integration } = await supabase
+  const { data: integration } = await serviceClient
     .from('tenant_integrations')
     .select('*')
     .eq('tenant_id', tenantId)
@@ -297,6 +310,7 @@ async function getGoogleAdsAccounts(supabase: any, tenantId: string) {
 
   // Check if token needs refresh
   if (integration.settings?.expires_at && new Date(integration.settings.expires_at) < new Date()) {
+    console.log('Token expired, refreshing...');
     const refreshResponse = await refreshAccessToken(supabase, tenantId);
     if (refreshResponse.status >= 400) {
       return refreshResponse;
@@ -304,7 +318,7 @@ async function getGoogleAdsAccounts(supabase: any, tenantId: string) {
   }
 
   // Get updated token
-  const { data: updatedIntegration } = await supabase
+  const { data: updatedIntegration } = await serviceClient
     .from('tenant_integrations')
     .select('api_key')
     .eq('id', integration.id)
