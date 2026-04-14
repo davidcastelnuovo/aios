@@ -1608,9 +1608,10 @@ Deno.serve(async (req) => {
 
     // ===========================
     // CARMEN WHATSAPP SESSION HANDLER
-    // Only for incoming individual (non-group) messages
+    // New sessions: only from OUTGOING messages (user sends trigger keyword)
+    // Existing sessions: respond to INCOMING messages (other party replies)
     // ===========================
-    if (isIncoming && !isGroup) {
+    if (!isGroup && (isIncoming || isManualOutgoing)) {
       const chatId = senderData.chatId;
       const normalizedMsg = messageText.trim().toLowerCase();
       
@@ -1688,7 +1689,10 @@ Deno.serve(async (req) => {
         });
       } else {
         // === NO ACTIVE SESSION: check if message triggers Carmen ===
-        
+        // Only OUTGOING messages (sent by the user) can trigger a new session
+        if (!isManualOutgoing) {
+          // Incoming message but no active session — skip Carmen entirely
+        } else {
         // Step 1: Find active Carmen automation for this tenant
         const carmenAutomation = await findCarmenSessionAutomation(supabaseClient, tenantId);
         
@@ -1795,6 +1799,7 @@ Deno.serve(async (req) => {
             }
           }
         }
+        } // end else isManualOutgoing
       }
     }
     // ===========================
@@ -1841,6 +1846,7 @@ Deno.serve(async (req) => {
             sender_name: senderData.senderName || null,
             sender_phone: phoneNumber,
             message_text: messageText,
+            direction: isOutgoing ? 'outgoing' : 'incoming',
             group_id: null,
             group_name: null,
             group_chat_id: null,

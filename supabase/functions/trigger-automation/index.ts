@@ -931,16 +931,17 @@ Deno.serve(async (req) => {
                       }
 
                       if (!payloadData._carmen_session_id) {
-                        // No active session — only create one if trigger keyword is present
+                        // No active session — only create one if trigger keyword is present AND message is outgoing
+                        const messageDirection = payloadData?.direction || ''
                         const triggerKeyword = triggerCfg.trigger_keyword ||
                           (automation as any).configuration?.trigger_keyword || 'כרמן'
                         const messageText = (payloadData?.text || payloadData?.message_text || '').toLowerCase()
                         const triggerWords = [triggerKeyword.toLowerCase(), 'carmen', 'כרמן']
                         const hasTrigger = triggerWords.some(kw => messageText.includes(kw))
 
-                        if (!hasTrigger) {
-                          console.log(`[CARMEN] No active session and no trigger keyword in message — skipping agent step for chat ${cId}`)
-                          // Skip the agent step entirely
+                        if (!hasTrigger || messageDirection !== 'outgoing') {
+                          console.log(`[CARMEN] No active session — skipping: hasTrigger=${hasTrigger}, direction=${messageDirection} (need outgoing) for chat ${cId}`)
+                          // Skip the agent step entirely — only the connection owner can start a session
                           continue
                         }
 
