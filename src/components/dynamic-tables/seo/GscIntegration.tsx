@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Link2, Unlink, RefreshCw, Search, MousePointerClick, Eye, Target } from "lucide-react";
+import { Link2, RefreshCw, Search, MousePointerClick, Eye, Target } from "lucide-react";
 
 interface GscIntegrationProps {
   tenantId: string;
@@ -14,6 +14,11 @@ interface GscIntegrationProps {
   domain?: string;
   keywords?: string[];
   onDataLoaded?: (data: GscKeywordData[]) => void;
+}
+
+interface GscSite {
+  siteUrl: string;
+  permissionLevel?: string;
 }
 
 export interface GscKeywordData {
@@ -24,117 +29,164 @@ export interface GscKeywordData {
   position: number;
 }
 
+function normalizeDomain(value?: string) {
+  return String(value || "")
+    .replace(/^sc-domain:/, "")
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .replace(/\/+$/, "")
+    .toLowerCase();
+}
+
 export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoaded }: GscIntegrationProps) {
   const queryClient = useQueryClient();
   const [selectedSite, setSelectedSite] = useState<string>("");
 
-  // Check for existing GSC integration
   const { data: gscIntegration, isLoading: isLoadingIntegration } = useQuery({
-    queryKey: ['gsc-integration', tenantId],
+    queryKey: ["gsc-integration", tenantId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', tenantId)
-        .eq('integration_type', 'google_search_console')
-        .eq('is_active', true)
+        .from("tenant_integrations")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .eq("integration_type", "google_search_console")
+        .eq("is_active", true)
+        .order("updated_at", { ascending: false })
+        .limit(1)
         .maybeSingle();
+
       if (error) throw error;
       return data;
     },
     enabled: !!tenantId,
+    refetchOnMount: "always",
   });
 
-  const settings = gscIntegration?.settings as any;
-  const availableSites = settings?.available_sites || [];
-  const connectedSiteUrl = selectedSite || settings?.site_url || '';
+  const settings = (gscIntegration?.settings as any) || {};
 
-  // Auto-match domain to GSC site
-  const matchedSite = domain
-    ? availableSites.find((s: any) =>
-        s.siteUrl?.includes(domain.replace(/^www\./, '')) ||
-        s.siteUrl?.includes(domain)
-      )
+  const {
+    data: availableSites = [],
+    isLoading: isLoadingSites,
+    refetch: refetchSites,
+  } = useQuery({
+    queryKey: ["gsc-sites", gscIntegration?.id],
+    queryFn: async () => {
+      if (!gscIntegration?.id) return [] as GscSite[];
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
+      const response = await supabase.functions.invoke("google-search-console-auth?action=get_sites", {
+        body: { integrationId: gscIntegration.id },
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+
+      if (response.error) throw response.error;
+      return Array.isArray(response.data?.sites) ? (response.data.sites as GscSite[]) : [];
+    },
+    enabled: !!gscIntegration?.id,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const persistedSiteUrl = selectedSite || settings?.site_url || settings?.siteUrl || "";
+  const normalizedDomain = normalizeDomain(domain);
+  const matchedSite = normalizedDomain
+    ? availableSites.find((site) => {
+        const normalizedSite = normalizeDomain(site.siteUrl);
+        return (
+          normalizedSite === normalizedDomain ||
+          normalizedSite.includes(normalizedDomain) ||
+          normalizedDomain.includes(normalizedSite)
+        );
+      })
     : null;
 
-  const effectiveSiteUrl = connectedSiteUrl || matchedSite?.siteUrl || '';
+  const fallbackSiteUrl = matchedSite?.siteUrl || (availableSites.length === 1 ? availableSites[0].siteUrl : "");
+  const effectiveSiteUrl = persistedSiteUrl || fallbackSiteUrl;
 
-  // Fetch GSC data for keywords
+  useEffect(() => {
+    if (!effectiveSiteUrl) {
+      onDataLoaded?.([]);
+    }
+  }, [effectiveSiteUrl, onDataLoaded, clientId]);
+
   const { data: gscData, isLoading: isLoadingData, refetch: refetchData } = useQuery({
-    queryKey: ['gsc-keyword-data', gscIntegration?.id, effectiveSiteUrl, keywords?.join(',')],
+    queryKey: ["gsc-keyword-data", gscIntegration?.id, effectiveSiteUrl, keywords?.join(",")],
     queryFn: async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
+      if (!session) throw new Error("Not authenticated");
 
-      const response = await supabase.functions.invoke('fetch-gsc-data', {
+      const response = await supabase.functions.invoke("fetch-gsc-data", {
         body: {
           integrationId: gscIntegration!.id,
           siteUrl: effectiveSiteUrl,
           keywords: keywords || [],
         },
+        headers: { Authorization: `Bearer ${session.access_token}` },
       });
 
       if (response.error) throw response.error;
-      const rows = response.data?.rows || [];
+      const rows = Array.isArray(response.data?.rows) ? response.data.rows : [];
       onDataLoaded?.(rows);
       return rows as GscKeywordData[];
     },
     enabled: !!gscIntegration?.id && !!effectiveSiteUrl,
   });
 
-  // Connect GSC mutation
   const connectMutation = useMutation({
     mutationFn: async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
+      if (!session) throw new Error("Not authenticated");
 
-      const response = await supabase.functions.invoke(
-        'google-search-console-auth?action=authorize',
-        {
-          body: {
-            tenantId,
-            userId: session.user.id,
-            siteUrl: domain || '',
-          },
-        }
-      );
+      const response = await supabase.functions.invoke("google-search-console-auth?action=authorize", {
+        body: {
+          tenantId,
+          userId: session.user.id,
+          siteUrl: domain || "",
+        },
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
 
       if (response.error) throw response.error;
       return response.data;
     },
     onSuccess: (data) => {
       if (data?.authUrl) {
-        window.open(data.authUrl, '_blank', 'width=600,height=700');
+        window.open(data.authUrl, "_blank", "width=600,height=700");
       }
     },
     onError: (error) => {
-      toast.error('שגיאה בחיבור ל-Google Search Console');
+      toast.error("שגיאה בחיבור ל-Google Search Console");
       console.error(error);
     },
   });
 
-  // Update site URL
   const updateSiteMutation = useMutation({
     mutationFn: async (siteUrl: string) => {
       if (!gscIntegration?.id) return;
       const { error } = await supabase
-        .from('tenant_integrations')
+        .from("tenant_integrations")
         .update({
-          settings: { ...settings, site_url: siteUrl },
+          settings: {
+            ...settings,
+            site_url: siteUrl,
+            siteUrl: siteUrl,
+            available_sites: availableSites,
+          },
         })
-        .eq('id', gscIntegration.id);
+        .eq("id", gscIntegration.id);
+
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['gsc-integration'] });
-      queryClient.invalidateQueries({ queryKey: ['gsc-keyword-data'] });
-      toast.success('האתר עודכן');
+      queryClient.invalidateQueries({ queryKey: ["gsc-integration"] });
+      queryClient.invalidateQueries({ queryKey: ["gsc-keyword-data"] });
+      toast.success("הנכס עודכן");
     },
   });
 
   if (isLoadingIntegration) return null;
 
-  // Not connected - show connect button
   if (!gscIntegration) {
     return (
       <Card className="border-dashed border-primary/30">
@@ -153,14 +205,13 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
             className="gap-2"
           >
             <Link2 className="h-4 w-4" />
-            {connectMutation.isPending ? 'מתחבר...' : 'חבר GSC'}
+            {connectMutation.isPending ? "מתחבר..." : "חבר GSC"}
           </Button>
         </CardContent>
       </Card>
     );
   }
 
-  // Connected - show site selector and data
   return (
     <Card className="border-primary/20">
       <CardHeader className="py-3 px-4">
@@ -169,25 +220,25 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
             <Search className="h-4 w-4 text-primary" />
             <CardTitle className="text-sm font-medium">Google Search Console</CardTitle>
             <Badge variant="secondary" className="text-xs">
-              {settings?.google_email || 'מחובר'}
+              {settings?.google_email || "מחובר"}
             </Badge>
           </div>
           <div className="flex items-center gap-2">
-            {availableSites.length > 1 && (
+            {availableSites.length > 0 && (
               <Select
                 value={effectiveSiteUrl}
-                onValueChange={(val) => {
-                  setSelectedSite(val);
-                  updateSiteMutation.mutate(val);
+                onValueChange={(value) => {
+                  setSelectedSite(value);
+                  updateSiteMutation.mutate(value);
                 }}
               >
-                <SelectTrigger className="h-7 text-xs w-[200px]">
-                  <SelectValue placeholder="בחר אתר" />
+                <SelectTrigger className="h-7 text-xs w-[220px]">
+                  <SelectValue placeholder="בחר נכס Search Console" />
                 </SelectTrigger>
                 <SelectContent>
-                  {availableSites.map((site: any) => (
+                  {availableSites.map((site) => (
                     <SelectItem key={site.siteUrl} value={site.siteUrl}>
-                      {site.siteUrl.replace('sc-domain:', '').replace('https://', '')}
+                      {site.siteUrl.replace("sc-domain:", "").replace("https://", "")}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -197,16 +248,32 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
               variant="ghost"
               size="sm"
               className="h-7 w-7 p-0"
-              onClick={() => refetchData()}
-              disabled={isLoadingData}
+              onClick={() => {
+                refetchSites();
+                refetchData();
+              }}
+              disabled={isLoadingData || isLoadingSites}
             >
-              <RefreshCw className={`h-3 w-3 ${isLoadingData ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`h-3 w-3 ${(isLoadingData || isLoadingSites) ? "animate-spin" : ""}`} />
             </Button>
           </div>
         </div>
       </CardHeader>
 
-      {/* Summary stats */}
+      {!isLoadingSites && availableSites.length === 0 && (
+        <CardContent className="px-4 pb-3 pt-0">
+          <p className="text-xs text-muted-foreground text-center">
+            החיבור קיים אבל לא נטענו נכסים מ-Search Console. נסה רענון או חיבור מחדש.
+          </p>
+        </CardContent>
+      )}
+
+      {!effectiveSiteUrl && availableSites.length > 0 && !isLoadingSites && (
+        <CardContent className="px-4 pb-3 pt-0">
+          <p className="text-xs text-muted-foreground text-center">בחר נכס Search Console כדי למשוך נתונים</p>
+        </CardContent>
+      )}
+
       {gscData && gscData.length > 0 && (
         <CardContent className="px-4 pb-3 pt-0">
           <div className="grid grid-cols-3 gap-3">
@@ -216,7 +283,7 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
                 קליקים
               </div>
               <p className="text-sm font-bold">
-                {gscData.reduce((s: number, r: GscKeywordData) => s + r.clicks, 0).toLocaleString()}
+                {gscData.reduce((sum: number, row: GscKeywordData) => sum + row.clicks, 0).toLocaleString()}
               </p>
             </div>
             <div className="text-center">
@@ -225,7 +292,7 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
                 חשיפות
               </div>
               <p className="text-sm font-bold">
-                {gscData.reduce((s: number, r: GscKeywordData) => s + r.impressions, 0).toLocaleString()}
+                {gscData.reduce((sum: number, row: GscKeywordData) => sum + row.impressions, 0).toLocaleString()}
               </p>
             </div>
             <div className="text-center">
@@ -234,7 +301,7 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
                 CTR ממוצע
               </div>
               <p className="text-sm font-bold">
-                {(gscData.reduce((s: number, r: GscKeywordData) => s + r.ctr, 0) / gscData.length).toFixed(1)}%
+                {(gscData.reduce((sum: number, row: GscKeywordData) => sum + row.ctr, 0) / gscData.length).toFixed(1)}%
               </p>
             </div>
           </div>
@@ -243,7 +310,7 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
 
       {effectiveSiteUrl && !gscData && !isLoadingData && (
         <CardContent className="px-4 pb-3 pt-0">
-          <p className="text-xs text-muted-foreground text-center">אין נתונים זמינים</p>
+          <p className="text-xs text-muted-foreground text-center">אין נתונים זמינים עבור הנכס שנבחר</p>
         </CardContent>
       )}
     </Card>
