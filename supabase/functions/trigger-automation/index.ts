@@ -931,7 +931,20 @@ Deno.serve(async (req) => {
                       }
 
                       if (!payloadData._carmen_session_id) {
-                        // First message — create new session
+                        // No active session — only create one if trigger keyword is present
+                        const triggerKeyword = triggerCfg.trigger_keyword ||
+                          (automation as any).configuration?.trigger_keyword || 'כרמן'
+                        const messageText = (payloadData?.text || payloadData?.message_text || '').toLowerCase()
+                        const triggerWords = [triggerKeyword.toLowerCase(), 'carmen', 'כרמן']
+                        const hasTrigger = triggerWords.some(kw => messageText.includes(kw))
+
+                        if (!hasTrigger) {
+                          console.log(`[CARMEN] No active session and no trigger keyword in message — skipping agent step for chat ${cId}`)
+                          // Skip the agent step entirely
+                          continue
+                        }
+
+                        // Trigger keyword found — create new session
                         const connUserId = payloadData?.connection_user_id || ''
                         const { data: newSession } = await supabase
                           .from('carmen_whatsapp_sessions')
@@ -945,8 +958,7 @@ Deno.serve(async (req) => {
                             conversation_history: [],
                             status: 'active',
                             automation_id: automation.id || null,
-                            started_by_keyword: triggerCfg.trigger_keyword ||
-                              (automation as any).configuration?.trigger_keyword || 'כרמן',
+                            started_by_keyword: triggerKeyword,
                             end_keyword: triggerCfg.end_keyword ||
                               (automation as any).configuration?.end_keyword || 'סיימנו',
                           })
