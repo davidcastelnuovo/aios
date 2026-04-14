@@ -491,11 +491,14 @@ export function GoogleAnalyticsDashboard({
 
     const trafficBreakdown = { organicSessions, paidSessions, otherSessions, organicUsers, paidUsers, organicConversions, paidConversions };
 
-    // Phone call events - filtered by date range
-    const eventRecords = records.filter(r => {
+    // Phone call events - use aggregate records (accurate totals) when available, fallback to date-filtered event_total
+    const aggregateEventRecords = records.filter(r => r.data.report_type === 'event_aggregate');
+    const hasAggregateEvents = aggregateEventRecords.length > 0;
+
+    const dateFilteredEventRecords = records.filter(r => {
       const reportType = r.data.report_type;
       if (reportType !== 'event_total' && reportType !== 'event_by_channel') return false;
-      if (!r.data.date) return true; // legacy records without date - include them
+      if (!r.data.date) return true;
       try {
         const recordDate = parseISO(r.data.date);
         const start = new Date(currentRange.start);
@@ -507,30 +510,32 @@ export function GoogleAnalyticsDashboard({
         return true;
       }
     });
+
+    // Use aggregate records for totals (they match GA4 UI), or fallback to daily
+    const eventSourceRecords = hasAggregateEvents ? aggregateEventRecords : dateFilteredEventRecords;
+
     const phoneCallEvents: { eventName: string; total: number }[] = [];
-    const hasEventTotals = eventRecords.some(r => r.data.report_type === 'event_total');
-    
-    // Find phone-call-like events
     const phoneEventMap = new Map<string, number>();
-    for (const r of eventRecords) {
-      if (hasEventTotals && r.data.report_type !== 'event_total') continue;
+    for (const r of eventSourceRecords) {
+      // For date-filtered records, only use event_total
+      if (!hasAggregateEvents && r.data.report_type !== 'event_total') continue;
       const eventName = (r.data.event_name || '').toLowerCase();
-      // Match phone call events (flexible matching)
       if (eventName.includes('phone') || eventName.includes('call') || eventName.includes('tel') || eventName.includes('click_to_call')) {
         const displayName = r.data.event_name || 'Unknown';
-        // Use key_events if available (for GA4 key events/conversions), fallback to event_count
         const keyEvents = Number(r.data.key_events) || 0;
         const eventCount = Number(r.data.event_count) || 0;
         const count = Math.max(eventCount, keyEvents);
-        phoneEventMap.set(displayName, (phoneEventMap.get(displayName) ?? 0) + count);
+        // For aggregate records, use the value directly (don't sum across rows)
+        if (hasAggregateEvents) {
+          phoneEventMap.set(displayName, count);
+        } else {
+          phoneEventMap.set(displayName, (phoneEventMap.get(displayName) ?? 0) + count);
+        }
       }
     }
     
     for (const [eventName, total] of phoneEventMap.entries()) {
-      phoneCallEvents.push({
-        eventName,
-        total,
-      });
+      phoneCallEvents.push({ eventName, total });
     }
     phoneCallEvents.sort((a, b) => b.total - a.total);
 
