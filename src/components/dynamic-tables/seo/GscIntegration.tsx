@@ -228,24 +228,44 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
           </div>
           <div className="flex items-center gap-2">
             {availableSites.length > 0 && (
-              <Select
-                value={effectiveSiteUrl}
-                onValueChange={(value) => {
-                  setSelectedSite(value);
-                  updateSiteMutation.mutate(value);
-                }}
-              >
-                <SelectTrigger className="h-7 text-xs w-[220px]">
-                  <SelectValue placeholder="בחר נכס Search Console" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableSites.map((site) => (
-                    <SelectItem key={site.siteUrl} value={site.siteUrl}>
-                      {site.siteUrl.replace("sc-domain:", "").replace("https://", "")}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={sitePopoverOpen} onOpenChange={setSitePopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" role="combobox" className="h-7 text-xs w-[220px] justify-between">
+                    {effectiveSiteUrl
+                      ? effectiveSiteUrl.replace("sc-domain:", "").replace("https://", "")
+                      : "בחר נכס Search Console"}
+                    <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[260px] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="חפש נכס..." className="h-8 text-xs" />
+                    <CommandList>
+                      <CommandEmpty>לא נמצאו נכסים</CommandEmpty>
+                      <CommandGroup>
+                        {availableSites.map((site) => {
+                          const label = site.siteUrl.replace("sc-domain:", "").replace("https://", "");
+                          return (
+                            <CommandItem
+                              key={site.siteUrl}
+                              value={label}
+                              onSelect={() => {
+                                setSelectedSite(site.siteUrl);
+                                updateSiteMutation.mutate(site.siteUrl);
+                                setSitePopoverOpen(false);
+                              }}
+                              className="text-xs"
+                            >
+                              <Check className={cn("mr-2 h-3 w-3", effectiveSiteUrl === site.siteUrl ? "opacity-100" : "opacity-0")} />
+                              {label}
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             )}
             <Button
               variant="ghost"
