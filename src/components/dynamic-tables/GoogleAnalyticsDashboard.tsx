@@ -491,8 +491,21 @@ export function GoogleAnalyticsDashboard({
 
     const trafficBreakdown = { organicSessions, paidSessions, otherSessions, organicUsers, paidUsers, organicConversions, paidConversions };
 
-    // Phone call events by channel
-    const eventRecords = records.filter(r => r.data.report_type === 'event_by_channel');
+    // Phone call events by channel - filtered by date range
+    const eventRecords = records.filter(r => {
+      if (r.data.report_type !== 'event_by_channel') return false;
+      if (!r.data.date) return true; // legacy records without date - include them
+      try {
+        const recordDate = parseISO(r.data.date);
+        const start = new Date(currentRange.start);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(currentRange.end);
+        end.setHours(23, 59, 59, 999);
+        return isWithinInterval(recordDate, { start, end });
+      } catch {
+        return true;
+      }
+    });
     const phoneCallEvents: { eventName: string; organic: number; paid: number; other: number; total: number }[] = [];
     
     // Find phone-call-like events
