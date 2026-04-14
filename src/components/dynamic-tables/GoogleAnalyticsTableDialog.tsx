@@ -43,16 +43,14 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
   const { data: integration, isLoading: integrationLoading } = useQuery({
     queryKey: ['ga-integration', activeTenantId],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return null;
-      
       const { data } = await supabase
         .from('tenant_integrations')
         .select('*')
         .eq('tenant_id', activeTenantId)
         .eq('integration_type', 'google_analytics')
-        .eq('user_id', user.id)
         .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
       
       return data;
