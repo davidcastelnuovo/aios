@@ -491,9 +491,10 @@ export function GoogleAnalyticsDashboard({
 
     const trafficBreakdown = { organicSessions, paidSessions, otherSessions, organicUsers, paidUsers, organicConversions, paidConversions };
 
-    // Phone call events by channel - filtered by date range
+    // Phone call events - filtered by date range
     const eventRecords = records.filter(r => {
-      if (r.data.report_type !== 'event_by_channel') return false;
+      const reportType = r.data.report_type;
+      if (reportType !== 'event_total' && reportType !== 'event_by_channel') return false;
       if (!r.data.date) return true; // legacy records without date - include them
       try {
         const recordDate = parseISO(r.data.date);
@@ -506,37 +507,26 @@ export function GoogleAnalyticsDashboard({
         return true;
       }
     });
-    const phoneCallEvents: { eventName: string; organic: number; paid: number; other: number; total: number }[] = [];
+    const phoneCallEvents: { eventName: string; total: number }[] = [];
+    const hasEventTotals = eventRecords.some(r => r.data.report_type === 'event_total');
     
     // Find phone-call-like events
-    const phoneEventMap = new Map<string, { organic: number; paid: number; other: number }>();
+    const phoneEventMap = new Map<string, number>();
     for (const r of eventRecords) {
+      if (hasEventTotals && r.data.report_type !== 'event_total') continue;
       const eventName = (r.data.event_name || '').toLowerCase();
       // Match phone call events (flexible matching)
       if (eventName.includes('phone') || eventName.includes('call') || eventName.includes('tel') || eventName.includes('click_to_call')) {
         const displayName = r.data.event_name || 'Unknown';
-        const channel = (r.data.channel_group || '').toLowerCase();
         const count = Number(r.data.event_count) || 0;
-        
-        const existing = phoneEventMap.get(displayName) || { organic: 0, paid: 0, other: 0 };
-        if (channel.includes('organic')) {
-          existing.organic += count;
-        } else if (channel.includes('paid') || channel.includes('cpc') || channel.includes('display')) {
-          existing.paid += count;
-        } else {
-          existing.other += count;
-        }
-        phoneEventMap.set(displayName, existing);
+        phoneEventMap.set(displayName, (phoneEventMap.get(displayName) ?? 0) + count);
       }
     }
     
-    for (const [eventName, counts] of phoneEventMap.entries()) {
+    for (const [eventName, total] of phoneEventMap.entries()) {
       phoneCallEvents.push({
         eventName,
-        organic: counts.organic,
-        paid: counts.paid,
-        other: counts.other,
-        total: counts.organic + counts.paid + counts.other,
+        total,
       });
     }
     phoneCallEvents.sort((a, b) => b.total - a.total);
