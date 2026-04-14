@@ -780,7 +780,57 @@ export function GoogleAnalyticsDashboard({
         )}
       </div>
 
-      {/* Charts Row */}
+      {/* Organic vs Paid Breakdown */}
+      {(trafficBreakdown.organicSessions > 0 || trafficBreakdown.paidSessions > 0) && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">אורגני מול ממומן</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="text-center p-3 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800">
+                <div className="flex items-center justify-center gap-1.5 mb-1">
+                  <Leaf className="h-4 w-4 text-green-600" />
+                  <span className="text-sm text-muted-foreground">סשנים אורגני</span>
+                </div>
+                <p className="text-xl font-bold text-green-700 dark:text-green-400">{formatNumber(trafficBreakdown.organicSessions)}</p>
+                {totals.sessions > 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {((trafficBreakdown.organicSessions / totals.sessions) * 100).toFixed(1)}%
+                  </p>
+                )}
+              </div>
+              <div className="text-center p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
+                <div className="flex items-center justify-center gap-1.5 mb-1">
+                  <Megaphone className="h-4 w-4 text-blue-600" />
+                  <span className="text-sm text-muted-foreground">סשנים ממומן</span>
+                </div>
+                <p className="text-xl font-bold text-blue-700 dark:text-blue-400">{formatNumber(trafficBreakdown.paidSessions)}</p>
+                {totals.sessions > 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {((trafficBreakdown.paidSessions / totals.sessions) * 100).toFixed(1)}%
+                  </p>
+                )}
+              </div>
+              <div className="text-center p-3 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800">
+                <div className="flex items-center justify-center gap-1.5 mb-1">
+                  <Leaf className="h-4 w-4 text-green-600" />
+                  <span className="text-sm text-muted-foreground">המרות אורגני</span>
+                </div>
+                <p className="text-xl font-bold text-green-700 dark:text-green-400">{formatNumber(trafficBreakdown.organicConversions)}</p>
+              </div>
+              <div className="text-center p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
+                <div className="flex items-center justify-center gap-1.5 mb-1">
+                  <Megaphone className="h-4 w-4 text-blue-600" />
+                  <span className="text-sm text-muted-foreground">המרות ממומן</span>
+                </div>
+                <p className="text-xl font-bold text-blue-700 dark:text-blue-400">{formatNumber(trafficBreakdown.paidConversions)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Traffic Sources Pie Chart with Legend Below */}
         <Card>
