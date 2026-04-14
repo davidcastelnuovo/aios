@@ -485,7 +485,7 @@ export function ClientsChatView({
         )}
 
         {/* Client list */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0" dir="rtl">
           <div className="divide-y w-full">
             {filteredClients.map((client) => {
               const isSelected = client.id === selectedClientId;
