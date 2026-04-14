@@ -304,6 +304,8 @@ serve(async (req) => {
       { key: 'engaged_sessions', name: 'Engaged Sessions', type: 'number', position: 15 },
       { key: 'engagement_rate', name: 'Engagement Rate', type: 'number', position: 16 },
       { key: 'events_per_session', name: 'Events per Session', type: 'number', position: 17 },
+      { key: 'event_name', name: 'Event Name', type: 'text', position: 18 },
+      { key: 'event_count', name: 'Event Count', type: 'number', position: 19 },
     ];
 
     for (const field of fieldDefinitions) {
