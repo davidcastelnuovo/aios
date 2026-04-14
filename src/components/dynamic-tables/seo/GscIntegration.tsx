@@ -300,8 +300,9 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
       )}
 
       {gscData && gscData.length > 0 && (
-        <CardContent className="px-4 pb-3 pt-0">
-          <div className="grid grid-cols-3 gap-3">
+        <CardContent className="px-4 pb-4 pt-0 space-y-4">
+          {/* Summary Stats */}
+          <div className="grid grid-cols-4 gap-3">
             <div className="text-center">
               <div className="flex items-center justify-center gap-1 text-xs text-muted-foreground">
                 <MousePointerClick className="h-3 w-3" />
@@ -329,7 +330,19 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
                 {(gscData.reduce((sum: number, row: GscKeywordData) => sum + row.ctr, 0) / gscData.length).toFixed(1)}%
               </p>
             </div>
+            <div className="text-center">
+              <div className="flex items-center justify-center gap-1 text-xs text-muted-foreground">
+                <Award className="h-3 w-3" />
+                עמוד ראשון
+              </div>
+              <p className="text-sm font-bold">
+                {gscData.filter((row: GscKeywordData) => row.position <= 10).length}
+              </p>
+            </div>
           </div>
+
+          {/* Queries Table */}
+          <GscQueriesTable data={gscData} />
         </CardContent>
       )}
 
@@ -339,5 +352,104 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
         </CardContent>
       )}
     </Card>
+  );
+}
+
+function GscQueriesTable({ data }: { data: GscKeywordData[] }) {
+  const [sortBy, setSortBy] = useState<keyof GscKeywordData>("impressions");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [searchFilter, setSearchFilter] = useState("");
+
+  const sortedData = useMemo(() => {
+    let filtered = data;
+    if (searchFilter.trim()) {
+      const q = searchFilter.toLowerCase();
+      filtered = data.filter(row => row.keyword.toLowerCase().includes(q));
+    }
+    return filtered.slice().sort((a, b) => {
+      const aVal = a[sortBy] as number;
+      const bVal = b[sortBy] as number;
+      return sortOrder === "desc" ? bVal - aVal : aVal - bVal;
+    });
+  }, [data, sortBy, sortOrder, searchFilter]);
+
+  const formatNumber = (num: number) => new Intl.NumberFormat('he-IL').format(num);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <h4 className="text-sm font-medium flex items-center gap-1.5">
+          <Search className="h-4 w-4" />
+          ביטויי חיפוש ({formatNumber(sortedData.length)})
+        </h4>
+        <div className="flex items-center gap-2">
+          <Input
+            placeholder="חפש ביטוי..."
+            value={searchFilter}
+            onChange={(e) => setSearchFilter(e.target.value)}
+            className="h-8 w-[200px] text-sm"
+          />
+          <Select value={sortBy} onValueChange={(v) => setSortBy(v as keyof GscKeywordData)}>
+            <SelectTrigger className="w-[110px] h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="clicks">קליקים</SelectItem>
+              <SelectItem value="impressions">חשיפות</SelectItem>
+              <SelectItem value="ctr">CTR</SelectItem>
+              <SelectItem value="position">מיקום</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 w-8 p-0"
+            onClick={() => setSortOrder(o => o === "asc" ? "desc" : "asc")}
+          >
+            <ArrowUpDown className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto max-h-[500px] overflow-y-auto rounded-md border">
+        <table className="w-full text-sm">
+          <thead className="sticky top-0 bg-muted/80 backdrop-blur-sm">
+            <tr className="border-b">
+              <th className="text-right py-2 px-3 font-medium">ביטוי</th>
+              <th className="text-center py-2 px-3 font-medium">קליקים</th>
+              <th className="text-center py-2 px-3 font-medium">חשיפות</th>
+              <th className="text-center py-2 px-3 font-medium">CTR</th>
+              <th className="text-center py-2 px-3 font-medium">מיקום</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sortedData.slice(0, 200).map((row, index) => (
+              <tr key={index} className="border-b hover:bg-muted/50">
+                <td className="py-1.5 px-3 font-medium max-w-[300px] truncate" title={row.keyword}>
+                  {row.keyword}
+                </td>
+                <td className="text-center py-1.5 px-3">{formatNumber(row.clicks)}</td>
+                <td className="text-center py-1.5 px-3">{formatNumber(row.impressions)}</td>
+                <td className="text-center py-1.5 px-3">{row.ctr.toFixed(2)}%</td>
+                <td className="text-center py-1.5 px-3">
+                  <span className={cn(
+                    "inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-medium",
+                    row.position <= 3 ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" :
+                    row.position <= 10 ? "bg-primary/10 text-primary" :
+                    row.position <= 20 ? "bg-muted text-muted-foreground" :
+                    "text-muted-foreground"
+                  )}>
+                    {row.position.toFixed(1)}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {sortedData.length > 200 && (
+        <p className="text-xs text-muted-foreground text-center">מציג 200 מתוך {formatNumber(sortedData.length)} ביטויים</p>
+      )}
+    </div>
   );
 }
