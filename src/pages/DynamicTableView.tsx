@@ -43,6 +43,7 @@ import { Badge } from "@/components/ui/badge";
 import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnalyticsDashboard";
 import { SearchConsoleDashboard } from "@/components/dynamic-tables/SearchConsoleDashboard";
 import { SeoDashboardView } from "@/components/dynamic-tables/SeoDashboardView";
+import { SeoReportTabs } from "@/components/dynamic-tables/SeoReportTabs";
 import { AlertsManagementDialog } from "@/components/dynamic-tables/AlertsManagementDialog";
 import { ActiveAlerts } from "@/components/dynamic-tables/ActiveAlerts";
 import { ShareTableDialog } from "@/components/dynamic-tables/ShareTableDialog";
@@ -2553,9 +2554,9 @@ export default function DynamicTableView() {
         <SearchConsoleDashboard tableId={table.id} />
       )}
 
-      {/* SEO (Ahrefs) Dashboard */}
+      {/* SEO (Ahrefs) Dashboard with GSC & Analytics tabs */}
       {hasAhrefs && table?.integration_settings?.data_source === 'ahrefs_reports' && table?.integration_settings?.clientId && table?.tenant_id && (
-        <SeoDashboardView 
+        <SeoReportTabs 
           tenantId={table.tenant_id} 
           clientId={table.integration_settings.clientId} 
         />
