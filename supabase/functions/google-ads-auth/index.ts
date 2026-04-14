@@ -224,8 +224,14 @@ async function handleOAuthCallback(url: URL) {
   }
 }
 
-async function refreshAccessToken(supabase: any, tenantId: string) {
-  const { data: integration } = await supabase
+async function refreshAccessToken(_supabase: any, tenantId: string) {
+  // Use service role client for token refresh to avoid RLS issues
+  const serviceClient = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  );
+
+  const { data: integration } = await serviceClient
     .from('tenant_integrations')
     .select('*')
     .eq('tenant_id', tenantId)
@@ -254,6 +260,7 @@ async function refreshAccessToken(supabase: any, tenantId: string) {
   const tokens = await tokenResponse.json();
 
   if (tokens.error) {
+    console.error('Token refresh failed:', tokens.error, tokens.error_description);
     return new Response(JSON.stringify({ error: tokens.error_description || tokens.error }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -262,7 +269,7 @@ async function refreshAccessToken(supabase: any, tenantId: string) {
 
   const expiresAt = new Date(Date.now() + (tokens.expires_in * 1000)).toISOString();
 
-  await supabase
+  await serviceClient
     .from('tenant_integrations')
     .update({
       api_key: tokens.access_token,
