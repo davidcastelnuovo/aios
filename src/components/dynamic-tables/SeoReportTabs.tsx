@@ -284,9 +284,21 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                       </SelectContent>
                     </Select>
                     {selectedGaTableId && (
-                      <Badge variant="secondary" className="text-xs">
-                        {gaTables.find(t => t.id === selectedGaTableId)?.name}
-                      </Badge>
+                      <>
+                        <Badge variant="secondary" className="text-xs">
+                          {gaTables.find(t => t.id === selectedGaTableId)?.name}
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 gap-1.5"
+                          onClick={() => syncGaMutation.mutate(selectedGaTableId)}
+                          disabled={syncGaMutation.isPending}
+                        >
+                          <RefreshCw className={`h-3.5 w-3.5 ${syncGaMutation.isPending ? 'animate-spin' : ''}`} />
+                          {syncGaMutation.isPending ? 'מסנכרן...' : 'סנכרן'}
+                        </Button>
+                      </>
                     )}
                   </div>
                 </CardContent>
