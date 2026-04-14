@@ -4,11 +4,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { SeoDashboardView } from "./SeoDashboardView";
 import { SearchConsoleDashboard } from "./SearchConsoleDashboard";
 import { GoogleAnalyticsDashboard } from "./GoogleAnalyticsDashboard";
 import { GscIntegration } from "./seo/GscIntegration";
-import { TrendingUp, Search, BarChart3, Settings2 } from "lucide-react";
+import { TrendingUp, Search, BarChart3, Settings2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 
@@ -128,6 +129,35 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
     enabled: !!selectedGaTableId,
     staleTime: 5 * 60 * 1000,
   });
+
+  // GA sync mutation
+  const syncGaMutation = useMutation({
+    mutationFn: async (tableId: string) => {
+      const now = new Date();
+      const endDate = now.toISOString().split('T')[0];
+      const startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const response = await supabase.functions.invoke('sync-google-analytics-data', {
+        method: 'POST',
+        body: { tableId, startDate, endDate },
+      });
+      if (response.error) throw response.error;
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['crm-records', selectedGaTableId] });
+      toast.success(`נתוני Analytics סונכרנו (${data?.records_synced || 0} שורות)`);
+    },
+    onError: (error: any) => {
+      toast.error('שגיאה בסנכרון Analytics: ' + error.message);
+    },
+  });
+
+  // Auto-sync GA if table is selected but has no records
+  useEffect(() => {
+    if (selectedGaTableId && gaRecords && gaRecords.length === 0 && !syncGaMutation.isPending) {
+      syncGaMutation.mutate(selectedGaTableId);
+    }
+  }, [selectedGaTableId, gaRecords]);
 
   // Check GSC integration exists
   const { data: gscIntegration } = useQuery({
@@ -254,9 +284,21 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                       </SelectContent>
                     </Select>
                     {selectedGaTableId && (
-                      <Badge variant="secondary" className="text-xs">
-                        {gaTables.find(t => t.id === selectedGaTableId)?.name}
-                      </Badge>
+                      <>
+                        <Badge variant="secondary" className="text-xs">
+                          {gaTables.find(t => t.id === selectedGaTableId)?.name}
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 gap-1.5"
+                          onClick={() => syncGaMutation.mutate(selectedGaTableId)}
+                          disabled={syncGaMutation.isPending}
+                        >
+                          <RefreshCw className={`h-3.5 w-3.5 ${syncGaMutation.isPending ? 'animate-spin' : ''}`} />
+                          {syncGaMutation.isPending ? 'מסנכרן...' : 'סנכרן'}
+                        </Button>
+                      </>
                     )}
                   </div>
                 </CardContent>
@@ -270,8 +312,25 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                 />
               ) : selectedGaTableId ? (
                 <Card>
-                  <CardContent className="p-8 text-center text-muted-foreground">
-                    אין נתונים זמינים עבור חשבון Analytics זה
+                  <CardContent className="p-8 text-center text-muted-foreground space-y-3">
+                    {syncGaMutation.isPending ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <RefreshCw className="h-5 w-5 animate-spin" />
+                        <span>מסנכרן נתוני Analytics...</span>
+                      </div>
+                    ) : (
+                      <>
+                        <p>אין נתונים זמינים עבור חשבון Analytics זה</p>
+                        <Button
+                          variant="outline"
+                          onClick={() => syncGaMutation.mutate(selectedGaTableId)}
+                          className="gap-2"
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                          סנכרן נתונים
+                        </Button>
+                      </>
+                    )}
                   </CardContent>
                 </Card>
               ) : (
