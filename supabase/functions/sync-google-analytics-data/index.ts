@@ -489,36 +489,68 @@ serve(async (req) => {
       limit: 5000,
     };
 
+    // ====== REPORT 7: Aggregate key events by eventName (no date dimension for accurate totals) ======
+    const aggregateEventsRequest = {
+      dateRanges: [{ startDate: actualStartDate, endDate: actualEndDate }],
+      dimensions: [
+        { name: 'eventName' },
+      ],
+      metrics: [
+        { name: 'eventCount' },
+        { name: 'keyEvents' },
+      ],
+      orderBys: [{ metric: { metricName: 'eventCount' }, desc: true }],
+      limit: 500,
+    };
+
     let eventsData: any = { rows: [] };
+    let aggregateEventsData: any = { rows: [] };
     try {
-      const eventsResponse = await fetch(
-        `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(eventsRequest),
-        }
-      );
+      const [eventsResponse, aggregateEventsResponse] = await Promise.all([
+        fetch(
+          `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(eventsRequest),
+          }
+        ),
+        fetch(
+          `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(aggregateEventsRequest),
+          }
+        ),
+      ]);
       eventsData = await eventsResponse.json();
+      aggregateEventsData = await aggregateEventsResponse.json();
       if (eventsData.error) {
         console.error('Events report error:', eventsData.error);
         eventsData = { rows: [] };
+      }
+      if (aggregateEventsData.error) {
+        console.error('Aggregate events report error:', aggregateEventsData.error);
+        aggregateEventsData = { rows: [] };
       }
     } catch (e) {
       console.error('Events report fetch error:', e);
     }
 
-    // Process event data
+    // Process daily event data
     if (eventsData.rows) {
       for (const row of eventsData.rows) {
         const rawDate = row.dimensionValues[0].value;
         const eventName = row.dimensionValues[1].value;
         const eventCount = parseInt(row.metricValues[0].value) || 0;
         const keyEvents = parseInt(row.metricValues[1]?.value) || 0;
-        // Use the higher of eventCount and keyEvents to capture key events properly
         const finalCount = Math.max(eventCount, keyEvents);
         const formattedDate = rawDate ? `${rawDate.slice(0,4)}-${rawDate.slice(4,6)}-${rawDate.slice(6,8)}` : null;
 
@@ -534,6 +566,42 @@ serve(async (req) => {
             key_events: keyEvents,
             source_medium: null,
             date: formattedDate,
+            page_path: null,
+            sessions: null,
+            users: null,
+            new_users: null,
+            pageviews: null,
+            bounce_rate: null,
+            avg_session_duration: null,
+            conversions: null,
+            add_to_cart: null,
+            purchases: null,
+            purchase_value: null,
+          },
+        });
+      }
+    }
+
+    // Process aggregate event totals (accurate counts without date thresholding)
+    if (aggregateEventsData.rows) {
+      for (const row of aggregateEventsData.rows) {
+        const eventName = row.dimensionValues[0].value;
+        const eventCount = parseInt(row.metricValues[0].value) || 0;
+        const keyEvents = parseInt(row.metricValues[1]?.value) || 0;
+        const finalCount = Math.max(eventCount, keyEvents);
+
+        records.push({
+          table_id: tableId,
+          tenant_id: table.tenant_id,
+          agency_id: table.agency_id,
+          data: {
+            report_type: 'event_aggregate',
+            event_name: eventName,
+            channel_group: null,
+            event_count: finalCount,
+            key_events: keyEvents,
+            source_medium: null,
+            date: null,
             page_path: null,
             sessions: null,
             users: null,
