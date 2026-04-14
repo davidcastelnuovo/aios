@@ -43,19 +43,21 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
   const { data: integration, isLoading: integrationLoading } = useQuery({
     queryKey: ['ga-integration', activeTenantId],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('tenant_integrations')
         .select('*')
         .eq('tenant_id', activeTenantId)
         .eq('integration_type', 'google_analytics')
         .eq('is_active', true)
-        .order('created_at', { ascending: false })
+        .order('updated_at', { ascending: false })
         .limit(1)
         .maybeSingle();
-      
+
+      if (error) throw error;
       return data;
     },
     enabled: open && !!activeTenantId && connectionMethod === "direct",
+    refetchOnMount: 'always',
   });
 
   // Fetch Make.com integration

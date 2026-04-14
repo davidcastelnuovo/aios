@@ -154,57 +154,44 @@ serve(async (req) => {
         console.error('Failed to fetch Google user info:', e);
       }
 
+      const { data: allGa, error: allGaError } = await supabase
+        .from('tenant_integrations')
+        .select('id, user_id, settings')
+        .eq('tenant_id', tenantId)
+        .eq('integration_type', 'google_analytics');
+
+      if (allGaError) {
+        throw allGaError;
+      }
+
+      const existingForUser = allGa?.find((row: any) => row.user_id === userId) || null;
+      const existingForEmail = googleEmail
+        ? allGa?.find((row: any) => row.settings?.google_email === googleEmail) || null
+        : null;
+      const existingIntegration = existingForEmail || existingForUser;
+      const existingSettings = (existingIntegration?.settings as Record<string, unknown> | null) || null;
+
       const integrationData = {
         is_active: true,
         api_key: tokens.access_token,
         settings: {
-          refresh_token: tokens.refresh_token,
+          ...existingSettings,
+          refresh_token: tokens.refresh_token || existingSettings?.refresh_token,
           expires_at: expiresAt,
           connected_at: new Date().toISOString(),
-          google_email: googleEmail,
+          google_email: googleEmail || existingSettings?.google_email || '',
         },
         updated_at: new Date().toISOString(),
       };
 
-      // If addNew, always create a new record; otherwise update existing for this email
       let saveError;
-      if (!addNew && googleEmail) {
-        // Check for existing integration with same email
-        const { data: existingByEmail } = await supabase
+      if (existingIntegration) {
+        const { error } = await supabase
           .from('tenant_integrations')
-          .select('id')
-          .eq('tenant_id', tenantId)
-          .eq('integration_type', 'google_analytics')
-          .maybeSingle();
-        
-        // Try to find by email in settings
-        const { data: allGa } = await supabase
-          .from('tenant_integrations')
-          .select('id, settings')
-          .eq('tenant_id', tenantId)
-          .eq('integration_type', 'google_analytics');
-        
-        const matchByEmail = allGa?.find((row: any) => row.settings?.google_email === googleEmail);
-        
-        if (matchByEmail) {
-          const { error } = await supabase
-            .from('tenant_integrations')
-            .update(integrationData)
-            .eq('id', matchByEmail.id);
-          saveError = error;
-        } else {
-          const { error } = await supabase
-            .from('tenant_integrations')
-            .insert({
-              tenant_id: tenantId,
-              user_id: userId,
-              integration_type: 'google_analytics',
-              ...integrationData,
-            });
-          saveError = error;
-        }
+          .update(integrationData)
+          .eq('id', existingIntegration.id);
+        saveError = error;
       } else {
-        // addNew or no email — always insert
         const { error } = await supabase
           .from('tenant_integrations')
           .insert({
