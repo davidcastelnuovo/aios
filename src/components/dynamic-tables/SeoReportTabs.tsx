@@ -46,7 +46,7 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('crm_tables')
-        .select('id, name, slug, integration_type, integration_settings')
+        .select('id, name, slug, integration_type, integration_settings, client_id')
         .eq('tenant_id', tenantId)
         .in('integration_type', ['google_search_console', 'google_analytics']);
       if (error) throw error;
