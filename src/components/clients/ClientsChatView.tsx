@@ -485,8 +485,8 @@ export function ClientsChatView({
         )}
 
         {/* Client list */}
-        <ScrollArea className="h-0 flex-1 min-h-0">
-          <div className="divide-y">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
+          <div className="divide-y w-full">
             {filteredClients.map((client) => {
               const isSelected = client.id === selectedClientId;
               const isChecked = selectedClientIds.has(client.id);
@@ -559,9 +559,8 @@ export function ClientsChatView({
               </div>
             )}
           </div>
-        </ScrollArea>
+        </div>
       </div>
-
       {/* Left side - Client detail panel (75%) */}
       <div className="flex-1 flex flex-col overflow-hidden min-h-0">
         {selectedClient ? (
