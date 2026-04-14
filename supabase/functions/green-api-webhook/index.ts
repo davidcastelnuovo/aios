@@ -1799,6 +1799,7 @@ Deno.serve(async (req) => {
             }
           }
         }
+        } // end else isManualOutgoing
       }
     }
     // ===========================
