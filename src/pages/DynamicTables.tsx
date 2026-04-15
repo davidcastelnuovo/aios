@@ -432,8 +432,6 @@ export default function DynamicTables() {
         </div>
       </div>
 
-      {/* CRM Health Alerts */}
-      <CRMAlerts />
 
       {/* Main Tabs: Tables / Dashboards */}
       <Tabs value={mainTab} onValueChange={setMainTab} className="space-y-6">
