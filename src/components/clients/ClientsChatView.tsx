@@ -511,7 +511,7 @@ export function ClientsChatView({
                     isChecked && multiSelectMode && "bg-primary/10"
                   )}
                 >
-                  <div className="flex flex-row-reverse items-start gap-2">
+                  <div className="flex items-start gap-2">
                     {/* Avatar - right side in RTL */}
                     <div
                       className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
