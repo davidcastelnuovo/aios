@@ -1774,6 +1774,152 @@ async function executeTool(
         return { success: true, result: { message: 'הסקיל נמחק בהצלחה' } };
       }
 
+      case 'list_unconnected_clients': {
+        const tableType = toolCall.args.table_type || 'facebook_insights';
+        const { data: allClients, error: clientsErr } = await supabaseClient
+          .from('clients')
+          .select('id, name, agency_id, agencies(name)')
+          .eq('tenant_id', tenantId)
+          .in('status', ['active', 'onboarding'])
+          .order('name');
+        if (clientsErr) throw clientsErr;
+
+        const { data: connectedTables } = await supabaseClient
+          .from('crm_tables')
+          .select('client_id')
+          .eq('tenant_id', tenantId)
+          .eq('integration_type', tableType)
+          .not('client_id', 'is', null);
+
+        const connectedClientIds = new Set((connectedTables || []).map((t: any) => t.client_id));
+        const unconnected = (allClients || []).filter((c: any) => !connectedClientIds.has(c.id))
+          .map((c: any) => ({ id: c.id, name: c.name, agency_name: c.agencies?.name }));
+
+        return { success: true, result: { count: unconnected.length, unconnected_clients: unconnected } };
+      }
+
+      case 'create_facebook_report_table': {
+        const { client_id, ad_account_id, ad_account_name } = toolCall.args;
+        const { data: existing } = await supabaseClient
+          .from('crm_tables')
+          .select('id, name')
+          .eq('tenant_id', tenantId)
+          .eq('client_id', client_id)
+          .eq('integration_type', 'facebook_insights')
+          .maybeSingle();
+        if (existing) {
+          return { success: true, result: { already_exists: true, table_id: existing.id, name: existing.name } };
+        }
+        const { data: client } = await supabaseClient.from('clients').select('name, agency_id').eq('id', client_id).single();
+        if (!client) return { success: false, error: 'לקוח לא נמצא' };
+
+        const tableName = `דוח פייסבוק - ${client.name}`;
+        const slug = `facebook-${client_id.substring(0, 8)}`;
+        const { data: table, error } = await supabaseClient.from('crm_tables').insert({
+          tenant_id: tenantId,
+          name: tableName,
+          slug,
+          description: `דוח ביצועי מודעות פייסבוק עבור ${client.name} (${ad_account_name})`,
+          icon: 'BarChart3',
+          category: 'דוחות',
+          integration_type: 'facebook_insights',
+          integration_settings: { ad_account_id, ad_account_name },
+          agency_id: client.agency_id || null,
+          client_id,
+          created_by: userId,
+        }).select('id, name, slug').single();
+        if (error) throw error;
+        modifiedEntities.add('crm_tables');
+        return { success: true, result: { table_id: table.id, name: table.name, slug: table.slug, ad_account_id, client_name: client.name } };
+      }
+
+      case 'create_google_ads_table': {
+        const { client_id, ad_account_id, ad_account_name } = toolCall.args;
+        const { data: existing } = await supabaseClient
+          .from('crm_tables')
+          .select('id, name')
+          .eq('tenant_id', tenantId)
+          .eq('client_id', client_id)
+          .eq('integration_type', 'google_ads')
+          .maybeSingle();
+        if (existing) {
+          return { success: true, result: { already_exists: true, table_id: existing.id, name: existing.name } };
+        }
+        const { data: client } = await supabaseClient.from('clients').select('name, agency_id').eq('id', client_id).single();
+        if (!client) return { success: false, error: 'לקוח לא נמצא' };
+
+        const tableName = `דוח גוגל אדס - ${client.name}`;
+        const slug = `google-ads-${client_id.substring(0, 8)}`;
+        const { data: table, error } = await supabaseClient.from('crm_tables').insert({
+          tenant_id: tenantId,
+          name: tableName,
+          slug,
+          description: `דוח ביצועי Google Ads עבור ${client.name} (${ad_account_name})`,
+          icon: 'BarChart3',
+          category: 'דוחות',
+          integration_type: 'google_ads',
+          integration_settings: { ad_account_id, ad_account_name },
+          agency_id: client.agency_id || null,
+          client_id,
+          created_by: userId,
+        }).select('id, name, slug').single();
+        if (error) throw error;
+        modifiedEntities.add('crm_tables');
+        return { success: true, result: { table_id: table.id, name: table.name, slug: table.slug, ad_account_id, client_name: client.name } };
+      }
+
+      case 'batch_create_report_tables': {
+        const { items } = toolCall.args;
+        if (!Array.isArray(items) || items.length === 0) {
+          return { success: false, error: 'items array is required' };
+        }
+        const results: any[] = [];
+        for (const item of items) {
+          const { client_id, ad_account_id, ad_account_name, type } = item;
+          const integType = type === 'google_ads' ? 'google_ads' : 'facebook_insights';
+          try {
+            const { data: existing } = await supabaseClient
+              .from('crm_tables')
+              .select('id, name')
+              .eq('tenant_id', tenantId)
+              .eq('client_id', client_id)
+              .eq('integration_type', integType)
+              .maybeSingle();
+            if (existing) {
+              results.push({ client_id, status: 'already_exists', table_id: existing.id });
+              continue;
+            }
+            const { data: client } = await supabaseClient.from('clients').select('name, agency_id').eq('id', client_id).single();
+            if (!client) { results.push({ client_id, status: 'error', error: 'לקוח לא נמצא' }); continue; }
+
+            const prefix = type === 'google_ads' ? 'דוח גוגל אדס' : 'דוח פייסבוק';
+            const slugPrefix = type === 'google_ads' ? 'google-ads' : 'facebook';
+            const { data: table, error } = await supabaseClient.from('crm_tables').insert({
+              tenant_id: tenantId,
+              name: `${prefix} - ${client.name}`,
+              slug: `${slugPrefix}-${client_id.substring(0, 8)}`,
+              description: `${prefix} עבור ${client.name} (${ad_account_name})`,
+              icon: 'BarChart3',
+              category: 'דוחות',
+              integration_type: integType,
+              integration_settings: { ad_account_id, ad_account_name },
+              agency_id: client.agency_id || null,
+              client_id,
+              created_by: userId,
+            }).select('id, name').single();
+            if (error) { results.push({ client_id, status: 'error', error: error.message }); continue; }
+            results.push({ client_id, client_name: client.name, status: 'created', table_id: table.id });
+          } catch (e: any) {
+            results.push({ client_id, status: 'error', error: e.message });
+          }
+        }
+        modifiedEntities.add('crm_tables');
+        const created = results.filter(r => r.status === 'created').length;
+        const skipped = results.filter(r => r.status === 'already_exists').length;
+        const errors = results.filter(r => r.status === 'error').length;
+        return { success: true, result: { total: items.length, created, skipped, errors, details: results } };
+      }
+
       default:
         return { success: false, error: `Unknown tool: ${toolCall.name}` };
     }
