@@ -24,7 +24,7 @@ import { GoogleSearchConsoleTableDialog } from "@/components/dynamic-tables/Goog
 import { AhrefsTableDialog } from "@/components/dynamic-tables/AhrefsTableDialog";
 import { SeoReportDialog } from "@/components/dynamic-tables/SeoReportDialog";
 import { TableCardAlerts } from "@/components/dynamic-tables/TableCardAlerts";
-import { CRMAlerts } from "@/components/clients/CRMAlerts";
+
 import { CreateDashboardDialog } from "@/components/dynamic-tables/CreateDashboardDialog";
 import { Badge } from "@/components/ui/badge";
 import {
