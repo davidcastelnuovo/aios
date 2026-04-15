@@ -1921,6 +1921,68 @@ async function executeTool(
         return { success: true, result: { total: items.length, created, skipped, errors, details: results } };
       }
 
+      case 'delegate_to_background': {
+        const { task_description, task_title } = toolCall.args;
+        
+        // Find the agent for this tenant
+        const { data: agentData } = await supabaseClient
+          .from('ai_agents')
+          .select('id')
+          .eq('tenant_id', tenantId)
+          .eq('active', true)
+          .limit(1)
+          .maybeSingle();
+        
+        if (!agentData) {
+          return { success: false, error: 'לא נמצא סוכן AI פעיל בטננט' };
+        }
+        
+        // Create agent_task
+        const { data: newTask, error: taskErr } = await supabaseClient
+          .from('agent_tasks')
+          .insert({
+            agent_id: agentData.id,
+            tenant_id: tenantId,
+            title: task_title || 'משימת רקע',
+            description: task_description,
+            priority: 8,
+            status: 'pending',
+            schedule_type: 'once',
+            task_mode: 'background',
+            enabled: true,
+            created_by: userId,
+          })
+          .select('id, title, status')
+          .single();
+        
+        if (taskErr) throw taskErr;
+        
+        // Fire run-agent-task in background
+        const SUPABASE_URL_ENV = Deno.env.get('SUPABASE_URL')!;
+        const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+        
+        fetch(`${SUPABASE_URL_ENV}/functions/v1/run-agent-task`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${ANON_KEY}`,
+          },
+          body: JSON.stringify({ task_id: newTask.id }),
+        }).catch(e => console.error('Background task trigger failed:', e));
+        
+        modifiedEntities.add('agent_tasks');
+        
+        return {
+          success: true,
+          result: {
+            agent_task_id: newTask.id,
+            title: newTask.title,
+            status: 'pending',
+            message: `המשימה "${task_title}" נוצרה ומתחילה לרוץ ברקע. המשתמש יכול לעקוב אחרי ההתקדמות בזמן אמת.`,
+          },
+        };
+      }
+
       default:
         return { success: false, error: `Unknown tool: ${toolCall.name}` };
     }
