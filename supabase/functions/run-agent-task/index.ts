@@ -60,11 +60,23 @@ Deno.serve(async (req) => {
     }).eq('id', task_id)
 
     // Find the agent
-    const { data: agent } = await supabase
+    // Find the agent - try task's agent_id first, then fallback
+    let { data: agent } = await supabase
       .from('ai_agents')
       .select('*')
       .eq('id', task.agent_id)
       .maybeSingle()
+    
+    if (!agent) {
+      // Fallback to any active agent
+      const { data: fallback } = await supabase
+        .from('ai_agents')
+        .select('*')
+        .eq('active', true)
+        .limit(1)
+        .maybeSingle()
+      agent = fallback
+    }
 
     if (!agent) {
       await supabase.from('agent_tasks').update({
