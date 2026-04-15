@@ -243,7 +243,7 @@ async function executeTool(
             .select('agency_id')
             .eq('campaigner_id', targetCampaignerId)
             .limit(1)
-            .single();
+            .maybeSingle();
           if (!targetAgency?.agency_id) {
             return { success: false, error: 'לא נמצאה סוכנות מקושרת לקמפיינר המבוקש.' };
           }
@@ -254,7 +254,7 @@ async function executeTool(
             .from('profiles')
             .select('campaigner_id')
             .eq('id', userId)
-            .single();
+            .maybeSingle();
           
           if (!profileData?.campaigner_id) {
             return { success: false, error: 'לא נמצא קמפיינר מקושר למשתמש שלך.' };
@@ -266,7 +266,7 @@ async function executeTool(
             .select('agency_id')
             .eq('campaigner_id', assignCampaignerId)
             .limit(1)
-            .single();
+            .maybeSingle();
           if (!campaignerAgency?.agency_id) {
             return { success: false, error: 'לא נמצאה סוכנות מקושרת לקמפיינר שלך.' };
           }
@@ -290,7 +290,7 @@ async function executeTool(
         const { data, error } = await supabaseClient
           .from('tasks').insert(taskData)
           .select('*, clients(name), agencies(name), campaigners(full_name)')
-          .single();
+          .maybeSingle();
         if (error) throw error;
 
         // Mark tasks as modified for UI invalidation
@@ -310,7 +310,7 @@ async function executeTool(
               .from('calendar_tokens')
               .select('id, google_email')
               .eq('user_id', userId)
-              .single();
+              .maybeSingle();
 
             if (!calendarToken) {
               calendarSyncError = 'calendar_not_connected';
@@ -440,7 +440,7 @@ async function executeTool(
           .from('agent_tasks')
           .insert(agentTaskData)
           .select('id, title, status, schedule_type')
-          .single();
+          .maybeSingle();
         if (agentTaskError) throw agentTaskError;
 
         modifiedEntities.add('agent_tasks');
@@ -465,7 +465,7 @@ async function executeTool(
           .select('id, title, notes, due_date, due_time, priority, status, google_calendar_event_id')
           .eq('id', task_id)
           .eq('tenant_id', tenantId)
-          .single();
+          .maybeSingle();
 
         if (existingError || !existingTask) {
           return { success: false, error: 'לא נמצאה משימה לעדכון' };
@@ -489,7 +489,7 @@ async function executeTool(
           .eq('id', task_id)
           .eq('tenant_id', tenantId)
           .select('id, title, notes, due_date, due_time, priority, status, google_calendar_event_id')
-          .single();
+          .maybeSingle();
 
         if (updateError || !updatedTask) throw updateError || new Error('שגיאה בעדכון המשימה');
 
@@ -518,7 +518,7 @@ async function executeTool(
               .from('calendar_tokens')
               .select('id')
               .eq('user_id', userId)
-              .single();
+              .maybeSingle();
 
             if (!calendarToken) {
               calendarSyncError = 'calendar_not_connected';
@@ -624,7 +624,7 @@ async function executeTool(
         const { task_id, status } = toolCall.args;
         const { data, error } = await supabaseClient
           .from('tasks').update({ status }).eq('id', task_id).eq('tenant_id', tenantId)
-          .select('*, clients(name), agencies(name)').single();
+          .select('*, clients(name), agencies(name)').maybeSingle();
         if (error) throw error;
         modifiedEntities.add('tasks');
         return { success: true, result: { task_id: data.id, title: data.title, status: data.status, client_name: data.clients?.name } };
@@ -632,7 +632,7 @@ async function executeTool(
 
       case 'list_tasks': {
         const { agency_id, client_id, status, limit = 20, my_tasks = false } = toolCall.args;
-        const { data: profileData } = await supabaseClient.from('profiles').select('campaigner_id').eq('id', userId).single();
+        const { data: profileData } = await supabaseClient.from('profiles').select('campaigner_id').eq('id', userId).maybeSingle();
         const userCampaignerId = profileData?.campaigner_id;
 
         let query = supabaseClient.from('tasks')
@@ -659,7 +659,7 @@ async function executeTool(
 
       case 'get_client_info': {
         const { client_id } = toolCall.args;
-        const { data, error } = await supabaseClient.from('clients').select('*, agencies(name)').eq('id', client_id).eq('tenant_id', tenantId).single();
+        const { data, error } = await supabaseClient.from('clients').select('*, agencies(name)').eq('id', client_id).eq('tenant_id', tenantId).maybeSingle();
         if (error) throw error;
         return { success: true, result: { id: data.id, name: data.name, status: data.status, email: data.email, phone: data.phone, industry: data.industry, agency_name: data.agencies?.name, monthly_budget: data.monthly_budget, retainer: data.retainer, start_date: data.start_date } };
       }
@@ -685,10 +685,10 @@ async function executeTool(
       case 'create_lead': {
         const { company_name, contact_name, phone, email, source, notes } = toolCall.args;
         
-        const { data: defaultAgency } = await supabaseClient.from('agencies').select('id').eq('tenant_id', tenantId).eq('is_default', true).limit(1).single();
+        const { data: defaultAgency } = await supabaseClient.from('agencies').select('id').eq('tenant_id', tenantId).eq('is_default', true).limit(1).maybeSingle();
         const agencyId = defaultAgency?.id;
         if (!agencyId) {
-          const { data: firstAgency } = await supabaseClient.from('agencies').select('id').eq('tenant_id', tenantId).limit(1).single();
+          const { data: firstAgency } = await supabaseClient.from('agencies').select('id').eq('tenant_id', tenantId).limit(1).maybeSingle();
           if (!firstAgency?.id) return { success: false, error: 'לא נמצאה סוכנות' };
         }
 
@@ -704,7 +704,7 @@ async function executeTool(
           tenant_id: tenantId,
         };
 
-        const { data, error } = await supabaseClient.from('leads').insert(leadData).select('id, company_name, contact_name, status').single();
+        const { data, error } = await supabaseClient.from('leads').insert(leadData).select('id, company_name, contact_name, status').maybeSingle();
         if (error) throw error;
         modifiedEntities.add('leads');
         return { success: true, result: { lead_id: data.id, company_name: data.company_name, contact_name: data.contact_name, status: data.status } };
@@ -712,7 +712,7 @@ async function executeTool(
 
       case 'update_lead_status': {
         const { lead_id, status } = toolCall.args;
-        const { data, error } = await supabaseClient.from('leads').update({ status }).eq('id', lead_id).eq('tenant_id', tenantId).select('id, company_name, status').single();
+        const { data, error } = await supabaseClient.from('leads').update({ status }).eq('id', lead_id).eq('tenant_id', tenantId).select('id, company_name, status').maybeSingle();
         if (error) throw error;
         modifiedEntities.add('leads');
         return { success: true, result: { lead_id: data.id, company_name: data.company_name, status: data.status } };
@@ -723,7 +723,7 @@ async function executeTool(
         
         let resolvedAgencyId = leadsAgencyId;
         if (!resolvedAgencyId && leadsAgencyName) {
-          const { data: agencyMatch } = await supabaseClient.from('agencies').select('id').eq('tenant_id', tenantId).ilike('name', `%${leadsAgencyName}%`).limit(1).single();
+          const { data: agencyMatch } = await supabaseClient.from('agencies').select('id').eq('tenant_id', tenantId).ilike('name', `%${leadsAgencyName}%`).limit(1).maybeSingle();
           if (agencyMatch) resolvedAgencyId = agencyMatch.id;
         }
         
@@ -741,7 +741,7 @@ async function executeTool(
         
         let resolvedClientAgencyId = clientsAgencyId;
         if (!resolvedClientAgencyId && clientsAgencyName) {
-          const { data: agencyMatch } = await supabaseClient.from('agencies').select('id').eq('tenant_id', tenantId).ilike('name', `%${clientsAgencyName}%`).limit(1).single();
+          const { data: agencyMatch } = await supabaseClient.from('agencies').select('id').eq('tenant_id', tenantId).ilike('name', `%${clientsAgencyName}%`).limit(1).maybeSingle();
           if (agencyMatch) resolvedClientAgencyId = agencyMatch.id;
         }
         
@@ -755,17 +755,17 @@ async function executeTool(
 
       case 'create_client': {
         const { name, contact_name, phone, email, industry, notes } = toolCall.args;
-        const { data: defaultAgency } = await supabaseClient.from('agencies').select('id').eq('tenant_id', tenantId).eq('is_default', true).limit(1).single();
+        const { data: defaultAgency } = await supabaseClient.from('agencies').select('id').eq('tenant_id', tenantId).eq('is_default', true).limit(1).maybeSingle();
         let agencyId = defaultAgency?.id;
         if (!agencyId) {
-          const { data: firstAgency } = await supabaseClient.from('agencies').select('id').eq('tenant_id', tenantId).limit(1).single();
+          const { data: firstAgency } = await supabaseClient.from('agencies').select('id').eq('tenant_id', tenantId).limit(1).maybeSingle();
           agencyId = firstAgency?.id;
         }
         if (!agencyId) return { success: false, error: 'לא נמצאה סוכנות' };
 
         const { data, error } = await supabaseClient.from('clients').insert({
           name, contact_name, phone, email, industry, notes, status: 'active', agency_id: agencyId, tenant_id: tenantId,
-        }).select('id, name, status').single();
+        }).select('id, name, status').maybeSingle();
         if (error) throw error;
         modifiedEntities.add('clients');
         return { success: true, result: { client_id: data.id, name: data.name, status: data.status } };
@@ -775,7 +775,7 @@ async function executeTool(
         const { name, description, trigger_type, action_type, configuration } = toolCall.args;
         const { data, error } = await supabaseClient.from('automations').insert({
           name, description, trigger_type, action_type, configuration: configuration || {}, tenant_id: tenantId, active: true,
-        }).select('id, name, trigger_type, action_type, active').single();
+        }).select('id, name, trigger_type, action_type, active').maybeSingle();
         if (error) throw error;
         return { success: true, result: { automation_id: data.id, name: data.name, trigger_type: data.trigger_type, action_type: data.action_type, active: data.active } };
       }
@@ -847,7 +847,7 @@ async function executeTool(
         }
         
         // Get the sender's name for the AI signature
-        const { data: senderProfile } = await supabaseClient.from('profiles').select('full_name').eq('id', userId).single();
+        const { data: senderProfile } = await supabaseClient.from('profiles').select('full_name').eq('id', userId).maybeSingle();
         const senderName = senderProfile?.full_name || 'המנהל';
         
         let phone: string | null = directPhoneNumber || directPhone || null;
@@ -861,7 +861,7 @@ async function executeTool(
               .from('leads')
               .select('phone, company_name, contact_name, active_chat_provider')
               .eq('id', contact_id)
-              .single();
+              .maybeSingle();
 
             if (data) {
               phone = phone || data.phone;
@@ -874,7 +874,7 @@ async function executeTool(
               .from('clients')
               .select('phone, name, contact_name, active_chat_provider')
               .eq('id', contact_id)
-              .single();
+              .maybeSingle();
 
             if (data) {
               phone = phone || data.phone;
@@ -959,10 +959,10 @@ async function executeTool(
         // Also get contact info
         let contactName = '';
         if (contact_type === 'lead') {
-          const { data: lead } = await supabaseClient.from('leads').select('company_name, contact_name, phone').eq('id', contact_id).single();
+          const { data: lead } = await supabaseClient.from('leads').select('company_name, contact_name, phone').eq('id', contact_id).maybeSingle();
           contactName = lead?.contact_name || lead?.company_name || '';
         } else {
-          const { data: client } = await supabaseClient.from('clients').select('name, contact_name, phone').eq('id', contact_id).single();
+          const { data: client } = await supabaseClient.from('clients').select('name, contact_name, phone').eq('id', contact_id).maybeSingle();
           contactName = client?.contact_name || client?.name || '';
         }
 
@@ -1098,7 +1098,7 @@ async function executeTool(
             { onConflict: 'user_id,tenant_id,category,key' }
           )
           .select('id, category, key')
-          .single();
+          .maybeSingle();
         if (error) throw error;
         return { success: true, result: { saved: true, category, key } };
       }
@@ -1141,7 +1141,7 @@ async function executeTool(
 
       case 'get_agency_info': {
         const { agency_id } = toolCall.args;
-        const { data, error } = await supabaseClient.from('agencies').select('*').eq('id', agency_id).eq('tenant_id', tenantId).single();
+        const { data, error } = await supabaseClient.from('agencies').select('*').eq('id', agency_id).eq('tenant_id', tenantId).maybeSingle();
         if (error) throw error;
         return { success: true, result: data };
       }
@@ -1152,7 +1152,7 @@ async function executeTool(
         const updateData: Record<string, any> = {};
         for (const k of allowed) if (updates[k] !== undefined) updateData[k] = updates[k];
         if (!Object.keys(updateData).length) return { success: false, error: 'לא נשלחו שדות לעדכון' };
-        const { data, error } = await supabaseClient.from('agencies').update(updateData).eq('id', agency_id).eq('tenant_id', tenantId).select('id, name, status').single();
+        const { data, error } = await supabaseClient.from('agencies').update(updateData).eq('id', agency_id).eq('tenant_id', tenantId).select('id, name, status').maybeSingle();
         if (error) throw error;
         modifiedEntities.add('agencies');
         return { success: true, result: data };
@@ -1169,7 +1169,7 @@ async function executeTool(
 
       case 'get_campaigner_info': {
         const { campaigner_id } = toolCall.args;
-        const { data, error } = await supabaseClient.from('campaigners').select('*, campaigner_agencies(agency_id, agencies(name))').eq('id', campaigner_id).eq('tenant_id', tenantId).single();
+        const { data, error } = await supabaseClient.from('campaigners').select('*, campaigner_agencies(agency_id, agencies(name))').eq('id', campaigner_id).eq('tenant_id', tenantId).maybeSingle();
         if (error) throw error;
         return { success: true, result: data };
       }
@@ -1183,7 +1183,7 @@ async function executeTool(
 
       case 'create_supplier': {
         const { name, contact_name, email, phone, category, notes } = toolCall.args;
-        const { data, error } = await supabaseClient.from('suppliers').insert({ name, contact_name, email, phone, category, notes, tenant_id: tenantId }).select('id, name').single();
+        const { data, error } = await supabaseClient.from('suppliers').insert({ name, contact_name, email, phone, category, notes, tenant_id: tenantId }).select('id, name').maybeSingle();
         if (error) throw error;
         modifiedEntities.add('suppliers');
         return { success: true, result: data };
@@ -1191,7 +1191,7 @@ async function executeTool(
 
       case 'get_supplier_info': {
         const { supplier_id } = toolCall.args;
-        const { data, error } = await supabaseClient.from('suppliers').select('*').eq('id', supplier_id).eq('tenant_id', tenantId).single();
+        const { data, error } = await supabaseClient.from('suppliers').select('*').eq('id', supplier_id).eq('tenant_id', tenantId).maybeSingle();
         if (error) throw error;
         return { success: true, result: data };
       }
@@ -1205,7 +1205,7 @@ async function executeTool(
 
       case 'get_sales_person_info': {
         const { sales_person_id } = toolCall.args;
-        const { data, error } = await supabaseClient.from('sales_people').select('*').eq('id', sales_person_id).eq('tenant_id', tenantId).single();
+        const { data, error } = await supabaseClient.from('sales_people').select('*').eq('id', sales_person_id).eq('tenant_id', tenantId).maybeSingle();
         if (error) throw error;
         return { success: true, result: data };
       }
@@ -1219,7 +1219,7 @@ async function executeTool(
 
       case 'create_product': {
         const { name, description, price, category } = toolCall.args;
-        const { data, error } = await supabaseClient.from('products').insert({ name, description, price, category, tenant_id: tenantId, is_active: true }).select('id, name, price').single();
+        const { data, error } = await supabaseClient.from('products').insert({ name, description, price, category, tenant_id: tenantId, is_active: true }).select('id, name, price').maybeSingle();
         if (error) throw error;
         modifiedEntities.add('products');
         return { success: true, result: data };
@@ -1230,7 +1230,7 @@ async function executeTool(
         const allowed = ['name', 'description', 'price', 'is_active', 'category'];
         const updateData: Record<string, any> = {};
         for (const k of allowed) if (updates[k] !== undefined) updateData[k] = updates[k];
-        const { data, error } = await supabaseClient.from('products').update(updateData).eq('id', product_id).eq('tenant_id', tenantId).select('id, name, price').single();
+        const { data, error } = await supabaseClient.from('products').update(updateData).eq('id', product_id).eq('tenant_id', tenantId).select('id, name, price').maybeSingle();
         if (error) throw error;
         modifiedEntities.add('products');
         return { success: true, result: data };
@@ -1259,19 +1259,19 @@ async function executeTool(
         let finalAgencyId = agency_id;
         let finalClientId = client_id;
         if (!finalAgencyId) {
-          const { data: ag } = await supabaseClient.from('agencies').select('id').eq('tenant_id', tenantId).eq('is_default', true).limit(1).single();
+          const { data: ag } = await supabaseClient.from('agencies').select('id').eq('tenant_id', tenantId).eq('is_default', true).limit(1).maybeSingle();
           finalAgencyId = ag?.id;
           if (!finalAgencyId) {
-            const { data: ag2 } = await supabaseClient.from('agencies').select('id').eq('tenant_id', tenantId).limit(1).single();
+            const { data: ag2 } = await supabaseClient.from('agencies').select('id').eq('tenant_id', tenantId).limit(1).maybeSingle();
             finalAgencyId = ag2?.id;
           }
         }
         if (!finalClientId) {
-          const { data: cl } = await supabaseClient.from('clients').select('id').eq('tenant_id', tenantId).limit(1).single();
+          const { data: cl } = await supabaseClient.from('clients').select('id').eq('tenant_id', tenantId).limit(1).maybeSingle();
           finalClientId = cl?.id;
         }
         if (!finalAgencyId || !finalClientId) return { success: false, error: 'חסר סוכנות או לקוח' };
-        const { data, error } = await supabaseClient.from('finance').insert({ type, amount, date, category, notes, client_id: finalClientId, agency_id: finalAgencyId, supplier_id, tenant_id: tenantId }).select('id, type, amount, date').single();
+        const { data, error } = await supabaseClient.from('finance').insert({ type, amount, date, category, notes, client_id: finalClientId, agency_id: finalAgencyId, supplier_id, tenant_id: tenantId }).select('id, type, amount, date').maybeSingle();
         if (error) throw error;
         modifiedEntities.add('finance');
         return { success: true, result: data };
@@ -1312,7 +1312,7 @@ async function executeTool(
 
       case 'update_onboarding_status': {
         const { onboarding_id, status } = toolCall.args;
-        const { data, error } = await supabaseClient.from('client_onboarding').update({ status }).eq('id', onboarding_id).eq('tenant_id', tenantId).select('id, title, status').single();
+        const { data, error } = await supabaseClient.from('client_onboarding').update({ status }).eq('id', onboarding_id).eq('tenant_id', tenantId).select('id, title, status').maybeSingle();
         if (error) throw error;
         modifiedEntities.add('client_onboarding');
         return { success: true, result: data };
@@ -1331,16 +1331,16 @@ async function executeTool(
 
       case 'clock_in': {
         const { notes } = toolCall.args;
-        const { data, error } = await supabaseClient.from('time_entries').insert({ user_id: userId, tenant_id: tenantId, clock_in: new Date().toISOString(), notes }).select('id, clock_in').single();
+        const { data, error } = await supabaseClient.from('time_entries').insert({ user_id: userId, tenant_id: tenantId, clock_in: new Date().toISOString(), notes }).select('id, clock_in').maybeSingle();
         if (error) throw error;
         modifiedEntities.add('time_entries');
         return { success: true, result: { entry_id: data.id, clock_in: data.clock_in } };
       }
 
       case 'clock_out': {
-        const { data: openEntry, error: findErr } = await supabaseClient.from('time_entries').select('id').eq('user_id', userId).eq('tenant_id', tenantId).is('clock_out', null).order('clock_in', { ascending: false }).limit(1).single();
+        const { data: openEntry, error: findErr } = await supabaseClient.from('time_entries').select('id').eq('user_id', userId).eq('tenant_id', tenantId).is('clock_out', null).order('clock_in', { ascending: false }).limit(1).maybeSingle();
         if (findErr || !openEntry) return { success: false, error: 'לא נמצאה כניסה פתוחה' };
-        const { data, error } = await supabaseClient.from('time_entries').update({ clock_out: new Date().toISOString() }).eq('id', openEntry.id).select('id, clock_in, clock_out').single();
+        const { data, error } = await supabaseClient.from('time_entries').update({ clock_out: new Date().toISOString() }).eq('id', openEntry.id).select('id, clock_in, clock_out').maybeSingle();
         if (error) throw error;
         modifiedEntities.add('time_entries');
         return { success: true, result: data };
@@ -1348,7 +1348,7 @@ async function executeTool(
 
       case 'add_client_update': {
         const { client_id, content } = toolCall.args;
-        const { data, error } = await supabaseClient.from('client_updates').insert({ client_id, user_id: userId, tenant_id: tenantId, content }).select('id').single();
+        const { data, error } = await supabaseClient.from('client_updates').insert({ client_id, user_id: userId, tenant_id: tenantId, content }).select('id').maybeSingle();
         if (error) throw error;
         modifiedEntities.add('client_updates');
         return { success: true, result: { update_id: data.id } };
@@ -1356,7 +1356,7 @@ async function executeTool(
 
       case 'add_lead_update': {
         const { lead_id, content } = toolCall.args;
-        const { data, error } = await supabaseClient.from('lead_updates').insert({ lead_id, user_id: userId, tenant_id: tenantId, content }).select('id').single();
+        const { data, error } = await supabaseClient.from('lead_updates').insert({ lead_id, user_id: userId, tenant_id: tenantId, content }).select('id').maybeSingle();
         if (error) throw error;
         modifiedEntities.add('lead_updates');
         return { success: true, result: { update_id: data.id } };
@@ -1480,7 +1480,7 @@ async function executeTool(
           const cplOlder = leads_older > 0 ? spend_older / leads_older : null;
           const cplChangePct = cplOlder && cpl7 ? ((cpl7 - cplOlder) / cplOlder * 100) : null;
 
-          const { data: clientData } = await supabaseClient.from('clients').select('name').eq('id', table.client_id).single();
+          const { data: clientData } = await supabaseClient.from('clients').select('name').eq('id', table.client_id).maybeSingle();
 
           // Find the most recent updated_time across all campaigns for this client
           const updatedTimes = records
@@ -1719,7 +1719,7 @@ async function executeTool(
             updated_at: new Date().toISOString(),
           }, { onConflict: 'user_id,tenant_id,name' })
           .select()
-          .single();
+          .maybeSingle();
         if (error) throw error;
         return { success: true, result: { id: data.id, name: data.name, message: `הסקיל "${name}" נשמר בהצלחה` } };
       }
@@ -1743,7 +1743,7 @@ async function executeTool(
           .eq('user_id', userId)
           .eq('tenant_id', tenantId)
           .ilike('name', skillName)
-          .single();
+          .maybeSingle();
         if (error || !data) return { success: false, error: `לא נמצא סקיל בשם "${skillName}"` };
         return { success: true, result: { skill_name: data.name, description: data.description, steps: data.steps, instruction: 'בצע את הצעדים המפורטים ב-steps באמצעות הכלים שלך. כל שורה היא צעד שצריך לבצע.' } };
       }
@@ -1811,7 +1811,7 @@ async function executeTool(
         if (existing) {
           return { success: true, result: { already_exists: true, table_id: existing.id, name: existing.name } };
         }
-        const { data: client } = await supabaseClient.from('clients').select('name, agency_id').eq('id', client_id).single();
+        const { data: client } = await supabaseClient.from('clients').select('name, agency_id').eq('id', client_id).maybeSingle();
         if (!client) return { success: false, error: 'לקוח לא נמצא' };
 
         const tableName = `דוח פייסבוק - ${client.name}`;
@@ -1828,7 +1828,7 @@ async function executeTool(
           agency_id: client.agency_id || null,
           client_id,
           created_by: userId,
-        }).select('id, name, slug').single();
+        }).select('id, name, slug').maybeSingle();
         if (error) throw error;
         modifiedEntities.add('crm_tables');
         return { success: true, result: { table_id: table.id, name: table.name, slug: table.slug, ad_account_id, client_name: client.name } };
@@ -1846,7 +1846,7 @@ async function executeTool(
         if (existing) {
           return { success: true, result: { already_exists: true, table_id: existing.id, name: existing.name } };
         }
-        const { data: client } = await supabaseClient.from('clients').select('name, agency_id').eq('id', client_id).single();
+        const { data: client } = await supabaseClient.from('clients').select('name, agency_id').eq('id', client_id).maybeSingle();
         if (!client) return { success: false, error: 'לקוח לא נמצא' };
 
         const tableName = `דוח גוגל אדס - ${client.name}`;
@@ -1863,7 +1863,7 @@ async function executeTool(
           agency_id: client.agency_id || null,
           client_id,
           created_by: userId,
-        }).select('id, name, slug').single();
+        }).select('id, name, slug').maybeSingle();
         if (error) throw error;
         modifiedEntities.add('crm_tables');
         return { success: true, result: { table_id: table.id, name: table.name, slug: table.slug, ad_account_id, client_name: client.name } };
@@ -1890,7 +1890,7 @@ async function executeTool(
               results.push({ client_id, status: 'already_exists', table_id: existing.id });
               continue;
             }
-            const { data: client } = await supabaseClient.from('clients').select('name, agency_id').eq('id', client_id).single();
+            const { data: client } = await supabaseClient.from('clients').select('name, agency_id').eq('id', client_id).maybeSingle();
             if (!client) { results.push({ client_id, status: 'error', error: 'לקוח לא נמצא' }); continue; }
 
             const prefix = type === 'google_ads' ? 'דוח גוגל אדס' : 'דוח פייסבוק';
@@ -1907,7 +1907,7 @@ async function executeTool(
               agency_id: client.agency_id || null,
               client_id,
               created_by: userId,
-            }).select('id, name').single();
+            }).select('id, name').maybeSingle();
             if (error) { results.push({ client_id, status: 'error', error: error.message }); continue; }
             results.push({ client_id, client_name: client.name, status: 'created', table_id: table.id });
           } catch (e: any) {
@@ -2409,26 +2409,26 @@ serve(async (req) => {
     // Resolve tenant
     let tenantId: string | null = null;
     if (tenant_slug) {
-      const { data: tenantBySlug } = await supabaseClient.from('tenants').select('id').eq('slug', tenant_slug).single();
+      const { data: tenantBySlug } = await supabaseClient.from('tenants').select('id').eq('slug', tenant_slug).maybeSingle();
       if (tenantBySlug) tenantId = tenantBySlug.id;
     }
     if (!tenantId) {
-      const { data: activeTenant } = await supabaseClient.from('user_active_tenant').select('tenant_id').eq('user_id', user.id).single();
+      const { data: activeTenant } = await supabaseClient.from('user_active_tenant').select('tenant_id').eq('user_id', user.id).maybeSingle();
       tenantId = activeTenant?.tenant_id || null;
     }
     if (!tenantId) {
-      const { data: tenantData } = await supabaseClient.from('tenant_users').select('tenant_id').eq('user_id', user.id).limit(1).single();
+      const { data: tenantData } = await supabaseClient.from('tenant_users').select('tenant_id').eq('user_id', user.id).limit(1).maybeSingle();
       tenantId = tenantData?.tenant_id || null;
     }
     if (!tenantId) throw new Error('אין לך גישה למערכת');
 
     // Get user profile
-    const { data: profileData } = await supabaseClient.from('profiles').select('full_name, email, campaigner_id, ui_mode').eq('id', user.id).single();
+    const { data: profileData } = await supabaseClient.from('profiles').select('full_name, email, campaigner_id, ui_mode').eq('id', user.id).maybeSingle();
     let campaignerName: string | null = null;
     let campaignerId: string | null = null;
 
     if (profileData?.campaigner_id) {
-      const { data: campaignerData } = await supabaseClient.from('campaigners').select('full_name, id').eq('id', profileData.campaigner_id).single();
+      const { data: campaignerData } = await supabaseClient.from('campaigners').select('full_name, id').eq('id', profileData.campaigner_id).maybeSingle();
       if (campaignerData) { campaignerName = campaignerData.full_name; campaignerId = campaignerData.id; }
     }
 
@@ -2495,7 +2495,7 @@ serve(async (req) => {
     let conversation = null;
     let messages: any[] = [];
     if (conversation_id) {
-      const { data: convData } = await supabaseClient.from('ai_conversations').select('*').eq('id', conversation_id).eq('user_id', user.id).single();
+      const { data: convData } = await supabaseClient.from('ai_conversations').select('*').eq('id', conversation_id).eq('user_id', user.id).maybeSingle();
       if (convData) { conversation = convData; messages = convData.messages || []; }
     }
 
@@ -2707,7 +2707,7 @@ serve(async (req) => {
           if (conversation_id && conversation) {
             await supabaseClient.from('ai_conversations').update({ messages, updated_at: new Date().toISOString() }).eq('id', conversation_id);
           } else {
-            const { data: newConv } = await supabaseClient.from('ai_conversations').insert({ user_id: user.id, tenant_id: tenantId, title: conversationTitle, messages }).select().single();
+            const { data: newConv } = await supabaseClient.from('ai_conversations').insert({ user_id: user.id, tenant_id: tenantId, title: conversationTitle, messages }).select().maybeSingle();
             if (newConv) {
               savedConversationId = newConv.id;
               controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'conversation_id', id: newConv.id })}\n\n`));
