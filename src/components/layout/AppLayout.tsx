@@ -208,6 +208,20 @@ export function AppLayout({ children }: AppLayoutProps) {
                     </Select>
                   </div>
                 )}
+                {/* Carmen button in header */}
+                <button
+                  onClick={() => setCarmenOpen(true)}
+                  className="relative group"
+                  title="כרמן — עוזרת AI"
+                  aria-label="פתח את כרמן"
+                >
+                  <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 border-2 border-background animate-pulse z-10" />
+                  <img
+                    src={CARMEN_ICON}
+                    alt="כרמן"
+                    className="h-9 w-9 rounded-full object-cover border-2 border-red-600/60 group-hover:scale-110 transition-transform duration-200"
+                  />
+                </button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="icon" className="rounded-full">
@@ -227,31 +241,6 @@ export function AppLayout({ children }: AppLayoutProps) {
               {children}
             </main>
           </div>
-
-          {/* Carmen floating button — bottom right */}
-          <button
-            onClick={() => setCarmenOpen(true)}
-            className="fixed bottom-6 right-6 z-50 group"
-            title="כרמן — עוזרת AI"
-            aria-label="פתח את כרמן"
-          >
-            <div className="relative">
-              {/* Glow ring */}
-              <div className="absolute inset-0 rounded-full bg-red-600/30 blur-md scale-110 group-hover:scale-125 transition-transform duration-300" />
-              {/* Pulse dot */}
-              <span className="absolute -top-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-400 border-2 border-background animate-pulse z-10" />
-              {/* Avatar */}
-              <img
-                src={CARMEN_ICON}
-                alt="כרמן"
-                className="relative h-14 w-14 rounded-full object-cover shadow-lg border-2 border-red-600/60 group-hover:scale-105 transition-transform duration-200"
-              />
-            </div>
-            {/* Tooltip label */}
-            <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-background border text-xs font-medium px-2 py-0.5 rounded-full shadow opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-              כרמן
-            </span>
-          </button>
 
           <AIOSDialog open={carmenOpen} onOpenChange={setCarmenOpen} />
         </div>
