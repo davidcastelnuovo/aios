@@ -1920,6 +1920,49 @@ async function executeTool(
         return { success: true, result: { total: items.length, created, skipped, errors, details: results } };
       }
 
+      case 'list_orphan_tables': {
+        const { data: orphans, error } = await supabaseClient
+          .from('crm_tables')
+          .select('id, name, slug, integration_type, integration_settings, created_at')
+          .eq('tenant_id', tenantId)
+          .is('client_id', null)
+          .in('integration_type', ['facebook_insights', 'google_ads', 'facebook_ecommerce'])
+          .order('name');
+        if (error) throw error;
+        return { success: true, result: { count: orphans?.length || 0, tables: orphans || [] } };
+      }
+
+      case 'link_table_to_client': {
+        const { table_id, client_id } = toolCall.args;
+        const { data: client } = await supabaseClient.from('clients').select('name').eq('id', client_id).maybeSingle();
+        if (!client) return { success: false, error: 'לקוח לא נמצא' };
+        const { error } = await supabaseClient.from('crm_tables').update({ client_id }).eq('id', table_id).eq('tenant_id', tenantId);
+        if (error) throw error;
+        modifiedEntities.add('crm_tables');
+        return { success: true, result: { table_id, client_id, client_name: client.name } };
+      }
+
+      case 'batch_link_tables_to_clients': {
+        const { links } = toolCall.args;
+        if (!Array.isArray(links) || links.length === 0) return { success: false, error: 'links array is required' };
+        const results: any[] = [];
+        for (const link of links) {
+          try {
+            const { data: client } = await supabaseClient.from('clients').select('name').eq('id', link.client_id).maybeSingle();
+            if (!client) { results.push({ table_id: link.table_id, status: 'error', error: 'לקוח לא נמצא' }); continue; }
+            const { error } = await supabaseClient.from('crm_tables').update({ client_id: link.client_id }).eq('id', link.table_id).eq('tenant_id', tenantId);
+            if (error) { results.push({ table_id: link.table_id, status: 'error', error: error.message }); continue; }
+            results.push({ table_id: link.table_id, client_name: client.name, status: 'linked' });
+          } catch (e: any) {
+            results.push({ table_id: link.table_id, status: 'error', error: e.message });
+          }
+        }
+        modifiedEntities.add('crm_tables');
+        const linked = results.filter(r => r.status === 'linked').length;
+        const errs = results.filter(r => r.status === 'error').length;
+        return { success: true, result: { total: links.length, linked, errors: errs, details: results } };
+      }
+
       case 'delegate_to_background': {
         const { task_description, task_title } = toolCall.args;
         
