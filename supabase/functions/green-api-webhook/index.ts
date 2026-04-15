@@ -1829,6 +1829,8 @@ Deno.serve(async (req) => {
             }
           }
         }
+        } // end scopeAllowed
+        } // end carmenAutomation exists
         } // end else isManualOutgoing
       }
     }
