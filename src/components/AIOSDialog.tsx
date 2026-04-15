@@ -8,12 +8,23 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { Bot, Send, Plus, Loader2, Wrench, Menu, Sparkles, Zap, MessageSquare, Users, Target, Mic, MicOff, Square } from "lucide-react";
+import { Bot, Send, Plus, Loader2, Wrench, Menu, Sparkles, Zap, MessageSquare, Users, Target, Mic, MicOff, Square, PlayCircle, CheckCircle2, XCircle, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import ReactMarkdown from "react-markdown";
 import { invalidateAIEntityQueries } from "@/lib/aiInvalidation";
+
+interface BackgroundTask {
+  id: string;
+  title: string;
+  status: string;
+  run_count: number | null;
+  result: any;
+  created_at: string;
+  completed_at: string | null;
+}
 
 interface Message {
   role: 'user' | 'assistant' | 'tool_call';
@@ -54,8 +65,10 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { toast } = useToast();
   const { userId } = useCurrentUser();
+  const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
+  const [backgroundTasks, setBackgroundTasks] = useState<BackgroundTask[]>([]);
 
   const { data: conversations = [], isLoading: conversationsLoading } = useQuery({
     queryKey: ['ai-conversations'],
@@ -80,6 +93,60 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
   useEffect(() => {
     onWorkingChange?.(isStreaming);
   }, [isStreaming, onWorkingChange]);
+
+  // Load and subscribe to background tasks
+  useEffect(() => {
+    if (!open || !tenantId) return;
+
+    // Initial load of recent background tasks
+    const loadTasks = async () => {
+      const { data } = await supabase
+        .from('agent_tasks')
+        .select('id, title, status, run_count, result, created_at, completed_at')
+        .eq('tenant_id', tenantId)
+        .eq('task_mode', 'background')
+        .in('status', ['pending', 'running', 'completed', 'failed'])
+        .order('created_at', { ascending: false })
+        .limit(5);
+      if (data) setBackgroundTasks(data as BackgroundTask[]);
+    };
+    loadTasks();
+
+    // Realtime subscription
+    const channel = supabase
+      .channel('bg-tasks')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'agent_tasks',
+        filter: `tenant_id=eq.${tenantId}`,
+      }, (payload) => {
+        const task = payload.new as any;
+        if (task?.task_mode !== 'background') return;
+        
+        setBackgroundTasks(prev => {
+          const idx = prev.findIndex(t => t.id === task.id);
+          const updated: BackgroundTask = {
+            id: task.id,
+            title: task.title,
+            status: task.status,
+            run_count: task.run_count,
+            result: task.result,
+            created_at: task.created_at,
+            completed_at: task.completed_at,
+          };
+          if (idx >= 0) {
+            const copy = [...prev];
+            copy[idx] = updated;
+            return copy;
+          }
+          return [updated, ...prev].slice(0, 5);
+        });
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [open, tenantId]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -470,6 +537,9 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
     save_memory: "שומר לזיכרון",
     recall_memory: "שולף זיכרון",
     delete_memory: "מוחק זיכרון",
+    delegate_to_background: "מעביר לריצה ברקע",
+    batch_update_client_health: "מעדכן בריאות לקוחות",
+    analyze_campaign_performance: "מנתח ביצועי קמפיינים",
   };
 
   const SidebarContent = () => (
@@ -556,6 +626,48 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
             <p className="text-[11px] text-muted-foreground">עוזרת AI חכמה — ניהול, אוטומציות, הודעות ועוד</p>
           </div>
         </div>
+
+        {/* Background Tasks Progress */}
+        {backgroundTasks.filter(t => t.status === 'pending' || t.status === 'running').length > 0 && (
+          <div className="border-b border-border px-3 py-2 bg-muted/30 flex-shrink-0 space-y-1.5">
+            {backgroundTasks
+              .filter(t => t.status === 'pending' || t.status === 'running')
+              .map(task => (
+                <div key={task.id} className="flex items-center gap-2 text-xs">
+                  {task.status === 'pending' ? (
+                    <Clock className="h-3.5 w-3.5 text-muted-foreground animate-pulse" />
+                  ) : (
+                    <Loader2 className="h-3.5 w-3.5 text-primary animate-spin" />
+                  )}
+                  <span className="font-medium truncate flex-1">{task.title}</span>
+                  {task.run_count && task.run_count > 1 && (
+                    <span className="text-muted-foreground">סבב {task.run_count}</span>
+                  )}
+                  <span className="text-muted-foreground">
+                    {task.status === 'pending' ? 'ממתין...' : 'רץ ברקע...'}
+                  </span>
+                </div>
+              ))}
+          </div>
+        )}
+
+        {/* Completed Background Tasks (show briefly) */}
+        {backgroundTasks.filter(t => t.status === 'completed' && t.completed_at && 
+          (Date.now() - new Date(t.completed_at).getTime()) < 60000
+        ).length > 0 && (
+          <div className="border-b border-border px-3 py-2 bg-success/5 flex-shrink-0 space-y-1.5">
+            {backgroundTasks
+              .filter(t => t.status === 'completed' && t.completed_at && 
+                (Date.now() - new Date(t.completed_at).getTime()) < 60000)
+              .map(task => (
+                <div key={task.id} className="flex items-center gap-2 text-xs">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+                  <span className="font-medium truncate flex-1">{task.title}</span>
+                  <span className="text-success">הושלם ✓</span>
+                </div>
+              ))}
+          </div>
+        )}
 
         {/* Messages */}
         <ScrollArea className="flex-1 p-3">

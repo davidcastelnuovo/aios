@@ -120,11 +120,10 @@ ${uiMode === 'aios' ? `📊 **חשוב לגבי תצוגת נתונים (display
 - **חשוב מאוד:** כשמדברים על "דשבורד CRM", "דשבורד סוכנות", "דגלים", "flags", "בריאות לקוח" או "לעדכן את הדשבורד" — הכוונה לעדכון אמיתי של mood_status ותקשורת הלקוח. במקרה כזה חובה להשתמש ב-**batch_update_client_health** (עדיף) או **update_client_health** בפועל עבור כל לקוח רלוונטי.
 - אם המשתמש מבקש לעדכן דשבורד/דגלים על בסיס ביצועי קמפיינים — קודם השתמש ב-**analyze_campaign_performance**, ואז קרא ל-**batch_update_client_health** עם **כל** הלקוחות — גם אלה שתקינים (mood_status: happy) וגם אלה עם בעיות.
 - **אסור** לכתוב "עדכנתי", "בוצע עדכון", "הדלקתי דגל" או ניסוח דומה אם לא הייתה קריאת **update_client_health** או **batch_update_client_health** מוצלחת בפועל.
-- **כשמבצעים בדיקת דופק או עדכון דשבורד:**
-  1. קרא ל-**analyze_campaign_performance** (ללא client_id) לקבלת כל הלקוחות עם נתוני קמפיינים.
-  2. קרא ל-**list_clients** לקבלת רשימת **כל** הלקוחות הפעילים.
-  3. קרא ל-**batch_update_client_health** עם **כל הלקוחות הפעילים** — גם תקינים (happy + "ביצועים תקינים") וגם בעייתיים. לקוחות ללא נתוני קמפיינים יקבלו הערה "אין נתוני קמפיינים מסונכרנים".
-  4. **תמיד** דווחי בדיוק כמה לקוחות עודכנו מתוך כמה. **אסור** לדווח "עברתי על כל הלקוחות" אם לא ביצעת update בפועל לכל אחד מהם.
+- **כשמבצעים בדיקת דופק, עדכון דשבורד, או כל משימה שעוברת על יותר מ-5 לקוחות:**
+  **חובה** להשתמש ב-**delegate_to_background** כדי להעביר את המשימה לריצה ברקע. המשימה תרוץ גם אם המשתמש סוגר את הצ׳אט.
+  תיאור המשימה ב-task_description צריך לכלול הוראות מדויקות: "1. קרא ל-analyze_campaign_performance. 2. קרא ל-list_clients. 3. קרא ל-batch_update_client_health עם כל הלקוחות."
+  אחרי קריאת delegate_to_background, אמור למשתמש: "התחלתי לעבוד על זה ברקע. תוכל לראות את ההתקדמות בזמן אמת, גם אם תסגור את החלון."
 
 📋 **מיפוי סטטוסי תקשורת (עברית ↔ API):**
 - **תקין** / **רגוע** / **הכל בסדר** → mood_status: \`happy\`, communication_status: \`normal\`
@@ -1921,6 +1920,68 @@ async function executeTool(
         return { success: true, result: { total: items.length, created, skipped, errors, details: results } };
       }
 
+      case 'delegate_to_background': {
+        const { task_description, task_title } = toolCall.args;
+        
+        // Find the agent for this tenant
+        const { data: agentData } = await supabaseClient
+          .from('ai_agents')
+          .select('id')
+          .eq('tenant_id', tenantId)
+          .eq('active', true)
+          .limit(1)
+          .maybeSingle();
+        
+        if (!agentData) {
+          return { success: false, error: 'לא נמצא סוכן AI פעיל בטננט' };
+        }
+        
+        // Create agent_task
+        const { data: newTask, error: taskErr } = await supabaseClient
+          .from('agent_tasks')
+          .insert({
+            agent_id: agentData.id,
+            tenant_id: tenantId,
+            title: task_title || 'משימת רקע',
+            description: task_description,
+            priority: 8,
+            status: 'pending',
+            schedule_type: 'once',
+            task_mode: 'background',
+            enabled: true,
+            created_by: userId,
+          })
+          .select('id, title, status')
+          .single();
+        
+        if (taskErr) throw taskErr;
+        
+        // Fire run-agent-task in background
+        const SUPABASE_URL_ENV = Deno.env.get('SUPABASE_URL')!;
+        const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+        
+        fetch(`${SUPABASE_URL_ENV}/functions/v1/run-agent-task`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${ANON_KEY}`,
+          },
+          body: JSON.stringify({ task_id: newTask.id }),
+        }).catch(e => console.error('Background task trigger failed:', e));
+        
+        modifiedEntities.add('agent_tasks');
+        
+        return {
+          success: true,
+          result: {
+            agent_task_id: newTask.id,
+            title: newTask.title,
+            status: 'pending',
+            message: `המשימה "${task_title}" נוצרה ומתחילה לרוץ ברקע. המשתמש יכול לעקוב אחרי ההתקדמות בזמן אמת.`,
+          },
+        };
+      }
+
       default:
         return { success: false, error: `Unknown tool: ${toolCall.name}` };
     }
@@ -2384,6 +2445,8 @@ const tools = [
   { type: 'function', function: { name: 'create_facebook_report_table', description: 'חיבור חשבון מודעות פייסבוק ללקוח — יוצר טבלת דוח facebook_insights ב-CRM', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח' }, ad_account_id: { type: 'string', description: 'מזהה חשבון מודעות פייסבוק (act_XXXXX)' }, ad_account_name: { type: 'string', description: 'שם חשבון המודעות' } }, required: ['client_id', 'ad_account_id', 'ad_account_name'] } } },
   { type: 'function', function: { name: 'create_google_ads_table', description: 'חיבור חשבון Google Ads ללקוח — יוצר טבלת דוח google_ads ב-CRM', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח' }, ad_account_id: { type: 'string', description: 'מזהה חשבון Google Ads' }, ad_account_name: { type: 'string', description: 'שם חשבון המודעות' } }, required: ['client_id', 'ad_account_id', 'ad_account_name'] } } },
   { type: 'function', function: { name: 'batch_create_report_tables', description: 'יצירת מספר טבלאות דוח בבת אחת (Google Ads / Meta). **השתמש בכלי הזה תמיד כשצריך לחבר מספר לקוחות** — חוסך עשרות סבבים.', parameters: { type: 'object', properties: { items: { type: 'array', items: { type: 'object', properties: { client_id: { type: 'string' }, ad_account_id: { type: 'string' }, ad_account_name: { type: 'string' }, type: { type: 'string', enum: ['meta', 'google_ads'] } }, required: ['client_id', 'ad_account_id', 'ad_account_name', 'type'] }, description: 'מערך של חיבורים ליצירה' } }, required: ['items'] } } },
+  // === BACKGROUND TASK DELEGATION ===
+  { type: 'function', function: { name: 'delegate_to_background', description: 'העבר משימה ארוכה לריצה ברקע. **חובה להשתמש בכלי הזה** כאשר המשימה דורשת עיבוד של יותר מ-5 לקוחות (בדיקת דופק, עדכון דשבורד, batch updates, סנכרון מרובה). המשימה תרוץ ברקע גם אם המשתמש סוגר את הצ׳אט, ותעדכן התקדמות בזמן אמת.', parameters: { type: 'object', properties: { task_description: { type: 'string', description: 'תיאור מפורט של המשימה לביצוע ברקע — כולל הוראות מדויקות, כמו "בצע בדיקת דופק לכל 75 הלקוחות הפעילים" או "עדכן mood_status לכל הלקוחות לפי ביצועי קמפיינים"' }, task_title: { type: 'string', description: 'כותרת קצרה למשימה (למשל: "בדיקת דופק", "עדכון דשבורד")' } }, required: ['task_description', 'task_title'] } } },
 ];
 
 serve(async (req) => {
