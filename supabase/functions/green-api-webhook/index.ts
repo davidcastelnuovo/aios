@@ -1777,6 +1777,7 @@ Deno.serve(async (req) => {
                   status: 'active',
                   started_by_keyword: messageText,
                   end_keyword: endKeywordConfig,
+                  automation_id: carmenAutomation.id,
                 })
                 .select()
                 .single();
