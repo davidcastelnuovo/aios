@@ -13,7 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, TrendingUp, TrendingDown, MousePointerClick, Eye, Target, ArrowUpDown, Minus, Award, Upload, X, FileText } from "lucide-react";
+import { Search, TrendingUp, TrendingDown, MousePointerClick, Eye, Target, ArrowUpDown, ArrowUp, ArrowDown, Minus, Award, Upload, X, FileText } from "lucide-react";
+import { cn } from "@/lib/utils";
 import Papa from "papaparse";
 import { toast } from "sonner";
 
@@ -40,8 +41,10 @@ interface AggregatedData {
 }
 
 export function SearchConsoleDashboard({ tableId }: SearchConsoleDashboardProps) {
-  const [sortBy, setSortBy] = useState<string>("impressions");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  // Default: sort by position ascending (best rank = lowest number = first)
+  const [sortBy, setSortBy] = useState<string>("position");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const [searchFilter, setSearchFilter] = useState("");
   const [trackedKeywords, setTrackedKeywords] = useState<string[]>([]);
   const [newKeyword, setNewKeyword] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -70,12 +73,38 @@ export function SearchConsoleDashboard({ tableId }: SearchConsoleDashboardProps)
 
   const formatNumber = (num: number) => new Intl.NumberFormat('he-IL').format(num);
 
-  // Sort queries
-  const sortedQueries = aggregatedData?.queries?.slice().sort((a, b) => {
-    const aVal = a[sortBy as keyof typeof a] as number;
-    const bVal = b[sortBy as keyof typeof b] as number;
-    return sortOrder === "desc" ? bVal - aVal : aVal - bVal;
-  }) || [];
+  // Handle column header click — toggle direction if same column, else smart default
+  const handleSortColumn = (col: string) => {
+    if (sortBy === col) {
+      setSortOrder(o => o === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(col);
+      // position: ascending = best first; everything else: descending = highest first
+      setSortOrder(col === "position" ? "asc" : "desc");
+    }
+  };
+
+  // Sort + filter queries
+  const sortedQueries = (() => {
+    let rows = aggregatedData?.queries?.slice() || [];
+    if (searchFilter.trim()) {
+      const q = searchFilter.toLowerCase();
+      rows = rows.filter(r => r.query.toLowerCase().includes(q));
+    }
+    rows.sort((a, b) => {
+      const aVal = a[sortBy as keyof typeof a] as number;
+      const bVal = b[sortBy as keyof typeof b] as number;
+      return sortOrder === "desc" ? bVal - aVal : aVal - bVal;
+    });
+    return rows;
+  })();
+
+  const SortIcon = ({ col }: { col: string }) => {
+    if (sortBy !== col) return <ArrowUpDown className="h-3 w-3 opacity-30 inline ml-1" />;
+    return sortOrder === "asc"
+      ? <ArrowUp className="h-3 w-3 text-primary inline ml-1" />
+      : <ArrowDown className="h-3 w-3 text-primary inline ml-1" />;
+  };
 
   // Find tracked keywords in the data
   const trackedKeywordsData = trackedKeywords.map(keyword => {
@@ -354,56 +383,68 @@ export function SearchConsoleDashboard({ tableId }: SearchConsoleDashboardProps)
       {/* Queries Table */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg flex items-center justify-between">
-            <span>ביטויי חיפוש (טופ 100)</span>
-            <div className="flex gap-2">
-              <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger className="w-[120px] h-8 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="clicks">קליקים</SelectItem>
-                  <SelectItem value="impressions">חשיפות</SelectItem>
-                  <SelectItem value="ctr">CTR</SelectItem>
-                  <SelectItem value="position">מיקום</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => setSortOrder(o => o === "asc" ? "desc" : "asc")}
-              >
-                <ArrowUpDown className="h-4 w-4" />
-              </Button>
-            </div>
+          <CardTitle className="text-lg flex items-center justify-between flex-wrap gap-2">
+            <span>ביטויי חיפוש ({formatNumber(sortedQueries.length)})</span>
+            <Input
+              placeholder="חפש ביטוי..."
+              value={searchFilter}
+              onChange={(e) => setSearchFilter(e.target.value)}
+              className="h-8 w-[220px] text-sm font-normal"
+            />
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b">
+                <tr className="border-b bg-muted/40">
                   <th className="text-right py-2 px-3 font-medium">ביטוי</th>
-                  <th className="text-center py-2 px-3 font-medium">קליקים</th>
-                  <th className="text-center py-2 px-3 font-medium">חשיפות</th>
-                  <th className="text-center py-2 px-3 font-medium">CTR</th>
-                  <th className="text-center py-2 px-3 font-medium">מיקום</th>
+                  <th
+                    className="text-center py-2 px-3 font-medium cursor-pointer hover:bg-muted/70 select-none whitespace-nowrap"
+                    onClick={() => handleSortColumn("position")}
+                  >
+                    מיקום <SortIcon col="position" />
+                  </th>
+                  <th
+                    className="text-center py-2 px-3 font-medium cursor-pointer hover:bg-muted/70 select-none whitespace-nowrap"
+                    onClick={() => handleSortColumn("clicks")}
+                  >
+                    קליקים <SortIcon col="clicks" />
+                  </th>
+                  <th
+                    className="text-center py-2 px-3 font-medium cursor-pointer hover:bg-muted/70 select-none whitespace-nowrap"
+                    onClick={() => handleSortColumn("impressions")}
+                  >
+                    חשיפות <SortIcon col="impressions" />
+                  </th>
+                  <th
+                    className="text-center py-2 px-3 font-medium cursor-pointer hover:bg-muted/70 select-none whitespace-nowrap"
+                    onClick={() => handleSortColumn("ctr")}
+                  >
+                    CTR <SortIcon col="ctr" />
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {sortedQueries.map((query, index) => (
                   <tr key={index} className="border-b hover:bg-muted/50">
                     <td className="py-2 px-3 font-medium max-w-[300px] truncate" title={query.query}>
-                      {query.query.length > 50 ? query.query.substring(0, 50) + '...' : query.query}
+                      {query.query.length > 60 ? query.query.substring(0, 60) + '...' : query.query}
+                    </td>
+                    <td className="text-center py-2 px-3">
+                      <span className={cn(
+                        "inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-medium",
+                        query.position <= 3 ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" :
+                        query.position <= 10 ? "bg-primary/10 text-primary" :
+                        query.position <= 20 ? "bg-muted text-muted-foreground" :
+                        "text-muted-foreground"
+                      )}>
+                        {query.position.toFixed(1)}
+                      </span>
                     </td>
                     <td className="text-center py-2 px-3">{formatNumber(query.clicks)}</td>
                     <td className="text-center py-2 px-3">{formatNumber(query.impressions)}</td>
                     <td className="text-center py-2 px-3">{query.ctr.toFixed(2)}%</td>
-                    <td className="text-center py-2 px-3">
-                      <Badge variant={query.position <= 10 ? "default" : query.position <= 20 ? "secondary" : "outline"}>
-                        {query.position.toFixed(1)}
-                      </Badge>
-                    </td>
                   </tr>
                 ))}
               </tbody>

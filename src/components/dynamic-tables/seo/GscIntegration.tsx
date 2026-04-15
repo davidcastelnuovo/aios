@@ -18,6 +18,8 @@ interface GscIntegrationProps {
   domain?: string;
   keywords?: string[];
   onDataLoaded?: (data: GscKeywordData[]) => void;
+  /** When true, hides the raw queries table — data is still fetched and passed via onDataLoaded */
+  hideTable?: boolean;
 }
 
 interface GscSite {
@@ -42,7 +44,7 @@ function normalizeDomain(value?: string) {
     .toLowerCase();
 }
 
-export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoaded }: GscIntegrationProps) {
+export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoaded, hideTable = false }: GscIntegrationProps) {
   const queryClient = useQueryClient();
   const [selectedSite, setSelectedSite] = useState<string>("");
   const [sitePopoverOpen, setSitePopoverOpen] = useState(false);
@@ -227,6 +229,11 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
             <Badge variant="secondary" className="text-xs">
               {settings?.google_email || "מחובר"}
             </Badge>
+            {hideTable && gscData && gscData.length > 0 && (
+              <Badge variant="outline" className="text-xs text-green-700 border-green-300 bg-green-50">
+                {gscData.length} ביטויים נטענו
+              </Badge>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {availableSites.length > 0 && (
@@ -299,7 +306,8 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
         </CardContent>
       )}
 
-      {gscData && gscData.length > 0 && (
+      {/* When hideTable=true, only show summary stats (no full queries table) */}
+      {!hideTable && gscData && gscData.length > 0 && (
         <CardContent className="px-4 pb-4 pt-0 space-y-4">
           {/* Summary Stats */}
           <div className="grid grid-cols-4 gap-3">
@@ -356,8 +364,8 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
 }
 
 function GscQueriesTable({ data }: { data: GscKeywordData[] }) {
-  const [sortBy, setSortBy] = useState<keyof GscKeywordData>("impressions");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [sortBy, setSortBy] = useState<keyof GscKeywordData>("position");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [searchFilter, setSearchFilter] = useState("");
 
   const sortedData = useMemo(() => {
@@ -375,6 +383,25 @@ function GscQueriesTable({ data }: { data: GscKeywordData[] }) {
 
   const formatNumber = (num: number) => new Intl.NumberFormat('he-IL').format(num);
 
+  const handleSortColumn = (col: keyof GscKeywordData) => {
+    if (sortBy === col) {
+      setSortOrder(o => o === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(col);
+      // position: ascending is best (lower = better); others: descending is best
+      setSortOrder(col === "position" ? "asc" : "desc");
+    }
+  };
+
+  const SortIcon = ({ col }: { col: keyof GscKeywordData }) => {
+    if (sortBy !== col) return <ArrowUpDown className="h-3 w-3 opacity-30 inline ml-1" />;
+    return (
+      <span className="inline ml-1 text-primary">
+        {sortOrder === "asc" ? "↑" : "↓"}
+      </span>
+    );
+  };
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -389,25 +416,6 @@ function GscQueriesTable({ data }: { data: GscKeywordData[] }) {
             onChange={(e) => setSearchFilter(e.target.value)}
             className="h-8 w-[200px] text-sm"
           />
-          <Select value={sortBy} onValueChange={(v) => setSortBy(v as keyof GscKeywordData)}>
-            <SelectTrigger className="w-[110px] h-8 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="clicks">קליקים</SelectItem>
-              <SelectItem value="impressions">חשיפות</SelectItem>
-              <SelectItem value="ctr">CTR</SelectItem>
-              <SelectItem value="position">מיקום</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 w-8 p-0"
-            onClick={() => setSortOrder(o => o === "asc" ? "desc" : "asc")}
-          >
-            <ArrowUpDown className="h-3.5 w-3.5" />
-          </Button>
         </div>
       </div>
 
@@ -416,10 +424,30 @@ function GscQueriesTable({ data }: { data: GscKeywordData[] }) {
           <thead className="sticky top-0 bg-muted/80 backdrop-blur-sm">
             <tr className="border-b">
               <th className="text-right py-2 px-3 font-medium">ביטוי</th>
-              <th className="text-center py-2 px-3 font-medium">קליקים</th>
-              <th className="text-center py-2 px-3 font-medium">חשיפות</th>
-              <th className="text-center py-2 px-3 font-medium">CTR</th>
-              <th className="text-center py-2 px-3 font-medium">מיקום</th>
+              <th
+                className="text-center py-2 px-3 font-medium cursor-pointer hover:bg-muted select-none"
+                onClick={() => handleSortColumn("position")}
+              >
+                מיקום <SortIcon col="position" />
+              </th>
+              <th
+                className="text-center py-2 px-3 font-medium cursor-pointer hover:bg-muted select-none"
+                onClick={() => handleSortColumn("clicks")}
+              >
+                קליקים <SortIcon col="clicks" />
+              </th>
+              <th
+                className="text-center py-2 px-3 font-medium cursor-pointer hover:bg-muted select-none"
+                onClick={() => handleSortColumn("impressions")}
+              >
+                חשיפות <SortIcon col="impressions" />
+              </th>
+              <th
+                className="text-center py-2 px-3 font-medium cursor-pointer hover:bg-muted select-none"
+                onClick={() => handleSortColumn("ctr")}
+              >
+                CTR <SortIcon col="ctr" />
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -428,9 +456,6 @@ function GscQueriesTable({ data }: { data: GscKeywordData[] }) {
                 <td className="py-1.5 px-3 font-medium max-w-[300px] truncate" title={row.keyword}>
                   {row.keyword}
                 </td>
-                <td className="text-center py-1.5 px-3">{formatNumber(row.clicks)}</td>
-                <td className="text-center py-1.5 px-3">{formatNumber(row.impressions)}</td>
-                <td className="text-center py-1.5 px-3">{row.ctr.toFixed(2)}%</td>
                 <td className="text-center py-1.5 px-3">
                   <span className={cn(
                     "inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-medium",
@@ -442,6 +467,9 @@ function GscQueriesTable({ data }: { data: GscKeywordData[] }) {
                     {row.position.toFixed(1)}
                   </span>
                 </td>
+                <td className="text-center py-1.5 px-3">{formatNumber(row.clicks)}</td>
+                <td className="text-center py-1.5 px-3">{formatNumber(row.impressions)}</td>
+                <td className="text-center py-1.5 px-3">{row.ctr.toFixed(2)}%</td>
               </tr>
             ))}
           </tbody>

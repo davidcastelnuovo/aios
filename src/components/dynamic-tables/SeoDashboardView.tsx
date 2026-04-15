@@ -18,9 +18,11 @@ import { useAhrefsEnrichment } from "@/hooks/useAhrefsEnrichment";
 interface SeoDashboardViewProps {
   tenantId: string;
   clientId: string;
+  /** CRM records from the linked Google Analytics table */
+  gaRecords?: any[];
 }
 
-export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) {
+export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDashboardViewProps) {
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [gscData, setGscData] = useState<GscKeywordData[]>([]);
   const { fetchComparisons, comparisonData, isLoading: isEnriching } = useAhrefsEnrichment();
@@ -75,6 +77,27 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
   const snapshotCampaignStart = reportData?.snapshot_campaign_start || {};
   const campaignStartDate = reportData?.campaign_start_date || snapshotCampaignStart?.date;
   const trafficHistory = Array.isArray(reportData?.traffic_history) ? reportData.traffic_history : [];
+
+  // Derive organic sessions from GA daily_source records (matches what Analytics reports)
+  const gaOrganicByMonth = useMemo(() => {
+    if (!gaRecords || gaRecords.length === 0) return [];
+    const monthMap = new Map<string, number>();
+    for (const r of gaRecords) {
+      const reportType = r.data?.report_type;
+      if (reportType !== 'daily_source' && reportType !== 'daily') continue;
+      const sourceMedium = String(r.data?.source_medium || '').toLowerCase();
+      const isOrganic = sourceMedium.includes('organic');
+      if (reportType === 'daily_source' && !isOrganic) continue;
+      const date = r.data?.date;
+      if (!date) continue;
+      const monthKey = date.substring(0, 7); // YYYY-MM
+      const sessions = Number(r.data?.sessions) || 0;
+      monthMap.set(monthKey, (monthMap.get(monthKey) || 0) + sessions);
+    }
+    return Array.from(monthMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, sessions]) => ({ month, sessions }));
+  }, [gaRecords]);
 
   // Find previous month report for keyword comparison
   const selectedIdx = reports.findIndex(r => r.id === selectedReport?.id);
@@ -314,15 +337,16 @@ export function SeoDashboardView({ tenantId, clientId }: SeoDashboardViewProps) 
       />
 
       {/* Traffic History Chart */}
-      <SeoTrafficChart trafficHistory={trafficHistory} />
+      <SeoTrafficChart trafficHistory={trafficHistory} gaOrganicByMonth={gaOrganicByMonth} />
 
-      {/* Google Search Console Integration */}
+      {/* Google Search Console Integration — enriches keyword rows silently, no raw table shown here */}
       <GscIntegration
         tenantId={tenantId}
         clientId={clientId}
         domain={reportData?.domain || selectedReport?.domain}
         keywords={[...organicKeywords, ...trackedKeywords].map((k: any) => k.keyword).filter(Boolean)}
         onDataLoaded={handleGscDataLoaded}
+        hideTable
       />
 
       {/* Keywords — unified view with tabs */}

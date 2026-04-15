@@ -207,7 +207,11 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
         </TabsList>
 
         <TabsContent value="seo">
-          <SeoDashboardView tenantId={tenantId} clientId={clientId} />
+          <SeoDashboardView
+            tenantId={tenantId}
+            clientId={clientId}
+            gaRecords={gaRecords || []}
+          />
         </TabsContent>
 
         {hasGsc && (

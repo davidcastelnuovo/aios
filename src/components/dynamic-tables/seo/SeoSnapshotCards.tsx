@@ -57,6 +57,24 @@ export function SeoSnapshotCards({ snapshot, prevMonth, campaignStart }: SeoSnap
             <p className="text-2xl font-bold text-primary">
               {typeof metric.value === 'number' ? metric.value.toLocaleString() : metric.value}
             </p>
+            <div className="mt-1 flex flex-col items-center gap-0.5">
+              {metric.prevValue !== undefined && (
+                <ChangeIndicator
+                  current={metric.value}
+                  previous={metric.prevValue}
+                  label="מחודש שעבר"
+                  inverse={metric.keys.some(k => k.includes('position') || k.includes('kd'))}
+                />
+              )}
+              {metric.campaignValue !== undefined && metric.campaignValue !== metric.prevValue && (
+                <ChangeIndicator
+                  current={metric.value}
+                  previous={metric.campaignValue}
+                  label="מתחילת קמפיין"
+                  inverse={metric.keys.some(k => k.includes('position') || k.includes('kd'))}
+                />
+              )}
+            </div>
           </CardContent>
         </Card>
       ))}
