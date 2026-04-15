@@ -94,6 +94,60 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
     onWorkingChange?.(isStreaming);
   }, [isStreaming, onWorkingChange]);
 
+  // Load and subscribe to background tasks
+  useEffect(() => {
+    if (!open || !tenantId) return;
+
+    // Initial load of recent background tasks
+    const loadTasks = async () => {
+      const { data } = await supabase
+        .from('agent_tasks')
+        .select('id, title, status, run_count, result, created_at, completed_at')
+        .eq('tenant_id', tenantId)
+        .eq('task_mode', 'background')
+        .in('status', ['pending', 'running', 'completed', 'failed'])
+        .order('created_at', { ascending: false })
+        .limit(5);
+      if (data) setBackgroundTasks(data as BackgroundTask[]);
+    };
+    loadTasks();
+
+    // Realtime subscription
+    const channel = supabase
+      .channel('bg-tasks')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'agent_tasks',
+        filter: `tenant_id=eq.${tenantId}`,
+      }, (payload) => {
+        const task = payload.new as any;
+        if (task?.task_mode !== 'background') return;
+        
+        setBackgroundTasks(prev => {
+          const idx = prev.findIndex(t => t.id === task.id);
+          const updated: BackgroundTask = {
+            id: task.id,
+            title: task.title,
+            status: task.status,
+            run_count: task.run_count,
+            result: task.result,
+            created_at: task.created_at,
+            completed_at: task.completed_at,
+          };
+          if (idx >= 0) {
+            const copy = [...prev];
+            copy[idx] = updated;
+            return copy;
+          }
+          return [updated, ...prev].slice(0, 5);
+        });
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [open, tenantId]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
