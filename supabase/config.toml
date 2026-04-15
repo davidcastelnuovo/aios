@@ -3,6 +3,9 @@ project_id = "jnzguisakdtcollxmgzd"
 [functions.ai-support-chat]
 verify_jwt = true
 
+[functions.run-agent-task]
+verify_jwt = false
+
 [functions.test-facebook-lead-webhook]
 verify_jwt = false
 
