@@ -1699,6 +1699,35 @@ Deno.serve(async (req) => {
         if (!carmenAutomation) {
           // No Carmen automation configured — skip silently
         } else {
+          // === SCOPE ENFORCEMENT ===
+          const scopeMode = carmenAutomation.configuration?.carmen_scope_mode || 'all';
+          const allowedPhones = carmenAutomation.configuration?.carmen_allowed_phones || [];
+          
+          // Check if this chat is allowed by scope rules
+          let scopeAllowed = true;
+          if (scopeMode === 'specific_phone') {
+            // Only allow specific phone numbers (e.g. private chat with self)
+            const normalizedChatPhone = phoneNumber?.replace(/[^0-9]/g, '') || '';
+            const isPhoneAllowed = allowedPhones.some((p: string) => {
+              const normalizedAllowed = p.replace(/[^0-9]/g, '');
+              return normalizedChatPhone.endsWith(normalizedAllowed) || normalizedAllowed.endsWith(normalizedChatPhone);
+            });
+            if (!isPhoneAllowed) {
+              scopeAllowed = false;
+              console.log(`[CARMEN SCOPE] Phone ${phoneNumber} not in allowed list [${allowedPhones.join(', ')}]. Skipping session creation.`);
+            }
+          } else if (scopeMode === 'private_only') {
+            // Only private chats (already filtered by !isGroup above)
+            scopeAllowed = true;
+          } else if (scopeMode === 'specific_group') {
+            // Only specific groups — skip for non-group chats
+            scopeAllowed = false;
+            console.log(`[CARMEN SCOPE] specific_group mode but this is a private chat. Skipping.`);
+          }
+          
+          if (!scopeAllowed) {
+            // Scope check failed — do NOT create session
+          } else {
           // Get trigger keyword from automation config (default: 'כרמן')
           const triggerKeyword = (carmenAutomation.configuration?.trigger_keyword || 'כרמן').toLowerCase();
           const endKeywordConfig = carmenAutomation.configuration?.end_keyword || 'סיימנו כרמן';
