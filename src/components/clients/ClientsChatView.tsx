@@ -519,7 +519,7 @@ export function ClientsChatView({
                     >
                       {(displayName || "?")[0]}
                     </div>
-                    <div className="flex-1 overflow-hidden text-right">
+                    <div className="flex-1 min-w-0 text-right">
                     {multiSelectMode && (
                       <div className="pt-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                         <Checkbox
@@ -528,12 +528,12 @@ export function ClientsChatView({
                         />
                       </div>
                     )}
-                      <div className="flex items-center gap-1 justify-end">
+                      <div className="flex items-center gap-1">
+                        <span dir="rtl" className="block font-semibold text-sm truncate flex-1 min-w-0 text-right">
+                          {displayName}
+                        </span>
                         <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
                           {moodInfo.emoji}
-                        </span>
-                        <span className="font-semibold text-sm text-foreground block truncate">
-                          {displayName}
                         </span>
                       </div>
                       <div className="flex items-center gap-1 mt-1 justify-end flex-wrap">
