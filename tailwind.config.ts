@@ -90,10 +90,10 @@ export default {
         },
         "carmen-glow": {
           "0%, 100%": {
-            boxShadow: "0 0 4px 2px rgba(52, 211, 153, 0.3), 0 0 8px 4px rgba(52, 211, 153, 0.15)",
+            boxShadow: "0 0 8px 4px rgba(52, 211, 153, 0.5), 0 0 16px 8px rgba(52, 211, 153, 0.3), inset 0 0 4px 1px rgba(52, 211, 153, 0.1)",
           },
           "50%": {
-            boxShadow: "0 0 8px 4px rgba(52, 211, 153, 0.5), 0 0 16px 8px rgba(52, 211, 153, 0.25)",
+            boxShadow: "0 0 14px 7px rgba(52, 211, 153, 0.7), 0 0 28px 14px rgba(52, 211, 153, 0.4), inset 0 0 6px 2px rgba(52, 211, 153, 0.15)",
           },
         },
       },

@@ -155,6 +155,8 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
       let buffer = '';
       let assistantContent = '';
 
+      let receivedDone = false;
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -189,6 +191,7 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
             } else if (parsed.type === 'invalidate') {
               invalidateAIEntityQueries(queryClient, parsed.entity);
             } else if (parsed.type === 'done') {
+              receivedDone = true;
               if (assistantContent) {
                 setMessages(prev => [...prev, {
                   role: 'assistant',
@@ -204,6 +207,27 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
             console.error('Parse error:', e);
           }
         }
+      }
+
+      // Stream ended without 'done' signal — timeout or disconnect
+      if (!receivedDone) {
+        if (assistantContent) {
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: assistantContent + "\n\n⚠️ _החיבור נותק — ייתכן שהפעולה הופסקה באמצע._",
+            timestamp: new Date().toISOString(),
+          }]);
+          setStreamingMessage("");
+        } else {
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: "⚠️ הפעולה הופסקה — ייתכן שהמשימה ארוכה מדי. נסה לפרק אותה לחלקים קטנים יותר.",
+            timestamp: new Date().toISOString(),
+          }]);
+          setStreamingMessage("");
+        }
+        setIsStreaming(false);
+        queryClient.invalidateQueries({ queryKey: ['ai-conversations'] });
       }
     } catch (error: any) {
       console.error('Error sending message:', error);
@@ -354,6 +378,8 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
       let buffer = '';
       let assistantContent = '';
 
+      let receivedDone = false;
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -383,6 +409,7 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
             } else if (parsed.type === 'invalidate') {
               invalidateAIEntityQueries(queryClient, parsed.entity);
             } else if (parsed.type === 'done') {
+              receivedDone = true;
               if (assistantContent) {
                 setMessages(prev => [...prev, { role: 'assistant', content: assistantContent, timestamp: new Date().toISOString() }]);
                 setStreamingMessage("");
@@ -392,6 +419,17 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
             }
           } catch (e) { console.error('Parse error:', e); }
         }
+      }
+
+      if (!receivedDone) {
+        if (assistantContent) {
+          setMessages(prev => [...prev, { role: 'assistant', content: assistantContent + "\n\n⚠️ _החיבור נותק — ייתכן שהפעולה הופסקה באמצע._", timestamp: new Date().toISOString() }]);
+        } else {
+          setMessages(prev => [...prev, { role: 'assistant', content: "⚠️ הפעולה הופסקה — ייתכן שהמשימה ארוכה מדי. נסה לפרק אותה לחלקים קטנים יותר.", timestamp: new Date().toISOString() }]);
+        }
+        setStreamingMessage("");
+        setIsStreaming(false);
+        queryClient.invalidateQueries({ queryKey: ['ai-conversations'] });
       }
     } catch (error: any) {
       console.error('Error sending message:', error);
@@ -503,7 +541,7 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
           <img
             src="https://d2xsxph8kpxj0f.cloudfront.net/310419663030948028/XGJWpzb5zh76ZdoV37Q3K8/carmen-icon-CyF3DNNJ8Z9Uhfz7EpYJcQ.webp"
             alt="כרמן"
-            className="h-9 w-9 rounded-full object-cover flex-shrink-0 border-2 border-red-600/40"
+            className={`h-9 w-9 rounded-full object-cover flex-shrink-0 border-2 ${isStreaming ? 'border-emerald-400 animate-carmen-glow' : 'border-red-600/40'}`}
           />
           <div className="min-w-0 flex-1">
             <h2 className="text-sm font-bold">כרמן</h2>
