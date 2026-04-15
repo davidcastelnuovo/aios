@@ -1923,8 +1923,8 @@ async function executeTool(
       case 'delegate_to_background': {
         const { task_description, task_title } = toolCall.args;
         
-        // Find the agent for this tenant
-        const { data: agentData } = await supabaseClient
+        // Find the agent for this tenant, fallback to any active agent
+        let { data: agentData } = await supabaseClient
           .from('ai_agents')
           .select('id')
           .eq('tenant_id', tenantId)
@@ -1933,7 +1933,18 @@ async function executeTool(
           .maybeSingle();
         
         if (!agentData) {
-          return { success: false, error: 'לא נמצא סוכן AI פעיל בטננט' };
+          // Fallback: use any active agent (Carmen is shared)
+          const { data: fallbackAgent } = await supabaseClient
+            .from('ai_agents')
+            .select('id')
+            .eq('active', true)
+            .limit(1)
+            .maybeSingle();
+          agentData = fallbackAgent;
+        }
+        
+        if (!agentData) {
+          return { success: false, error: 'לא נמצא סוכן AI פעיל' };
         }
         
         // Create agent_task
