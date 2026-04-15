@@ -8,12 +8,23 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { Bot, Send, Plus, Loader2, Wrench, Menu, Sparkles, Zap, MessageSquare, Users, Target, Mic, MicOff, Square } from "lucide-react";
+import { Bot, Send, Plus, Loader2, Wrench, Menu, Sparkles, Zap, MessageSquare, Users, Target, Mic, MicOff, Square, PlayCircle, CheckCircle2, XCircle, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import ReactMarkdown from "react-markdown";
 import { invalidateAIEntityQueries } from "@/lib/aiInvalidation";
+
+interface BackgroundTask {
+  id: string;
+  title: string;
+  status: string;
+  run_count: number | null;
+  result: any;
+  created_at: string;
+  completed_at: string | null;
+}
 
 interface Message {
   role: 'user' | 'assistant' | 'tool_call';
@@ -54,8 +65,10 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { toast } = useToast();
   const { userId } = useCurrentUser();
+  const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
+  const [backgroundTasks, setBackgroundTasks] = useState<BackgroundTask[]>([]);
 
   const { data: conversations = [], isLoading: conversationsLoading } = useQuery({
     queryKey: ['ai-conversations'],
@@ -470,6 +483,9 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
     save_memory: "שומר לזיכרון",
     recall_memory: "שולף זיכרון",
     delete_memory: "מוחק זיכרון",
+    delegate_to_background: "מעביר לריצה ברקע",
+    batch_update_client_health: "מעדכן בריאות לקוחות",
+    analyze_campaign_performance: "מנתח ביצועי קמפיינים",
   };
 
   const SidebarContent = () => (
