@@ -538,11 +538,19 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
             </SheetContent>
           </Sheet>
 
-          <img
-            src="https://d2xsxph8kpxj0f.cloudfront.net/310419663030948028/XGJWpzb5zh76ZdoV37Q3K8/carmen-icon-CyF3DNNJ8Z9Uhfz7EpYJcQ.webp"
-            alt="כרמן"
-            className={`h-9 w-9 rounded-full object-cover flex-shrink-0 border-2 ${isStreaming ? 'border-emerald-400 animate-carmen-glow' : 'border-red-600/40'}`}
-          />
+          <div className="relative flex-shrink-0">
+            {isStreaming && (
+              <>
+                <span aria-hidden="true" className="absolute -inset-2 rounded-full bg-success/20 animate-pulse" />
+                <span aria-hidden="true" className="absolute -inset-1 rounded-full ring-2 ring-success/60 animate-carmen-glow" />
+              </>
+            )}
+            <img
+              src="https://d2xsxph8kpxj0f.cloudfront.net/310419663030948028/XGJWpzb5zh76ZdoV37Q3K8/carmen-icon-CyF3DNNJ8Z9Uhfz7EpYJcQ.webp"
+              alt="כרמן"
+              className={`relative z-10 h-9 w-9 rounded-full object-cover border-2 ${isStreaming ? 'border-success/70' : 'border-border'}`}
+            />
+          </div>
           <div className="min-w-0 flex-1">
             <h2 className="text-sm font-bold">כרמן</h2>
             <p className="text-[11px] text-muted-foreground">עוזרת AI חכמה — ניהול, אוטומציות, הודעות ועוד</p>
