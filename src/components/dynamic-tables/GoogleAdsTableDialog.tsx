@@ -93,52 +93,55 @@ export function GoogleAdsTableDialog({ open, onOpenChange, assignedClientIds }: 
     queryKey: ['agencies', tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
-      // Get own agencies
-      const { data: ownAgencies, error: ownError } = await supabase
+
+      const { data: ownedAgencies, error: ownedError } = await supabase
         .from('agencies')
         .select('id, name')
         .eq('tenant_id', tenantId)
         .order('name');
-      if (ownError) throw ownError;
+      if (ownedError) throw ownedError;
 
-      // Get cross-tenant shared agency IDs
-      const { data: sharedAccess } = await supabase
+      const { data: sharedAccess, error: sharedError } = await supabase
         .from('agency_tenant_access')
-        .select('agency_id')
+        .select(`
+          agency_id,
+          agencies (
+            id,
+            name
+          )
+        `)
         .eq('accessing_tenant_id', tenantId);
+      if (sharedError) throw sharedError;
 
-      const sharedIds = (sharedAccess || []).map(a => a.agency_id);
-      const ownIds = (ownAgencies || []).map(a => a.id);
-      const missingIds = sharedIds.filter(id => !ownIds.includes(id));
+      const sharedAgencies = (sharedAccess || [])
+        .map((row: any) => Array.isArray(row.agencies) ? row.agencies[0] : row.agencies)
+        .filter(Boolean)
+        .map((agency: any) => ({ id: agency.id, name: agency.name }));
 
-      if (missingIds.length > 0) {
-        const { data: sharedAgencies } = await supabase
-          .from('agencies')
-          .select('id, name')
-          .in('id', missingIds)
-          .order('name');
-        return [...(ownAgencies || []), ...(sharedAgencies || [])];
-      }
+      const mergedAgencies = [...(ownedAgencies || []), ...sharedAgencies].filter(
+        (agency, index, arr) => arr.findIndex((item) => item.id === agency.id) === index
+      );
 
-      return ownAgencies || [];
+      return mergedAgencies.sort((a, b) => a.name.localeCompare(b.name, 'he'));
     },
     enabled: open && !!tenantId,
   });
 
   // Fetch clients based on selected agency
   const { data: rawClients = [] } = useQuery({
-    queryKey: ['clients-for-table', agencyId],
+    queryKey: ['clients-for-table', tenantId, agencyId],
     queryFn: async () => {
-      if (!agencyId) return [];
+      if (!agencyId || !tenantId) return [];
       const { data, error } = await supabase
         .from('clients')
         .select('id, name')
+        .or(`tenant_id.eq.${tenantId},agency_id.eq.${agencyId}`)
         .eq('agency_id', agencyId)
         .order('name');
       if (error) throw error;
       return data || [];
     },
-    enabled: open && !!agencyId,
+    enabled: open && !!agencyId && !!tenantId,
   });
 
   const clients = assignedClientIds
