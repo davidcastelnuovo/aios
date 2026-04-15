@@ -88,18 +88,39 @@ export function GoogleAdsTableDialog({ open, onOpenChange, assignedClientIds }: 
   const [customerIdInput, setCustomerIdInput] = useState("");
   const [campaignType, setCampaignType] = useState<"leads" | "ecommerce">("leads");
 
-  // Fetch agencies
+  // Fetch agencies (including cross-tenant shared agencies)
   const { data: agencies = [] } = useQuery({
     queryKey: ['agencies', tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
-      const { data, error } = await supabase
+      // Get own agencies
+      const { data: ownAgencies, error: ownError } = await supabase
         .from('agencies')
         .select('id, name')
         .eq('tenant_id', tenantId)
         .order('name');
-      if (error) throw error;
-      return data || [];
+      if (ownError) throw ownError;
+
+      // Get cross-tenant shared agency IDs
+      const { data: sharedAccess } = await supabase
+        .from('agency_tenant_access')
+        .select('agency_id')
+        .eq('accessing_tenant_id', tenantId);
+
+      const sharedIds = (sharedAccess || []).map(a => a.agency_id);
+      const ownIds = (ownAgencies || []).map(a => a.id);
+      const missingIds = sharedIds.filter(id => !ownIds.includes(id));
+
+      if (missingIds.length > 0) {
+        const { data: sharedAgencies } = await supabase
+          .from('agencies')
+          .select('id, name')
+          .in('id', missingIds)
+          .order('name');
+        return [...(ownAgencies || []), ...(sharedAgencies || [])];
+      }
+
+      return ownAgencies || [];
     },
     enabled: open && !!tenantId,
   });
