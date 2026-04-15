@@ -5,6 +5,10 @@ interface SeoSnapshotCardsProps {
   snapshot: Record<string, any>;
   prevMonth: Record<string, any>;
   campaignStart: Record<string, any>;
+  /** Latest GA organic sessions (current month) — overrides Ahrefs org_traffic */
+  gaOrganicSessions?: number | null;
+  /** Previous month GA organic sessions */
+  gaOrganicSessionsPrev?: number | null;
 }
 
 function ChangeIndicator({ current, previous, label, inverse }: { current?: number; previous?: number; label: string; inverse?: boolean }) {
@@ -28,22 +32,35 @@ function getVal(obj: Record<string, any>, ...keys: string[]): number | undefined
   return undefined;
 }
 
-export function SeoSnapshotCards({ snapshot, prevMonth, campaignStart }: SeoSnapshotCardsProps) {
+export function SeoSnapshotCards({ snapshot, prevMonth, campaignStart, gaOrganicSessions, gaOrganicSessionsPrev }: SeoSnapshotCardsProps) {
   const metrics = [
-    { keys: ['domain_rating', 'dr'], label: 'דירוג דומיין (DR)', icon: '🏆' },
-    { keys: ['org_traffic'], label: 'תנועה אורגנית', icon: '📈' },
-    { keys: ['org_keywords_top3'], label: 'מילות מפתח (Top 3)', icon: '🥇' },
-    { keys: ['org_keywords_top10'], label: 'מילות מפתח (Top 10)', icon: '🔟' },
-    { keys: ['org_keywords_total'], label: 'סה״כ מילות מפתח', icon: '🔑' },
-    { keys: ['referring_domains', 'referring_domains_all_time'], label: 'דומיינים מפנים', icon: '🔗' },
-    { keys: ['backlinks_live'], label: 'קישורים נכנסים (פעילים)', icon: '🌐' },
-    { keys: ['backlinks_all_time'], label: 'קישורים נכנסים (כולל)', icon: '📊' },
-  ].map(m => ({
-    ...m,
-    value: getVal(snapshot, ...m.keys),
-    prevValue: getVal(prevMonth, ...m.keys),
-    campaignValue: getVal(campaignStart, ...m.keys),
-  })).filter(m => m.value !== undefined);
+    { keys: ['domain_rating', 'dr'], label: 'דירוג דומיין (DR)', icon: '🏆', isOrganic: false },
+    { keys: ['org_traffic'], label: 'תנועה אורגנית', icon: '📈', isOrganic: true },
+    { keys: ['org_keywords_top3'], label: 'מילות מפתח (Top 3)', icon: '🥇', isOrganic: false },
+    { keys: ['org_keywords_top10'], label: 'מילות מפתח (Top 10)', icon: '🔟', isOrganic: false },
+    { keys: ['org_keywords_total'], label: 'סה״כ מילות מפתח', icon: '🔑', isOrganic: false },
+    { keys: ['referring_domains', 'referring_domains_all_time'], label: 'דומיינים מפנים', icon: '🔗', isOrganic: false },
+    { keys: ['backlinks_live'], label: 'קישורים נכנסים (פעילים)', icon: '🌐', isOrganic: false },
+    { keys: ['backlinks_all_time'], label: 'קישורים נכנסים (כולל)', icon: '📊', isOrganic: false },
+  ].map(m => {
+    // For organic traffic: use GA sessions if available, otherwise Ahrefs
+    if (m.isOrganic && gaOrganicSessions != null) {
+      return {
+        ...m,
+        value: gaOrganicSessions,
+        prevValue: gaOrganicSessionsPrev ?? undefined,
+        campaignValue: undefined, // no campaign comparison for GA organic
+        gaSource: true,
+      };
+    }
+    return {
+      ...m,
+      value: getVal(snapshot, ...m.keys),
+      prevValue: getVal(prevMonth, ...m.keys),
+      campaignValue: getVal(campaignStart, ...m.keys),
+      gaSource: false,
+    };
+  }).filter(m => m.value !== undefined);
 
   if (metrics.length === 0) return null;
 
@@ -53,7 +70,12 @@ export function SeoSnapshotCards({ snapshot, prevMonth, campaignStart }: SeoSnap
         <Card key={idx} className="border-primary/10">
           <CardContent className="p-4 text-center">
             <span className="text-xl mb-1 block">{metric.icon}</span>
-            <p className="text-xs text-muted-foreground mb-1">{metric.label}</p>
+            <p className="text-xs text-muted-foreground mb-1">
+              {metric.label}
+              {(metric as any).gaSource && (
+                <span className="ml-1 text-[10px] text-green-600 font-medium">(Analytics)</span>
+              )}
+            </p>
             <p className="text-2xl font-bold text-primary">
               {typeof metric.value === 'number' ? metric.value.toLocaleString() : metric.value}
             </p>

@@ -99,6 +99,18 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
       .map(([month, sessions]) => ({ month, sessions }));
   }, [gaRecords]);
 
+  // Compute GA organic sessions for current and previous month (for snapshot card)
+  const gaOrganicCurrentMonth = useMemo(() => {
+    if (gaOrganicByMonth.length === 0) return null;
+    // Latest month in the array
+    return gaOrganicByMonth[gaOrganicByMonth.length - 1]?.sessions ?? null;
+  }, [gaOrganicByMonth]);
+
+  const gaOrganicPrevMonth = useMemo(() => {
+    if (gaOrganicByMonth.length < 2) return null;
+    return gaOrganicByMonth[gaOrganicByMonth.length - 2]?.sessions ?? null;
+  }, [gaOrganicByMonth]);
+
   // Find previous month report for keyword comparison
   const selectedIdx = reports.findIndex(r => r.id === selectedReport?.id);
   const prevMonthReport = selectedIdx >= 0 && selectedIdx < reports.length - 1 ? reports[selectedIdx + 1] : null;
@@ -334,6 +346,8 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
         snapshot={snapshot}
         prevMonth={snapshotPrevMonth}
         campaignStart={snapshotCampaignStart}
+        gaOrganicSessions={gaOrganicCurrentMonth}
+        gaOrganicSessionsPrev={gaOrganicPrevMonth}
       />
 
       {/* Traffic History Chart */}
