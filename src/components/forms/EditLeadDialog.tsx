@@ -1155,8 +1155,6 @@ const updateMutation = useMutation({
                           <SelectContent className="bg-background z-50 max-h-[200px]">
                             {meetingScheduler.isLoadingCalendar ? (
                               <div className="p-2 text-center text-sm text-muted-foreground">טוען יומן...</div>
-                            ) : meetingScheduler.calendarError ? (
-                              <div className="p-2 text-center text-sm text-destructive">{meetingScheduler.calendarError}</div>
                             ) : (
                               timeSlots.map(({ time, available }) => (
                                 <SelectItem
@@ -1184,8 +1182,6 @@ const updateMutation = useMutation({
                               <div className="p-2 text-center text-sm text-muted-foreground">בחר קודם שעת התחלה</div>
                             ) : meetingScheduler.isLoadingCalendar ? (
                               <div className="p-2 text-center text-sm text-muted-foreground">טוען יומן...</div>
-                            ) : meetingScheduler.calendarError ? (
-                              <div className="p-2 text-center text-sm text-destructive">{meetingScheduler.calendarError}</div>
                             ) : endTimeSlots.length === 0 ? (
                               <div className="p-2 text-center text-sm text-muted-foreground">אין שעות סיום זמינות</div>
                             ) : (
