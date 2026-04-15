@@ -1,45 +1,72 @@
 
 
-# תיקון: כרמן מופעלת גם כשאנה שולחת "כרמן" — במקום רק כשאתה שולח
+# תיקון סופי: כרמן עונה רק בצ'אט עצמי (972507677613)
 
-## הבעיה
+## שורש הבעיה
 
-כרגע, כרמן מופעלת כשמישהו **שולח לך** את מילת ההפעלה ("כרמן") — למשל כשאנה כותבת לך "כרמן". אבל אתה רוצה שכרמן תופעל רק כש**אתה** כותב "כרמן" בצ'אט.
+יש **שני נתיבים נפרדים** שיוצרים סשנים של כרמן:
 
-הבאג נמצא בשני מקומות:
+1. **`green-api-webhook`** — handler ישיר (שורות 1690-1802) שיוצר סשנים ישירות ו**לא בודק כלל** את `carmen_scope_mode` או `carmen_allowed_phones` מתוך הגדרות האוטומציה
+2. **`trigger-automation`** — כן בודק scope דרך `validateFlowTriggerConfig`, אבל הנתיב הראשון "קופץ" לפניו
 
-1. **green-api-webhook שורה 1613** — הטיפול בכרמן רץ רק על הודעות **נכנסות** (`isIncoming`). זה הפוך ממה שאתה רוצה — צריך שזה ירוץ על הודעות **יוצאות** שלך.
+האוטומציה שלך מוגדרת נכון (`carmen_scope_mode: specific_phone`, `carmen_allowed_phones: [972507677613]`), אבל ה-webhook מתעלם מזה ופותח סשנים בכל צ'אט.
 
-2. **trigger-automation** — גם שם אין הבחנה בין הודעה נכנסת ליוצאת, אז גם שם כרמן מופעלת מהודעות של אנה.
+**הוכחה מהדאטה:** הסשן הפעיל עכשיו (740c70db) נוצר עם `automation_id: NULL` — כלומר ה-webhook יצר אותו ישירות, בלי לעבור דרך האוטומציה שמכילה את הגבלות ה-scope.
 
 ## התיקון
 
-### קובץ 1: `supabase/functions/green-api-webhook/index.ts`
+### פעולה 1: סגירת הסשן הפעיל הלא-חוקי
+- UPDATE ב-DB לסגירת הסשן `740c70db` (status='ended')
 
-**שינוי 1 — שורה 1613**: שינוי התנאי מ-`isIncoming` ל-`isOutgoing` (או `isManualOutgoing`) — כרמן תופעל רק כשאתה שולח הודעה עם מילת ההפעלה, לא כשמישהו אחר שולח לך.
+### פעולה 2: `supabase/functions/green-api-webhook/index.ts`
 
-**שינוי 2** — כשיש סשן פעיל, כרמן צריכה להמשיך להגיב להודעות **נכנסות** מהצד השני (כי אחרי שפתחת סשן, אנה שולחת הודעות וכרמן צריכה לענות). אז הלוגיקה תהיה:
-- **פתיחת סשן חדש** → רק מהודעות יוצאות שלך
-- **המשך סשן קיים** → מהודעות נכנסות (תגובות הצד השני)
+**הוספת אכיפת scope ב-handler הישיר** (שורות 1697-1707):
 
-**שינוי 3** — הוספת `direction: 'outgoing'/'incoming'` לפיילואד שנשלח ל-`trigger-automation`.
+אחרי ש-`findCarmenSessionAutomation` מחזיר את האוטומציה עם הקונפיגורציה (שכוללת `carmen_scope_mode` ו-`carmen_allowed_phones`), להוסיף בדיקה:
 
-### קובץ 2: `supabase/functions/trigger-automation/index.ts`
+```text
+if carmenAutomation exists:
+  config = carmenAutomation.configuration
+  scopeMode = config.carmen_scope_mode
+  
+  if scopeMode === 'specific_phone':
+    allowedPhones = config.carmen_allowed_phones || []
+    if phoneNumber NOT in allowedPhones:
+      → SKIP (don't create session) + log
+  
+  if scopeMode === 'private_only':
+    → already handled (isGroup check exists)
+  
+  if scopeMode === 'specific_group':
+    → SKIP for non-group chats
+```
 
-**שינוי בשורות 933-945** — הוספת בדיקת כיוון (`direction`) בנוסף לבדיקת מילת מפתח: סשן חדש ייפתח רק אם ההודעה יוצאת (`direction === 'outgoing'`) וכוללת את מילת ההפעלה.
+גם **בהמשך סשן קיים** (שורה 1621): להוסיף בדיקה שהסשן שייך לצ'אט מורשה — או לשמור את ה-automation_id בסשן כדי שניתן יהיה לבדוק.
+
+### פעולה 3: שמירת `automation_id` בסשנים חדשים
+
+בשורה 1738-1753, כשנוצר סשן חדש, להוסיף:
+```
+automation_id: carmenAutomation.id
+```
+
+כרגע זה NULL, מה שמונע בדיקת scope על סשנים שנוצרו מה-webhook.
+
+### פעולה 4: Deploy
+- Deploy מחדש את `green-api-webhook`
 
 ```text
 Flow אחרי התיקון:
 
-green-api-webhook:
-  הודעה יוצאת (אתה כותב "כרמן") → פותח סשן חדש ✓
-  הודעה נכנסת (אנה כותבת "כרמן") → לא פותח סשן ✗
-  הודעה נכנסת + סשן פעיל → ממשיך סשן (כרמן עונה לאנה) ✓
-
-trigger-automation:
-  יצירת סשן חדש → רק אם direction=outgoing + מילת מפתח ✓
+green-api-webhook handler:
+  1. findCarmenSessionAutomation → gets config with scope rules
+  2. CHECK SCOPE: specific_phone → only 972507677613 allowed
+  3. If phone NOT allowed → SKIP entirely
+  4. If phone allowed + trigger keyword + outgoing → create session with automation_id
+  
+  Active session handler:
+  5. findActiveCarmenSession → found
+  6. Session has automation_id → can validate scope if needed
+  7. Continue session normally
 ```
-
-### Deploy
-- Deploy מחדש את `green-api-webhook` ו-`trigger-automation`
 
