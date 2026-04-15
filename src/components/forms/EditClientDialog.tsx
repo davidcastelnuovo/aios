@@ -1025,8 +1025,6 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                       <SelectContent className="bg-background z-50 max-h-[200px]">
                         {meetingScheduler.isLoadingCalendar ? (
                           <SelectItem value="loading" disabled>טוען יומן...</SelectItem>
-                        ) : meetingScheduler.calendarError ? (
-                          <SelectItem value="error" disabled>{meetingScheduler.calendarError}</SelectItem>
                         ) : (
                           timeSlots.map(({ time, available }) => (
                             <SelectItem
@@ -1054,8 +1052,6 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                           <SelectItem value="no-start" disabled>בחר קודם שעת התחלה</SelectItem>
                         ) : meetingScheduler.isLoadingCalendar ? (
                           <SelectItem value="loading-end" disabled>טוען יומן...</SelectItem>
-                        ) : meetingScheduler.calendarError ? (
-                          <SelectItem value="error-end" disabled>{meetingScheduler.calendarError}</SelectItem>
                         ) : endTimeSlots.length === 0 ? (
                           <SelectItem value="none-end" disabled>אין שעות סיום זמינות</SelectItem>
                         ) : (
