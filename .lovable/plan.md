@@ -1,72 +1,31 @@
 
 
-# תיקון סופי: כרמן עונה רק בצ'אט עצמי (972507677613)
+# תיקון: שעת סיום לא מופיעה בקביעת פגישה
 
-## שורש הבעיה
+## הבעיה
 
-יש **שני נתיבים נפרדים** שיוצרים סשנים של כרמן:
+שתי בעיות שגורמות לזה:
 
-1. **`green-api-webhook`** — handler ישיר (שורות 1690-1802) שיוצר סשנים ישירות ו**לא בודק כלל** את `carmen_scope_mode` או `carmen_allowed_phones` מתוך הגדרות האוטומציה
-2. **`trigger-automation`** — כן בודק scope דרך `validateFlowTriggerConfig`, אבל הנתיב הראשון "קופץ" לפניו
+1. **התאריך לא נבחר אוטומטית** — היום (16 באפריל) מופיע מסומן בירוק בלוח השנה, אבל `meetingDate` בקוד הוא `undefined` כי המשתמש לא לחץ עליו בפועל. בגלל זה `getAvailableEndTimeSlots()` מחזיר רשימה ריקה → "אין שעות סיום זמינות".
 
-האוטומציה שלך מוגדרת נכון (`carmen_scope_mode: specific_phone`, `carmen_allowed_phones: [972507677613]`), אבל ה-webhook מתעלם מזה ופותח סשנים בכל צ'אט.
-
-**הוכחה מהדאטה:** הסשן הפעיל עכשיו (740c70db) נוצר עם `automation_id: NULL` — כלומר ה-webhook יצר אותו ישירות, בלי לעבור דרך האוטומציה שמכילה את הגבלות ה-scope.
+2. **שגיאת יומן חוסמת בחירה** — אם המשתמש כן לוחץ על תאריך, מתבצעת קריאה ל-Google Calendar. אם היומן לא מחובר, `calendarError` נקבע ואז הדרופדאון של "עד שעה" מציג את הודעת השגיאה בלבד ולא נותן לבחור שעה.
 
 ## התיקון
 
-### פעולה 1: סגירת הסשן הפעיל הלא-חוקי
-- UPDATE ב-DB לסגירת הסשן `740c70db` (status='ended')
+### קובץ: `src/hooks/useMeetingScheduler.ts`
 
-### פעולה 2: `supabase/functions/green-api-webhook/index.ts`
+**תיקון 1: בחירה אוטומטית של היום בטעינה**
+- הוספת `useEffect` שמגדיר את `meetingDate` להיום כשה-hook נטען (במקום `undefined`)
+- זה גם יגרום לקריאת אירועי יומן אוטומטית
 
-**הוספת אכיפת scope ב-handler הישיר** (שורות 1697-1707):
+**תיקון 2: שעות סיום תמיד זמינות**
+- בפונקציה `getAvailableEndTimeSlots`: אם יש `calendarError`, להחזיר את כל שעות הסיום כ-available (במקום רשימה ריקה)
+- ככה גם אם היומן לא מחובר, המשתמש יכול לבחור שעת סיום
 
-אחרי ש-`findCarmenSessionAutomation` מחזיר את האוטומציה עם הקונפיגורציה (שכוללת `carmen_scope_mode` ו-`carmen_allowed_phones`), להוסיף בדיקה:
+**תיקון 3: דרופדאון שעת סיום לא ייחסם משגיאת יומן**
 
-```text
-if carmenAutomation exists:
-  config = carmenAutomation.configuration
-  scopeMode = config.carmen_scope_mode
-  
-  if scopeMode === 'specific_phone':
-    allowedPhones = config.carmen_allowed_phones || []
-    if phoneNumber NOT in allowedPhones:
-      → SKIP (don't create session) + log
-  
-  if scopeMode === 'private_only':
-    → already handled (isGroup check exists)
-  
-  if scopeMode === 'specific_group':
-    → SKIP for non-group chats
-```
+### קבצים: `ClientMeetingTab.tsx`, `EditLeadDialog.tsx`, `EditClientDialog.tsx`
 
-גם **בהמשך סשן קיים** (שורה 1621): להוסיף בדיקה שהסשן שייך לצ'אט מורשה — או לשמור את ה-automation_id בסשן כדי שניתן יהיה לבדוק.
-
-### פעולה 3: שמירת `automation_id` בסשנים חדשים
-
-בשורה 1738-1753, כשנוצר סשן חדש, להוסיף:
-```
-automation_id: carmenAutomation.id
-```
-
-כרגע זה NULL, מה שמונע בדיקת scope על סשנים שנוצרו מה-webhook.
-
-### פעולה 4: Deploy
-- Deploy מחדש את `green-api-webhook`
-
-```text
-Flow אחרי התיקון:
-
-green-api-webhook handler:
-  1. findCarmenSessionAutomation → gets config with scope rules
-  2. CHECK SCOPE: specific_phone → only 972507677613 allowed
-  3. If phone NOT allowed → SKIP entirely
-  4. If phone allowed + trigger keyword + outgoing → create session with automation_id
-  
-  Active session handler:
-  5. findActiveCarmenSession → found
-  6. Session has automation_id → can validate scope if needed
-  7. Continue session normally
-```
+- בדרופדאון "עד שעה": אם יש `calendarError`, להציג את שעות הסיום הרגילות (בלי מידע על תפוסות) במקום להציג הודעת שגיאה שחוסמת בחירה
+- שגיאת יומן תוצג כהודעה נפרדת מתחת ללוח השנה, לא בתוך הדרופדאון
 
