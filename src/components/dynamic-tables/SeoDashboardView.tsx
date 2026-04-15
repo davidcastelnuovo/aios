@@ -78,16 +78,17 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
   const campaignStartDate = reportData?.campaign_start_date || snapshotCampaignStart?.date;
   const trafficHistory = Array.isArray(reportData?.traffic_history) ? reportData.traffic_history : [];
 
-  // Derive organic sessions from GA daily_source records (matches what Analytics reports)
+  // Monthly organic sessions for the chart — derived from daily_source records (organic only)
+  // Note: daily_source may be incomplete due to GA API row limits; used for trend chart only
   const gaOrganicByMonth = useMemo(() => {
     if (!gaRecords || gaRecords.length === 0) return [];
     const monthMap = new Map<string, number>();
     for (const r of gaRecords) {
       const reportType = r.data?.report_type;
-      if (reportType !== 'daily_source' && reportType !== 'daily') continue;
+      // Only use daily_source rows — 'daily' rows have no source breakdown (total traffic)
+      if (reportType !== 'daily_source') continue;
       const sourceMedium = String(r.data?.source_medium || '').toLowerCase();
-      const isOrganic = sourceMedium.includes('organic');
-      if (reportType === 'daily_source' && !isOrganic) continue;
+      if (!sourceMedium.includes('organic')) continue;
       const date = r.data?.date;
       if (!date) continue;
       const monthKey = date.substring(0, 7); // YYYY-MM
@@ -99,13 +100,24 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
       .map(([month, sessions]) => ({ month, sessions }));
   }, [gaRecords]);
 
-  // Compute GA organic sessions for current and previous month (for snapshot card)
+  // Snapshot organic sessions — from channel_group 'Organic Search' (matches GA Traffic Acquisition exactly)
   const gaOrganicCurrentMonth = useMemo(() => {
+    if (!gaRecords || gaRecords.length === 0) return null;
+    const channelOrganic = gaRecords
+      .filter(r => r.data?.report_type === 'channel_group')
+      .filter(r => {
+        const cg = String(r.data?.channel_group || '').toLowerCase();
+        return cg === 'organic search' || cg.includes('organic search');
+      })
+      .reduce((sum, r) => sum + (Number(r.data?.sessions) || 0), 0);
+    if (channelOrganic > 0) return channelOrganic;
+    // Fallback: sum from monthly chart data
     if (gaOrganicByMonth.length === 0) return null;
-    // Latest month in the array
     return gaOrganicByMonth[gaOrganicByMonth.length - 1]?.sessions ?? null;
-  }, [gaOrganicByMonth]);
+  }, [gaRecords, gaOrganicByMonth]);
 
+  // Previous period organic from channel_group is not available (no date on channel_group)
+  // Use the second-to-last month from daily_source as approximation
   const gaOrganicPrevMonth = useMemo(() => {
     if (gaOrganicByMonth.length < 2) return null;
     return gaOrganicByMonth[gaOrganicByMonth.length - 2]?.sessions ?? null;
