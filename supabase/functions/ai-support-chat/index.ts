@@ -79,6 +79,11 @@ ${memoryContext}
 23. **סקילים (Skills)** - שמירת תהליכי עבודה כקיצורי דרך, הפעלת סקילים שמורים, ניהול ספריית מיומנויות
 24. **סנכרון Meta Ads** - סנכרון נתוני פייסבוק/מטה מטבלאות CRM, רענון נתוני קמפיינים
 25. **טבלאות דוח** - חיבור חשבונות מודעות (Meta/Google Ads) ללקוחות, יצירת טבלאות דוח, זיהוי לקוחות לא מחוברים, יצירת מרובה (batch)
+26. **תיקון טבלאות יתומות** - זיהוי טבלאות דוח ללא שיוך ללקוח (list_orphan_tables), שיוך בודד (link_table_to_client), שיוך מרובה (batch_link_tables_to_clients)
+
+⚠️ **חשוב לגבי טבלאות דוח:**
+- אחרי batch_create_report_tables, תמיד בדוק עם list_orphan_tables שלא נשארו טבלאות ללא client_id
+- אם נמצאו טבלאות יתומות, השתמש ב-batch_link_tables_to_clients לשייך אותן ללקוחות הנכונים
 
 ${skillsContext ? `🎯 **סקילים שמורים (Skills) — קיצורי דרך לתהליכים:**
 ${skillsContext}
@@ -1920,6 +1925,49 @@ async function executeTool(
         return { success: true, result: { total: items.length, created, skipped, errors, details: results } };
       }
 
+      case 'list_orphan_tables': {
+        const { data: orphans, error } = await supabaseClient
+          .from('crm_tables')
+          .select('id, name, slug, integration_type, integration_settings, created_at')
+          .eq('tenant_id', tenantId)
+          .is('client_id', null)
+          .in('integration_type', ['facebook_insights', 'google_ads', 'facebook_ecommerce'])
+          .order('name');
+        if (error) throw error;
+        return { success: true, result: { count: orphans?.length || 0, tables: orphans || [] } };
+      }
+
+      case 'link_table_to_client': {
+        const { table_id, client_id } = toolCall.args;
+        const { data: client } = await supabaseClient.from('clients').select('name').eq('id', client_id).maybeSingle();
+        if (!client) return { success: false, error: 'לקוח לא נמצא' };
+        const { error } = await supabaseClient.from('crm_tables').update({ client_id }).eq('id', table_id).eq('tenant_id', tenantId);
+        if (error) throw error;
+        modifiedEntities.add('crm_tables');
+        return { success: true, result: { table_id, client_id, client_name: client.name } };
+      }
+
+      case 'batch_link_tables_to_clients': {
+        const { links } = toolCall.args;
+        if (!Array.isArray(links) || links.length === 0) return { success: false, error: 'links array is required' };
+        const results: any[] = [];
+        for (const link of links) {
+          try {
+            const { data: client } = await supabaseClient.from('clients').select('name').eq('id', link.client_id).maybeSingle();
+            if (!client) { results.push({ table_id: link.table_id, status: 'error', error: 'לקוח לא נמצא' }); continue; }
+            const { error } = await supabaseClient.from('crm_tables').update({ client_id: link.client_id }).eq('id', link.table_id).eq('tenant_id', tenantId);
+            if (error) { results.push({ table_id: link.table_id, status: 'error', error: error.message }); continue; }
+            results.push({ table_id: link.table_id, client_name: client.name, status: 'linked' });
+          } catch (e: any) {
+            results.push({ table_id: link.table_id, status: 'error', error: e.message });
+          }
+        }
+        modifiedEntities.add('crm_tables');
+        const linked = results.filter(r => r.status === 'linked').length;
+        const errs = results.filter(r => r.status === 'error').length;
+        return { success: true, result: { total: links.length, linked, errors: errs, details: results } };
+      }
+
       case 'delegate_to_background': {
         const { task_description, task_title } = toolCall.args;
         
@@ -2456,6 +2504,10 @@ const tools = [
   { type: 'function', function: { name: 'create_facebook_report_table', description: 'חיבור חשבון מודעות פייסבוק ללקוח — יוצר טבלת דוח facebook_insights ב-CRM', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח' }, ad_account_id: { type: 'string', description: 'מזהה חשבון מודעות פייסבוק (act_XXXXX)' }, ad_account_name: { type: 'string', description: 'שם חשבון המודעות' } }, required: ['client_id', 'ad_account_id', 'ad_account_name'] } } },
   { type: 'function', function: { name: 'create_google_ads_table', description: 'חיבור חשבון Google Ads ללקוח — יוצר טבלת דוח google_ads ב-CRM', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח' }, ad_account_id: { type: 'string', description: 'מזהה חשבון Google Ads' }, ad_account_name: { type: 'string', description: 'שם חשבון המודעות' } }, required: ['client_id', 'ad_account_id', 'ad_account_name'] } } },
   { type: 'function', function: { name: 'batch_create_report_tables', description: 'יצירת מספר טבלאות דוח בבת אחת (Google Ads / Meta). **השתמש בכלי הזה תמיד כשצריך לחבר מספר לקוחות** — חוסך עשרות סבבים.', parameters: { type: 'object', properties: { items: { type: 'array', items: { type: 'object', properties: { client_id: { type: 'string' }, ad_account_id: { type: 'string' }, ad_account_name: { type: 'string' }, type: { type: 'string', enum: ['meta', 'google_ads'] } }, required: ['client_id', 'ad_account_id', 'ad_account_name', 'type'] }, description: 'מערך של חיבורים ליצירה' } }, required: ['items'] } } },
+  // === ORPHAN TABLE TOOLS ===
+  { type: 'function', function: { name: 'list_orphan_tables', description: 'רשימת טבלאות דוח (facebook_insights / google_ads) ללא חיבור ללקוח (client_id=null). שימושי לזיהוי טבלאות "יתומות" שצריכות שיוך.', parameters: { type: 'object', properties: {} } } },
+  { type: 'function', function: { name: 'link_table_to_client', description: 'שיוך טבלת CRM קיימת ללקוח — עדכון client_id בטבלה', parameters: { type: 'object', properties: { table_id: { type: 'string', description: 'מזהה הטבלה' }, client_id: { type: 'string', description: 'מזהה הלקוח לשיוך' } }, required: ['table_id', 'client_id'] } } },
+  { type: 'function', function: { name: 'batch_link_tables_to_clients', description: 'שיוך מרובה של טבלאות CRM ללקוחות בבת אחת — עדכון client_id בכל טבלה', parameters: { type: 'object', properties: { links: { type: 'array', items: { type: 'object', properties: { table_id: { type: 'string' }, client_id: { type: 'string' } }, required: ['table_id', 'client_id'] }, description: 'מערך של { table_id, client_id }' } }, required: ['links'] } } },
   // === BACKGROUND TASK DELEGATION ===
   { type: 'function', function: { name: 'delegate_to_background', description: 'העבר משימה ארוכה לריצה ברקע. **חובה להשתמש בכלי הזה** כאשר המשימה דורשת עיבוד של יותר מ-5 לקוחות (בדיקת דופק, עדכון דשבורד, batch updates, סנכרון מרובה). המשימה תרוץ ברקע גם אם המשתמש סוגר את הצ׳אט, ותעדכן התקדמות בזמן אמת.', parameters: { type: 'object', properties: { task_description: { type: 'string', description: 'תיאור מפורט של המשימה לביצוע ברקע — כולל הוראות מדויקות, כמו "בצע בדיקת דופק לכל 75 הלקוחות הפעילים" או "עדכן mood_status לכל הלקוחות לפי ביצועי קמפיינים"' }, task_title: { type: 'string', description: 'כותרת קצרה למשימה (למשל: "בדיקת דופק", "עדכון דשבורד")' } }, required: ['task_description', 'task_title'] } } },
 ];
