@@ -70,6 +70,8 @@ export function AIOSProvider({ children }: { children: React.ReactNode }) {
       let fullContent = "";
       let textBuffer = "";
 
+      let receivedDone = false;
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -104,6 +106,10 @@ export function AIOSProvider({ children }: { children: React.ReactNode }) {
               continue;
             }
 
+            if (parsed.type === "done") {
+              receivedDone = true;
+            }
+
             if (parsed.type === "token" && parsed.content) {
               fullContent += parsed.content;
               setStatusText(fullContent);
@@ -116,6 +122,13 @@ export function AIOSProvider({ children }: { children: React.ReactNode }) {
 
       if (fullContent) {
         setHistory((prev) => [...prev, { role: "assistant", content: fullContent }]);
+      }
+
+      if (!receivedDone && !fullContent) {
+        setStatusText("⚠️ הפעולה הופסקה — ייתכן שהמשימה ארוכה מדי.");
+        setHistory((prev) => [...prev, { role: "assistant", content: "⚠️ הפעולה הופסקה — ייתכן שהמשימה ארוכה מדי. נסה לפרק אותה לחלקים קטנים יותר." }]);
+      } else if (!receivedDone && fullContent) {
+        setStatusText(fullContent + "\n\n⚠️ החיבור נותק — ייתכן שהפעולה הופסקה באמצע.");
       }
     } catch (error) {
       console.error("AIOS error:", error);
