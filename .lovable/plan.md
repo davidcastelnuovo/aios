@@ -1,49 +1,59 @@
 
 
-# תוכנית: אנימציית עבודה לכרמן + תיקון יכולת ביצוע משימות ארוכות
+# תיקון: כרמן לא מסיימת משימות ארוכות + אנימציה לא נראית
 
-## הבעיות שזוהו
+## בעיות שזוהו
 
-### 1. אין אינדיקציה חזותית שכרמן עובדת
-כרגע יש רק נקודה ירוקה קבועה עם `animate-pulse`. אין הבדל בין "כרמן זמינה" ל"כרמן עובדת".
+### 1. Timeout של Edge Function
+ל-`ai-support-chat` אין הגדרת timeout מיוחדת ב-`config.toml`. ברירת המחדל היא **60 שניות**. עם 75 לקוחות, גם עם batch, לולאת ה-AI (tool call → AI response → tool call) יכולה לקחת הרבה יותר. כשה-timeout קורה, ה-stream נקטע **בלי הודעת שגיאה** — כרמן פשוט נעלמת.
 
-### 2. כרמן לא יכולה לבצע את המשימה שהיא טוענת
-המשימה של חיבור 75 לקוחות לטבלאות Google Ads/Meta Ads דורשת כלים שקיימים רק ב-`run-ai-agent` אבל **לא קיימים ב-`ai-support-chat`** (שזה מה שה-AIOS Dialog משתמש בו):
-- `list_unconnected_clients` — לא קיים
-- `create_facebook_report_table` — לא קיים  
-- `create_google_ads_table` — לא קיים
+### 2. הקליינט לא מזהה ניתוק
+ב-`AIOSDialog.tsx`, `setIsStreaming(false)` קורה רק כש:
+- מתקבל `type: 'done'` (שורה 200)
+- נתפס exception (שורה 215)
 
-כלומר כרמן "מדברת" על ביצוע המשימה אבל אין לה את הכלים לעשות את זה בפועל.
+אם ה-stream נקטע ע"י timeout, `reader.read()` מחזיר `done: true` בלי שנשלח `type: 'done'` — הלולאה נגמרת, **אבל `isStreaming` נשאר `true`** וכרמן "תקועה" לנצח.
 
-בנוסף, גם אם נוסיף את הכלים, עם 75 לקוחות מגבלת ה-25 סבבים ב-`MAX_TOOL_ROUNDS` עלולה לא להספיק.
+### 3. שגיאת DB בלוג
+`PGRST116 - Cannot coerce result to single JSON object` — כנראה מקריאת `.single()` בפונקציות כמו `create_facebook_report_table` או `create_google_ads_table` כש-client_id לא נמצא.
+
+### 4. הגלואו קטן מדי
+`box-shadow` של `4px`/`8px` עם opacity 0.3/0.15 כמעט לא נראה על רקע כהה.
 
 ---
 
 ## התיקון
 
-### חלק 1: אנימציית "כרמן עובדת" (גלואו)
+### חלק 1: הגדלת Timeout ל-300 שניות
+**קובץ: `supabase/config.toml`**
+- הוספת בלוק לפונקציה עם הגדלת timeout (שימוש ב-`wall_clock_limit_sec = 300`)
 
-**קובץ: `src/components/layout/AppLayout.tsx`**
-- הוספת state `carmenWorking` שמתחבר ל-`isStreaming` מה-AIOSDialog
-- כשכרמן עובדת: הוספת ring animation זוהר (emerald glow) סביב האווטאר שלה בהדר
-- שימוש ב-CSS animation עם `box-shadow` ירוק מהבהב עדין
-
-**קובץ: `tailwind.config.ts`**
-- הוספת keyframe חדש `carmen-glow` עם אפקט glow ירוק עדין
-
+### חלק 2: תיקון זיהוי ניתוק בצד הקליינט
 **קובץ: `src/components/AIOSDialog.tsx`**
-- חשיפת `isStreaming` כ-callback ל-AppLayout (דרך prop `onWorkingChange`)
+- אחרי שלולאת `while (true)` נגמרת (reader done), אם `isStreaming` עדיין true — כלומר לא התקבל `type: 'done'` — נסיים את ה-streaming בכוח
+- נוסיף הודעה למשתמש: אם היה assistantContent חלקי — נציג אותו. אם לא — נציג הודעת שגיאה "הפעולה הופסקה"
+- אותו דבר ב-`AIOSContext.tsx` (לגרסת ה-AIOS mode)
 
-### חלק 2: הוספת כלים חסרים ל-ai-support-chat
+### חלק 3: חיזוק אנימציית הזוהר
+**קובץ: `tailwind.config.ts`**
+- הגדלת ה-spread ל-`12px`/`20px`
+- הגברת opacity ל-`0.6`/`0.4`
+- הוספת `ring` צבע emerald-400 בנוסף ל-box-shadow
 
+### חלק 4: הוספת אינדיקציית "כרמן עובדת" בתוך הדיאלוג
+**קובץ: `src/components/AIOSDialog.tsx`**
+- כשהדיאלוג פתוח וכרמן עובדת, הוספת אנימציית glow לאווטאר שלה בהדר של הדיאלוג
+
+### חלק 5: תיקון שגיאת PGRST116
 **קובץ: `supabase/functions/ai-support-chat/index.ts`**
-- הוספת הגדרות כלים: `list_unconnected_clients`, `create_facebook_report_table`, `create_google_ads_table` (לטבלאות Google Ads)
-- הוספת ה-executeTool handlers עבור כל כלי
-- **הגדלת MAX_TOOL_ROUNDS** מ-25 ל-50 כדי לאפשר לופ ארוך יותר על 75 לקוחות
+- שינוי קריאות `.single()` ל-`.maybeSingle()` במקומות שעלולים להחזיר 0 שורות (בעיקר בשליפת לקוח)
 
-### חלק 3: כלי batch לחיבור טבלאות (Google Ads + Meta)
+---
 
-**קובץ: `supabase/functions/ai-support-chat/index.ts`**
-- הוספת כלי `batch_create_report_tables` שמקבל מערך של `{client_id, ad_account_id, ad_account_name, type: 'meta'|'google_ads'}` ויוצר את כל הטבלאות בקריאה אחת
-- זה חוסך עשרות סבבים — במקום קריאת tool נפרדת לכל לקוח
+## קבצים לעריכה
+- `supabase/config.toml` — timeout
+- `src/components/AIOSDialog.tsx` — זיהוי ניתוק + glow בדיאלוג
+- `src/contexts/AIOSContext.tsx` — זיהוי ניתוק (AIOS mode)
+- `tailwind.config.ts` — חיזוק glow
+- `supabase/functions/ai-support-chat/index.ts` — `.maybeSingle()` תיקון
 
