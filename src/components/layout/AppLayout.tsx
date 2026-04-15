@@ -42,6 +42,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { userId } = useCurrentUser();
   const { currentTenantId, setCurrentTenantId, currentTenant } = useTenant();
   const [carmenOpen, setCarmenOpen] = useState(false);
+  const [carmenWorking, setCarmenWorking] = useState(false);
 
   // Fetch available tenants for the user
   const { data: userTenants } = useQuery({
@@ -219,7 +220,11 @@ export function AppLayout({ children }: AppLayoutProps) {
                   <img
                     src={CARMEN_ICON}
                     alt="כרמן"
-                    className="h-9 w-9 rounded-full object-cover border-2 border-red-600/60 group-hover:scale-110 transition-transform duration-200"
+                    className={`h-9 w-9 rounded-full object-cover border-2 group-hover:scale-110 transition-all duration-200 ${
+                      carmenWorking
+                        ? 'border-emerald-400 animate-carmen-glow'
+                        : 'border-red-600/60'
+                    }`}
                   />
                 </button>
                 <DropdownMenu>
@@ -242,7 +247,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             </main>
           </div>
 
-          <AIOSDialog open={carmenOpen} onOpenChange={setCarmenOpen} />
+          <AIOSDialog open={carmenOpen} onOpenChange={setCarmenOpen} onWorkingChange={setCarmenWorking} />
         </div>
       </SidebarProvider>
     </ViewAsProvider>

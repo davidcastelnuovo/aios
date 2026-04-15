@@ -78,6 +78,7 @@ ${memoryContext}
 22. **עדכון בריאות לקוח** - עדכון mood_status בדשבורד CRM, יצירת התראות ב-communication_logs
 23. **סקילים (Skills)** - שמירת תהליכי עבודה כקיצורי דרך, הפעלת סקילים שמורים, ניהול ספריית מיומנויות
 24. **סנכרון Meta Ads** - סנכרון נתוני פייסבוק/מטה מטבלאות CRM, רענון נתוני קמפיינים
+25. **טבלאות דוח** - חיבור חשבונות מודעות (Meta/Google Ads) ללקוחות, יצירת טבלאות דוח, זיהוי לקוחות לא מחוברים, יצירת מרובה (batch)
 
 ${skillsContext ? `🎯 **סקילים שמורים (Skills) — קיצורי דרך לתהליכים:**
 ${skillsContext}
@@ -1774,6 +1775,152 @@ async function executeTool(
         return { success: true, result: { message: 'הסקיל נמחק בהצלחה' } };
       }
 
+      case 'list_unconnected_clients': {
+        const tableType = toolCall.args.table_type || 'facebook_insights';
+        const { data: allClients, error: clientsErr } = await supabaseClient
+          .from('clients')
+          .select('id, name, agency_id, agencies(name)')
+          .eq('tenant_id', tenantId)
+          .in('status', ['active', 'onboarding'])
+          .order('name');
+        if (clientsErr) throw clientsErr;
+
+        const { data: connectedTables } = await supabaseClient
+          .from('crm_tables')
+          .select('client_id')
+          .eq('tenant_id', tenantId)
+          .eq('integration_type', tableType)
+          .not('client_id', 'is', null);
+
+        const connectedClientIds = new Set((connectedTables || []).map((t: any) => t.client_id));
+        const unconnected = (allClients || []).filter((c: any) => !connectedClientIds.has(c.id))
+          .map((c: any) => ({ id: c.id, name: c.name, agency_name: c.agencies?.name }));
+
+        return { success: true, result: { count: unconnected.length, unconnected_clients: unconnected } };
+      }
+
+      case 'create_facebook_report_table': {
+        const { client_id, ad_account_id, ad_account_name } = toolCall.args;
+        const { data: existing } = await supabaseClient
+          .from('crm_tables')
+          .select('id, name')
+          .eq('tenant_id', tenantId)
+          .eq('client_id', client_id)
+          .eq('integration_type', 'facebook_insights')
+          .maybeSingle();
+        if (existing) {
+          return { success: true, result: { already_exists: true, table_id: existing.id, name: existing.name } };
+        }
+        const { data: client } = await supabaseClient.from('clients').select('name, agency_id').eq('id', client_id).single();
+        if (!client) return { success: false, error: 'לקוח לא נמצא' };
+
+        const tableName = `דוח פייסבוק - ${client.name}`;
+        const slug = `facebook-${client_id.substring(0, 8)}`;
+        const { data: table, error } = await supabaseClient.from('crm_tables').insert({
+          tenant_id: tenantId,
+          name: tableName,
+          slug,
+          description: `דוח ביצועי מודעות פייסבוק עבור ${client.name} (${ad_account_name})`,
+          icon: 'BarChart3',
+          category: 'דוחות',
+          integration_type: 'facebook_insights',
+          integration_settings: { ad_account_id, ad_account_name },
+          agency_id: client.agency_id || null,
+          client_id,
+          created_by: userId,
+        }).select('id, name, slug').single();
+        if (error) throw error;
+        modifiedEntities.add('crm_tables');
+        return { success: true, result: { table_id: table.id, name: table.name, slug: table.slug, ad_account_id, client_name: client.name } };
+      }
+
+      case 'create_google_ads_table': {
+        const { client_id, ad_account_id, ad_account_name } = toolCall.args;
+        const { data: existing } = await supabaseClient
+          .from('crm_tables')
+          .select('id, name')
+          .eq('tenant_id', tenantId)
+          .eq('client_id', client_id)
+          .eq('integration_type', 'google_ads')
+          .maybeSingle();
+        if (existing) {
+          return { success: true, result: { already_exists: true, table_id: existing.id, name: existing.name } };
+        }
+        const { data: client } = await supabaseClient.from('clients').select('name, agency_id').eq('id', client_id).single();
+        if (!client) return { success: false, error: 'לקוח לא נמצא' };
+
+        const tableName = `דוח גוגל אדס - ${client.name}`;
+        const slug = `google-ads-${client_id.substring(0, 8)}`;
+        const { data: table, error } = await supabaseClient.from('crm_tables').insert({
+          tenant_id: tenantId,
+          name: tableName,
+          slug,
+          description: `דוח ביצועי Google Ads עבור ${client.name} (${ad_account_name})`,
+          icon: 'BarChart3',
+          category: 'דוחות',
+          integration_type: 'google_ads',
+          integration_settings: { ad_account_id, ad_account_name },
+          agency_id: client.agency_id || null,
+          client_id,
+          created_by: userId,
+        }).select('id, name, slug').single();
+        if (error) throw error;
+        modifiedEntities.add('crm_tables');
+        return { success: true, result: { table_id: table.id, name: table.name, slug: table.slug, ad_account_id, client_name: client.name } };
+      }
+
+      case 'batch_create_report_tables': {
+        const { items } = toolCall.args;
+        if (!Array.isArray(items) || items.length === 0) {
+          return { success: false, error: 'items array is required' };
+        }
+        const results: any[] = [];
+        for (const item of items) {
+          const { client_id, ad_account_id, ad_account_name, type } = item;
+          const integType = type === 'google_ads' ? 'google_ads' : 'facebook_insights';
+          try {
+            const { data: existing } = await supabaseClient
+              .from('crm_tables')
+              .select('id, name')
+              .eq('tenant_id', tenantId)
+              .eq('client_id', client_id)
+              .eq('integration_type', integType)
+              .maybeSingle();
+            if (existing) {
+              results.push({ client_id, status: 'already_exists', table_id: existing.id });
+              continue;
+            }
+            const { data: client } = await supabaseClient.from('clients').select('name, agency_id').eq('id', client_id).single();
+            if (!client) { results.push({ client_id, status: 'error', error: 'לקוח לא נמצא' }); continue; }
+
+            const prefix = type === 'google_ads' ? 'דוח גוגל אדס' : 'דוח פייסבוק';
+            const slugPrefix = type === 'google_ads' ? 'google-ads' : 'facebook';
+            const { data: table, error } = await supabaseClient.from('crm_tables').insert({
+              tenant_id: tenantId,
+              name: `${prefix} - ${client.name}`,
+              slug: `${slugPrefix}-${client_id.substring(0, 8)}`,
+              description: `${prefix} עבור ${client.name} (${ad_account_name})`,
+              icon: 'BarChart3',
+              category: 'דוחות',
+              integration_type: integType,
+              integration_settings: { ad_account_id, ad_account_name },
+              agency_id: client.agency_id || null,
+              client_id,
+              created_by: userId,
+            }).select('id, name').single();
+            if (error) { results.push({ client_id, status: 'error', error: error.message }); continue; }
+            results.push({ client_id, client_name: client.name, status: 'created', table_id: table.id });
+          } catch (e: any) {
+            results.push({ client_id, status: 'error', error: e.message });
+          }
+        }
+        modifiedEntities.add('crm_tables');
+        const created = results.filter(r => r.status === 'created').length;
+        const skipped = results.filter(r => r.status === 'already_exists').length;
+        const errors = results.filter(r => r.status === 'error').length;
+        return { success: true, result: { total: items.length, created, skipped, errors, details: results } };
+      }
+
       default:
         return { success: false, error: `Unknown tool: ${toolCall.name}` };
     }
@@ -2232,6 +2379,11 @@ const tools = [
   { type: 'function', function: { name: 'execute_skill', description: 'טעינת סקיל לפי שם והפעלת הצעדים שלו. כשמשתמש מזכיר שם סקיל או אומר "תפעילי סקיל X", טען את הסקיל ובצע את הצעדים.', parameters: { type: 'object', properties: { name: { type: 'string', description: 'שם הסקיל להפעלה' } }, required: ['name'] } } },
   { type: 'function', function: { name: 'update_skill', description: 'עדכון סקיל קיים', parameters: { type: 'object', properties: { skill_id: { type: 'string', description: 'מזהה הסקיל (UUID)' }, name: { type: 'string' }, description: { type: 'string' }, steps: { type: 'string' }, trigger_phrases: { type: 'array', items: { type: 'string' } } }, required: ['skill_id'] } } },
   { type: 'function', function: { name: 'delete_skill', description: 'מחיקת סקיל', parameters: { type: 'object', properties: { skill_id: { type: 'string', description: 'מזהה הסקיל (UUID)' } }, required: ['skill_id'] } } },
+  // === GROUP 7: REPORT TABLE TOOLS ===
+  { type: 'function', function: { name: 'list_unconnected_clients', description: 'רשימת לקוחות פעילים שאין להם עדיין טבלת דוח מסוג מסוים (facebook_insights או google_ads) ב-CRM. שימושי לזיהוי לקוחות שצריכים חיבור.', parameters: { type: 'object', properties: { table_type: { type: 'string', enum: ['facebook_insights', 'google_ads'], description: 'סוג הטבלה לבדיקה (ברירת מחדל: facebook_insights)' } } } } },
+  { type: 'function', function: { name: 'create_facebook_report_table', description: 'חיבור חשבון מודעות פייסבוק ללקוח — יוצר טבלת דוח facebook_insights ב-CRM', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח' }, ad_account_id: { type: 'string', description: 'מזהה חשבון מודעות פייסבוק (act_XXXXX)' }, ad_account_name: { type: 'string', description: 'שם חשבון המודעות' } }, required: ['client_id', 'ad_account_id', 'ad_account_name'] } } },
+  { type: 'function', function: { name: 'create_google_ads_table', description: 'חיבור חשבון Google Ads ללקוח — יוצר טבלת דוח google_ads ב-CRM', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח' }, ad_account_id: { type: 'string', description: 'מזהה חשבון Google Ads' }, ad_account_name: { type: 'string', description: 'שם חשבון המודעות' } }, required: ['client_id', 'ad_account_id', 'ad_account_name'] } } },
+  { type: 'function', function: { name: 'batch_create_report_tables', description: 'יצירת מספר טבלאות דוח בבת אחת (Google Ads / Meta). **השתמש בכלי הזה תמיד כשצריך לחבר מספר לקוחות** — חוסך עשרות סבבים.', parameters: { type: 'object', properties: { items: { type: 'array', items: { type: 'object', properties: { client_id: { type: 'string' }, ad_account_id: { type: 'string' }, ad_account_name: { type: 'string' }, type: { type: 'string', enum: ['meta', 'google_ads'] } }, required: ['client_id', 'ad_account_id', 'ad_account_name', 'type'] }, description: 'מערך של חיבורים ליצירה' } }, required: ['items'] } } },
 ];
 
 serve(async (req) => {
@@ -2430,7 +2582,7 @@ serve(async (req) => {
           }
           
           // Execute accumulated tool calls with recursive support (up to 3 rounds)
-          const MAX_TOOL_ROUNDS = 25;
+          const MAX_TOOL_ROUNDS = 50;
           let toolRound = 0;
           let currentToolCalls = { ...toolCallAccumulators };
           let currentFinishReason = finishReason;

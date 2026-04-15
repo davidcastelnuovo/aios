@@ -34,9 +34,10 @@ interface Conversation {
 interface AIOSDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onWorkingChange?: (working: boolean) => void;
 }
 
-export function AIOSDialog({ open, onOpenChange }: AIOSDialogProps) {
+export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogProps) {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const [input, setInput] = useState("");
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
@@ -75,6 +76,10 @@ export function AIOSDialog({ open, onOpenChange }: AIOSDialogProps) {
     },
     enabled: !!userId && open,
   });
+
+  useEffect(() => {
+    onWorkingChange?.(isStreaming);
+  }, [isStreaming, onWorkingChange]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
