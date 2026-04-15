@@ -11,7 +11,11 @@ import { useCurrentTenant } from "@/hooks/useCurrentTenant";
  * משותף בין EditLeadDialog ו-EditClientDialog
  */
 export function useMeetingScheduler(tenantId?: string) {
-  const [meetingDate, setMeetingDate] = useState<Date | undefined>(undefined);
+  const [meetingDate, setMeetingDate] = useState<Date | undefined>(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  });
   const [meetingTime, setMeetingTime] = useState("10:00");
   const [meetingEndTime, setMeetingEndTime] = useState("11:00");
   const [meetingSubject, setMeetingSubject] = useState("");
@@ -127,7 +131,7 @@ export function useMeetingScheduler(tenantId?: string) {
   const getAvailableTimeSlots = () => {
     const allTimeOptions = generateTimeOptions();
 
-    if (!meetingDate || calendarEvents.length === 0) {
+    if (!meetingDate || calendarEvents.length === 0 || calendarError) {
       return allTimeOptions.map(time => ({ time, available: true }));
     }
 
@@ -165,7 +169,7 @@ export function useMeetingScheduler(tenantId?: string) {
 
     const endOptions = generateEndTimeOptions(meetingTime);
 
-    if (calendarEvents.length === 0) {
+    if (calendarEvents.length === 0 || calendarError) {
       return endOptions.map(time => ({ time, available: true }));
     }
 
