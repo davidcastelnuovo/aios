@@ -77,6 +77,10 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
     enabled: !!userId && open,
   });
 
+  useEffect(() => {
+    onWorkingChange?.(isStreaming);
+  }, [isStreaming, onWorkingChange]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
