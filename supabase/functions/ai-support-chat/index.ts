@@ -2378,6 +2378,11 @@ const tools = [
   { type: 'function', function: { name: 'execute_skill', description: 'טעינת סקיל לפי שם והפעלת הצעדים שלו. כשמשתמש מזכיר שם סקיל או אומר "תפעילי סקיל X", טען את הסקיל ובצע את הצעדים.', parameters: { type: 'object', properties: { name: { type: 'string', description: 'שם הסקיל להפעלה' } }, required: ['name'] } } },
   { type: 'function', function: { name: 'update_skill', description: 'עדכון סקיל קיים', parameters: { type: 'object', properties: { skill_id: { type: 'string', description: 'מזהה הסקיל (UUID)' }, name: { type: 'string' }, description: { type: 'string' }, steps: { type: 'string' }, trigger_phrases: { type: 'array', items: { type: 'string' } } }, required: ['skill_id'] } } },
   { type: 'function', function: { name: 'delete_skill', description: 'מחיקת סקיל', parameters: { type: 'object', properties: { skill_id: { type: 'string', description: 'מזהה הסקיל (UUID)' } }, required: ['skill_id'] } } },
+  // === GROUP 7: REPORT TABLE TOOLS ===
+  { type: 'function', function: { name: 'list_unconnected_clients', description: 'רשימת לקוחות פעילים שאין להם עדיין טבלת דוח מסוג מסוים (facebook_insights או google_ads) ב-CRM. שימושי לזיהוי לקוחות שצריכים חיבור.', parameters: { type: 'object', properties: { table_type: { type: 'string', enum: ['facebook_insights', 'google_ads'], description: 'סוג הטבלה לבדיקה (ברירת מחדל: facebook_insights)' } } } } },
+  { type: 'function', function: { name: 'create_facebook_report_table', description: 'חיבור חשבון מודעות פייסבוק ללקוח — יוצר טבלת דוח facebook_insights ב-CRM', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח' }, ad_account_id: { type: 'string', description: 'מזהה חשבון מודעות פייסבוק (act_XXXXX)' }, ad_account_name: { type: 'string', description: 'שם חשבון המודעות' } }, required: ['client_id', 'ad_account_id', 'ad_account_name'] } } },
+  { type: 'function', function: { name: 'create_google_ads_table', description: 'חיבור חשבון Google Ads ללקוח — יוצר טבלת דוח google_ads ב-CRM', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח' }, ad_account_id: { type: 'string', description: 'מזהה חשבון Google Ads' }, ad_account_name: { type: 'string', description: 'שם חשבון המודעות' } }, required: ['client_id', 'ad_account_id', 'ad_account_name'] } } },
+  { type: 'function', function: { name: 'batch_create_report_tables', description: 'יצירת מספר טבלאות דוח בבת אחת (Google Ads / Meta). **השתמש בכלי הזה תמיד כשצריך לחבר מספר לקוחות** — חוסך עשרות סבבים.', parameters: { type: 'object', properties: { items: { type: 'array', items: { type: 'object', properties: { client_id: { type: 'string' }, ad_account_id: { type: 'string' }, ad_account_name: { type: 'string' }, type: { type: 'string', enum: ['meta', 'google_ads'] } }, required: ['client_id', 'ad_account_id', 'ad_account_name', 'type'] }, description: 'מערך של חיבורים ליצירה' } }, required: ['items'] } } },
 ];
 
 serve(async (req) => {
@@ -2576,7 +2581,7 @@ serve(async (req) => {
           }
           
           // Execute accumulated tool calls with recursive support (up to 3 rounds)
-          const MAX_TOOL_ROUNDS = 25;
+          const MAX_TOOL_ROUNDS = 50;
           let toolRound = 0;
           let currentToolCalls = { ...toolCallAccumulators };
           let currentFinishReason = finishReason;
