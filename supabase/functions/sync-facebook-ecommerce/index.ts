@@ -52,25 +52,24 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+    const requestBody = await req.json();
+    const { table_id, _internal_cron } = requestBody;
+
+    // Auth: skip user check when called internally by cron
+    let userId: string | null = null;
+    if (!_internal_cron) {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      userId = user.id;
     }
 
-    const { table_id } = await req.json();
-    
     if (!table_id) {
       return new Response(JSON.stringify({ error: 'table_id required' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
-
-    const { data: tenantId } = await supabase.rpc('get_user_tenant_id', { _user_id: user.id });
-    if (!tenantId) {
-      return new Response(JSON.stringify({ error: 'No tenant found' }), {
-        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
