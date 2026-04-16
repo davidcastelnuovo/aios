@@ -262,6 +262,37 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
   const organicKeywords = useMemo(() => rawOrganic.map(kw => enrichKeyword(kw, effectiveComparison)), [rawOrganic, prevMonthMap, gscMap, effectiveComparison]);
   const trackedKeywords = useMemo(() => rawTracked.map(kw => enrichKeyword(kw, effectiveComparison)), [rawTracked, prevMonthMap, gscMap, effectiveComparison]);
 
+  // Build GSC-only keywords: keywords in GSC that don't exist in Ahrefs data
+  const gscOnlyKeywords = useMemo(() => {
+    if (gscData.length === 0) return [];
+    const ahrefsNames = new Set<string>();
+    for (const kw of rawOrganic) {
+      ahrefsNames.add(String(kw.keyword || '').toLowerCase().trim());
+    }
+    for (const kw of rawTracked) {
+      ahrefsNames.add(String(kw.keyword || '').toLowerCase().trim());
+    }
+    return gscData
+      .filter(g => g.keyword && !ahrefsNames.has(g.keyword.toLowerCase().trim()))
+      .map(g => ({
+        keyword: g.keyword,
+        position: g.position ?? null,
+        traffic: null,
+        volume: null,
+        kd: null,
+        cpc: null,
+        url: g.page || null,
+        position_prev_month: null,
+        position_3month: null,
+        position_yearly: null,
+        gsc_clicks: g.clicks ?? null,
+        gsc_impressions: g.impressions ?? null,
+        gsc_ctr: g.ctr ?? null,
+        gsc_position: g.position ?? null,
+        _source: 'gsc' as const,
+      }));
+  }, [gscData, rawOrganic, rawTracked]);
+
   const domain = reportData?.domain || selectedReport?.domain;
 
   // Load cached comparison data from the database on mount (no API call)
