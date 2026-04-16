@@ -5460,38 +5460,60 @@ export type Database = {
       social_media_wordpress_sites: {
         Row: {
           app_password: string
+          client_id: string | null
           created_at: string
           id: string
           is_active: boolean
+          last_woocommerce_sync_at: string | null
           site_name: string | null
           site_url: string
           tenant_id: string
           updated_at: string
           username: string
+          woocommerce_consumer_key: string | null
+          woocommerce_consumer_secret: string | null
+          woocommerce_enabled: boolean
         }
         Insert: {
           app_password: string
+          client_id?: string | null
           created_at?: string
           id?: string
           is_active?: boolean
+          last_woocommerce_sync_at?: string | null
           site_name?: string | null
           site_url: string
           tenant_id: string
           updated_at?: string
           username: string
+          woocommerce_consumer_key?: string | null
+          woocommerce_consumer_secret?: string | null
+          woocommerce_enabled?: boolean
         }
         Update: {
           app_password?: string
+          client_id?: string | null
           created_at?: string
           id?: string
           is_active?: boolean
+          last_woocommerce_sync_at?: string | null
           site_name?: string | null
           site_url?: string
           tenant_id?: string
           updated_at?: string
           username?: string
+          woocommerce_consumer_key?: string | null
+          woocommerce_consumer_secret?: string | null
+          woocommerce_enabled?: boolean
         }
         Relationships: [
+          {
+            foreignKeyName: "social_media_wordpress_sites_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "social_media_wordpress_sites_tenant_id_fkey"
             columns: ["tenant_id"]
