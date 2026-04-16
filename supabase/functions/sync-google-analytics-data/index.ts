@@ -623,6 +623,96 @@ serve(async (req) => {
       }
     }
 
+    // ====== REPORT 8: Monthly organic traffic history (24 months) ======
+    // This provides the long-term organic traffic trend for SEO reports
+    const monthlyOrganicStartDate = new Date();
+    monthlyOrganicStartDate.setMonth(monthlyOrganicStartDate.getMonth() - 24);
+    const monthlyOrganicRequest = {
+      dateRanges: [{
+        startDate: monthlyOrganicStartDate.toISOString().split('T')[0],
+        endDate: new Date().toISOString().split('T')[0],
+      }],
+      dimensions: [
+        { name: 'yearMonth' },
+        { name: 'sessionDefaultChannelGroup' },
+      ],
+      metrics: [
+        { name: 'sessions' },
+        { name: 'totalUsers' },
+      ],
+      dimensionFilter: {
+        filter: {
+          fieldName: 'sessionDefaultChannelGroup',
+          stringFilter: {
+            matchType: 'EXACT',
+            value: 'Organic Search',
+            caseSensitive: false,
+          },
+        },
+      },
+      orderBys: [{ dimension: { dimensionName: 'yearMonth' }, desc: false }],
+      limit: 100,
+    };
+
+    let monthlyOrganicData: any = { rows: [] };
+    try {
+      const monthlyOrganicResponse = await fetch(
+        `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(monthlyOrganicRequest),
+        }
+      );
+      monthlyOrganicData = await monthlyOrganicResponse.json();
+      if (monthlyOrganicData.error) {
+        console.error('Monthly organic report error:', monthlyOrganicData.error);
+        monthlyOrganicData = { rows: [] };
+      }
+    } catch (e) {
+      console.error('Monthly organic report fetch error:', e);
+    }
+
+    // Process monthly organic data
+    if (monthlyOrganicData.rows) {
+      for (const row of monthlyOrganicData.rows) {
+        const yearMonth = row.dimensionValues[0].value; // YYYYMM
+        const formattedMonth = `${yearMonth.substring(0, 4)}-${yearMonth.substring(4, 6)}`;
+        const sessions = parseInt(row.metricValues[0].value) || 0;
+        const users = parseInt(row.metricValues[1].value) || 0;
+
+        records.push({
+          table_id: tableId,
+          tenant_id: table.tenant_id,
+          agency_id: table.agency_id,
+          data: {
+            report_type: 'monthly_organic',
+            month: formattedMonth,
+            sessions,
+            users,
+            channel_group: 'Organic Search',
+            source_medium: null,
+            date: `${formattedMonth}-01`,
+            page_path: null,
+            event_name: null,
+            event_count: null,
+            key_events: null,
+            new_users: null,
+            pageviews: null,
+            bounce_rate: null,
+            avg_session_duration: null,
+            conversions: null,
+            add_to_cart: null,
+            purchases: null,
+            purchase_value: null,
+          },
+        });
+      }
+    }
+
     // Insert in batches to avoid payload size limits
     const batchSize = 200;
     for (let i = 0; i < records.length; i += batchSize) {

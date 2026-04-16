@@ -82,6 +82,16 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
   // Note: daily_source may be incomplete due to GA API row limits; used for trend chart only
   const gaOrganicByMonth = useMemo(() => {
     if (!gaRecords || gaRecords.length === 0) return [];
+
+    // Prefer monthly_organic records (24-month history from GA sync)
+    const monthlyOrganic = gaRecords
+      .filter((r: any) => r.data?.report_type === 'monthly_organic')
+      .map((r: any) => ({ month: r.data.month as string, sessions: Number(r.data.sessions) || 0 }))
+      .sort((a, b) => a.month.localeCompare(b.month));
+
+    if (monthlyOrganic.length > 0) return monthlyOrganic;
+
+    // Fallback: derive from daily_source records
     const monthMap = new Map<string, number>();
     for (const r of gaRecords) {
       const reportType = r.data?.report_type;
