@@ -269,7 +269,35 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
     };
   }
 
-  const organicKeywords = useMemo(() => rawOrganic.map(kw => enrichKeyword(kw, effectiveComparison)), [rawOrganic, prevMonthMap, gscMap, effectiveComparison]);
+  const organicKeywords = useMemo(() => {
+    const enriched = rawOrganic.map(kw => enrichKeyword(kw, effectiveComparison));
+    // Add keywords from Ahrefs comparison API that don't exist in webhook data
+    const existingNames = new Set<string>();
+    for (const kw of rawOrganic) existingNames.add(String(kw.keyword || '').toLowerCase().trim());
+    for (const kw of rawTracked) existingNames.add(String(kw.keyword || '').toLowerCase().trim());
+    
+    // Merge from both 3-month and yearly comparison maps
+    const comparisonOnly = new Map<string, AhrefsKeyword>();
+    for (const [name, kw] of effectiveComparison.threeMonth) {
+      if (!existingNames.has(name)) comparisonOnly.set(name, kw);
+    }
+    for (const [name, kw] of effectiveComparison.yearly) {
+      if (!existingNames.has(name) && !comparisonOnly.has(name)) comparisonOnly.set(name, kw);
+    }
+    
+    for (const [, kw] of comparisonOnly) {
+      enriched.push(enrichKeyword({
+        keyword: kw.keyword,
+        position: kw.best_position,
+        traffic: kw.sum_traffic,
+        volume: kw.volume,
+        kd: kw.keyword_difficulty,
+        cpc: kw.cpc,
+        url: kw.best_position_url,
+      }, effectiveComparison));
+    }
+    return enriched;
+  }, [rawOrganic, rawTracked, prevMonthMap, gscMap, effectiveComparison]);
   const trackedKeywords = useMemo(() => rawTracked.map(kw => enrichKeyword(kw, effectiveComparison)), [rawTracked, prevMonthMap, gscMap, effectiveComparison]);
 
   // Build GSC-only keywords: keywords in GSC that don't exist in Ahrefs data
