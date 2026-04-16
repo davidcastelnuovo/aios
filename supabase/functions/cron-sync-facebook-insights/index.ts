@@ -35,11 +35,12 @@ interface CampaignStatus {
   objective?: string | null;
 }
 
+const BATCH_SIZE = 8;
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
-
 
   try {
     const supabase = createClient(
@@ -47,20 +48,39 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Get all Facebook Insights tables
-    const { data: tables, error: tablesError } = await supabase
+    // Parse batch params
+    let body: any = {};
+    try { body = await req.json(); } catch {}
+    const batchOffset = body.batch_offset || 0;
+    const tableIds: string[] | null = body.table_ids || null;
+
+    // Get Facebook Insights tables
+    let query = supabase
       .from('crm_tables')
       .select('*')
-      .eq('integration_type', 'facebook_insights');
+      .eq('integration_type', 'facebook_insights')
+      .order('id');
+
+    if (tableIds && tableIds.length > 0) {
+      query = query.in('id', tableIds);
+    }
+
+    const { data: allTables, error: tablesError } = await query;
 
     if (tablesError) {
       console.error('Error fetching tables:', tablesError);
       throw tablesError;
     }
 
+    // Slice for current batch
+    const tables = (allTables || []).slice(batchOffset, batchOffset + BATCH_SIZE);
+    const hasMore = (allTables || []).length > batchOffset + BATCH_SIZE;
 
     const results = {
-      total: tables?.length || 0,
+      total: (allTables || []).length,
+      batch_offset: batchOffset,
+      batch_size: tables.length,
+      has_more: hasMore,
       synced: 0,
       failed: 0,
       errors: [] as string[],
