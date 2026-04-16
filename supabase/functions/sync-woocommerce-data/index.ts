@@ -95,7 +95,10 @@ serve(async (req) => {
     const summaries: any[] = [];
 
     for (const site of sites) {
-      const { id: siteId, tenant_id, site_url, woo_consumer_key, woo_consumer_secret } = site;
+      const { id: siteId, tenant_id, site_url } = site;
+      // Support both legacy (woo_consumer_*) and current (woocommerce_consumer_*) column names
+      const woo_consumer_key = site.woocommerce_consumer_key || site.woo_consumer_key;
+      const woo_consumer_secret = site.woocommerce_consumer_secret || site.woo_consumer_secret;
 
       if (!woo_consumer_key || !woo_consumer_secret) {
         summaries.push({ site_id: siteId, error: "Missing WooCommerce credentials" });
