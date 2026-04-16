@@ -117,7 +117,7 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
         if (!d) return true;
         return String(d).startsWith(currentMonth);
       })
-      .reduce((sum, r) => sum + (Number(r.data?.sessions) || 0), 0);
+      .reduce((sum, r) => sum + (Number(r.data?.users) || Number(r.data?.sessions) || 0), 0);
     if (channelOrganic > 0) return channelOrganic;
     // Fallback: sum from monthly chart data
     if (gaOrganicByMonth.length === 0) return null;
@@ -144,7 +144,7 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
         if (!d) return false; // skip dateless for prev period
         return String(d).startsWith(prevMonth);
       })
-      .reduce((sum, r) => sum + (Number(r.data?.sessions) || 0), 0);
+      .reduce((sum, r) => sum + (Number(r.data?.users) || Number(r.data?.sessions) || 0), 0);
     if (prevOrganic > 0) return prevOrganic;
     if (gaOrganicByMonth.length < 2) return null;
     return gaOrganicByMonth[gaOrganicByMonth.length - 2]?.sessions ?? null;
