@@ -533,13 +533,10 @@ export function GoogleAnalyticsDashboard({
 
     const trafficBreakdown = { organicSessions, paidSessions, otherSessions, organicUsers, paidUsers, organicConversions, paidConversions };
 
-    // Phone call events - use aggregate records (accurate totals) when available, fallback to date-filtered event_total
-    const aggregateEventRecords = records.filter(r => r.data.report_type === 'event_aggregate');
-    const hasAggregateEvents = aggregateEventRecords.length > 0;
-
+    // Phone call events - always use date-filtered event_total records for accurate per-period counts
     const dateFilteredEventRecords = records.filter(r => {
       const reportType = r.data.report_type;
-      if (reportType !== 'event_total' && reportType !== 'event_by_channel') return false;
+      if (reportType !== 'event_total') return false;
       if (!r.data.date) return true;
       try {
         const recordDate = parseISO(r.data.date);
@@ -553,8 +550,7 @@ export function GoogleAnalyticsDashboard({
       }
     });
 
-    // Use aggregate records for totals (they match GA4 UI), or fallback to daily
-    const eventSourceRecords = hasAggregateEvents ? aggregateEventRecords : dateFilteredEventRecords;
+    const eventSourceRecords = dateFilteredEventRecords;
 
     const phoneCallEvents: { eventName: string; total: number }[] = [];
     const phoneEventMap = new Map<string, number>();
