@@ -1,40 +1,46 @@
 
-## Plan: Send Report Update to Client via WhatsApp/Email
 
-### Problem
-The "שלח עדכון ללקוח" button currently opens a generic webhook URL dialog. The user wants it to:
-1. Take a screenshot of only the summary tables (ecommerce + leads campaign summaries)
-2. Open a dialog to choose delivery method (WhatsApp group / Email / Both)
-3. Allow editing the target phone/group or choosing a different one
-4. Allow adding accompanying text with the screenshot
+## Plan: Inline Report Panel in Client Card Reports Tab
 
-### Technical Details
+### What the user wants
+Replace the iframe-based table views in the client card "Reports" tab with an inline report panel that:
+1. Auto-syncs data when entering the tab and captures a screenshot of summary tables
+2. Shows cached/old screenshot while new data loads (with loading indicator)
+3. Includes the same SendReportDialog functionality (WhatsApp group, email, phone, message text, share link) — but embedded inline, not as a modal
+4. Fits within the client card's available space
 
-**1. Install `html-to-image` library**
-- Used to capture DOM elements as PNG images
-- Will add `ref` attributes to the summary table `<Card>` elements to target them for screenshot
+### Technical approach
 
-**2. New component: `src/components/dynamic-tables/SendReportDialog.tsx`**
-- Dialog with:
-  - Preview of captured screenshot(s)
-  - Delivery method selector: WhatsApp / Email / Both (checkboxes)
-  - WhatsApp section: dropdown of tenant's WhatsApp groups (preselect client's linked group if available), editable phone field for direct send
-  - Email section: email input (prefilled from client data if available)
-  - Textarea for accompanying message text
-  - Send button
-- Fetches WhatsApp groups from `whatsapp_groups` table filtered by `tenant_id`
-- Fetches client info (phone, email) from `clients` table using `table.client_id`
+**1. New component: `src/components/clients/ClientReportPanel.tsx`**
+- For each linked table, renders an inline panel (not a dialog) with:
+  - Screenshot preview area (cached image with loading overlay while refreshing)
+  - Send controls: WhatsApp group selector (pre-filled from client's `whatsapp_group_id`), phone input, email input, message textarea, share link indicator
+  - Send button using existing `send-green-api-file` edge function
+- On mount/table change: triggers a sync of the table data (calls the appropriate sync edge function based on `integration_type`), then captures a screenshot via the embed iframe approach or by loading the table view in a hidden container and using `html-to-image`
 
-**3. Update `src/pages/DynamicTableView.tsx`**
-- Add refs to the summary Card elements (ecommerce and lead campaign tables)
-- Replace the webhook dialog state/logic with `SendReportDialog`
-- On button click: capture summary tables as image using `html-to-image`, then open the dialog with the image
-- Pass `table.client_id` and `table.tenant_id` to the dialog
+**2. Screenshot capture approach**
+- Use a hidden iframe loading `?embed=1` for each table
+- Once the iframe loads, use `html-to-image` (`toPng`) to capture it
+- Store the captured blob per table in state
+- Cache the last screenshot blob (or data URL) in `localStorage` keyed by table ID so old images show immediately on re-entry
+- While capturing, show the cached image with a spinning loader overlay
 
-**4. Sending logic**
-- **WhatsApp**: Use existing `send-green-api-file` edge function — send the screenshot image as a file with the caption text, targeting either a group (`groupId`) or direct phone
-- **Email**: Use existing `send-email` or create a simple edge function to send email with image attachment (check if email sending edge function exists)
+**3. Update `ClientTablesTab.tsx`**
+- Replace the iframe-based collapsible rendering with the new `ClientReportPanel` for each table
+- Keep the link/unlink management section as-is
+- Pass `clientId`, `tenantId`, client data to each panel
 
-**5. No database changes needed**
-- All data (groups, clients) already exists
-- Existing edge functions handle WhatsApp file sending
+**4. Auto-sync on tab entry**
+- When `ClientReportPanel` mounts, fire the sync edge function for the table's integration type (facebook_insights → `sync-facebook-insights`, google_ads → `sync-google-ads-data`)
+- After sync completes, reload the iframe and re-capture the screenshot
+- Show a loading state during this process
+
+### Files to change
+- **New**: `src/components/clients/ClientReportPanel.tsx` — inline report panel with screenshot + send controls
+- **Edit**: `src/components/clients/ClientTablesTab.tsx` — replace iframe rendering with `ClientReportPanel`
+
+### Notes
+- Reuses the same WhatsApp/email sending logic from `SendReportDialog`
+- The panel is not a modal — it renders inline within the client card's space
+- Share link lookup uses the same `table_shares` query pattern
+
