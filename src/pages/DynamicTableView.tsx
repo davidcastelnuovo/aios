@@ -2759,7 +2759,7 @@ export default function DynamicTableView() {
                       <Plus className="h-3 w-3" />
                     </Button>
                   </div>
-                </div>
+                </div>}
               </div>
 
               {/* Rows */}
