@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
+import { useUserIntegrations } from "@/hooks/useUserIntegrations";
 import { Loader2, BarChart3, ExternalLink, Search, Zap, AlertCircle, CheckCircle2 } from "lucide-react";
 
 interface GoogleAnalyticsTableDialogProps {
@@ -38,27 +39,17 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
   const [isCreating, setIsCreating] = useState(false);
   const [propertySearch, setPropertySearch] = useState("");
   const [connectionMethod, setConnectionMethod] = useState<"make" | "direct">("make");
+  const [selectedIntegrationId, setSelectedIntegrationId] = useState("");
 
-  // Fetch direct API GA integration
-  const { data: integration, isLoading: integrationLoading } = useQuery({
-    queryKey: ['ga-integration', activeTenantId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', activeTenantId)
-        .eq('integration_type', 'google_analytics')
-        .eq('is_active', true)
-        .order('updated_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (error) throw error;
-      return data;
-    },
-    enabled: open && !!activeTenantId && connectionMethod === "direct",
-    refetchOnMount: 'always',
-  });
+  // Fetch user's own + shared GA integrations
+  const { data: allIntegrations = [], isLoading: integrationLoading } = useUserIntegrations(
+    activeTenantId, 'google_analytics', { enabled: open && connectionMethod === "direct" }
+  );
+  
+  // Use selected or first available integration
+  const integration = selectedIntegrationId 
+    ? allIntegrations.find(i => i.id === selectedIntegrationId) || allIntegrations[0] || null
+    : allIntegrations[0] || null;
 
   // Fetch Make.com integration
   const { data: makeIntegration, isLoading: makeLoading } = useQuery({
@@ -358,7 +349,7 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
                 <Alert>
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
-                    לא נמצא חיבור Google Analytics פעיל
+                    לא נמצא חיבור Google Analytics פעיל (שלך או משותף)
                   </AlertDescription>
                 </Alert>
                 <Button variant="outline" asChild>
@@ -370,6 +361,31 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
               </div>
             ) : (
               <div className="space-y-4">
+                {/* Integration selector when multiple connections available */}
+                {allIntegrations.length > 1 && (
+                  <div className="space-y-2">
+                    <Label>חשבון Google Analytics</Label>
+                    <Select value={selectedIntegrationId || integration?.id || ''} onValueChange={setSelectedIntegrationId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="בחר חשבון" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {allIntegrations.map((integ) => {
+                          const s = integ.settings as Record<string, unknown> | null;
+                          const email = (s?.google_email as string) || 'חשבון לא ידוע';
+                          const isOwn = (integ as any)._isOwn;
+                          const sharedBy = (integ as any)._sharedByName;
+                          return (
+                            <SelectItem key={integ.id} value={integ.id}>
+                              {email} {!isOwn && sharedBy ? `(שותף ע"י ${sharedBy})` : ''}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
                 <div className="space-y-2">
                   <Label>שם הטבלה *</Label>
                   <Input
