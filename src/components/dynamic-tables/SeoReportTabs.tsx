@@ -354,6 +354,9 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                 <GoogleAnalyticsDashboard
                   records={gaRecords}
                   tableId={selectedGaTableId}
+                  defaultReportMode={
+                    (gaTables.find(t => t.id === selectedGaTableId)?.integration_settings as any)?.default_report_mode || 'leads'
+                  }
                 />
               ) : selectedGaTableId ? (
                 <Card>
