@@ -731,11 +731,89 @@ export default function DashboardView() {
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
+    const syncToast = toast.loading('מסנכרן נתונים מכל המקורות...');
     try {
+      // Compute date range for analytics-style syncs (GA / GSC)
+      const computeRange = () => {
+        const now = new Date();
+        const end = new Date(now);
+        const start = new Date(now);
+        switch (dateFilter) {
+          case 'today': break;
+          case 'yesterday': start.setDate(start.getDate() - 1); end.setDate(end.getDate() - 1); break;
+          case 'last_7_days': start.setDate(start.getDate() - 6); break;
+          case 'last_30_days': start.setDate(start.getDate() - 29); break;
+          case 'last_70_days': start.setDate(start.getDate() - 69); break;
+          case 'this_month': start.setDate(1); break;
+          case 'last_month': start.setMonth(start.getMonth() - 1, 1); end.setDate(0); break;
+          default: start.setDate(start.getDate() - 6);
+        }
+        return { startDate: start.toISOString().slice(0, 10), endDate: end.toISOString().slice(0, 10) };
+      };
+      const { startDate, endDate } = computeRange();
+
+      // Build a sync task per table based on integration_type
+      const tableTasks = (tables as any[]).map((t: any) => {
+        switch (t.integration_type) {
+          case 'facebook_insights':
+            return { label: 'Facebook', promise: supabase.functions.invoke('sync-facebook-insights', { method: 'POST', body: { table_id: t.id } }) };
+          case 'facebook_ecommerce':
+            return { label: 'Facebook Ecom', promise: supabase.functions.invoke('sync-facebook-ecommerce', { method: 'POST', body: { table_id: t.id } }) };
+          case 'google_ads':
+            return { label: 'Google Ads', promise: supabase.functions.invoke('sync-google-ads-data', { method: 'POST', body: { table_id: t.id } }) };
+          case 'google_analytics':
+            return { label: 'Google Analytics', promise: supabase.functions.invoke('sync-google-analytics-data', { method: 'POST', body: { tableId: t.id, startDate, endDate } }) };
+          case 'google_search_console':
+            return { label: 'Search Console', promise: supabase.functions.invoke('sync-google-search-console-data', { method: 'POST', body: { tableId: t.id, startDate, endDate } }) };
+          default:
+            return null;
+        }
+      }).filter(Boolean) as { label: string; promise: Promise<any> }[];
+
+      // Fetch WooCommerce sites for this client and sync each
+      const wooTasks: { label: string; promise: Promise<any> }[] = [];
+      if (dashboard?.client_id && currentTenantId) {
+        const { data: sites } = await supabase
+          .from('social_media_wordpress_sites' as any)
+          .select('id, site_name')
+          .eq('client_id', dashboard.client_id)
+          .eq('tenant_id', currentTenantId)
+          .eq('woocommerce_enabled', true)
+          .eq('is_active', true);
+        ((sites as any[]) || []).forEach((s: any) => {
+          wooTasks.push({
+            label: `WooCommerce (${s.site_name})`,
+            promise: supabase.functions.invoke('sync-woocommerce-data', { body: { site_id: s.id } }),
+          });
+        });
+      }
+
+      const allTasks = [...tableTasks, ...wooTasks];
+
+      if (allTasks.length === 0) {
+        await refetchRecords();
+        toast.success('הנתונים רועננו', { id: syncToast });
+        return;
+      }
+
+      const results = await Promise.allSettled(allTasks.map(t => t.promise));
+      const failed: string[] = [];
+      results.forEach((r, i) => {
+        if (r.status === 'rejected' || (r.status === 'fulfilled' && (r.value as any)?.error)) {
+          failed.push(allTasks[i].label);
+        }
+      });
+
+      // Reload data from DB
       await refetchRecords();
-      toast.success('הנתונים רועננו');
-    } catch (error) {
-      toast.error('שגיאה ברענון הנתונים');
+
+      if (failed.length === 0) {
+        toast.success(`סונכרנו ${allTasks.length} מקורות נתונים בהצלחה`, { id: syncToast });
+      } else {
+        toast.warning(`סונכרנו ${allTasks.length - failed.length}/${allTasks.length}. נכשלו: ${failed.join(', ')}`, { id: syncToast });
+      }
+    } catch (error: any) {
+      toast.error('שגיאה ברענון: ' + (error?.message || 'שגיאה לא ידועה'), { id: syncToast });
     } finally {
       setIsRefreshing(false);
     }
