@@ -392,6 +392,26 @@ export default function WordPressSettings() {
         </p>
       </div>
 
+      {agencies.length > 0 && (
+        <div>
+          <Label>סוכנות מקושרת (אופציונלי)</Label>
+          <Select
+            value={form.agency_id || "none"}
+            onValueChange={(v) => setForm({ ...form, agency_id: v === "none" ? "" : v, client_id: "" })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="בחר סוכנות..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">ללא</SelectItem>
+              {agencies.map((a) => (
+                <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       {clients.length > 0 && (
         <div>
           <Label>לקוח מקושר (אופציונלי)</Label>
