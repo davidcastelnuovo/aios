@@ -28,6 +28,7 @@ interface SendReportDialogProps {
   onOpenChange: (open: boolean) => void;
   screenshotBlob: Blob | null;
   tableName: string;
+  tableId: string;
   clientId?: string | null;
   tenantId: string;
 }
