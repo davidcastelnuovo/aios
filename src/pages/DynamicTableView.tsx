@@ -1823,6 +1823,8 @@ export default function DynamicTableView() {
                 size="icon"
                 onClick={() => {
                   setSelectedGoogleAccount(table.integration_settings?.customer_id || '');
+                  setSelectedSyncDateRange(table.integration_settings?.date_range || 'last_30_days');
+                  setSelectedCurrency((table.integration_settings?.currency as CurrencyCode) || 'ILS');
                   setShowGoogleSettingsDialog(true);
                 }}
               >
