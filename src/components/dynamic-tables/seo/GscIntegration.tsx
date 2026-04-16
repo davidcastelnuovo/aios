@@ -82,7 +82,9 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
     staleTime: 5 * 60 * 1000,
   });
 
-  const persistedSiteUrl = selectedSite || settings?.site_url || settings?.siteUrl || "";
+  // Per-client site URL takes priority over global setting
+  const clientSites = settings?.client_sites || {};
+  const persistedSiteUrl = selectedSite || clientSites[clientId] || settings?.site_url || settings?.siteUrl || "";
   const normalizedDomain = normalizeDomain(domain);
   const matchedSite = normalizedDomain
     ? availableSites.find((site) => {
@@ -158,6 +160,7 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
   const updateSiteMutation = useMutation({
     mutationFn: async (siteUrl: string) => {
       if (!gscIntegration?.id) return;
+      const updatedClientSites = { ...clientSites, [clientId]: siteUrl };
       const { error } = await supabase
         .from("tenant_integrations")
         .update({
@@ -165,6 +168,7 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
             ...settings,
             site_url: siteUrl,
             siteUrl: siteUrl,
+            client_sites: updatedClientSites,
             available_sites: availableSites,
           },
         })
