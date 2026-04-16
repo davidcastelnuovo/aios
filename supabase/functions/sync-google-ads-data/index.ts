@@ -347,7 +347,13 @@ Deno.serve(async (req) => {
         const costMicros = parseInt(result.metrics?.costMicros || '0');
         const cost = costMicros / 1000000; // Convert micros to actual currency
         const conversions = parseFloat(result.metrics?.conversions || '0');
-        const conversionsValue = parseFloat(result.metrics?.conversionsValue || '0');
+        const allConversions = parseFloat(result.metrics?.allConversions || '0');
+        const conversionsValueRaw = parseFloat(result.metrics?.conversionsValue || '0');
+        const allConversionsValueRaw = parseFloat(result.metrics?.allConversionsValue || '0');
+        // Prefer all_conversions_value if higher (PMax/offline accounts often report value here only)
+        const conversionsValue = Math.max(conversionsValueRaw, allConversionsValueRaw);
+        // Same logic for conversion COUNT — match Google Ads UI which shows all_conversions
+        const finalConversions = Math.max(conversions, allConversions);
         const roas = cost > 0 ? conversionsValue / cost : 0;
 
         records.push({
@@ -359,7 +365,7 @@ Deno.serve(async (req) => {
           ctr: parseFloat(result.metrics?.ctr || '0') * 100, // Convert to percentage
           cpc: parseInt(result.metrics?.averageCpc || '0') / 1000000,
           cost: cost,
-          conversions,
+          conversions: finalConversions,
           conversions_value: conversionsValue,
           cost_per_conversion: parseInt(result.metrics?.costPerConversion || '0') / 1000000,
           roas: Math.round(roas * 100) / 100,
