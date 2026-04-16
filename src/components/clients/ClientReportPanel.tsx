@@ -178,43 +178,42 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
   const captureScreenshot = useCallback(async () => {
     setIsCapturing(true);
     try {
-      // Wait for iframe content to render
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-
       const iframe = iframeRef.current;
       if (!iframe) {
         setIsCapturing(false);
         return;
       }
 
-      // Access the iframe's inner document (same-origin)
-      const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-      if (!iframeDoc?.body) {
-        console.error("Cannot access iframe document");
-        setIsCapturing(false);
-        return;
-      }
+      // Wait for iframe content to fully render
+      await new Promise((resolve) => setTimeout(resolve, 4000));
 
-      const { toPng } = await import("html-to-image");
-      const targetEl = iframeDoc.querySelector('[data-embed-root]') as HTMLElement || iframeDoc.body;
-      const dataUrl = await toPng(targetEl, {
-        quality: 0.9,
-        pixelRatio: 2,
-        cacheBust: true,
-        width: targetEl.scrollWidth,
-        height: targetEl.scrollHeight,
+      const html2canvas = (await import("html2canvas")).default;
+      
+      // Temporarily make iframe visible for html2canvas to capture
+      const prevStyle = iframe.style.cssText;
+      iframe.style.cssText = "position:fixed;left:0;top:0;width:1200px;height:800px;opacity:0.01;pointer-events:none;z-index:-9999;";
+      
+      const canvas = await html2canvas(iframe.contentDocument?.body || iframe, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        width: 1200,
+        height: 800,
+        logging: false,
       });
+      
+      // Hide iframe again
+      iframe.style.cssText = prevStyle;
 
+      const dataUrl = canvas.toDataURL("image/png", 0.9);
       setScreenshotUrl(dataUrl);
-      // Cache in localStorage (limit size to avoid quota issues)
       try {
         localStorage.setItem(CACHE_KEY_PREFIX + table.id, dataUrl);
-      } catch { /* localStorage full, skip caching */ }
+      } catch { /* localStorage full */ }
 
-      // Convert to blob for sending
-      const res = await fetch(dataUrl);
-      const blob = await res.blob();
-      setScreenshotBlob(blob);
+      canvas.toBlob((blob) => {
+        if (blob) setScreenshotBlob(blob);
+      }, "image/png", 0.9);
     } catch (err) {
       console.error("Screenshot capture error:", err);
     } finally {
