@@ -196,23 +196,24 @@ Deno.serve(async (req) => {
     }
 
     // Fetch insights with actions and action_values for ecommerce data.
-    // IMPORTANT: action_attribution_windows is set to ['1d_click'] to match what Facebook Ads
-    // Manager displays by default for "Today" view. Without this, the API defaults to a wider
-    // window (7d_click,1d_view) and returns inflated conversion counts vs. what users see in UI.
-    // use_unified_attribution_setting=true forces FB to use the ad account's default attribution.
-    const insightsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/insights?level=campaign&fields=campaign_id,campaign_name,impressions,clicks,cpm,ctr,actions,action_values,spend&time_range={"since":"${sinceStr}","until":"${untilStr}"}&time_increment=1&use_unified_attribution_setting=true&limit=500&access_token=${accessToken}`;
+    // IMPORTANT: action_attribution_windows=['7d_click'] aligns with the default attribution
+    // setting in Facebook Ads Manager UI for most accounts (post-iOS14). This avoids inflated
+    // conversion counts that we'd get with the wider 7d_click+1d_view window.
+    const insightsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/insights?level=campaign&fields=campaign_id,campaign_name,impressions,clicks,cpm,ctr,actions,action_values,spend&time_range={"since":"${sinceStr}","until":"${untilStr}"}&time_increment=1&action_attribution_windows=["7d_click"]&limit=500&access_token=${accessToken}`;
     
     console.log('Facebook insights URL (no token):', insightsUrl.replace(accessToken, 'REDACTED'));
     const response = await fetch(insightsUrl);
     const data = await response.json();
     
-    // Log raw actions for first campaign for debugging
+    // Log raw actions for first campaign for debugging — full breakdown of all action_types
     if (data.data?.[0]) {
-      console.log('Sample raw insight:', JSON.stringify({
+      console.log('Sample raw insight (FULL):', JSON.stringify({
         campaign: data.data[0].campaign_name,
-        actions: data.data[0].actions,
-        action_values: data.data[0].action_values,
-      }));
+        date: data.data[0].date_start,
+        spend: data.data[0].spend,
+        all_actions: data.data[0].actions,
+        all_action_values: data.data[0].action_values,
+      }, null, 2));
     }
 
     if (data.error) {
