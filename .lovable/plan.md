@@ -1,29 +1,25 @@
 
 
-## Plan: Supplement Ahrefs Keywords with GSC-only Keywords
+## Plan: Embed Mode for Dynamic Tables in Client Card
 
 ### Problem
-The SEO keywords table only shows keywords from Ahrefs. GSC often indexes additional keywords that Ahrefs doesn't track. These GSC-only keywords are fetched but silently discarded because they don't match any Ahrefs keyword.
+Currently, tables in the client "Reports" tab are loaded via iframe with `?embed=1`, but `DynamicTableView.tsx` doesn't handle this parameter. The full page renders — including header, back button, sync controls, settings dialogs, alerts, and column management — creating a cluttered experience inside the client card.
 
 ### Solution
-After merging Ahrefs keywords, add any remaining GSC keywords that don't already exist in the Ahrefs data. These will appear with GSC metrics (clicks, impressions, CTR, position) and empty Ahrefs-specific fields (traffic, volume, KD, CPC).
+Add `embed` query parameter support to `DynamicTableView.tsx` that strips away everything except the core data table/dashboard content.
 
 ### Technical Details
 
-**File: `src/components/dynamic-tables/SeoDashboardView.tsx`**
-1. After building `organicKeywords` and `trackedKeywords`, create a set of all Ahrefs keyword names (lowercased)
-2. Loop through `gscData` — for each keyword NOT in the Ahrefs set, create a new keyword object with:
-   - `keyword`, `position` (from GSC), `gsc_clicks`, `gsc_impressions`, `gsc_ctr`, `gsc_position`
-   - `traffic`, `volume`, `kd`, `cpc`, `url` = null (no Ahrefs data)
-   - Mark with a flag like `_source: 'gsc'` for potential UI differentiation
-3. Pass these GSC-only keywords as additional entries — either append to `organicKeywords` or pass as a new prop
+**File: `src/pages/DynamicTableView.tsx`**
+1. Read `embed` from `useSearchParams` at the top of the component
+2. When `embed=1`:
+   - Hide the title row (h1, badges, description)
+   - Hide the controls row (back button, sync buttons, settings, dropdown menu)
+   - Hide alerts (scenario clone, no-data warnings)
+   - Hide the "add column" and "delete row" UI elements
+   - Hide all settings/delete dialogs
+   - Keep only: date filter (compact), campaign search, the data table itself, and integration dashboards (GA, GSC, SEO, Facebook summary)
+   - Remove container padding (`py-8 px-4` → `py-2 px-2`)
 
-**File: `src/components/dynamic-tables/seo/SeoKeywordsTable.tsx`**
-- The table already handles null values gracefully (shows "—"), so GSC-only rows will display correctly
-- Optionally add a small badge/indicator for GSC-only keywords to differentiate them from Ahrefs keywords
-
-### Impact
-- No database changes needed
-- No edge function changes needed
-- GSC data is already being fetched — this just uses the data that's currently being discarded
+This is a single-file change. The iframe in `ClientTablesTab.tsx` already passes `?embed=1` so no other changes needed.
 
