@@ -212,6 +212,8 @@ Deno.serve(async (req) => {
     );
 
     let searchData = await searchResponse.json();
+    console.log(`[sync-google-ads] table=${table_id} customer=${customerId} login=${loginCustomerId} status=${searchResponse.status} dateRange=${startDate.toISOString().split('T')[0]}..${endDate.toISOString().split('T')[0]}`);
+    console.log(`[sync-google-ads] response preview:`, JSON.stringify(searchData).slice(0, 800));
 
     // If failed and no manager_id was set, try to discover the MCC
     if (searchData.error && !settings.manager_id) {
