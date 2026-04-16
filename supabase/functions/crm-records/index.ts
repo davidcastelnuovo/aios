@@ -6,76 +6,125 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
 };
 
+const APP_TIME_ZONE = Deno.env.get('APP_TIME_ZONE') ?? 'Asia/Jerusalem';
+
+function getDateStringInTimeZone(date: Date, timeZone = APP_TIME_ZONE): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+
+  const year = parts.find((part) => part.type === 'year')?.value;
+  const month = parts.find((part) => part.type === 'month')?.value;
+  const day = parts.find((part) => part.type === 'day')?.value;
+
+  if (!year || !month || !day) {
+    throw new Error('Failed to resolve date parts for date filtering');
+  }
+
+  return `${year}-${month}-${day}`;
+}
+
+function shiftDateString(dateString: string, days: number): string {
+  const [year, month, day] = dateString.split('-').map(Number);
+  const utcDate = new Date(Date.UTC(year, month - 1, day));
+  utcDate.setUTCDate(utcDate.getUTCDate() + days);
+  return utcDate.toISOString().split('T')[0];
+}
+
+function getMonthStart(dateString: string): string {
+  return `${dateString.slice(0, 7)}-01`;
+}
+
+function getWeekdayIndexInTimeZone(date: Date, timeZone = APP_TIME_ZONE): number {
+  const weekday = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    weekday: 'short',
+  }).format(date);
+
+  const weekdayMap: Record<string, number> = {
+    Sun: 0,
+    Mon: 1,
+    Tue: 2,
+    Wed: 3,
+    Thu: 4,
+    Fri: 5,
+    Sat: 6,
+  };
+
+  return weekdayMap[weekday] ?? 0;
+}
+
 // Helper to get date range for filtering
 function getDateRange(filter: string, customFrom?: string, customTo?: string): { startDate: string | null; endDate: string | null } {
   const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const today = getDateStringInTimeZone(now);
+  const dayOfWeek = getWeekdayIndexInTimeZone(now);
   let startDate: string | null = null;
   let endDate: string | null = null;
-  
+
   switch (filter) {
     case 'today':
-      startDate = today.toISOString().split('T')[0];
-      endDate = startDate;
+      startDate = today;
+      endDate = today;
       break;
-    case 'yesterday':
-      const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
-      startDate = yesterday.toISOString().split('T')[0];
-      endDate = startDate;
+    case 'yesterday': {
+      const yesterday = shiftDateString(today, -1);
+      startDate = yesterday;
+      endDate = yesterday;
       break;
+    }
     case 'this_week':
-      // Start of current week (Sunday)
-      const dayOfWeek = now.getDay();
-      const startOfThisWeek = new Date(today.getTime() - dayOfWeek * 24 * 60 * 60 * 1000);
-      startDate = startOfThisWeek.toISOString().split('T')[0];
-      endDate = today.toISOString().split('T')[0];
+      startDate = shiftDateString(today, -dayOfWeek);
+      endDate = today;
       break;
-    case 'last_week':
-      // Previous complete week (Sunday to Saturday)
-      const currentDayOfWeek = now.getDay();
-      const endOfLastWeek = new Date(today.getTime() - (currentDayOfWeek + 1) * 24 * 60 * 60 * 1000);
-      const startOfLastWeek = new Date(endOfLastWeek.getTime() - 6 * 24 * 60 * 60 * 1000);
-      startDate = startOfLastWeek.toISOString().split('T')[0];
-      endDate = endOfLastWeek.toISOString().split('T')[0];
+    case 'last_week': {
+      const endOfLastWeek = shiftDateString(today, -(dayOfWeek + 1));
+      const startOfLastWeek = shiftDateString(endOfLastWeek, -6);
+      startDate = startOfLastWeek;
+      endDate = endOfLastWeek;
       break;
+    }
     case 'last_7_days':
-      startDate = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      endDate = today.toISOString().split('T')[0];
+      startDate = shiftDateString(today, -6);
+      endDate = today;
       break;
     case 'last_14_days':
-      startDate = new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      endDate = today.toISOString().split('T')[0];
+      startDate = shiftDateString(today, -13);
+      endDate = today;
       break;
     case 'last_30_days':
-      startDate = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      endDate = today.toISOString().split('T')[0];
+      startDate = shiftDateString(today, -29);
+      endDate = today;
       break;
     case 'last_70_days':
-      startDate = new Date(today.getTime() - 70 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      endDate = today.toISOString().split('T')[0];
+      startDate = shiftDateString(today, -69);
+      endDate = today;
       break;
     case 'this_month':
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      startDate = startOfMonth.toISOString().split('T')[0];
-      endDate = today.toISOString().split('T')[0];
+      startDate = getMonthStart(today);
+      endDate = today;
       break;
-    case 'last_month':
-      const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
-      startDate = startOfLastMonth.toISOString().split('T')[0];
-      endDate = endOfLastMonth.toISOString().split('T')[0];
+    case 'last_month': {
+      const startOfCurrentMonth = getMonthStart(today);
+      const endOfLastMonth = shiftDateString(startOfCurrentMonth, -1);
+      startDate = getMonthStart(endOfLastMonth);
+      endDate = endOfLastMonth;
       break;
+    }
     case 'last_90_days':
-      startDate = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      endDate = today.toISOString().split('T')[0];
+      startDate = shiftDateString(today, -89);
+      endDate = today;
       break;
     case 'last_180_days':
-      startDate = new Date(today.getTime() - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      endDate = today.toISOString().split('T')[0];
+      startDate = shiftDateString(today, -179);
+      endDate = today;
       break;
     case 'last_365_days':
-      startDate = new Date(today.getTime() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      endDate = today.toISOString().split('T')[0];
+      startDate = shiftDateString(today, -364);
+      endDate = today;
       break;
     case 'custom':
       if (customFrom && customTo) {
@@ -84,7 +133,7 @@ function getDateRange(filter: string, customFrom?: string, customTo?: string): {
       }
       break;
   }
-  
+
   return { startDate, endDate };
 }
 
