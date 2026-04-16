@@ -95,8 +95,10 @@ export default function DynamicTableView() {
   const queryClient = useQueryClient();
   
   const [newColumnName, setNewColumnName] = useState("");
-  const [webhookUrl, setWebhookUrl] = useState("");
-  const [showWebhookDialog, setShowWebhookDialog] = useState(false);
+  const [showSendReportDialog, setShowSendReportDialog] = useState(false);
+  const [reportScreenshotBlob, setReportScreenshotBlob] = useState<Blob | null>(null);
+  const [isCapturingScreenshot, setIsCapturingScreenshot] = useState(false);
+  const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [selectedAdAccount, setSelectedAdAccount] = useState<string>("");
   const [adAccountSearch, setAdAccountSearch] = useState("");
