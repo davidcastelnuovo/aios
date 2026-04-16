@@ -2617,6 +2617,7 @@ export default function DynamicTableView() {
           })()}
         </Card>
       )}
+      </div>
 
       {/* Google Analytics Dashboard */}
       {hasGoogleAnalytics && filteredRecords && filteredRecords.length > 0 && (
