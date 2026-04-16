@@ -335,9 +335,20 @@ Deno.serve(async (req) => {
         costPerLead = spend / leads;
       }
 
-      const purchases = getActionCount(purchaseActionTypes);
-      const purchaseValue = getActionValue(purchaseActionTypes);
-      const addToCart = getActionCount(addToCartActionTypes);
+      // Pick the first matching action_type (deduplicated) instead of summing all,
+      // to mirror Facebook Ads Manager's "Purchases" / "Website purchases" column.
+      const pickFirstAvailable = (priority: string[]) => {
+        for (const type of priority) {
+          if (actionTypeSet.has(type)) return [type];
+        }
+        return [];
+      };
+      const effectivePurchaseTypes = pickFirstAvailable(purchaseActionTypePriority);
+      const effectiveAddToCartTypes = pickFirstAvailable(addToCartActionTypePriority);
+
+      const purchases = getActionCount(effectivePurchaseTypes);
+      const purchaseValue = getActionValue(effectivePurchaseTypes);
+      const addToCart = getActionCount(effectiveAddToCartTypes);
       const roas = spend > 0 ? purchaseValue / spend : 0;
 
       // Get campaign status
