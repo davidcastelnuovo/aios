@@ -2151,28 +2151,42 @@ export default function DynamicTableView() {
                   <p className="text-xs text-muted-foreground mt-1">ניתן להזין ידנית או לבחור מהרשימה למעלה</p>
                 </div>
                 <Button 
-                  onClick={() => {
+                  onClick={async () => {
                     if (!table?.id || !selectedGoogleAccount) return;
                     const cleanId = selectedGoogleAccount.replace(/\D/g, '');
-                    supabase
-                      .from('crm_tables')
-                      .update({
-                        integration_settings: {
-                          ...table.integration_settings,
-                          customer_id: cleanId,
-                          date_range: selectedSyncDateRange,
+                    try {
+                      const { error: tableError } = await supabase
+                        .from('crm_tables')
+                        .update({
+                          integration_settings: {
+                            ...table.integration_settings,
+                            customer_id: cleanId,
+                            date_range: selectedSyncDateRange,
+                          }
+                        })
+                        .eq('id', table.id);
+                      if (tableError) throw tableError;
+
+                      // Also link the account to the client card so syncs/refresh work
+                      const linkedClientId = table.client_id || table.integration_settings?.clientId;
+                      if (linkedClientId) {
+                        const { error: clientError } = await supabase
+                          .from('clients')
+                          .update({ google_ads_account_id: cleanId })
+                          .eq('id', linkedClientId);
+                        if (clientError) {
+                          console.error('Failed to link account to client:', clientError);
+                          toast.warning('הטבלה עודכנה, אך השיוך ללקוח נכשל: ' + clientError.message);
                         }
-                      })
-                      .eq('id', table.id)
-                      .then(({ error }) => {
-                        if (error) {
-                          toast.error('שגיאה בעדכון: ' + error.message);
-                        } else {
-                          queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
-                          setShowGoogleSettingsDialog(false);
-                          toast.success('הגדרות Google Ads עודכנו בהצלחה');
-                        }
-                      });
+                      }
+
+                      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+                      queryClient.invalidateQueries({ queryKey: ['clients'] });
+                      setShowGoogleSettingsDialog(false);
+                      toast.success(linkedClientId ? 'הגדרות נשמרו ושויכו ללקוח' : 'הגדרות Google Ads עודכנו בהצלחה');
+                    } catch (err: any) {
+                      toast.error('שגיאה בעדכון: ' + (err?.message || String(err)));
+                    }
                   }}
                   disabled={!selectedGoogleAccount}
                   className="w-full"
