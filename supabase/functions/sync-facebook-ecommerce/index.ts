@@ -195,11 +195,25 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Fetch insights with actions and action_values for ecommerce data
-    const insightsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/insights?level=campaign&fields=campaign_id,campaign_name,impressions,clicks,cpm,ctr,actions,action_values,spend&time_range={"since":"${sinceStr}","until":"${untilStr}"}&time_increment=1&limit=500&access_token=${accessToken}`;
+    // Fetch insights with actions and action_values for ecommerce data.
+    // IMPORTANT: action_attribution_windows is set to ['1d_click'] to match what Facebook Ads
+    // Manager displays by default for "Today" view. Without this, the API defaults to a wider
+    // window (7d_click,1d_view) and returns inflated conversion counts vs. what users see in UI.
+    // use_unified_attribution_setting=true forces FB to use the ad account's default attribution.
+    const insightsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/insights?level=campaign&fields=campaign_id,campaign_name,impressions,clicks,cpm,ctr,actions,action_values,spend&time_range={"since":"${sinceStr}","until":"${untilStr}"}&time_increment=1&use_unified_attribution_setting=true&limit=500&access_token=${accessToken}`;
     
+    console.log('Facebook insights URL (no token):', insightsUrl.replace(accessToken, 'REDACTED'));
     const response = await fetch(insightsUrl);
     const data = await response.json();
+    
+    // Log raw actions for first campaign for debugging
+    if (data.data?.[0]) {
+      console.log('Sample raw insight:', JSON.stringify({
+        campaign: data.data[0].campaign_name,
+        actions: data.data[0].actions,
+        action_values: data.data[0].action_values,
+      }));
+    }
 
     if (data.error) {
       console.error('Facebook API error:', data.error);
