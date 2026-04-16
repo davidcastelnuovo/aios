@@ -44,8 +44,8 @@ interface WordPressSite {
   site_name: string | null;
   is_active: boolean;
   woocommerce_enabled: boolean;
-  woo_consumer_key: string | null;
-  woo_consumer_secret: string | null;
+  woocommerce_consumer_key: string | null;
+  woocommerce_consumer_secret: string | null;
   woo_last_sync_at: string | null;
   woo_sync_enabled: boolean;
   client_id: string | null;
