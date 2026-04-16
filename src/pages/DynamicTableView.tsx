@@ -2103,6 +2103,96 @@ export default function DynamicTableView() {
             </DialogContent>
           </Dialog>
 
+          {/* Google Ads Settings Dialog */}
+          <Dialog open={showGoogleSettingsDialog} onOpenChange={setShowGoogleSettingsDialog}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>הגדרות Google Ads</DialogTitle>
+                <DialogDescription>שנה את חשבון Google Ads המסונכרן</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label>חשבון Google Ads</Label>
+                  {googleAccountsLoading ? (
+                    <Skeleton className="h-10 w-full" />
+                  ) : (
+                    <Select 
+                      value={selectedGoogleAccount} 
+                      onValueChange={setSelectedGoogleAccount}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="בחר חשבון Google Ads" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(Array.isArray(googleAdsAccounts) ? googleAdsAccounts : []).map((account: any) => (
+                          <SelectItem key={account.id} value={String(account.id)}>
+                            {account.name} ({account.id})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+                <div>
+                  <Label>טווח סנכרון</Label>
+                  <Select 
+                    value={selectedSyncDateRange} 
+                    onValueChange={setSelectedSyncDateRange}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="בחר טווח זמן" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {syncDateRangeOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>מזהה חשבון נוכחי</Label>
+                  <Input 
+                    value={selectedGoogleAccount} 
+                    onChange={(e) => setSelectedGoogleAccount(e.target.value)}
+                    placeholder="הזן מזהה חשבון Google Ads"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">ניתן להזין ידנית או לבחור מהרשימה למעלה</p>
+                </div>
+                <Button 
+                  onClick={() => {
+                    if (!table?.id || !selectedGoogleAccount) return;
+                    const cleanId = selectedGoogleAccount.replace(/\D/g, '');
+                    supabase
+                      .from('crm_tables')
+                      .update({
+                        integration_settings: {
+                          ...table.integration_settings,
+                          customer_id: cleanId,
+                          date_range: selectedSyncDateRange,
+                        }
+                      })
+                      .eq('id', table.id)
+                      .then(({ error }) => {
+                        if (error) {
+                          toast.error('שגיאה בעדכון: ' + error.message);
+                        } else {
+                          queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+                          setShowGoogleSettingsDialog(false);
+                          toast.success('הגדרות Google Ads עודכנו בהצלחה');
+                        }
+                      });
+                  }}
+                  disabled={!selectedGoogleAccount}
+                  className="w-full"
+                >
+                  שמור שינויים
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+
           {table?.id && table?.tenant_id && (
             <ShareTableDialog tableId={table.id} tableName={table.name} tenantId={table.tenant_id} />
           )}
