@@ -8,6 +8,29 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { Share2, Copy, Plus, Trash2 } from "lucide-react";
 
+function generateReadableToken(tableName: string): string {
+  // Transliterate Hebrew to English-ish, keep ASCII
+  const hebrewMap: Record<string, string> = {
+    'א': 'a', 'ב': 'b', 'ג': 'g', 'ד': 'd', 'ה': 'h', 'ו': 'v', 'ז': 'z',
+    'ח': 'ch', 'ט': 't', 'י': 'y', 'כ': 'k', 'ך': 'k', 'ל': 'l', 'מ': 'm',
+    'ם': 'm', 'נ': 'n', 'ן': 'n', 'ס': 's', 'ע': 'a', 'פ': 'p', 'ף': 'f',
+    'צ': 'ts', 'ץ': 'ts', 'ק': 'k', 'ר': 'r', 'ש': 'sh', 'ת': 't',
+  };
+  const transliterated = tableName
+    .split('')
+    .map(ch => hebrewMap[ch] || ch)
+    .join('');
+  const slug = transliterated
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 40);
+  const shortId = Math.random().toString(36).slice(2, 8);
+  return `${slug || 'report'}-${shortId}`;
+}
+
 interface ShareTableDialogProps {
   tableId: string;
   tableName: string;
@@ -37,6 +60,7 @@ export function ShareTableDialog({ tableId, tableName, tenantId }: ShareTableDia
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
+      const readableToken = generateReadableToken(tableName);
       const { data, error } = await supabase
         .from("table_shares" as any)
         .insert({
@@ -44,6 +68,7 @@ export function ShareTableDialog({ tableId, tableName, tenantId }: ShareTableDia
           tenant_id: tenantId,
           created_by: user.id,
           allowed_emails: [],
+          share_token: readableToken,
         } as any)
         .select()
         .single();
