@@ -12,6 +12,7 @@ import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { TableCardAlerts } from "@/components/dynamic-tables/TableCardAlerts";
+import { ClientReportPanel } from "@/components/clients/ClientReportPanel";
 import { toast } from "sonner";
 
 interface ClientTablesTabProps {
@@ -295,12 +296,11 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
               </div>
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <div className="border-t">
-                <iframe
-                  src={`${window.location.origin}${buildPath(`/table/${table.slug}?embed=1`)}`}
-                  className="w-full border-0"
-                  style={{ height: '500px' }}
-                  title={table.name}
+              <div className="border-t p-3">
+                <ClientReportPanel
+                  table={table}
+                  clientId={clientId}
+                  tenantId={tenantId || ""}
                 />
               </div>
             </CollapsibleContent>
