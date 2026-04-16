@@ -103,8 +103,9 @@ export function SendReportDialog({
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (data?.share_token) {
-        return `https://after-lead.lovable.app/shared/table/${data.share_token}`;
+      const shareData = data as any;
+      if (shareData?.share_token) {
+        return `https://after-lead.lovable.app/shared/table/${shareData.share_token}`;
       }
       return null;
     },
