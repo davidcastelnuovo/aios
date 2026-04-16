@@ -99,6 +99,9 @@ export default function DynamicTableView() {
   const [reportScreenshotBlob, setReportScreenshotBlob] = useState<Blob | null>(null);
   const [isCapturingScreenshot, setIsCapturingScreenshot] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
+  const [debugDialogOpen, setDebugDialogOpen] = useState(false);
+  const [debugData, setDebugData] = useState<any>(null);
+  const [debugLoading, setDebugLoading] = useState(false);
   const [selectedAdAccount, setSelectedAdAccount] = useState<string>("");
   const [adAccountSearch, setAdAccountSearch] = useState("");
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
