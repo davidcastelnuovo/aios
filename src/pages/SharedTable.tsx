@@ -12,7 +12,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { FileSpreadsheet, Facebook, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { FileSpreadsheet, Facebook, TrendingUp, TrendingDown, Minus, Globe } from "lucide-react";
+import { PublicSeoView } from "@/components/dynamic-tables/PublicSeoView";
 
 const DATE_FILTERS = [
   { value: 'today', label: 'היום' },
@@ -219,6 +220,26 @@ export default function SharedTable() {
   }
 
   if (!data?.table) return null;
+
+  // SEO/Ahrefs tables: render the visual SEO dashboard instead of the raw table
+  if (integrationType === "ahrefs") {
+    return (
+      <div className="min-h-screen bg-background" dir="rtl">
+        <div className="w-full max-w-7xl mx-auto p-4 md:p-6 space-y-6">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <Globe className="h-5 w-5 text-primary" />
+              <h1 className="text-xl md:text-2xl font-bold">{data.table.name}</h1>
+            </div>
+          </div>
+          <PublicSeoView
+            tableName={data.table.name}
+            reports={data.ahrefs_reports || []}
+          />
+        </div>
+      </div>
+    );
+  }
 
   const formatCellValue = (value: any) => {
     if (value === null || value === undefined) return '—';
