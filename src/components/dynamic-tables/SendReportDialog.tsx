@@ -242,32 +242,28 @@ export function SendReportDialog({
           {sendWhatsApp && (
             <div className="space-y-3 p-3 border rounded-lg bg-muted/30">
               <div>
-                <Label htmlFor="whatsapp-group" className="text-sm">קבוצת וואטסאפ</Label>
-                <Select value={selectedGroupId} onValueChange={setSelectedGroupId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="בחר קבוצה..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">ללא קבוצה - שלח לטלפון</SelectItem>
-                    {groups?.map((group) => (
-                      <SelectItem key={group.id} value={group.id}>
-                        {group.group_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label className="text-sm">קבוצת וואטסאפ (חיפוש לפי שם)</Label>
+                <GroupCombobox
+                  groups={groups || []}
+                  value={selectedGroupId}
+                  onChange={setSelectedGroupId}
+                />
               </div>
-              {(!selectedGroupId || selectedGroupId === "__none__") && (
-                <div>
-                  <Label htmlFor="direct-phone" className="text-sm">מספר טלפון</Label>
-                  <Input
-                    id="direct-phone"
-                    value={directPhone}
-                    onChange={(e) => setDirectPhone(e.target.value)}
-                    placeholder="05xxxxxxxx"
-                  />
-                </div>
-              )}
+              <div>
+                <Label htmlFor="direct-phone" className="text-sm">
+                  או מספר טלפון ישיר
+                </Label>
+                <Input
+                  id="direct-phone"
+                  value={directPhone}
+                  onChange={(e) => setDirectPhone(e.target.value)}
+                  placeholder="05xxxxxxxx"
+                  dir="ltr"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  אם נבחרה קבוצה — היא תקבל עדיפות. אחרת תישלח הודעה למספר.
+                </p>
+              </div>
             </div>
           )}
 
