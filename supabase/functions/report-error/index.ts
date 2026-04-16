@@ -35,7 +35,6 @@ Deno.serve(async (req) => {
         source: source || 'frontend',
         error_message,
         error_stack: error_stack || null,
-        context: context || {},
         url: url || null,
         user_id: userId,
       })
