@@ -181,10 +181,7 @@ export default function WordPressSettings() {
         woocommerce_consumer_secret: values.woo_consumer_secret || null,
         woo_sync_enabled: values.woo_sync_enabled,
         client_id: values.client_id || null,
-      };
-      const { error } = await supabase
-        .from("social_media_wordpress_sites" as any)
-        .insert(payload);
+        agency_id: values.agency_id || null,
       if (error) throw error;
     },
     onSuccess: () => {
