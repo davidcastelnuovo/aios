@@ -304,10 +304,10 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
   const gscOnlyKeywords = useMemo(() => {
     if (gscData.length === 0) return [];
     const ahrefsNames = new Set<string>();
-    for (const kw of rawOrganic) {
+    for (const kw of organicKeywords) {
       ahrefsNames.add(String(kw.keyword || '').toLowerCase().trim());
     }
-    for (const kw of rawTracked) {
+    for (const kw of trackedKeywords) {
       ahrefsNames.add(String(kw.keyword || '').toLowerCase().trim());
     }
     return gscData
