@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 interface SeoKeywordsTableProps {
   keywords: any[];
   trackedKeywords?: any[];
+  gscOnlyKeywords?: any[];
   hasGscData?: boolean;
   show3Month?: boolean;
   showYearly?: boolean;
@@ -32,7 +33,14 @@ function KeywordRow({ kw, show3Month, showYearly, showPrevMonth, showGsc }: { kw
 
   return (
     <tr className="border-b last:border-0 hover:bg-muted/30">
-      <td className="p-3 font-medium text-right">{String(kw.keyword || '')}</td>
+      <td className="p-3 font-medium text-right">
+        <span className="inline-flex items-center gap-1.5">
+          {String(kw.keyword || '')}
+          {kw._source === 'gsc' && (
+            <Badge variant="outline" className="text-[10px] px-1 py-0 font-normal text-muted-foreground">GSC</Badge>
+          )}
+        </span>
+      </td>
       <td className="p-3 text-center">
         {kw.position != null ? (
           <Badge variant={kw.position <= 3 ? 'default' : kw.position <= 10 ? 'secondary' : 'outline'} className="font-mono">
@@ -137,12 +145,19 @@ function KeywordTable({ keywords, title, icon, show3Month, showYearly, showPrevM
   );
 }
 
-export function SeoKeywordsTable({ keywords, trackedKeywords = [], hasGscData = false, show3Month = false, showYearly = false }: SeoKeywordsTableProps) {
-  // Merge all keywords (tracked + organic), deduplicate by keyword name
+export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywords = [], hasGscData = false, show3Month = false, showYearly = false }: SeoKeywordsTableProps) {
+  // Merge all keywords (tracked + organic + gsc-only), deduplicate by keyword name
   const allKeywords = [...trackedKeywords];
   const trackedNames = new Set(trackedKeywords.map((k: any) => String(k.keyword || '').toLowerCase()));
   for (const kw of keywords) {
     if (!trackedNames.has(String(kw.keyword || '').toLowerCase())) {
+      allKeywords.push(kw);
+    }
+  }
+  // Add GSC-only keywords (already deduplicated against Ahrefs in SeoDashboardView)
+  const allNames = new Set(allKeywords.map((k: any) => String(k.keyword || '').toLowerCase()));
+  for (const kw of gscOnlyKeywords) {
+    if (!allNames.has(String(kw.keyword || '').toLowerCase())) {
       allKeywords.push(kw);
     }
   }
@@ -191,6 +206,9 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], hasGscData = 
               <Badge variant="default" className="text-xs">🎯 {trackedKeywords.length} tracked</Badge>
             )}
             <Badge variant="outline" className="text-xs">{keywords.length} אורגניות</Badge>
+            {gscOnlyKeywords.length > 0 && (
+              <Badge variant="outline" className="text-xs border-blue-300 text-blue-600">🔍 {gscOnlyKeywords.length} GSC בלבד</Badge>
+            )}
           </div>
         </CardTitle>
       </CardHeader>
