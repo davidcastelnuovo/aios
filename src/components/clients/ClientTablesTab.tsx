@@ -296,12 +296,11 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
               </div>
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <div className="border-t">
-                <iframe
-                  src={`${window.location.origin}${buildPath(`/table/${table.slug}?embed=1`)}`}
-                  className="w-full border-0"
-                  style={{ height: '500px' }}
-                  title={table.name}
+              <div className="border-t p-3">
+                <ClientReportPanel
+                  table={table}
+                  clientId={clientId}
+                  tenantId={tenantId || ""}
                 />
               </div>
             </CollapsibleContent>
