@@ -49,6 +49,7 @@ interface WordPressSite {
   woo_last_sync_at: string | null;
   woo_sync_enabled: boolean;
   client_id: string | null;
+  agency_id: string | null;
   notes: string | null;
   created_at: string;
 }
@@ -75,6 +76,7 @@ const emptyForm = {
   woo_consumer_secret: "",
   woo_sync_enabled: false,
   tenant_id: "",
+  agency_id: "",
   client_id: "",
 };
 
@@ -105,17 +107,36 @@ export default function WordPressSettings() {
     enabled: isSuperAdmin,
   });
 
-  // Fetch clients for the selected tenant
-  const { data: clients = [] } = useQuery<Client[]>({
-    queryKey: ["clients-for-wp", form.tenant_id || tenantId],
+  // Fetch agencies for the selected tenant
+  const { data: agencies = [] } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ["agencies-for-wp", form.tenant_id || tenantId],
     queryFn: async () => {
       const tid = form.tenant_id || tenantId;
       if (!tid) return [];
       const { data, error } = await supabase
+        .from("agencies")
+        .select("id, name")
+        .eq("tenant_id", tid)
+        .order("name");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!(form.tenant_id || tenantId),
+  });
+
+  // Fetch clients for the selected tenant (filtered by agency if selected)
+  const { data: clients = [] } = useQuery<Client[]>({
+    queryKey: ["clients-for-wp", form.tenant_id || tenantId, form.agency_id],
+    queryFn: async () => {
+      const tid = form.tenant_id || tenantId;
+      if (!tid) return [];
+      let q = supabase
         .from("clients")
         .select("id, name")
         .eq("tenant_id", tid)
         .order("name");
+      if (form.agency_id) q = q.eq("agency_id", form.agency_id);
+      const { data, error } = await q;
       if (error) throw error;
       return data || [];
     },
@@ -160,6 +181,7 @@ export default function WordPressSettings() {
         woocommerce_consumer_secret: values.woo_consumer_secret || null,
         woo_sync_enabled: values.woo_sync_enabled,
         client_id: values.client_id || null,
+        agency_id: values.agency_id || null,
       };
       const { error } = await supabase
         .from("social_media_wordpress_sites" as any)
@@ -189,6 +211,7 @@ export default function WordPressSettings() {
         woocommerce_consumer_secret: values.woo_consumer_secret || null,
         woo_sync_enabled: values.woo_sync_enabled,
         client_id: values.client_id || null,
+        agency_id: values.agency_id || null,
         updated_at: new Date().toISOString(),
       };
       // Only update password if provided
@@ -293,6 +316,7 @@ export default function WordPressSettings() {
       woo_consumer_secret: site.woocommerce_consumer_secret || "",
       woo_sync_enabled: site.woo_sync_enabled,
       tenant_id: site.tenant_id,
+      agency_id: site.agency_id || "",
       client_id: site.client_id || "",
     });
   };
@@ -367,6 +391,26 @@ export default function WordPressSettings() {
           WordPress Admin → Users → Profile → Application Passwords
         </p>
       </div>
+
+      {agencies.length > 0 && (
+        <div>
+          <Label>סוכנות מקושרת (אופציונלי)</Label>
+          <Select
+            value={form.agency_id || "none"}
+            onValueChange={(v) => setForm({ ...form, agency_id: v === "none" ? "" : v, client_id: "" })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="בחר סוכנות..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">ללא</SelectItem>
+              {agencies.map((a) => (
+                <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       {clients.length > 0 && (
         <div>

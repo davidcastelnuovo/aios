@@ -5459,6 +5459,7 @@ export type Database = {
       }
       social_media_wordpress_sites: {
         Row: {
+          agency_id: string | null
           app_password: string
           client_id: string | null
           created_at: string
@@ -5478,6 +5479,7 @@ export type Database = {
           woocommerce_enabled: boolean
         }
         Insert: {
+          agency_id?: string | null
           app_password: string
           client_id?: string | null
           created_at?: string
@@ -5497,6 +5499,7 @@ export type Database = {
           woocommerce_enabled?: boolean
         }
         Update: {
+          agency_id?: string | null
           app_password?: string
           client_id?: string | null
           created_at?: string
@@ -5516,6 +5519,13 @@ export type Database = {
           woocommerce_enabled?: boolean
         }
         Relationships: [
+          {
+            foreignKeyName: "social_media_wordpress_sites_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "social_media_wordpress_sites_client_id_fkey"
             columns: ["client_id"]
