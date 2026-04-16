@@ -1554,7 +1554,7 @@ export default function DynamicTableView() {
       )}
 
       {/* Alert for tables with scenario but no data - offer fix options */}
-      {hasScenarioButNoData && !activateScenarioMutation.isSuccess && !patchScenarioBlueprintMutation.isSuccess && (
+      {!isEmbed && hasScenarioButNoData && !activateScenarioMutation.isSuccess && !patchScenarioBlueprintMutation.isSuccess && (
         <Alert className="mb-6 border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
           <AlertCircle className="h-4 w-4 text-amber-600" />
           <AlertTitle className="text-amber-800 dark:text-amber-200">
