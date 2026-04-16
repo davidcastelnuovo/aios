@@ -428,7 +428,7 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
         tenantId={tenantId}
         clientId={clientId}
         domain={reportData?.domain || selectedReport?.domain}
-        keywords={[...organicKeywords, ...trackedKeywords].map((k: any) => k.keyword).filter(Boolean)}
+        keywords={[]}
         onDataLoaded={handleGscDataLoaded}
         hideTable
       />
