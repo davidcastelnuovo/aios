@@ -20,7 +20,9 @@ interface GoogleAdsRecord {
   cpc: number;
   cost: number;
   conversions: number;
+  conversions_value: number;
   cost_per_conversion: number;
+  roas: number;
 }
 
 Deno.serve(async (req) => {
