@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Send, Mail, MessageCircle, Loader2 } from "lucide-react";
+import { Send, Mail, MessageCircle, Loader2, Link2 } from "lucide-react";
 
 interface SendReportDialogProps {
   open: boolean;
