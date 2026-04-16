@@ -211,6 +211,7 @@ export default function WordPressSettings() {
         woocommerce_consumer_secret: values.woo_consumer_secret || null,
         woo_sync_enabled: values.woo_sync_enabled,
         client_id: values.client_id || null,
+        agency_id: values.agency_id || null,
         updated_at: new Date().toISOString(),
       };
       // Only update password if provided
