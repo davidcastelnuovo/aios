@@ -100,6 +100,19 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
     enabled: !!tenantId,
   });
 
+  // Fetch team members for this client
+  const { data: teamMembers } = useQuery({
+    queryKey: ["client-team-emails", clientId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("client_team")
+        .select("id, campaigner_id, role_on_account, campaigners(full_name, email)")
+        .eq("client_id", clientId);
+      return (data || []).filter((t: any) => t.campaigners?.email);
+    },
+    enabled: !!clientId,
+  });
+
   // Fetch share link
   const { data: shareLink } = useQuery({
     queryKey: ["table-share-link", table.id],
@@ -385,13 +398,46 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
 
         {/* Email */}
         {sendEmail && (
-          <Input
-            type="email"
-            value={emailAddress}
-            onChange={(e) => setEmailAddress(e.target.value)}
-            placeholder="example@email.com"
-            className="h-8 text-xs"
-          />
+          <div className="space-y-2">
+            {teamMembers && teamMembers.length > 0 && (
+              <Select
+                value={emailAddress}
+                onValueChange={(val) => {
+                  if (val === "__custom__") {
+                    setEmailAddress("");
+                  } else {
+                    setEmailAddress(val);
+                  }
+                }}
+              >
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder="בחר מהצוות או הזן ידנית..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {client?.email && (
+                    <SelectItem value={client.email}>
+                      📋 {client.name} (לקוח) — {client.email}
+                    </SelectItem>
+                  )}
+                  {teamMembers.map((t: any) => (
+                    <SelectItem key={t.id} value={t.campaigners.email}>
+                      👤 {t.campaigners.full_name}{t.role_on_account ? ` (${t.role_on_account})` : ""} — {t.campaigners.email}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="__custom__">✏️ הזן כתובת ידנית</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+            {(!teamMembers || teamMembers.length === 0 || emailAddress === "" || !teamMembers.some((t: any) => t.campaigners.email === emailAddress)) && (
+              <Input
+                type="email"
+                value={emailAddress}
+                onChange={(e) => setEmailAddress(e.target.value)}
+                placeholder="example@email.com"
+                className="h-8 text-xs"
+              />
+            )}
+          </div>
         )}
 
         {/* Share Link Info */}
