@@ -359,7 +359,7 @@ Deno.serve(async (req) => {
       const hasEcommerceSignal =
         purchases > 0 ||
         purchaseValue > 0 ||
-        purchaseActionTypes.some((type) => actionTypeSet.has(type));
+        purchaseActionTypePriority.some((type) => actionTypeSet.has(type));
       // add_to_cart alone is NOT enough to classify as ecommerce —
       // lead campaigns can have incidental add-to-cart events.
       const hasStrongEcommerceSignal = hasEcommerceSignal || isEcommerceObjective;
