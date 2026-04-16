@@ -359,7 +359,7 @@ Deno.serve(async (req) => {
       const rows = insights.map((insight) => ({
         table_id,
         tenant_id: tableTenantId,
-        created_by: user.id,
+        created_by: userId,
         data: insight as any,
       }));
       const { error: insErr, count } = await supabaseAdmin
