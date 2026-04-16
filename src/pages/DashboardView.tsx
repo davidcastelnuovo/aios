@@ -484,14 +484,19 @@ export default function DashboardView() {
     const effectiveAdsSpend = adsSpend > 0 ? adsSpend : globalAdsMetrics.spend;
     const effectiveImpressions = totalImpressions > 0 ? totalImpressions : globalAdsMetrics.impressions;
 
+    // WooCommerce is the source of truth for revenue when available.
+    // GA revenue is shown as informational only and NOT summed with Woo.
+    const wooRev = wooSummary.revenue || 0;
+    const bottomLineRevenue = wooRev > 0 ? wooRev : analyticsRevenue;
+
     return {
       spend: effectiveSpend, impressions: effectiveImpressions, clicks: totalClicks, results: totalResults, leads: totalLeads,
-      revenue: analyticsRevenue + (wooSummary.revenue || 0),
+      revenue: bottomLineRevenue,
       revenueAnalytics: analyticsRevenue,
-      revenueWoo: wooSummary.revenue || 0,
+      revenueWoo: wooRev,
       ordersWoo: wooSummary.orders || 0,
       roas_spend: effectiveAdsSpend,
-      roas_value: analyticsRevenue + (wooSummary.revenue || 0),
+      roas_value: bottomLineRevenue,
       analyticsPurchases, analyticsAddToCart, analyticsSessions, analyticsUsers,
     };
   }, [summaryByPlatform, globalAdsMetrics, wooSummary]);
@@ -941,12 +946,12 @@ export default function DashboardView() {
                       <Card className="h-full bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
                         <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
                           <p className="text-sm text-muted-foreground">
-                            {totalSummary.revenueWoo > 0 ? 'הכנסות כולל WooCommerce' : 'הכנסות (Analytics)'}
+                            {totalSummary.revenueWoo > 0 ? 'הכנסות (WooCommerce)' : 'הכנסות (Analytics)'}
                           </p>
                           <p className="text-3xl font-bold mt-2">{formatCurrency(totalSummary.revenue)}</p>
-                          {totalSummary.revenueWoo > 0 && (
+                          {totalSummary.revenueWoo > 0 && totalSummary.revenueAnalytics > 0 && (
                             <p className="text-xs text-muted-foreground mt-1">
-                              GA: {formatCurrency(totalSummary.revenueAnalytics)} · Woo: {formatCurrency(totalSummary.revenueWoo)}
+                              להשוואה · GA מדווח: {formatCurrency(totalSummary.revenueAnalytics)}
                             </p>
                           )}
                         </CardContent>
