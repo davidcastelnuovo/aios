@@ -486,10 +486,15 @@ export default function DashboardView() {
 
     return {
       spend: effectiveSpend, impressions: effectiveImpressions, clicks: totalClicks, results: totalResults, leads: totalLeads,
-      revenue: analyticsRevenue, roas_spend: effectiveAdsSpend, roas_value: analyticsRevenue,
+      revenue: analyticsRevenue + (wooSummary.revenue || 0),
+      revenueAnalytics: analyticsRevenue,
+      revenueWoo: wooSummary.revenue || 0,
+      ordersWoo: wooSummary.orders || 0,
+      roas_spend: effectiveAdsSpend,
+      roas_value: analyticsRevenue + (wooSummary.revenue || 0),
       analyticsPurchases, analyticsAddToCart, analyticsSessions, analyticsUsers,
     };
-  }, [summaryByPlatform, globalAdsMetrics]);
+  }, [summaryByPlatform, globalAdsMetrics, wooSummary]);
 
   const combinedRoas = totalSummary.roas_spend > 0 ? totalSummary.roas_value / totalSummary.roas_spend : 0;
   const combinedCpl = totalSummary.results > 0 ? totalSummary.spend / totalSummary.results : 0;
