@@ -51,6 +51,7 @@ import { ShareTableDialog } from "@/components/dynamic-tables/ShareTableDialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { MakeScenarioSettings } from "@/components/dynamic-tables/MakeScenarioSettings";
 import { SendReportDialog } from "@/components/dynamic-tables/SendReportDialog";
+import { CURRENCY_OPTIONS, getCurrencySymbol, type CurrencyCode } from "@/lib/currency";
 
 // Google Ads icon component
 const GoogleAdsIcon = ({ className = "h-4 w-4" }: { className?: string }) => (
