@@ -160,6 +160,7 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
   const updateSiteMutation = useMutation({
     mutationFn: async (siteUrl: string) => {
       if (!gscIntegration?.id) return;
+      const updatedClientSites = { ...clientSites, [clientId]: siteUrl };
       const { error } = await supabase
         .from("tenant_integrations")
         .update({
@@ -167,6 +168,7 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
             ...settings,
             site_url: siteUrl,
             siteUrl: siteUrl,
+            client_sites: updatedClientSites,
             available_sites: availableSites,
           },
         })
