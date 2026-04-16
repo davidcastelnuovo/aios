@@ -295,6 +295,7 @@ export default function WordPressSettings() {
       woo_consumer_secret: site.woocommerce_consumer_secret || "",
       woo_sync_enabled: site.woo_sync_enabled,
       tenant_id: site.tenant_id,
+      agency_id: site.agency_id || "",
       client_id: site.client_id || "",
     });
   };
