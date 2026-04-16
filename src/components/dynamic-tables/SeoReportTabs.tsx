@@ -319,6 +319,15 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                         })}
                       </SelectContent>
                     </Select>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      onClick={() => setShowGaDialog(true)}
+                      title="צור חיבור Analytics חדש"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
                     {selectedGaTableId && (
                       <>
                         <Badge variant="secondary" className="text-xs">
