@@ -1,37 +1,24 @@
 
 
-# תוכנית: תיקון טבלאות יתומות + הוספת כלים לכרמן
+## Plan: Add "Create GA Table" button in SEO Report Analytics tab
 
-## מה קרה
-כרמן יצרה 20 טבלאות Facebook Insights בלי `client_id` — הן מופיעות כ"ממתין לחיבור חשבון מודעות". 15 מתוכן ניתנות לשיוך ללקוחות קיימים, 5 נותרות ללא התאמה (G.G, פליקס, זכינות, סטודיו דיל, gg ds).
+### Problem
+When viewing an SEO report's Analytics tab, the GA table selector dropdown doesn't offer a way to create a new GA table. The user needs to navigate away to create one.
 
-## חלק 1: תיקון ידני — שיוך 15 טבלאות ללקוחות
-**מיגרציה SQL** שתעדכן `client_id` ב-15 טבלאות יתומות:
-- 24 קראט, ד"ר הולדר, גוטשטיין, פעמית עסקים, א.ש חקירות, סילבה, אלהאם פארמה, דורון לוין, yts, מרחב מוגן, מני גרינבאום, כבי מונטג, גילי גולדברג, גיל פינקלשטיין, מן מכונות ניקוי
+### Solution
+Add a "+" button next to the GA table selector that opens the existing `GoogleAnalyticsTableDialog`. After creating a table, the list refreshes and the new table can be selected.
 
-5 טבלאות ללא התאמה יישארו — תצטרך לשייך אותן ידנית או לבקש מכרמן.
+### Technical Details
 
-## חלק 2: הוספת כלים חדשים לכרמן
-**קובץ: `supabase/functions/ai-support-chat/index.ts`**
+**File: `src/components/dynamic-tables/SeoReportTabs.tsx`**
+1. Import `GoogleAnalyticsTableDialog` and `Plus` icon
+2. Add state: `const [showGaDialog, setShowGaDialog] = useState(false)`
+3. Next to the GA `<Select>`, add a `<Button>` with a `+` icon that opens the dialog
+4. Render `<GoogleAnalyticsTableDialog open={showGaDialog} onOpenChange={setShowGaDialog} />` 
+5. On dialog close after creation, `queryClient.invalidateQueries(['seo-related-tables'])` will auto-refresh the GA tables list (since `GoogleAnalyticsTableDialog` already invalidates `crm-tables`, we may need to also invalidate `seo-related-tables`)
 
-### כלי 1: `list_orphan_tables`
-- מחזיר רשימת טבלאות CRM ללא `client_id` (יתומות)
-- מאפשר לכרמן לזהות טבלאות שצריכות חיבור
+**File: `src/components/dynamic-tables/GoogleAnalyticsTableDialog.tsx`**
+- No changes needed — the dialog already works standalone and invalidates queries on creation.
 
-### כלי 2: `link_table_to_client`
-- מקבל `table_id` + `client_id`
-- מעדכן את ה-`client_id` בטבלה קיימת
-- מאפשר לכרמן לתקן טבלאות יתומות בעצמה
-
-### כלי 3: `batch_link_tables_to_clients`
-- מקבל מערך של `{ table_id, client_id }`
-- מעדכן מרובה בסבב אחד — לא צריך 20 קריאות
-
-### עדכון System Prompt
-- הוראה לכרמן: אחרי `batch_create_report_tables`, תמיד לוודא שכל הטבלאות מחוברות
-- אם נוצרו טבלאות יתומות, להשתמש ב-`list_orphan_tables` + `batch_link_tables_to_clients`
-
-## קבצים לעריכה
-1. מיגרציית SQL — עדכון 15 טבלאות
-2. `supabase/functions/ai-support-chat/index.ts` — 3 כלים חדשים + עדכון prompt
+**Query invalidation note:** The existing dialog invalidates `crm-tables` but `SeoReportTabs` uses `seo-related-tables` query key. We'll add invalidation of `seo-related-tables` in `SeoReportTabs` by watching for dialog close, or extend the dialog to accept an `onSuccess` callback.
 
