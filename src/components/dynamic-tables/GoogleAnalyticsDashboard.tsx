@@ -555,20 +555,13 @@ export function GoogleAnalyticsDashboard({
     const phoneCallEvents: { eventName: string; total: number }[] = [];
     const phoneEventMap = new Map<string, number>();
     for (const r of eventSourceRecords) {
-      // For date-filtered records, only use event_total
-      if (!hasAggregateEvents && r.data.report_type !== 'event_total') continue;
       const eventName = (r.data.event_name || '').toLowerCase();
       if (eventName.includes('phone') || eventName.includes('call') || eventName.includes('tel') || eventName.includes('click_to_call') || eventName.includes('maskyoo')) {
         const displayName = r.data.event_name || 'Unknown';
         const keyEvents = Number(r.data.key_events) || 0;
         const eventCount = Number(r.data.event_count) || 0;
         const count = Math.max(eventCount, keyEvents);
-        // For aggregate records, use the value directly (don't sum across rows)
-        if (hasAggregateEvents) {
-          phoneEventMap.set(displayName, count);
-        } else {
-          phoneEventMap.set(displayName, (phoneEventMap.get(displayName) ?? 0) + count);
-        }
+        phoneEventMap.set(displayName, (phoneEventMap.get(displayName) ?? 0) + count);
       }
     }
     
