@@ -280,12 +280,16 @@ Deno.serve(async (req) => {
 
     // Process results
     const records: GoogleAdsRecord[] = [];
-    
-    for (const batch of (searchData || [])) {
-      for (const result of (batch.results || [])) {
+    const batchesArr = Array.isArray(searchData) ? searchData : (searchData?.results ? [searchData] : []);
+    console.log(`[sync-google-ads] batches received: ${batchesArr.length}`);
+
+    for (const batch of batchesArr) {
+      const results = batch.results || [];
+      console.log(`[sync-google-ads] batch results: ${results.length}`);
+      for (const result of results) {
         const costMicros = parseInt(result.metrics?.costMicros || '0');
         const cost = costMicros / 1000000; // Convert micros to actual currency
-        
+
         records.push({
           date: result.segments?.date || '',
           campaign_id: result.campaign?.id || '',
@@ -300,6 +304,7 @@ Deno.serve(async (req) => {
         });
       }
     }
+    console.log(`[sync-google-ads] total records parsed: ${records.length}`);
 
 
     // Create fields if they don't exist
