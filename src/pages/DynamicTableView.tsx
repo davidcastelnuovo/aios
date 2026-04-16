@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { toPng } from "html-to-image";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -49,6 +50,7 @@ import { ActiveAlerts } from "@/components/dynamic-tables/ActiveAlerts";
 import { ShareTableDialog } from "@/components/dynamic-tables/ShareTableDialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { MakeScenarioSettings } from "@/components/dynamic-tables/MakeScenarioSettings";
+import { SendReportDialog } from "@/components/dynamic-tables/SendReportDialog";
 
 // Google Ads icon component
 const GoogleAdsIcon = ({ className = "h-4 w-4" }: { className?: string }) => (
@@ -63,6 +65,7 @@ interface CrmTable {
   slug: string;
   description: string | null;
   tenant_id: string;
+  client_id: string | null;
   integration_type: string | null;
   integration_settings: any;
   secondary_integration_type?: string | null;
@@ -92,8 +95,9 @@ export default function DynamicTableView() {
   const queryClient = useQueryClient();
   
   const [newColumnName, setNewColumnName] = useState("");
-  const [webhookUrl, setWebhookUrl] = useState("");
-  const [showWebhookDialog, setShowWebhookDialog] = useState(false);
+  const [showSendReportDialog, setShowSendReportDialog] = useState(false);
+  const [reportScreenshotBlob, setReportScreenshotBlob] = useState<Blob | null>(null);
+  const [isCapturingScreenshot, setIsCapturingScreenshot] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [selectedAdAccount, setSelectedAdAccount] = useState<string>("");
   const [adAccountSearch, setAdAccountSearch] = useState("");
@@ -564,34 +568,32 @@ export default function DynamicTableView() {
     },
   });
 
-  const sendWebhookMutation = useMutation({
-    mutationFn: async () => {
-      if (!webhookUrl) throw new Error('No webhook URL');
-      if (!records || !fields) throw new Error('No data');
-      
-      const payload = {
-        table: table?.name,
-        fields: fields.map(f => ({ key: f.key, name: f.name })),
-        records: records.map(r => r.data),
-      };
-      
-      const response = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+  // Add ref for summary tables container
+  const summaryTablesRef = useRef<HTMLDivElement>(null);
+
+  const handleSendReport = useCallback(async () => {
+    if (!summaryTablesRef.current) {
+      toast.error('לא נמצאו טבלאות מסכמות');
+      return;
+    }
+    setIsCapturingScreenshot(true);
+    try {
+      const dataUrl = await toPng(summaryTablesRef.current, {
+        backgroundColor: '#ffffff',
+        quality: 0.95,
+        pixelRatio: 2,
       });
-      
-      if (!response.ok) throw new Error('Webhook failed');
-      return response;
-    },
-    onSuccess: () => {
-      toast.success('הנתונים נשלחו ל-Webhook בהצלחה');
-      setShowWebhookDialog(false);
-    },
-    onError: (error: any) => {
-      toast.error('שגיאה בשליחה ל-Webhook: ' + error.message);
-    },
-  });
+      const response = await fetch(dataUrl);
+      const blob = await response.blob();
+      setReportScreenshotBlob(blob);
+      setShowSendReportDialog(true);
+    } catch (error) {
+      console.error('Screenshot error:', error);
+      toast.error('שגיאה ביצירת צילום מסך');
+    } finally {
+      setIsCapturingScreenshot(false);
+    }
+  }, []);
 
   const deleteTableMutation = useMutation({
     mutationFn: async () => {
@@ -1991,32 +1993,16 @@ export default function DynamicTableView() {
             </DialogContent>
           </Dialog>
           
-          <Dialog open={showWebhookDialog} onOpenChange={setShowWebhookDialog}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>שליחה ל-Webhook</DialogTitle>
-                <DialogDescription>הזן כתובת URL לשליחת הנתונים</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="webhook-url">Webhook URL</Label>
-                  <Input
-                    id="webhook-url"
-                    value={webhookUrl}
-                    onChange={(e) => setWebhookUrl(e.target.value)}
-                    placeholder="https://example.com/webhook"
-                  />
-                </div>
-                <Button 
-                  onClick={() => sendWebhookMutation.mutate()} 
-                  disabled={sendWebhookMutation.isPending || !webhookUrl}
-                  className="w-full"
-                >
-                  {sendWebhookMutation.isPending ? 'שולח...' : 'שלח נתונים'}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+          {table && (
+            <SendReportDialog
+              open={showSendReportDialog}
+              onOpenChange={setShowSendReportDialog}
+              screenshotBlob={reportScreenshotBlob}
+              tableName={table.name}
+              clientId={table.client_id || table.integration_settings?.clientId}
+              tenantId={table.tenant_id}
+            />
+          )}
 
           {/* Settings Dialog for Facebook Insights */}
           <Dialog open={showSettingsDialog} onOpenChange={(open) => {
@@ -2207,9 +2193,9 @@ export default function DynamicTableView() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setShowWebhookDialog(true)}>
+              <DropdownMenuItem onClick={handleSendReport} disabled={isCapturingScreenshot}>
                 <Send className="ml-2 h-4 w-4" />
-                שלח עדכון ללקוח
+                {isCapturingScreenshot ? 'מצלם...' : 'שלח עדכון ללקוח'}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -2235,6 +2221,7 @@ export default function DynamicTableView() {
         />
       )}
 
+      <div ref={summaryTablesRef}>
       {/* Summary Stats for Facebook Insights (split by campaign type) */}
       {hasFacebook && filteredRecords && filteredRecords.length > 0 && (
         (() => {
@@ -2510,7 +2497,6 @@ export default function DynamicTableView() {
         </Card>
       )}
 
-
       {/* Summary Stats for Google Ads */}
       {hasGoogleAds && filteredRecords && filteredRecords.length > 0 && (
         <Card className="mb-4 overflow-hidden">
@@ -2631,6 +2617,7 @@ export default function DynamicTableView() {
           })()}
         </Card>
       )}
+      </div>
 
       {/* Google Analytics Dashboard */}
       {hasGoogleAnalytics && filteredRecords && filteredRecords.length > 0 && (
