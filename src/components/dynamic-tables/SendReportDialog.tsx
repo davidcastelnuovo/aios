@@ -158,7 +158,7 @@ export function SendReportDialog({
         formData.append("fileType", "image");
         if (fullCaption) formData.append("caption", fullCaption);
         
-        if (selectedGroupId) {
+        if (hasGroup) {
           formData.append("groupId", selectedGroupId);
         } else if (directPhone) {
           formData.append("phoneNumber", directPhone);
