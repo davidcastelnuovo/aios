@@ -9,25 +9,22 @@ import { toast } from "sonner";
 import { Share2, Copy, Plus, Trash2 } from "lucide-react";
 
 function generateReadableToken(tableName: string): string {
-  // Transliterate Hebrew to English-ish, keep ASCII
   const hebrewMap: Record<string, string> = {
     'א': 'a', 'ב': 'b', 'ג': 'g', 'ד': 'd', 'ה': 'h', 'ו': 'v', 'ז': 'z',
     'ח': 'ch', 'ט': 't', 'י': 'y', 'כ': 'k', 'ך': 'k', 'ל': 'l', 'מ': 'm',
     'ם': 'm', 'נ': 'n', 'ן': 'n', 'ס': 's', 'ע': 'a', 'פ': 'p', 'ף': 'f',
     'צ': 'ts', 'ץ': 'ts', 'ק': 'k', 'ר': 'r', 'ש': 'sh', 'ת': 't',
   };
-  const transliterated = tableName
+  const firstWord = tableName.trim().split(/\s+/)[0] || 'report';
+  const transliterated = firstWord
     .split('')
     .map(ch => hebrewMap[ch] || ch)
     .join('');
   const slug = transliterated
     .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 40);
-  const shortId = Math.random().toString(36).slice(2, 8);
+    .replace(/[^a-z0-9]/g, '')
+    .slice(0, 8);
+  const shortId = Math.random().toString(36).slice(2, 6);
   return `${slug || 'report'}-${shortId}`;
 }
 
