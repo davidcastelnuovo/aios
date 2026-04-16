@@ -2034,6 +2034,28 @@ export default function DynamicTableView() {
             />
           )}
 
+          {/* Debug Dialog for Facebook Ecommerce raw data */}
+          <Dialog open={debugDialogOpen} onOpenChange={setDebugDialogOpen}>
+            <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto" dir="ltr">
+              <DialogHeader>
+                <DialogTitle>Facebook Raw Data — Debug</DialogTitle>
+                <DialogDescription>
+                  השווה את ה-action_types הגולמיים שפייסבוק מחזיר עם מה שאתה רואה ב-Ads Manager UI.
+                  שלוש קריאות עם attribution windows שונים.
+                </DialogDescription>
+              </DialogHeader>
+              {debugLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin" />
+                </div>
+              ) : (
+                <pre className="text-xs bg-muted p-4 rounded overflow-x-auto whitespace-pre-wrap" style={{ direction: 'ltr' }}>
+                  {debugData ? JSON.stringify(debugData, null, 2) : 'No data'}
+                </pre>
+              )}
+            </DialogContent>
+          </Dialog>
+
           {/* Settings Dialog for Facebook Insights */}
           <Dialog open={showSettingsDialog} onOpenChange={(open) => {
             setShowSettingsDialog(open);
