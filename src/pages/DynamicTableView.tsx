@@ -86,6 +86,8 @@ interface CrmRecord {
 export default function DynamicTableView() {
   const { tableSlug } = useParams<{ tableSlug: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const isEmbed = searchParams.get('embed') === '1';
   const { buildPath } = useTenantPath();
   const queryClient = useQueryClient();
   
