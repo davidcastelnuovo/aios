@@ -77,7 +77,7 @@ export function useAhrefsEnrichment() {
   const fetchComparisons = useCallback(async (
     domain: string,
     reportDate?: string,
-    limit = 200,
+    limit = 1000,
     country = "il"
   ) => {
     setIsLoading(true);
