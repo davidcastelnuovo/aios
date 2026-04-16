@@ -2215,6 +2215,7 @@ export default function DynamicTableView() {
           </DropdownMenu>
         </div>
       </div>
+      )}
 
       {/* Active Alerts for Facebook Insights */}
       {hasFacebook && table?.id && records && (
