@@ -156,8 +156,8 @@ export default function WordPressSettings() {
         notes: values.notes || null,
         tenant_id: tid,
         woocommerce_enabled: values.woocommerce_enabled,
-        woo_consumer_key: values.woo_consumer_key || null,
-        woo_consumer_secret: values.woo_consumer_secret || null,
+        woocommerce_consumer_key: values.woo_consumer_key || null,
+        woocommerce_consumer_secret: values.woo_consumer_secret || null,
         woo_sync_enabled: values.woo_sync_enabled,
         client_id: values.client_id || null,
       };
