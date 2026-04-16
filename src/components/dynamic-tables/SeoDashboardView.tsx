@@ -13,7 +13,7 @@ import { SeoSnapshotCards } from "./seo/SeoSnapshotCards";
 import { SeoTrafficChart } from "./seo/SeoTrafficChart";
 import { SeoKeywordsTable } from "./seo/SeoKeywordsTable";
 import { GscIntegration, type GscKeywordData } from "./seo/GscIntegration";
-import { useAhrefsEnrichment } from "@/hooks/useAhrefsEnrichment";
+import { useAhrefsEnrichment, type AhrefsKeyword } from "@/hooks/useAhrefsEnrichment";
 
 interface SeoDashboardViewProps {
   tenantId: string;
