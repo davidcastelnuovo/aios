@@ -100,6 +100,19 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
     enabled: !!tenantId,
   });
 
+  // Fetch team members for this client
+  const { data: teamMembers } = useQuery({
+    queryKey: ["client-team-emails", clientId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("client_team")
+        .select("id, campaigner_id, role_on_account, campaigners(full_name, email)")
+        .eq("client_id", clientId);
+      return (data || []).filter((t: any) => t.campaigners?.email);
+    },
+    enabled: !!clientId,
+  });
+
   // Fetch share link
   const { data: shareLink } = useQuery({
     queryKey: ["table-share-link", table.id],
