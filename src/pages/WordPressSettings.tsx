@@ -44,8 +44,8 @@ interface WordPressSite {
   site_name: string | null;
   is_active: boolean;
   woocommerce_enabled: boolean;
-  woo_consumer_key: string | null;
-  woo_consumer_secret: string | null;
+  woocommerce_consumer_key: string | null;
+  woocommerce_consumer_secret: string | null;
   woo_last_sync_at: string | null;
   woo_sync_enabled: boolean;
   client_id: string | null;
@@ -156,8 +156,8 @@ export default function WordPressSettings() {
         notes: values.notes || null,
         tenant_id: tid,
         woocommerce_enabled: values.woocommerce_enabled,
-        woo_consumer_key: values.woo_consumer_key || null,
-        woo_consumer_secret: values.woo_consumer_secret || null,
+        woocommerce_consumer_key: values.woo_consumer_key || null,
+        woocommerce_consumer_secret: values.woo_consumer_secret || null,
         woo_sync_enabled: values.woo_sync_enabled,
         client_id: values.client_id || null,
       };
@@ -185,8 +185,8 @@ export default function WordPressSettings() {
         site_name: values.site_name || null,
         notes: values.notes || null,
         woocommerce_enabled: values.woocommerce_enabled,
-        woo_consumer_key: values.woo_consumer_key || null,
-        woo_consumer_secret: values.woo_consumer_secret || null,
+        woocommerce_consumer_key: values.woo_consumer_key || null,
+        woocommerce_consumer_secret: values.woo_consumer_secret || null,
         woo_sync_enabled: values.woo_sync_enabled,
         client_id: values.client_id || null,
         updated_at: new Date().toISOString(),
@@ -289,8 +289,8 @@ export default function WordPressSettings() {
       site_name: site.site_name || "",
       notes: site.notes || "",
       woocommerce_enabled: site.woocommerce_enabled,
-      woo_consumer_key: site.woo_consumer_key || "",
-      woo_consumer_secret: site.woo_consumer_secret || "",
+      woo_consumer_key: site.woocommerce_consumer_key || "",
+      woo_consumer_secret: site.woocommerce_consumer_secret || "",
       woo_sync_enabled: site.woo_sync_enabled,
       tenant_id: site.tenant_id,
       client_id: site.client_id || "",
