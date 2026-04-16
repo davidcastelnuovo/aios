@@ -49,6 +49,7 @@ interface WordPressSite {
   woo_last_sync_at: string | null;
   woo_sync_enabled: boolean;
   client_id: string | null;
+  agency_id: string | null;
   notes: string | null;
   created_at: string;
 }
