@@ -82,7 +82,9 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
     staleTime: 5 * 60 * 1000,
   });
 
-  const persistedSiteUrl = selectedSite || settings?.site_url || settings?.siteUrl || "";
+  // Per-client site URL takes priority over global setting
+  const clientSites = settings?.client_sites || {};
+  const persistedSiteUrl = selectedSite || clientSites[clientId] || settings?.site_url || settings?.siteUrl || "";
   const normalizedDomain = normalizeDomain(domain);
   const matchedSite = normalizedDomain
     ? availableSites.find((site) => {
