@@ -248,6 +248,71 @@ export default function DashboardView() {
     enabled: !!dashboard?.client_id && !!currentTenantId,
   });
 
+  // Check if client has a linked WooCommerce site
+  const { data: hasWooCommerce = false } = useQuery({
+    queryKey: ['has-woocommerce', dashboard?.client_id, currentTenantId],
+    queryFn: async () => {
+      if (!dashboard?.client_id || !currentTenantId) return false;
+      const { count, error } = await (supabase
+        .from('social_media_wordpress_sites' as any)
+        .select('id', { count: 'exact', head: true })
+        .eq('client_id', dashboard.client_id)
+        .eq('tenant_id', currentTenantId)
+        .eq('woocommerce_enabled', true)
+        .eq('is_active', true)
+        .limit(1));
+      if (error) return false;
+      return (count || 0) > 0;
+    },
+    enabled: !!dashboard?.client_id && !!currentTenantId,
+  });
+
+  // Fetch WooCommerce summary for the date range to include in totals
+  const wooDateRange = useMemo(() => {
+    const now = new Date();
+    const end = new Date(now); end.setHours(23, 59, 59, 999);
+    const start = new Date(now); start.setHours(0, 0, 0, 0);
+    switch (dateFilter) {
+      case 'today': break;
+      case 'yesterday': start.setDate(start.getDate() - 1); end.setDate(end.getDate() - 1); end.setHours(23, 59, 59, 999); break;
+      case 'last_7_days': start.setDate(start.getDate() - 6); break;
+      case 'last_30_days': start.setDate(start.getDate() - 29); break;
+      case 'last_70_days': start.setDate(start.getDate() - 69); break;
+      case 'this_month': start.setDate(1); break;
+      case 'last_month': start.setMonth(start.getMonth() - 1, 1); end.setDate(0); end.setHours(23, 59, 59, 999); break;
+      default: start.setDate(start.getDate() - 6);
+    }
+    return { start: start.toISOString(), end: end.toISOString() };
+  }, [dateFilter]);
+
+  const { data: wooSummary = { revenue: 0, orders: 0 } } = useQuery({
+    queryKey: ['woo-summary-for-totals', dashboard?.client_id, currentTenantId, dateFilter],
+    queryFn: async () => {
+      if (!dashboard?.client_id || !currentTenantId) return { revenue: 0, orders: 0 };
+      const { data: sites } = await (supabase
+        .from('social_media_wordpress_sites' as any)
+        .select('id')
+        .eq('client_id', dashboard.client_id)
+        .eq('tenant_id', currentTenantId)
+        .eq('woocommerce_enabled', true)
+        .eq('is_active', true));
+      const siteIds = (sites as any[] || []).map((s: any) => s.id);
+      if (siteIds.length === 0) return { revenue: 0, orders: 0 };
+      const { data: orders } = await (supabase
+        .from('woocommerce_orders' as any)
+        .select('total, status')
+        .in('site_id', siteIds)
+        .gte('date_created', wooDateRange.start)
+        .lte('date_created', wooDateRange.end)
+        .limit(5000));
+      const validStatuses = ['completed', 'processing', 'on-hold'];
+      const valid = ((orders as any[]) || []).filter((o: any) => validStatuses.includes(o.status));
+      const revenue = valid.reduce((s: number, o: any) => s + Number(o.total || 0), 0);
+      return { revenue, orders: valid.length };
+    },
+    enabled: !!dashboard?.client_id && !!currentTenantId && hasWooCommerce,
+  });
+
   // Available platforms for tab rendering
   const availablePlatforms = useMemo(() => {
     const set = new Set<string>();
@@ -259,8 +324,9 @@ export default function DashboardView() {
     if (set.has('google_ads')) platforms.push('google_ads');
     if (set.has('google_analytics')) platforms.push('google_analytics');
     if (hasSeoReports) platforms.push('seo');
+    if (hasWooCommerce) platforms.push('woocommerce');
     return platforms;
-  }, [tables, hasSeoReports]);
+  }, [tables, hasSeoReports, hasWooCommerce]);
 
   // Filter records by platform tab AND only use daily aggregate records for Analytics
   // IMPORTANT: Use only report_type='daily' for aggregation (KPI, charts).
