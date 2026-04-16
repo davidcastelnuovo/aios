@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -86,6 +86,8 @@ interface CrmRecord {
 export default function DynamicTableView() {
   const { tableSlug } = useParams<{ tableSlug: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const isEmbed = searchParams.get('embed') === '1';
   const { buildPath } = useTenantPath();
   const queryClient = useQueryClient();
   
@@ -1515,9 +1517,9 @@ export default function DynamicTableView() {
     (table?.integration_settings?.last_sync_at || (!recordsLoading && records && records.length > 0));
 
   return (
-    <div className="container mx-auto py-8 px-4">
+    <div className={cn("container mx-auto", isEmbed ? "py-2 px-2" : "py-8 px-4")}>
       {/* Alert for tables that need scenario cloning */}
-      {needsScenarioClone && (
+      {!isEmbed && needsScenarioClone && (
         <Alert className="mb-6 border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950">
           <AlertCircle className="h-4 w-4 text-orange-600" />
           <AlertTitle className="text-orange-800 dark:text-orange-200">
@@ -1552,7 +1554,7 @@ export default function DynamicTableView() {
       )}
 
       {/* Alert for tables with scenario but no data - offer fix options */}
-      {hasScenarioButNoData && !activateScenarioMutation.isSuccess && !patchScenarioBlueprintMutation.isSuccess && (
+      {!isEmbed && hasScenarioButNoData && !activateScenarioMutation.isSuccess && !patchScenarioBlueprintMutation.isSuccess && (
         <Alert className="mb-6 border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
           <AlertCircle className="h-4 w-4 text-amber-600" />
           <AlertTitle className="text-amber-800 dark:text-amber-200">
@@ -1596,6 +1598,7 @@ export default function DynamicTableView() {
         </Alert>
       )}
 
+      {!isEmbed && (
       <div className="flex flex-col gap-4 mb-6">
         {/* Title Row */}
         <div className="text-center md:text-right">
@@ -2212,9 +2215,10 @@ export default function DynamicTableView() {
           </DropdownMenu>
         </div>
       </div>
+      )}
 
       {/* Active Alerts for Facebook Insights */}
-      {hasFacebook && table?.id && records && (
+      {!isEmbed && hasFacebook && table?.id && records && (
         <ActiveAlerts 
           tableId={table.id} 
           records={records} 
@@ -2660,6 +2664,7 @@ export default function DynamicTableView() {
             <div className="min-w-full inline-block">
               {/* Header */}
               <div className="flex border-b bg-muted/30 sticky top-0 z-10">
+                {!isEmbed && (
                 <div className="w-12 flex-shrink-0 border-l p-2 flex items-center justify-center">
                   <Button 
                     variant="ghost" 
@@ -2671,6 +2676,7 @@ export default function DynamicTableView() {
                     <Plus className="h-3 w-3" />
                   </Button>
                 </div>
+                )}
                 {fields?.map((field) => (
                   <div key={field.id} className="w-[150px] flex-shrink-0 border-l p-2">
                     {editingFieldId === field.id ? (
@@ -2733,7 +2739,7 @@ export default function DynamicTableView() {
                     )}
                   </div>
                 ))}
-                <div className="w-[150px] flex-shrink-0 border-l p-2">
+                {!isEmbed && <div className="w-[150px] flex-shrink-0 border-l p-2">
                   <div className="flex items-center gap-1">
                     <Input
                       placeholder="עמודה חדשה"
@@ -2755,12 +2761,13 @@ export default function DynamicTableView() {
                       <Plus className="h-3 w-3" />
                     </Button>
                   </div>
-                </div>
+                </div>}
               </div>
 
               {/* Rows */}
               {filteredRecords?.map((record) => (
                 <div key={record.id} className="flex border-b hover:bg-muted/20 transition-colors group">
+                  {!isEmbed && (
                   <div className="w-12 flex-shrink-0 border-l p-2 flex items-center justify-center bg-muted/10">
                     <Button 
                       variant="ghost" 
@@ -2771,6 +2778,7 @@ export default function DynamicTableView() {
                       <Trash2 className="h-3 w-3" />
                     </Button>
                   </div>
+                  )}
                   {fields?.map((field) => {
                     const cellKey = `${record.id}-${field.key}`;
                     const isEditing = editingCell?.recordId === record.id && editingCell?.fieldKey === field.key;
