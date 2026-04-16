@@ -533,13 +533,10 @@ export function GoogleAnalyticsDashboard({
 
     const trafficBreakdown = { organicSessions, paidSessions, otherSessions, organicUsers, paidUsers, organicConversions, paidConversions };
 
-    // Phone call events - use aggregate records (accurate totals) when available, fallback to date-filtered event_total
-    const aggregateEventRecords = records.filter(r => r.data.report_type === 'event_aggregate');
-    const hasAggregateEvents = aggregateEventRecords.length > 0;
-
+    // Phone call events - always use date-filtered event_total records for accurate per-period counts
     const dateFilteredEventRecords = records.filter(r => {
       const reportType = r.data.report_type;
-      if (reportType !== 'event_total' && reportType !== 'event_by_channel') return false;
+      if (reportType !== 'event_total') return false;
       if (!r.data.date) return true;
       try {
         const recordDate = parseISO(r.data.date);
@@ -553,26 +550,18 @@ export function GoogleAnalyticsDashboard({
       }
     });
 
-    // Use aggregate records for totals (they match GA4 UI), or fallback to daily
-    const eventSourceRecords = hasAggregateEvents ? aggregateEventRecords : dateFilteredEventRecords;
+    const eventSourceRecords = dateFilteredEventRecords;
 
     const phoneCallEvents: { eventName: string; total: number }[] = [];
     const phoneEventMap = new Map<string, number>();
     for (const r of eventSourceRecords) {
-      // For date-filtered records, only use event_total
-      if (!hasAggregateEvents && r.data.report_type !== 'event_total') continue;
       const eventName = (r.data.event_name || '').toLowerCase();
       if (eventName.includes('phone') || eventName.includes('call') || eventName.includes('tel') || eventName.includes('click_to_call') || eventName.includes('maskyoo')) {
         const displayName = r.data.event_name || 'Unknown';
         const keyEvents = Number(r.data.key_events) || 0;
         const eventCount = Number(r.data.event_count) || 0;
         const count = Math.max(eventCount, keyEvents);
-        // For aggregate records, use the value directly (don't sum across rows)
-        if (hasAggregateEvents) {
-          phoneEventMap.set(displayName, count);
-        } else {
-          phoneEventMap.set(displayName, (phoneEventMap.get(displayName) ?? 0) + count);
-        }
+        phoneEventMap.set(displayName, (phoneEventMap.get(displayName) ?? 0) + count);
       }
     }
     
@@ -871,7 +860,7 @@ export function GoogleAnalyticsDashboard({
       </div>
 
       {/* Organic vs Paid Breakdown */}
-      {(trafficBreakdown.organicSessions > 0 || trafficBreakdown.paidSessions > 0) && (
+      {(trafficBreakdown.organicUsers > 0 || trafficBreakdown.paidUsers > 0) && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-lg">אורגני מול ממומן</CardTitle>
@@ -881,24 +870,24 @@ export function GoogleAnalyticsDashboard({
               <div className="text-center p-3 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800">
                 <div className="flex items-center justify-center gap-1.5 mb-1">
                   <Leaf className="h-4 w-4 text-green-600" />
-                  <span className="text-sm text-muted-foreground">סשנים אורגני</span>
+                  <span className="text-sm text-muted-foreground">משתמשים אורגני</span>
                 </div>
-                <p className="text-xl font-bold text-green-700 dark:text-green-400">{formatNumber(trafficBreakdown.organicSessions)}</p>
-                {totals.sessions > 0 && (
+                <p className="text-xl font-bold text-green-700 dark:text-green-400">{formatNumber(trafficBreakdown.organicUsers)}</p>
+                {totals.users > 0 && (
                   <p className="text-xs text-muted-foreground mt-1">
-                    {((trafficBreakdown.organicSessions / totals.sessions) * 100).toFixed(1)}%
+                    {((trafficBreakdown.organicUsers / totals.users) * 100).toFixed(1)}%
                   </p>
                 )}
               </div>
               <div className="text-center p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
                 <div className="flex items-center justify-center gap-1.5 mb-1">
                   <Megaphone className="h-4 w-4 text-blue-600" />
-                  <span className="text-sm text-muted-foreground">סשנים ממומן</span>
+                  <span className="text-sm text-muted-foreground">משתמשים ממומן</span>
                 </div>
-                <p className="text-xl font-bold text-blue-700 dark:text-blue-400">{formatNumber(trafficBreakdown.paidSessions)}</p>
-                {totals.sessions > 0 && (
+                <p className="text-xl font-bold text-blue-700 dark:text-blue-400">{formatNumber(trafficBreakdown.paidUsers)}</p>
+                {totals.users > 0 && (
                   <p className="text-xs text-muted-foreground mt-1">
-                    {((trafficBreakdown.paidSessions / totals.sessions) * 100).toFixed(1)}%
+                    {((trafficBreakdown.paidUsers / totals.users) * 100).toFixed(1)}%
                   </p>
                 )}
               </div>

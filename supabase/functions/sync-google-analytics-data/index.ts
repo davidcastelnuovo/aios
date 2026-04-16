@@ -204,10 +204,10 @@ serve(async (req) => {
 
     const dailySourceData = await dailySourceResponse.json();
 
-    // ====== REPORT 5: Traffic Acquisition by Channel Group ======
+    // ====== REPORT 5: User Acquisition by Channel Group ======
     const channelGroupRequest = {
       dateRanges: [{ startDate: actualStartDate, endDate: actualEndDate }],
-      dimensions: [{ name: 'date' }, { name: 'sessionDefaultChannelGrouping' }],
+      dimensions: [{ name: 'date' }, { name: 'firstUserDefaultChannelGrouping' }],
       metrics: [
         { name: 'sessions' },
         { name: 'engagedSessions' },
