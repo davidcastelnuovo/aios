@@ -51,6 +51,7 @@ import { ShareTableDialog } from "@/components/dynamic-tables/ShareTableDialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { MakeScenarioSettings } from "@/components/dynamic-tables/MakeScenarioSettings";
 import { SendReportDialog } from "@/components/dynamic-tables/SendReportDialog";
+import { CURRENCY_OPTIONS, getCurrencySymbol, type CurrencyCode } from "@/lib/currency";
 
 // Google Ads icon component
 const GoogleAdsIcon = ({ className = "h-4 w-4" }: { className?: string }) => (
@@ -112,6 +113,7 @@ export default function DynamicTableView() {
   const [customDateRange, setCustomDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
   const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
   const [selectedSyncDateRange, setSelectedSyncDateRange] = useState<string>("last_30_days");
+  const [selectedCurrency, setSelectedCurrency] = useState<CurrencyCode>("ILS");
   const [activeTab, setActiveTab] = useState<string>("main"); // 'main' | 'facebook' | 'google_ads' | 'combined'
   const [showGoogleSettingsDialog, setShowGoogleSettingsDialog] = useState(false);
   const [selectedGoogleAccount, setSelectedGoogleAccount] = useState<string>("");
@@ -1192,9 +1194,10 @@ export default function DynamicTableView() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
       
-      // Find the selected ad account to get its currency
+      // Find the selected ad account to get its currency (only as a fallback)
       const selectedAccount = adAccounts?.find((acc: any) => acc.id === adAccountId);
-      const currency = selectedAccount?.currency || 'ILS';
+      // User's manual choice wins over the ad-account currency
+      const currency = selectedCurrency || selectedAccount?.currency || 'ILS';
       
       const { error } = await supabase
         .from('crm_tables')
@@ -1706,6 +1709,7 @@ export default function DynamicTableView() {
                 onClick={() => {
                   setSelectedAdAccount(table.integration_settings?.ad_account_id || '');
                   setSelectedSyncDateRange(table.integration_settings?.date_range || 'last_30_days');
+                  setSelectedCurrency((table.integration_settings?.currency as CurrencyCode) || 'ILS');
                   setShowSettingsDialog(true);
                 }}
               >
@@ -1741,6 +1745,7 @@ export default function DynamicTableView() {
                 onClick={() => {
                   setSelectedAdAccount(table.integration_settings?.ad_account_id || '');
                   setSelectedSyncDateRange(table.integration_settings?.date_range || 'last_30_days');
+                  setSelectedCurrency((table.integration_settings?.currency as CurrencyCode) || 'ILS');
                   setShowSettingsDialog(true);
                 }}
               >
@@ -1818,6 +1823,8 @@ export default function DynamicTableView() {
                 size="icon"
                 onClick={() => {
                   setSelectedGoogleAccount(table.integration_settings?.customer_id || '');
+                  setSelectedSyncDateRange(table.integration_settings?.date_range || 'last_30_days');
+                  setSelectedCurrency((table.integration_settings?.currency as CurrencyCode) || 'ILS');
                   setShowGoogleSettingsDialog(true);
                 }}
               >
@@ -2133,6 +2140,27 @@ export default function DynamicTableView() {
                     </SelectContent>
                   </Select>
                 </div>
+                <div>
+                  <Label>מטבע תצוגה</Label>
+                  <Select
+                    value={selectedCurrency}
+                    onValueChange={(v) => setSelectedCurrency(v as CurrencyCode)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="בחר מטבע" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CURRENCY_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    משנה רק את סמל המטבע המוצג. אין המרת ערכים.
+                  </p>
+                </div>
                 <Button 
                   onClick={() => updateTableSettingsMutation.mutate(selectedAdAccount)}
                   disabled={updateTableSettingsMutation.isPending || !selectedAdAccount}
@@ -2201,6 +2229,27 @@ export default function DynamicTableView() {
                   />
                   <p className="text-xs text-muted-foreground mt-1">ניתן להזין ידנית או לבחור מהרשימה למעלה</p>
                 </div>
+                <div>
+                  <Label>מטבע תצוגה</Label>
+                  <Select
+                    value={selectedCurrency}
+                    onValueChange={(v) => setSelectedCurrency(v as CurrencyCode)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="בחר מטבע" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CURRENCY_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    משנה רק את סמל המטבע המוצג. אין המרת ערכים.
+                  </p>
+                </div>
                 <Button 
                   onClick={async () => {
                     if (!table?.id || !selectedGoogleAccount) return;
@@ -2213,6 +2262,7 @@ export default function DynamicTableView() {
                             ...table.integration_settings,
                             customer_id: cleanId,
                             date_range: selectedSyncDateRange,
+                            currency: selectedCurrency,
                           }
                         })
                         .eq('id', table.id);
@@ -2350,7 +2400,7 @@ export default function DynamicTableView() {
             )
           );
 
-          const currency = table.integration_settings?.currency === 'USD' ? '$' : '₪';
+          const currency = getCurrencySymbol(table.integration_settings?.currency);
 
           const leadTotals = leadCampaigns.reduce((acc, [, campaign]) => ({
             impressions: acc.impressions + campaign.impressions,
@@ -2520,7 +2570,7 @@ export default function DynamicTableView() {
                   </thead>
                   <tbody>
                     {(() => {
-                      const currency = table.integration_settings?.currency === 'USD' ? '$' : '₪';
+                      const currency = getCurrencySymbol(table.integration_settings?.currency);
                       return Object.entries(campaignGroups).map(([campaignName, data]) => {
                         const roas = data.spend > 0 ? data.purchase_value / data.spend : 0;
                         return (
@@ -2540,7 +2590,7 @@ export default function DynamicTableView() {
                   </tbody>
                   <tfoot className="bg-primary/10 font-bold">
                     {(() => {
-                      const currency = table.integration_settings?.currency === 'USD' ? '$' : '₪';
+                      const currency = getCurrencySymbol(table.integration_settings?.currency);
                       const totalRoas = totals.spend > 0 ? totals.purchase_value / totals.spend : 0;
                       return (
                         <tr>
