@@ -52,6 +52,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { MakeScenarioSettings } from "@/components/dynamic-tables/MakeScenarioSettings";
 import { SendReportDialog } from "@/components/dynamic-tables/SendReportDialog";
 import { CURRENCY_OPTIONS, getCurrencySymbol, type CurrencyCode } from "@/lib/currency";
+import { LinkTableToClientDialog } from "@/components/dynamic-tables/LinkTableToClientDialog";
 
 // Google Ads icon component
 const GoogleAdsIcon = ({ className = "h-4 w-4" }: { className?: string }) => (
@@ -120,6 +121,7 @@ export default function DynamicTableView() {
   const [showAlertsDialog, setShowAlertsDialog] = useState(false);
   const [showMakeWebhookDialog, setShowMakeWebhookDialog] = useState(false);
   const [showDeleteTableDialog, setShowDeleteTableDialog] = useState(false);
+  const [showLinkClientDialog, setShowLinkClientDialog] = useState(false);
   const [campaignSearch, setCampaignSearch] = useState("");
   const [isCloning, setIsCloning] = useState(false);
   const cellInputRef = useRef<HTMLInputElement>(null);
@@ -1673,6 +1675,17 @@ export default function DynamicTableView() {
               <ArrowRight className="ml-2 h-4 w-4" />
               חזור
             </Button>
+            {!table.client_id && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowLinkClientDialog(true)}
+                className="gap-2 border-orange-300 text-orange-700 hover:bg-orange-50 dark:border-orange-700 dark:text-orange-400 dark:hover:bg-orange-950"
+              >
+                <Link className="h-4 w-4" />
+                שייך ללקוח
+              </Button>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -1680,6 +1693,10 @@ export default function DynamicTableView() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setShowLinkClientDialog(true)}>
+                  <Link className="ml-2 h-4 w-4" />
+                  {table.client_id ? 'שנה שיוך לקוח' : 'שייך ללקוח'}
+                </DropdownMenuItem>
                 <DropdownMenuItem 
                   className="text-destructive focus:text-destructive"
                   onClick={() => setShowDeleteTableDialog(true)}
@@ -3043,6 +3060,17 @@ export default function DynamicTableView() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Link Table to Client Dialog */}
+      {table && (
+        <LinkTableToClientDialog
+          tableId={table.id}
+          tenantId={table.tenant_id}
+          currentClientId={table.client_id}
+          open={showLinkClientDialog}
+          onOpenChange={setShowLinkClientDialog}
+        />
+      )}
     </div>
   );
 }
