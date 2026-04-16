@@ -333,39 +333,20 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
 
   const domain = reportData?.domain || selectedReport?.domain;
 
-  // Load cached comparison data from the database on mount, or auto-fetch if none cached
+  // Load cached comparison data from the DB only — never auto-fetch (saves API credits)
   useEffect(() => {
-    if (selectedReport && !hasAutoEnriched) {
-      const cached = (selectedReport as any).comparison_data;
-      if (cached && cached.threeMonth && cached.yearly) {
-        const threeMonthMap = new Map<string, any>(Object.entries(cached.threeMonth));
-        const yearlyMap = new Map<string, any>(Object.entries(cached.yearly));
-        setCachedComparison({ threeMonth: threeMonthMap, yearly: yearlyMap });
-        setHasAutoEnriched(true);
-      } else if (domain) {
-        // No cached data — auto-fetch from Ahrefs API
-        setHasAutoEnriched(true);
-        const reportDate = selectedReport?.report_date || new Date().toISOString().split('T')[0];
-        fetchComparisons(domain, reportDate, 200).then((result) => {
-          if (result && selectedReport?.id) {
-            const cachePayload: Record<string, Record<string, any>> = {
-              threeMonth: {},
-              yearly: {},
-            };
-            result.threeMonth.forEach((v, k) => { cachePayload.threeMonth[k] = v; });
-            result.yearly.forEach((v, k) => { cachePayload.yearly[k] = v; });
-            supabase
-              .from('ahrefs_reports')
-              .update({ comparison_data: cachePayload } as any)
-              .eq('id', selectedReport.id)
-              .then(() => {});
-          }
-        });
-      } else {
-        setHasAutoEnriched(true);
-      }
+    // Reset live comparison data when switching reports to avoid stale cross-client data
+    resetComparisonData?.();
+    setCachedComparison(null);
+
+    if (!selectedReport) return;
+    const cached = (selectedReport as any).comparison_data;
+    if (cached && cached.threeMonth && cached.yearly) {
+      const threeMonthMap = new Map<string, any>(Object.entries(cached.threeMonth));
+      const yearlyMap = new Map<string, any>(Object.entries(cached.yearly));
+      setCachedComparison({ threeMonth: threeMonthMap, yearly: yearlyMap });
     }
-  }, [selectedReport, hasAutoEnriched, domain, fetchComparisons]);
+  }, [selectedReport?.id]);
 
 
   const handleManualSync = useCallback(async () => {
