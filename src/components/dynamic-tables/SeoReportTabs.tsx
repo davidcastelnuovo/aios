@@ -143,6 +143,7 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
         .select('id, data')
         .eq('table_id', selectedGaTableId)
         .in('data->>report_type', ['channel_group', 'event_aggregate'])
+        .or(`data->>report_type.eq.monthly_organic`)
         .order('created_at', { ascending: false })
         .limit(500);
       if (error) throw error;
