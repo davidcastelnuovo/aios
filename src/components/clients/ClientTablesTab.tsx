@@ -12,6 +12,7 @@ import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { TableCardAlerts } from "@/components/dynamic-tables/TableCardAlerts";
+import { ClientReportPanel } from "@/components/clients/ClientReportPanel";
 import { toast } from "sonner";
 
 interface ClientTablesTabProps {
