@@ -136,7 +136,8 @@ export function SendReportDialog({
     try {
       // Send via WhatsApp
       if (sendWhatsApp) {
-        if (!selectedGroupId && !directPhone) {
+        const hasGroup = selectedGroupId && selectedGroupId !== "__none__";
+        if (!hasGroup && !directPhone) {
           toast.error("יש לבחור קבוצה או להזין מספר טלפון");
           setIsSending(false);
           return;
