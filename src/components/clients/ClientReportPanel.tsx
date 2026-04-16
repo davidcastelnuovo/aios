@@ -469,18 +469,21 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
         </Button>
       </div>
 
-      {/* Hidden iframe for screenshot capture - completely off-screen */}
-      <iframe
-        ref={iframeRef}
-        src={iframeSrc}
-        style={{ position: "fixed", left: -9999, top: -9999, width: 1200, height: 800, opacity: 0, pointerEvents: "none", border: "none", zIndex: -9999 }}
-        title={table.name}
-        onLoad={() => {
-          if (!screenshotUrl && !isCapturing && !isSyncing) {
-            captureScreenshot();
-          }
-        }}
-      />
+      {/* Render iframe in a portal to document.body so it's truly isolated */}
+      {createPortal(
+        <iframe
+          ref={iframeRef}
+          src={iframeSrc}
+          style={{ position: "fixed", left: -9999, top: -9999, width: 1200, height: 800, opacity: 0, pointerEvents: "none", border: "none", zIndex: -9999 }}
+          title={table.name}
+          onLoad={() => {
+            if (!screenshotUrl && !isCapturing && !isSyncing) {
+              captureScreenshot();
+            }
+          }}
+        />,
+        document.body
+      )}
     </div>
   );
 }
