@@ -518,8 +518,18 @@ export function GoogleAnalyticsDashboard({
         .reduce((sum, r) => sum + (Number(r.data.sessions) || 0), 0);
       organicUsers = cgSum('organic search', 'users');
       paidUsers = cgSum('paid search', 'users') + cgSum('paid social', 'users') + cgSum('display', 'users');
-      organicConversions = 0;
-      paidConversions = 0;
+      // Conversions: prefer key_events (matches GA "Key events" column), fallback to conversions, then purchases
+      const cgConvSum = (keyword: string) =>
+        channelGroupRecords
+          .filter(r => String(r.data.channel_group || '').toLowerCase().includes(keyword))
+          .reduce((sum, r) => {
+            const ke = Number(r.data.key_events) || 0;
+            const cv = Number(r.data.conversions) || 0;
+            const pu = Number(r.data.purchases) || 0;
+            return sum + (ke || cv || pu);
+          }, 0);
+      organicConversions = cgConvSum('organic search');
+      paidConversions = cgConvSum('paid search') + cgConvSum('paid social') + cgConvSum('display');
     } else {
       // Fallback: classify from trafficSources (daily_source based)
       organicSessions = trafficSources.filter(s => classifyTraffic(s.name) === 'organic').reduce((sum, s) => sum + s.sessions, 0);
