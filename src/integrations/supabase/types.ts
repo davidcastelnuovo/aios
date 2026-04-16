@@ -7445,6 +7445,339 @@ export type Database = {
         }
         Relationships: []
       }
+      woocommerce_customers: {
+        Row: {
+          avatar_url: string | null
+          billing: Json | null
+          created_at: string | null
+          email: string | null
+          first_name: string | null
+          id: string
+          last_name: string | null
+          orders_count: number | null
+          raw_data: Json | null
+          role: string | null
+          shipping: Json | null
+          site_id: string
+          synced_at: string | null
+          tenant_id: string
+          total_spent: number | null
+          updated_at: string | null
+          username: string | null
+          woo_customer_id: number
+        }
+        Insert: {
+          avatar_url?: string | null
+          billing?: Json | null
+          created_at?: string | null
+          email?: string | null
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          orders_count?: number | null
+          raw_data?: Json | null
+          role?: string | null
+          shipping?: Json | null
+          site_id: string
+          synced_at?: string | null
+          tenant_id: string
+          total_spent?: number | null
+          updated_at?: string | null
+          username?: string | null
+          woo_customer_id: number
+        }
+        Update: {
+          avatar_url?: string | null
+          billing?: Json | null
+          created_at?: string | null
+          email?: string | null
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          orders_count?: number | null
+          raw_data?: Json | null
+          role?: string | null
+          shipping?: Json | null
+          site_id?: string
+          synced_at?: string | null
+          tenant_id?: string
+          total_spent?: number | null
+          updated_at?: string | null
+          username?: string | null
+          woo_customer_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "woocommerce_customers_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "social_media_wordpress_sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "woocommerce_customers_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      woocommerce_orders: {
+        Row: {
+          billing: Json | null
+          created_at: string | null
+          currency: string | null
+          customer_email: string | null
+          customer_first_name: string | null
+          customer_id: number | null
+          customer_last_name: string | null
+          customer_phone: string | null
+          date_completed: string | null
+          date_created: string | null
+          date_modified: string | null
+          date_paid: string | null
+          discount_total: number | null
+          id: string
+          line_items: Json | null
+          order_number: string | null
+          payment_method: string | null
+          payment_method_title: string | null
+          raw_data: Json | null
+          shipping: Json | null
+          shipping_total: number | null
+          site_id: string
+          status: string | null
+          subtotal: number | null
+          synced_at: string | null
+          tenant_id: string
+          total: number | null
+          total_tax: number | null
+          updated_at: string | null
+          woo_order_id: number
+        }
+        Insert: {
+          billing?: Json | null
+          created_at?: string | null
+          currency?: string | null
+          customer_email?: string | null
+          customer_first_name?: string | null
+          customer_id?: number | null
+          customer_last_name?: string | null
+          customer_phone?: string | null
+          date_completed?: string | null
+          date_created?: string | null
+          date_modified?: string | null
+          date_paid?: string | null
+          discount_total?: number | null
+          id?: string
+          line_items?: Json | null
+          order_number?: string | null
+          payment_method?: string | null
+          payment_method_title?: string | null
+          raw_data?: Json | null
+          shipping?: Json | null
+          shipping_total?: number | null
+          site_id: string
+          status?: string | null
+          subtotal?: number | null
+          synced_at?: string | null
+          tenant_id: string
+          total?: number | null
+          total_tax?: number | null
+          updated_at?: string | null
+          woo_order_id: number
+        }
+        Update: {
+          billing?: Json | null
+          created_at?: string | null
+          currency?: string | null
+          customer_email?: string | null
+          customer_first_name?: string | null
+          customer_id?: number | null
+          customer_last_name?: string | null
+          customer_phone?: string | null
+          date_completed?: string | null
+          date_created?: string | null
+          date_modified?: string | null
+          date_paid?: string | null
+          discount_total?: number | null
+          id?: string
+          line_items?: Json | null
+          order_number?: string | null
+          payment_method?: string | null
+          payment_method_title?: string | null
+          raw_data?: Json | null
+          shipping?: Json | null
+          shipping_total?: number | null
+          site_id?: string
+          status?: string | null
+          subtotal?: number | null
+          synced_at?: string | null
+          tenant_id?: string
+          total?: number | null
+          total_tax?: number | null
+          updated_at?: string | null
+          woo_order_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "woocommerce_orders_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "social_media_wordpress_sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "woocommerce_orders_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      woocommerce_products: {
+        Row: {
+          categories: Json | null
+          created_at: string | null
+          id: string
+          images: Json | null
+          name: string | null
+          price: number | null
+          raw_data: Json | null
+          regular_price: number | null
+          sale_price: number | null
+          site_id: string
+          sku: string | null
+          slug: string | null
+          status: string | null
+          stock_quantity: number | null
+          stock_status: string | null
+          synced_at: string | null
+          tenant_id: string
+          total_sales: number | null
+          type: string | null
+          updated_at: string | null
+          woo_product_id: number
+        }
+        Insert: {
+          categories?: Json | null
+          created_at?: string | null
+          id?: string
+          images?: Json | null
+          name?: string | null
+          price?: number | null
+          raw_data?: Json | null
+          regular_price?: number | null
+          sale_price?: number | null
+          site_id: string
+          sku?: string | null
+          slug?: string | null
+          status?: string | null
+          stock_quantity?: number | null
+          stock_status?: string | null
+          synced_at?: string | null
+          tenant_id: string
+          total_sales?: number | null
+          type?: string | null
+          updated_at?: string | null
+          woo_product_id: number
+        }
+        Update: {
+          categories?: Json | null
+          created_at?: string | null
+          id?: string
+          images?: Json | null
+          name?: string | null
+          price?: number | null
+          raw_data?: Json | null
+          regular_price?: number | null
+          sale_price?: number | null
+          site_id?: string
+          sku?: string | null
+          slug?: string | null
+          status?: string | null
+          stock_quantity?: number | null
+          stock_status?: string | null
+          synced_at?: string | null
+          tenant_id?: string
+          total_sales?: number | null
+          type?: string | null
+          updated_at?: string | null
+          woo_product_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "woocommerce_products_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "social_media_wordpress_sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "woocommerce_products_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      woocommerce_sync_log: {
+        Row: {
+          customers_synced: number | null
+          error_message: string | null
+          finished_at: string | null
+          id: string
+          orders_synced: number | null
+          products_synced: number | null
+          site_id: string
+          started_at: string | null
+          status: string
+          tenant_id: string
+        }
+        Insert: {
+          customers_synced?: number | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          orders_synced?: number | null
+          products_synced?: number | null
+          site_id: string
+          started_at?: string | null
+          status?: string
+          tenant_id: string
+        }
+        Update: {
+          customers_synced?: number | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          orders_synced?: number | null
+          products_synced?: number | null
+          site_id?: string
+          started_at?: string | null
+          status?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "woocommerce_sync_log_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "social_media_wordpress_sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "woocommerce_sync_log_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       zoom_recordings: {
         Row: {
           client_id: string | null
