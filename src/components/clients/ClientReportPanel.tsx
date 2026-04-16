@@ -469,12 +469,11 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
         </Button>
       </div>
 
-      {/* Hidden iframe for screenshot capture */}
+      {/* Hidden iframe for screenshot capture - completely off-screen */}
       <iframe
         ref={iframeRef}
         src={iframeSrc}
-        className="border-0 absolute"
-        style={{ width: 1200, height: 800, left: -9999, top: -9999, position: "fixed", opacity: 0, pointerEvents: "none" }}
+        style={{ position: "fixed", left: -9999, top: -9999, width: 1200, height: 800, opacity: 0, pointerEvents: "none", border: "none", zIndex: -9999 }}
         title={table.name}
         onLoad={() => {
           if (!screenshotUrl && !isCapturing && !isSyncing) {
