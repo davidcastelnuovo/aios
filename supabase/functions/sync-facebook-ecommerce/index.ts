@@ -195,11 +195,25 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Fetch insights with actions and action_values for ecommerce data
-    const insightsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/insights?level=campaign&fields=campaign_id,campaign_name,impressions,clicks,cpm,ctr,actions,action_values,spend&time_range={"since":"${sinceStr}","until":"${untilStr}"}&time_increment=1&limit=500&access_token=${accessToken}`;
+    // Fetch insights with actions and action_values for ecommerce data.
+    // IMPORTANT: action_attribution_windows is set to ['1d_click'] to match what Facebook Ads
+    // Manager displays by default for "Today" view. Without this, the API defaults to a wider
+    // window (7d_click,1d_view) and returns inflated conversion counts vs. what users see in UI.
+    // use_unified_attribution_setting=true forces FB to use the ad account's default attribution.
+    const insightsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/insights?level=campaign&fields=campaign_id,campaign_name,impressions,clicks,cpm,ctr,actions,action_values,spend&time_range={"since":"${sinceStr}","until":"${untilStr}"}&time_increment=1&use_unified_attribution_setting=true&limit=500&access_token=${accessToken}`;
     
+    console.log('Facebook insights URL (no token):', insightsUrl.replace(accessToken, 'REDACTED'));
     const response = await fetch(insightsUrl);
     const data = await response.json();
+    
+    // Log raw actions for first campaign for debugging
+    if (data.data?.[0]) {
+      console.log('Sample raw insight:', JSON.stringify({
+        campaign: data.data[0].campaign_name,
+        actions: data.data[0].actions,
+        action_values: data.data[0].action_values,
+      }));
+    }
 
     if (data.error) {
       console.error('Facebook API error:', data.error);
@@ -211,27 +225,35 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Ecommerce action types
-    const purchaseActionTypes = ['purchase', 'omni_purchase', 'offsite_conversion.fb_pixel_purchase'];
-    const addToCartActionTypes = ['add_to_cart', 'offsite_conversion.fb_pixel_add_to_cart'];
-    const initiateCheckoutActionTypes = ['initiate_checkout', 'offsite_conversion.fb_pixel_initiate_checkout'];
+    // Ecommerce action types — ORDERED BY PRIORITY (pixel-specific first, generic last).
+    // Facebook returns multiple action_types for the SAME conversion event (e.g. 'purchase',
+    // 'omni_purchase', and 'offsite_conversion.fb_pixel_purchase' all describe the same purchase).
+    // Summing them triple-counts. We must pick ONE — the most specific (pixel) when available,
+    // falling back to omni, then generic.
+    const purchaseActionTypes = ['offsite_conversion.fb_pixel_purchase', 'omni_purchase', 'purchase'];
+    const addToCartActionTypes = ['offsite_conversion.fb_pixel_add_to_cart', 'omni_add_to_cart', 'add_to_cart'];
+    const initiateCheckoutActionTypes = ['offsite_conversion.fb_pixel_initiate_checkout', 'omni_initiated_checkout', 'initiate_checkout'];
 
     const insights: EcommerceRecord[] = (data.data || []).map((insight: any) => {
       const actions = insight.actions ?? [];
       const actionValues = insight.action_values ?? [];
 
-      // Helper to extract count from actions
+      // Pick the FIRST matching action type (by priority order) and return its value.
+      // Never sum across types — that double/triple-counts the same conversion.
       const getActionCount = (actionTypes: string[]) => {
-        return actions
-          .filter((a: any) => actionTypes.includes(a.action_type))
-          .reduce((sum: number, a: any) => sum + (parseInt(a.value) || 0), 0);
+        for (const type of actionTypes) {
+          const match = actions.find((a: any) => a.action_type === type);
+          if (match) return parseInt(match.value) || 0;
+        }
+        return 0;
       };
 
-      // Helper to extract value from action_values
       const getActionValue = (actionTypes: string[]) => {
-        return actionValues
-          .filter((a: any) => actionTypes.includes(a.action_type))
-          .reduce((sum: number, a: any) => sum + (parseFloat(a.value) || 0), 0);
+        for (const type of actionTypes) {
+          const match = actionValues.find((a: any) => a.action_type === type);
+          if (match) return parseFloat(match.value) || 0;
+        }
+        return 0;
       };
 
       // Extract ecommerce metrics
