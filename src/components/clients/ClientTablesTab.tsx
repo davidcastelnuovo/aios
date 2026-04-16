@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { FileSpreadsheet, Facebook, ShoppingCart, ExternalLink, LayoutDashboard, X, Plus, Maximize2 } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { FileSpreadsheet, Facebook, ShoppingCart, ExternalLink, LayoutDashboard, X, Plus, Maximize2, ChevronDown, Settings } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
@@ -29,6 +30,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
   const [tableSearch, setTableSearch] = useState("");
   const [showTableDropdown, setShowTableDropdown] = useState(false);
   const [viewDashboard, setViewDashboard] = useState<{ id: string; name: string } | null>(null);
+  const [showLinkSection, setShowLinkSection] = useState(false);
 
   // All tables for the tenant
   const { data: allTables = [], isLoading } = useQuery({
@@ -164,180 +166,198 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
 
   return (
     <div className="space-y-4" dir="rtl">
-      {/* Table selector */}
-      <div className="flex flex-col items-end gap-1">
-        <span className="text-muted-foreground text-sm flex items-center gap-1">
-          <FileSpreadsheet className="h-3.5 w-3.5" />
-          :שייך טבלה
-        </span>
-        <div className="relative w-full">
-          <Input
-            placeholder="חפש טבלה לשיוך..."
-            value={tableSearch}
-            onChange={(e) => { setTableSearch(e.target.value); setShowTableDropdown(true); }}
-            onFocus={() => setShowTableDropdown(true)}
-            onBlur={() => setTimeout(() => setShowTableDropdown(false), 200)}
-            className="h-7 text-xs text-right"
-            dir="rtl"
-          />
-          {showTableDropdown && (
-            <div className="absolute z-50 top-full mt-1 w-full bg-popover border rounded-md shadow-md max-h-[200px] overflow-y-auto">
-              {availableTables.length > 0 ? availableTables.map((t: any) => (
-                <button
-                  key={t.id}
-                  className="w-full text-right px-3 py-1.5 text-xs hover:bg-accent transition-colors flex items-center justify-between"
-                  onClick={() => linkTable(t.id)}
-                >
-                  <Plus className="h-3 w-3 text-muted-foreground shrink-0" />
-                  <div className="flex items-center gap-1.5 truncate">
-                    {renderTableIcon(t)}
-                    <span className="truncate">{t.name}</span>
-                  </div>
-                </button>
-              )) : (
-                <div className="px-3 py-2 text-xs text-muted-foreground text-center">אין טבלאות זמינות</div>
-              )}
-            </div>
-          )}
-        </div>
+      {/* Settings toggle for linking */}
+      <div className="flex justify-end">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-xs gap-1 text-muted-foreground"
+          onClick={() => setShowLinkSection(!showLinkSection)}
+        >
+          <Settings className="h-3.5 w-3.5" />
+          ניהול שיוכים
+          <ChevronDown className={`h-3 w-3 transition-transform ${showLinkSection ? 'rotate-180' : ''}`} />
+        </Button>
       </div>
 
-      {/* Dashboard selector */}
-      <div className="flex flex-col items-end gap-1">
-        <span className="text-muted-foreground text-sm flex items-center gap-1">
-          <LayoutDashboard className="h-3.5 w-3.5" />
-          :שייך דשבורד
-        </span>
-        <div className="relative w-full">
-          <Input
-            placeholder="חפש דשבורד לשיוך..."
-            value={dashboardSearch}
-            onChange={(e) => { setDashboardSearch(e.target.value); setShowDashboardDropdown(true); }}
-            onFocus={() => setShowDashboardDropdown(true)}
-            onBlur={() => setTimeout(() => setShowDashboardDropdown(false), 200)}
-            className="h-7 text-xs text-right"
-            dir="rtl"
-          />
-          {showDashboardDropdown && (
-            <div className="absolute z-50 top-full mt-1 w-full bg-popover border rounded-md shadow-md max-h-[200px] overflow-y-auto">
-              {availableDashboards.length > 0 ? availableDashboards.map((d: any) => (
-                <button
-                  key={d.id}
-                  className="w-full text-right px-3 py-1.5 text-xs hover:bg-accent transition-colors flex items-center justify-between"
-                  onClick={() => linkDashboard(d.id)}
-                >
-                  <Plus className="h-3 w-3 text-muted-foreground shrink-0" />
-                  <span className="truncate">{d.name}</span>
-                </button>
-              )) : (
-                <div className="px-3 py-2 text-xs text-muted-foreground text-center">אין דשבורדים זמינים</div>
+      {/* Collapsible link section */}
+      {showLinkSection && (
+        <div className="space-y-3 p-3 bg-muted/30 rounded-lg border">
+          {/* Table selector */}
+          <div className="flex flex-col items-end gap-1">
+            <span className="text-muted-foreground text-xs flex items-center gap-1">
+              <FileSpreadsheet className="h-3 w-3" />
+              שייך טבלה:
+            </span>
+            <div className="relative w-full">
+              <Input
+                placeholder="חפש טבלה לשיוך..."
+                value={tableSearch}
+                onChange={(e) => { setTableSearch(e.target.value); setShowTableDropdown(true); }}
+                onFocus={() => setShowTableDropdown(true)}
+                onBlur={() => setTimeout(() => setShowTableDropdown(false), 200)}
+                className="h-7 text-xs text-right"
+                dir="rtl"
+              />
+              {showTableDropdown && (
+                <div className="absolute z-50 top-full mt-1 w-full bg-popover border rounded-md shadow-md max-h-[200px] overflow-y-auto">
+                  {availableTables.length > 0 ? availableTables.map((t: any) => (
+                    <button
+                      key={t.id}
+                      className="w-full text-right px-3 py-1.5 text-xs hover:bg-accent transition-colors flex items-center justify-between"
+                      onClick={() => linkTable(t.id)}
+                    >
+                      <Plus className="h-3 w-3 text-muted-foreground shrink-0" />
+                      <div className="flex items-center gap-1.5 truncate">
+                        {renderTableIcon(t)}
+                        <span className="truncate">{t.name}</span>
+                      </div>
+                    </button>
+                  )) : (
+                    <div className="px-3 py-2 text-xs text-muted-foreground text-center">אין טבלאות זמינות</div>
+                  )}
+                </div>
               )}
             </div>
-          )}
-        </div>
-      </div>
+          </div>
 
-      {/* Linked tables */}
-      {tables.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="font-semibold text-sm flex items-center gap-2 justify-end">
-            <FileSpreadsheet className="h-4 w-4 text-primary" />
-            טבלאות משויכות
-          </h3>
-          <div className="grid gap-3 md:grid-cols-2">
-            {tables.map((table: any) => (
-              <Card key={table.id} className="cursor-pointer hover:shadow-md transition-shadow">
-                <CardHeader className="p-4">
-                  <CardTitle className="text-sm flex items-center gap-2 justify-between">
-                    <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0"
-                        onClick={(e) => { e.stopPropagation(); unlinkTable(table.id); }}>
-                        <X className="h-3 w-3" />
-                      </Button>
-                      <ExternalLink className="h-3.5 w-3.5 text-muted-foreground shrink-0 cursor-pointer"
-                        onClick={() => navigate(buildPath(`/table/${table.slug}`))} />
-                    </div>
-                    <div className="flex items-center gap-2 truncate cursor-pointer"
-                      onClick={() => navigate(buildPath(`/table/${table.slug}`))}>
-                      {renderTableIcon(table)}
-                      <span className="truncate">{table.name}</span>
-                    </div>
-                  </CardTitle>
-                  {(table.integration_type === "facebook_insights" || table.integration_type === "facebook_ecommerce" || table.integration_type === "google_ads") ? (
-                    (table.integration_settings?.ad_account_id || table.integration_settings?.customer_id) ? (
-                      <CardDescription className="text-green-600 text-xs">✓ מחובר</CardDescription>
-                    ) : (
-                      <CardDescription className="text-amber-600 text-xs">ממתין לחיבור</CardDescription>
-                    )
-                  ) : table.description ? (
-                    <CardDescription className="text-xs">{table.description}</CardDescription>
-                  ) : null}
-                  {table.integration_type === "facebook_insights" && <TableCardAlerts tableId={table.id} />}
-                </CardHeader>
-              </Card>
-            ))}
+          {/* Dashboard selector */}
+          <div className="flex flex-col items-end gap-1">
+            <span className="text-muted-foreground text-xs flex items-center gap-1">
+              <LayoutDashboard className="h-3 w-3" />
+              שייך דשבורד:
+            </span>
+            <div className="relative w-full">
+              <Input
+                placeholder="חפש דשבורד לשיוך..."
+                value={dashboardSearch}
+                onChange={(e) => { setDashboardSearch(e.target.value); setShowDashboardDropdown(true); }}
+                onFocus={() => setShowDashboardDropdown(true)}
+                onBlur={() => setTimeout(() => setShowDashboardDropdown(false), 200)}
+                className="h-7 text-xs text-right"
+                dir="rtl"
+              />
+              {showDashboardDropdown && (
+                <div className="absolute z-50 top-full mt-1 w-full bg-popover border rounded-md shadow-md max-h-[200px] overflow-y-auto">
+                  {availableDashboards.length > 0 ? availableDashboards.map((d: any) => (
+                    <button
+                      key={d.id}
+                      className="w-full text-right px-3 py-1.5 text-xs hover:bg-accent transition-colors flex items-center justify-between"
+                      onClick={() => linkDashboard(d.id)}
+                    >
+                      <Plus className="h-3 w-3 text-muted-foreground shrink-0" />
+                      <span className="truncate">{d.name}</span>
+                    </button>
+                  )) : (
+                    <div className="px-3 py-2 text-xs text-muted-foreground text-center">אין דשבורדים זמינים</div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
 
-      {/* Linked dashboards */}
-      {dashboards.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="font-semibold text-sm flex items-center gap-2 justify-end">
-            <LayoutDashboard className="h-4 w-4 text-primary" />
-            דשבורדים משויכים
-          </h3>
-          <div className="grid gap-3 md:grid-cols-2">
-            {dashboards.map((dash: any) => (
-              <Card key={dash.id} className="cursor-pointer hover:shadow-md transition-shadow"
-                onClick={() => setViewDashboard({ id: dash.id, name: dash.name })}>
-                <CardHeader className="p-4">
-                  <CardTitle className="text-sm flex items-center gap-2 justify-between">
-                    <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0"
-                        onClick={(e) => { e.stopPropagation(); unlinkDashboard(dash.id); }}>
-                        <X className="h-3 w-3" />
-                      </Button>
-                      <ExternalLink className="h-3.5 w-3.5 text-muted-foreground shrink-0 cursor-pointer"
-                        onClick={(e) => { e.stopPropagation(); navigate(buildPath(`/dashboard/${dash.id}`)); }} />
-                    </div>
-                    <span className="truncate">{dash.name}</span>
-                  </CardTitle>
-                </CardHeader>
-              </Card>
-            ))}
+      {/* Embedded tables — each table rendered inline via iframe */}
+      {tables.map((table: any) => (
+        <Collapsible key={table.id} defaultOpen>
+          <div className="border rounded-lg overflow-hidden">
+            <CollapsibleTrigger className="w-full flex items-center justify-between px-3 py-2 bg-muted/40 hover:bg-muted/60 transition-colors group">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 shrink-0"
+                  onClick={(e) => { e.stopPropagation(); unlinkTable(table.id); }}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 shrink-0"
+                  onClick={(e) => { e.stopPropagation(); navigate(buildPath(`/table/${table.slug}`)); }}
+                >
+                  <ExternalLink className="h-3 w-3" />
+                </Button>
+                <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=closed]:rotate-90" />
+              </div>
+              <div className="flex items-center gap-2 text-sm font-medium">
+                {renderTableIcon(table)}
+                <span>{table.name}</span>
+                {(table.integration_type === "facebook_insights" || table.integration_type === "facebook_ecommerce" || table.integration_type === "google_ads") && (
+                  (table.integration_settings?.ad_account_id || table.integration_settings?.customer_id) ? (
+                    <span className="text-green-600 text-xs">✓ מחובר</span>
+                  ) : (
+                    <span className="text-amber-600 text-xs">ממתין לחיבור</span>
+                  )
+                )}
+              </div>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="border-t">
+                <iframe
+                  src={`${window.location.origin}${buildPath(`/table/${table.slug}?embed=1`)}`}
+                  className="w-full border-0"
+                  style={{ height: '500px' }}
+                  title={table.name}
+                />
+              </div>
+            </CollapsibleContent>
           </div>
-        </div>
-      )}
+        </Collapsible>
+      ))}
+
+      {/* Embedded dashboards */}
+      {dashboards.map((dash: any) => (
+        <Collapsible key={dash.id} defaultOpen>
+          <div className="border rounded-lg overflow-hidden">
+            <CollapsibleTrigger className="w-full flex items-center justify-between px-3 py-2 bg-muted/40 hover:bg-muted/60 transition-colors group">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 shrink-0"
+                  onClick={(e) => { e.stopPropagation(); unlinkDashboard(dash.id); }}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 shrink-0"
+                  onClick={(e) => { e.stopPropagation(); navigate(buildPath(`/dashboard/${dash.id}`)); }}
+                >
+                  <Maximize2 className="h-3 w-3" />
+                </Button>
+                <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=closed]:rotate-90" />
+              </div>
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <LayoutDashboard className="h-4 w-4" />
+                <span>{dash.name}</span>
+              </div>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="border-t">
+                <iframe
+                  src={`${window.location.origin}${buildPath(`/dashboard/${dash.id}`)}`}
+                  className="w-full border-0"
+                  style={{ height: '500px' }}
+                  title={dash.name}
+                />
+              </div>
+            </CollapsibleContent>
+          </div>
+        </Collapsible>
+      ))}
 
       {!hasContent && (
         <div className="text-center py-8 text-sm text-muted-foreground">
           <FileSpreadsheet className="h-8 w-8 mx-auto mb-2 opacity-30" />
-          <p>אין טבלאות או דשבורדים משויכים ל{clientName}</p>
-          <p className="text-xs mt-1">ניתן לשייך מהשדות למעלה</p>
+          <p>אין דוחות או דשבורדים משויכים ל{clientName}</p>
+          <p className="text-xs mt-1">לחץ על "ניהול שיוכים" כדי לשייך</p>
         </div>
       )}
-
-      {/* Dashboard view dialog */}
-      <Dialog open={!!viewDashboard} onOpenChange={(open) => !open && setViewDashboard(null)}>
-        <DialogContent className="max-w-[95vw] w-[95vw] max-h-[90vh] h-[90vh] p-0 overflow-hidden">
-          <DialogHeader className="p-4 pb-0 flex flex-row items-center justify-between">
-            <DialogTitle className="text-base">{viewDashboard?.name}</DialogTitle>
-            <Button variant="ghost" size="sm" className="gap-1 text-xs"
-              onClick={() => { navigate(buildPath(`/dashboard/${viewDashboard?.id}`)); setViewDashboard(null); }}>
-              <Maximize2 className="h-3.5 w-3.5" />
-              פתח במסך מלא
-            </Button>
-          </DialogHeader>
-          {viewDashboard && (
-            <iframe
-              src={`${window.location.origin}${buildPath(`/dashboard/${viewDashboard.id}`)}`}
-              className="w-full flex-1 border-0"
-              style={{ height: 'calc(90vh - 60px)' }}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
