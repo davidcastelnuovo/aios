@@ -52,30 +52,32 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+    const requestBody = await req.json();
+    const { table_id, _internal_cron } = requestBody;
+
+    // Auth: skip user check when called internally by cron
+    let userId: string | null = null;
+    if (!_internal_cron) {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      userId = user.id;
     }
 
-    const { table_id } = await req.json();
-    
     if (!table_id) {
       return new Response(JSON.stringify({ error: 'table_id required' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    const { data: tenantId } = await supabase.rpc('get_user_tenant_id', { _user_id: user.id });
-    if (!tenantId) {
-      return new Response(JSON.stringify({ error: 'No tenant found' }), {
-        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
+    // Use admin client for reads to support both user and cron contexts
+    const readClient = _internal_cron ? supabaseAdmin : supabase;
 
     // Get table with integration settings
-    const { data: table, error: tableError } = await supabase
+    const { data: table, error: tableError } = await readClient
       .from('crm_tables')
       .select('*')
       .eq('id', table_id)
@@ -106,8 +108,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get Facebook access token (including shared integrations)
-    let { data: integration } = await supabase
+    // Get Facebook access token (including shared integrations) - use admin to bypass RLS
+    let { data: integration } = await supabaseAdmin
       .from('tenant_integrations')
       .select('api_key, shared_from_integration_id')
       .eq('tenant_id', tableTenantId)
@@ -118,7 +120,7 @@ Deno.serve(async (req) => {
 
     // If this is a shared integration, fetch the source integration's token
     if (integration?.shared_from_integration_id && !integration?.api_key) {
-      const { data: sourceIntegration } = await supabase
+      const { data: sourceIntegration } = await supabaseAdmin
         .from('tenant_integrations')
         .select('api_key')
         .eq('id', integration.shared_from_integration_id)
@@ -196,23 +198,24 @@ Deno.serve(async (req) => {
     }
 
     // Fetch insights with actions and action_values for ecommerce data.
-    // IMPORTANT: action_attribution_windows is set to ['1d_click'] to match what Facebook Ads
-    // Manager displays by default for "Today" view. Without this, the API defaults to a wider
-    // window (7d_click,1d_view) and returns inflated conversion counts vs. what users see in UI.
-    // use_unified_attribution_setting=true forces FB to use the ad account's default attribution.
-    const insightsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/insights?level=campaign&fields=campaign_id,campaign_name,impressions,clicks,cpm,ctr,actions,action_values,spend&time_range={"since":"${sinceStr}","until":"${untilStr}"}&time_increment=1&use_unified_attribution_setting=true&limit=500&access_token=${accessToken}`;
+    // IMPORTANT: action_attribution_windows=['7d_click'] aligns with the default attribution
+    // setting in Facebook Ads Manager UI for most accounts (post-iOS14). This avoids inflated
+    // conversion counts that we'd get with the wider 7d_click+1d_view window.
+    const insightsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/insights?level=campaign&fields=campaign_id,campaign_name,impressions,clicks,cpm,ctr,actions,action_values,spend&time_range={"since":"${sinceStr}","until":"${untilStr}"}&time_increment=1&action_attribution_windows=["7d_click"]&limit=500&access_token=${accessToken}`;
     
     console.log('Facebook insights URL (no token):', insightsUrl.replace(accessToken, 'REDACTED'));
     const response = await fetch(insightsUrl);
     const data = await response.json();
     
-    // Log raw actions for first campaign for debugging
+    // Log raw actions for first campaign for debugging — full breakdown of all action_types
     if (data.data?.[0]) {
-      console.log('Sample raw insight:', JSON.stringify({
+      console.log('Sample raw insight (FULL):', JSON.stringify({
         campaign: data.data[0].campaign_name,
-        actions: data.data[0].actions,
-        action_values: data.data[0].action_values,
-      }));
+        date: data.data[0].date_start,
+        spend: data.data[0].spend,
+        all_actions: data.data[0].actions,
+        all_action_values: data.data[0].action_values,
+      }, null, 2));
     }
 
     if (data.error) {
@@ -225,14 +228,15 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Ecommerce action types — ORDERED BY PRIORITY (pixel-specific first, generic last).
-    // Facebook returns multiple action_types for the SAME conversion event (e.g. 'purchase',
-    // 'omni_purchase', and 'offsite_conversion.fb_pixel_purchase' all describe the same purchase).
-    // Summing them triple-counts. We must pick ONE — the most specific (pixel) when available,
-    // falling back to omni, then generic.
-    const purchaseActionTypes = ['offsite_conversion.fb_pixel_purchase', 'omni_purchase', 'purchase'];
-    const addToCartActionTypes = ['offsite_conversion.fb_pixel_add_to_cart', 'omni_add_to_cart', 'add_to_cart'];
-    const initiateCheckoutActionTypes = ['offsite_conversion.fb_pixel_initiate_checkout', 'omni_initiated_checkout', 'initiate_checkout'];
+    // Ecommerce action types — ORDERED BY PRIORITY (deduplicated FIRST, pixel-specific LAST).
+    // Facebook returns multiple action_types for the SAME conversion event:
+    //   - 'omni_purchase' = Aggregated, deduplicated cross-platform (this is what FB Ads Manager UI shows)
+    //   - 'purchase'      = Generic purchase event
+    //   - 'offsite_conversion.fb_pixel_purchase' = Raw pixel events (includes organic + cross-device, INFLATES counts)
+    // We pick the FIRST matching one. omni_purchase aligns with the "Purchases" column in Ads Manager.
+    const purchaseActionTypes = ['omni_purchase', 'purchase', 'offsite_conversion.fb_pixel_purchase'];
+    const addToCartActionTypes = ['omni_add_to_cart', 'add_to_cart', 'offsite_conversion.fb_pixel_add_to_cart'];
+    const initiateCheckoutActionTypes = ['omni_initiated_checkout', 'initiate_checkout', 'offsite_conversion.fb_pixel_initiate_checkout'];
 
     const insights: EcommerceRecord[] = (data.data || []).map((insight: any) => {
       const actions = insight.actions ?? [];
@@ -355,7 +359,7 @@ Deno.serve(async (req) => {
       const rows = insights.map((insight) => ({
         table_id,
         tenant_id: tableTenantId,
-        created_by: user.id,
+        created_by: userId,
         data: insight as any,
       }));
       const { error: insErr, count } = await supabaseAdmin

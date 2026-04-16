@@ -99,6 +99,9 @@ export default function DynamicTableView() {
   const [reportScreenshotBlob, setReportScreenshotBlob] = useState<Blob | null>(null);
   const [isCapturingScreenshot, setIsCapturingScreenshot] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
+  const [debugDialogOpen, setDebugDialogOpen] = useState(false);
+  const [debugData, setDebugData] = useState<any>(null);
+  const [debugLoading, setDebugLoading] = useState(false);
   const [selectedAdAccount, setSelectedAdAccount] = useState<string>("");
   const [adAccountSearch, setAdAccountSearch] = useState("");
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
@@ -1743,6 +1746,32 @@ export default function DynamicTableView() {
               >
                 <Settings className="h-4 w-4" />
               </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                title="השווה ל-Facebook (Debug)"
+                onClick={async () => {
+                  setDebugLoading(true);
+                  setDebugDialogOpen(true);
+                  setDebugData(null);
+                  try {
+                    const { data, error } = await supabase.functions.invoke('debug-facebook-ecommerce', {
+                      method: 'POST',
+                      body: { table_id: table.id },
+                    });
+                    if (error) throw error;
+                    setDebugData(data);
+                  } catch (e: any) {
+                    toast.error('שגיאה בדיבאג: ' + e.message);
+                    setDebugDialogOpen(false);
+                  } finally {
+                    setDebugLoading(false);
+                  }
+                }}
+              >
+                <Info className="h-4 w-4" />
+                Debug
+              </Button>
             </div>
           )}
           
@@ -2004,6 +2033,28 @@ export default function DynamicTableView() {
               tenantId={table.tenant_id}
             />
           )}
+
+          {/* Debug Dialog for Facebook Ecommerce raw data */}
+          <Dialog open={debugDialogOpen} onOpenChange={setDebugDialogOpen}>
+            <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto" dir="ltr">
+              <DialogHeader>
+                <DialogTitle>Facebook Raw Data — Debug</DialogTitle>
+                <DialogDescription>
+                  השווה את ה-action_types הגולמיים שפייסבוק מחזיר עם מה שאתה רואה ב-Ads Manager UI.
+                  שלוש קריאות עם attribution windows שונים.
+                </DialogDescription>
+              </DialogHeader>
+              {debugLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin" />
+                </div>
+              ) : (
+                <pre className="text-xs bg-muted p-4 rounded overflow-x-auto whitespace-pre-wrap" style={{ direction: 'ltr' }}>
+                  {debugData ? JSON.stringify(debugData, null, 2) : 'No data'}
+                </pre>
+              )}
+            </DialogContent>
+          </Dialog>
 
           {/* Settings Dialog for Facebook Insights */}
           <Dialog open={showSettingsDialog} onOpenChange={(open) => {
