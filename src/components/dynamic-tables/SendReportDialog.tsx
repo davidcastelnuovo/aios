@@ -145,11 +145,17 @@ export function SendReportDialog({
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error("Not authenticated");
 
+        // Build caption with optional share link
+        const captionParts: string[] = [];
+        if (messageText) captionParts.push(messageText);
+        if (shareLink) captionParts.push(`\n📊 צפה בדוח המלא: ${shareLink}`);
+        const fullCaption = captionParts.join("");
+
         const formData = new FormData();
         formData.append("file", screenshotBlob, `report-${tableName}.png`);
         formData.append("tenantId", tenantId);
         formData.append("fileType", "image");
-        if (messageText) formData.append("caption", messageText);
+        if (fullCaption) formData.append("caption", fullCaption);
         
         if (selectedGroupId) {
           formData.append("groupId", selectedGroupId);
