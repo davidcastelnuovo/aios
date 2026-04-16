@@ -1194,9 +1194,10 @@ export default function DynamicTableView() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
       
-      // Find the selected ad account to get its currency
+      // Find the selected ad account to get its currency (only as a fallback)
       const selectedAccount = adAccounts?.find((acc: any) => acc.id === adAccountId);
-      const currency = selectedAccount?.currency || 'ILS';
+      // User's manual choice wins over the ad-account currency
+      const currency = selectedCurrency || selectedAccount?.currency || 'ILS';
       
       const { error } = await supabase
         .from('crm_tables')
