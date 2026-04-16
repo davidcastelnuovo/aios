@@ -20,6 +20,7 @@ import { ClientUpdatesTab } from "@/components/clients/ClientUpdatesTab";
 import { ClientTablesTab } from "@/components/clients/ClientTablesTab";
 import { ClientLinkedFiles } from "@/components/clients/ClientLinkedFiles";
 import { ClientCredentialsTab } from "@/components/clients/ClientCredentialsTab";
+import { ClientWordPressTab } from "@/components/clients/ClientWordPressTab";
 import { ClientDocsEditor } from "@/components/clients/ClientDocsEditor";
 import { FolderLinksField } from "@/components/forms/FolderLinksField";
 import { AttachmentsField } from "@/components/forms/AttachmentsField";
@@ -677,7 +678,7 @@ export function ClientsChatView({
 
             {/* Detail tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0 flex flex-col overflow-hidden">
-              <TabsList className="mx-4 mt-3 grid grid-cols-9 w-auto max-w-3xl h-9 bg-muted/50 mr-4 ml-auto">
+              <TabsList className="mx-4 mt-3 grid grid-cols-10 w-auto max-w-4xl h-9 bg-muted/50 mr-4 ml-auto">
                 <TabsTrigger value="details" className="text-xs gap-1">
                   <FileText className="h-3.5 w-3.5" />
                   פרטי לקוח
@@ -1103,6 +1104,10 @@ export function ClientsChatView({
 
                 <TabsContent value="updates" className="mt-0">
                   <ClientUpdatesTab clientId={selectedClient.id} clientName={selectedClient.name || "לקוח"} />
+                </TabsContent>
+
+                <TabsContent value="wordpress" className="mt-0">
+                  <ClientWordPressTab clientId={selectedClient.id} />
                 </TabsContent>
               </ScrollArea>
 
