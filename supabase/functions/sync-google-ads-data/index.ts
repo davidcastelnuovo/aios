@@ -185,6 +185,9 @@ Deno.serve(async (req) => {
 
 
     // Use Google Ads Query Language to fetch campaign performance
+    // Note: We fetch BOTH "conversions" (counted conversions) and "all_conversions"
+    // because some accounts (e.g. Performance Max with offline/store conversions)
+    // report value via all_conversions_value rather than conversions_value.
     const query = `
       SELECT
         segments.date,
@@ -197,6 +200,8 @@ Deno.serve(async (req) => {
         metrics.cost_micros,
         metrics.conversions,
         metrics.conversions_value,
+        metrics.all_conversions,
+        metrics.all_conversions_value,
         metrics.cost_per_conversion
       FROM campaign
       WHERE segments.date BETWEEN '${startDate.toISOString().split('T')[0]}' AND '${endDate.toISOString().split('T')[0]}'
