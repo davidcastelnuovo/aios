@@ -196,6 +196,7 @@ Deno.serve(async (req) => {
         metrics.average_cpc,
         metrics.cost_micros,
         metrics.conversions,
+        metrics.conversions_value,
         metrics.cost_per_conversion
       FROM campaign
       WHERE segments.date BETWEEN '${startDate.toISOString().split('T')[0]}' AND '${endDate.toISOString().split('T')[0]}'
