@@ -305,20 +305,39 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
 
   const domain = reportData?.domain || selectedReport?.domain;
 
-  // Load cached comparison data from the database on mount (no API call)
+  // Load cached comparison data from the database on mount, or auto-fetch if none cached
   useEffect(() => {
     if (selectedReport && !hasAutoEnriched) {
       const cached = (selectedReport as any).comparison_data;
       if (cached && cached.threeMonth && cached.yearly) {
         const threeMonthMap = new Map<string, any>(Object.entries(cached.threeMonth));
         const yearlyMap = new Map<string, any>(Object.entries(cached.yearly));
-        // Set comparison data via the hook's internal setter is not exposed,
-        // so we store it locally and merge into enrichKeyword
         setCachedComparison({ threeMonth: threeMonthMap, yearly: yearlyMap });
+        setHasAutoEnriched(true);
+      } else if (domain) {
+        // No cached data — auto-fetch from Ahrefs API
+        setHasAutoEnriched(true);
+        const reportDate = selectedReport?.report_date || new Date().toISOString().split('T')[0];
+        fetchComparisons(domain, reportDate, 200).then((result) => {
+          if (result && selectedReport?.id) {
+            const cachePayload: Record<string, Record<string, any>> = {
+              threeMonth: {},
+              yearly: {},
+            };
+            result.threeMonth.forEach((v, k) => { cachePayload.threeMonth[k] = v; });
+            result.yearly.forEach((v, k) => { cachePayload.yearly[k] = v; });
+            supabase
+              .from('ahrefs_reports')
+              .update({ comparison_data: cachePayload } as any)
+              .eq('id', selectedReport.id)
+              .then(() => {});
+          }
+        });
+      } else {
+        setHasAutoEnriched(true);
       }
-      setHasAutoEnriched(true);
     }
-  }, [selectedReport, hasAutoEnriched]);
+  }, [selectedReport, hasAutoEnriched, domain, fetchComparisons]);
 
 
   const handleManualSync = useCallback(async () => {
