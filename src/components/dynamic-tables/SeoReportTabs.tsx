@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/button";
 import { SeoDashboardView } from "./SeoDashboardView";
 import { SearchConsoleDashboard } from "./SearchConsoleDashboard";
 import { GoogleAnalyticsDashboard } from "./GoogleAnalyticsDashboard";
+import { GoogleAnalyticsTableDialog } from "./GoogleAnalyticsTableDialog";
 import { GscIntegration } from "./seo/GscIntegration";
-import { TrendingUp, Search, BarChart3, Settings2, RefreshCw } from "lucide-react";
+import { TrendingUp, Search, BarChart3, Settings2, RefreshCw, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 
@@ -69,6 +70,7 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
   // Selected GA table (from saved or first available)
   const [selectedGaTableId, setSelectedGaTableId] = useState<string>("");
   const [selectedGscTableId, setSelectedGscTableId] = useState<string>("");
+  const [showGaDialog, setShowGaDialog] = useState(false);
 
   useEffect(() => {
     if (savedGaTableId) setSelectedGaTableId(savedGaTableId);
@@ -317,6 +319,15 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                         })}
                       </SelectContent>
                     </Select>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      onClick={() => setShowGaDialog(true)}
+                      title="צור חיבור Analytics חדש"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
                     {selectedGaTableId && (
                       <>
                         <Badge variant="secondary" className="text-xs">
@@ -378,6 +389,16 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
           </TabsContent>
         )}
       </Tabs>
+
+      <GoogleAnalyticsTableDialog
+        open={showGaDialog}
+        onOpenChange={(open) => {
+          setShowGaDialog(open);
+          if (!open) {
+            queryClient.invalidateQueries({ queryKey: ['seo-related-tables'] });
+          }
+        }}
+      />
     </div>
   );
 }
