@@ -2496,7 +2496,7 @@ export default function DynamicTableView() {
           })()}
         </Card>
       )}
-
+      </div>
 
       {/* Summary Stats for Google Ads */}
       {hasGoogleAds && filteredRecords && filteredRecords.length > 0 && (
