@@ -2193,9 +2193,9 @@ export default function DynamicTableView() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setShowWebhookDialog(true)}>
+              <DropdownMenuItem onClick={handleSendReport} disabled={isCapturingScreenshot}>
                 <Send className="ml-2 h-4 w-4" />
-                שלח עדכון ללקוח
+                {isCapturingScreenshot ? 'מצלם...' : 'שלח עדכון ללקוח'}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
