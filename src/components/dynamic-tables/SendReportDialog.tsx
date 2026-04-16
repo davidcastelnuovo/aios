@@ -21,13 +21,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Send, Mail, MessageCircle, Loader2 } from "lucide-react";
+import { Send, Mail, MessageCircle, Loader2, Link2 } from "lucide-react";
 
 interface SendReportDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   screenshotBlob: Blob | null;
   tableName: string;
+  tableId: string;
   clientId?: string | null;
   tenantId: string;
 }
@@ -37,6 +38,7 @@ export function SendReportDialog({
   onOpenChange,
   screenshotBlob,
   tableName,
+  tableId,
   clientId,
   tenantId,
 }: SendReportDialogProps) {
@@ -89,6 +91,27 @@ export function SendReportDialog({
     enabled: open,
   });
 
+  // Fetch active share link for the table
+  const { data: shareLink } = useQuery({
+    queryKey: ["table-share-link", tableId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("table_shares" as any)
+        .select("share_token, is_active")
+        .eq("table_id", tableId)
+        .eq("is_active", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const shareData = data as any;
+      if (shareData?.share_token) {
+        return `https://after-lead.lovable.app/shared/table/${shareData.share_token}`;
+      }
+      return null;
+    },
+    enabled: open && !!tableId,
+  });
+
   // Pre-fill from client data
   useEffect(() => {
     if (client) {
@@ -113,7 +136,8 @@ export function SendReportDialog({
     try {
       // Send via WhatsApp
       if (sendWhatsApp) {
-        if (!selectedGroupId && !directPhone) {
+        const hasGroup = selectedGroupId && selectedGroupId !== "__none__";
+        if (!hasGroup && !directPhone) {
           toast.error("יש לבחור קבוצה או להזין מספר טלפון");
           setIsSending(false);
           return;
@@ -122,13 +146,19 @@ export function SendReportDialog({
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error("Not authenticated");
 
+        // Build caption with optional share link
+        const captionParts: string[] = [];
+        if (messageText) captionParts.push(messageText);
+        if (shareLink) captionParts.push(`\n📊 צפה בדוח המלא: ${shareLink}`);
+        const fullCaption = captionParts.join("");
+
         const formData = new FormData();
         formData.append("file", screenshotBlob, `report-${tableName}.png`);
         formData.append("tenantId", tenantId);
         formData.append("fileType", "image");
-        if (messageText) formData.append("caption", messageText);
+        if (fullCaption) formData.append("caption", fullCaption);
         
-        if (selectedGroupId) {
+        if (hasGroup) {
           formData.append("groupId", selectedGroupId);
         } else if (directPhone) {
           formData.append("phoneNumber", directPhone);
@@ -222,7 +252,7 @@ export function SendReportDialog({
                     <SelectValue placeholder="בחר קבוצה..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">ללא קבוצה - שלח לטלפון</SelectItem>
+                    <SelectItem value="__none__">ללא קבוצה - שלח לטלפון</SelectItem>
                     {groups?.map((group) => (
                       <SelectItem key={group.id} value={group.id}>
                         {group.group_name}
@@ -231,7 +261,7 @@ export function SendReportDialog({
                   </SelectContent>
                 </Select>
               </div>
-              {!selectedGroupId && (
+              {(!selectedGroupId || selectedGroupId === "__none__") && (
                 <div>
                   <Label htmlFor="direct-phone" className="text-sm">מספר טלפון</Label>
                   <Input
@@ -258,6 +288,20 @@ export function SendReportDialog({
                   placeholder="example@email.com"
                 />
               </div>
+            </div>
+          )}
+
+          {/* Share Link Info */}
+          {shareLink && (
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 text-sm text-muted-foreground">
+              <Link2 className="h-4 w-4 shrink-0" />
+              <span>קישור צפייה בטבלה יצורף אוטומטית להודעה</span>
+            </div>
+          )}
+          {!shareLink && (
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 text-sm text-muted-foreground">
+              <Link2 className="h-4 w-4 shrink-0 opacity-50" />
+              <span>אין קישור שיתוף פעיל — צור קישור דרך "שתף טבלה" כדי לצרף לינק</span>
             </div>
           )}
 
