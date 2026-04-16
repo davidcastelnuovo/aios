@@ -179,7 +179,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
     setIsCapturing(true);
     try {
       const iframe = iframeRef.current;
-      if (!iframe) {
+      if (!iframe || !iframe.contentDocument?.body) {
         setIsCapturing(false);
         return;
       }
@@ -187,25 +187,23 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
       // Wait for iframe content to fully render
       await new Promise((resolve) => setTimeout(resolve, 4000));
 
+      const iframeBody = iframe.contentDocument.body;
       const html2canvas = (await import("html2canvas")).default;
       
-      // Temporarily make iframe visible for html2canvas to capture
-      const prevStyle = iframe.style.cssText;
-      iframe.style.cssText = "position:fixed;left:0;top:0;width:1200px;height:800px;opacity:0.01;pointer-events:none;z-index:-9999;";
-      
-      const canvas = await html2canvas(iframe.contentDocument?.body || iframe, {
-        scale: 2,
+      const canvas = await html2canvas(iframeBody, {
+        scale: 1.5,
         useCORS: true,
         allowTaint: true,
-        width: 1200,
-        height: 800,
         logging: false,
+        // Skip nested iframes to prevent infinite recursion
+        ignoreElements: (el) => el.tagName === "IFRAME",
+        width: iframeBody.scrollWidth,
+        height: Math.min(iframeBody.scrollHeight, 1200),
+        windowWidth: 1200,
+        windowHeight: 800,
       });
-      
-      // Hide iframe again
-      iframe.style.cssText = prevStyle;
 
-      const dataUrl = canvas.toDataURL("image/png", 0.9);
+      const dataUrl = canvas.toDataURL("image/png", 0.85);
       setScreenshotUrl(dataUrl);
       try {
         localStorage.setItem(CACHE_KEY_PREFIX + table.id, dataUrl);
@@ -213,9 +211,10 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
 
       canvas.toBlob((blob) => {
         if (blob) setScreenshotBlob(blob);
-      }, "image/png", 0.9);
+      }, "image/png", 0.85);
     } catch (err) {
       console.error("Screenshot capture error:", err);
+      toast.error("שגיאה בצילום הדוח");
     } finally {
       setIsCapturing(false);
     }
