@@ -480,7 +480,21 @@ export function GoogleAnalyticsDashboard({
     };
 
     // Prefer channel_group records — they match GA Traffic Acquisition exactly
-    const channelGroupRecords = records.filter(r => r.data.report_type === 'channel_group');
+    // Filter by date range so the organic/paid breakdown respects the selected period
+    const channelGroupRecords = records.filter(r => {
+      if (r.data.report_type !== 'channel_group') return false;
+      if (!r.data.date) return true; // legacy records without date — include
+      try {
+        const recordDate = parseISO(r.data.date);
+        const start = new Date(currentRange.start);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(currentRange.end);
+        end.setHours(23, 59, 59, 999);
+        return isWithinInterval(recordDate, { start, end });
+      } catch {
+        return true;
+      }
+    });
     let organicSessions: number;
     let paidSessions: number;
     let otherSessions: number;
