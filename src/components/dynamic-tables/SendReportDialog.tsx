@@ -105,7 +105,7 @@ export function SendReportDialog({
         .maybeSingle();
       const shareData = data as any;
       if (shareData?.share_token) {
-        return `https://after-lead.lovable.app/shared/table/${shareData.share_token}`;
+        return `https://after-lead.com/shared/table/${shareData.share_token}`;
       }
       return null;
     },
