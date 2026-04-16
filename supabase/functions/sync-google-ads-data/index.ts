@@ -20,7 +20,9 @@ interface GoogleAdsRecord {
   cpc: number;
   cost: number;
   conversions: number;
+  conversions_value: number;
   cost_per_conversion: number;
+  roas: number;
 }
 
 Deno.serve(async (req) => {
@@ -194,6 +196,7 @@ Deno.serve(async (req) => {
         metrics.average_cpc,
         metrics.cost_micros,
         metrics.conversions,
+        metrics.conversions_value,
         metrics.cost_per_conversion
       FROM campaign
       WHERE segments.date BETWEEN '${startDate.toISOString().split('T')[0]}' AND '${endDate.toISOString().split('T')[0]}'
@@ -338,6 +341,9 @@ Deno.serve(async (req) => {
       for (const result of results) {
         const costMicros = parseInt(result.metrics?.costMicros || '0');
         const cost = costMicros / 1000000; // Convert micros to actual currency
+        const conversions = parseFloat(result.metrics?.conversions || '0');
+        const conversionsValue = parseFloat(result.metrics?.conversionsValue || '0');
+        const roas = cost > 0 ? conversionsValue / cost : 0;
 
         records.push({
           date: result.segments?.date || '',
@@ -348,8 +354,10 @@ Deno.serve(async (req) => {
           ctr: parseFloat(result.metrics?.ctr || '0') * 100, // Convert to percentage
           cpc: parseInt(result.metrics?.averageCpc || '0') / 1000000,
           cost: cost,
-          conversions: parseFloat(result.metrics?.conversions || '0'),
-          cost_per_conversion: parseFloat(result.metrics?.costPerConversion || '0') / 1000000,
+          conversions,
+          conversions_value: conversionsValue,
+          cost_per_conversion: parseInt(result.metrics?.costPerConversion || '0') / 1000000,
+          roas: Math.round(roas * 100) / 100,
         });
       }
     }
@@ -357,9 +365,9 @@ Deno.serve(async (req) => {
 
 
     // Create fields if they don't exist (use admin client - table may belong to a different tenant)
-    const fieldKeys = ['date', 'campaign_name', 'campaign_id', 'impressions', 'clicks', 'ctr', 'cpc', 'cost', 'conversions', 'cost_per_conversion'];
-    const fieldNames = ['תאריך', 'שם הקמפיין', 'מזהה קמפיין', 'חשיפות', 'קליקים', 'אחוז קליקים', 'עלות לקליק', 'הוצאה', 'המרות', 'עלות להמרה'];
-    const fieldTypes = ['date', 'text', 'text', 'number', 'number', 'number', 'number', 'number', 'number', 'number'];
+    const fieldKeys = ['date', 'campaign_name', 'campaign_id', 'impressions', 'clicks', 'ctr', 'cpc', 'cost', 'conversions', 'conversions_value', 'cost_per_conversion', 'roas'];
+    const fieldNames = ['תאריך', 'שם הקמפיין', 'מזהה קמפיין', 'חשיפות', 'קליקים', 'אחוז קליקים', 'עלות לקליק', 'הוצאה', 'המרות', 'ערך המרות', 'עלות להמרה', 'ROAS'];
+    const fieldTypes = ['date', 'text', 'text', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number'];
 
     for (let i = 0; i < fieldKeys.length; i++) {
       const { data: existingField } = await supabaseAdmin
