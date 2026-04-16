@@ -165,7 +165,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
   const captureScreenshot = useCallback(async () => {
     setIsCapturing(true);
     try {
-      // Wait for iframe to be ready
+      // Wait for iframe content to render
       await new Promise((resolve) => setTimeout(resolve, 3000));
 
       const iframe = iframeRef.current;
@@ -174,16 +174,29 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
         return;
       }
 
-      // Use html-to-image on the iframe
+      // Access the iframe's inner document (same-origin)
+      const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+      if (!iframeDoc?.body) {
+        console.error("Cannot access iframe document");
+        setIsCapturing(false);
+        return;
+      }
+
       const { toPng } = await import("html-to-image");
-      const dataUrl = await toPng(iframe, {
+      const targetEl = iframeDoc.querySelector('[data-embed-root]') as HTMLElement || iframeDoc.body;
+      const dataUrl = await toPng(targetEl, {
         quality: 0.9,
         pixelRatio: 2,
         cacheBust: true,
+        width: targetEl.scrollWidth,
+        height: targetEl.scrollHeight,
       });
 
       setScreenshotUrl(dataUrl);
-      localStorage.setItem(CACHE_KEY_PREFIX + table.id, dataUrl);
+      // Cache in localStorage (limit size to avoid quota issues)
+      try {
+        localStorage.setItem(CACHE_KEY_PREFIX + table.id, dataUrl);
+      } catch { /* localStorage full, skip caching */ }
 
       // Convert to blob for sending
       const res = await fetch(dataUrl);
