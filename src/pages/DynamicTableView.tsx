@@ -1598,6 +1598,7 @@ export default function DynamicTableView() {
         </Alert>
       )}
 
+      {!isEmbed && (
       <div className="flex flex-col gap-4 mb-6">
         {/* Title Row */}
         <div className="text-center md:text-right">
