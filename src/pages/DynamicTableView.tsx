@@ -1520,6 +1520,7 @@ export default function DynamicTableView() {
     <div className={cn("container mx-auto", isEmbed ? "py-2 px-2" : "py-8 px-4")}>
       {/* Alert for tables that need scenario cloning */}
       {!isEmbed && needsScenarioClone && (
+        <Alert className="mb-6 border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950">
           <AlertCircle className="h-4 w-4 text-orange-600" />
           <AlertTitle className="text-orange-800 dark:text-orange-200">
             הטבלה לא מחוברת לסנריו
