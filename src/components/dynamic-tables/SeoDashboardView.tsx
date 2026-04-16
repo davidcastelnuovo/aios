@@ -329,7 +329,7 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
         gsc_position: g.position ?? null,
         _source: 'gsc' as const,
       }));
-  }, [gscData, rawOrganic, rawTracked]);
+  }, [gscData, organicKeywords, trackedKeywords]);
 
   const domain = reportData?.domain || selectedReport?.domain;
 
