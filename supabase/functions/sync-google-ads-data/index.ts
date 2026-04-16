@@ -341,6 +341,9 @@ Deno.serve(async (req) => {
       for (const result of results) {
         const costMicros = parseInt(result.metrics?.costMicros || '0');
         const cost = costMicros / 1000000; // Convert micros to actual currency
+        const conversions = parseFloat(result.metrics?.conversions || '0');
+        const conversionsValue = parseFloat(result.metrics?.conversionsValue || '0');
+        const roas = cost > 0 ? conversionsValue / cost : 0;
 
         records.push({
           date: result.segments?.date || '',
@@ -351,8 +354,10 @@ Deno.serve(async (req) => {
           ctr: parseFloat(result.metrics?.ctr || '0') * 100, // Convert to percentage
           cpc: parseInt(result.metrics?.averageCpc || '0') / 1000000,
           cost: cost,
-          conversions: parseFloat(result.metrics?.conversions || '0'),
-          cost_per_conversion: parseFloat(result.metrics?.costPerConversion || '0') / 1000000,
+          conversions,
+          conversions_value: conversionsValue,
+          cost_per_conversion: parseInt(result.metrics?.costPerConversion || '0') / 1000000,
+          roas: Math.round(roas * 100) / 100,
         });
       }
     }
