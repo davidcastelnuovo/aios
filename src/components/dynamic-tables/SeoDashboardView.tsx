@@ -281,7 +281,7 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
         volume: null,
         kd: null,
         cpc: null,
-        url: g.page || null,
+        url: null,
         position_prev_month: null,
         position_3month: null,
         position_yearly: null,
@@ -437,6 +437,7 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
       <SeoKeywordsTable
         keywords={organicKeywords}
         trackedKeywords={trackedKeywords}
+        gscOnlyKeywords={gscOnlyKeywords}
         hasGscData={gscData.length > 0}
         show3Month={effectiveComparison.threeMonth.size > 0}
         showYearly={effectiveComparison.yearly.size > 0}
