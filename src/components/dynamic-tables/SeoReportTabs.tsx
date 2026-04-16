@@ -142,9 +142,9 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
         .from('crm_records')
         .select('id, data')
         .eq('table_id', selectedGaTableId)
-        .in('data->>report_type', ['channel_group', 'event_aggregate'])
+        .in('data->>report_type', ['channel_group', 'event_aggregate', 'monthly_organic'])
         .order('created_at', { ascending: false })
-        .limit(500);
+        .limit(600);
       if (error) throw error;
       return data || [];
     },
