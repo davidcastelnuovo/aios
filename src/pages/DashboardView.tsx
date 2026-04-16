@@ -484,14 +484,19 @@ export default function DashboardView() {
     const effectiveAdsSpend = adsSpend > 0 ? adsSpend : globalAdsMetrics.spend;
     const effectiveImpressions = totalImpressions > 0 ? totalImpressions : globalAdsMetrics.impressions;
 
+    // WooCommerce is the source of truth for revenue when available.
+    // GA revenue is shown as informational only and NOT summed with Woo.
+    const wooRev = wooSummary.revenue || 0;
+    const bottomLineRevenue = wooRev > 0 ? wooRev : analyticsRevenue;
+
     return {
       spend: effectiveSpend, impressions: effectiveImpressions, clicks: totalClicks, results: totalResults, leads: totalLeads,
-      revenue: analyticsRevenue + (wooSummary.revenue || 0),
+      revenue: bottomLineRevenue,
       revenueAnalytics: analyticsRevenue,
-      revenueWoo: wooSummary.revenue || 0,
+      revenueWoo: wooRev,
       ordersWoo: wooSummary.orders || 0,
       roas_spend: effectiveAdsSpend,
-      roas_value: analyticsRevenue + (wooSummary.revenue || 0),
+      roas_value: bottomLineRevenue,
       analyticsPurchases, analyticsAddToCart, analyticsSessions, analyticsUsers,
     };
   }, [summaryByPlatform, globalAdsMetrics, wooSummary]);
