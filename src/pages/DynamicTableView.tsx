@@ -2218,7 +2218,7 @@ export default function DynamicTableView() {
       )}
 
       {/* Active Alerts for Facebook Insights */}
-      {hasFacebook && table?.id && records && (
+      {!isEmbed && hasFacebook && table?.id && records && (
         <ActiveAlerts 
           tableId={table.id} 
           records={records} 
