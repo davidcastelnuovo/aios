@@ -5465,11 +5465,14 @@ export type Database = {
           id: string
           is_active: boolean
           last_woocommerce_sync_at: string | null
+          notes: string | null
           site_name: string | null
           site_url: string
           tenant_id: string
           updated_at: string
           username: string
+          woo_last_sync_at: string | null
+          woo_sync_enabled: boolean
           woocommerce_consumer_key: string | null
           woocommerce_consumer_secret: string | null
           woocommerce_enabled: boolean
@@ -5481,11 +5484,14 @@ export type Database = {
           id?: string
           is_active?: boolean
           last_woocommerce_sync_at?: string | null
+          notes?: string | null
           site_name?: string | null
           site_url: string
           tenant_id: string
           updated_at?: string
           username: string
+          woo_last_sync_at?: string | null
+          woo_sync_enabled?: boolean
           woocommerce_consumer_key?: string | null
           woocommerce_consumer_secret?: string | null
           woocommerce_enabled?: boolean
@@ -5497,11 +5503,14 @@ export type Database = {
           id?: string
           is_active?: boolean
           last_woocommerce_sync_at?: string | null
+          notes?: string | null
           site_name?: string | null
           site_url?: string
           tenant_id?: string
           updated_at?: string
           username?: string
+          woo_last_sync_at?: string | null
+          woo_sync_enabled?: boolean
           woocommerce_consumer_key?: string | null
           woocommerce_consumer_secret?: string | null
           woocommerce_enabled?: boolean
