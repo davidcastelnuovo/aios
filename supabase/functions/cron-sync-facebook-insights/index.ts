@@ -540,6 +540,22 @@ Deno.serve(async (req) => {
     }
 
 
+    // Auto-invoke next batch if there are more tables
+    if (hasMore && !tableIds) {
+      const nextOffset = batchOffset + BATCH_SIZE;
+      console.log(`🔄 Triggering next batch at offset ${nextOffset}...`);
+      const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+      const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+      fetch(`${supabaseUrl}/functions/v1/cron-sync-facebook-insights`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${serviceKey}`,
+        },
+        body: JSON.stringify({ batch_offset: nextOffset }),
+      }).catch(err => console.error('Failed to trigger next batch:', err));
+    }
+
     return new Response(JSON.stringify({
       success: true,
       ...results,
