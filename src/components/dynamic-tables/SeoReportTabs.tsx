@@ -115,8 +115,8 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
     },
   });
 
-  // Fetch GA records for selected table
-  const { data: gaRecords } = useQuery({
+  // Fetch GA records for selected table (daily_source, daily, top_pages, traffic_source, event_total)
+  const { data: gaRecordsRaw } = useQuery({
     queryKey: ['crm-records', selectedGaTableId],
     queryFn: async () => {
       if (!selectedGaTableId) return [];
@@ -129,6 +129,36 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
     enabled: !!selectedGaTableId,
     staleTime: 5 * 60 * 1000,
   });
+
+  // Fetch channel_group and event_aggregate records directly — these are small sets that
+  // can get pushed out of the crm-records response when there are many daily_source rows
+  const { data: gaAggregateRecords } = useQuery({
+    queryKey: ['crm-records-aggregate', selectedGaTableId],
+    queryFn: async () => {
+      if (!selectedGaTableId) return [];
+      const { data, error } = await supabase
+        .from('crm_records')
+        .select('id, data')
+        .eq('table_id', selectedGaTableId)
+        .in('data->>report_type', ['channel_group', 'event_aggregate'])
+        .order('created_at', { ascending: false })
+        .limit(500);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!selectedGaTableId,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Merge: aggregate records first so they are always present, dedup by id
+  const gaRecords = useMemo(() => {
+    const base = Array.isArray(gaRecordsRaw) ? gaRecordsRaw : [];
+    const agg = Array.isArray(gaAggregateRecords) ? gaAggregateRecords : [];
+    if (agg.length === 0) return base;
+    const existingIds = new Set(base.map((r: any) => r.id));
+    const newAgg = agg.filter((r: any) => !existingIds.has(r.id));
+    return [...newAgg, ...base];
+  }, [gaRecordsRaw, gaAggregateRecords]);
 
   // GA sync mutation
   const syncGaMutation = useMutation({

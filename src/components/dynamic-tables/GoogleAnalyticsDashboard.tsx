@@ -479,15 +479,43 @@ export function GoogleAnalyticsDashboard({
       return 'other';
     };
 
-    const organicSessions = trafficSources.filter(s => classifyTraffic(s.name) === 'organic').reduce((sum, s) => sum + s.sessions, 0);
-    const paidSessions = trafficSources.filter(s => classifyTraffic(s.name) === 'paid').reduce((sum, s) => sum + s.sessions, 0);
-    const otherSessions = trafficSources.filter(s => classifyTraffic(s.name) === 'other').reduce((sum, s) => sum + s.sessions, 0);
+    // Prefer channel_group records — they match GA Traffic Acquisition exactly
+    const channelGroupRecords = records.filter(r => r.data.report_type === 'channel_group');
+    let organicSessions: number;
+    let paidSessions: number;
+    let otherSessions: number;
+    let organicUsers: number;
+    let paidUsers: number;
+    let organicConversions: number;
+    let paidConversions: number;
 
-    const organicUsers = trafficSources.filter(s => classifyTraffic(s.name) === 'organic').reduce((sum, s) => sum + s.users, 0);
-    const paidUsers = trafficSources.filter(s => classifyTraffic(s.name) === 'paid').reduce((sum, s) => sum + s.users, 0);
-
-    const organicConversions = trafficSources.filter(s => classifyTraffic(s.name) === 'organic').reduce((sum, s) => sum + s.conversions, 0);
-    const paidConversions = trafficSources.filter(s => classifyTraffic(s.name) === 'paid').reduce((sum, s) => sum + s.conversions, 0);
+    if (channelGroupRecords.length > 0) {
+      const cgSum = (keyword: string, field: string) =>
+        channelGroupRecords
+          .filter(r => String(r.data.channel_group || '').toLowerCase().includes(keyword))
+          .reduce((sum, r) => sum + (Number(r.data[field]) || 0), 0);
+      organicSessions = cgSum('organic search', 'sessions');
+      paidSessions = cgSum('paid search', 'sessions') + cgSum('paid social', 'sessions') + cgSum('display', 'sessions');
+      otherSessions = channelGroupRecords
+        .filter(r => {
+          const cg = String(r.data.channel_group || '').toLowerCase();
+          return !cg.includes('organic search') && !cg.includes('paid search') && !cg.includes('paid social') && !cg.includes('display');
+        })
+        .reduce((sum, r) => sum + (Number(r.data.sessions) || 0), 0);
+      organicUsers = cgSum('organic search', 'users');
+      paidUsers = cgSum('paid search', 'users') + cgSum('paid social', 'users') + cgSum('display', 'users');
+      organicConversions = 0;
+      paidConversions = 0;
+    } else {
+      // Fallback: classify from trafficSources (daily_source based)
+      organicSessions = trafficSources.filter(s => classifyTraffic(s.name) === 'organic').reduce((sum, s) => sum + s.sessions, 0);
+      paidSessions = trafficSources.filter(s => classifyTraffic(s.name) === 'paid').reduce((sum, s) => sum + s.sessions, 0);
+      otherSessions = trafficSources.filter(s => classifyTraffic(s.name) === 'other').reduce((sum, s) => sum + s.sessions, 0);
+      organicUsers = trafficSources.filter(s => classifyTraffic(s.name) === 'organic').reduce((sum, s) => sum + s.users, 0);
+      paidUsers = trafficSources.filter(s => classifyTraffic(s.name) === 'paid').reduce((sum, s) => sum + s.users, 0);
+      organicConversions = trafficSources.filter(s => classifyTraffic(s.name) === 'organic').reduce((sum, s) => sum + s.conversions, 0);
+      paidConversions = trafficSources.filter(s => classifyTraffic(s.name) === 'paid').reduce((sum, s) => sum + s.conversions, 0);
+    }
 
     const trafficBreakdown = { organicSessions, paidSessions, otherSessions, organicUsers, paidUsers, organicConversions, paidConversions };
 
@@ -520,7 +548,7 @@ export function GoogleAnalyticsDashboard({
       // For date-filtered records, only use event_total
       if (!hasAggregateEvents && r.data.report_type !== 'event_total') continue;
       const eventName = (r.data.event_name || '').toLowerCase();
-      if (eventName.includes('phone') || eventName.includes('call') || eventName.includes('tel') || eventName.includes('click_to_call')) {
+      if (eventName.includes('phone') || eventName.includes('call') || eventName.includes('tel') || eventName.includes('click_to_call') || eventName.includes('maskyoo')) {
         const displayName = r.data.event_name || 'Unknown';
         const keyEvents = Number(r.data.key_events) || 0;
         const eventCount = Number(r.data.event_count) || 0;
