@@ -23,6 +23,7 @@ import { ShareDashboardDialog } from "@/components/dynamic-tables/ShareDashboard
 import { useTenant } from "@/contexts/TenantContext";
 import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnalyticsDashboard";
 import { SeoDashboardView } from "@/components/dynamic-tables/SeoDashboardView";
+import { WooCommerceDashboard } from "@/components/dynamic-tables/WooCommerceDashboard";
 import {
   LineChart, Line, BarChart, Bar, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts";
@@ -46,7 +47,7 @@ const PLATFORM_CONFIG: Record<string, { name: string; color: string; bgColor: st
 };
 
 type CampaignType = 'leads' | 'ecommerce';
-type PlatformFilter = 'all' | 'facebook' | 'google_ads' | 'google_analytics' | 'seo';
+type PlatformFilter = 'all' | 'facebook' | 'google_ads' | 'google_analytics' | 'seo' | 'woocommerce';
 
 const getCampaignType = (integrationType?: string | null, integrationSettings?: any): CampaignType => {
   if (integrationType === 'facebook_ecommerce') return 'ecommerce';
