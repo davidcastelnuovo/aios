@@ -207,7 +207,7 @@ serve(async (req) => {
     // ====== REPORT 5: Traffic Acquisition by Channel Group ======
     const channelGroupRequest = {
       dateRanges: [{ startDate: actualStartDate, endDate: actualEndDate }],
-      dimensions: [{ name: 'sessionDefaultChannelGrouping' }],
+      dimensions: [{ name: 'date' }, { name: 'sessionDefaultChannelGrouping' }],
       metrics: [
         { name: 'sessions' },
         { name: 'engagedSessions' },
@@ -218,8 +218,11 @@ serve(async (req) => {
         { name: 'ecommercePurchases' },
         { name: 'purchaseRevenue' },
       ],
-      orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
-      limit: 50,
+      orderBys: [
+        { dimension: { dimensionName: 'date' }, desc: false },
+        { metric: { metricName: 'sessions' }, desc: true },
+      ],
+      limit: 10000,
     };
 
     const channelGroupResponse = await fetch(
@@ -443,18 +446,20 @@ serve(async (req) => {
       }
     }
 
-    // Channel group data (Traffic Acquisition)
+    // Channel group data (Traffic Acquisition) — stored per day for date filtering
     if (channelGroupData.rows) {
       for (const row of channelGroupData.rows) {
+        const rawDate = row.dimensionValues[0].value; // YYYYMMDD
+        const formattedDate = `${rawDate.substring(0, 4)}-${rawDate.substring(4, 6)}-${rawDate.substring(6, 8)}`;
         records.push({
           table_id: tableId,
           tenant_id: table.tenant_id,
           agency_id: table.agency_id,
           data: {
             report_type: 'channel_group',
-            channel_group: row.dimensionValues[0].value,
+            channel_group: row.dimensionValues[1].value,
             source_medium: null,
-            date: null,
+            date: formattedDate,
             page_path: null,
             sessions: parseInt(row.metricValues[0].value) || 0,
             engaged_sessions: parseInt(row.metricValues[1].value) || 0,
