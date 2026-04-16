@@ -113,6 +113,45 @@ Deno.serve(async (req) => {
       .eq("table_id", table.id)
       .order("sort_order");
 
+    // For Ahrefs/SEO tables — return the actual SEO reports payload so the
+    // public viewer can render the visual SEO dashboard instead of a raw table.
+    if (table.integration_type === "ahrefs") {
+      const settings = (table.integration_settings as any) || {};
+      const targetClientId = settings.clientId || table.client_id;
+      const targetDomain = settings.targetDomain || null;
+
+      let reportsQuery = supabase
+        .from("ahrefs_reports")
+        .select("id, domain, report_type, report_date, received_at, report_data, comparison_data, metadata")
+        .eq("tenant_id", table.tenant_id)
+        .order("report_date", { ascending: false, nullsFirst: false })
+        .order("received_at", { ascending: false })
+        .limit(50);
+
+      if (targetClientId) reportsQuery = reportsQuery.eq("client_id", targetClientId);
+      if (targetDomain) reportsQuery = reportsQuery.eq("domain", targetDomain);
+
+      const { data: ahrefsReports, error: reportsErr } = await reportsQuery;
+      if (reportsErr) console.error("Error fetching ahrefs reports:", reportsErr);
+
+      return new Response(
+        JSON.stringify({
+          table: {
+            id: table.id,
+            name: table.name,
+            integration_type: table.integration_type,
+            integration_settings: table.integration_settings,
+            agency_name: agencyName,
+          },
+          fields: fields || [],
+          records: [],
+          ahrefs_reports: ahrefsReports || [],
+          has_email_restriction: false,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Calculate date range
     const { startDate, endDate } = getDateRange(dateFilter);
 
