@@ -375,7 +375,7 @@ Deno.serve(async (req) => {
           ? 'ecommerce'
           : hasLeadSignal || isLeadObjective
             ? 'lead'
-            : addToCart > 0 || addToCartActionTypes.some((type) => actionTypeSet.has(type))
+            : addToCart > 0 || addToCartActionTypePriority.some((type) => actionTypeSet.has(type))
               ? 'ecommerce'
               : 'other';
 
