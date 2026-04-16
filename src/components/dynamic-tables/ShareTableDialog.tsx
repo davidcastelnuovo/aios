@@ -111,8 +111,7 @@ export function ShareTableDialog({ tableId, tableName, tenantId }: ShareTableDia
   });
 
   const getShareUrl = (token: string) => {
-    const publicAppOrigin = "https://after-lead.lovable.app";
-    return `${publicAppOrigin}/shared/table/${token}`;
+    return `https://after-lead.com/shared/table/${token}`;
   };
 
   const copyLink = (token: string) => {
