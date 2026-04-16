@@ -49,7 +49,15 @@ Deno.serve(async (req) => {
       });
     }
 
-    const body = req.method === 'POST' ? await req.json() : {};
+    let body: any = {};
+    if (req.method === 'POST') {
+      try {
+        const text = await req.text();
+        body = text ? JSON.parse(text) : {};
+      } catch {
+        body = {};
+      }
+    }
 
     switch (action || body.action) {
       case 'get_auth_url':
