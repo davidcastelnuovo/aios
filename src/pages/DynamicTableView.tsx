@@ -2737,7 +2737,7 @@ export default function DynamicTableView() {
                     )}
                   </div>
                 ))}
-                <div className="w-[150px] flex-shrink-0 border-l p-2">
+                {!isEmbed && <div className="w-[150px] flex-shrink-0 border-l p-2">
                   <div className="flex items-center gap-1">
                     <Input
                       placeholder="עמודה חדשה"
