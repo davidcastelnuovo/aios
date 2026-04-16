@@ -1993,32 +1993,16 @@ export default function DynamicTableView() {
             </DialogContent>
           </Dialog>
           
-          <Dialog open={showWebhookDialog} onOpenChange={setShowWebhookDialog}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>שליחה ל-Webhook</DialogTitle>
-                <DialogDescription>הזן כתובת URL לשליחת הנתונים</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="webhook-url">Webhook URL</Label>
-                  <Input
-                    id="webhook-url"
-                    value={webhookUrl}
-                    onChange={(e) => setWebhookUrl(e.target.value)}
-                    placeholder="https://example.com/webhook"
-                  />
-                </div>
-                <Button 
-                  onClick={() => sendWebhookMutation.mutate()} 
-                  disabled={sendWebhookMutation.isPending || !webhookUrl}
-                  className="w-full"
-                >
-                  {sendWebhookMutation.isPending ? 'שולח...' : 'שלח נתונים'}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+          {table && (
+            <SendReportDialog
+              open={showSendReportDialog}
+              onOpenChange={setShowSendReportDialog}
+              screenshotBlob={reportScreenshotBlob}
+              tableName={table.name}
+              clientId={table.client_id || table.integration_settings?.clientId}
+              tenantId={table.tenant_id}
+            />
+          )}
 
           {/* Settings Dialog for Facebook Insights */}
           <Dialog open={showSettingsDialog} onOpenChange={(open) => {
