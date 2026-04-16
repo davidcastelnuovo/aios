@@ -261,7 +261,7 @@ export function SendReportDialog({
                   </SelectContent>
                 </Select>
               </div>
-              {!selectedGroupId && (
+              {(!selectedGroupId || selectedGroupId === "__none__") && (
                 <div>
                   <Label htmlFor="direct-phone" className="text-sm">מספר טלפון</Label>
                   <Input
