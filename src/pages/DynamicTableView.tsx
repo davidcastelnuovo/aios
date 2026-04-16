@@ -2765,6 +2765,7 @@ export default function DynamicTableView() {
               {/* Rows */}
               {filteredRecords?.map((record) => (
                 <div key={record.id} className="flex border-b hover:bg-muted/20 transition-colors group">
+                  {!isEmbed && (
                   <div className="w-12 flex-shrink-0 border-l p-2 flex items-center justify-center bg-muted/10">
                     <Button 
                       variant="ghost" 
@@ -2775,6 +2776,7 @@ export default function DynamicTableView() {
                       <Trash2 className="h-3 w-3" />
                     </Button>
                   </div>
+                  )}
                   {fields?.map((field) => {
                     const cellKey = `${record.id}-${field.key}`;
                     const isEditing = editingCell?.recordId === record.id && editingCell?.fieldKey === field.key;
