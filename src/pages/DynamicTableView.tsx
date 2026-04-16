@@ -2221,6 +2221,7 @@ export default function DynamicTableView() {
         />
       )}
 
+      <div ref={summaryTablesRef}>
       {/* Summary Stats for Facebook Insights (split by campaign type) */}
       {hasFacebook && filteredRecords && filteredRecords.length > 0 && (
         (() => {
