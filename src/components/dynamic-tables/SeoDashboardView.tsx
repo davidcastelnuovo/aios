@@ -100,14 +100,22 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
       .map(([month, sessions]) => ({ month, sessions }));
   }, [gaRecords]);
 
-  // Snapshot organic sessions — from channel_group 'Organic Search' (matches GA Traffic Acquisition exactly)
+  // Snapshot organic sessions — from channel_group 'Organic Search' filtered to current month
   const gaOrganicCurrentMonth = useMemo(() => {
     if (!gaRecords || gaRecords.length === 0) return null;
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     const channelOrganic = gaRecords
       .filter(r => r.data?.report_type === 'channel_group')
       .filter(r => {
         const cg = String(r.data?.channel_group || '').toLowerCase();
         return cg === 'organic search' || cg.includes('organic search');
+      })
+      .filter(r => {
+        // If record has date, filter to current month; otherwise include (legacy)
+        const d = r.data?.date;
+        if (!d) return true;
+        return String(d).startsWith(currentMonth);
       })
       .reduce((sum, r) => sum + (Number(r.data?.sessions) || 0), 0);
     if (channelOrganic > 0) return channelOrganic;
@@ -116,12 +124,31 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
     return gaOrganicByMonth[gaOrganicByMonth.length - 1]?.sessions ?? null;
   }, [gaRecords, gaOrganicByMonth]);
 
-  // Previous period organic from channel_group is not available (no date on channel_group)
-  // Use the second-to-last month from daily_source as approximation
+  // Previous month organic from channel_group records with date filtering
   const gaOrganicPrevMonth = useMemo(() => {
+    if (!gaRecords || gaRecords.length === 0) {
+      if (gaOrganicByMonth.length < 2) return null;
+      return gaOrganicByMonth[gaOrganicByMonth.length - 2]?.sessions ?? null;
+    }
+    const now = new Date();
+    const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+    const prevOrganic = gaRecords
+      .filter(r => r.data?.report_type === 'channel_group')
+      .filter(r => {
+        const cg = String(r.data?.channel_group || '').toLowerCase();
+        return cg === 'organic search' || cg.includes('organic search');
+      })
+      .filter(r => {
+        const d = r.data?.date;
+        if (!d) return false; // skip dateless for prev period
+        return String(d).startsWith(prevMonth);
+      })
+      .reduce((sum, r) => sum + (Number(r.data?.sessions) || 0), 0);
+    if (prevOrganic > 0) return prevOrganic;
     if (gaOrganicByMonth.length < 2) return null;
     return gaOrganicByMonth[gaOrganicByMonth.length - 2]?.sessions ?? null;
-  }, [gaOrganicByMonth]);
+  }, [gaRecords, gaOrganicByMonth]);
 
   // Find previous month report for keyword comparison
   const selectedIdx = reports.findIndex(r => r.id === selectedReport?.id);
