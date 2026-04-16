@@ -313,49 +313,61 @@ Deno.serve(async (req) => {
     console.log(`[sync-google-ads] total records parsed: ${records.length}`);
 
 
-    // Create fields if they don't exist
+    // Create fields if they don't exist (use admin client - table may belong to a different tenant)
     const fieldKeys = ['date', 'campaign_name', 'campaign_id', 'impressions', 'clicks', 'ctr', 'cpc', 'cost', 'conversions', 'cost_per_conversion'];
     const fieldNames = ['תאריך', 'שם הקמפיין', 'מזהה קמפיין', 'חשיפות', 'קליקים', 'אחוז קליקים', 'עלות לקליק', 'הוצאה', 'המרות', 'עלות להמרה'];
     const fieldTypes = ['date', 'text', 'text', 'number', 'number', 'number', 'number', 'number', 'number', 'number'];
-    
+
     for (let i = 0; i < fieldKeys.length; i++) {
-      const { data: existingField } = await supabase
+      const { data: existingField } = await supabaseAdmin
         .from('crm_fields')
         .select('id')
         .eq('table_id', table_id)
         .eq('key', fieldKeys[i])
-        .single();
-      
+        .maybeSingle();
+
       if (!existingField) {
-        await supabase.from('crm_fields').insert({
+        const { error: fieldErr } = await supabaseAdmin.from('crm_fields').insert({
           table_id,
           key: fieldKeys[i],
           name: fieldNames[i],
           type: fieldTypes[i],
           position: i,
         });
+        if (fieldErr) console.error(`[sync-google-ads] field insert error for ${fieldKeys[i]}:`, fieldErr.message);
       }
     }
 
-    // Delete existing records and insert new ones
-    await supabase
+    // Delete existing records and insert new ones (admin client to bypass RLS)
+    const { error: delErr } = await supabaseAdmin
       .from('crm_records')
       .delete()
       .eq('table_id', table_id)
       .eq('tenant_id', tableTenantId);
+    if (delErr) console.error('[sync-google-ads] delete error:', delErr.message);
 
-    // Insert new records
-    for (const record of records) {
-      await supabase.from('crm_records').insert({
+    // Insert new records (batched)
+    let inserted = 0;
+    if (records.length > 0) {
+      const rows = records.map((record) => ({
         table_id,
         tenant_id: tableTenantId,
         created_by: user.id,
-        data: record,
-      });
+        data: record as any,
+      }));
+      const { error: insErr, count } = await supabaseAdmin
+        .from('crm_records')
+        .insert(rows, { count: 'exact' });
+      if (insErr) {
+        console.error('[sync-google-ads] insert error:', insErr.message);
+      } else {
+        inserted = count ?? rows.length;
+      }
     }
+    console.log(`[sync-google-ads] inserted: ${inserted}`);
 
-    // Update last_sync_at
-    await supabase
+    // Update last_sync_at (admin to bypass RLS for cross-tenant tables)
+    await supabaseAdmin
       .from('crm_tables')
       .update({
         integration_settings: {
@@ -365,9 +377,9 @@ Deno.serve(async (req) => {
       })
       .eq('id', table_id);
 
-    return new Response(JSON.stringify({ 
+    return new Response(JSON.stringify({
       success: true,
-      records_synced: records.length,
+      records_synced: inserted,
       last_sync_at: new Date().toISOString()
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
