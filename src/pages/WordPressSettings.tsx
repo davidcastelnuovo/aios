@@ -107,17 +107,36 @@ export default function WordPressSettings() {
     enabled: isSuperAdmin,
   });
 
-  // Fetch clients for the selected tenant
-  const { data: clients = [] } = useQuery<Client[]>({
-    queryKey: ["clients-for-wp", form.tenant_id || tenantId],
+  // Fetch agencies for the selected tenant
+  const { data: agencies = [] } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ["agencies-for-wp", form.tenant_id || tenantId],
     queryFn: async () => {
       const tid = form.tenant_id || tenantId;
       if (!tid) return [];
       const { data, error } = await supabase
+        .from("agencies")
+        .select("id, name")
+        .eq("tenant_id", tid)
+        .order("name");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!(form.tenant_id || tenantId),
+  });
+
+  // Fetch clients for the selected tenant (filtered by agency if selected)
+  const { data: clients = [] } = useQuery<Client[]>({
+    queryKey: ["clients-for-wp", form.tenant_id || tenantId, form.agency_id],
+    queryFn: async () => {
+      const tid = form.tenant_id || tenantId;
+      if (!tid) return [];
+      let q = supabase
         .from("clients")
         .select("id, name")
         .eq("tenant_id", tid)
         .order("name");
+      if (form.agency_id) q = q.eq("agency_id", form.agency_id);
+      const { data, error } = await q;
       if (error) throw error;
       return data || [];
     },
