@@ -217,6 +217,8 @@ serve(async (req) => {
         { name: 'totalUsers' },
         { name: 'ecommercePurchases' },
         { name: 'purchaseRevenue' },
+        { name: 'keyEvents' },
+        { name: 'conversions' },
       ],
       orderBys: [
         { dimension: { dimensionName: 'date' }, desc: false },
