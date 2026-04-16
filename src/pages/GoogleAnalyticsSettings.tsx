@@ -8,10 +8,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useUserIntegrations } from "@/hooks/useUserIntegrations";
 import { toast } from "sonner";
-import { ArrowLeft, BarChart3, RefreshCw, Loader2, ExternalLink, CheckCircle2, AlertCircle, Zap, Copy, Check } from "lucide-react";
+import { ArrowLeft, BarChart3, RefreshCw, Loader2, ExternalLink, CheckCircle2, AlertCircle, Zap, Copy, Check, Share2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
+import { ManageIntegrationPermissionsDialog } from "@/components/forms/ManageIntegrationPermissionsDialog";
 
 export default function GoogleAnalyticsSettings() {
   const { currentTenantId } = useTenant();
@@ -22,26 +24,15 @@ export default function GoogleAnalyticsSettings() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [activeTab, setActiveTab] = useState("make");
   const [webhookCopied, setWebhookCopied] = useState(false);
+  const [sharingIntegrationId, setSharingIntegrationId] = useState<string | null>(null);
+  const [sharingIntegrationName, setSharingIntegrationName] = useState("");
+  const [sharingOwnerId, setSharingOwnerId] = useState<string | null>(null);
 
   // Webhook URL for Make.com
   const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/webhook-google-analytics-sync`;
 
-  // Get ALL direct API integrations (multiple accounts)
-  const { data: integrations = [], isLoading } = useQuery({
-    queryKey: ['google-analytics-integrations', currentTenantId],
-    queryFn: async () => {
-      if (!currentTenantId) return [];
-      const { data, error } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', currentTenantId)
-        .eq('integration_type', 'google_analytics')
-        .eq('is_active', true);
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!currentTenantId,
-  });
+  // Get user's own + shared direct API integrations
+  const { data: integrations = [], isLoading } = useUserIntegrations(currentTenantId, 'google_analytics');
 
   const hasAnyDirectConnection = integrations.length > 0;
 
@@ -349,15 +340,24 @@ export default function GoogleAnalyticsSettings() {
               ) : hasAnyDirectConnection ? (
                 <div className="space-y-4">
                   {/* List connected accounts */}
-                  {integrations.map((integ) => {
+                   {integrations.map((integ) => {
                     const s = integ.settings as Record<string, unknown> | null;
                     const email = (s?.google_email as string) || 'חשבון לא ידוע';
+                    const isOwn = (integ as any)._isOwn;
+                    const sharedByName = (integ as any)._sharedByName;
                     return (
                       <div key={integ.id} className="flex items-center justify-between p-3 border rounded-lg bg-muted/30">
                         <div className="flex items-center gap-3">
                           <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
                           <div>
-                            <p className="font-medium text-sm">{email}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-sm">{email}</p>
+                              {!isOwn && (
+                                <Badge variant="secondary" className="text-xs">
+                                  שותף {sharedByName ? `ע"י ${sharedByName}` : ''}
+                                </Badge>
+                              )}
+                            </div>
                             {s?.connected_at && (
                               <p className="text-xs text-muted-foreground">
                                 חובר: {new Date(s.connected_at as string).toLocaleDateString('he-IL')}
@@ -366,14 +366,30 @@ export default function GoogleAnalyticsSettings() {
                           </div>
                         </div>
                         <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => disconnectMutation.mutate(integ.id)}
-                            disabled={disconnectMutation.isPending}
-                          >
-                            נתק
-                          </Button>
+                          {isOwn && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setSharingIntegrationId(integ.id);
+                                setSharingIntegrationName(email);
+                                setSharingOwnerId(integ.user_id);
+                              }}
+                            >
+                              <Share2 className="h-4 w-4 ml-1" />
+                              שתף
+                            </Button>
+                          )}
+                          {isOwn && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => disconnectMutation.mutate(integ.id)}
+                              disabled={disconnectMutation.isPending}
+                            >
+                              נתק
+                            </Button>
+                          )}
                         </div>
                       </div>
                     );
@@ -496,6 +512,15 @@ export default function GoogleAnalyticsSettings() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Share Integration Dialog */}
+      <ManageIntegrationPermissionsDialog
+        open={!!sharingIntegrationId}
+        onOpenChange={(open) => { if (!open) setSharingIntegrationId(null); }}
+        integrationId={sharingIntegrationId || ''}
+        integrationName={`Google Analytics - ${sharingIntegrationName}`}
+        integrationOwnerId={sharingOwnerId}
+      />
     </div>
   );
 }

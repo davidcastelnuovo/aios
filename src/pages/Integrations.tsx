@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { useHasIntegrationAccess } from "@/hooks/useUserIntegrations";
 
 interface IntegrationCardProps {
   icon: React.ReactNode;
@@ -112,22 +113,8 @@ export default function Integrations() {
     enabled: !!currentTenantId,
   });
 
-  // Check Google Ads integration status
-  const { data: googleAdsIntegration } = useQuery({
-    queryKey: ['google-ads-integration', currentTenantId],
-    queryFn: async () => {
-      if (!currentTenantId) return null;
-      const { data } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', currentTenantId)
-        .eq('integration_type', 'google_ads')
-        .eq('is_active', true)
-        .maybeSingle();
-      return data;
-    },
-    enabled: !!currentTenantId,
-  });
+  // Check Google Ads integration status (per-user)
+  const hasGoogleAds = useHasIntegrationAccess(currentTenantId, 'google_ads');
 
   // Check Make.com (Google Ads via Make) integration status
   const { data: makeIntegration } = useQuery({
@@ -146,39 +133,11 @@ export default function Integrations() {
     enabled: !!currentTenantId,
   });
 
-  // Check Google Analytics integration status
-  const { data: googleAnalyticsIntegration } = useQuery({
-    queryKey: ['google-analytics-integration', currentTenantId],
-    queryFn: async () => {
-      if (!currentTenantId) return null;
-      const { data } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', currentTenantId)
-        .eq('integration_type', 'google_analytics')
-        .eq('is_active', true)
-        .maybeSingle();
-      return data;
-    },
-    enabled: !!currentTenantId,
-  });
+  // Check Google Analytics integration status (per-user)
+  const hasGoogleAnalytics = useHasIntegrationAccess(currentTenantId, 'google_analytics');
 
-  // Check Google Search Console integration status
-  const { data: googleSearchConsoleIntegration } = useQuery({
-    queryKey: ['google-search-console-integration', currentTenantId],
-    queryFn: async () => {
-      if (!currentTenantId) return null;
-      const { data } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', currentTenantId)
-        .eq('integration_type', 'google_search_console')
-        .eq('is_active', true)
-        .maybeSingle();
-      return data;
-    },
-    enabled: !!currentTenantId,
-  });
+  // Check Google Search Console integration status (per-user)
+  const hasGoogleSearchConsole = useHasIntegrationAccess(currentTenantId, 'google_search_console');
 
   // Check Ahrefs integration status
   const { data: ahrefsIntegration } = useQuery({
@@ -376,7 +335,7 @@ export default function Integrations() {
         "מעקב המרות ועלויות",
         "סנכרון אוטומטי לטבלאות",
       ],
-      isConnected: !!googleAdsIntegration,
+      isConnected: hasGoogleAds,
       route: "google-ads-settings",
       gradient: "bg-gradient-to-r from-yellow-500 to-red-500",
     },
@@ -396,7 +355,7 @@ export default function Integrations() {
         "Bounce Rate ו-Session Duration",
         "מקורות תנועה",
       ],
-      isConnected: !!googleAnalyticsIntegration,
+      isConnected: hasGoogleAnalytics,
       route: "google-analytics-settings",
       gradient: "bg-gradient-to-r from-orange-500 to-orange-600",
     },
@@ -413,7 +372,7 @@ export default function Integrations() {
         "מילות מפתח מובילות",
         "מיקום ממוצע בחיפוש",
       ],
-      isConnected: !!googleSearchConsoleIntegration,
+      isConnected: hasGoogleSearchConsole,
       route: "google-search-console-settings",
       gradient: "bg-gradient-to-r from-blue-600 to-indigo-600",
     },

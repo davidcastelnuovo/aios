@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useUserIntegrations } from "@/hooks/useUserIntegrations";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -49,25 +50,11 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
   const [selectedSite, setSelectedSite] = useState<string>("");
   const [sitePopoverOpen, setSitePopoverOpen] = useState(false);
 
-  const { data: gscIntegration, isLoading: isLoadingIntegration } = useQuery({
-    queryKey: ["gsc-integration", tenantId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("tenant_integrations")
-        .select("*")
-        .eq("tenant_id", tenantId)
-        .eq("integration_type", "google_search_console")
-        .eq("is_active", true)
-        .order("updated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!tenantId,
-    refetchOnMount: "always",
-  });
+  // Use per-user integration filtering (own + shared)
+  const { data: gscIntegrations = [], isLoading: isLoadingIntegration } = useUserIntegrations(
+    tenantId, 'google_search_console'
+  );
+  const gscIntegration = gscIntegrations[0] || null;
 
   const settings = (gscIntegration?.settings as any) || {};
 

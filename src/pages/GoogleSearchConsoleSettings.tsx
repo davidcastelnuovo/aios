@@ -7,10 +7,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useUserIntegrations } from "@/hooks/useUserIntegrations";
 import { toast } from "sonner";
-import { ArrowLeft, Search, RefreshCw, Loader2, ExternalLink, CheckCircle2, AlertCircle } from "lucide-react";
+import { ArrowLeft, Search, RefreshCw, Loader2, ExternalLink, CheckCircle2, AlertCircle, Share2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
+import { ManageIntegrationPermissionsDialog } from "@/components/forms/ManageIntegrationPermissionsDialog";
 
 export default function GoogleSearchConsoleSettings() {
   const { currentTenantId } = useTenant();
@@ -19,23 +21,13 @@ export default function GoogleSearchConsoleSettings() {
   const { buildPath } = useTenantPath();
   const queryClient = useQueryClient();
   const [isConnecting, setIsConnecting] = useState(false);
+  const [sharingIntegrationId, setSharingIntegrationId] = useState<string | null>(null);
+  const [sharingIntegrationName, setSharingIntegrationName] = useState("");
+  const [sharingOwnerId, setSharingOwnerId] = useState<string | null>(null);
 
-  // Get integration status
-  const { data: integration, isLoading } = useQuery({
-    queryKey: ['google-search-console-integration', currentTenantId],
-    queryFn: async () => {
-      if (!currentTenantId) return null;
-      const { data } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', currentTenantId)
-        .eq('integration_type', 'google_search_console')
-        .eq('is_active', true)
-        .maybeSingle();
-      return data;
-    },
-    enabled: !!currentTenantId,
-  });
+  // Get user's own + shared integrations
+  const { data: integrations = [], isLoading } = useUserIntegrations(currentTenantId, 'google_search_console');
+  const integration = integrations.length > 0 ? integrations[0] : null;
 
   // Connect to Google Search Console
   const handleConnect = async () => {
@@ -134,7 +126,14 @@ export default function GoogleSearchConsoleSettings() {
               <Alert className="bg-green-50 border-green-200">
                 <CheckCircle2 className="h-4 w-4 text-green-600" />
                 <AlertDescription className="text-green-800">
-                  Google Search Console מחובר בהצלחה
+                  <div className="flex items-center gap-2">
+                    Google Search Console מחובר בהצלחה
+                    {!(integration as any)._isOwn && (
+                      <Badge variant="secondary" className="text-xs">
+                        שותף {(integration as any)._sharedByName ? `ע"י ${(integration as any)._sharedByName}` : ''}
+                      </Badge>
+                    )}
+                  </div>
                   {settings?.connected_at && (
                     <span className="block text-sm mt-1">
                       חובר בתאריך: {new Date(settings.connected_at).toLocaleDateString('he-IL')}
@@ -144,6 +143,19 @@ export default function GoogleSearchConsoleSettings() {
               </Alert>
 
               <div className="flex gap-3">
+                {(integration as any)._isOwn && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setSharingIntegrationId(integration.id);
+                      setSharingIntegrationName(settings?.google_email || 'GSC');
+                      setSharingOwnerId(integration.user_id);
+                    }}
+                  >
+                    <Share2 className="h-4 w-4 ml-2" />
+                    שתף חיבור
+                  </Button>
+                )}
                 <Button 
                   variant="outline" 
                   onClick={handleConnect}
@@ -152,13 +164,15 @@ export default function GoogleSearchConsoleSettings() {
                   <RefreshCw className={`h-4 w-4 ml-2 ${isConnecting ? 'animate-spin' : ''}`} />
                   חיבור מחדש
                 </Button>
-                <Button 
-                  variant="destructive"
-                  onClick={() => disconnectMutation.mutate()}
-                  disabled={disconnectMutation.isPending}
-                >
-                  נתק חיבור
-                </Button>
+                {(integration as any)._isOwn && (
+                  <Button 
+                    variant="destructive"
+                    onClick={() => disconnectMutation.mutate()}
+                    disabled={disconnectMutation.isPending}
+                  >
+                    נתק חיבור
+                  </Button>
+                )}
               </div>
             </div>
           ) : (
@@ -242,6 +256,15 @@ export default function GoogleSearchConsoleSettings() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Share Integration Dialog */}
+      <ManageIntegrationPermissionsDialog
+        open={!!sharingIntegrationId}
+        onOpenChange={(open) => { if (!open) setSharingIntegrationId(null); }}
+        integrationId={sharingIntegrationId || ''}
+        integrationName={`Google Search Console - ${sharingIntegrationName}`}
+        integrationOwnerId={sharingOwnerId}
+      />
     </div>
   );
 }
