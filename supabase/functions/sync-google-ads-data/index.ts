@@ -221,23 +221,18 @@ Deno.serve(async (req) => {
     console.log(`[sync-google-ads] table=${table_id} customer=${customerId} login=${loginCustomerId} status=${searchResponse.status} dateRange=${startDate.toISOString().split('T')[0]}..${endDate.toISOString().split('T')[0]}`);
     console.log(`[sync-google-ads] response preview:`, JSON.stringify(searchData).slice(0, 800));
 
-    // If failed and no manager_id was set, try to discover the MCC
-    if (searchData.error && !settings.manager_id) {
-      console.log('First attempt failed, trying to discover MCC for account', customerId);
-      
-      const listResponse = await fetch('https://googleads.googleapis.com/v23/customers:listAccessibleCustomers', {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'developer-token': DEVELOPER_TOKEN,
-        },
-      });
-      const listData = await listResponse.json();
-      const resourceNames = listData?.resourceNames || [];
-      
-      for (const resourceName of resourceNames) {
-        const potentialMccId = typeof resourceName === 'string' ? resourceName.split('/')[1] : null;
-        if (!potentialMccId || potentialMccId === customerId) continue;
-        
+    // Helper: detect Google Ads error in any response shape (object, array, or wrapped)
+    const detectGAError = (data: any): any | null => {
+      if (!data) return null;
+      if (data.error) return data.error;
+      if (Array.isArray(data) && data.length > 0 && data[0]?.error) return data[0].error;
+      return null;
+    };
+
+    // Helper: try a list of candidate MCCs and return the first that works
+    const tryMccCandidates = async (candidates: string[]): Promise<{ data: any; mcc: string } | null> => {
+      for (const mcc of candidates) {
+        if (!mcc || mcc === customerId) continue;
         const retryResponse = await fetch(
           `https://googleads.googleapis.com/v23/customers/${customerId}/googleAds:searchStream`,
           {
@@ -245,39 +240,87 @@ Deno.serve(async (req) => {
             headers: {
               'Authorization': `Bearer ${accessToken}`,
               'developer-token': DEVELOPER_TOKEN,
-              'login-customer-id': potentialMccId,
+              'login-customer-id': mcc,
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({ query }),
           }
         );
         const retryData = await retryResponse.json();
-        if (!retryData.error) {
-          console.log('Found working MCC:', potentialMccId);
-          searchData = retryData;
-          loginCustomerId = potentialMccId;
-          
-          // Save discovered manager_id for future syncs
-          const serviceSupabase = createClient(
-            Deno.env.get('SUPABASE_URL') ?? '',
-            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-          );
-          await serviceSupabase
-            .from('crm_tables')
-            .update({
-              integration_settings: { ...settings, manager_id: potentialMccId }
-            })
-            .eq('id', table_id);
-          break;
+        if (!detectGAError(retryData)) {
+          console.log(`[sync-google-ads] Found working MCC: ${mcc}`);
+          return { data: retryData, mcc };
         }
+        console.log(`[sync-google-ads] MCC ${mcc} failed:`, JSON.stringify(detectGAError(retryData)).slice(0, 200));
+      }
+      return null;
+    };
+
+    let initialError = detectGAError(searchData);
+
+    // If failed and no manager_id was set, try to discover the MCC
+    if (initialError && !settings.manager_id) {
+      console.log('[sync-google-ads] First attempt failed, trying to discover MCC for account', customerId);
+
+      // Build a candidate list:
+      // 1) Known historical MCCs (hardcoded fallback for this project)
+      // 2) Any MCCs already discovered for other tables in this tenant
+      // 3) listAccessibleCustomers
+      const knownMccs = ['1625878765', '4568787244', '8225555809', '6200958104'];
+
+      const { data: tenantTables } = await supabaseAdmin
+        .from('crm_tables')
+        .select('integration_settings')
+        .eq('tenant_id', tableTenantId)
+        .eq('integration_type', 'google_ads');
+      const tenantMccs = Array.from(new Set(
+        (tenantTables || [])
+          .map((t: any) => t.integration_settings?.manager_id)
+          .filter(Boolean)
+          .map(String)
+      ));
+
+      let listMccs: string[] = [];
+      try {
+        const listResponse = await fetch('https://googleads.googleapis.com/v23/customers:listAccessibleCustomers', {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'developer-token': DEVELOPER_TOKEN,
+          },
+        });
+        const listData = await listResponse.json();
+        listMccs = (listData?.resourceNames || [])
+          .map((r: any) => typeof r === 'string' ? r.split('/')[1] : null)
+          .filter(Boolean);
+      } catch (e) {
+        console.warn('[sync-google-ads] listAccessibleCustomers failed:', e);
+      }
+
+      const candidates = Array.from(new Set([...tenantMccs, ...knownMccs, ...listMccs]));
+      console.log(`[sync-google-ads] MCC candidates to try (${candidates.length}):`, candidates);
+
+      const result = await tryMccCandidates(candidates);
+      if (result) {
+        searchData = result.data;
+        loginCustomerId = result.mcc;
+        initialError = null;
+
+        // Save discovered manager_id for future syncs
+        await supabaseAdmin
+          .from('crm_tables')
+          .update({
+            integration_settings: { ...settings, manager_id: result.mcc }
+          })
+          .eq('id', table_id);
       }
     }
 
-    if (searchData.error) {
-      console.error('Google Ads API error:', searchData.error);
-      return new Response(JSON.stringify({ 
+    const finalError = detectGAError(searchData);
+    if (finalError) {
+      console.error('Google Ads API error:', finalError);
+      return new Response(JSON.stringify({
         error: 'Google Ads API error',
-        details: searchData.error.message
+        details: finalError.message || JSON.stringify(finalError)
       }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
