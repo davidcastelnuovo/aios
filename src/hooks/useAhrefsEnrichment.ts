@@ -120,5 +120,9 @@ export function useAhrefsEnrichment() {
     }
   }, []);
 
-  return { fetchComparisons, comparisonData, isLoading };
+  const resetComparisonData = useCallback(() => {
+    setComparisonData({ threeMonth: new Map(), yearly: new Map() });
+  }, []);
+
+  return { fetchComparisons, comparisonData, resetComparisonData, isLoading };
 }
