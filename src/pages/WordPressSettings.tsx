@@ -372,14 +372,14 @@ export default function WordPressSettings() {
         <div>
           <Label>לקוח מקושר (אופציונלי)</Label>
           <Select
-            value={form.client_id}
-            onValueChange={(v) => setForm({ ...form, client_id: v })}
+            value={form.client_id || "none"}
+            onValueChange={(v) => setForm({ ...form, client_id: v === "none" ? "" : v })}
           >
             <SelectTrigger>
               <SelectValue placeholder="בחר לקוח..." />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">ללא</SelectItem>
+              <SelectItem value="none">ללא</SelectItem>
               {clients.map((c) => (
                 <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
               ))}
