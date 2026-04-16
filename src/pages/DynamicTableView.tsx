@@ -1709,6 +1709,7 @@ export default function DynamicTableView() {
                 onClick={() => {
                   setSelectedAdAccount(table.integration_settings?.ad_account_id || '');
                   setSelectedSyncDateRange(table.integration_settings?.date_range || 'last_30_days');
+                  setSelectedCurrency((table.integration_settings?.currency as CurrencyCode) || 'ILS');
                   setShowSettingsDialog(true);
                 }}
               >
@@ -1744,6 +1745,7 @@ export default function DynamicTableView() {
                 onClick={() => {
                   setSelectedAdAccount(table.integration_settings?.ad_account_id || '');
                   setSelectedSyncDateRange(table.integration_settings?.date_range || 'last_30_days');
+                  setSelectedCurrency((table.integration_settings?.currency as CurrencyCode) || 'ILS');
                   setShowSettingsDialog(true);
                 }}
               >
