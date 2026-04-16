@@ -187,13 +187,14 @@ serve(async (req) => {
       const kwUrl = new URL('https://api.ahrefs.com/v3/site-explorer/organic-keywords');
       kwUrl.searchParams.set('target', target);
       kwUrl.searchParams.set('country', country);
+      kwUrl.searchParams.set('mode', 'domain');
       kwUrl.searchParams.set('date', date);
       if (dateCompared) {
         kwUrl.searchParams.set('date_compared', dateCompared);
       }
       kwUrl.searchParams.set('limit', String(limit));
       kwUrl.searchParams.set('select', 'keyword,best_position,best_position_prev,best_position_url,best_position_url_prev,sum_traffic,sum_traffic_prev,volume,volume_prev,keyword_difficulty,keyword_difficulty_prev,cpc,cpc_prev');
-      kwUrl.searchParams.set('order_by', 'sum_traffic:desc');
+      kwUrl.searchParams.set('order_by', 'best_position:asc');
 
       const kwResp = await fetch(kwUrl.toString(), {
         headers: {
