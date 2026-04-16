@@ -3060,6 +3060,17 @@ export default function DynamicTableView() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Link Table to Client Dialog */}
+      {table && (
+        <LinkTableToClientDialog
+          tableId={table.id}
+          tenantId={table.tenant_id}
+          currentClientId={table.client_id}
+          open={showLinkClientDialog}
+          onOpenChange={setShowLinkClientDialog}
+        />
+      )}
     </div>
   );
 }
