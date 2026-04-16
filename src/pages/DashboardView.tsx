@@ -865,6 +865,12 @@ export default function DashboardView() {
                     SEO
                   </TabsTrigger>
                 )}
+                {availablePlatforms.includes('woocommerce') && (
+                  <TabsTrigger value="woocommerce" className="flex items-center gap-2">
+                    <ShoppingCart className="h-4 w-4 text-emerald-600" />
+                    WooCommerce
+                  </TabsTrigger>
+                )}
               </TabsList>
             </Tabs>
           )}
@@ -873,6 +879,11 @@ export default function DashboardView() {
             <div className="grid gap-4 md:grid-cols-4">
               {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32" />)}
             </div>
+          ) : platformFilter === 'woocommerce' ? (
+            /* WooCommerce tab */
+            dashboard?.client_id && currentTenantId ? (
+              <WooCommerceDashboard clientId={dashboard.client_id} tenantId={currentTenantId} dateFilter={dateFilter} />
+            ) : null
           ) : tables.length === 0 ? (
             <Card className="p-12 text-center">
               <h3 className="text-lg font-semibold mb-2">אין טבלאות משויכות ללקוח זה</h3>
