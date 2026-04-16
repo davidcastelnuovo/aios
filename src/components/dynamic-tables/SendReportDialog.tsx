@@ -13,15 +13,11 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { toast } from "sonner";
-import { Send, Mail, MessageCircle, Loader2, Link2 } from "lucide-react";
+import { Send, Mail, MessageCircle, Loader2, Link2, Check, ChevronsUpDown, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface SendReportDialogProps {
   open: boolean;
@@ -246,32 +242,28 @@ export function SendReportDialog({
           {sendWhatsApp && (
             <div className="space-y-3 p-3 border rounded-lg bg-muted/30">
               <div>
-                <Label htmlFor="whatsapp-group" className="text-sm">קבוצת וואטסאפ</Label>
-                <Select value={selectedGroupId} onValueChange={setSelectedGroupId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="בחר קבוצה..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">ללא קבוצה - שלח לטלפון</SelectItem>
-                    {groups?.map((group) => (
-                      <SelectItem key={group.id} value={group.id}>
-                        {group.group_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label className="text-sm">קבוצת וואטסאפ (חיפוש לפי שם)</Label>
+                <GroupCombobox
+                  groups={groups || []}
+                  value={selectedGroupId}
+                  onChange={setSelectedGroupId}
+                />
               </div>
-              {(!selectedGroupId || selectedGroupId === "__none__") && (
-                <div>
-                  <Label htmlFor="direct-phone" className="text-sm">מספר טלפון</Label>
-                  <Input
-                    id="direct-phone"
-                    value={directPhone}
-                    onChange={(e) => setDirectPhone(e.target.value)}
-                    placeholder="05xxxxxxxx"
-                  />
-                </div>
-              )}
+              <div>
+                <Label htmlFor="direct-phone" className="text-sm">
+                  או מספר טלפון ישיר
+                </Label>
+                <Input
+                  id="direct-phone"
+                  value={directPhone}
+                  onChange={(e) => setDirectPhone(e.target.value)}
+                  placeholder="05xxxxxxxx"
+                  dir="ltr"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  אם נבחרה קבוצה — היא תקבל עדיפות. אחרת תישלח הודעה למספר.
+                </p>
+              </div>
             </div>
           )}
 
@@ -338,5 +330,83 @@ export function SendReportDialog({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+interface GroupOption {
+  id: string;
+  group_name: string;
+  group_chat_id?: string | null;
+}
+
+function GroupCombobox({
+  groups,
+  value,
+  onChange,
+}: {
+  groups: GroupOption[];
+  value: string;
+  onChange: (val: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = groups.find((g) => g.id === value);
+
+  return (
+    <div className="flex items-center gap-2">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className="flex-1 justify-between font-normal"
+          >
+            <span className={cn("truncate", !selected && "text-muted-foreground")}>
+              {selected ? selected.group_name : "חפש קבוצה לפי שם..."}
+            </span>
+            <ChevronsUpDown className="h-4 w-4 opacity-50 shrink-0" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+          <Command>
+            <CommandInput placeholder="חפש שם קבוצה..." />
+            <CommandList>
+              <CommandEmpty>לא נמצאו קבוצות</CommandEmpty>
+              <CommandGroup>
+                {groups.map((group) => (
+                  <CommandItem
+                    key={group.id}
+                    value={group.group_name}
+                    onSelect={() => {
+                      onChange(group.id === value ? "" : group.id);
+                      setOpen(false);
+                    }}
+                  >
+                    <Check
+                      className={cn(
+                        "ml-2 h-4 w-4",
+                        value === group.id ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    {group.group_name}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+      {selected && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={() => onChange("")}
+          title="נקה בחירה"
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      )}
+    </div>
   );
 }
