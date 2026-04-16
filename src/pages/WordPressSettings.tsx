@@ -76,6 +76,7 @@ const emptyForm = {
   woo_consumer_secret: "",
   woo_sync_enabled: false,
   tenant_id: "",
+  agency_id: "",
   client_id: "",
 };
 
