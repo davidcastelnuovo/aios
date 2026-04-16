@@ -594,7 +594,6 @@ export default function DynamicTableView() {
       setIsCapturingScreenshot(false);
     }
   }, []);
-  });
 
   const deleteTableMutation = useMutation({
     mutationFn: async () => {
