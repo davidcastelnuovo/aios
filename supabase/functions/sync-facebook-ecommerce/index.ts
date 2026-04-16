@@ -73,8 +73,11 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Use admin client for reads to support both user and cron contexts
+    const readClient = _internal_cron ? supabaseAdmin : supabase;
+
     // Get table with integration settings
-    const { data: table, error: tableError } = await supabase
+    const { data: table, error: tableError } = await readClient
       .from('crm_tables')
       .select('*')
       .eq('id', table_id)
@@ -105,8 +108,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get Facebook access token (including shared integrations)
-    let { data: integration } = await supabase
+    // Get Facebook access token (including shared integrations) - use admin to bypass RLS
+    let { data: integration } = await supabaseAdmin
       .from('tenant_integrations')
       .select('api_key, shared_from_integration_id')
       .eq('tenant_id', tableTenantId)
@@ -117,7 +120,7 @@ Deno.serve(async (req) => {
 
     // If this is a shared integration, fetch the source integration's token
     if (integration?.shared_from_integration_id && !integration?.api_key) {
-      const { data: sourceIntegration } = await supabase
+      const { data: sourceIntegration } = await supabaseAdmin
         .from('tenant_integrations')
         .select('api_key')
         .eq('id', integration.shared_from_integration_id)
