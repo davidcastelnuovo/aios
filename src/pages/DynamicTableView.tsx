@@ -1746,6 +1746,32 @@ export default function DynamicTableView() {
               >
                 <Settings className="h-4 w-4" />
               </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                title="השווה ל-Facebook (Debug)"
+                onClick={async () => {
+                  setDebugLoading(true);
+                  setDebugDialogOpen(true);
+                  setDebugData(null);
+                  try {
+                    const { data, error } = await supabase.functions.invoke('debug-facebook-ecommerce', {
+                      method: 'POST',
+                      body: { table_id: table.id },
+                    });
+                    if (error) throw error;
+                    setDebugData(data);
+                  } catch (e: any) {
+                    toast.error('שגיאה בדיבאג: ' + e.message);
+                    setDebugDialogOpen(false);
+                  } finally {
+                    setDebugLoading(false);
+                  }
+                }}
+              >
+                <Info className="h-4 w-4" />
+                Debug
+              </Button>
             </div>
           )}
           
