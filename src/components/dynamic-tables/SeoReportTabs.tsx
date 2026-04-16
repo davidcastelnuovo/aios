@@ -389,6 +389,16 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
           </TabsContent>
         )}
       </Tabs>
+
+      <GoogleAnalyticsTableDialog
+        open={showGaDialog}
+        onOpenChange={(open) => {
+          setShowGaDialog(open);
+          if (!open) {
+            queryClient.invalidateQueries({ queryKey: ['seo-related-tables'] });
+          }
+        }}
+      />
     </div>
   );
 }
