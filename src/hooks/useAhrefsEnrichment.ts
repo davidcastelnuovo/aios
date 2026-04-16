@@ -30,6 +30,13 @@ export function useAhrefsEnrichment() {
     yearly: new Map(),
   });
 
+  const resetComparisonData = useCallback(() => {
+    setComparisonData({
+      threeMonth: new Map(),
+      yearly: new Map(),
+    });
+  }, []);
+
   const fetchKeywordsForPeriod = async (
     domain: string,
     date: string,
@@ -88,7 +95,6 @@ export function useAhrefsEnrichment() {
       const session = (await supabase.auth.getSession()).data.session;
       const token = session?.access_token || anonKey;
 
-      // Calculate comparison dates
       const baseDate = new Date(currentDate);
       const threeMonthsAgo = new Date(baseDate);
       threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
@@ -98,7 +104,6 @@ export function useAhrefsEnrichment() {
       const date3m = threeMonthsAgo.toISOString().split("T")[0];
       const date1y = oneYearAgo.toISOString().split("T")[0];
 
-      // Fetch both periods in parallel
       const [threeMonthKw, yearlyKw] = await Promise.all([
         fetchKeywordsForPeriod(domain, currentDate, date3m, limit, country, token, anonKey, projectId),
         fetchKeywordsForPeriod(domain, currentDate, date1y, limit, country, token, anonKey, projectId),
@@ -120,5 +125,5 @@ export function useAhrefsEnrichment() {
     }
   }, []);
 
-  return { fetchComparisons, comparisonData, isLoading };
+  return { fetchComparisons, comparisonData, resetComparisonData, isLoading };
 }
