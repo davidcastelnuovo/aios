@@ -1999,6 +1999,7 @@ export default function DynamicTableView() {
               onOpenChange={setShowSendReportDialog}
               screenshotBlob={reportScreenshotBlob}
               tableName={table.name}
+              tableId={table.id}
               clientId={table.client_id || table.integration_settings?.clientId}
               tenantId={table.tenant_id}
             />

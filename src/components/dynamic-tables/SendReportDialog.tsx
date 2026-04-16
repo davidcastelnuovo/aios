@@ -91,6 +91,26 @@ export function SendReportDialog({
     enabled: open,
   });
 
+  // Fetch active share link for the table
+  const { data: shareLink } = useQuery({
+    queryKey: ["table-share-link", tableId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("table_shares" as any)
+        .select("share_token, is_active")
+        .eq("table_id", tableId)
+        .eq("is_active", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (data?.share_token) {
+        return `https://after-lead.lovable.app/shared/table/${data.share_token}`;
+      }
+      return null;
+    },
+    enabled: open && !!tableId,
+  });
+
   // Pre-fill from client data
   useEffect(() => {
     if (client) {
