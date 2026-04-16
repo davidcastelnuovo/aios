@@ -251,7 +251,7 @@ export function SendReportDialog({
                     <SelectValue placeholder="בחר קבוצה..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">ללא קבוצה - שלח לטלפון</SelectItem>
+                    <SelectItem value="__none__">ללא קבוצה - שלח לטלפון</SelectItem>
                     {groups?.map((group) => (
                       <SelectItem key={group.id} value={group.id}>
                         {group.group_name}
