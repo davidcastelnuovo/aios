@@ -1170,8 +1170,8 @@ export default function DynamicTableView() {
     queryFn: async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
-      const response = await supabase.functions.invoke('google-ads-auth?action=get_accounts', {
-        method: 'POST',
+      const response = await supabase.functions.invoke('google-ads-auth', {
+        body: { action: 'get_accounts' },
       });
       if (response.error) throw response.error;
       return Array.isArray(response.data?.accounts) ? response.data.accounts : [];
