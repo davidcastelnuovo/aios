@@ -254,8 +254,20 @@ Deno.serve(async (req) => {
       'onsite_conversion.messaging_first_reply',
       'messaging_first_reply',
     ];
-    const purchaseActionTypes = ['purchase', 'omni_purchase', 'offsite_conversion.fb_pixel_purchase'];
-    const addToCartActionTypes = ['add_to_cart', 'offsite_conversion.fb_pixel_add_to_cart'];
+    // IMPORTANT: Facebook returns the same conversion under multiple action_types
+    // (e.g. 'purchase', 'omni_purchase', 'offsite_conversion.fb_pixel_purchase' all
+    // refer to the same event). Summing all of them causes 2-3x inflation vs the
+    // Ads Manager UI. We pick ONE canonical type per metric, with fallbacks.
+    const purchaseActionTypePriority = [
+      'omni_purchase', // Facebook's deduplicated total (matches "Purchases" in Ads Manager)
+      'offsite_conversion.fb_pixel_purchase', // Pure website pixel purchases
+      'purchase', // Legacy aggregate
+    ];
+    const addToCartActionTypePriority = [
+      'omni_add_to_cart',
+      'offsite_conversion.fb_pixel_add_to_cart',
+      'add_to_cart',
+    ];
 
     const insights: InsightRecord[] = (data.data || []).map((insight: any) => {
       const allActions = [...(insight.actions ?? []), ...(insight.conversions ?? [])];
@@ -323,9 +335,20 @@ Deno.serve(async (req) => {
         costPerLead = spend / leads;
       }
 
-      const purchases = getActionCount(purchaseActionTypes);
-      const purchaseValue = getActionValue(purchaseActionTypes);
-      const addToCart = getActionCount(addToCartActionTypes);
+      // Pick the first matching action_type (deduplicated) instead of summing all,
+      // to mirror Facebook Ads Manager's "Purchases" / "Website purchases" column.
+      const pickFirstAvailable = (priority: string[]) => {
+        for (const type of priority) {
+          if (actionTypeSet.has(type)) return [type];
+        }
+        return [];
+      };
+      const effectivePurchaseTypes = pickFirstAvailable(purchaseActionTypePriority);
+      const effectiveAddToCartTypes = pickFirstAvailable(addToCartActionTypePriority);
+
+      const purchases = getActionCount(effectivePurchaseTypes);
+      const purchaseValue = getActionValue(effectivePurchaseTypes);
+      const addToCart = getActionCount(effectiveAddToCartTypes);
       const roas = spend > 0 ? purchaseValue / spend : 0;
 
       // Get campaign status
@@ -336,7 +359,7 @@ Deno.serve(async (req) => {
       const hasEcommerceSignal =
         purchases > 0 ||
         purchaseValue > 0 ||
-        purchaseActionTypes.some((type) => actionTypeSet.has(type));
+        purchaseActionTypePriority.some((type) => actionTypeSet.has(type));
       // add_to_cart alone is NOT enough to classify as ecommerce —
       // lead campaigns can have incidental add-to-cart events.
       const hasStrongEcommerceSignal = hasEcommerceSignal || isEcommerceObjective;
@@ -352,7 +375,7 @@ Deno.serve(async (req) => {
           ? 'ecommerce'
           : hasLeadSignal || isLeadObjective
             ? 'lead'
-            : addToCart > 0 || addToCartActionTypes.some((type) => actionTypeSet.has(type))
+            : addToCart > 0 || addToCartActionTypePriority.some((type) => actionTypeSet.has(type))
               ? 'ecommerce'
               : 'other';
 
