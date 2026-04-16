@@ -2664,6 +2664,7 @@ export default function DynamicTableView() {
             <div className="min-w-full inline-block">
               {/* Header */}
               <div className="flex border-b bg-muted/30 sticky top-0 z-10">
+                {!isEmbed && (
                 <div className="w-12 flex-shrink-0 border-l p-2 flex items-center justify-center">
                   <Button 
                     variant="ghost" 
@@ -2675,6 +2676,7 @@ export default function DynamicTableView() {
                     <Plus className="h-3 w-3" />
                   </Button>
                 </div>
+                )}
                 {fields?.map((field) => (
                   <div key={field.id} className="w-[150px] flex-shrink-0 border-l p-2">
                     {editingFieldId === field.id ? (
