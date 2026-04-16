@@ -290,6 +290,20 @@ export function SendReportDialog({
             </div>
           )}
 
+          {/* Share Link Info */}
+          {shareLink && (
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 text-sm text-muted-foreground">
+              <Link2 className="h-4 w-4 shrink-0" />
+              <span>קישור צפייה בטבלה יצורף אוטומטית להודעה</span>
+            </div>
+          )}
+          {!shareLink && (
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 text-sm text-muted-foreground">
+              <Link2 className="h-4 w-4 shrink-0 opacity-50" />
+              <span>אין קישור שיתוף פעיל — צור קישור דרך "שתף טבלה" כדי לצרף לינק</span>
+            </div>
+          )}
+
           {/* Message Text */}
           <div>
             <Label htmlFor="message-text" className="text-sm">טקסט מלווה (אופציונלי)</Label>
