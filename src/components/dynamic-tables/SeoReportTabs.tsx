@@ -70,6 +70,7 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
   // Selected GA table (from saved or first available)
   const [selectedGaTableId, setSelectedGaTableId] = useState<string>("");
   const [selectedGscTableId, setSelectedGscTableId] = useState<string>("");
+  const [showGaDialog, setShowGaDialog] = useState(false);
 
   useEffect(() => {
     if (savedGaTableId) setSelectedGaTableId(savedGaTableId);
