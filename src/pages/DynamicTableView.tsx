@@ -2227,6 +2227,27 @@ export default function DynamicTableView() {
                   />
                   <p className="text-xs text-muted-foreground mt-1">ניתן להזין ידנית או לבחור מהרשימה למעלה</p>
                 </div>
+                <div>
+                  <Label>מטבע תצוגה</Label>
+                  <Select
+                    value={selectedCurrency}
+                    onValueChange={(v) => setSelectedCurrency(v as CurrencyCode)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="בחר מטבע" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CURRENCY_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    משנה רק את סמל המטבע המוצג. אין המרת ערכים.
+                  </p>
+                </div>
                 <Button 
                   onClick={async () => {
                     if (!table?.id || !selectedGoogleAccount) return;
@@ -2239,6 +2260,7 @@ export default function DynamicTableView() {
                             ...table.integration_settings,
                             customer_id: cleanId,
                             date_range: selectedSyncDateRange,
+                            currency: selectedCurrency,
                           }
                         })
                         .eq('id', table.id);
