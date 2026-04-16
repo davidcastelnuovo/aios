@@ -226,14 +226,15 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Ecommerce action types — ORDERED BY PRIORITY (pixel-specific first, generic last).
-    // Facebook returns multiple action_types for the SAME conversion event (e.g. 'purchase',
-    // 'omni_purchase', and 'offsite_conversion.fb_pixel_purchase' all describe the same purchase).
-    // Summing them triple-counts. We must pick ONE — the most specific (pixel) when available,
-    // falling back to omni, then generic.
-    const purchaseActionTypes = ['offsite_conversion.fb_pixel_purchase', 'omni_purchase', 'purchase'];
-    const addToCartActionTypes = ['offsite_conversion.fb_pixel_add_to_cart', 'omni_add_to_cart', 'add_to_cart'];
-    const initiateCheckoutActionTypes = ['offsite_conversion.fb_pixel_initiate_checkout', 'omni_initiated_checkout', 'initiate_checkout'];
+    // Ecommerce action types — ORDERED BY PRIORITY (deduplicated FIRST, pixel-specific LAST).
+    // Facebook returns multiple action_types for the SAME conversion event:
+    //   - 'omni_purchase' = Aggregated, deduplicated cross-platform (this is what FB Ads Manager UI shows)
+    //   - 'purchase'      = Generic purchase event
+    //   - 'offsite_conversion.fb_pixel_purchase' = Raw pixel events (includes organic + cross-device, INFLATES counts)
+    // We pick the FIRST matching one. omni_purchase aligns with the "Purchases" column in Ads Manager.
+    const purchaseActionTypes = ['omni_purchase', 'purchase', 'offsite_conversion.fb_pixel_purchase'];
+    const addToCartActionTypes = ['omni_add_to_cart', 'add_to_cart', 'offsite_conversion.fb_pixel_add_to_cart'];
+    const initiateCheckoutActionTypes = ['omni_initiated_checkout', 'initiate_checkout', 'offsite_conversion.fb_pixel_initiate_checkout'];
 
     const insights: EcommerceRecord[] = (data.data || []).map((insight: any) => {
       const actions = insight.actions ?? [];
