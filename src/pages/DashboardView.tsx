@@ -940,8 +940,15 @@ export default function DashboardView() {
                     {showAnalyticsCards && (
                       <Card className="h-full bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
                         <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
-                          <p className="text-sm text-muted-foreground">הכנסות (Analytics)</p>
+                          <p className="text-sm text-muted-foreground">
+                            {totalSummary.revenueWoo > 0 ? 'הכנסות כולל WooCommerce' : 'הכנסות (Analytics)'}
+                          </p>
                           <p className="text-3xl font-bold mt-2">{formatCurrency(totalSummary.revenue)}</p>
+                          {totalSummary.revenueWoo > 0 && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              GA: {formatCurrency(totalSummary.revenueAnalytics)} · Woo: {formatCurrency(totalSummary.revenueWoo)}
+                            </p>
+                          )}
                         </CardContent>
                       </Card>
                     )}
