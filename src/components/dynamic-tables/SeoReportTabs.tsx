@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/button";
 import { SeoDashboardView } from "./SeoDashboardView";
 import { SearchConsoleDashboard } from "./SearchConsoleDashboard";
 import { GoogleAnalyticsDashboard } from "./GoogleAnalyticsDashboard";
+import { GoogleAnalyticsTableDialog } from "./GoogleAnalyticsTableDialog";
 import { GscIntegration } from "./seo/GscIntegration";
-import { TrendingUp, Search, BarChart3, Settings2, RefreshCw } from "lucide-react";
+import { TrendingUp, Search, BarChart3, Settings2, RefreshCw, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 
