@@ -169,15 +169,15 @@ export const ClientReportSnapshot = forwardRef<HTMLDivElement, Props>(
           background: "#ffffff",
           fontFamily: "Arial, Helvetica, sans-serif",
           direction: "rtl",
-          color: "#1a1a2e",
+          color: "#0A1526",
         }}
       >
         {/* Header */}
-        <div style={{ marginBottom: 16, borderBottom: "2px solid #3b82f6", paddingBottom: 12 }}>
-          <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0, color: "#1e40af" }}>
+        <div style={{ marginBottom: 16, borderBottom: "2px solid #3FD9B0", paddingBottom: 12 }}>
+          <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0, color: "#0A1526" }}>
             📊 {tableName}
           </h2>
-          <p style={{ fontSize: 12, color: "#6b7280", margin: "4px 0 0" }}>
+          <p style={{ fontSize: 12, color: "#5b6b80", margin: "4px 0 0" }}>
             7 ימים אחרונים • {format(subDays(new Date(), 6), "dd/MM")} - {format(new Date(), "dd/MM/yyyy")}
           </p>
         </div>
