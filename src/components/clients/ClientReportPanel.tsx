@@ -5,7 +5,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
@@ -26,6 +25,8 @@ import {
   Camera,
 } from "lucide-react";
 import { useTenantPath } from "@/hooks/useTenantPath";
+import { ClientReportSnapshot } from "./ClientReportSnapshot";
+import { toPng } from "html-to-image";
 
 interface ClientReportPanelProps {
   table: any;
@@ -49,12 +50,13 @@ function getSyncFunction(integrationType: string | null): string | null {
 
 export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPanelProps) {
   const { buildPath } = useTenantPath();
-  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const snapshotRef = useRef<HTMLDivElement>(null);
 
   // Screenshot state
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [captureReady, setCaptureReady] = useState(false);
 
   // Send controls state
   const [sendWhatsApp, setSendWhatsApp] = useState(true);
@@ -101,7 +103,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
     enabled: !!tenantId,
   });
 
-  // Fetch team members for this client
+  // Fetch team members
   const { data: teamMembers } = useQuery({
     queryKey: ["client-team-emails", clientId],
     queryFn: async () => {
@@ -144,14 +146,24 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
     }
   }, [client]);
 
+  // Schedule capture after mount + delay for data to load
+  useEffect(() => {
+    const timer = setTimeout(() => setCaptureReady(true), 3000);
+    return () => clearTimeout(timer);
+  }, [table.id]);
+
+  // Auto-capture when ready
+  useEffect(() => {
+    if (captureReady && !screenshotUrl && !isCapturing) {
+      captureScreenshot();
+    }
+  }, [captureReady]);
+
   // Auto-sync on mount
   useEffect(() => {
     const syncFn = getSyncFunction(table.integration_type);
     if (syncFn) {
       triggerSync();
-    } else {
-      // No sync needed, just capture screenshot after iframe loads
-      captureScreenshot();
     }
   }, [table.id]);
 
@@ -163,7 +175,6 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
-
       await supabase.functions.invoke(syncFn, {
         body: { tableId: table.id, tenantId },
       });
@@ -171,48 +182,32 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
       console.error("Sync error:", err);
     } finally {
       setIsSyncing(false);
-      // Capture screenshot after sync
+      // Re-capture after sync
       setTimeout(() => captureScreenshot(), 2000);
     }
   };
 
   const captureScreenshot = useCallback(async () => {
+    const node = snapshotRef.current;
+    if (!node) return;
+
     setIsCapturing(true);
     try {
-      const iframe = iframeRef.current;
-      if (!iframe || !iframe.contentDocument?.body) {
-        setIsCapturing(false);
-        return;
-      }
-
-      // Wait for iframe content to fully render
-      await new Promise((resolve) => setTimeout(resolve, 4000));
-
-      const iframeBody = iframe.contentDocument.body;
-      const html2canvas = (await import("html2canvas")).default;
-      
-      const canvas = await html2canvas(iframeBody, {
-        scale: 1.5,
-        useCORS: true,
-        allowTaint: true,
-        logging: false,
-        // Skip nested iframes to prevent infinite recursion
-        ignoreElements: (el) => el.tagName === "IFRAME",
-        width: iframeBody.scrollWidth,
-        height: Math.min(iframeBody.scrollHeight, 1200),
-        windowWidth: 1200,
-        windowHeight: 800,
+      const dataUrl = await toPng(node, {
+        quality: 0.9,
+        pixelRatio: 1.5,
+        backgroundColor: "#ffffff",
       });
 
-      const dataUrl = canvas.toDataURL("image/png", 0.85);
       setScreenshotUrl(dataUrl);
       try {
         localStorage.setItem(CACHE_KEY_PREFIX + table.id, dataUrl);
       } catch { /* localStorage full */ }
 
-      canvas.toBlob((blob) => {
-        if (blob) setScreenshotBlob(blob);
-      }, "image/png", 0.85);
+      // Create blob for sending
+      const res = await fetch(dataUrl);
+      const blob = await res.blob();
+      setScreenshotBlob(blob);
     } catch (err) {
       console.error("Screenshot capture error:", err);
       toast.error("שגיאה בצילום הדוח");
@@ -291,8 +286,6 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
     }
   };
 
-  const iframeSrc = `${window.location.origin}${buildPath(`/table/${table.slug}?embed=1`)}`;
-
   return (
     <div className="space-y-3" dir="rtl">
       {/* Screenshot Preview */}
@@ -310,7 +303,6 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
           </div>
         )}
 
-        {/* Loading overlay */}
         {(isCapturing || isSyncing) && (
           <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
             <div className="flex items-center gap-2 text-sm">
@@ -321,13 +313,13 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
         )}
       </div>
 
-      {/* Action buttons row */}
+      {/* Action buttons */}
       <div className="flex gap-2">
         <Button
           variant="outline"
           size="sm"
           className="gap-1 text-xs"
-          onClick={() => { triggerSync(); }}
+          onClick={() => triggerSync()}
           disabled={isSyncing || isCapturing}
         >
           <RefreshCw className={`h-3 w-3 ${isSyncing ? "animate-spin" : ""}`} />
@@ -356,7 +348,6 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
 
       {/* Send Controls */}
       <div className="space-y-3 p-3 border rounded-lg bg-muted/20">
-        {/* Delivery Methods */}
         <div className="flex gap-4">
           <label className="flex items-center gap-2 cursor-pointer">
             <Checkbox checked={sendWhatsApp} onCheckedChange={(c) => setSendWhatsApp(!!c)} />
@@ -370,7 +361,6 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
           </label>
         </div>
 
-        {/* WhatsApp Options */}
         {sendWhatsApp && (
           <div className="space-y-2">
             <Select value={selectedGroupId} onValueChange={setSelectedGroupId}>
@@ -395,7 +385,6 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
           </div>
         )}
 
-        {/* Email */}
         {sendEmail && (
           <div className="space-y-2">
             {teamMembers && teamMembers.length > 0 && (
@@ -439,13 +428,11 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
           </div>
         )}
 
-        {/* Share Link Info */}
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <Link2 className={`h-3 w-3 shrink-0 ${shareLink ? "" : "opacity-50"}`} />
           <span>{shareLink ? "קישור צפייה יצורף אוטומטית" : "אין קישור שיתוף פעיל"}</span>
         </div>
 
-        {/* Message */}
         <Textarea
           value={messageText}
           onChange={(e) => setMessageText(e.target.value)}
@@ -454,7 +441,6 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
           className="text-xs"
         />
 
-        {/* Send Button */}
         <Button
           onClick={handleSend}
           disabled={isSending || !screenshotBlob}
@@ -469,19 +455,25 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
         </Button>
       </div>
 
-      {/* Render iframe in a portal to document.body so it's truly isolated */}
+      {/* Hidden snapshot component rendered via portal — no iframe! */}
       {createPortal(
-        <iframe
-          ref={iframeRef}
-          src={iframeSrc}
-          style={{ position: "fixed", left: -9999, top: -9999, width: 1200, height: 800, opacity: 0, pointerEvents: "none", border: "none", zIndex: -9999 }}
-          title={table.name}
-          onLoad={() => {
-            if (!screenshotUrl && !isCapturing && !isSyncing) {
-              captureScreenshot();
-            }
+        <div
+          style={{
+            position: "fixed",
+            left: -9999,
+            top: -9999,
+            zIndex: -9999,
+            pointerEvents: "none",
+            opacity: 0,
           }}
-        />,
+          aria-hidden="true"
+        >
+          <ClientReportSnapshot
+            ref={snapshotRef}
+            tableId={table.id}
+            tableName={table.name}
+          />
+        </div>,
         document.body
       )}
     </div>
