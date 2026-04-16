@@ -113,6 +113,7 @@ export default function DynamicTableView() {
   const [customDateRange, setCustomDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
   const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
   const [selectedSyncDateRange, setSelectedSyncDateRange] = useState<string>("last_30_days");
+  const [selectedCurrency, setSelectedCurrency] = useState<CurrencyCode>("ILS");
   const [activeTab, setActiveTab] = useState<string>("main"); // 'main' | 'facebook' | 'google_ads' | 'combined'
   const [showGoogleSettingsDialog, setShowGoogleSettingsDialog] = useState(false);
   const [selectedGoogleAccount, setSelectedGoogleAccount] = useState<string>("");
@@ -2351,7 +2352,7 @@ export default function DynamicTableView() {
             )
           );
 
-          const currency = table.integration_settings?.currency === 'USD' ? '$' : '₪';
+          const currency = getCurrencySymbol(table.integration_settings?.currency);
 
           const leadTotals = leadCampaigns.reduce((acc, [, campaign]) => ({
             impressions: acc.impressions + campaign.impressions,
@@ -2521,7 +2522,7 @@ export default function DynamicTableView() {
                   </thead>
                   <tbody>
                     {(() => {
-                      const currency = table.integration_settings?.currency === 'USD' ? '$' : '₪';
+                      const currency = getCurrencySymbol(table.integration_settings?.currency);
                       return Object.entries(campaignGroups).map(([campaignName, data]) => {
                         const roas = data.spend > 0 ? data.purchase_value / data.spend : 0;
                         return (
@@ -2541,7 +2542,7 @@ export default function DynamicTableView() {
                   </tbody>
                   <tfoot className="bg-primary/10 font-bold">
                     {(() => {
-                      const currency = table.integration_settings?.currency === 'USD' ? '$' : '₪';
+                      const currency = getCurrencySymbol(table.integration_settings?.currency);
                       const totalRoas = totals.spend > 0 ? totals.purchase_value / totals.spend : 0;
                       return (
                         <tr>
