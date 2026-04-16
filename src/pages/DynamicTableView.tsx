@@ -2209,7 +2209,7 @@ export default function DynamicTableView() {
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => setShowWebhookDialog(true)}>
                 <Send className="ml-2 h-4 w-4" />
-                שלח ל-Webhook
+                שלח עדכון ללקוח
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
