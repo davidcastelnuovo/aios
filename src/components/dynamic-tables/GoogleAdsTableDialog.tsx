@@ -329,6 +329,18 @@ export function GoogleAdsTableDialog({ open, onOpenChange, assignedClientIds }: 
       }
       // For webhook, we just set the data_source and let the user configure via Make.com
 
+      // Resolve agency_id: prefer the client's agency_id if a client is selected
+      // (ensures cross-tenant visibility via shared agencies). Fall back to selected agencyId.
+      let resolvedAgencyId: string | null = agencyId || null;
+      if (clientId) {
+        const { data: clientRow } = await supabase
+          .from('clients')
+          .select('agency_id')
+          .eq('id', clientId)
+          .maybeSingle();
+        if (clientRow?.agency_id) resolvedAgencyId = clientRow.agency_id;
+      }
+
       const response = await supabase.functions.invoke('crm-tables', {
         method: 'POST',
         body: {
@@ -337,7 +349,7 @@ export function GoogleAdsTableDialog({ open, onOpenChange, assignedClientIds }: 
           category: category || 'Google Ads',
           integration_type: 'google_ads',
           integration_settings: integrationSettings,
-          agency_id: agencyId || null,
+          agency_id: resolvedAgencyId,
           client_id: clientId || null,
         },
       });
