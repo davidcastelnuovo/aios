@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { toPng } from "html-to-image";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -49,6 +50,7 @@ import { ActiveAlerts } from "@/components/dynamic-tables/ActiveAlerts";
 import { ShareTableDialog } from "@/components/dynamic-tables/ShareTableDialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { MakeScenarioSettings } from "@/components/dynamic-tables/MakeScenarioSettings";
+import { SendReportDialog } from "@/components/dynamic-tables/SendReportDialog";
 
 // Google Ads icon component
 const GoogleAdsIcon = ({ className = "h-4 w-4" }: { className?: string }) => (
@@ -63,6 +65,7 @@ interface CrmTable {
   slug: string;
   description: string | null;
   tenant_id: string;
+  client_id: string | null;
   integration_type: string | null;
   integration_settings: any;
   secondary_integration_type?: string | null;
