@@ -46,6 +46,12 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
     );
 
+    // Service-role client for writes (bypass RLS - tables can be in different tenants than the requester)
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -292,45 +298,57 @@ Deno.serve(async (req) => {
       'number', 'number', 'text', 'text'
     ];
     
-    // Create/update fields
+    // Create/update fields (use admin to bypass RLS for cross-tenant tables)
     for (let i = 0; i < fieldKeys.length; i++) {
-      const { data: existingField } = await supabase
+      const { data: existingField } = await supabaseAdmin
         .from('crm_fields')
         .select('id')
         .eq('table_id', table_id)
         .eq('key', fieldKeys[i])
-        .single();
+        .maybeSingle();
       
       if (!existingField) {
-        await supabase.from('crm_fields').insert({
+        const { error: fieldErr } = await supabaseAdmin.from('crm_fields').insert({
           table_id,
           key: fieldKeys[i],
           name: fieldNames[i],
           type: fieldTypes[i],
           position: i,
         });
+        if (fieldErr) console.error(`[sync-facebook-ecommerce] field insert error for ${fieldKeys[i]}:`, fieldErr.message);
       }
     }
 
-    // Delete existing records and insert new ones
-    await supabase
+    // Delete existing records and insert new ones (admin client to bypass RLS)
+    const { error: delErr } = await supabaseAdmin
       .from('crm_records')
       .delete()
       .eq('table_id', table_id)
       .eq('tenant_id', tableTenantId);
+    if (delErr) console.error('[sync-facebook-ecommerce] delete error:', delErr.message);
 
-    // Insert new records
-    for (const insight of insights) {
-      await supabase.from('crm_records').insert({
+    // Insert new records (batched)
+    let inserted = 0;
+    if (insights.length > 0) {
+      const rows = insights.map((insight) => ({
         table_id,
         tenant_id: tableTenantId,
         created_by: user.id,
-        data: insight,
-      });
+        data: insight as any,
+      }));
+      const { error: insErr, count } = await supabaseAdmin
+        .from('crm_records')
+        .insert(rows, { count: 'exact' });
+      if (insErr) {
+        console.error('[sync-facebook-ecommerce] insert error:', insErr.message);
+      } else {
+        inserted = count ?? rows.length;
+      }
     }
+    console.log(`[sync-facebook-ecommerce] inserted: ${inserted}`);
 
-    // Update last_sync_at in integration_settings
-    await supabase
+    // Update last_sync_at in integration_settings (admin to bypass RLS)
+    await supabaseAdmin
       .from('crm_tables')
       .update({
         integration_settings: {
@@ -343,7 +361,7 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify({ 
       success: true,
-      records_synced: insights.length,
+      records_synced: inserted,
       last_sync_at: new Date().toISOString()
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
