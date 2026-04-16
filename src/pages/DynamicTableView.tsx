@@ -568,33 +568,32 @@ export default function DynamicTableView() {
     },
   });
 
-  const sendWebhookMutation = useMutation({
-    mutationFn: async () => {
-      if (!webhookUrl) throw new Error('No webhook URL');
-      if (!records || !fields) throw new Error('No data');
-      
-      const payload = {
-        table: table?.name,
-        fields: fields.map(f => ({ key: f.key, name: f.name })),
-        records: records.map(r => r.data),
-      };
-      
-      const response = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+  // Add ref for summary tables container
+  const summaryTablesRef = useRef<HTMLDivElement>(null);
+
+  const handleSendReport = useCallback(async () => {
+    if (!summaryTablesRef.current) {
+      toast.error('לא נמצאו טבלאות מסכמות');
+      return;
+    }
+    setIsCapturingScreenshot(true);
+    try {
+      const dataUrl = await toPng(summaryTablesRef.current, {
+        backgroundColor: '#ffffff',
+        quality: 0.95,
+        pixelRatio: 2,
       });
-      
-      if (!response.ok) throw new Error('Webhook failed');
-      return response;
-    },
-    onSuccess: () => {
-      toast.success('הנתונים נשלחו ל-Webhook בהצלחה');
-      setShowWebhookDialog(false);
-    },
-    onError: (error: any) => {
-      toast.error('שגיאה בשליחה ל-Webhook: ' + error.message);
-    },
+      const response = await fetch(dataUrl);
+      const blob = await response.blob();
+      setReportScreenshotBlob(blob);
+      setShowSendReportDialog(true);
+    } catch (error) {
+      console.error('Screenshot error:', error);
+      toast.error('שגיאה ביצירת צילום מסך');
+    } finally {
+      setIsCapturingScreenshot(false);
+    }
+  }, []);
   });
 
   const deleteTableMutation = useMutation({
