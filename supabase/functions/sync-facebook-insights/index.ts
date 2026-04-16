@@ -254,8 +254,20 @@ Deno.serve(async (req) => {
       'onsite_conversion.messaging_first_reply',
       'messaging_first_reply',
     ];
-    const purchaseActionTypes = ['purchase', 'omni_purchase', 'offsite_conversion.fb_pixel_purchase'];
-    const addToCartActionTypes = ['add_to_cart', 'offsite_conversion.fb_pixel_add_to_cart'];
+    // IMPORTANT: Facebook returns the same conversion under multiple action_types
+    // (e.g. 'purchase', 'omni_purchase', 'offsite_conversion.fb_pixel_purchase' all
+    // refer to the same event). Summing all of them causes 2-3x inflation vs the
+    // Ads Manager UI. We pick ONE canonical type per metric, with fallbacks.
+    const purchaseActionTypePriority = [
+      'omni_purchase', // Facebook's deduplicated total (matches "Purchases" in Ads Manager)
+      'offsite_conversion.fb_pixel_purchase', // Pure website pixel purchases
+      'purchase', // Legacy aggregate
+    ];
+    const addToCartActionTypePriority = [
+      'omni_add_to_cart',
+      'offsite_conversion.fb_pixel_add_to_cart',
+      'add_to_cart',
+    ];
 
     const insights: InsightRecord[] = (data.data || []).map((insight: any) => {
       const allActions = [...(insight.actions ?? []), ...(insight.conversions ?? [])];
