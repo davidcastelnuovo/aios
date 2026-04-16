@@ -182,6 +182,10 @@ export default function WordPressSettings() {
         woo_sync_enabled: values.woo_sync_enabled,
         client_id: values.client_id || null,
         agency_id: values.agency_id || null,
+      };
+      const { error } = await supabase
+        .from("social_media_wordpress_sites" as any)
+        .insert(payload);
       if (error) throw error;
     },
     onSuccess: () => {
