@@ -207,7 +207,7 @@ serve(async (req) => {
     // ====== REPORT 5: Traffic Acquisition by Channel Group ======
     const channelGroupRequest = {
       dateRanges: [{ startDate: actualStartDate, endDate: actualEndDate }],
-      dimensions: [{ name: 'sessionDefaultChannelGrouping' }],
+      dimensions: [{ name: 'date' }, { name: 'sessionDefaultChannelGrouping' }],
       metrics: [
         { name: 'sessions' },
         { name: 'engagedSessions' },
@@ -218,8 +218,11 @@ serve(async (req) => {
         { name: 'ecommercePurchases' },
         { name: 'purchaseRevenue' },
       ],
-      orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
-      limit: 50,
+      orderBys: [
+        { dimension: { dimensionName: 'date' }, desc: false },
+        { metric: { metricName: 'sessions' }, desc: true },
+      ],
+      limit: 10000,
     };
 
     const channelGroupResponse = await fetch(
