@@ -502,7 +502,6 @@ export function ClientsChatView({
                       toggleClientSelection(client.id);
                     } else {
                       setSelectedClientId(client.id);
-                      setActiveTab("details");
                     }
                   }}
                   className={cn(
@@ -701,7 +700,7 @@ export function ClientsChatView({
                 </TabsTrigger>
                 <TabsTrigger value="report" className="text-xs gap-1">
                   <BarChart3 className="h-3.5 w-3.5" />
-                  טבלאות
+                  דוחות
                 </TabsTrigger>
                 <TabsTrigger value="updates" className="text-xs gap-1">
                   <MessageSquare className="h-3.5 w-3.5" />
