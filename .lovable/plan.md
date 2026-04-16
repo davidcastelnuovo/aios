@@ -1,58 +1,29 @@
 
 
-## Plan: Per-User Google Connections with Sharing
+## Plan: Supplement Ahrefs Keywords with GSC-only Keywords
 
-### Current State
-- Google Analytics/GSC/Google Ads connections are stored in `tenant_integrations` with `tenant_id` scoping — any user in the tenant sees all connections
-- The table already has `user_id` and `shared_from_integration_id` columns
-- `integration_user_permissions` table and `ManageIntegrationPermissionsDialog` already exist for permission sharing
-- The edge function `google-analytics-auth` already stores `userId` in the state and saves it to `tenant_integrations.user_id`
+### Problem
+The SEO keywords table only shows keywords from Ahrefs. GSC often indexes additional keywords that Ahrefs doesn't track. These GSC-only keywords are fetched but silently discarded because they don't match any Ahrefs keyword.
 
-### What Changes
-
-**Goal**: Each user connects their own Google account. They see only their own connections + connections shared with them. They can share their connection with other team members.
+### Solution
+After merging Ahrefs keywords, add any remaining GSC keywords that don't already exist in the Ahrefs data. These will appear with GSC metrics (clicks, impressions, CTR, position) and empty Ahrefs-specific fields (traffic, volume, KD, CPC).
 
 ### Technical Details
 
-#### 1. Frontend — GoogleAnalyticsSettings.tsx
-- Change the integration query to filter by current user OR shared permissions:
-  - Fetch integrations where `user_id = currentUserId` (own connections)
-  - Also fetch integrations where the user has a record in `integration_user_permissions`
-- Add a "Share" button next to each connected account that opens `ManageIntegrationPermissionsDialog`
-- Show shared connections with a badge indicating who shared them
+**File: `src/components/dynamic-tables/SeoDashboardView.tsx`**
+1. After building `organicKeywords` and `trackedKeywords`, create a set of all Ahrefs keyword names (lowercased)
+2. Loop through `gscData` — for each keyword NOT in the Ahrefs set, create a new keyword object with:
+   - `keyword`, `position` (from GSC), `gsc_clicks`, `gsc_impressions`, `gsc_ctr`, `gsc_position`
+   - `traffic`, `volume`, `kd`, `cpc`, `url` = null (no Ahrefs data)
+   - Mark with a flag like `_source: 'gsc'` for potential UI differentiation
+3. Pass these GSC-only keywords as additional entries — either append to `organicKeywords` or pass as a new prop
 
-#### 2. Frontend — GoogleAnalyticsTableDialog.tsx
-- Update the GA integration query (line 43-61) to show user's own connections + shared ones
-- Add a selector if the user has multiple connections (own + shared) to pick which account to use
+**File: `src/components/dynamic-tables/seo/SeoKeywordsTable.tsx`**
+- The table already handles null values gracefully (shows "—"), so GSC-only rows will display correctly
+- Optionally add a small badge/indicator for GSC-only keywords to differentiate them from Ahrefs keywords
 
-#### 3. Frontend — SeoReportTabs.tsx / GscIntegration.tsx
-- Same pattern: filter integrations by user ownership or shared permissions
-
-#### 4. Frontend — Integrations.tsx
-- Update the integration status queries to check per-user connections (own + shared)
-
-#### 5. Edge Function — google-analytics-auth
-- No changes needed — already stores `user_id`
-
-#### 6. Edge Functions — sync functions (sync-google-analytics-data, sync-gsc-data, etc.)
-- When syncing, resolve the integration by `integrationId` (already works — no tenant-wide assumption)
-
-#### 7. Database — No schema changes needed
-- `tenant_integrations.user_id` already exists
-- `integration_user_permissions` already exists
-- `shared_from_integration_id` already exists
-
-### Files to Edit (~6 files)
-1. `src/pages/GoogleAnalyticsSettings.tsx` — Per-user filtering + share button
-2. `src/components/dynamic-tables/GoogleAnalyticsTableDialog.tsx` — Show user's accessible integrations
-3. `src/components/dynamic-tables/seo/GscIntegration.tsx` — Per-user GSC filtering
-4. `src/pages/Integrations.tsx` — Per-user connection status display
-5. `src/pages/GoogleSearchConsoleSettings.tsx` — Per-user filtering + share button (if exists)
-6. Same pattern for Google Ads settings if applicable
-
-### User Experience
-- User goes to GA settings → sees only their own connected accounts
-- Clicks "Share" → opens the existing permissions dialog to grant access to teammates
-- When creating a GA table, user sees their own connections + connections shared with them
-- Shared connections show a badge: "שותף על ידי [שם]"
+### Impact
+- No database changes needed
+- No edge function changes needed
+- GSC data is already being fetched — this just uses the data that's currently being discarded
 
