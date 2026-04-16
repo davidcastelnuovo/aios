@@ -38,6 +38,7 @@ export function SendReportDialog({
   onOpenChange,
   screenshotBlob,
   tableName,
+  tableId,
   clientId,
   tenantId,
 }: SendReportDialogProps) {
