@@ -13,15 +13,11 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { toast } from "sonner";
-import { Send, Mail, MessageCircle, Loader2, Link2 } from "lucide-react";
+import { Send, Mail, MessageCircle, Loader2, Link2, Check, ChevronsUpDown, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface SendReportDialogProps {
   open: boolean;
