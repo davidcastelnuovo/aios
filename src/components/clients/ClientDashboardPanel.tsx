@@ -256,21 +256,19 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
     let blob = screenshotBlob;
     if (!blob) {
       toast.info("מצלם דשבורד...");
-      await captureScreenshot();
-      // Read fresh blob after capture
-      blob = screenshotBlob;
+      blob = await captureScreenshot();
       if (!blob) {
-        toast.error("לא נוצר צילום מסך - נסה שוב את הצילום הידני");
+        toast.error("לא נוצר צילום מסך - לחץ על 'צלם מחדש' ונסה שוב");
         return;
       }
     }
     setIsSending(true);
     try {
       const effectiveShareLink = shareLink || (await ensureShareLink());
-      
+
       if (sendWhatsApp) {
         const formData = new FormData();
-        formData.append("file", screenshotBlob, `dashboard-${dashboard.name}.png`);
+        formData.append("file", blob, `dashboard-${dashboard.name}.png`);
         formData.append("tenantId", tenantId);
         formData.append("fileType", "image");
         const caption = `${messageText}\n\n📊 צפה בדשבורד המלא: ${effectiveShareLink || ""}`;
@@ -298,10 +296,10 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
         const base64Data = await new Promise<string>((resolve) => {
           const reader = new FileReader();
           reader.onloadend = () => resolve((reader.result as string).split(",")[1]);
-          reader.readAsDataURL(screenshotBlob);
+          reader.readAsDataURL(blob!);
         });
 
-        await supabase.functions.invoke("gmail-api", {
+        const { error: gmailError } = await supabase.functions.invoke("gmail-api", {
           body: {
             action: "send",
             to: emailRecipients.join(", "),
@@ -310,10 +308,20 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
             attachments: [{ filename: "dashboard.png", mimeType: "image/png", data: base64Data }],
           },
         });
-        toast.success("הדשבורד נשלח באימייל");
+        if (gmailError) {
+          const msg = String(gmailError.message || "");
+          if (msg.includes("Token refresh failed") || msg.includes("invalid_grant")) {
+            toast.error("חיבור Gmail פג - יש להתחבר מחדש בהגדרות");
+          } else {
+            throw gmailError;
+          }
+        } else {
+          toast.success("הדשבורד נשלח באימייל");
+        }
       }
-    } catch (e) {
-      toast.error("שגיאה בשליחה");
+    } catch (e: any) {
+      console.error("Send error:", e);
+      toast.error(`שגיאה בשליחה: ${e?.message || "לא ידוע"}`);
     } finally {
       setIsSending(false);
     }
