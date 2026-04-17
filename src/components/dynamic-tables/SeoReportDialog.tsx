@@ -89,6 +89,7 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [selectedClient, setSelectedClient] = useState("");
+  const [selectedDomain, setSelectedDomain] = useState<string>("");
   const [isCreatingTable, setIsCreatingTable] = useState(false);
 
   const { data: clients = [] } = useQuery({
@@ -150,9 +151,45 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
     enabled: !!currentTenantId && !!selectedClient,
   });
 
-  // Extract structured data from the latest report
-  const latestReport = reports[0];
-  const reportData = latestReport?.report_data as any;
+  // Available domains for the selected client
+  const availableDomains = useMemo(() => {
+    const set = new Set<string>();
+    reports.forEach((r: any) => { if (r.domain) set.add(r.domain); });
+    return Array.from(set);
+  }, [reports]);
+
+  // Normalize a website URL → bare domain (no protocol, no www, no path)
+  const normalizeDomain = (url?: string | null): string => {
+    if (!url) return '';
+    return url.replace(/^https?:\/\//i, '').replace(/^www\./i, '').split('/')[0].toLowerCase().trim();
+  };
+
+  const selectedClientObjEarly = clients.find(c => c.id === selectedClient);
+  const clientPreferredDomain = normalizeDomain(selectedClientObjEarly?.website);
+
+  // Auto-select domain: prefer the one matching client's website, else first
+  useMemo(() => {
+    if (!selectedClient || availableDomains.length === 0) {
+      if (selectedDomain) setSelectedDomain("");
+      return;
+    }
+    if (selectedDomain && availableDomains.includes(selectedDomain)) return;
+    const preferred = clientPreferredDomain
+      ? availableDomains.find(d => d.toLowerCase() === clientPreferredDomain || d.toLowerCase().includes(clientPreferredDomain) || clientPreferredDomain.includes(d.toLowerCase()))
+      : null;
+    setSelectedDomain(preferred || availableDomains[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedClient, availableDomains.join('|'), clientPreferredDomain]);
+
+  // Pick the latest report matching the selected domain
+  const latestReport = useMemo(() => {
+    if (!reports.length) return null;
+    if (selectedDomain) {
+      return reports.find((r: any) => r.domain === selectedDomain) || reports[0];
+    }
+    return reports[0];
+  }, [reports, selectedDomain]);
+  const reportData = (latestReport as any)?.report_data;
 
   const snapshot = reportData?.snapshot || {};
   const trafficHistory = Array.isArray(reportData?.traffic_history) ? reportData.traffic_history : [];
