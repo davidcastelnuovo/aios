@@ -366,20 +366,19 @@ export default function GoogleAnalyticsSettings() {
                           </div>
                         </div>
                         <div className="flex gap-2">
-                          {isOwn && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setSharingIntegrationId(integ.id);
-                                setSharingIntegrationName(email);
-                                setSharingOwnerId(integ.user_id);
-                              }}
-                            >
-                              <Share2 className="h-4 w-4 ml-1" />
-                              שתף
-                            </Button>
-                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSharingIntegrationId(integ.id);
+                              setSharingIntegrationName(email);
+                              setSharingOwnerId(integ.user_id);
+                            }}
+                            title={isOwn ? "שתף עם חברי צוות" : "נהל שיתוף (חיבור משותף בארגון)"}
+                          >
+                            <Share2 className="h-4 w-4 ml-1" />
+                            שתף
+                          </Button>
                           {isOwn && (
                             <Button
                               variant="outline"
