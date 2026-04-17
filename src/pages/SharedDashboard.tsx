@@ -14,7 +14,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Facebook, FileSpreadsheet, TrendingUp, TrendingDown, Minus, BarChart3, RefreshCw, ShoppingCart } from "lucide-react";
+import { Facebook, FileSpreadsheet, TrendingUp, TrendingDown, Minus, BarChart3, RefreshCw, ShoppingCart, Search } from "lucide-react";
+import { PublicSeoView } from "@/components/dynamic-tables/PublicSeoView";
 import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnalyticsDashboard";
 import { PublicWooCommerceView } from "@/components/dynamic-tables/PublicWooCommerceView";
 import {
