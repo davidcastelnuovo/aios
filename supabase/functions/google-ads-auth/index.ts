@@ -612,25 +612,25 @@ async function disconnectGoogleAds(supabase: any, tenantId: string) {
   });
 }
 
-async function checkConnectionStatus(supabase: any, tenantId: string) {
-  const { data: integration } = await supabase
-    .from('tenant_integrations')
-    .select('*')
-    .eq('tenant_id', tenantId)
-    .eq('integration_type', 'google_ads')
-    .eq('is_active', true)
-    .maybeSingle();
+async function checkConnectionStatus(_supabase: any, tenantId: string, userId: string) {
+  const serviceClient = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  );
 
-  const isConnected = !!integration?.api_key;
-  const isExpired = integration?.settings?.expires_at 
-    ? new Date(integration.settings.expires_at) < new Date()
+  const integrations = await getAccessibleGoogleAdsIntegrations(serviceClient, tenantId, userId);
+  const isConnected = integrations.length > 0;
+  const primary = integrations[0];
+  const isExpired = primary?.settings?.expires_at
+    ? new Date(primary.settings.expires_at) < new Date()
     : false;
 
-  return new Response(JSON.stringify({ 
+  return new Response(JSON.stringify({
     is_connected: isConnected,
     is_expired: isExpired,
-    connected_at: integration?.settings?.connected_at,
-    expires_at: integration?.settings?.expires_at,
+    connected_at: primary?.settings?.connected_at,
+    expires_at: primary?.settings?.expires_at,
+    integration_count: integrations.length,
   }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' }
   });
