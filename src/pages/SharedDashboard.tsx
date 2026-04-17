@@ -148,7 +148,9 @@ export default function SharedDashboard() {
   const wooSites = data?.woocommerce?.sites || [];
   const wooOrders = data?.woocommerce?.orders || [];
   const hasWooCommerce = wooSites.length > 0;
-  console.log('[SharedDashboard] wooSites:', wooSites.length, 'wooOrders:', wooOrders.length);
+  const ahrefsReports = data?.ahrefs_reports || [];
+  const hasSeo = ahrefsReports.length > 0;
+  console.log('[SharedDashboard] wooSites:', wooSites.length, 'wooOrders:', wooOrders.length, 'seoReports:', ahrefsReports.length);
 
   // Available platforms
   const availablePlatforms = useMemo(() => {
@@ -159,8 +161,9 @@ export default function SharedDashboard() {
     if (set.has('google_ads')) platforms.push('google_ads');
     if (set.has('google_analytics')) platforms.push('google_analytics');
     if (hasWooCommerce) platforms.push('woocommerce');
+    if (hasSeo) platforms.push('seo');
     return platforms;
-  }, [tables, hasWooCommerce]);
+  }, [tables, hasWooCommerce, hasSeo]);
 
   // Filter records: platform filter + only use 'daily' aggregate records for Analytics
   const filteredRecords = useMemo(() => {
