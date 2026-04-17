@@ -39,7 +39,7 @@ const PLATFORM_CONFIG: Record<string, { name: string; color: string }> = {
   google_analytics: { name: 'Analytics', color: 'text-orange-500' },
 };
 
-type PlatformFilter = 'all' | 'facebook' | 'google_ads' | 'google_analytics' | 'woocommerce';
+type PlatformFilter = 'all' | 'facebook' | 'google_ads' | 'google_analytics' | 'woocommerce' | 'seo';
 type CampaignType = 'leads' | 'ecommerce';
 
 const getSpendFromData = (data: any) => Number(data?.spend) || Number(data?.cost) || 0;
