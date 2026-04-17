@@ -107,7 +107,7 @@ export function EmailRecipientsSelector({
                         {opt.email}
                       </div>
                     </div>
-                  </label>
+                  </div>
                 );
               })}
             </div>
