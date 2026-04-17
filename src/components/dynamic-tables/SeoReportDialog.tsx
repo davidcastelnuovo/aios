@@ -94,13 +94,39 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
   const { data: clients = [] } = useQuery({
     queryKey: ['seo-report-clients', currentTenantId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // 1) Own-tenant clients
+      const ownPromise = supabase
         .from('clients')
         .select('id, name, agency_id, website, is_seo_client')
-        .eq('tenant_id', currentTenantId!)
-        .order('name');
-      if (error) throw error;
-      let result = data || [];
+        .eq('tenant_id', currentTenantId!);
+
+      // 2) Cross-tenant: agencies shared with this tenant
+      const sharedAgenciesPromise = supabase
+        .from('agency_tenant_access')
+        .select('agency_id')
+        .eq('accessing_tenant_id', currentTenantId!);
+
+      const [ownRes, sharedRes] = await Promise.all([ownPromise, sharedAgenciesPromise]);
+      if (ownRes.error) throw ownRes.error;
+      if (sharedRes.error) throw sharedRes.error;
+
+      const sharedAgencyIds = (sharedRes.data || []).map((r: any) => r.agency_id).filter(Boolean);
+
+      let sharedClients: any[] = [];
+      if (sharedAgencyIds.length > 0) {
+        const { data, error } = await supabase
+          .from('clients')
+          .select('id, name, agency_id, website, is_seo_client')
+          .in('agency_id', sharedAgencyIds);
+        if (error) throw error;
+        sharedClients = data || [];
+      }
+
+      // Merge & dedupe by id
+      const map = new Map<string, any>();
+      [...(ownRes.data || []), ...sharedClients].forEach((c: any) => map.set(c.id, c));
+      let result = Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'he'));
+
       if (assignedClientIds) {
         result = result.filter(c => assignedClientIds.includes(c.id));
       }
