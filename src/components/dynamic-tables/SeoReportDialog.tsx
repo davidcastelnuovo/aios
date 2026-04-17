@@ -217,7 +217,7 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
     if (!selectedClient || !latestReport) return;
     setIsCreatingTable(true);
     try {
-      const domain = reportData?.domain || latestReport?.domain || '';
+      const domain = selectedDomain || reportData?.domain || latestReport?.domain || '';
       const clientName = selectedClientObj?.name || '';
       const domainMatchesName = domain && clientName && domain.toLowerCase().includes(clientName.toLowerCase());
       const tableName = domain && !domainMatchesName ? `${clientName} - ${domain}` : clientName;
