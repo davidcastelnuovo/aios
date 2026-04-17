@@ -353,11 +353,11 @@ serve(async (req) => {
             pageviews: parseInt(row.metricValues[3].value) || 0,
             bounce_rate: (parseFloat(row.metricValues[4].value) * 100).toFixed(1),
             avg_session_duration: parseFloat(row.metricValues[5].value).toFixed(1),
-            conversions: parseInt(row.metricValues[6].value) || 0,
-            add_to_cart: parseInt(row.metricValues[7]?.value) || 0,
-            purchases: parseInt(row.metricValues[8]?.value) || 0,
-            purchase_value: parseFloat(row.metricValues[9]?.value) || 0,
-            total_revenue: parseFloat(row.metricValues[10]?.value) || 0,
+            add_to_cart: parseInt(row.metricValues[6]?.value) || 0,
+            purchases: parseInt(row.metricValues[7]?.value) || 0,
+            purchase_value: parseFloat(row.metricValues[8]?.value) || 0,
+            total_revenue: parseFloat(row.metricValues[9]?.value) || 0,
+            conversions: parseInt(row.metricValues[7]?.value) || 0,
           },
         });
       }
@@ -416,11 +416,11 @@ serve(async (req) => {
             pageviews: parseInt(row.metricValues[3].value) || 0,
             bounce_rate: (parseFloat(row.metricValues[4].value) * 100).toFixed(1),
             avg_session_duration: parseFloat(row.metricValues[5].value).toFixed(1),
-            conversions: parseInt(row.metricValues[6].value) || 0,
-            add_to_cart: parseInt(row.metricValues[7]?.value) || 0,
-            purchases: parseInt(row.metricValues[8]?.value) || 0,
-            purchase_value: parseFloat(row.metricValues[9]?.value) || 0,
-            total_revenue: parseFloat(row.metricValues[10]?.value) || 0,
+            add_to_cart: parseInt(row.metricValues[6]?.value) || 0,
+            purchases: parseInt(row.metricValues[7]?.value) || 0,
+            purchase_value: parseFloat(row.metricValues[8]?.value) || 0,
+            total_revenue: parseFloat(row.metricValues[9]?.value) || 0,
+            conversions: parseInt(row.metricValues[7]?.value) || 0,
           },
         });
       }
