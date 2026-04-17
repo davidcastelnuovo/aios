@@ -571,7 +571,10 @@ export default function DynamicTables() {
                 key={category}
                 variant={selectedCategory === category ? "default" : "outline"}
                 size="sm"
-                onClick={() => setSelectedCategory(category)}
+                onClick={() => {
+                  setSelectedCategory(category);
+                  try { sessionStorage.setItem('dynamicTables.selectedCategory', category); } catch {}
+                }}
                 className="gap-2"
               >
                 <span>({categoryTables.length})</span>
