@@ -15,12 +15,17 @@ export const ClientReportSnapshot = forwardRef<HTMLDivElement, Props>(
       queryFn: async () => {
         const { data, error } = await supabase
           .from("crm_tables")
-          .select("id, tenant_id, integration_type, integration_settings")
+          .select("id, tenant_id, client_id, integration_type, integration_settings")
           .eq("id", tableId)
           .maybeSingle();
 
         if (error) throw error;
-        return data as { tenant_id: string; integration_type: string | null; integration_settings?: any } | null;
+        return data as {
+          tenant_id: string;
+          client_id: string | null;
+          integration_type: string | null;
+          integration_settings?: any;
+        } | null;
       },
       staleTime: 5 * 60 * 1000,
     });
@@ -29,8 +34,11 @@ export const ClientReportSnapshot = forwardRef<HTMLDivElement, Props>(
       tableMeta?.integration_type === "ahrefs" ||
       tableMeta?.integration_settings?.data_source === "ahrefs_reports";
 
-    const seoClientId = (tableMeta?.integration_settings?.clientId ||
-      tableMeta?.integration_settings?.client_id) as string | undefined;
+    const seoClientId = (
+      tableMeta?.integration_settings?.clientId ||
+      tableMeta?.integration_settings?.client_id ||
+      tableMeta?.client_id
+    ) as string | undefined;
     const seoTargetDomain = tableMeta?.integration_settings?.targetDomain as string | undefined;
 
     // Fetch latest Ahrefs report for SEO snapshot
