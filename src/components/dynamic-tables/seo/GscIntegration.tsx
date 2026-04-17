@@ -19,6 +19,8 @@ interface GscIntegrationProps {
   domain?: string;
   keywords?: string[];
   onDataLoaded?: (data: GscKeywordData[]) => void;
+  /** Called whenever a GSC site is selected/auto-linked, so callers can persist it on their own entity. */
+  onSiteSelected?: (siteUrl: string) => void;
   /** When true, hides the raw queries table — data is still fetched and passed via onDataLoaded */
   hideTable?: boolean;
 }
@@ -45,7 +47,7 @@ function normalizeDomain(value?: string) {
     .toLowerCase();
 }
 
-export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoaded, hideTable = false }: GscIntegrationProps) {
+export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoaded, onSiteSelected, hideTable = false }: GscIntegrationProps) {
   const queryClient = useQueryClient();
   const [selectedSite, setSelectedSite] = useState<string>("");
   const [sitePopoverOpen, setSitePopoverOpen] = useState(false);
@@ -82,9 +84,10 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
     staleTime: 5 * 60 * 1000,
   });
 
-  // Per-client site URL takes priority over global setting
+  // STRICT per-client isolation: do NOT fall back to global settings.site_url/siteUrl
+  // (those caused selections to leak across clients).
   const clientSites = settings?.client_sites || {};
-  const persistedSiteUrl = selectedSite || clientSites[clientId] || settings?.site_url || settings?.siteUrl || "";
+  const persistedSiteUrl = selectedSite || clientSites[clientId] || "";
   const normalizedDomain = normalizeDomain(domain);
   const matchedSite = normalizedDomain
     ? availableSites.find((site) => {
@@ -97,6 +100,8 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
       })
     : null;
 
+  // Auto-link by domain: only suggest if the report domain matches a GSC property.
+  // Single-property auto-select kept as a convenience when there's nothing else to choose.
   const fallbackSiteUrl = matchedSite?.siteUrl || (availableSites.length === 1 ? availableSites[0].siteUrl : "");
   const effectiveSiteUrl = persistedSiteUrl || fallbackSiteUrl;
 
@@ -105,6 +110,8 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
       onDataLoaded?.([]);
     }
   }, [effectiveSiteUrl, onDataLoaded, clientId]);
+
+  // Auto-link useEffect is declared further down (after updateSiteMutation is defined).
 
   const { data: gscData, isLoading: isLoadingData, refetch: refetchData } = useQuery({
     queryKey: ["gsc-keyword-data", gscIntegration?.id, effectiveSiteUrl, keywords?.join(",")],
@@ -161,13 +168,13 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
     mutationFn: async (siteUrl: string) => {
       if (!gscIntegration?.id) return;
       const updatedClientSites = { ...clientSites, [clientId]: siteUrl };
+      // Strip any legacy global site_url/siteUrl to prevent cross-client leakage.
+      const { site_url: _legacySnake, siteUrl: _legacyCamel, ...cleanSettings } = settings || {};
       const { error } = await supabase
         .from("tenant_integrations")
         .update({
           settings: {
-            ...settings,
-            site_url: siteUrl,
-            siteUrl: siteUrl,
+            ...cleanSettings,
             client_sites: updatedClientSites,
             available_sites: availableSites,
           },
@@ -176,12 +183,28 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
 
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, siteUrl) => {
       queryClient.invalidateQueries({ queryKey: ["gsc-integration"] });
       queryClient.invalidateQueries({ queryKey: ["gsc-keyword-data"] });
+      onSiteSelected?.(siteUrl);
       toast.success("הנכס עודכן");
     },
   });
+
+  // Auto-link by domain: when no per-client mapping exists and the report's domain
+  // matches a GSC property, persist it automatically (per-client only).
+  useEffect(() => {
+    if (
+      gscIntegration?.id &&
+      clientId &&
+      !clientSites[clientId] &&
+      matchedSite?.siteUrl &&
+      !updateSiteMutation.isPending
+    ) {
+      updateSiteMutation.mutate(matchedSite.siteUrl);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gscIntegration?.id, clientId, matchedSite?.siteUrl]);
 
   if (isLoadingIntegration) return null;
 

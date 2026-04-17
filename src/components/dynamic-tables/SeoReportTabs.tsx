@@ -41,6 +41,7 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
   const targetDomain = (seoTable?.integration_settings as any)?.targetDomain || '';
   const savedGaTableId = (seoTable?.integration_settings as any)?.linkedGaTableId || '';
   const savedGscTableId = (seoTable?.integration_settings as any)?.linkedGscTableId || '';
+  const savedGscSiteUrl = (seoTable?.integration_settings as any)?.linkedGscSiteUrl || '';
 
   // Fetch ALL GA and GSC tables for this tenant
   const { data: relatedTables } = useQuery({
@@ -279,7 +280,12 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                 <GscIntegration
                   tenantId={tenantId}
                   clientId={clientId}
-                  domain={targetDomain}
+                  domain={savedGscSiteUrl || targetDomain}
+                  onSiteSelected={(siteUrl) => {
+                    if (siteUrl && siteUrl !== savedGscSiteUrl) {
+                      saveLinkMutation.mutate({ key: 'linkedGscSiteUrl', value: siteUrl });
+                    }
+                  }}
                 />
               </div>
             )}
