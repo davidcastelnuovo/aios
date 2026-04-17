@@ -83,14 +83,21 @@ export function EmailRecipientsSelector({
               {options.map((opt) => {
                 const checked = selectedEmails.includes(opt.email);
                 return (
-                  <label
+                  <div
                     key={opt.email}
+                    role="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      toggleEmail(opt.email);
+                    }}
                     className="flex items-start gap-2 px-2 py-1.5 rounded hover:bg-accent cursor-pointer text-xs"
                   >
                     <Checkbox
                       checked={checked}
                       onCheckedChange={() => toggleEmail(opt.email)}
-                      className="mt-0.5"
+                      onClick={(e) => e.stopPropagation()}
+                      className="mt-0.5 pointer-events-none"
                     />
                     <div className="flex-1 min-w-0">
                       <div className="font-medium truncate">
@@ -100,7 +107,7 @@ export function EmailRecipientsSelector({
                         {opt.email}
                       </div>
                     </div>
-                  </label>
+                  </div>
                 );
               })}
             </div>
