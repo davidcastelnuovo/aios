@@ -147,6 +147,7 @@ export default function SharedDashboard() {
   const wooSites = data?.woocommerce?.sites || [];
   const wooOrders = data?.woocommerce?.orders || [];
   const hasWooCommerce = wooSites.length > 0;
+  console.log('[SharedDashboard] wooSites:', wooSites.length, 'wooOrders:', wooOrders.length);
 
   // Available platforms
   const availablePlatforms = useMemo(() => {
