@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { ClientReportSnapshot } from "./ClientReportSnapshot";
+import { SeoCombinedSnapshot } from "./SeoCombinedSnapshot";
 import { toPng } from "html-to-image";
 import { buildBrandedEmailHtml } from "@/lib/emailTemplate";
 import { EmailRecipientsSelector, type EmailOption } from "./EmailRecipientsSelector";
@@ -172,7 +173,8 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
     const cached = localStorage.getItem(CACHE_KEY_PREFIX + table.id);
     setScreenshotUrl(cached || null);
 
-    const delay = table.integration_type === "ahrefs" ? 4000 : 3000;
+    // SEO tables need extra time to fetch GSC data via edge function
+    const delay = table.integration_type === "ahrefs" ? 6000 : 3000;
     const timer = window.setTimeout(() => setCaptureReady(true), delay);
     return () => window.clearTimeout(timer);
   }, [table.id, table.integration_type]);
@@ -571,11 +573,19 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
           }}
           aria-hidden="true"
         >
-          <ClientReportSnapshot
-            ref={snapshotRef}
-            tableId={table.id}
-            tableName={table.name}
-          />
+          {table.integration_type === "ahrefs" ? (
+            <SeoCombinedSnapshot
+              ref={snapshotRef}
+              tableId={table.id}
+              tableName={table.name}
+            />
+          ) : (
+            <ClientReportSnapshot
+              ref={snapshotRef}
+              tableId={table.id}
+              tableName={table.name}
+            />
+          )}
         </div>,
         document.body
       )}
