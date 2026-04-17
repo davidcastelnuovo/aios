@@ -14,7 +14,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Facebook, FileSpreadsheet, TrendingUp, TrendingDown, Minus, BarChart3, RefreshCw, ShoppingCart } from "lucide-react";
+import { Facebook, FileSpreadsheet, TrendingUp, TrendingDown, Minus, BarChart3, RefreshCw, ShoppingCart, Search } from "lucide-react";
+import { PublicSeoView } from "@/components/dynamic-tables/PublicSeoView";
 import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnalyticsDashboard";
 import { PublicWooCommerceView } from "@/components/dynamic-tables/PublicWooCommerceView";
 import {
@@ -38,7 +39,7 @@ const PLATFORM_CONFIG: Record<string, { name: string; color: string }> = {
   google_analytics: { name: 'Analytics', color: 'text-orange-500' },
 };
 
-type PlatformFilter = 'all' | 'facebook' | 'google_ads' | 'google_analytics' | 'woocommerce';
+type PlatformFilter = 'all' | 'facebook' | 'google_ads' | 'google_analytics' | 'woocommerce' | 'seo';
 type CampaignType = 'leads' | 'ecommerce';
 
 const getSpendFromData = (data: any) => Number(data?.spend) || Number(data?.cost) || 0;
@@ -147,7 +148,9 @@ export default function SharedDashboard() {
   const wooSites = data?.woocommerce?.sites || [];
   const wooOrders = data?.woocommerce?.orders || [];
   const hasWooCommerce = wooSites.length > 0;
-  console.log('[SharedDashboard] wooSites:', wooSites.length, 'wooOrders:', wooOrders.length);
+  const ahrefsReports = data?.ahrefs_reports || [];
+  const hasSeo = ahrefsReports.length > 0;
+  console.log('[SharedDashboard] wooSites:', wooSites.length, 'wooOrders:', wooOrders.length, 'seoReports:', ahrefsReports.length);
 
   // Available platforms
   const availablePlatforms = useMemo(() => {
@@ -158,8 +161,9 @@ export default function SharedDashboard() {
     if (set.has('google_ads')) platforms.push('google_ads');
     if (set.has('google_analytics')) platforms.push('google_analytics');
     if (hasWooCommerce) platforms.push('woocommerce');
+    if (hasSeo) platforms.push('seo');
     return platforms;
-  }, [tables, hasWooCommerce]);
+  }, [tables, hasWooCommerce, hasSeo]);
 
   // Filter records: platform filter + only use 'daily' aggregate records for Analytics
   const filteredRecords = useMemo(() => {
@@ -561,6 +565,12 @@ export default function SharedDashboard() {
                 WooCommerce
               </TabsTrigger>
             )}
+            {availablePlatforms.includes('seo') && (
+              <TabsTrigger value="seo" className="flex items-center gap-2">
+                <Search className="h-4 w-4 text-purple-600" />
+                SEO
+              </TabsTrigger>
+            )}
           </TabsList>
         </Tabs>
       )}
@@ -574,6 +584,8 @@ export default function SharedDashboard() {
         />
       ) : platformFilter === 'woocommerce' ? (
         <PublicWooCommerceView sites={wooSites} orders={wooOrders} />
+      ) : platformFilter === 'seo' ? (
+        <PublicSeoView tableName={dashboard?.client_name || 'SEO'} reports={ahrefsReports} />
       ) : (
         <>
           {/* Summary Cards - "All" tab: 7 KPI cards like DashboardView */}
