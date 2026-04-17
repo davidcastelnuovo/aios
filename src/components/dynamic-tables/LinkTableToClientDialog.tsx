@@ -50,13 +50,39 @@ export function LinkTableToClientDialog({
   const { data: clients = [], isLoading } = useQuery({
     queryKey: ["clients-for-table-link", tenantId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // 1) Clients owned by current tenant
+      const { data: ownClients, error: ownError } = await supabase
         .from("clients")
         .select("id, name, agency_id, agencies(name)")
         .eq("tenant_id", tenantId)
         .order("name");
-      if (error) throw error;
-      return data || [];
+      if (ownError) throw ownError;
+
+      // 2) Cross-tenant: clients of agencies shared with this tenant
+      const { data: sharedAccess } = await supabase
+        .from("agency_tenant_access")
+        .select("agency_id")
+        .eq("accessing_tenant_id", tenantId);
+
+      const sharedAgencyIds = (sharedAccess || []).map((s: any) => s.agency_id).filter(Boolean);
+
+      let sharedClients: any[] = [];
+      if (sharedAgencyIds.length > 0) {
+        const { data: sc } = await supabase
+          .from("clients")
+          .select("id, name, agency_id, agencies(name)")
+          .in("agency_id", sharedAgencyIds);
+        sharedClients = sc || [];
+      }
+
+      // Merge & dedupe
+      const map = new Map<string, any>();
+      for (const c of [...(ownClients || []), ...sharedClients]) {
+        if (!map.has(c.id)) map.set(c.id, c);
+      }
+      return Array.from(map.values()).sort((a, b) =>
+        (a.name || "").localeCompare(b.name || "", "he")
+      );
     },
     enabled: open && !!tenantId,
   });
