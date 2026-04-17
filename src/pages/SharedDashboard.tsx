@@ -439,22 +439,21 @@ export default function SharedDashboard() {
     return Object.values(map).sort((a, b) => b.spend - a.spend);
   }, [platformFilter, records]);
 
-  // Google Ads campaign summary
+  // Google Ads campaign summary - mirrors DashboardView (uses conversions / conversions_value)
   const googleAdsCampaignSummary = useMemo(() => {
     if (platformFilter !== 'google_ads') return [];
-    const map: Record<string, { name: string; impressions: number; clicks: number; spend: number; leads: number; purchases: number; revenue: number; addToCart: number }> = {};
+    const map: Record<string, { name: string; campaign_id: string; impressions: number; clicks: number; spend: number; conversions: number; conversions_value: number }> = {};
     const gaRecords = records.filter((r: any) => (r._source || '') === 'google_ads');
     gaRecords.forEach((r: any) => {
       const d = r.data || {};
       const name = d.campaign_name || d.campaign || 'ללא שם';
-      if (!map[name]) map[name] = { name, impressions: 0, clicks: 0, spend: 0, leads: 0, purchases: 0, revenue: 0, addToCart: 0 };
-      map[name].impressions += Number(d.impressions) || 0;
-      map[name].clicks += Number(d.clicks) || 0;
-      map[name].spend += getSpendFromData(d);
-      map[name].leads += getLeadsFromData(d);
-      map[name].purchases += getPurchasesFromData(d);
-      map[name].revenue += getRevenueFromData(d);
-      map[name].addToCart += getAddToCartFromData(d);
+      const key = String(d.campaign_id || name);
+      if (!map[key]) map[key] = { name, campaign_id: String(d.campaign_id || ''), impressions: 0, clicks: 0, spend: 0, conversions: 0, conversions_value: 0 };
+      map[key].impressions += Number(d.impressions) || 0;
+      map[key].clicks += Number(d.clicks) || 0;
+      map[key].spend += Number(d.cost) || Number(d.spend) || 0;
+      map[key].conversions += Number(d.conversions) || 0;
+      map[key].conversions_value += Number(d.conversions_value) || 0;
     });
     return Object.values(map).sort((a, b) => b.spend - a.spend);
   }, [platformFilter, records]);
