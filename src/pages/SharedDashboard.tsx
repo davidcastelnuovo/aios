@@ -532,6 +532,12 @@ export default function SharedDashboard() {
                 Analytics
               </TabsTrigger>
             )}
+            {availablePlatforms.includes('woocommerce') && (
+              <TabsTrigger value="woocommerce" className="flex items-center gap-2">
+                <ShoppingCart className="h-4 w-4 text-emerald-600" />
+                WooCommerce
+              </TabsTrigger>
+            )}
           </TabsList>
         </Tabs>
       )}
@@ -543,6 +549,8 @@ export default function SharedDashboard() {
           externalDateFilter={dateFilter}
           defaultReportMode={(dashboard?.settings as any)?.default_report_mode}
         />
+      ) : platformFilter === 'woocommerce' ? (
+        <PublicWooCommerceView sites={wooSites} orders={wooOrders} />
       ) : (
         <>
           {/* Summary Cards - "All" tab: 7 KPI cards like DashboardView */}
