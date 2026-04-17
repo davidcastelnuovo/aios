@@ -1302,8 +1302,8 @@ export default function DashboardView() {
                 );
               })()}
 
-              {/* Raw Table Data - show on platform-specific tabs (Google Ads, Analytics) */}
-              {platformFilter !== 'all' && platformFilter !== 'facebook' && platformRawData.fields.length > 0 && (
+              {/* Raw Table Data - show only on Analytics tab (Google Ads has its own summary view below) */}
+              {platformFilter !== 'all' && platformFilter !== 'facebook' && platformFilter !== 'google_ads' && platformRawData.fields.length > 0 && (
                 <Card>
                   <CardHeader>
                     <CardTitle>
