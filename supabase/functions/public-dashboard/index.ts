@@ -171,6 +171,19 @@ Deno.serve(async (req) => {
       });
     }
 
+    // ---- Ahrefs SEO reports for this client ----
+    let ahrefsReports: any[] = [];
+    if (dashboard.client_id) {
+      const { data: reports } = await supabase
+        .from("ahrefs_reports")
+        .select("id, domain, report_date, report_type, report_data, comparison_data, received_at")
+        .eq("tenant_id", dashboard.tenant_id)
+        .eq("client_id", dashboard.client_id)
+        .order("report_date", { ascending: false })
+        .limit(50);
+      ahrefsReports = reports || [];
+    }
+
     // ---- WooCommerce: fetch linked sites + orders for this client ----
     let wooSites: any[] = [];
     let wooOrders: any[] = [];
