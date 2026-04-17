@@ -2,42 +2,60 @@
 
 ## אבחון
 
-בדקתי הכל מקצה לקצה:
+**שורש הבעיה (לוג Edge Function):**
+```
+ERROR Gmail API error: Token refresh failed
+```
+ה-`refresh_token` של Gmail פג/לא תקף — לכן ה-edge function זורקת 500 ולכן ה-toast "שגיאה בשליחת הדוח". האימייל לא נשלח כי **חיבור Gmail צריך חידוש**.
 
-**1. בקאנד (`public-dashboard` edge function)** — תקין ✅
-קריאה ישירה ל-API עם `token=lidar` מחזירה:
-- `woocommerce.sites`: 1 אתר (lidarswimwear.com)
-- `woocommerce.orders`: 81 הזמנות
+**הסניפט של SEO לא קיים בכלל:**
+ב-`ClientReportSnapshot.tsx` יש לוגיקה רק ל-Ads (`facebook_insights`, `facebook_ecommerce`, `google_ads`) ולפילדים גנריים. כשהטבלה היא דוח SEO (`integration_settings.data_source === 'ahrefs_reports'`) — הוא נופל ל-fallback של "אין נתונים לתקופה זו" כי ה-records של Ahrefs לא מתאימים לפילטר 7-ימים. לכן הצילום ריק/לא רלוונטי.
 
-**2. דאטה במסד** — תקין ✅
-האתר מקושר ללקוח "לידר", עם `woocommerce_enabled=true`, `is_active=true`, ו-`tenant_id` תואם לדשבורד.
+**אין יצירה אוטומטית של share link:**
+ב-`ClientReportPanel.tsx` שורה 119-138 — רק *קוראים* קישור קיים. אם אין — לא נוצר. יש להוסיף mutation שיוצר אם חסר.
 
-**3. קוד הפרונט (`SharedDashboard.tsx`)** — תקין ✅
-- שורה 145-147: קורא `data?.woocommerce?.sites` ומחשב `hasWooCommerce`
-- שורה 157: מוסיף `'woocommerce'` ל-`availablePlatforms`
-- שורות 535-540: מרנדר `<TabsTrigger value="woocommerce">`
-- שורה 552-553: מרנדר את `<PublicWooCommerceView>`
+---
 
-## מסקנה
+## פתרון
 
-**הקוד כבר נכון** — התיקון מהשיחה הקודמת אכן עובד. הצילום שלך מראה ככל הנראה גרסה ישנה של הקישור (קאש בדפדפן), משום שכל החלקים פועלים תקין כשבודקים ישירות.
+### 1. שיפור הודעת השגיאה ב-Gmail (UX)
+ב-`ClientReportPanel.tsx` `handleSend` — לזהות שגיאות `Token refresh failed` / `Gmail not connected` ולהציג הודעה ברורה: *"חיבור ה-Gmail פג. יש להתחבר מחדש בדף Gmail Settings"* + כפתור ניווט.
 
-## מה אעשה כדי להבטיח שזה עובד 100%
+### 2. יצירה אוטומטית של Share Link אם חסר
+- אם `shareLink` הוא `null` — לפני שליחה, להריץ אוטומטית `INSERT` ל-`table_shares` עם token קריא (זהה ללוגיקה ב-`ShareTableDialog.generateReadableToken`).
+- לאחר היצירה — invalidate השאילתה ולהמשיך עם הקישור החדש.
+- אופציונלי: כפתור קטן "צור קישור" בתוך אזור ה-Share info שכרגע מציג "אין קישור שיתוף פעיל".
 
-### 1. הוספת אינדיקטור ויזואלי במצב ריק
-ב-`PublicWooCommerceView.tsx` כבר יש fallback "אין אתר WooCommerce משויך" — ולכן אם הנתונים מגיעים אך הלשונית עדיין לא נראית, זה אומר שה-JS שנטען בדפדפן ישן.
+### 3. תמיכת SEO בצילום (Top 10 ביטויים)
+ב-`ClientReportSnapshot.tsx`:
+- לזהות `integration_type === 'ahrefs_reports'` או `integration_settings.data_source === 'ahrefs_reports'`.
+- אם זה SEO — לטעון את ה-keywords של הלקוח דרך אותן שאילתות ש-`SeoDashboardView`/`useAhrefsEnrichment` משתמשים בהן (טבלאות `ahrefs_keywords` או דרך `useAhrefsEnrichment` hook על-ידי קריאה ישירה לטבלאות).
+- לרנדר:
+  - כותרת + שם הלקוח/דומיין
+  - 4 כרטיסי snapshot: תנועה אורגנית / Top 3 / Top 10 / סך מילות מפתח (אם יש)
+  - **טבלה של עד Top 10 ביטויים ראשונים** (sorted by position ≤ 10, asc) — עמודות: ביטוי, מיקום, שינוי חודשי, נפח, URL.
+- ה-snapshot המוכן יישלח כתמונה דרך אותו `toPng` קיים — לא צריך לשנות את ה-capture flow.
 
-### 2. הוספת cache-busting + בדיקת הגנה
-- ב-`SharedDashboard.tsx`: אוסיף `staleTime: 0` ו-`gcTime: 0` ל-React Query כדי למנוע קאשינג של תגובת ה-API שלא תכלול את שדה `woocommerce`.
-- אוסיף לוג קונסול קצר (`console.log('[SharedDashboard] wooSites:', wooSites.length)`) לאבחון עתידי.
-- אעבור על ה-`availablePlatforms` ואוודא שגם אם `tables` ריק (אבל יש WooCommerce בלבד) — הלשוניות עדיין מרונדרות (כיום ה-`Tabs` נטען רק אם `availablePlatforms.length > 0`, וזה כבר מטופל נכון).
+### 4. הסרת הקאש של html-to-image שגרם לאזהרות (לא בלוקר)
+מוסיפים `skipFonts: true` לקריאת `toPng` כדי למנוע את ה-`SecurityError` עם Google Fonts (אזהרות בלבד, אבל הצילום עובד).
 
-### 3. הנחיה למשתמש
-לאחר העדכון, יהיה צורך **לרענן את הדף עם Ctrl+Shift+R** (או לפתוח בחלון פרטי) כדי לטעון את ה-JS המעודכן. הקאש של הדפדפן הוא ההסבר היחיד ההגיוני לכך שהלשונית לא מופיעה כשהנתונים זמינים בצד השרת.
+---
 
 ## קבצים לעדכון
-- `src/pages/SharedDashboard.tsx` — הוספת `staleTime:0`, `gcTime:0`, ולוג אבחון
 
-## תוצאה
-לאחר הרענון הקשיח — לשונית WooCommerce תופיע ב-`/shared/dashboard/lidar` עם הנתונים של הלקוח לידר.
+1. **`src/components/clients/ClientReportSnapshot.tsx`** — הוספת תמיכה ב-SEO:
+   - שאילתה לטעינת `ahrefs_keywords` + `ahrefs_overview` (snapshot)
+   - מצב רנדור חדש: ראשי snapshot + Top 10 keywords table
+2. **`src/components/clients/ClientReportPanel.tsx`**:
+   - `ensureShareLink()` — אם אין share link, יצירה אוטומטית עם token קריא לפני השליחה
+   - שיפור error handling של Gmail (זיהוי "Token refresh failed" → הודעה ברורה + כפתור "התחבר מחדש")
+   - הוספת `skipFonts: true` ל-`toPng`
+
+---
+
+## תוצאה למשתמש
+
+- **דוח SEO**: הצילום מציג Top 10 ביטויים בעמוד הראשון (כפי שביקשת) + מטריקות snapshot.
+- **קישור שיתוף**: אם אין — נוצר אוטומטית בלחיצה על "שלח דוח", ומצורף לקפשן/מייל.
+- **אימייל**: במקום "שגיאה כללית" יוצגה הודעה ספציפית: "חיבור Gmail פג — יש להתחבר מחדש" + ניתוב לדף ההתחברות.
 
