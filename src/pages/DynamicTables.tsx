@@ -128,12 +128,29 @@ export default function DynamicTables() {
     queryKey: ['agencies', tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
-      const { data, error } = await supabase
+      // Owned agencies
+      const { data: owned, error: ownedErr } = await supabase
         .from('agencies')
         .select('id, name')
         .eq('tenant_id', tenantId);
-      if (error) throw error;
-      return data || [];
+      if (ownedErr) throw ownedErr;
+
+      // Shared agencies (cross-tenant via agency_tenant_access)
+      const { data: sharedAccess, error: sharedErr } = await supabase
+        .from('agency_tenant_access')
+        .select('agency_id, agencies(id, name)')
+        .eq('accessing_tenant_id', tenantId);
+      if (sharedErr) throw sharedErr;
+
+      const shared = (sharedAccess || [])
+        .map((row: any) => Array.isArray(row.agencies) ? row.agencies[0] : row.agencies)
+        .filter(Boolean)
+        .map((a: any) => ({ id: a.id, name: a.name }));
+
+      const merged = [...(owned || []), ...shared].filter(
+        (a, i, arr) => arr.findIndex(x => x.id === a.id) === i
+      );
+      return merged.sort((a, b) => a.name.localeCompare(b.name, 'he'));
     },
     enabled: !!tenantId,
   });
