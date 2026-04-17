@@ -250,6 +250,11 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
       }
 
       if (sendEmail) {
+        if (emailRecipients.length === 0) {
+          toast.error("יש לבחור לפחות נמען אימייל אחד");
+          setIsSending(false);
+          return;
+        }
         const base64Data = await new Promise<string>((resolve) => {
           const reader = new FileReader();
           reader.onloadend = () => resolve((reader.result as string).split(",")[1]);
@@ -307,6 +312,27 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
               {groups?.map((g) => <SelectItem key={g.id} value={g.id}>{g.group_name}</SelectItem>)}
             </SelectContent>
           </Select>
+        )}
+
+        {sendEmail && (
+          <EmailRecipientsSelector
+            options={[
+              ...(client?.email
+                ? [{
+                    email: client.email,
+                    label: `${client.name} (לקוח)`,
+                    icon: "📋",
+                  } satisfies EmailOption]
+                : []),
+              ...((teamMembers || []).map((t: any) => ({
+                email: t.campaigners.email,
+                label: `${t.campaigners.full_name}${t.role_on_account ? ` (${t.role_on_account})` : ""}`,
+                icon: "👤",
+              } satisfies EmailOption))),
+            ]}
+            selectedEmails={emailRecipients}
+            onChange={setEmailRecipients}
+          />
         )}
 
         <Textarea value={messageText} onChange={(e) => setMessageText(e.target.value)} placeholder="טקסט מלווה..." />
