@@ -28,6 +28,7 @@ import {
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { ClientReportSnapshot } from "./ClientReportSnapshot";
 import { toPng } from "html-to-image";
+import { EmailRecipientsSelector, type EmailOption } from "./EmailRecipientsSelector";
 
 interface ClientReportPanelProps {
   table: any;
