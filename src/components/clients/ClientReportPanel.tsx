@@ -539,9 +539,19 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
           </div>
         )}
 
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Link2 className={`h-3 w-3 shrink-0 ${shareLink ? "" : "opacity-50"}`} />
-          <span>{shareLink ? "קישור צפייה יצורף אוטומטית" : "אין קישור שיתוף פעיל"}</span>
+          <span className="flex-1">{shareLink ? "קישור צפייה יצורף אוטומטית" : "אין קישור שיתוף פעיל"}</span>
+          {!shareLink && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 text-xs"
+              onClick={() => ensureShareLink()}
+            >
+              צור קישור
+            </Button>
+          )}
         </div>
 
         <Textarea
