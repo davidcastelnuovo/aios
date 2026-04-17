@@ -108,7 +108,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get access token
+    // Get access token — try table tenant first, then fall back to source tenants
+    // of cross-tenant agency access (e.g. table in tenant A using Google Ads connected in tenant B
+    // because agency is shared via agency_tenant_access).
     let { data: integration } = await supabase
       .from('tenant_integrations')
       .select('*')
@@ -116,6 +118,26 @@ Deno.serve(async (req) => {
       .eq('integration_type', 'google_ads')
       .eq('is_active', true)
       .maybeSingle();
+
+    if (!integration?.api_key) {
+      const { data: accessRows } = await supabase
+        .from('agency_tenant_access')
+        .select('source_tenant_id')
+        .eq('accessing_tenant_id', tableTenantId);
+      const sourceTenantIds = (accessRows || [])
+        .map((r: any) => r.source_tenant_id)
+        .filter((id: any) => !!id && id !== tableTenantId);
+
+      if (sourceTenantIds.length > 0) {
+        const { data: fallbackIntegrations } = await supabase
+          .from('tenant_integrations')
+          .select('*')
+          .in('tenant_id', sourceTenantIds)
+          .eq('integration_type', 'google_ads')
+          .eq('is_active', true);
+        integration = (fallbackIntegrations || []).find((i: any) => i.api_key) || null;
+      }
+    }
 
     if (!integration?.api_key) {
       return new Response(JSON.stringify({ error: 'Google Ads not connected' }), {
