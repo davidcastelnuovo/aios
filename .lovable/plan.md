@@ -1,37 +1,53 @@
 
-המשתמש בחר אופציה ב' עם דגש על שילוב: הצילום יציג את **שתי המקורות יחד** — Ahrefs Top 10 + GSC Top 10 בתצוגה משולבת.
+## האבחנה
 
-## מה ייבנה
+בדקתי את הנתונים בפועל לתאריך 16/04 בטבלת לידר:
+- **המערכת שלנו**: 15,955 ש"ח (29 רכישות)
+- **GA4 בצילום שלך**: 20,646 ש"ח
+- **הפער**: 4,691 ש"ח (~22.7%)
 
-צילום הדוח בכרטיס הלקוח יוחלף בצילום אמיתי של רכיב `SeoReportTabs` במצב snapshot, שיציג בדף אחד את שני בלוקי ה-Top 10:
-1. **Ahrefs Top 10** (מילות מפתח אורגניות מובילות + מיקומים)
-2. **GSC Top 10** (שאילתות עמוד ראשון מ-Google Search Console)
+### הסיבה
+המערכת מושכת מ-GA4 את המטריקה **`purchaseRevenue`** (הכנסות מרכישות E-commerce בלבד), בעוד שהעמודה "סה״כ הכנסות" שאתה רואה בצילום GA4 מציגה את **`totalRevenue`** — שזה מטריקה רחבה יותר הכוללת:
+- `purchaseRevenue` (רכישות) ✅ אנחנו מושכים
+- `subscriptionRevenue` (מנויים) ❌ חסר
+- `adRevenue` (הכנסות מפרסומות באתר) ❌ חסר
 
-## שינויים בקבצים
+ב-LIDAR יש כנראה ~4,691 ש"ח של הכנסות ממקורות שאינם רכישות ישירות (כנראה הכנסות נוספות שמדווחות ב-GA4).
 
-### 1. `src/components/dynamic-tables/seo/SeoReportTabs.tsx`
-הוספת prop חדש:
-- `snapshotMode?: boolean` — כשפעיל:
-  - מסתיר את ה-TabsList (לא מציג כפתורי טאבים)
-  - מסתיר כפתורי פעולה (סנכרון, שיתוף, +)
-  - מרנדר תצוגה מאוחדת: Ahrefs Top 10 למעלה + GSC Top 10 למטה (שני בלוקים זה תחת זה)
-  - ללא בוררי טבלאות
+הוכחה: סך כל ה-`daily_source` ב-DB מסתכם בדיוק ל-15,955 — בדיוק מה שמופיע אצלנו, וזה מדויק עבור `purchaseRevenue`.
 
-### 2. `src/components/dynamic-tables/SeoDashboardView.tsx`
-הוספת prop `snapshotMode` שיגביל לתצוגת Top 10 בלבד עבור Ahrefs (ללא השוואות, ללא טאבים פנימיים).
+### למה זה קורה
+ב-`supabase/functions/sync-google-analytics-data/index.ts` בקריאות ל-GA4 API מוגדרות המטריקות:
+```ts
+metrics: [
+  ...
+  { name: 'ecommercePurchases' },
+  { name: 'purchaseRevenue' },  // ← רק רכישות
+]
+```
+ל-GA4 יש מטריקה נוספת `totalRevenue` שאיננו מבקשים.
 
-### 3. `src/components/dynamic-tables/seo/GscIntegration.tsx`
-הוספת prop `snapshotMode` שיציג רק את טבלת ה-Top 10 (עמוד ראשון), ללא כפתורי שפה/חיפוש/סנכרון.
+## הפתרון המוצע
 
-### 4. `src/components/clients/ClientReportPanel.tsx`
-החלפת לוגיקת זיהוי דוח SEO:
-- במקום לרנדר `ClientReportSnapshot`, לרנדר off-screen את `<SeoReportTabs snapshotMode tenantId clientId />`
-- להמתין ~5 שניות לטעינת GSC + Ahrefs
-- לצלם עם html2canvas
-- לאפס cache בעת מעבר בין טבלאות (כבר קיים)
+### 1. הוספת `totalRevenue` ל-3 הקריאות הראשיות ב-GA4 API
+בקובץ `supabase/functions/sync-google-analytics-data/index.ts`:
+- `trafficSourceRequest` — להוסיף `{ name: 'totalRevenue' }`
+- `dailyRequest` — להוסיף `{ name: 'totalRevenue' }`
+- `dailySourceRequest` — להוסיף `{ name: 'totalRevenue' }`
+- `channelGroupRequest` — להוסיף `{ name: 'totalRevenue' }`
 
-### 5. `src/components/clients/ClientReportSnapshot.tsx`
-להישאר כ-fallback בלבד אם הצילום החי נכשל (loader: "טוען צילום עדכני…").
+### 2. הוספת שדה `total_revenue` ל-`fieldDefinitions` 
+שדה חדש שיציג בנפרד את סך ההכנסות הכולל (לעומת `purchase_value` שיישאר רק לרכישות).
+
+### 3. עדכון לוגיקת הצגה בדשבורד
+ב-`src/components/dynamic-tables/GoogleAnalyticsDashboard.tsx`:
+- להעדיף את `total_revenue` כשהוא קיים, ולעבור ל-`purchase_value` כ-fallback (כדי שלא תישבר תאימות לאחור).
+- הוספת תגית/הסבר על המספר: "הכנסות = רכישות + מנויים + פרסומות (כמו ב-GA4)".
+
+### 4. סנכרון מיידי לאחר השינוי
+לאחר deploy של הפונקציה, נצטרך להריץ סנכרון ידני של טבלת לידר כדי למשוך את `totalRevenue` ההיסטורי.
 
 ## תוצאה
-כרטיס הלקוח יציג צילום זהה לחלוטין למה שמופיע בדוח החי — שני בלוקים מאוחדים: **Ahrefs Top 10** + **GSC Top 10** עם אותם מספרים, אותו עיצוב, אותם נתונים.
+לאחר הפתרון, המספר בדשבורד יתאים בדיוק למה שמופיע בעמודת "סה״כ הכנסות" של GA4 (20,646 ש"ח לאתמול), והפער ייעלם.
+
+**שים לב**: ייתכן פער שיורי קטן (פחות מ-1%) בגלל מנגנון ה-sampling של GA4 בנתונים טריים (24–48 שעות אחרונות), אבל הוא ייעלם תוך יום-יומיים.
