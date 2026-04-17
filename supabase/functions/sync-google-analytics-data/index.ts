@@ -107,10 +107,10 @@ serve(async (req) => {
         { name: 'screenPageViews' },
         { name: 'bounceRate' },
         { name: 'averageSessionDuration' },
-        { name: 'conversions' },
         { name: 'addToCarts' },
         { name: 'ecommercePurchases' },
         { name: 'purchaseRevenue' },
+        { name: 'totalRevenue' },
       ],
       orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
       limit: 50,
@@ -146,6 +146,7 @@ serve(async (req) => {
         { name: 'addToCarts' },
         { name: 'ecommercePurchases' },
         { name: 'purchaseRevenue' },
+        { name: 'totalRevenue' },
       ],
       orderBys: [{ dimension: { dimensionName: 'date' }, desc: false }],
     };
@@ -178,10 +179,10 @@ serve(async (req) => {
         { name: 'screenPageViews' },
         { name: 'bounceRate' },
         { name: 'averageSessionDuration' },
-        { name: 'conversions' },
         { name: 'addToCarts' },
         { name: 'ecommercePurchases' },
         { name: 'purchaseRevenue' },
+        { name: 'totalRevenue' },
       ],
       orderBys: [
         { dimension: { dimensionName: 'date' }, desc: false },
@@ -218,7 +219,7 @@ serve(async (req) => {
         { name: 'ecommercePurchases' },
         { name: 'purchaseRevenue' },
         { name: 'keyEvents' },
-        { name: 'conversions' },
+        { name: 'totalRevenue' },
       ],
       orderBys: [
         { dimension: { dimensionName: 'date' }, desc: false },
@@ -305,12 +306,13 @@ serve(async (req) => {
       { key: 'add_to_cart', name: 'Add To Cart', type: 'number', position: 11 },
       { key: 'purchases', name: 'Purchases', type: 'number', position: 12 },
       { key: 'purchase_value', name: 'Purchase Value', type: 'number', position: 13 },
-      { key: 'channel_group', name: 'Channel Group', type: 'text', position: 14 },
-      { key: 'engaged_sessions', name: 'Engaged Sessions', type: 'number', position: 15 },
-      { key: 'engagement_rate', name: 'Engagement Rate', type: 'number', position: 16 },
-      { key: 'events_per_session', name: 'Events per Session', type: 'number', position: 17 },
-      { key: 'event_name', name: 'Event Name', type: 'text', position: 18 },
-      { key: 'event_count', name: 'Event Count', type: 'number', position: 19 },
+      { key: 'total_revenue', name: 'Total Revenue', type: 'number', position: 14 },
+      { key: 'channel_group', name: 'Channel Group', type: 'text', position: 15 },
+      { key: 'engaged_sessions', name: 'Engaged Sessions', type: 'number', position: 16 },
+      { key: 'engagement_rate', name: 'Engagement Rate', type: 'number', position: 17 },
+      { key: 'events_per_session', name: 'Events per Session', type: 'number', position: 18 },
+      { key: 'event_name', name: 'Event Name', type: 'text', position: 19 },
+      { key: 'event_count', name: 'Event Count', type: 'number', position: 20 },
     ];
 
     for (const field of fieldDefinitions) {
@@ -351,10 +353,11 @@ serve(async (req) => {
             pageviews: parseInt(row.metricValues[3].value) || 0,
             bounce_rate: (parseFloat(row.metricValues[4].value) * 100).toFixed(1),
             avg_session_duration: parseFloat(row.metricValues[5].value).toFixed(1),
-            conversions: parseInt(row.metricValues[6].value) || 0,
-            add_to_cart: parseInt(row.metricValues[7]?.value) || 0,
-            purchases: parseInt(row.metricValues[8]?.value) || 0,
-            purchase_value: parseFloat(row.metricValues[9]?.value) || 0,
+            add_to_cart: parseInt(row.metricValues[6]?.value) || 0,
+            purchases: parseInt(row.metricValues[7]?.value) || 0,
+            purchase_value: parseFloat(row.metricValues[8]?.value) || 0,
+            total_revenue: parseFloat(row.metricValues[9]?.value) || 0,
+            conversions: parseInt(row.metricValues[7]?.value) || 0,
           },
         });
       }
@@ -385,6 +388,7 @@ serve(async (req) => {
             add_to_cart: parseInt(row.metricValues[4]?.value) || 0,
             purchases: parseInt(row.metricValues[5]?.value) || 0,
             purchase_value: parseFloat(row.metricValues[6]?.value) || 0,
+            total_revenue: parseFloat(row.metricValues[7]?.value) || 0,
           },
         });
       }
@@ -412,10 +416,11 @@ serve(async (req) => {
             pageviews: parseInt(row.metricValues[3].value) || 0,
             bounce_rate: (parseFloat(row.metricValues[4].value) * 100).toFixed(1),
             avg_session_duration: parseFloat(row.metricValues[5].value).toFixed(1),
-            conversions: parseInt(row.metricValues[6].value) || 0,
-            add_to_cart: parseInt(row.metricValues[7]?.value) || 0,
-            purchases: parseInt(row.metricValues[8]?.value) || 0,
-            purchase_value: parseFloat(row.metricValues[9]?.value) || 0,
+            add_to_cart: parseInt(row.metricValues[6]?.value) || 0,
+            purchases: parseInt(row.metricValues[7]?.value) || 0,
+            purchase_value: parseFloat(row.metricValues[8]?.value) || 0,
+            total_revenue: parseFloat(row.metricValues[9]?.value) || 0,
+            conversions: parseInt(row.metricValues[7]?.value) || 0,
           },
         });
       }
@@ -454,7 +459,6 @@ serve(async (req) => {
         const rawDate = row.dimensionValues[0].value; // YYYYMMDD
         const formattedDate = `${rawDate.substring(0, 4)}-${rawDate.substring(4, 6)}-${rawDate.substring(6, 8)}`;
         const keyEventsCount = parseFloat(row.metricValues[8]?.value) || 0;
-        const conversionsCount = parseFloat(row.metricValues[9]?.value) || 0;
         records.push({
           table_id: tableId,
           tenant_id: table.tenant_id,
@@ -474,7 +478,8 @@ serve(async (req) => {
             purchases: parseInt(row.metricValues[6]?.value) || 0,
             purchase_value: parseFloat(row.metricValues[7]?.value) || 0,
             key_events: keyEventsCount,
-            conversions: keyEventsCount || conversionsCount,
+            conversions: keyEventsCount,
+            total_revenue: parseFloat(row.metricValues[9]?.value) || 0,
             new_users: null,
             pageviews: null,
             bounce_rate: null,
