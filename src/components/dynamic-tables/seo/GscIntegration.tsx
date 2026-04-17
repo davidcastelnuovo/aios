@@ -109,19 +109,7 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
     }
   }, [effectiveSiteUrl, onDataLoaded, clientId]);
 
-  // Auto-save the per-client mapping when we matched a site by domain and nothing was saved yet.
-  useEffect(() => {
-    if (
-      gscIntegration?.id &&
-      clientId &&
-      !clientSites[clientId] &&
-      matchedSite?.siteUrl &&
-      !updateSiteMutation.isPending
-    ) {
-      updateSiteMutation.mutate(matchedSite.siteUrl);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gscIntegration?.id, clientId, matchedSite?.siteUrl]);
+  // Auto-link useEffect is declared further down (after updateSiteMutation is defined).
 
   const { data: gscData, isLoading: isLoadingData, refetch: refetchData } = useQuery({
     queryKey: ["gsc-keyword-data", gscIntegration?.id, effectiveSiteUrl, keywords?.join(",")],
