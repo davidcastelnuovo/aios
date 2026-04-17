@@ -183,9 +183,10 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
 
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, siteUrl) => {
       queryClient.invalidateQueries({ queryKey: ["gsc-integration"] });
       queryClient.invalidateQueries({ queryKey: ["gsc-keyword-data"] });
+      onSiteSelected?.(siteUrl);
       toast.success("הנכס עודכן");
     },
   });
