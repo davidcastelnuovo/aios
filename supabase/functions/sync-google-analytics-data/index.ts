@@ -461,7 +461,6 @@ serve(async (req) => {
         const rawDate = row.dimensionValues[0].value; // YYYYMMDD
         const formattedDate = `${rawDate.substring(0, 4)}-${rawDate.substring(4, 6)}-${rawDate.substring(6, 8)}`;
         const keyEventsCount = parseFloat(row.metricValues[8]?.value) || 0;
-        const conversionsCount = parseFloat(row.metricValues[9]?.value) || 0;
         records.push({
           table_id: tableId,
           tenant_id: table.tenant_id,
@@ -481,8 +480,8 @@ serve(async (req) => {
             purchases: parseInt(row.metricValues[6]?.value) || 0,
             purchase_value: parseFloat(row.metricValues[7]?.value) || 0,
             key_events: keyEventsCount,
-            conversions: keyEventsCount || conversionsCount,
-            total_revenue: parseFloat(row.metricValues[10]?.value) || 0,
+            conversions: keyEventsCount,
+            total_revenue: parseFloat(row.metricValues[9]?.value) || 0,
             new_users: null,
             pageviews: null,
             bounce_rate: null,
