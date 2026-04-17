@@ -82,9 +82,10 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
     staleTime: 5 * 60 * 1000,
   });
 
-  // Per-client site URL takes priority over global setting
+  // STRICT per-client isolation: do NOT fall back to global settings.site_url/siteUrl
+  // (those caused selections to leak across clients).
   const clientSites = settings?.client_sites || {};
-  const persistedSiteUrl = selectedSite || clientSites[clientId] || settings?.site_url || settings?.siteUrl || "";
+  const persistedSiteUrl = selectedSite || clientSites[clientId] || "";
   const normalizedDomain = normalizeDomain(domain);
   const matchedSite = normalizedDomain
     ? availableSites.find((site) => {
@@ -97,6 +98,8 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
       })
     : null;
 
+  // Auto-link by domain: only suggest if the report domain matches a GSC property.
+  // Single-property auto-select kept as a convenience when there's nothing else to choose.
   const fallbackSiteUrl = matchedSite?.siteUrl || (availableSites.length === 1 ? availableSites[0].siteUrl : "");
   const effectiveSiteUrl = persistedSiteUrl || fallbackSiteUrl;
 
@@ -105,6 +108,20 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
       onDataLoaded?.([]);
     }
   }, [effectiveSiteUrl, onDataLoaded, clientId]);
+
+  // Auto-save the per-client mapping when we matched a site by domain and nothing was saved yet.
+  useEffect(() => {
+    if (
+      gscIntegration?.id &&
+      clientId &&
+      !clientSites[clientId] &&
+      matchedSite?.siteUrl &&
+      !updateSiteMutation.isPending
+    ) {
+      updateSiteMutation.mutate(matchedSite.siteUrl);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gscIntegration?.id, clientId, matchedSite?.siteUrl]);
 
   const { data: gscData, isLoading: isLoadingData, refetch: refetchData } = useQuery({
     queryKey: ["gsc-keyword-data", gscIntegration?.id, effectiveSiteUrl, keywords?.join(",")],
