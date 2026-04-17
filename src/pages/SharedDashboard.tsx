@@ -126,6 +126,8 @@ export default function SharedDashboard() {
     },
     enabled: !!shareToken,
     retry: false,
+    staleTime: 0,
+    gcTime: 0,
   });
 
   const tables = data?.tables || [];
