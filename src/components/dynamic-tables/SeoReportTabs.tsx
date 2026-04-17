@@ -281,6 +281,11 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                   tenantId={tenantId}
                   clientId={clientId}
                   domain={savedGscSiteUrl || targetDomain}
+                  onSiteSelected={(siteUrl) => {
+                    if (siteUrl && siteUrl !== savedGscSiteUrl) {
+                      saveLinkMutation.mutate({ key: 'linkedGscSiteUrl', value: siteUrl });
+                    }
+                  }}
                 />
               </div>
             )}
