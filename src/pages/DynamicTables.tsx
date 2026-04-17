@@ -100,7 +100,10 @@ export default function DynamicTables() {
   const [editAgencyId, setEditAgencyId] = useState<string>("");
   const [editClientId, setEditClientId] = useState<string>("");
   const [clientPopoverOpen, setClientPopoverOpen] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return sessionStorage.getItem('dynamicTables.selectedCategory');
+  });
   const [showCreateDashboardDialog, setShowCreateDashboardDialog] = useState(false);
   const [mainTab, setMainTab] = useState<string>("tables");
   const [editAdAccountId, setEditAdAccountId] = useState<string>("");
