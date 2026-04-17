@@ -346,7 +346,16 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
         </div>
       </Tabs>
 
+      <div className="flex items-center gap-2 text-xs">
+        <Button type="button" variant="outline" size="sm" onClick={() => captureScreenshot()} disabled={isCapturing || !iframeLoaded}>
+          {isCapturing ? (<><Loader2 className="ml-2 h-3 w-3 animate-spin" /> מצלם...</>) : (<><Camera className="ml-2 h-3 w-3" /> {screenshotBlob ? "צלם מחדש" : "צלם דשבורד"}</>)}
+        </Button>
+        {screenshotBlob && <span className="text-primary">✓ צילום מוכן לשליחה</span>}
+        {!screenshotBlob && !isCapturing && iframeLoaded && <span className="text-muted-foreground">אין צילום עדיין - לחץ על "צלם דשבורד"</span>}
+      </div>
+
       <div className="p-4 border rounded-lg bg-muted/20 space-y-4">
+
         <div className="flex gap-4">
           <label className="flex items-center gap-2"><Checkbox checked={sendWhatsApp} onCheckedChange={(c) => setSendWhatsApp(!!c)} /> וואטסאפ</label>
           <label className="flex items-center gap-2"><Checkbox checked={sendEmail} onCheckedChange={(c) => setSendEmail(!!c)} /> אימייל</label>
