@@ -306,7 +306,7 @@ export function GoogleAnalyticsDashboard({
         existing.conversions += toNumber(r.data.conversions ?? r.data.transactions ?? r.data.purchases);
         existing.addToCart += toNumber(r.data.add_to_cart ?? r.data.add_to_carts);
         existing.purchases += toNumber(r.data.purchases ?? r.data.transactions ?? r.data.conversions);
-        existing.purchaseValue += toNumber(r.data.purchase_value ?? r.data.purchase_revenue ?? r.data.revenue ?? r.data.total_revenue);
+        existing.purchaseValue += toNumber(r.data.total_revenue ?? r.data.purchase_value ?? r.data.purchase_revenue ?? r.data.revenue);
         sourceMap.set(name, existing);
       }
 
@@ -410,7 +410,7 @@ export function GoogleAnalyticsDashboard({
         conversions: toNumber(r.data.conversions ?? r.data.transactions ?? r.data.purchases),
         addToCart: toNumber(r.data.add_to_cart ?? r.data.add_to_carts),
         purchases: toNumber(r.data.purchases ?? r.data.transactions ?? r.data.conversions),
-        purchaseValue: toNumber(r.data.purchase_value ?? r.data.purchase_revenue ?? r.data.revenue ?? r.data.total_revenue),
+        purchaseValue: toNumber(r.data.total_revenue ?? r.data.purchase_value ?? r.data.purchase_revenue ?? r.data.revenue),
       }))
       .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 
@@ -422,7 +422,7 @@ export function GoogleAnalyticsDashboard({
         conversions: toNumber(r.data.conversions ?? r.data.transactions ?? r.data.purchases),
         addToCart: toNumber(r.data.add_to_cart ?? r.data.add_to_carts),
         purchases: toNumber(r.data.purchases ?? r.data.transactions ?? r.data.conversions),
-        purchaseValue: toNumber(r.data.purchase_value ?? r.data.purchase_revenue ?? r.data.revenue ?? r.data.total_revenue),
+        purchaseValue: toNumber(r.data.total_revenue ?? r.data.purchase_value ?? r.data.purchase_revenue ?? r.data.revenue),
       }));
 
     const topPages = records
