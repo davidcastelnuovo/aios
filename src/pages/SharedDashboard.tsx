@@ -14,8 +14,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Facebook, FileSpreadsheet, TrendingUp, TrendingDown, Minus, BarChart3, RefreshCw } from "lucide-react";
+import { Facebook, FileSpreadsheet, TrendingUp, TrendingDown, Minus, BarChart3, RefreshCw, ShoppingCart } from "lucide-react";
 import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnalyticsDashboard";
+import { PublicWooCommerceView } from "@/components/dynamic-tables/PublicWooCommerceView";
 import {
   LineChart, Line, BarChart, Bar, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts";
@@ -37,7 +38,7 @@ const PLATFORM_CONFIG: Record<string, { name: string; color: string }> = {
   google_analytics: { name: 'Analytics', color: 'text-orange-500' },
 };
 
-type PlatformFilter = 'all' | 'facebook' | 'google_ads' | 'google_analytics';
+type PlatformFilter = 'all' | 'facebook' | 'google_ads' | 'google_analytics' | 'woocommerce';
 type CampaignType = 'leads' | 'ecommerce';
 
 const getSpendFromData = (data: any) => Number(data?.spend) || Number(data?.cost) || 0;
@@ -141,6 +142,10 @@ export default function SharedDashboard() {
     return rawRecords;
   }, [rawRecords, tables]);
 
+  const wooSites = data?.woocommerce?.sites || [];
+  const wooOrders = data?.woocommerce?.orders || [];
+  const hasWooCommerce = wooSites.length > 0;
+
   // Available platforms
   const availablePlatforms = useMemo(() => {
     const set = new Set<string>();
@@ -149,8 +154,9 @@ export default function SharedDashboard() {
     if (set.has('facebook_insights') || set.has('facebook_ecommerce')) platforms.push('facebook');
     if (set.has('google_ads')) platforms.push('google_ads');
     if (set.has('google_analytics')) platforms.push('google_analytics');
+    if (hasWooCommerce) platforms.push('woocommerce');
     return platforms;
-  }, [tables]);
+  }, [tables, hasWooCommerce]);
 
   // Filter records: platform filter + only use 'daily' aggregate records for Analytics
   const filteredRecords = useMemo(() => {
