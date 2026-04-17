@@ -9,10 +9,10 @@ interface Props {
   tableName: string;
 }
 
-function formatCompactNumber(num: number): string {
-  if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
-  if (num >= 1_000) return `${(num / 1_000).toFixed(1)}K`;
-  return String(num);
+function fmt(num: number | null | undefined): string {
+  if (num == null || isNaN(Number(num))) return "—";
+  const n = Number(num);
+  return n.toLocaleString();
 }
 
 function normalizeDomain(value?: string) {
@@ -46,9 +46,19 @@ const tdStyle: React.CSSProperties = {
   color: "#1f2937",
 };
 
+function getVal(obj: Record<string, any>, ...keys: string[]): number | undefined {
+  for (const k of keys) {
+    if (obj?.[k] !== undefined && obj?.[k] !== null) return obj[k];
+  }
+  return undefined;
+}
+
 /**
- * Combined SEO snapshot: Ahrefs Top 10 + GSC Top 10 stacked vertically.
- * Fetches data directly (no UI side-effects) for fast, deterministic capture.
+ * SEO snapshot — mirrors SeoDashboardView design:
+ * - 8 metric cards (DR, Organic Traffic, Top3/Top10/Total Keywords, Referring Domains, Backlinks)
+ * - GA organic sessions take priority for "Organic Traffic" when available
+ * - Inline change indicator vs previous month
+ * - Ahrefs Top 10 + GSC Top 10 keyword tables
  */
 export const SeoCombinedSnapshot = forwardRef<HTMLDivElement, Props>(
   ({ tableId, tableName }, ref) => {
@@ -72,12 +82,14 @@ export const SeoCombinedSnapshot = forwardRef<HTMLDivElement, Props>(
     });
 
     const tenantId = tableMeta?.tenant_id || "";
+    const settings = tableMeta?.integration_settings || {};
     const clientId =
-      (tableMeta?.integration_settings?.clientId as string | undefined) ||
-      (tableMeta?.integration_settings?.client_id as string | undefined) ||
+      (settings?.clientId as string | undefined) ||
+      (settings?.client_id as string | undefined) ||
       tableMeta?.client_id ||
       "";
-    const targetDomain = (tableMeta?.integration_settings?.targetDomain as string | undefined) || "";
+    const targetDomain = (settings?.targetDomain as string | undefined) || "";
+    const linkedGaTableId = (settings?.linkedGaTableId as string | undefined) || "";
 
     // Latest Ahrefs report
     const { data: latestSeoReport } = useQuery({
@@ -101,6 +113,23 @@ export const SeoCombinedSnapshot = forwardRef<HTMLDivElement, Props>(
       staleTime: 5 * 60 * 1000,
     });
 
+    // GA records — for organic traffic override
+    const { data: gaRecords = [] } = useQuery({
+      queryKey: ["seo-snapshot-ga-records", linkedGaTableId],
+      queryFn: async () => {
+        if (!linkedGaTableId) return [];
+        const { data, error } = await supabase
+          .from("crm_records")
+          .select("data")
+          .eq("table_id", linkedGaTableId)
+          .limit(5000);
+        if (error) return [];
+        return data || [];
+      },
+      enabled: !!linkedGaTableId,
+      staleTime: 5 * 60 * 1000,
+    });
+
     // GSC integration (per-user/shared)
     const { data: gscIntegrations = [] } = useUserIntegrations(
       tenantId,
@@ -110,7 +139,6 @@ export const SeoCombinedSnapshot = forwardRef<HTMLDivElement, Props>(
     const gscSettings = (gscIntegration?.settings as any) || {};
     const gscClientSites = gscSettings?.client_sites || {};
 
-    // Resolve GSC site URL: per-client mapping → match by domain → single property fallback
     const { data: availableSites = [] } = useQuery({
       queryKey: ["seo-snapshot-gsc-sites", gscIntegration?.id],
       queryFn: async () => {
@@ -168,11 +196,85 @@ export const SeoCombinedSnapshot = forwardRef<HTMLDivElement, Props>(
       staleTime: 5 * 60 * 1000,
     });
 
+    // GA organic — current/previous month from channel_group records
+    const { gaOrganicCurrent, gaOrganicPrev } = useMemo(() => {
+      if (!gaRecords || gaRecords.length === 0) {
+        return { gaOrganicCurrent: null as number | null, gaOrganicPrev: null as number | null };
+      }
+      const now = new Date();
+      const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+      const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, "0")}`;
+
+      const filterOrganic = (r: any) => {
+        if (r.data?.report_type !== "channel_group") return false;
+        const cg = String(r.data?.channel_group || "").toLowerCase();
+        return cg === "organic search" || cg.includes("organic search");
+      };
+
+      const sumFor = (monthKey: string) =>
+        gaRecords
+          .filter(filterOrganic)
+          .filter((r: any) => {
+            const d = r.data?.date;
+            if (!d) return monthKey === currentMonth; // legacy dateless rows count toward current
+            return String(d).startsWith(monthKey);
+          })
+          .reduce(
+            (sum: number, r: any) =>
+              sum + (Number(r.data?.users) || Number(r.data?.sessions) || 0),
+            0,
+          );
+
+      const cur = sumFor(currentMonth);
+      const prv = sumFor(prevMonth);
+      return {
+        gaOrganicCurrent: cur > 0 ? cur : null,
+        gaOrganicPrev: prv > 0 ? prv : null,
+      };
+    }, [gaRecords]);
+
+    const reportData = (latestSeoReport?.report_data as any) || {};
+    const snapshot = reportData?.snapshot || {};
+    const snapshotPrevMonth =
+      reportData?.snapshot_prev_month || reportData?.snapshot_prev || {};
+
+    // Build the 8-metric grid (matches SeoSnapshotCards order)
+    const metrics = useMemo(() => {
+      const defs = [
+        { keys: ["domain_rating", "dr"], label: "דירוג דומיין (DR)", icon: "🏆", isOrganic: false },
+        { keys: ["org_traffic"], label: "תנועה אורגנית", icon: "📈", isOrganic: true },
+        { keys: ["org_keywords_top3"], label: "מילות מפתח (Top 3)", icon: "🥇", isOrganic: false },
+        { keys: ["org_keywords_top10"], label: "מילות מפתח (Top 10)", icon: "🔟", isOrganic: false },
+        { keys: ["org_keywords_total"], label: "סה״כ מילות מפתח", icon: "🔑", isOrganic: false },
+        { keys: ["referring_domains", "referring_domains_all_time"], label: "דומיינים מפנים", icon: "🔗", isOrganic: false },
+        { keys: ["backlinks_live"], label: "קישורים נכנסים (פעילים)", icon: "🌐", isOrganic: false },
+        { keys: ["backlinks_all_time"], label: "קישורים נכנסים (כולל)", icon: "📊", isOrganic: false },
+      ];
+      return defs
+        .map((m) => {
+          if (m.isOrganic && gaOrganicCurrent != null) {
+            return {
+              ...m,
+              value: gaOrganicCurrent,
+              prevValue: gaOrganicPrev ?? undefined,
+              gaSource: true,
+            };
+          }
+          return {
+            ...m,
+            value: getVal(snapshot, ...m.keys),
+            prevValue: getVal(snapshotPrevMonth, ...m.keys),
+            gaSource: false,
+          };
+        })
+        .filter((m) => m.value !== undefined);
+    }, [snapshot, snapshotPrevMonth, gaOrganicCurrent, gaOrganicPrev]);
+
     // Build Ahrefs Top 10
     const ahrefsTop10 = useMemo(() => {
-      const rd = latestSeoReport?.report_data || {};
-      const organic = Array.isArray(rd.organic_keywords) ? rd.organic_keywords : [];
-      const tracked = Array.isArray(rd.tracked_keywords) ? rd.tracked_keywords : [];
+      const organic = Array.isArray(reportData.organic_keywords) ? reportData.organic_keywords : [];
+      const tracked = Array.isArray(reportData.tracked_keywords) ? reportData.tracked_keywords : [];
       const map = new Map<string, any>();
       for (const kw of [...tracked, ...organic]) {
         const key = String(kw.keyword || "").toLowerCase().trim();
@@ -180,10 +282,7 @@ export const SeoCombinedSnapshot = forwardRef<HTMLDivElement, Props>(
         const prev = map.get(key);
         const pos = kw.position ?? kw.best_position ?? null;
         const prevPos = prev?.position ?? prev?.best_position ?? null;
-        if (
-          !prev ||
-          (pos != null && (prevPos == null || pos < prevPos))
-        ) {
+        if (!prev || (pos != null && (prevPos == null || pos < prevPos))) {
           map.set(key, kw);
         }
       }
@@ -198,17 +297,15 @@ export const SeoCombinedSnapshot = forwardRef<HTMLDivElement, Props>(
         .filter((k) => k.position != null && k.position <= 10)
         .sort((a, b) => (a.position || 999) - (b.position || 999))
         .slice(0, 10);
-    }, [latestSeoReport]);
+    }, [reportData]);
 
-    // Build GSC Top 10 (first page = position <= 10)
+    // Build GSC Top 10 (first page = position <= 10), sorted by clicks
     const gscTop10 = useMemo(() => {
       return [...gscData]
         .filter((r: any) => r.position != null && r.position <= 10)
         .sort((a: any, b: any) => b.clicks - a.clicks)
         .slice(0, 10);
     }, [gscData]);
-
-    const snapshot = (latestSeoReport?.report_data as any)?.snapshot || {};
 
     return (
       <div
@@ -236,13 +333,29 @@ export const SeoCombinedSnapshot = forwardRef<HTMLDivElement, Props>(
           </p>
         </div>
 
-        {/* Snapshot metrics */}
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
-          <MetricCard title="תנועה אורגנית" value={formatCompactNumber(Number(snapshot.org_traffic ?? 0))} />
-          <MetricCard title="Top 3" value={formatCompactNumber(Number(snapshot.org_keywords_top3 ?? 0))} />
-          <MetricCard title="Top 10" value={formatCompactNumber(Number(snapshot.org_keywords_top10 ?? 0))} />
-          <MetricCard title="סה״כ ביטויים" value={formatCompactNumber(Number(snapshot.org_keywords_total ?? 0))} />
-        </div>
+        {/* 8 Metric Cards — 4 columns × 2 rows */}
+        {metrics.length > 0 && (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(4, 1fr)",
+              gap: 10,
+              marginBottom: 20,
+            }}
+          >
+            {metrics.map((m, idx) => (
+              <MetricCard
+                key={idx}
+                icon={m.icon}
+                label={m.label}
+                value={fmt(m.value as number)}
+                prevValue={m.prevValue as number | undefined}
+                current={m.value as number}
+                gaSource={(m as any).gaSource}
+              />
+            ))}
+          </div>
+        )}
 
         {/* Ahrefs Top 10 */}
         <Section title="🏆 Ahrefs — Top 10 ביטויים מובילים">
@@ -290,12 +403,8 @@ export const SeoCombinedSnapshot = forwardRef<HTMLDivElement, Props>(
                           ? `▼ ${Math.abs(change)}`
                           : "—"}
                       </td>
-                      <td style={tdStyle}>
-                        {kw.volume ? formatCompactNumber(Number(kw.volume)) : "—"}
-                      </td>
-                      <td style={tdStyle}>
-                        {kw.traffic ? formatCompactNumber(Number(kw.traffic)) : "—"}
-                      </td>
+                      <td style={tdStyle}>{kw.volume ? fmt(Number(kw.volume)) : "—"}</td>
+                      <td style={tdStyle}>{kw.traffic ? fmt(Number(kw.traffic)) : "—"}</td>
                     </tr>
                   );
                 })}
@@ -326,8 +435,8 @@ export const SeoCombinedSnapshot = forwardRef<HTMLDivElement, Props>(
                     <td style={tdStyle}>{i + 1}</td>
                     <td style={{ ...tdStyle, fontWeight: 600 }}>{kw.keyword}</td>
                     <td style={tdStyle}>{Number(kw.position).toFixed(1)}</td>
-                    <td style={tdStyle}>{formatCompactNumber(Number(kw.clicks || 0))}</td>
-                    <td style={tdStyle}>{formatCompactNumber(Number(kw.impressions || 0))}</td>
+                    <td style={tdStyle}>{fmt(Number(kw.clicks || 0))}</td>
+                    <td style={tdStyle}>{fmt(Number(kw.impressions || 0))}</td>
                     <td style={tdStyle}>
                       {kw.ctr != null ? `${(Number(kw.ctr) * 100).toFixed(1)}%` : "—"}
                     </td>
@@ -354,20 +463,60 @@ export const SeoCombinedSnapshot = forwardRef<HTMLDivElement, Props>(
 
 SeoCombinedSnapshot.displayName = "SeoCombinedSnapshot";
 
-function MetricCard({ title, value }: { title: string; value: string }) {
+function MetricCard({
+  icon,
+  label,
+  value,
+  prevValue,
+  current,
+  gaSource,
+}: {
+  icon: string;
+  label: string;
+  value: string;
+  prevValue?: number;
+  current?: number;
+  gaSource?: boolean;
+}) {
+  let changeNode: React.ReactNode = null;
+  if (prevValue != null && current != null && !isNaN(Number(current))) {
+    const diff = Number(current) - Number(prevValue);
+    if (diff === 0) {
+      changeNode = <span style={{ color: "#6b7280" }}>—</span>;
+    } else {
+      const isPositive = diff > 0;
+      changeNode = (
+        <span style={{ color: isPositive ? "#10b981" : "#ef4444", fontWeight: 600 }}>
+          {isPositive ? "▲" : "▼"} {Math.abs(diff).toLocaleString()}
+        </span>
+      );
+    }
+  }
+
   return (
     <div
       style={{
-        flex: "1 1 160px",
-        minWidth: 160,
-        padding: "12px 14px",
+        padding: "12px 10px",
         background: "linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%)",
         border: "1px solid #d1fae5",
         borderRadius: 8,
+        textAlign: "center",
       }}
     >
-      <div style={{ fontSize: 11, color: "#5b6b80", marginBottom: 4 }}>{title}</div>
-      <div style={{ fontSize: 20, fontWeight: 700, color: "#0A1526" }}>{value}</div>
+      <div style={{ fontSize: 16, marginBottom: 2 }}>{icon}</div>
+      <div style={{ fontSize: 10, color: "#5b6b80", marginBottom: 4, lineHeight: 1.3 }}>
+        {label}
+        {gaSource && (
+          <span style={{ color: "#10b981", fontWeight: 600, marginRight: 3 }}>
+            {" "}
+            (Analytics)
+          </span>
+        )}
+      </div>
+      <div style={{ fontSize: 18, fontWeight: 700, color: "#0A1526", marginBottom: 2 }}>
+        {value}
+      </div>
+      {changeNode && <div style={{ fontSize: 10 }}>{changeNode}</div>}
     </div>
   );
 }
