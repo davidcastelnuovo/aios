@@ -29,6 +29,7 @@ import {
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { toPng } from "html-to-image";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { EmailRecipientsSelector, type EmailOption } from "./EmailRecipientsSelector";
 
 interface ClientDashboardPanelProps {
   dashboard: { id: string; name: string };
@@ -67,7 +68,7 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
   const [sendEmail, setSendEmail] = useState(false);
   const [selectedGroupId, setSelectedGroupId] = useState("");
   const [directPhone, setDirectPhone] = useState("");
-  const [emailAddress, setEmailAddress] = useState("");
+  const [emailRecipients, setEmailRecipients] = useState<string[]>([]);
   const [messageText, setMessageText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [screenshotBlob, setScreenshotBlob] = useState<Blob | null>(null);
@@ -139,7 +140,7 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
   useEffect(() => {
     if (client) {
       if (client.phone) setDirectPhone(client.phone);
-      if (client.email) setEmailAddress(client.email);
+      if (client.email) setEmailRecipients((prev) => (prev.length === 0 ? [client.email!] : prev));
       if (client.whatsapp_group_id) setSelectedGroupId(client.whatsapp_group_id);
     }
   }, [client]);
@@ -249,6 +250,11 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
       }
 
       if (sendEmail) {
+        if (emailRecipients.length === 0) {
+          toast.error("יש לבחור לפחות נמען אימייל אחד");
+          setIsSending(false);
+          return;
+        }
         const base64Data = await new Promise<string>((resolve) => {
           const reader = new FileReader();
           reader.onloadend = () => resolve((reader.result as string).split(",")[1]);
@@ -258,7 +264,7 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
         await supabase.functions.invoke("gmail-api", {
           body: {
             action: "send",
-            to: emailAddress,
+            to: emailRecipients.join(", "),
             subject: `דשבורד ${dashboard.name}`,
             body: `${messageText}<br/><br/><a href="${effectiveShareLink}">צפה בדשבורד המלא</a>`,
             attachments: [{ filename: "dashboard.png", mimeType: "image/png", data: base64Data }],
@@ -306,6 +312,27 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
               {groups?.map((g) => <SelectItem key={g.id} value={g.id}>{g.group_name}</SelectItem>)}
             </SelectContent>
           </Select>
+        )}
+
+        {sendEmail && (
+          <EmailRecipientsSelector
+            options={[
+              ...(client?.email
+                ? [{
+                    email: client.email,
+                    label: `${client.name} (לקוח)`,
+                    icon: "📋",
+                  } satisfies EmailOption]
+                : []),
+              ...((teamMembers || []).map((t: any) => ({
+                email: t.campaigners.email,
+                label: `${t.campaigners.full_name}${t.role_on_account ? ` (${t.role_on_account})` : ""}`,
+                icon: "👤",
+              } satisfies EmailOption))),
+            ]}
+            selectedEmails={emailRecipients}
+            onChange={setEmailRecipients}
+          />
         )}
 
         <Textarea value={messageText} onChange={(e) => setMessageText(e.target.value)} placeholder="טקסט מלווה..." />

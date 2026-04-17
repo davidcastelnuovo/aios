@@ -28,6 +28,7 @@ import {
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { ClientReportSnapshot } from "./ClientReportSnapshot";
 import { toPng } from "html-to-image";
+import { EmailRecipientsSelector, type EmailOption } from "./EmailRecipientsSelector";
 
 interface ClientReportPanelProps {
   table: any;
@@ -80,7 +81,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
   const [sendEmail, setSendEmail] = useState(false);
   const [selectedGroupId, setSelectedGroupId] = useState("");
   const [directPhone, setDirectPhone] = useState("");
-  const [emailAddress, setEmailAddress] = useState("");
+  const [emailRecipients, setEmailRecipients] = useState<string[]>([]);
   const [messageText, setMessageText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [screenshotBlob, setScreenshotBlob] = useState<Blob | null>(null);
@@ -158,7 +159,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
   useEffect(() => {
     if (client) {
       if (client.phone) setDirectPhone(client.phone);
-      if (client.email) setEmailAddress(client.email);
+      if (client.email) setEmailRecipients((prev) => (prev.length === 0 ? [client.email!] : prev));
       if (client.whatsapp_group_id) setSelectedGroupId(client.whatsapp_group_id);
     }
   }, [client]);
@@ -322,8 +323,8 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
       }
 
       if (sendEmail) {
-        if (!emailAddress) {
-          toast.error("יש להזין כתובת אימייל");
+        if (emailRecipients.length === 0) {
+          toast.error("יש לבחור לפחות נמען אימייל אחד");
           setIsSending(false);
           return;
         }
@@ -357,7 +358,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
         const { data, error } = await supabase.functions.invoke("gmail-api", {
           body: {
             action: "send",
-            to: emailAddress,
+            to: emailRecipients.join(", "),
             subject,
             body: bodyHtml,
             attachments: [
@@ -497,46 +498,24 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
         )}
 
         {sendEmail && (
-          <div className="space-y-2">
-            {teamMembers && teamMembers.length > 0 && (
-              <Select
-                value={emailAddress}
-                onValueChange={(val) => {
-                  if (val === "__custom__") {
-                    setEmailAddress("");
-                  } else {
-                    setEmailAddress(val);
-                  }
-                }}
-              >
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue placeholder="בחר מהצוות או הזן ידנית..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {client?.email && (
-                    <SelectItem value={client.email}>
-                      📋 {client.name} (לקוח) — {client.email}
-                    </SelectItem>
-                  )}
-                  {teamMembers.map((t: any) => (
-                    <SelectItem key={t.id} value={t.campaigners.email}>
-                      👤 {t.campaigners.full_name}{t.role_on_account ? ` (${t.role_on_account})` : ""} — {t.campaigners.email}
-                    </SelectItem>
-                  ))}
-                  <SelectItem value="__custom__">✏️ הזן כתובת ידנית</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
-            {(!teamMembers || teamMembers.length === 0 || emailAddress === "" || !teamMembers.some((t: any) => t.campaigners.email === emailAddress)) && (
-              <Input
-                type="email"
-                value={emailAddress}
-                onChange={(e) => setEmailAddress(e.target.value)}
-                placeholder="example@email.com"
-                className="h-8 text-xs"
-              />
-            )}
-          </div>
+          <EmailRecipientsSelector
+            options={[
+              ...(client?.email
+                ? [{
+                    email: client.email,
+                    label: `${client.name} (לקוח)`,
+                    icon: "📋",
+                  } satisfies EmailOption]
+                : []),
+              ...((teamMembers || []).map((t: any) => ({
+                email: t.campaigners.email,
+                label: `${t.campaigners.full_name}${t.role_on_account ? ` (${t.role_on_account})` : ""}`,
+                icon: "👤",
+              } satisfies EmailOption))),
+            ]}
+            selectedEmails={emailRecipients}
+            onChange={setEmailRecipients}
+          />
         )}
 
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
