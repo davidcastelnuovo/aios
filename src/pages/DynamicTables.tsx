@@ -155,17 +155,29 @@ export default function DynamicTables() {
     enabled: !!tenantId,
   });
 
+  // Clients across owned + shared agencies (so editing Google Ads tables can assign clients
+  // belonging to cross-tenant shared agencies like DMM-MC).
   const { data: clients = [] } = useQuery({
-    queryKey: ['clients-all', tenantId],
+    queryKey: ['clients-all-with-shared', tenantId, agencies.map(a => a.id).join(',')],
     queryFn: async () => {
       if (!tenantId) return [];
+      const agencyIds = agencies.map(a => a.id);
+      if (agencyIds.length === 0) {
+        const { data, error } = await supabase
+          .from('clients')
+          .select('id, name, agency_id, website')
+          .eq('tenant_id', tenantId);
+        if (error) throw error;
+        return data || [];
+      }
       const { data, error } = await supabase
         .from('clients')
-        .select('id, name, agency_id, website');
+        .select('id, name, agency_id, website')
+        .in('agency_id', agencyIds);
       if (error) throw error;
       return data || [];
     },
-    enabled: !!tenantId,
+    enabled: !!tenantId && agencies.length >= 0,
   });
 
   // Fetch ad accounts for edit dialog (Facebook tables)
