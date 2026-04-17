@@ -75,7 +75,14 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
 
   useEffect(() => {
     const cached = localStorage.getItem(CACHE_KEY_PREFIX + dashboard.id);
-    if (cached) setScreenshotUrl(cached);
+    if (cached) {
+      setScreenshotUrl(cached);
+      // Restore blob from cached data URL so send works without re-capture
+      fetch(cached)
+        .then((r) => r.blob())
+        .then(setScreenshotBlob)
+        .catch(() => {});
+    }
   }, [dashboard.id]);
 
   const { data: client } = useQuery({
@@ -178,38 +185,61 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
     }
   }, [shareLink, dashboard.id, dashboard.name, tenantId, queryClient]);
 
-  const captureScreenshot = useCallback(async () => {
+  const captureScreenshot = useCallback(async (): Promise<Blob | null> => {
     const iframe = iframeRef.current;
     if (!iframe) {
       toast.error("Iframe לא נטען");
-      return;
+      return null;
     }
 
     setIsCapturing(true);
     try {
-      await new Promise((r) => setTimeout(r, 1000));
-      const doc = iframe.contentDocument;
-      if (!doc || !doc.body) throw new Error("לא ניתן לגשת לתוכן הדשבורד");
+      // Wait extra time for charts/data to render
+      await new Promise((r) => setTimeout(r, 1500));
+
+      let doc: Document | null = null;
+      try {
+        doc = iframe.contentDocument;
+      } catch (e) {
+        console.error("Cannot access iframe contentDocument:", e);
+      }
+      if (!doc || !doc.body) {
+        throw new Error("לא ניתן לגשת לתוכן הדשבורד (cross-origin?)");
+      }
 
       const root = (doc.querySelector("main") as HTMLElement) || doc.body;
-      const topHeight = Math.min(root.scrollHeight, 850);
+      const topHeight = Math.min(root.scrollHeight || 800, 850);
+      const width = root.scrollWidth || iframe.clientWidth || 1200;
 
       const dataUrl = await toPng(root, {
         quality: 0.92,
         pixelRatio: 1.5,
         backgroundColor: "#ffffff",
         height: topHeight,
-        width: root.scrollWidth,
+        width,
+        skipFonts: true,
+        cacheBust: true,
       });
 
+      if (!dataUrl || dataUrl.length < 1000) {
+        throw new Error("הצילום ריק");
+      }
+
       setScreenshotUrl(dataUrl);
-      localStorage.setItem(CACHE_KEY_PREFIX + dashboard.id, dataUrl);
+      try {
+        localStorage.setItem(CACHE_KEY_PREFIX + dashboard.id, dataUrl);
+      } catch {
+        // localStorage quota exceeded - skip cache
+      }
       const res = await fetch(dataUrl);
       const blob = await res.blob();
       setScreenshotBlob(blob);
+      toast.success("צילום הדשבורד נוצר");
+      return blob;
     } catch (err: any) {
       console.error("Dashboard screenshot error:", err);
-      toast.error("שגיאה בצילום הדשבורד");
+      toast.error(`שגיאה בצילום: ${err?.message || "לא ידוע"}`);
+      return null;
     } finally {
       setIsCapturing(false);
     }
@@ -223,17 +253,22 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
   }, [iframeLoaded, screenshotUrl, isCapturing, captureScreenshot]);
 
   const handleSend = async () => {
-    if (!screenshotBlob) {
-      toast.error("לא נוצר צילום מסך");
-      return;
+    let blob = screenshotBlob;
+    if (!blob) {
+      toast.info("מצלם דשבורד...");
+      blob = await captureScreenshot();
+      if (!blob) {
+        toast.error("לא נוצר צילום מסך - לחץ על 'צלם מחדש' ונסה שוב");
+        return;
+      }
     }
     setIsSending(true);
     try {
       const effectiveShareLink = shareLink || (await ensureShareLink());
-      
+
       if (sendWhatsApp) {
         const formData = new FormData();
-        formData.append("file", screenshotBlob, `dashboard-${dashboard.name}.png`);
+        formData.append("file", blob, `dashboard-${dashboard.name}.png`);
         formData.append("tenantId", tenantId);
         formData.append("fileType", "image");
         const caption = `${messageText}\n\n📊 צפה בדשבורד המלא: ${effectiveShareLink || ""}`;
@@ -261,10 +296,10 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
         const base64Data = await new Promise<string>((resolve) => {
           const reader = new FileReader();
           reader.onloadend = () => resolve((reader.result as string).split(",")[1]);
-          reader.readAsDataURL(screenshotBlob);
+          reader.readAsDataURL(blob!);
         });
 
-        await supabase.functions.invoke("gmail-api", {
+        const { error: gmailError } = await supabase.functions.invoke("gmail-api", {
           body: {
             action: "send",
             to: emailRecipients.join(", "),
@@ -273,10 +308,20 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
             attachments: [{ filename: "dashboard.png", mimeType: "image/png", data: base64Data }],
           },
         });
-        toast.success("הדשבורד נשלח באימייל");
+        if (gmailError) {
+          const msg = String(gmailError.message || "");
+          if (msg.includes("Token refresh failed") || msg.includes("invalid_grant")) {
+            toast.error("חיבור Gmail פג - יש להתחבר מחדש בהגדרות");
+          } else {
+            throw gmailError;
+          }
+        } else {
+          toast.success("הדשבורד נשלח באימייל");
+        }
       }
-    } catch (e) {
-      toast.error("שגיאה בשליחה");
+    } catch (e: any) {
+      console.error("Send error:", e);
+      toast.error(`שגיאה בשליחה: ${e?.message || "לא ידוע"}`);
     } finally {
       setIsSending(false);
     }
@@ -301,7 +346,16 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
         </div>
       </Tabs>
 
+      <div className="flex items-center gap-2 text-xs">
+        <Button type="button" variant="outline" size="sm" onClick={() => captureScreenshot()} disabled={isCapturing || !iframeLoaded}>
+          {isCapturing ? (<><Loader2 className="ml-2 h-3 w-3 animate-spin" /> מצלם...</>) : (<><Camera className="ml-2 h-3 w-3" /> {screenshotBlob ? "צלם מחדש" : "צלם דשבורד"}</>)}
+        </Button>
+        {screenshotBlob && <span className="text-primary">✓ צילום מוכן לשליחה</span>}
+        {!screenshotBlob && !isCapturing && iframeLoaded && <span className="text-muted-foreground">אין צילום עדיין - לחץ על "צלם דשבורד"</span>}
+      </div>
+
       <div className="p-4 border rounded-lg bg-muted/20 space-y-4">
+
         <div className="flex gap-4">
           <label className="flex items-center gap-2"><Checkbox checked={sendWhatsApp} onCheckedChange={(c) => setSendWhatsApp(!!c)} /> וואטסאפ</label>
           <label className="flex items-center gap-2"><Checkbox checked={sendEmail} onCheckedChange={(c) => setSendEmail(!!c)} /> אימייל</label>
