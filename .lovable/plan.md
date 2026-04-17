@@ -1,36 +1,43 @@
 
-## הבעיה
-ב-`GscIntegration.tsx` (שורות 160-184), כשמשתמש בוחר אתר GSC ללקוח X, הקוד שומר את הבחירה ב-3 מקומות:
-1. `client_sites[clientId]` (נכון — פר-לקוח)
-2. `settings.site_url` (גלובלי — **באג**)
-3. `settings.siteUrl` (גלובלי — **באג**)
 
-מאחר שהקריאה (שורה 87) נופלת חזרה ל-`settings.site_url` כשאין רישום פר-לקוח, **כל לקוח חדש שעדיין לא הוגדר לו אתר רואה את האתר של הלקוח שנבחר אחרון** → "מתעדכן רוחבית בכל הלקוחות".
+## אבחון
 
-בנוסף, השיוך לא נשמר על דוח ה-SEO עצמו (טבלת Ahrefs) אלא רק על האינטגרציה הגלובלית — לכן אם משתפים את חיבור ה-GSC בין משתמשים או מסנכרנים מחדש, השיוך עלול לאבד את ההקשר של הדוח הספציפי.
+בדקתי הכל מקצה לקצה:
 
-## הפתרון
+**1. בקאנד (`public-dashboard` edge function)** — תקין ✅
+קריאה ישירה ל-API עם `token=lidar` מחזירה:
+- `woocommerce.sites`: 1 אתר (lidarswimwear.com)
+- `woocommerce.orders`: 81 הזמנות
 
-### 1. תיקון הדליפה הרוחבית (`GscIntegration.tsx`)
-- **הסרת הכתיבה ל-`site_url`/`siteUrl` הגלובליים** ב-`updateSiteMutation`. נשמור רק את `client_sites[clientId]` (וגם `available_sites` לקאש).
-- **הסרת ה-fallback ל-`settings.site_url`/`settings.siteUrl`** בקריאה (שורה 87). אם אין רישום פר-לקוח → לא נציג אתר אוטומטית מבחירה ישנה של לקוח אחר.
-- **שמירה אוטומטית פר-דומיין**: כשאין `client_sites[clientId]` והדומיין של הדוח (prop `domain`) מתאים בדיוק לאחד מהאתרים הזמינים → לבחור אותו ולשמור אוטומטית ב-`client_sites[clientId]`. זה מממש את "אתה יכול לבד לקשר לפי הדומיין".
+**2. דאטה במסד** — תקין ✅
+האתר מקושר ללקוח "לידר", עם `woocommerce_enabled=true`, `is_active=true`, ו-`tenant_id` תואם לדשבורד.
 
-### 2. שמירה כפולה גם על דוח ה-SEO (`SeoReportTabs.tsx`)
-- כשמשתמש בוחר אתר GSC או טבלת GSC, לשמור את ה-`siteUrl` גם ב-`integration_settings.linkedGscSiteUrl` של טבלת ה-Ahrefs (בנוסף ל-`linkedGscTableId` הקיים).
-- להעביר את הערך הזה כ-prop `domain`/initial selection ל-`GscIntegration` כדי שהבחירה תהיה דביקה לדוח עצמו.
+**3. קוד הפרונט (`SharedDashboard.tsx`)** — תקין ✅
+- שורה 145-147: קורא `data?.woocommerce?.sites` ומחשב `hasWooCommerce`
+- שורה 157: מוסיף `'woocommerce'` ל-`availablePlatforms`
+- שורות 535-540: מרנדר `<TabsTrigger value="woocommerce">`
+- שורה 552-553: מרנדר את `<PublicWooCommerceView>`
 
-### 3. בחירה אוטומטית לפי דומיין (Auto-link)
-ב-`GscIntegration.tsx`, `useEffect` חדש: אם יש `domain` מהדוח ויש התאמה ב-`availableSites` (השוואה מנורמלת — מסיר `sc-domain:`, `https://`, `www.`) ועדיין אין `client_sites[clientId]` → בצע `updateSiteMutation` אוטומטית לאתר המתאים.
+## מסקנה
 
-## קבצים שיעודכנו
-- `src/components/dynamic-tables/seo/GscIntegration.tsx` — הסרת דליפה גלובלית + auto-link לפי דומיין
-- `src/components/dynamic-tables/SeoReportTabs.tsx` — שמירת `linkedGscSiteUrl` על טבלת ה-Ahrefs
+**הקוד כבר נכון** — התיקון מהשיחה הקודמת אכן עובד. הצילום שלך מראה ככל הנראה גרסה ישנה של הקישור (קאש בדפדפן), משום שכל החלקים פועלים תקין כשבודקים ישירות.
 
-## תוצאה למשתמש
-- כל לקוח שומר את אתר ה-GSC שלו בנפרד — אין עוד "התעדכנות רוחבית".
-- לאחר שיוך פעם אחת — נשמר לתמיד על הדוח.
-- אם הדומיין בדוח Ahrefs תואם לנכס ב-GSC — שיוך אוטומטי בלי התערבות ידנית.
+## מה אעשה כדי להבטיח שזה עובד 100%
 
-## הערת זיכרון
-לאחר היישום אעדכן את `mem://features/integrations/google-search-console-seo-sync` כך שיתעד שכל בחירת אתר GSC חייבת להיות פר-לקוח (`client_sites[clientId]`) ואסור לכתוב ל-`settings.site_url` הגלובלי כדי למנוע דליפה בין לקוחות.
+### 1. הוספת אינדיקטור ויזואלי במצב ריק
+ב-`PublicWooCommerceView.tsx` כבר יש fallback "אין אתר WooCommerce משויך" — ולכן אם הנתונים מגיעים אך הלשונית עדיין לא נראית, זה אומר שה-JS שנטען בדפדפן ישן.
+
+### 2. הוספת cache-busting + בדיקת הגנה
+- ב-`SharedDashboard.tsx`: אוסיף `staleTime: 0` ו-`gcTime: 0` ל-React Query כדי למנוע קאשינג של תגובת ה-API שלא תכלול את שדה `woocommerce`.
+- אוסיף לוג קונסול קצר (`console.log('[SharedDashboard] wooSites:', wooSites.length)`) לאבחון עתידי.
+- אעבור על ה-`availablePlatforms` ואוודא שגם אם `tables` ריק (אבל יש WooCommerce בלבד) — הלשוניות עדיין מרונדרות (כיום ה-`Tabs` נטען רק אם `availablePlatforms.length > 0`, וזה כבר מטופל נכון).
+
+### 3. הנחיה למשתמש
+לאחר העדכון, יהיה צורך **לרענן את הדף עם Ctrl+Shift+R** (או לפתוח בחלון פרטי) כדי לטעון את ה-JS המעודכן. הקאש של הדפדפן הוא ההסבר היחיד ההגיוני לכך שהלשונית לא מופיעה כשהנתונים זמינים בצד השרת.
+
+## קבצים לעדכון
+- `src/pages/SharedDashboard.tsx` — הוספת `staleTime:0`, `gcTime:0`, ולוג אבחון
+
+## תוצאה
+לאחר הרענון הקשיח — לשונית WooCommerce תופיע ב-`/shared/dashboard/lidar` עם הנתונים של הלקוח לידר.
+
