@@ -98,7 +98,7 @@ export default function AhrefsSettings() {
 
       if (!domainTableExists) {
         const clientName = client?.name || clients.find(c => c.id === clientId)?.name || '';
-        const tableName = `דוח SEO - ${clientName} - ${domain}`;
+        const tableName = `${clientName} - ${domain}`;
         const slug = `seo-report-${clientId}-${domain.replace(/\./g, '-')}-${Date.now()}`;
 
         await supabase.functions.invoke('crm-tables', {

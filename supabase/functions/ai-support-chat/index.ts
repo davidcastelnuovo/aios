@@ -1818,7 +1818,7 @@ async function executeTool(
         const { data: client } = await supabaseClient.from('clients').select('name, agency_id').eq('id', client_id).maybeSingle();
         if (!client) return { success: false, error: 'לקוח לא נמצא' };
 
-        const tableName = `דוח פייסבוק - ${client.name}`;
+        const tableName = client.name;
         const slug = `facebook-${client_id.substring(0, 8)}`;
         const { data: table, error } = await supabaseClient.from('crm_tables').insert({
           tenant_id: tenantId,
@@ -1853,7 +1853,7 @@ async function executeTool(
         const { data: client } = await supabaseClient.from('clients').select('name, agency_id').eq('id', client_id).maybeSingle();
         if (!client) return { success: false, error: 'לקוח לא נמצא' };
 
-        const tableName = `דוח גוגל אדס - ${client.name}`;
+        const tableName = client.name;
         const slug = `google-ads-${client_id.substring(0, 8)}`;
         const { data: table, error } = await supabaseClient.from('crm_tables').insert({
           tenant_id: tenantId,
@@ -1901,7 +1901,7 @@ async function executeTool(
             const slugPrefix = type === 'google_ads' ? 'google-ads' : 'facebook';
             const { data: table, error } = await supabaseClient.from('crm_tables').insert({
               tenant_id: tenantId,
-              name: `${prefix} - ${client.name}`,
+              name: client.name,
               slug: `${slugPrefix}-${client_id.substring(0, 8)}`,
               description: `${prefix} עבור ${client.name} (${ad_account_name})`,
               icon: 'BarChart3',
