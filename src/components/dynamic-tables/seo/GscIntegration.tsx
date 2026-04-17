@@ -377,23 +377,48 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
   );
 }
 
+const HEBREW_REGEX = /[\u0590-\u05FF]/;
+const ENGLISH_REGEX = /[A-Za-z]/;
+
+type LangFilter = "all" | "he" | "en";
+
 function GscQueriesTable({ data }: { data: GscKeywordData[] }) {
   const [sortBy, setSortBy] = useState<keyof GscKeywordData>("position");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [searchFilter, setSearchFilter] = useState("");
+  const [langFilter, setLangFilter] = useState<LangFilter>("all");
+
+  const langCounts = useMemo(() => {
+    let he = 0, en = 0, other = 0;
+    for (const row of data) {
+      const k = row.keyword || "";
+      if (HEBREW_REGEX.test(k)) he++;
+      else if (ENGLISH_REGEX.test(k)) en++;
+      else other++;
+    }
+    return { he, en, other, all: data.length };
+  }, [data]);
 
   const sortedData = useMemo(() => {
     let filtered = data;
+    if (langFilter !== "all") {
+      filtered = filtered.filter(row => {
+        const k = row.keyword || "";
+        if (langFilter === "he") return HEBREW_REGEX.test(k);
+        if (langFilter === "en") return ENGLISH_REGEX.test(k) && !HEBREW_REGEX.test(k);
+        return true;
+      });
+    }
     if (searchFilter.trim()) {
       const q = searchFilter.toLowerCase();
-      filtered = data.filter(row => row.keyword.toLowerCase().includes(q));
+      filtered = filtered.filter(row => row.keyword.toLowerCase().includes(q));
     }
     return filtered.slice().sort((a, b) => {
       const aVal = a[sortBy] as number;
       const bVal = b[sortBy] as number;
       return sortOrder === "desc" ? bVal - aVal : aVal - bVal;
     });
-  }, [data, sortBy, sortOrder, searchFilter]);
+  }, [data, sortBy, sortOrder, searchFilter, langFilter]);
 
   const formatNumber = (num: number) => new Intl.NumberFormat('he-IL').format(num);
 
