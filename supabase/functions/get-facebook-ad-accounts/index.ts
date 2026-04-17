@@ -32,25 +32,35 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Use service role to bypass RLS for reliable token retrieval (we already authenticated the user above)
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
     // Get Facebook access token from tenant_integrations (including shared)
-    let { data: integration } = await supabase
+    let { data: integration, error: intError } = await supabaseAdmin
       .from('tenant_integrations')
-      .select('api_key, settings, shared_from_integration_id')
+      .select('id, api_key, settings, shared_from_integration_id')
       .eq('tenant_id', tenantId)
       .in('integration_type', ['facebook', 'facebook_lead_ads'])
       .eq('is_active', true)
+      .order('updated_at', { ascending: false })
       .limit(1)
       .maybeSingle();
 
+    console.log('Facebook integration lookup:', { tenantId, found: !!integration, hasToken: !!integration?.api_key, sharedFrom: integration?.shared_from_integration_id, error: intError?.message });
+
     // If this is a shared integration, fetch the source integration's token
     if (integration?.shared_from_integration_id && !integration?.api_key) {
-      const { data: sourceIntegration } = await supabase
+      const { data: sourceIntegration } = await supabaseAdmin
         .from('tenant_integrations')
         .select('api_key, settings')
         .eq('id', integration.shared_from_integration_id)
-        .eq('is_active', true)
         .maybeSingle();
       
+      console.log('Shared source lookup:', { sourceId: integration.shared_from_integration_id, hasToken: !!sourceIntegration?.api_key });
+
       if (sourceIntegration?.api_key) {
         integration = { ...integration, api_key: sourceIntegration.api_key };
       }
@@ -59,7 +69,8 @@ Deno.serve(async (req) => {
     if (!integration?.api_key) {
       return new Response(JSON.stringify({ 
         error: 'Facebook not configured',
-        message: 'יש להגדיר תחילה את האינטגרציה עם פייסבוק'
+        message: 'יש להגדיר תחילה את האינטגרציה עם פייסבוק',
+        debug: { tenantId, foundIntegration: !!integration }
       }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
