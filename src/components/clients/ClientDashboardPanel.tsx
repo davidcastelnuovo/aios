@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
@@ -16,21 +17,14 @@ import {
 import { toast } from "sonner";
 import {
   Send,
-  Mail,
-  MessageCircle,
   Loader2,
-  Link2,
   Camera,
-  Maximize2,
-  LayoutDashboard,
-  Search,
-  Megaphone,
 } from "lucide-react";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { toPng } from "html-to-image";
 import { buildBrandedEmailHtml } from "@/lib/emailTemplate";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmailRecipientsSelector, type EmailOption } from "./EmailRecipientsSelector";
+import { ClientDashboardSnapshot } from "./ClientDashboardSnapshot";
 
 interface ClientDashboardPanelProps {
   dashboard: { id: string; name: string };
@@ -58,12 +52,12 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
   const { buildPath } = useTenantPath();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const snapshotRef = useRef<HTMLDivElement>(null);
 
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
-  const [iframeLoaded, setIframeLoaded] = useState(false);
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const [snapshotMounted, setSnapshotMounted] = useState(false);
+  const autoCapturedRef = useRef<string | null>(null);
 
   const [sendWhatsApp, setSendWhatsApp] = useState(true);
   const [sendEmail, setSendEmail] = useState(false);
@@ -78,7 +72,6 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
     const cached = localStorage.getItem(CACHE_KEY_PREFIX + dashboard.id);
     if (cached) {
       setScreenshotUrl(cached);
-      // Restore blob from cached data URL so send works without re-capture
       fetch(cached)
         .then((r) => r.blob())
         .then(setScreenshotBlob)
@@ -141,7 +134,7 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
         .maybeSingle();
       const shareData = data as any;
       if (shareData?.share_token) {
-        return `https://after-lead.lovable.app/shared/dashboard/${shareData.share_token}`;
+        return shareData.share_token as string;
       }
       return null;
     },
@@ -156,7 +149,7 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
     }
   }, [client]);
 
-  const ensureShareLink = useCallback(async (): Promise<string | null> => {
+  const ensureShareToken = useCallback(async (): Promise<string | null> => {
     if (shareLink) return shareLink;
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -176,48 +169,40 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
       if (error) throw error;
       const token = (data as any)?.share_token;
       if (!token) return null;
-      const url = `https://after-lead.lovable.app/shared/dashboard/${token}`;
       queryClient.invalidateQueries({ queryKey: ["dashboard-share-link", dashboard.id] });
       toast.success("נוצר קישור שיתוף חדש");
-      return url;
+      return token;
     } catch (err) {
       console.error("Failed to create share link", err);
       return null;
     }
   }, [shareLink, dashboard.id, dashboard.name, tenantId, queryClient]);
 
+  const shareUrl = shareLink ? `https://after-lead.lovable.app/shared/dashboard/${shareLink}` : null;
+
+  // Mount snapshot once we have the share token
+  useEffect(() => {
+    if (shareLink) {
+      setSnapshotMounted(true);
+    }
+  }, [shareLink]);
+
   const captureScreenshot = useCallback(async (): Promise<Blob | null> => {
-    const iframe = iframeRef.current;
-    if (!iframe) {
-      toast.error("Iframe לא נטען");
+    const node = snapshotRef.current;
+    if (!node) {
+      toast.error("רכיב הצילום עדיין לא נטען");
       return null;
     }
 
     setIsCapturing(true);
     try {
-      // Wait extra time for charts/data to render
-      await new Promise((r) => setTimeout(r, 1500));
+      // Wait for data to load and render inside the snapshot
+      await new Promise((r) => setTimeout(r, 2500));
 
-      let doc: Document | null = null;
-      try {
-        doc = iframe.contentDocument;
-      } catch (e) {
-        console.error("Cannot access iframe contentDocument:", e);
-      }
-      if (!doc || !doc.body) {
-        throw new Error("לא ניתן לגשת לתוכן הדשבורד (cross-origin?)");
-      }
-
-      const root = (doc.querySelector("main") as HTMLElement) || doc.body;
-      const topHeight = Math.min(root.scrollHeight || 800, 850);
-      const width = root.scrollWidth || iframe.clientWidth || 1200;
-
-      const dataUrl = await toPng(root, {
+      const dataUrl = await toPng(node, {
         quality: 0.92,
         pixelRatio: 1.5,
         backgroundColor: "#ffffff",
-        height: topHeight,
-        width,
         skipFonts: true,
         cacheBust: true,
       });
@@ -246,12 +231,19 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
     }
   }, [dashboard.id]);
 
+  // Auto-capture once snapshot is mounted (only first time per dashboard)
   useEffect(() => {
-    if (iframeLoaded && !screenshotUrl && !isCapturing) {
-      const t = setTimeout(() => captureScreenshot(), 2500);
+    if (
+      snapshotMounted &&
+      !screenshotUrl &&
+      !isCapturing &&
+      autoCapturedRef.current !== dashboard.id
+    ) {
+      autoCapturedRef.current = dashboard.id;
+      const t = setTimeout(() => captureScreenshot(), 3000);
       return () => clearTimeout(t);
     }
-  }, [iframeLoaded, screenshotUrl, isCapturing, captureScreenshot]);
+  }, [snapshotMounted, screenshotUrl, isCapturing, captureScreenshot, dashboard.id]);
 
   const handleSend = async () => {
     let blob = screenshotBlob;
@@ -265,14 +257,18 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
     }
     setIsSending(true);
     try {
-      const effectiveShareLink = shareLink || (await ensureShareLink());
+      let effectiveShareUrl = shareUrl;
+      if (!effectiveShareUrl) {
+        const token = await ensureShareToken();
+        if (token) effectiveShareUrl = `https://after-lead.lovable.app/shared/dashboard/${token}`;
+      }
 
       if (sendWhatsApp) {
         const formData = new FormData();
         formData.append("file", blob, `dashboard-${dashboard.name}.png`);
         formData.append("tenantId", tenantId);
         formData.append("fileType", "image");
-        const caption = `${messageText}\n\n📊 צפה בדשבורד המלא: ${effectiveShareLink || ""}`;
+        const caption = `${messageText}\n\n📊 צפה בדשבורד המלא: ${effectiveShareUrl || ""}`;
         formData.append("caption", caption);
         if (selectedGroupId && selectedGroupId !== "__none__") formData.append("groupId", selectedGroupId);
         else if (directPhone) formData.append("phoneNumber", directPhone);
@@ -304,7 +300,7 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
           title: `דשבורד ${dashboard.name}`,
           subtitle: client?.name ? `עבור ${client.name}` : undefined,
           message: messageText,
-          ctaUrl: effectiveShareLink || undefined,
+          ctaUrl: effectiveShareUrl || undefined,
           ctaLabel: "צפה בדשבורד המלא",
           hasAttachment: true,
           attachmentNote: "צילום הדשבורד מצורף כקובץ לנוחותך",
@@ -338,31 +334,53 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
     }
   };
 
+  const handleManualCapture = async () => {
+    if (!shareLink) {
+      toast.info("יוצר קישור שיתוף...");
+      const token = await ensureShareToken();
+      if (!token) {
+        toast.error("לא ניתן ליצור קישור שיתוף");
+        return;
+      }
+      setSnapshotMounted(true);
+      // Wait for snapshot to mount + render
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    await captureScreenshot();
+  };
+
   return (
     <div className="space-y-4" dir="rtl">
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="dashboard"><LayoutDashboard className="h-4 w-4 ml-2" /> דשבורד</TabsTrigger>
-          <TabsTrigger value="seo"><Search className="h-4 w-4 ml-2" /> SEO</TabsTrigger>
-          <TabsTrigger value="ads"><Megaphone className="h-4 w-4 ml-2" /> מודעות</TabsTrigger>
-        </TabsList>
-        
-        <div className="mt-4 border rounded-lg overflow-hidden h-[500px]">
-          <iframe
-            ref={iframeRef}
-            src={`${window.location.origin}${buildPath(`/dashboard/${dashboard.id}?tab=${activeTab}`)}`}
-            className="w-full h-full border-0"
-            onLoad={() => setIframeLoaded(true)}
+      {/* Screenshot preview (replaces iframe) */}
+      <div className="border rounded-lg overflow-hidden bg-muted/10 min-h-[400px] flex items-center justify-center">
+        {screenshotUrl ? (
+          <img
+            src={screenshotUrl}
+            alt={`Dashboard: ${dashboard.name}`}
+            className="w-full h-auto"
           />
-        </div>
-      </Tabs>
+        ) : isCapturing ? (
+          <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
+            <Loader2 className="h-8 w-8 animate-spin" />
+            <span className="text-sm">מצלם דשבורד...</span>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
+            <Camera className="h-8 w-8" />
+            <span className="text-sm">לחץ על "צלם דשבורד" כדי להתחיל</span>
+          </div>
+        )}
+      </div>
 
       <div className="flex items-center gap-2 text-xs">
-        <Button type="button" variant="outline" size="sm" onClick={() => captureScreenshot()} disabled={isCapturing || !iframeLoaded}>
-          {isCapturing ? (<><Loader2 className="ml-2 h-3 w-3 animate-spin" /> מצלם...</>) : (<><Camera className="ml-2 h-3 w-3" /> {screenshotBlob ? "צלם מחדש" : "צלם דשבורד"}</>)}
+        <Button type="button" variant="outline" size="sm" onClick={handleManualCapture} disabled={isCapturing}>
+          {isCapturing ? (
+            <><Loader2 className="ml-2 h-3 w-3 animate-spin" /> מצלם...</>
+          ) : (
+            <><Camera className="ml-2 h-3 w-3" /> {screenshotBlob ? "צלם מחדש" : "צלם דשבורד"}</>
+          )}
         </Button>
         {screenshotBlob && <span className="text-primary">✓ צילום מוכן לשליחה</span>}
-        {!screenshotBlob && !isCapturing && iframeLoaded && <span className="text-muted-foreground">אין צילום עדיין - לחץ על "צלם דשבורד"</span>}
       </div>
 
       <div className="p-4 border rounded-lg bg-muted/20 space-y-4">
@@ -409,6 +427,24 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
           {isSending ? <Loader2 className="animate-spin" /> : <><Send className="ml-2" /> שלח סיכום</>}
         </Button>
       </div>
+
+      {/* Hidden snapshot rendered via portal — mirrors ClientReportPanel pattern. */}
+      {snapshotMounted && shareLink && createPortal(
+        <div
+          style={{
+            position: "fixed",
+            left: -9999,
+            top: -9999,
+            zIndex: -9999,
+            pointerEvents: "none",
+            opacity: 0,
+          }}
+          aria-hidden="true"
+        >
+          <ClientDashboardSnapshot ref={snapshotRef} shareToken={shareLink} />
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
