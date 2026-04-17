@@ -13,6 +13,7 @@ import { useTenantPath } from "@/hooks/useTenantPath";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { TableCardAlerts } from "@/components/dynamic-tables/TableCardAlerts";
 import { ClientReportPanel } from "@/components/clients/ClientReportPanel";
+import { ClientDashboardPanel } from "@/components/clients/ClientDashboardPanel";
 import { toast } from "sonner";
 
 interface ClientTablesTabProps {
