@@ -19,6 +19,8 @@ interface GscIntegrationProps {
   domain?: string;
   keywords?: string[];
   onDataLoaded?: (data: GscKeywordData[]) => void;
+  /** Called whenever a GSC site is selected/auto-linked, so callers can persist it on their own entity. */
+  onSiteSelected?: (siteUrl: string) => void;
   /** When true, hides the raw queries table — data is still fetched and passed via onDataLoaded */
   hideTable?: boolean;
 }
