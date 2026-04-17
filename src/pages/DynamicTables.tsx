@@ -595,7 +595,7 @@ export default function DynamicTables() {
           {/* Client name search */}
           <div className="mb-4 max-w-sm">
             <Input
-              placeholder="חיפוש לפי שם לקוח..."
+              placeholder="חיפוש לפי שם טבלה או לקוח..."
               value={clientSearch}
               onChange={(e) => setClientSearch(e.target.value)}
               className="text-right"
