@@ -234,6 +234,7 @@ Deno.serve(async (req) => {
           sites: wooSites,
           orders: wooOrders,
         },
+        ahrefs_reports: ahrefsReports,
         has_email_restriction: false,
       }),
       {
