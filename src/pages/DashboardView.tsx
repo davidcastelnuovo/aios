@@ -1302,7 +1302,125 @@ export default function DashboardView() {
                 );
               })()}
 
-              {/* Raw Table Data - show only on Analytics tab (Google Ads has its own summary view below) */}
+              {/* Google Ads Campaign Summary (KPIs + per-campaign aggregation) */}
+              {platformFilter === 'google_ads' && (
+                <>
+                  <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-5 auto-rows-fr">
+                    <Card className="h-full bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900">
+                      <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
+                        <p className="text-sm text-muted-foreground">הוצאה כוללת</p>
+                        <p className="text-3xl font-bold mt-2">{formatCurrency(googleAdsTotals.spend)}</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="h-full bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900">
+                      <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
+                        <p className="text-sm text-muted-foreground">חשיפות</p>
+                        <p className="text-3xl font-bold mt-2">{formatNumber(googleAdsTotals.impressions)}</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="h-full bg-gradient-to-br from-cyan-50 to-cyan-100 dark:from-cyan-950 dark:to-cyan-900">
+                      <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
+                        <p className="text-sm text-muted-foreground">קליקים</p>
+                        <p className="text-3xl font-bold mt-2">{formatNumber(googleAdsTotals.clicks)}</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="h-full bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900">
+                      <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
+                        <p className="text-sm text-muted-foreground">המרות</p>
+                        <p className="text-3xl font-bold mt-2">{formatNumber(googleAdsTotals.conversions)}</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="h-full bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950 dark:to-amber-900">
+                      <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
+                        <p className="text-sm text-muted-foreground">עלות להמרה</p>
+                        <p className="text-3xl font-bold mt-2">
+                          {googleAdsTotals.conversions > 0
+                            ? formatCurrency(googleAdsTotals.spend / googleAdsTotals.conversions)
+                            : '-'}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {googleAdsCampaignSummary.length > 0 && (() => {
+                    const totalCtr = googleAdsTotals.impressions > 0
+                      ? (googleAdsTotals.clicks / googleAdsTotals.impressions) * 100
+                      : 0;
+                    const totalCpc = googleAdsTotals.clicks > 0
+                      ? googleAdsTotals.spend / googleAdsTotals.clicks
+                      : 0;
+                    const totalCpa = googleAdsTotals.conversions > 0
+                      ? googleAdsTotals.spend / googleAdsTotals.conversions
+                      : 0;
+                    return (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2">
+                            {getIntegrationIcon('google_ads')}
+                            סיכום קמפיינים - Google Ads
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="overflow-x-auto">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead className="text-right">קמפיין</TableHead>
+                                  <TableHead className="text-right">חשיפות</TableHead>
+                                  <TableHead className="text-right">קליקים</TableHead>
+                                  <TableHead className="text-right">CTR</TableHead>
+                                  <TableHead className="text-right">CPC</TableHead>
+                                  <TableHead className="text-right">הוצאה</TableHead>
+                                  <TableHead className="text-right">המרות</TableHead>
+                                  <TableHead className="text-right">עלות להמרה</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {googleAdsCampaignSummary.map((c, i) => {
+                                  const ctr = c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0;
+                                  const cpc = c.clicks > 0 ? c.spend / c.clicks : 0;
+                                  const cpa = c.conversions > 0 ? c.spend / c.conversions : 0;
+                                  return (
+                                    <TableRow key={i}>
+                                      <TableCell className="font-medium max-w-[300px]">{c.name}</TableCell>
+                                      <TableCell>{formatNumber(c.impressions)}</TableCell>
+                                      <TableCell>{formatNumber(c.clicks)}</TableCell>
+                                      <TableCell>{ctr.toFixed(2)}%</TableCell>
+                                      <TableCell>{cpc > 0 ? formatCurrency(cpc) : '-'}</TableCell>
+                                      <TableCell>{formatCurrency(c.spend)}</TableCell>
+                                      <TableCell className={c.conversions > 0 ? 'text-green-600 font-medium' : ''}>
+                                        {formatNumber(c.conversions)}
+                                      </TableCell>
+                                      <TableCell>{cpa > 0 ? formatCurrency(cpa) : '-'}</TableCell>
+                                    </TableRow>
+                                  );
+                                })}
+                                <TableRow className="bg-muted/50 font-bold border-t-2">
+                                  <TableCell>סה"כ</TableCell>
+                                  <TableCell>{formatNumber(googleAdsTotals.impressions)}</TableCell>
+                                  <TableCell>{formatNumber(googleAdsTotals.clicks)}</TableCell>
+                                  <TableCell>{totalCtr.toFixed(2)}%</TableCell>
+                                  <TableCell>{totalCpc > 0 ? formatCurrency(totalCpc) : '-'}</TableCell>
+                                  <TableCell>{formatCurrency(googleAdsTotals.spend)}</TableCell>
+                                  <TableCell className="text-green-600">{formatNumber(googleAdsTotals.conversions)}</TableCell>
+                                  <TableCell>{totalCpa > 0 ? formatCurrency(totalCpa) : '-'}</TableCell>
+                                </TableRow>
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })()}
+
+                  {googleAdsCampaignSummary.length === 0 && (
+                    <Card className="p-12 text-center">
+                      <p className="text-muted-foreground">אין נתוני Google Ads בטווח התאריכים הנבחר</p>
+                    </Card>
+                  )}
+                </>
+              )}
+
               {platformFilter !== 'all' && platformFilter !== 'facebook' && platformFilter !== 'google_ads' && platformRawData.fields.length > 0 && (
                 <Card>
                   <CardHeader>
