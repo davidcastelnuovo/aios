@@ -128,27 +128,56 @@ export default function DynamicTables() {
     queryKey: ['agencies', tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
-      const { data, error } = await supabase
+      // Owned agencies
+      const { data: owned, error: ownedErr } = await supabase
         .from('agencies')
         .select('id, name')
         .eq('tenant_id', tenantId);
-      if (error) throw error;
-      return data || [];
+      if (ownedErr) throw ownedErr;
+
+      // Shared agencies (cross-tenant via agency_tenant_access)
+      const { data: sharedAccess, error: sharedErr } = await supabase
+        .from('agency_tenant_access')
+        .select('agency_id, agencies(id, name)')
+        .eq('accessing_tenant_id', tenantId);
+      if (sharedErr) throw sharedErr;
+
+      const shared = (sharedAccess || [])
+        .map((row: any) => Array.isArray(row.agencies) ? row.agencies[0] : row.agencies)
+        .filter(Boolean)
+        .map((a: any) => ({ id: a.id, name: a.name }));
+
+      const merged = [...(owned || []), ...shared].filter(
+        (a, i, arr) => arr.findIndex(x => x.id === a.id) === i
+      );
+      return merged.sort((a, b) => a.name.localeCompare(b.name, 'he'));
     },
     enabled: !!tenantId,
   });
 
+  // Clients across owned + shared agencies (so editing Google Ads tables can assign clients
+  // belonging to cross-tenant shared agencies like DMM-MC).
   const { data: clients = [] } = useQuery({
-    queryKey: ['clients-all', tenantId],
+    queryKey: ['clients-all-with-shared', tenantId, agencies.map(a => a.id).join(',')],
     queryFn: async () => {
       if (!tenantId) return [];
+      const agencyIds = agencies.map(a => a.id);
+      if (agencyIds.length === 0) {
+        const { data, error } = await supabase
+          .from('clients')
+          .select('id, name, agency_id, website')
+          .eq('tenant_id', tenantId);
+        if (error) throw error;
+        return data || [];
+      }
       const { data, error } = await supabase
         .from('clients')
-        .select('id, name, agency_id, website');
+        .select('id, name, agency_id, website')
+        .in('agency_id', agencyIds);
       if (error) throw error;
       return data || [];
     },
-    enabled: !!tenantId,
+    enabled: !!tenantId && agencies.length >= 0,
   });
 
   // Fetch ad accounts for edit dialog (Facebook tables)
