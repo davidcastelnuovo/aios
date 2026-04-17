@@ -100,7 +100,10 @@ export default function DynamicTables() {
   const [editAgencyId, setEditAgencyId] = useState<string>("");
   const [editClientId, setEditClientId] = useState<string>("");
   const [clientPopoverOpen, setClientPopoverOpen] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return sessionStorage.getItem('dynamicTables.selectedCategory');
+  });
   const [showCreateDashboardDialog, setShowCreateDashboardDialog] = useState(false);
   const [mainTab, setMainTab] = useState<string>("tables");
   const [editAdAccountId, setEditAdAccountId] = useState<string>("");
@@ -443,9 +446,10 @@ export default function DynamicTables() {
     return Object.keys(groupedTables);
   }, [groupedTables]);
 
-  // Auto-select first category if none selected
+  // Auto-select first category if none selected, or if saved one no longer exists
   useMemo(() => {
-    if (!selectedCategory && categories.length > 0) {
+    if (categories.length === 0) return;
+    if (!selectedCategory || !categories.includes(selectedCategory)) {
       setSelectedCategory(categories[0]);
     }
   }, [categories, selectedCategory]);
@@ -568,7 +572,10 @@ export default function DynamicTables() {
                 key={category}
                 variant={selectedCategory === category ? "default" : "outline"}
                 size="sm"
-                onClick={() => setSelectedCategory(category)}
+                onClick={() => {
+                  setSelectedCategory(category);
+                  try { sessionStorage.setItem('dynamicTables.selectedCategory', category); } catch {}
+                }}
                 className="gap-2"
               >
                 <span>({categoryTables.length})</span>
