@@ -669,12 +669,28 @@ export function ClientsChatView({
                 <Button
                   variant="outline"
                   size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setDuplicateDialogOpen(true)}
+                  title="שכפל לקוח"
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="icon"
                   className="h-8 w-8 text-destructive hover:text-destructive"
                   onClick={() => handleDelete(selectedClient.id)}
                   title="מחק לקוח"
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
+
+                <DuplicateClientDialog
+                  open={duplicateDialogOpen}
+                  onOpenChange={setDuplicateDialogOpen}
+                  client={selectedClient ? { id: selectedClient.id, name: selectedClient.name } : null}
+                />
               </div>
             </div>
 
