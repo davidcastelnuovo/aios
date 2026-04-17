@@ -716,6 +716,59 @@ export default function DashboardView() {
     return Object.values(map).sort((a, b) => b.spend - a.spend);
   }, [platformFilter, allRecords]);
 
+  // Google Ads campaign summary - aggregate all Google Ads records by campaign name
+  const googleAdsCampaignSummary = useMemo(() => {
+    if (platformFilter !== 'google_ads') return [];
+    const map: Record<string, {
+      name: string;
+      campaign_id: string;
+      impressions: number;
+      clicks: number;
+      spend: number;
+      conversions: number;
+      conversions_value: number;
+    }> = {};
+
+    const gaRecords = allRecords.filter((r: any) => r._source === 'google_ads');
+    gaRecords.forEach((r: any) => {
+      const d = r.data || {};
+      const name = d.campaign_name || 'ללא שם';
+      const key = String(d.campaign_id || name);
+      if (!map[key]) {
+        map[key] = {
+          name,
+          campaign_id: String(d.campaign_id || ''),
+          impressions: 0,
+          clicks: 0,
+          spend: 0,
+          conversions: 0,
+          conversions_value: 0,
+        };
+      }
+      map[key].impressions += Number(d.impressions) || 0;
+      map[key].clicks += Number(d.clicks) || 0;
+      map[key].spend += Number(d.cost) || Number(d.spend) || 0;
+      map[key].conversions += Number(d.conversions) || 0;
+      map[key].conversions_value += Number(d.conversions_value) || 0;
+    });
+
+    return Object.values(map).sort((a, b) => b.spend - a.spend);
+  }, [platformFilter, allRecords]);
+
+  // Google Ads totals (KPI cards)
+  const googleAdsTotals = useMemo(() => {
+    return googleAdsCampaignSummary.reduce(
+      (acc, c) => ({
+        impressions: acc.impressions + c.impressions,
+        clicks: acc.clicks + c.clicks,
+        spend: acc.spend + c.spend,
+        conversions: acc.conversions + c.conversions,
+        conversions_value: acc.conversions_value + c.conversions_value,
+      }),
+      { impressions: 0, clicks: 0, spend: 0, conversions: 0, conversions_value: 0 }
+    );
+  }, [googleAdsCampaignSummary]);
+
   // Group records by date for table
   const recordsByDate = useMemo(() => {
     const byDate: Record<string, any[]> = {};
