@@ -439,22 +439,21 @@ export default function SharedDashboard() {
     return Object.values(map).sort((a, b) => b.spend - a.spend);
   }, [platformFilter, records]);
 
-  // Google Ads campaign summary
+  // Google Ads campaign summary - mirrors DashboardView (uses conversions / conversions_value)
   const googleAdsCampaignSummary = useMemo(() => {
     if (platformFilter !== 'google_ads') return [];
-    const map: Record<string, { name: string; impressions: number; clicks: number; spend: number; leads: number; purchases: number; revenue: number; addToCart: number }> = {};
+    const map: Record<string, { name: string; campaign_id: string; impressions: number; clicks: number; spend: number; conversions: number; conversions_value: number }> = {};
     const gaRecords = records.filter((r: any) => (r._source || '') === 'google_ads');
     gaRecords.forEach((r: any) => {
       const d = r.data || {};
       const name = d.campaign_name || d.campaign || 'ללא שם';
-      if (!map[name]) map[name] = { name, impressions: 0, clicks: 0, spend: 0, leads: 0, purchases: 0, revenue: 0, addToCart: 0 };
-      map[name].impressions += Number(d.impressions) || 0;
-      map[name].clicks += Number(d.clicks) || 0;
-      map[name].spend += getSpendFromData(d);
-      map[name].leads += getLeadsFromData(d);
-      map[name].purchases += getPurchasesFromData(d);
-      map[name].revenue += getRevenueFromData(d);
-      map[name].addToCart += getAddToCartFromData(d);
+      const key = String(d.campaign_id || name);
+      if (!map[key]) map[key] = { name, campaign_id: String(d.campaign_id || ''), impressions: 0, clicks: 0, spend: 0, conversions: 0, conversions_value: 0 };
+      map[key].impressions += Number(d.impressions) || 0;
+      map[key].clicks += Number(d.clicks) || 0;
+      map[key].spend += Number(d.cost) || Number(d.spend) || 0;
+      map[key].conversions += Number(d.conversions) || 0;
+      map[key].conversions_value += Number(d.conversions_value) || 0;
     });
     return Object.values(map).sort((a, b) => b.spend - a.spend);
   }, [platformFilter, records]);
@@ -837,14 +836,12 @@ export default function SharedDashboard() {
               impressions: acc.impressions + c.impressions,
               clicks: acc.clicks + c.clicks,
               spend: acc.spend + c.spend,
-              leads: acc.leads + c.leads,
-              addToCart: acc.addToCart + c.addToCart,
-              purchases: acc.purchases + c.purchases,
-              revenue: acc.revenue + c.revenue,
-            }), { impressions: 0, clicks: 0, spend: 0, leads: 0, addToCart: 0, purchases: 0, revenue: 0 });
-            const totalRoas = totals.spend > 0 ? totals.revenue / totals.spend : 0;
-            const totalCpl = totals.leads > 0 ? totals.spend / totals.leads : 0;
-            const isEcom = totals.purchases > 0 || totals.revenue > 0 || totals.addToCart > 0;
+              conversions: acc.conversions + c.conversions,
+              conversions_value: acc.conversions_value + c.conversions_value,
+            }), { impressions: 0, clicks: 0, spend: 0, conversions: 0, conversions_value: 0 });
+            const totalCtr = totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : 0;
+            const totalCpc = totals.clicks > 0 ? totals.spend / totals.clicks : 0;
+            const totalCpa = totals.conversions > 0 ? totals.spend / totals.conversions : 0;
 
             return (
               <>
@@ -867,37 +864,18 @@ export default function SharedDashboard() {
                       <p className="text-3xl font-bold mt-2">{formatNumber(totals.clicks)}</p>
                     </CardContent>
                   </Card>
-                  {isEcom ? (
-                    <>
-                      <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
-                        <CardContent className="p-6 text-center">
-                          <p className="text-sm text-muted-foreground">הכנסות</p>
-                          <p className="text-3xl font-bold mt-2">{formatCurrency(totals.revenue)}</p>
-                        </CardContent>
-                      </Card>
-                      <Card className={`bg-gradient-to-br ${totalRoas >= 1 ? 'from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900' : 'from-red-50 to-red-100 dark:from-red-950 dark:to-red-900'}`}>
-                        <CardContent className="p-6 text-center">
-                          <p className="text-sm text-muted-foreground">ROAS</p>
-                          <p className="text-3xl font-bold mt-2">{totalRoas.toFixed(2)}x</p>
-                        </CardContent>
-                      </Card>
-                    </>
-                  ) : (
-                    <>
-                      <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
-                        <CardContent className="p-6 text-center">
-                          <p className="text-sm text-muted-foreground">לידים</p>
-                          <p className="text-3xl font-bold mt-2">{formatNumber(totals.leads)}</p>
-                        </CardContent>
-                      </Card>
-                      <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900">
-                        <CardContent className="p-6 text-center">
-                          <p className="text-sm text-muted-foreground">עלות לליד</p>
-                          <p className="text-3xl font-bold mt-2">{totalCpl > 0 ? formatCurrency(totalCpl) : '-'}</p>
-                        </CardContent>
-                      </Card>
-                    </>
-                  )}
+                  <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900">
+                    <CardContent className="p-6 text-center">
+                      <p className="text-sm text-muted-foreground">המרות</p>
+                      <p className="text-3xl font-bold mt-2">{formatNumber(totals.conversions)}</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950 dark:to-amber-900">
+                    <CardContent className="p-6 text-center">
+                      <p className="text-sm text-muted-foreground">עלות להמרה</p>
+                      <p className="text-3xl font-bold mt-2">{totalCpa > 0 ? formatCurrency(totalCpa) : '-'}</p>
+                    </CardContent>
+                  </Card>
                 </div>
 
                 <Card>
@@ -915,47 +893,30 @@ export default function SharedDashboard() {
                             <TableHead className="text-right">קמפיין</TableHead>
                             <TableHead className="text-right">חשיפות</TableHead>
                             <TableHead className="text-right">קליקים</TableHead>
+                            <TableHead className="text-right">CTR</TableHead>
+                            <TableHead className="text-right">CPC</TableHead>
                             <TableHead className="text-right">הוצאה</TableHead>
-                            {isEcom ? (
-                              <>
-                                <TableHead className="text-right">רכישות</TableHead>
-                                <TableHead className="text-right">ערך רכישות</TableHead>
-                                <TableHead className="text-right">ROAS</TableHead>
-                              </>
-                            ) : (
-                              <>
-                                <TableHead className="text-right">לידים</TableHead>
-                                <TableHead className="text-right">עלות לליד</TableHead>
-                              </>
-                            )}
+                            <TableHead className="text-right">המרות</TableHead>
+                            <TableHead className="text-right">עלות להמרה</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {googleAdsCampaignSummary.map((c, i) => {
-                            const roas = c.spend > 0 ? c.revenue / c.spend : 0;
-                            const cpl = c.leads > 0 ? c.spend / c.leads : 0;
+                            const ctr = c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0;
+                            const cpc = c.clicks > 0 ? c.spend / c.clicks : 0;
+                            const cpa = c.conversions > 0 ? c.spend / c.conversions : 0;
                             return (
                               <TableRow key={i}>
                                 <TableCell className="font-medium max-w-[300px]">{c.name}</TableCell>
                                 <TableCell>{formatNumber(c.impressions)}</TableCell>
                                 <TableCell>{formatNumber(c.clicks)}</TableCell>
+                                <TableCell>{ctr.toFixed(2)}%</TableCell>
+                                <TableCell>{cpc > 0 ? formatCurrency(cpc) : '-'}</TableCell>
                                 <TableCell>{formatCurrency(c.spend)}</TableCell>
-                                {isEcom ? (
-                                  <>
-                                    <TableCell className={c.purchases > 0 ? 'text-green-600 font-medium' : ''}>{formatNumber(c.purchases)}</TableCell>
-                                    <TableCell className={c.revenue > 0 ? 'text-green-600 font-medium' : ''}>{formatCurrency(c.revenue)}</TableCell>
-                                    <TableCell>
-                                      <span className={roas >= 1 ? 'text-green-600 font-semibold' : roas > 0 ? 'text-red-600' : ''}>
-                                        {roas > 0 ? roas.toFixed(2) + 'x' : '0x'}
-                                      </span>
-                                    </TableCell>
-                                  </>
-                                ) : (
-                                  <>
-                                    <TableCell className={c.leads > 0 ? 'text-green-600 font-medium' : ''}>{formatNumber(c.leads)}</TableCell>
-                                    <TableCell>{cpl > 0 ? formatCurrency(cpl) : '-'}</TableCell>
-                                  </>
-                                )}
+                                <TableCell className={c.conversions > 0 ? 'text-green-600 font-medium' : ''}>
+                                  {formatNumber(c.conversions)}
+                                </TableCell>
+                                <TableCell>{cpa > 0 ? formatCurrency(cpa) : '-'}</TableCell>
                               </TableRow>
                             );
                           })}
@@ -963,23 +924,11 @@ export default function SharedDashboard() {
                             <TableCell>סה"כ</TableCell>
                             <TableCell>{formatNumber(totals.impressions)}</TableCell>
                             <TableCell>{formatNumber(totals.clicks)}</TableCell>
+                            <TableCell>{totalCtr.toFixed(2)}%</TableCell>
+                            <TableCell>{totalCpc > 0 ? formatCurrency(totalCpc) : '-'}</TableCell>
                             <TableCell>{formatCurrency(totals.spend)}</TableCell>
-                            {isEcom ? (
-                              <>
-                                <TableCell className="text-green-600">{formatNumber(totals.purchases)}</TableCell>
-                                <TableCell className="text-green-600">{formatCurrency(totals.revenue)}</TableCell>
-                                <TableCell>
-                                  <span className={totalRoas >= 1 ? 'text-green-600 font-semibold' : 'text-red-600'}>
-                                    {totalRoas.toFixed(2)}x
-                                  </span>
-                                </TableCell>
-                              </>
-                            ) : (
-                              <>
-                                <TableCell className="text-green-600">{formatNumber(totals.leads)}</TableCell>
-                                <TableCell>{totalCpl > 0 ? formatCurrency(totalCpl) : '-'}</TableCell>
-                              </>
-                            )}
+                            <TableCell className="text-green-600">{formatNumber(totals.conversions)}</TableCell>
+                            <TableCell>{totalCpa > 0 ? formatCurrency(totalCpa) : '-'}</TableCell>
                           </TableRow>
                         </TableBody>
                       </Table>
