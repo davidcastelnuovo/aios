@@ -251,9 +251,16 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
   }, [iframeLoaded, screenshotUrl, isCapturing, captureScreenshot]);
 
   const handleSend = async () => {
-    if (!screenshotBlob) {
-      toast.error("לא נוצר צילום מסך");
-      return;
+    let blob = screenshotBlob;
+    if (!blob) {
+      toast.info("מצלם דשבורד...");
+      await captureScreenshot();
+      // Read fresh blob after capture
+      blob = screenshotBlob;
+      if (!blob) {
+        toast.error("לא נוצר צילום מסך - נסה שוב את הצילום הידני");
+        return;
+      }
     }
     setIsSending(true);
     try {
