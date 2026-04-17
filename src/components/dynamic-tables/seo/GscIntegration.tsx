@@ -47,7 +47,7 @@ function normalizeDomain(value?: string) {
     .toLowerCase();
 }
 
-export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoaded, hideTable = false }: GscIntegrationProps) {
+export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoaded, onSiteSelected, hideTable = false }: GscIntegrationProps) {
   const queryClient = useQueryClient();
   const [selectedSite, setSelectedSite] = useState<string>("");
   const [sitePopoverOpen, setSitePopoverOpen] = useState(false);
