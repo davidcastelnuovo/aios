@@ -309,9 +309,21 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
                 <>
                   {/* Report Header */}
                   <div className="flex items-center justify-between flex-wrap gap-2">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 flex-wrap">
                       <Globe className="h-5 w-5 text-primary" />
-                      <span className="font-semibold text-lg">{reportData?.domain || latestReport?.domain}</span>
+                      {availableDomains.length > 1 ? (
+                        <select
+                          value={selectedDomain}
+                          onChange={(e) => setSelectedDomain(e.target.value)}
+                          className="font-semibold text-lg bg-transparent border border-input rounded-md px-2 py-1 cursor-pointer hover:bg-accent"
+                        >
+                          {availableDomains.map(d => (
+                            <option key={d} value={d}>{d}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="font-semibold text-lg">{reportData?.domain || latestReport?.domain}</span>
+                      )}
                       {reportData?.project_name && (
                         <Badge variant="outline">{reportData.project_name}</Badge>
                       )}
