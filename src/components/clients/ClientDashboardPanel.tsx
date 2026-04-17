@@ -185,11 +185,11 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
     }
   }, [shareLink, dashboard.id, dashboard.name, tenantId, queryClient]);
 
-  const captureScreenshot = useCallback(async () => {
+  const captureScreenshot = useCallback(async (): Promise<Blob | null> => {
     const iframe = iframeRef.current;
     if (!iframe) {
       toast.error("Iframe לא נטען");
-      return;
+      return null;
     }
 
     setIsCapturing(true);
@@ -235,9 +235,11 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
       const blob = await res.blob();
       setScreenshotBlob(blob);
       toast.success("צילום הדשבורד נוצר");
+      return blob;
     } catch (err: any) {
       console.error("Dashboard screenshot error:", err);
       toast.error(`שגיאה בצילום: ${err?.message || "לא ידוע"}`);
+      return null;
     } finally {
       setIsCapturing(false);
     }
