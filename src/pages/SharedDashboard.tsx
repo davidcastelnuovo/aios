@@ -819,6 +819,165 @@ export default function SharedDashboard() {
             );
           })()}
 
+          {/* Google Ads Campaign Summary Table */}
+          {platformFilter === 'google_ads' && googleAdsCampaignSummary.length > 0 && (() => {
+            const totals = googleAdsCampaignSummary.reduce((acc, c) => ({
+              impressions: acc.impressions + c.impressions,
+              clicks: acc.clicks + c.clicks,
+              spend: acc.spend + c.spend,
+              leads: acc.leads + c.leads,
+              addToCart: acc.addToCart + c.addToCart,
+              purchases: acc.purchases + c.purchases,
+              revenue: acc.revenue + c.revenue,
+            }), { impressions: 0, clicks: 0, spend: 0, leads: 0, addToCart: 0, purchases: 0, revenue: 0 });
+            const totalRoas = totals.spend > 0 ? totals.revenue / totals.spend : 0;
+            const totalCpl = totals.leads > 0 ? totals.spend / totals.leads : 0;
+            const isEcom = totals.purchases > 0 || totals.revenue > 0 || totals.addToCart > 0;
+
+            return (
+              <>
+                <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-5 auto-rows-fr">
+                  <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900">
+                    <CardContent className="p-6 text-center">
+                      <p className="text-sm text-muted-foreground">הוצאה כוללת</p>
+                      <p className="text-3xl font-bold mt-2">{formatCurrency(totals.spend)}</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900">
+                    <CardContent className="p-6 text-center">
+                      <p className="text-sm text-muted-foreground">חשיפות</p>
+                      <p className="text-3xl font-bold mt-2">{formatNumber(totals.impressions)}</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-gradient-to-br from-cyan-50 to-cyan-100 dark:from-cyan-950 dark:to-cyan-900">
+                    <CardContent className="p-6 text-center">
+                      <p className="text-sm text-muted-foreground">קליקים</p>
+                      <p className="text-3xl font-bold mt-2">{formatNumber(totals.clicks)}</p>
+                    </CardContent>
+                  </Card>
+                  {isEcom ? (
+                    <>
+                      <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
+                        <CardContent className="p-6 text-center">
+                          <p className="text-sm text-muted-foreground">הכנסות</p>
+                          <p className="text-3xl font-bold mt-2">{formatCurrency(totals.revenue)}</p>
+                        </CardContent>
+                      </Card>
+                      <Card className={`bg-gradient-to-br ${totalRoas >= 1 ? 'from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900' : 'from-red-50 to-red-100 dark:from-red-950 dark:to-red-900'}`}>
+                        <CardContent className="p-6 text-center">
+                          <p className="text-sm text-muted-foreground">ROAS</p>
+                          <p className="text-3xl font-bold mt-2">{totalRoas.toFixed(2)}x</p>
+                        </CardContent>
+                      </Card>
+                    </>
+                  ) : (
+                    <>
+                      <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
+                        <CardContent className="p-6 text-center">
+                          <p className="text-sm text-muted-foreground">לידים</p>
+                          <p className="text-3xl font-bold mt-2">{formatNumber(totals.leads)}</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900">
+                        <CardContent className="p-6 text-center">
+                          <p className="text-sm text-muted-foreground">עלות לליד</p>
+                          <p className="text-3xl font-bold mt-2">{totalCpl > 0 ? formatCurrency(totalCpl) : '-'}</p>
+                        </CardContent>
+                      </Card>
+                    </>
+                  )}
+                </div>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      {getIntegrationIcon('google_ads')}
+                      סיכום קמפיינים - Google Ads
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-right">קמפיין</TableHead>
+                            <TableHead className="text-right">חשיפות</TableHead>
+                            <TableHead className="text-right">קליקים</TableHead>
+                            <TableHead className="text-right">הוצאה</TableHead>
+                            {isEcom ? (
+                              <>
+                                <TableHead className="text-right">רכישות</TableHead>
+                                <TableHead className="text-right">ערך רכישות</TableHead>
+                                <TableHead className="text-right">ROAS</TableHead>
+                              </>
+                            ) : (
+                              <>
+                                <TableHead className="text-right">לידים</TableHead>
+                                <TableHead className="text-right">עלות לליד</TableHead>
+                              </>
+                            )}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {googleAdsCampaignSummary.map((c, i) => {
+                            const roas = c.spend > 0 ? c.revenue / c.spend : 0;
+                            const cpl = c.leads > 0 ? c.spend / c.leads : 0;
+                            return (
+                              <TableRow key={i}>
+                                <TableCell className="font-medium max-w-[300px]">{c.name}</TableCell>
+                                <TableCell>{formatNumber(c.impressions)}</TableCell>
+                                <TableCell>{formatNumber(c.clicks)}</TableCell>
+                                <TableCell>{formatCurrency(c.spend)}</TableCell>
+                                {isEcom ? (
+                                  <>
+                                    <TableCell className={c.purchases > 0 ? 'text-green-600 font-medium' : ''}>{formatNumber(c.purchases)}</TableCell>
+                                    <TableCell className={c.revenue > 0 ? 'text-green-600 font-medium' : ''}>{formatCurrency(c.revenue)}</TableCell>
+                                    <TableCell>
+                                      <span className={roas >= 1 ? 'text-green-600 font-semibold' : roas > 0 ? 'text-red-600' : ''}>
+                                        {roas > 0 ? roas.toFixed(2) + 'x' : '0x'}
+                                      </span>
+                                    </TableCell>
+                                  </>
+                                ) : (
+                                  <>
+                                    <TableCell className={c.leads > 0 ? 'text-green-600 font-medium' : ''}>{formatNumber(c.leads)}</TableCell>
+                                    <TableCell>{cpl > 0 ? formatCurrency(cpl) : '-'}</TableCell>
+                                  </>
+                                )}
+                              </TableRow>
+                            );
+                          })}
+                          <TableRow className="bg-muted/50 font-bold border-t-2">
+                            <TableCell>סה"כ</TableCell>
+                            <TableCell>{formatNumber(totals.impressions)}</TableCell>
+                            <TableCell>{formatNumber(totals.clicks)}</TableCell>
+                            <TableCell>{formatCurrency(totals.spend)}</TableCell>
+                            {isEcom ? (
+                              <>
+                                <TableCell className="text-green-600">{formatNumber(totals.purchases)}</TableCell>
+                                <TableCell className="text-green-600">{formatCurrency(totals.revenue)}</TableCell>
+                                <TableCell>
+                                  <span className={totalRoas >= 1 ? 'text-green-600 font-semibold' : 'text-red-600'}>
+                                    {totalRoas.toFixed(2)}x
+                                  </span>
+                                </TableCell>
+                              </>
+                            ) : (
+                              <>
+                                <TableCell className="text-green-600">{formatNumber(totals.leads)}</TableCell>
+                                <TableCell>{totalCpl > 0 ? formatCurrency(totalCpl) : '-'}</TableCell>
+                              </>
+                            )}
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            );
+          })()}
+
           {/* Platform Breakdown Table */}
           {Object.keys(summaryByPlatform).length > 0 && platformFilter === 'all' && (
             <Card>
