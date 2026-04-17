@@ -293,48 +293,82 @@ async function refreshAccessToken(_supabase: any, tenantId: string) {
   });
 }
 
-async function getGoogleAdsAccounts(supabase: any, tenantId: string) {
-  // Use service role client to reliably read/update tokens
-  const serviceClient = createClient(
-    Deno.env.get('SUPABASE_URL') ?? '',
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+async function getAccessibleGoogleAdsIntegrations(
+  serviceClient: any,
+  tenantId: string,
+  userId: string
+): Promise<any[]> {
+  // Source tenants from cross-tenant agency access (current tenant accesses others' agencies)
+  const { data: accessRows } = await serviceClient
+    .from('agency_tenant_access')
+    .select('source_tenant_id')
+    .eq('accessing_tenant_id', tenantId);
+  const sourceTenantIds = Array.from(
+    new Set([tenantId, ...((accessRows || []).map((r: any) => r.source_tenant_id).filter(Boolean))])
   );
 
-  // Get access token
-  const { data: integration } = await serviceClient
+  const { data: tenantIntegrations } = await serviceClient
     .from('tenant_integrations')
     .select('*')
-    .eq('tenant_id', tenantId)
+    .in('tenant_id', sourceTenantIds)
     .eq('integration_type', 'google_ads')
-    .eq('is_active', true)
-    .maybeSingle();
+    .eq('is_active', true);
 
-  if (!integration?.api_key) {
-    return new Response(JSON.stringify({ error: 'Google Ads not connected' }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+  // Integrations explicitly shared with the user
+  const { data: permissions } = await serviceClient
+    .from('integration_user_permissions')
+    .select('integration_id')
+    .eq('user_id', userId);
+  const sharedIds = (permissions || []).map((p: any) => p.integration_id);
+
+  let sharedIntegrations: any[] = [];
+  if (sharedIds.length > 0) {
+    const { data } = await serviceClient
+      .from('tenant_integrations')
+      .select('*')
+      .in('id', sharedIds)
+      .eq('integration_type', 'google_ads')
+      .eq('is_active', true);
+    sharedIntegrations = data || [];
   }
 
-  // Check if token needs refresh
-  if (integration.settings?.expires_at && new Date(integration.settings.expires_at) < new Date()) {
-    console.log('Token expired, refreshing...');
-    const refreshResponse = await refreshAccessToken(supabase, tenantId);
-    if (refreshResponse.status >= 400) {
-      return refreshResponse;
-    }
+  const map = new Map<string, any>();
+  for (const i of [...(tenantIntegrations || []), ...sharedIntegrations]) {
+    if (i?.id && i?.api_key) map.set(i.id, i);
   }
+  return Array.from(map.values());
+}
 
-  // Get updated token
-  const { data: updatedIntegration } = await serviceClient
+async function refreshIntegrationToken(serviceClient: any, integration: any) {
+  if (!integration?.settings?.refresh_token) return integration;
+  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: GOOGLE_CLIENT_ID,
+      client_secret: GOOGLE_CLIENT_SECRET,
+      refresh_token: integration.settings.refresh_token,
+      grant_type: 'refresh_token',
+    }),
+  });
+  const tokens = await tokenResponse.json();
+  if (tokens.error) {
+    console.error('Token refresh failed for integration', integration.id, tokens.error);
+    return integration;
+  }
+  const expiresAt = new Date(Date.now() + (tokens.expires_in * 1000)).toISOString();
+  await serviceClient
     .from('tenant_integrations')
-    .select('api_key')
-    .eq('id', integration.id)
-    .single();
+    .update({
+      api_key: tokens.access_token,
+      settings: { ...integration.settings, expires_at: expiresAt },
+    })
+    .eq('id', integration.id);
+  return { ...integration, api_key: tokens.access_token, settings: { ...integration.settings, expires_at: expiresAt } };
+}
 
-  const accessToken = updatedIntegration?.api_key || integration.api_key;
-
-  // Fetch accessible customers from Google Ads API
+async function fetchAccountsForIntegration(integration: any): Promise<any[]> {
+  const accessToken = integration.api_key;
   const response = await fetch('https://googleads.googleapis.com/v23/customers:listAccessibleCustomers', {
     headers: {
       'Authorization': `Bearer ${accessToken}`,
@@ -344,21 +378,12 @@ async function getGoogleAdsAccounts(supabase: any, tenantId: string) {
 
   const accessibleCustomersResult = await parseGoogleAdsJsonResponse(
     response,
-    'load accessible Google Ads accounts'
+    `load accessible Google Ads accounts for integration ${integration.id}`
   );
 
-  if (!accessibleCustomersResult.success) {
-    return new Response(JSON.stringify({ 
-      error: accessibleCustomersResult.error,
-      accounts: []
-    }), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
-  }
+  if (!accessibleCustomersResult.success) return [];
 
-  // Get account details for each customer
-  const accounts = [];
+  const accounts: any[] = [];
   const resourceNames = accessibleCustomersResult.data?.resourceNames || [];
   const detailQuery = `
     SELECT
@@ -370,14 +395,12 @@ async function getGoogleAdsAccounts(supabase: any, tenantId: string) {
     LIMIT 1
   `;
 
-  // First pass: try to get details, collect MCC IDs
   const mccIds: string[] = [];
   const failedIds: string[] = [];
 
   for (const resourceName of resourceNames) {
     const customerId = typeof resourceName === 'string' ? resourceName.split('/')[1] : null;
     if (!customerId) continue;
-    
     try {
       const detailResponse = await fetch(
         `https://googleads.googleapis.com/v23/customers/${customerId}/googleAds:search`,
@@ -392,22 +415,14 @@ async function getGoogleAdsAccounts(supabase: any, tenantId: string) {
           body: JSON.stringify({ query: detailQuery }),
         }
       );
-
-      const detailResult = await parseGoogleAdsJsonResponse(
-        detailResponse,
-        `load details for account ${customerId}`
-      );
-
+      const detailResult = await parseGoogleAdsJsonResponse(detailResponse, `load details for account ${customerId}`);
       if (!detailResult.success) {
-        console.warn(`First attempt failed for ${customerId}: ${detailResult.error}`);
         failedIds.push(customerId);
         continue;
       }
-
       const customer = detailResult.data?.results?.[0]?.customer;
       const isManager = Boolean(customer?.manager);
       if (isManager) mccIds.push(customerId);
-
       accounts.push({
         id: customerId,
         name: customer?.descriptiveName || `Account ${customerId}`,
@@ -420,7 +435,6 @@ async function getGoogleAdsAccounts(supabase: any, tenantId: string) {
     }
   }
 
-  // Second pass: retry failed accounts using MCC login-customer-id
   for (const customerId of failedIds) {
     let found = false;
     for (const mccId of mccIds) {
@@ -438,12 +452,7 @@ async function getGoogleAdsAccounts(supabase: any, tenantId: string) {
             body: JSON.stringify({ query: detailQuery }),
           }
         );
-
-        const detailResult = await parseGoogleAdsJsonResponse(
-          detailResponse,
-          `load details for account ${customerId} via MCC ${mccId}`
-        );
-
+        const detailResult = await parseGoogleAdsJsonResponse(detailResponse, `load details for account ${customerId} via MCC ${mccId}`);
         if (detailResult.success) {
           const customer = detailResult.data?.results?.[0]?.customer;
           accounts.push({
@@ -456,22 +465,13 @@ async function getGoogleAdsAccounts(supabase: any, tenantId: string) {
           found = true;
           break;
         }
-      } catch {
-        // try next MCC
-      }
+      } catch {}
     }
-
     if (!found) {
-      accounts.push({
-        id: customerId,
-        name: `Account ${customerId}`,
-        currency: 'ILS',
-        manager: false,
-      });
+      accounts.push({ id: customerId, name: `Account ${customerId}`, currency: 'ILS', manager: false });
     }
   }
 
-  // Third pass: fetch child accounts under each MCC
   const existingIds = new Set(accounts.map(a => a.id));
   const childQuery = `
     SELECT
@@ -500,23 +500,15 @@ async function getGoogleAdsAccounts(supabase: any, tenantId: string) {
           body: JSON.stringify({ query: childQuery }),
         }
       );
-
-      const childResult = await parseGoogleAdsJsonResponse(
-        childResponse,
-        `load child accounts for MCC ${mccId}`
-      );
-
+      const childResult = await parseGoogleAdsJsonResponse(childResponse, `load child accounts for MCC ${mccId}`);
       if (childResult.success && childResult.data?.results) {
         for (const row of childResult.data.results) {
           const client = row.customerClient;
           if (!client?.id) continue;
           const childId = String(client.id);
           if (existingIds.has(childId)) {
-            // Update existing account with manager_id if not set
             const existing = accounts.find(a => a.id === childId);
-            if (existing && !existing.manager_id) {
-              existing.manager_id = mccId;
-            }
+            if (existing && !existing.manager_id) existing.manager_id = mccId;
             continue;
           }
           existingIds.add(childId);
@@ -534,7 +526,41 @@ async function getGoogleAdsAccounts(supabase: any, tenantId: string) {
     }
   }
 
-  return new Response(JSON.stringify({ accounts }), {
+  return accounts;
+}
+
+async function getGoogleAdsAccounts(_supabase: any, tenantId: string, userId: string) {
+  const serviceClient = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  );
+
+  const integrations = await getAccessibleGoogleAdsIntegrations(serviceClient, tenantId, userId);
+
+  if (integrations.length === 0) {
+    return new Response(JSON.stringify({ error: 'Google Ads not connected', accounts: [] }), {
+      status: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+
+  const refreshed = await Promise.all(integrations.map(async (i) => {
+    if (i.settings?.expires_at && new Date(i.settings.expires_at) < new Date()) {
+      return await refreshIntegrationToken(serviceClient, i);
+    }
+    return i;
+  }));
+
+  const allAccountsArrays = await Promise.all(refreshed.map(fetchAccountsForIntegration));
+
+  const map = new Map<string, any>();
+  for (const arr of allAccountsArrays) {
+    for (const acc of arr) {
+      if (!map.has(acc.id)) map.set(acc.id, acc);
+    }
+  }
+
+  return new Response(JSON.stringify({ accounts: Array.from(map.values()) }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' }
   });
 }
