@@ -287,8 +287,6 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
           </TabsContent>
         )}
 
-        {/* placeholder removed below — kept original structure */}
-
         {hasGa && (
           <TabsContent value="ga">
             <div className="space-y-3">
