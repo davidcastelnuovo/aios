@@ -166,13 +166,13 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
     mutationFn: async (siteUrl: string) => {
       if (!gscIntegration?.id) return;
       const updatedClientSites = { ...clientSites, [clientId]: siteUrl };
+      // Strip any legacy global site_url/siteUrl to prevent cross-client leakage.
+      const { site_url: _legacySnake, siteUrl: _legacyCamel, ...cleanSettings } = settings || {};
       const { error } = await supabase
         .from("tenant_integrations")
         .update({
           settings: {
-            ...settings,
-            site_url: siteUrl,
-            siteUrl: siteUrl,
+            ...cleanSettings,
             client_sites: updatedClientSites,
             available_sites: availableSites,
           },
@@ -187,6 +187,21 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
       toast.success("הנכס עודכן");
     },
   });
+
+  // Auto-link by domain: when no per-client mapping exists and the report's domain
+  // matches a GSC property, persist it automatically (per-client only).
+  useEffect(() => {
+    if (
+      gscIntegration?.id &&
+      clientId &&
+      !clientSites[clientId] &&
+      matchedSite?.siteUrl &&
+      !updateSiteMutation.isPending
+    ) {
+      updateSiteMutation.mutate(matchedSite.siteUrl);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gscIntegration?.id, clientId, matchedSite?.siteUrl]);
 
   if (isLoadingIntegration) return null;
 
