@@ -259,13 +259,16 @@ export default function DynamicTables() {
       );
     }
     
-    // Filter by client name search
+    // Filter by table name OR client name search
     if (clientSearch.trim()) {
       const search = clientSearch.trim().toLowerCase();
       result = result.filter(table => {
-        if (!table.client_id) return false;
-        const client = clients.find(c => c.id === table.client_id);
-        return client?.name?.toLowerCase().includes(search);
+        if (table.name?.toLowerCase().includes(search)) return true;
+        if (table.client_id) {
+          const client = clients.find(c => c.id === table.client_id);
+          if (client?.name?.toLowerCase().includes(search)) return true;
+        }
+        return false;
       });
     }
 
