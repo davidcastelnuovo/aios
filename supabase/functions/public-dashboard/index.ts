@@ -171,12 +171,41 @@ Deno.serve(async (req) => {
       });
     }
 
+    // ---- WooCommerce: fetch linked sites + orders for this client ----
+    let wooSites: any[] = [];
+    let wooOrders: any[] = [];
+    if (dashboard.client_id) {
+      const { data: sites } = await supabase
+        .from("social_media_wordpress_sites")
+        .select("id, site_name, site_url, woo_last_sync_at")
+        .eq("client_id", dashboard.client_id)
+        .eq("tenant_id", dashboard.tenant_id)
+        .eq("woocommerce_enabled", true)
+        .eq("is_active", true);
+      wooSites = sites || [];
+      const siteIds = wooSites.map((s: any) => s.id);
+      if (siteIds.length > 0) {
+        let q = supabase
+          .from("woocommerce_orders")
+          .select(
+            "id, total, status, date_created, customer_email, customer_first_name, customer_last_name, line_items, order_number, currency"
+          )
+          .in("site_id", siteIds)
+          .order("date_created", { ascending: false })
+          .limit(2000);
+        if (startDate) q = q.gte("date_created", startDate);
+        if (endDate) q = q.lte("date_created", endDate + "T23:59:59.999Z");
+        const { data: orders } = await q;
+        wooOrders = orders || [];
+      }
+    }
 
     return new Response(
       JSON.stringify({
         dashboard: {
           id: dashboard.id,
           name: dashboard.name,
+          client_id: dashboard.client_id,
           client_name: dashboard.clients?.name,
           agency_name: dashboard.agencies?.name,
           dashboard_type: dashboard.dashboard_type,
@@ -188,6 +217,10 @@ Deno.serve(async (req) => {
           integration_settings: t.integration_settings,
         })),
         records: allRecords,
+        woocommerce: {
+          sites: wooSites,
+          orders: wooOrders,
+        },
         has_email_restriction: false,
       }),
       {
