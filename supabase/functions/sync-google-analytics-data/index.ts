@@ -111,6 +111,7 @@ serve(async (req) => {
         { name: 'addToCarts' },
         { name: 'ecommercePurchases' },
         { name: 'purchaseRevenue' },
+        { name: 'totalRevenue' },
       ],
       orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
       limit: 50,
@@ -146,6 +147,7 @@ serve(async (req) => {
         { name: 'addToCarts' },
         { name: 'ecommercePurchases' },
         { name: 'purchaseRevenue' },
+        { name: 'totalRevenue' },
       ],
       orderBys: [{ dimension: { dimensionName: 'date' }, desc: false }],
     };
@@ -219,6 +221,7 @@ serve(async (req) => {
         { name: 'purchaseRevenue' },
         { name: 'keyEvents' },
         { name: 'conversions' },
+        { name: 'totalRevenue' },
       ],
       orderBys: [
         { dimension: { dimensionName: 'date' }, desc: false },
