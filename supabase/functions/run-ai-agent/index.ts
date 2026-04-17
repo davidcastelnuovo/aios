@@ -1022,7 +1022,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const { data: client } = await supabase.from('clients').select('name, agency_id').eq('id', client_id).single()
       if (!client) return { error: 'לקוח לא נמצא' }
 
-      const tableName = `דוח פייסבוק - ${client.name}`
+      const tableName = client.name
       const slug = `facebook-${client_id.substring(0, 8)}`
       const { data: table, error } = await supabase.from('crm_tables').insert({
         tenant_id: tenantId,

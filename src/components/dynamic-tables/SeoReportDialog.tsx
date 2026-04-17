@@ -182,7 +182,8 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
     try {
       const domain = reportData?.domain || latestReport?.domain || '';
       const clientName = selectedClientObj?.name || '';
-      const tableName = `דוח SEO - ${clientName}`;
+      const domainMatchesName = domain && clientName && domain.toLowerCase().includes(clientName.toLowerCase());
+      const tableName = domain && !domainMatchesName ? `${clientName} - ${domain}` : clientName;
       const slug = `seo-report-${selectedClient}-${Date.now()}`;
 
       const { error } = await supabase.functions.invoke('crm-tables', {

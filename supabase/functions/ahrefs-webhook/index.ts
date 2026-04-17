@@ -175,7 +175,7 @@ Deno.serve(async (req) => {
               await supabase.from("crm_tables").insert({
                 tenant_id,
                 client_id: resolved_client_id,
-                name: `דוח SEO - ${domain}`,
+                name: domain,
                 slug: `seo-${domain.replace(/\./g, "-")}-${Date.now()}`,
                 integration_type: "ahrefs",
                 category: "seo",
