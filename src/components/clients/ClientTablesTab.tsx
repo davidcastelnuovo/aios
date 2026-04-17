@@ -13,6 +13,7 @@ import { useTenantPath } from "@/hooks/useTenantPath";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { TableCardAlerts } from "@/components/dynamic-tables/TableCardAlerts";
 import { ClientReportPanel } from "@/components/clients/ClientReportPanel";
+import { ClientDashboardPanel } from "@/components/clients/ClientDashboardPanel";
 import { toast } from "sonner";
 
 interface ClientTablesTabProps {
@@ -259,7 +260,49 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
         </div>
       )}
 
-      {/* Embedded tables — each table rendered inline via iframe */}
+      {/* Embedded dashboards — rendered FIRST with screenshot + send capability */}
+      {dashboards.map((dash: any) => (
+        <Collapsible key={dash.id} defaultOpen>
+          <div className="border rounded-lg overflow-hidden">
+            <CollapsibleTrigger className="w-full flex items-center justify-between px-3 py-2 bg-muted/40 hover:bg-muted/60 transition-colors group">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 shrink-0"
+                  onClick={(e) => { e.stopPropagation(); unlinkDashboard(dash.id); }}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 shrink-0"
+                  onClick={(e) => { e.stopPropagation(); navigate(buildPath(`/dashboard/${dash.id}`)); }}
+                >
+                  <Maximize2 className="h-3 w-3" />
+                </Button>
+                <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=closed]:rotate-90" />
+              </div>
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <LayoutDashboard className="h-4 w-4" />
+                <span>{dash.name}</span>
+              </div>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="border-t p-3">
+                <ClientDashboardPanel
+                  dashboard={{ id: dash.id, name: dash.name }}
+                  clientId={clientId}
+                  tenantId={tenantId || ""}
+                />
+              </div>
+            </CollapsibleContent>
+          </div>
+        </Collapsible>
+      ))}
+
+      {/* Embedded tables — each table rendered inline */}
       {tables.map((table: any) => (
         <Collapsible key={table.id} defaultOpen>
           <div className="border rounded-lg overflow-hidden">
@@ -301,49 +344,6 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
                   table={table}
                   clientId={clientId}
                   tenantId={tenantId || ""}
-                />
-              </div>
-            </CollapsibleContent>
-          </div>
-        </Collapsible>
-      ))}
-
-      {/* Embedded dashboards */}
-      {dashboards.map((dash: any) => (
-        <Collapsible key={dash.id} defaultOpen>
-          <div className="border rounded-lg overflow-hidden">
-            <CollapsibleTrigger className="w-full flex items-center justify-between px-3 py-2 bg-muted/40 hover:bg-muted/60 transition-colors group">
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 shrink-0"
-                  onClick={(e) => { e.stopPropagation(); unlinkDashboard(dash.id); }}
-                >
-                  <X className="h-3 w-3" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 shrink-0"
-                  onClick={(e) => { e.stopPropagation(); navigate(buildPath(`/dashboard/${dash.id}`)); }}
-                >
-                  <Maximize2 className="h-3 w-3" />
-                </Button>
-                <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=closed]:rotate-90" />
-              </div>
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <LayoutDashboard className="h-4 w-4" />
-                <span>{dash.name}</span>
-              </div>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <div className="border-t">
-                <iframe
-                  src={`${window.location.origin}${buildPath(`/dashboard/${dash.id}`)}`}
-                  className="w-full border-0"
-                  style={{ height: '500px' }}
-                  title={dash.name}
                 />
               </div>
             </CollapsibleContent>
