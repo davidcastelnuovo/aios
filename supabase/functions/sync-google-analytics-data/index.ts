@@ -184,6 +184,7 @@ serve(async (req) => {
         { name: 'addToCarts' },
         { name: 'ecommercePurchases' },
         { name: 'purchaseRevenue' },
+        { name: 'totalRevenue' },
       ],
       orderBys: [
         { dimension: { dimensionName: 'date' }, desc: false },
