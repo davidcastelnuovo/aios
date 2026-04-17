@@ -221,7 +221,6 @@ serve(async (req) => {
         { name: 'ecommercePurchases' },
         { name: 'purchaseRevenue' },
         { name: 'keyEvents' },
-        { name: 'conversions' },
         { name: 'totalRevenue' },
       ],
       orderBys: [
