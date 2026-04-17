@@ -292,7 +292,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
 
         const captionParts: string[] = [];
         if (messageText) captionParts.push(messageText);
-        if (shareLink) captionParts.push(`\n📊 צפה בדוח המלא: ${shareLink}`);
+        if (effectiveShareLink) captionParts.push(`\n📊 צפה בדוח המלא: ${effectiveShareLink}`);
         const fullCaption = captionParts.join("");
 
         const formData = new FormData();
@@ -348,7 +348,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
             <h2 style="color: #1e40af;">דוח ${table.name}</h2>
             ${safeMessage ? `<p style="white-space: pre-wrap; font-size: 15px; color: #374151;">${safeMessage}</p>` : ""}
             <p style="color: #6b7280;">הדוח מצורף כקובץ לנוחותך:</p>
-            ${shareLink ? `<p><a href="${shareLink}" style="display: inline-block; margin-top: 12px; padding: 12px 24px; background: #2563eb; color: white; text-decoration: none; border-radius: 6px; font-weight: bold;">📊 צפה בדוח המלא</a></p>` : ""}
+            ${effectiveShareLink ? `<p><a href="${effectiveShareLink}" style="display: inline-block; margin-top: 12px; padding: 12px 24px; background: #2563eb; color: white; text-decoration: none; border-radius: 6px; font-weight: bold;">📊 צפה בדוח המלא</a></p>` : ""}
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
             <p style="font-size: 12px; color: #9ca3af; text-align: center;">נשלח באמצעות Marketing Captain</p>
           </div>
@@ -376,7 +376,22 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
       }
     } catch (error: any) {
       console.error("Error sending report:", error);
-      toast.error("שגיאה בשליחת הדוח: " + error.message);
+      const msg = String(error?.message || "");
+      const isGmailAuthIssue =
+        msg.includes("Token refresh failed") ||
+        msg.includes("Gmail not connected") ||
+        msg.includes("invalid_grant");
+      if (isGmailAuthIssue) {
+        toast.error("חיבור ה-Gmail פג. יש להתחבר מחדש.", {
+          action: {
+            label: "התחבר מחדש",
+            onClick: () => navigate(buildPath("/gmail-settings")),
+          },
+          duration: 8000,
+        });
+      } else {
+        toast.error("שגיאה בשליחת הדוח: " + msg);
+      }
     } finally {
       setIsSending(false);
     }
