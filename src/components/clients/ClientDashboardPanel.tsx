@@ -75,7 +75,14 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
 
   useEffect(() => {
     const cached = localStorage.getItem(CACHE_KEY_PREFIX + dashboard.id);
-    if (cached) setScreenshotUrl(cached);
+    if (cached) {
+      setScreenshotUrl(cached);
+      // Restore blob from cached data URL so send works without re-capture
+      fetch(cached)
+        .then((r) => r.blob())
+        .then(setScreenshotBlob)
+        .catch(() => {});
+    }
   }, [dashboard.id]);
 
   const { data: client } = useQuery({
