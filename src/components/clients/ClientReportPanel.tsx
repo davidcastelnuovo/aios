@@ -81,7 +81,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
   const [sendEmail, setSendEmail] = useState(false);
   const [selectedGroupId, setSelectedGroupId] = useState("");
   const [directPhone, setDirectPhone] = useState("");
-  const [emailAddress, setEmailAddress] = useState("");
+  const [emailRecipients, setEmailRecipients] = useState<string[]>([]);
   const [messageText, setMessageText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [screenshotBlob, setScreenshotBlob] = useState<Blob | null>(null);
