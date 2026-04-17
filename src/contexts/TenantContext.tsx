@@ -19,6 +19,22 @@ function getSlugFromPath(pathname: string): string | null {
   return match ? match[1] : null;
 }
 
+function safeGetLocalStorage(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeSetLocalStorage(key: string, value: string) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Ignore storage failures in restricted browsers
+  }
+}
+
 export function TenantProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -27,7 +43,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   // Parse tenantSlug directly from URL instead of useParams (which doesn't work outside Routes)
   const [tenantSlug, setTenantSlug] = useState<string | null>(() => getSlugFromPath(window.location.pathname));
 
-  const [currentTenantId, setCurrentTenantId] = useState<string | null>(() => localStorage.getItem("selectedTenantId"));
+  const [currentTenantId, setCurrentTenantId] = useState<string | null>(() => safeGetLocalStorage("selectedTenantId"));
   const [isActiveTenantSynced, setIsActiveTenantSynced] = useState(false);
   const [isBootstrapTimedOut, setIsBootstrapTimedOut] = useState(false);
   const previousTenantIdRef = useRef<string | null>(null);
@@ -101,19 +117,18 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        
         const keysToRemove = [
           "tasks", "clients", "agencies", "agencies-filter", "user-agency-ids",
           "leads", "campaigners", "client-onboarding", "finance", "sales-people",
           "suppliers", "products", "automations", "time-entries", "chat-contacts",
           "crm-tables", "crm-records", "tenant-for-operations"
         ];
-        
+
         keysToRemove.forEach(key => {
           queryClient.removeQueries({ queryKey: [key] });
         });
-        
-        localStorage.setItem("selectedTenantId", currentTenantId);
+
+        safeSetLocalStorage("selectedTenantId", currentTenantId);
         
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
