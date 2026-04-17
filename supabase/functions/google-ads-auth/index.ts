@@ -64,7 +64,7 @@ Deno.serve(async (req) => {
         return getAuthUrl(tenantId, user.id);
       
       case 'get_accounts':
-        return getGoogleAdsAccounts(supabase, tenantId);
+        return getGoogleAdsAccounts(supabase, tenantId, user.id);
       
       case 'refresh_token':
         return refreshAccessToken(supabase, tenantId);
@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
         return disconnectGoogleAds(supabase, tenantId);
       
       case 'check_status':
-        return checkConnectionStatus(supabase, tenantId);
+        return checkConnectionStatus(supabase, tenantId, user.id);
       
       default:
         return new Response(JSON.stringify({ error: 'Invalid action' }), {
