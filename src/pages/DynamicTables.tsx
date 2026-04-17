@@ -446,13 +446,71 @@ export default function DynamicTables() {
     return Object.keys(groupedTables);
   }, [groupedTables]);
 
-  // Auto-select first category if none selected, or if saved one no longer exists
+  // Clear selectedCategory if it no longer exists in categories (don't auto-select first)
   useMemo(() => {
     if (categories.length === 0) return;
-    if (!selectedCategory || !categories.includes(selectedCategory)) {
-      setSelectedCategory(categories[0]);
+    if (selectedCategory && !categories.includes(selectedCategory)) {
+      setSelectedCategory(null);
+      try { sessionStorage.removeItem('dynamicTables.selectedCategory'); } catch {}
     }
   }, [categories, selectedCategory]);
+
+  // Soft branded color scheme per category
+  const getCategoryStyle = (category: string): { gradient: string; iconBg: string; iconColor: string; border: string; icon: any } => {
+    const c = category.toLowerCase();
+    if (c.includes('facebook') && c.includes('ecom')) {
+      return {
+        gradient: 'from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30',
+        iconBg: 'bg-emerald-100 dark:bg-emerald-900/40',
+        iconColor: 'text-emerald-600 dark:text-emerald-400',
+        border: 'border-emerald-200/60 dark:border-emerald-800/60 hover:border-emerald-400/80',
+        icon: ShoppingCart,
+      };
+    }
+    if (c.includes('facebook')) {
+      return {
+        gradient: 'from-blue-50 to-sky-50 dark:from-blue-950/30 dark:to-sky-950/30',
+        iconBg: 'bg-blue-100 dark:bg-blue-900/40',
+        iconColor: 'text-blue-600 dark:text-blue-400',
+        border: 'border-blue-200/60 dark:border-blue-800/60 hover:border-blue-400/80',
+        icon: Facebook,
+      };
+    }
+    if (c.includes('google ads') || c === 'google_ads') {
+      return {
+        gradient: 'from-orange-50 to-amber-50 dark:from-orange-950/30 dark:to-amber-950/30',
+        iconBg: 'bg-orange-100 dark:bg-orange-900/40',
+        iconColor: 'text-orange-600 dark:text-orange-400',
+        border: 'border-orange-200/60 dark:border-orange-800/60 hover:border-orange-400/80',
+        icon: TrendingUp,
+      };
+    }
+    if (c.includes('analytics')) {
+      return {
+        gradient: 'from-amber-50 to-yellow-50 dark:from-amber-950/30 dark:to-yellow-950/30',
+        iconBg: 'bg-amber-100 dark:bg-amber-900/40',
+        iconColor: 'text-amber-600 dark:text-amber-400',
+        border: 'border-amber-200/60 dark:border-amber-800/60 hover:border-amber-400/80',
+        icon: TrendingUp,
+      };
+    }
+    if (c.includes('seo') || c.includes('search console')) {
+      return {
+        gradient: 'from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/30',
+        iconBg: 'bg-violet-100 dark:bg-violet-900/40',
+        iconColor: 'text-violet-600 dark:text-violet-400',
+        border: 'border-violet-200/60 dark:border-violet-800/60 hover:border-violet-400/80',
+        icon: TrendingUp,
+      };
+    }
+    return {
+      gradient: 'from-slate-50 to-gray-50 dark:from-slate-950/30 dark:to-gray-950/30',
+      iconBg: 'bg-slate-100 dark:bg-slate-900/40',
+      iconColor: 'text-slate-600 dark:text-slate-400',
+      border: 'border-slate-200/60 dark:border-slate-800/60 hover:border-slate-400/80',
+      icon: FileSpreadsheet,
+    };
+  };
 
   return (
     <div className="container mx-auto py-8 px-4" dir="rtl">
