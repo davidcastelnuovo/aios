@@ -203,17 +203,47 @@ serve(async (req) => {
 
     // SEND message
     if (action === 'send') {
-      const { to, subject, body: emailBody, inReplyTo, threadId } = body;
+      const { to, subject, body: emailBody, inReplyTo, threadId, attachments } = body;
       if (!to || !subject) throw new Error('Missing to or subject');
 
-      let rawMessage = `To: ${to}\r\nSubject: ${subject}\r\nContent-Type: text/html; charset=utf-8\r\n`;
-      if (inReplyTo) {
-        rawMessage += `In-Reply-To: ${inReplyTo}\r\nReferences: ${inReplyTo}\r\n`;
-      }
-      rawMessage += `\r\n${emailBody || ''}`;
+      // Encode subject as RFC 2047 (UTF-8 base64) so Hebrew/non-ASCII renders correctly
+      const encodedSubject = `=?UTF-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`;
+      const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
 
-      // Base64url encode
-      const encoded = btoa(unescape(encodeURIComponent(rawMessage)))
+      let rawMessage = '';
+
+      if (hasAttachments) {
+        const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        rawMessage = `To: ${to}\r\nSubject: ${encodedSubject}\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary="${boundary}"\r\n`;
+        if (inReplyTo) {
+          rawMessage += `In-Reply-To: ${inReplyTo}\r\nReferences: ${inReplyTo}\r\n`;
+        }
+        rawMessage += `\r\n--${boundary}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Transfer-Encoding: 7bit\r\n\r\n${emailBody || ''}\r\n`;
+
+        for (const att of attachments) {
+          // att = { filename, mimeType, data (base64) }
+          const filename = att.filename || 'attachment';
+          const mimeType = att.mimeType || 'application/octet-stream';
+          const data = String(att.data || '').replace(/\r?\n/g, '');
+          // Re-wrap base64 to 76-char lines as per RFC
+          const wrapped = data.match(/.{1,76}/g)?.join('\r\n') || data;
+          rawMessage += `--${boundary}\r\nContent-Type: ${mimeType}; name="${filename}"\r\nContent-Disposition: attachment; filename="${filename}"\r\nContent-Transfer-Encoding: base64\r\n\r\n${wrapped}\r\n`;
+        }
+        rawMessage += `--${boundary}--`;
+      } else {
+        rawMessage = `To: ${to}\r\nSubject: ${encodedSubject}\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=utf-8\r\n`;
+        if (inReplyTo) {
+          rawMessage += `In-Reply-To: ${inReplyTo}\r\nReferences: ${inReplyTo}\r\n`;
+        }
+        rawMessage += `\r\n${emailBody || ''}`;
+      }
+
+      // Base64url encode the full RFC 2822 message
+      // Use TextEncoder to handle UTF-8 properly in body content
+      const bytes = new TextEncoder().encode(rawMessage);
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+      const encoded = btoa(binary)
         .replace(/\+/g, '-')
         .replace(/\//g, '_')
         .replace(/=+$/, '');

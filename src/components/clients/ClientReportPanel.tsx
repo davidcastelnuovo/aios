@@ -276,7 +276,52 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
           setIsSending(false);
           return;
         }
-        toast.info("שליחה באימייל תתווסף בקרוב");
+
+        // Convert blob to base64
+        const base64Data = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const result = reader.result as string;
+            resolve(result.split(",")[1] || "");
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(screenshotBlob);
+        });
+
+        const subject = `דוח ${table.name}${client?.name ? ` - ${client.name}` : ""}`;
+        const safeMessage = messageText
+          ? messageText.replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br/>")
+          : "";
+        const bodyHtml = `
+          <div dir="rtl" style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto;">
+            <h2 style="color: #1e40af;">דוח ${table.name}</h2>
+            ${safeMessage ? `<p style="white-space: pre-wrap; font-size: 15px; color: #374151;">${safeMessage}</p>` : ""}
+            <p style="color: #6b7280;">הדוח מצורף כקובץ לנוחותך:</p>
+            ${shareLink ? `<p><a href="${shareLink}" style="display: inline-block; margin-top: 12px; padding: 12px 24px; background: #2563eb; color: white; text-decoration: none; border-radius: 6px; font-weight: bold;">📊 צפה בדוח המלא</a></p>` : ""}
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+            <p style="font-size: 12px; color: #9ca3af; text-align: center;">נשלח באמצעות Marketing Captain</p>
+          </div>
+        `;
+
+        const { data, error } = await supabase.functions.invoke("gmail-api", {
+          body: {
+            action: "send",
+            to: emailAddress,
+            subject,
+            body: bodyHtml,
+            attachments: [
+              {
+                filename: `report-${table.name}.png`,
+                mimeType: "image/png",
+                data: base64Data,
+              },
+            ],
+          },
+        });
+
+        if (error) throw new Error(error.message || "שגיאה בשליחה");
+        if (data?.error) throw new Error(data.error);
+        toast.success("הדוח נשלח באימייל בהצלחה");
       }
     } catch (error: any) {
       console.error("Error sending report:", error);
