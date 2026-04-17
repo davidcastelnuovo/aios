@@ -623,32 +623,115 @@ export default function DynamicTables() {
             </Card>
           ) : (
         <div className="space-y-6">
-          {/* Horizontal Tabs */}
-          <div className="flex flex-wrap gap-2 border-b pb-3">
-            {Object.entries(groupedTables).map(([category, categoryTables]) => (
-              <Button
-                key={category}
-                variant={selectedCategory === category ? "default" : "outline"}
-                size="sm"
-                onClick={() => {
-                  setSelectedCategory(category);
-                  try { sessionStorage.setItem('dynamicTables.selectedCategory', category); } catch {}
-                }}
-                className="gap-2"
-              >
-                <span>({categoryTables.length})</span>
-                <span>{category}</span>
-              </Button>
-            ))}
-          </div>
+          {!selectedCategory ? (
+            /* Category picker cards */
+            <div>
+              <p className="text-sm text-muted-foreground mb-4">בחר קטגוריית דוחות</p>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {Object.entries(groupedTables).map(([category, categoryTables]) => {
+                  const style = getCategoryStyle(category);
+                  const Icon = style.icon;
+                  return (
+                    <Card
+                      key={category}
+                      onClick={() => {
+                        setSelectedCategory(category);
+                        try { sessionStorage.setItem('dynamicTables.selectedCategory', category); } catch {}
+                      }}
+                      className={cn(
+                        "cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5",
+                        "bg-gradient-to-br border-2",
+                        style.gradient,
+                        style.border
+                      )}
+                    >
+                      <CardHeader>
+                        <div className="flex items-center justify-between">
+                          <div className={cn("h-12 w-12 rounded-xl flex items-center justify-center", style.iconBg)}>
+                            <Icon className={cn("h-6 w-6", style.iconColor)} />
+                          </div>
+                          <Badge variant="secondary" className="text-base font-semibold">
+                            {categoryTables.length}
+                          </Badge>
+                        </div>
+                        <CardTitle className="mt-3 text-xl capitalize">{category}</CardTitle>
+                        <CardDescription>
+                          {categoryTables.length === 1 ? 'דוח אחד' : `${categoryTables.length} דוחות`}
+                        </CardDescription>
+                      </CardHeader>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Header with back button + current category */}
+              <div className="flex items-center justify-between gap-3 flex-wrap border-b pb-3">
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedCategory(null);
+                      try { sessionStorage.removeItem('dynamicTables.selectedCategory'); } catch {}
+                    }}
+                    className="gap-1"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                    חזרה לקטגוריות
+                  </Button>
+                  {(() => {
+                    const style = getCategoryStyle(selectedCategory);
+                    const Icon = style.icon;
+                    return (
+                      <div className="flex items-center gap-2">
+                        <div className={cn("h-8 w-8 rounded-lg flex items-center justify-center", style.iconBg)}>
+                          <Icon className={cn("h-4 w-4", style.iconColor)} />
+                        </div>
+                        <h2 className="text-lg font-semibold capitalize">{selectedCategory}</h2>
+                        <Badge variant="secondary">{groupedTables[selectedCategory]?.length || 0}</Badge>
+                      </div>
+                    );
+                  })()}
+                </div>
+                {/* Quick switcher */}
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(groupedTables).map(([category, categoryTables]) => {
+                    const style = getCategoryStyle(category);
+                    const isActive = selectedCategory === category;
+                    return (
+                      <Button
+                        key={category}
+                        variant={isActive ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          setSelectedCategory(category);
+                          try { sessionStorage.setItem('dynamicTables.selectedCategory', category); } catch {}
+                        }}
+                        className={cn("gap-1.5 h-8 text-xs", !isActive && style.border)}
+                      >
+                        <span className="capitalize">{category}</span>
+                        <span className="opacity-70">({categoryTables.length})</span>
+                      </Button>
+                    );
+                  })}
+                </div>
+              </div>
 
-          {/* Tables Grid */}
-          {selectedCategory && groupedTables[selectedCategory] && (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {groupedTables[selectedCategory].map((table) => (
+              {/* Tables Grid */}
+              {groupedTables[selectedCategory] && (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {groupedTables[selectedCategory].map((table) => {
+                    const style = getCategoryStyle(selectedCategory);
+                    return (
                 <Card
                   key={table.id}
-                  className="cursor-pointer hover:shadow-lg transition-shadow relative"
+                  className={cn(
+                    "cursor-pointer hover:shadow-lg transition-all hover:-translate-y-0.5 relative bg-gradient-to-br border",
+                    style.gradient,
+                    style.border
+                  )}
                   onClick={() => navigate(buildPath(`/table/${table.slug}`))}
                 >
                   <CardHeader>
@@ -755,8 +838,11 @@ export default function DynamicTables() {
                     </p>
                   </CardContent>
                 </Card>
-            ))}
-            </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
           )}
         </div>
           )}
