@@ -435,6 +435,26 @@ export default function SharedDashboard() {
     return Object.values(map).sort((a, b) => b.spend - a.spend);
   }, [platformFilter, records]);
 
+  // Google Ads campaign summary
+  const googleAdsCampaignSummary = useMemo(() => {
+    if (platformFilter !== 'google_ads') return [];
+    const map: Record<string, { name: string; impressions: number; clicks: number; spend: number; leads: number; purchases: number; revenue: number; addToCart: number }> = {};
+    const gaRecords = records.filter((r: any) => (r._source || '') === 'google_ads');
+    gaRecords.forEach((r: any) => {
+      const d = r.data || {};
+      const name = d.campaign_name || d.campaign || 'ללא שם';
+      if (!map[name]) map[name] = { name, impressions: 0, clicks: 0, spend: 0, leads: 0, purchases: 0, revenue: 0, addToCart: 0 };
+      map[name].impressions += Number(d.impressions) || 0;
+      map[name].clicks += Number(d.clicks) || 0;
+      map[name].spend += getSpendFromData(d);
+      map[name].leads += getLeadsFromData(d);
+      map[name].purchases += getPurchasesFromData(d);
+      map[name].revenue += getRevenueFromData(d);
+      map[name].addToCart += getAddToCartFromData(d);
+    });
+    return Object.values(map).sort((a, b) => b.spend - a.spend);
+  }, [platformFilter, records]);
+
   if (isLoading) {
     return (
       <div className="container mx-auto py-8 px-4 space-y-6" dir="rtl">
