@@ -280,12 +280,14 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                 <GscIntegration
                   tenantId={tenantId}
                   clientId={clientId}
-                  domain={targetDomain}
+                  domain={savedGscSiteUrl || targetDomain}
                 />
               </div>
             )}
           </TabsContent>
         )}
+
+        {/* placeholder removed below — kept original structure */}
 
         {hasGa && (
           <TabsContent value="ga">
