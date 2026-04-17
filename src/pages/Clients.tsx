@@ -4,11 +4,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, Building2, Globe, Coins, Phone, Mail, LayoutGrid, Table as TableIcon, MessageCircle, Edit, Search, Plus, Trash2, FolderOpen, ExternalLink, Download, Filter, FileSpreadsheet, Upload } from "lucide-react";
+import { Users, Building2, Globe, Coins, Phone, Mail, LayoutGrid, Table as TableIcon, MessageCircle, Edit, Search, Plus, Trash2, FolderOpen, ExternalLink, Download, Filter, FileSpreadsheet, Upload, Copy } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AddClientForm } from "@/components/forms/AddClientForm";
 import { ImportClientsSheet } from "@/components/forms/ImportClientsSheet";
 import { ImportClientsCSV } from "@/components/forms/ImportClientsCSV";
+import { DuplicateClientDialog } from "@/components/forms/DuplicateClientDialog";
 import { EditClientDialog } from "@/components/forms/EditClientDialog";
 import AddTaskForm from "@/components/forms/AddTaskForm";
 import { ClientsChatView } from "@/components/clients/ClientsChatView";
@@ -78,6 +79,7 @@ export default function Clients() {
   const [selectedCampaigner, setSelectedCampaigner] = useState<string>("all");
   const [selectedMoodStatus, setSelectedMoodStatus] = useState<string>("all");
   const [deletingClient, setDeletingClient] = useState<any>(null);
+  const [duplicatingClient, setDuplicatingClient] = useState<{ id: string; name: string } | null>(null);
   const [editingFolderLink, setEditingFolderLink] = useState<{ clientId: string; link: string } | null>(null);
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
@@ -726,6 +728,17 @@ export default function Clients() {
                 <Edit className="h-4 w-4" />
               </Button>
               <Button
+                size="sm"
+                variant="secondary"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDuplicatingClient({ id: client.id, name: client.name });
+                }}
+                title="שכפל לקוח"
+              >
+                <Copy className="h-4 w-4" />
+              </Button>
+              <Button
                   size="sm" 
                   variant="destructive"
                   onClick={(e) => {
@@ -1035,6 +1048,15 @@ export default function Clients() {
                         <Edit className="h-4 w-4" />
                       </Button>
                       <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setDuplicatingClient({ id: client.id, name: client.name })}
+                        className="h-8 w-8 p-0 hover:bg-accent/20"
+                        title="שכפל לקוח"
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                      <Button
                         size="sm" 
                         variant="ghost"
                         onClick={() => setDeletingClient(client)}
@@ -1242,8 +1264,18 @@ export default function Clients() {
           client={editingClient}
           open={!!editingClient}
           onOpenChange={(open) => !open && setEditingClient(null)}
+          onDuplicate={() => {
+            setDuplicatingClient({ id: editingClient.id, name: editingClient.name });
+            setEditingClient(null);
+          }}
         />
       )}
+
+      <DuplicateClientDialog
+        open={!!duplicatingClient}
+        onOpenChange={(open) => !open && setDuplicatingClient(null)}
+        client={duplicatingClient}
+      />
 
       <AlertDialog open={!!deletingClient} onOpenChange={(open) => !open && setDeletingClient(null)}>
         <AlertDialogContent>

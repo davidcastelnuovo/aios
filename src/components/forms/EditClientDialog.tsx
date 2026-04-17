@@ -31,7 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, X, Calendar as CalendarIcon, Clock, CheckCircle2, Paperclip, Plus, Trash2, Users, UserPlus } from "lucide-react";
+import { Loader2, X, Calendar as CalendarIcon, Clock, CheckCircle2, Paperclip, Plus, Trash2, Users, UserPlus, Copy } from "lucide-react";
 import { FolderLinksField } from "@/components/forms/FolderLinksField";
 import { AttachmentsField } from "@/components/forms/AttachmentsField";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -72,9 +72,10 @@ interface EditClientDialogProps {
   client: any;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onDuplicate?: () => void;
 }
 
-export function EditClientDialog({ client, open, onOpenChange }: EditClientDialogProps) {
+export function EditClientDialog({ client, open, onOpenChange, onDuplicate }: EditClientDialogProps) {
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
   const { getFieldLabel } = useCustomFieldLabels('client');
@@ -466,10 +467,26 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent dir="rtl" className="max-w-3xl h-[95vh] max-h-[95vh] overflow-y-auto flex flex-col">
         <DialogHeader>
-          <DialogTitle>עריכת לקוח: {client.name}</DialogTitle>
-          <DialogDescription>
-            עדכן את פרטי הלקוח, צפה במשימות והוסף הערות
-          </DialogDescription>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1">
+              <DialogTitle>עריכת לקוח: {client.name}</DialogTitle>
+              <DialogDescription>
+                עדכן את פרטי הלקוח, צפה במשימות והוסף הערות
+              </DialogDescription>
+            </div>
+            {onDuplicate && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={onDuplicate}
+                className="gap-2 shrink-0"
+              >
+                <Copy className="h-4 w-4" />
+                שכפל לקוח
+              </Button>
+            )}
+          </div>
         </DialogHeader>
 
         <Tabs defaultValue="details" className="w-full">
