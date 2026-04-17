@@ -446,13 +446,71 @@ export default function DynamicTables() {
     return Object.keys(groupedTables);
   }, [groupedTables]);
 
-  // Auto-select first category if none selected, or if saved one no longer exists
+  // Clear selectedCategory if it no longer exists in categories (don't auto-select first)
   useMemo(() => {
     if (categories.length === 0) return;
-    if (!selectedCategory || !categories.includes(selectedCategory)) {
-      setSelectedCategory(categories[0]);
+    if (selectedCategory && !categories.includes(selectedCategory)) {
+      setSelectedCategory(null);
+      try { sessionStorage.removeItem('dynamicTables.selectedCategory'); } catch {}
     }
   }, [categories, selectedCategory]);
+
+  // Soft branded color scheme per category
+  const getCategoryStyle = (category: string): { gradient: string; iconBg: string; iconColor: string; border: string; icon: any } => {
+    const c = category.toLowerCase();
+    if (c.includes('facebook') && c.includes('ecom')) {
+      return {
+        gradient: 'from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30',
+        iconBg: 'bg-emerald-100 dark:bg-emerald-900/40',
+        iconColor: 'text-emerald-600 dark:text-emerald-400',
+        border: 'border-emerald-200/60 dark:border-emerald-800/60 hover:border-emerald-400/80',
+        icon: ShoppingCart,
+      };
+    }
+    if (c.includes('facebook')) {
+      return {
+        gradient: 'from-blue-50 to-sky-50 dark:from-blue-950/30 dark:to-sky-950/30',
+        iconBg: 'bg-blue-100 dark:bg-blue-900/40',
+        iconColor: 'text-blue-600 dark:text-blue-400',
+        border: 'border-blue-200/60 dark:border-blue-800/60 hover:border-blue-400/80',
+        icon: Facebook,
+      };
+    }
+    if (c.includes('google ads') || c === 'google_ads') {
+      return {
+        gradient: 'from-orange-50 to-amber-50 dark:from-orange-950/30 dark:to-amber-950/30',
+        iconBg: 'bg-orange-100 dark:bg-orange-900/40',
+        iconColor: 'text-orange-600 dark:text-orange-400',
+        border: 'border-orange-200/60 dark:border-orange-800/60 hover:border-orange-400/80',
+        icon: TrendingUp,
+      };
+    }
+    if (c.includes('analytics')) {
+      return {
+        gradient: 'from-amber-50 to-yellow-50 dark:from-amber-950/30 dark:to-yellow-950/30',
+        iconBg: 'bg-amber-100 dark:bg-amber-900/40',
+        iconColor: 'text-amber-600 dark:text-amber-400',
+        border: 'border-amber-200/60 dark:border-amber-800/60 hover:border-amber-400/80',
+        icon: TrendingUp,
+      };
+    }
+    if (c.includes('seo') || c.includes('search console')) {
+      return {
+        gradient: 'from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/30',
+        iconBg: 'bg-violet-100 dark:bg-violet-900/40',
+        iconColor: 'text-violet-600 dark:text-violet-400',
+        border: 'border-violet-200/60 dark:border-violet-800/60 hover:border-violet-400/80',
+        icon: TrendingUp,
+      };
+    }
+    return {
+      gradient: 'from-slate-50 to-gray-50 dark:from-slate-950/30 dark:to-gray-950/30',
+      iconBg: 'bg-slate-100 dark:bg-slate-900/40',
+      iconColor: 'text-slate-600 dark:text-slate-400',
+      border: 'border-slate-200/60 dark:border-slate-800/60 hover:border-slate-400/80',
+      icon: FileSpreadsheet,
+    };
+  };
 
   return (
     <div className="container mx-auto py-8 px-4" dir="rtl">
@@ -565,32 +623,115 @@ export default function DynamicTables() {
             </Card>
           ) : (
         <div className="space-y-6">
-          {/* Horizontal Tabs */}
-          <div className="flex flex-wrap gap-2 border-b pb-3">
-            {Object.entries(groupedTables).map(([category, categoryTables]) => (
-              <Button
-                key={category}
-                variant={selectedCategory === category ? "default" : "outline"}
-                size="sm"
-                onClick={() => {
-                  setSelectedCategory(category);
-                  try { sessionStorage.setItem('dynamicTables.selectedCategory', category); } catch {}
-                }}
-                className="gap-2"
-              >
-                <span>({categoryTables.length})</span>
-                <span>{category}</span>
-              </Button>
-            ))}
-          </div>
+          {!selectedCategory ? (
+            /* Category picker cards */
+            <div>
+              <p className="text-sm text-muted-foreground mb-4">בחר קטגוריית דוחות</p>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {Object.entries(groupedTables).map(([category, categoryTables]) => {
+                  const style = getCategoryStyle(category);
+                  const Icon = style.icon;
+                  return (
+                    <Card
+                      key={category}
+                      onClick={() => {
+                        setSelectedCategory(category);
+                        try { sessionStorage.setItem('dynamicTables.selectedCategory', category); } catch {}
+                      }}
+                      className={cn(
+                        "cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5",
+                        "bg-gradient-to-br border-2",
+                        style.gradient,
+                        style.border
+                      )}
+                    >
+                      <CardHeader>
+                        <div className="flex items-center justify-between">
+                          <div className={cn("h-12 w-12 rounded-xl flex items-center justify-center", style.iconBg)}>
+                            <Icon className={cn("h-6 w-6", style.iconColor)} />
+                          </div>
+                          <Badge variant="secondary" className="text-base font-semibold">
+                            {categoryTables.length}
+                          </Badge>
+                        </div>
+                        <CardTitle className="mt-3 text-xl capitalize">{category}</CardTitle>
+                        <CardDescription>
+                          {categoryTables.length === 1 ? 'דוח אחד' : `${categoryTables.length} דוחות`}
+                        </CardDescription>
+                      </CardHeader>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Header with back button + current category */}
+              <div className="flex items-center justify-between gap-3 flex-wrap border-b pb-3">
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedCategory(null);
+                      try { sessionStorage.removeItem('dynamicTables.selectedCategory'); } catch {}
+                    }}
+                    className="gap-1"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                    חזרה לקטגוריות
+                  </Button>
+                  {(() => {
+                    const style = getCategoryStyle(selectedCategory);
+                    const Icon = style.icon;
+                    return (
+                      <div className="flex items-center gap-2">
+                        <div className={cn("h-8 w-8 rounded-lg flex items-center justify-center", style.iconBg)}>
+                          <Icon className={cn("h-4 w-4", style.iconColor)} />
+                        </div>
+                        <h2 className="text-lg font-semibold capitalize">{selectedCategory}</h2>
+                        <Badge variant="secondary">{groupedTables[selectedCategory]?.length || 0}</Badge>
+                      </div>
+                    );
+                  })()}
+                </div>
+                {/* Quick switcher */}
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(groupedTables).map(([category, categoryTables]) => {
+                    const style = getCategoryStyle(category);
+                    const isActive = selectedCategory === category;
+                    return (
+                      <Button
+                        key={category}
+                        variant={isActive ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          setSelectedCategory(category);
+                          try { sessionStorage.setItem('dynamicTables.selectedCategory', category); } catch {}
+                        }}
+                        className={cn("gap-1.5 h-8 text-xs", !isActive && style.border)}
+                      >
+                        <span className="capitalize">{category}</span>
+                        <span className="opacity-70">({categoryTables.length})</span>
+                      </Button>
+                    );
+                  })}
+                </div>
+              </div>
 
-          {/* Tables Grid */}
-          {selectedCategory && groupedTables[selectedCategory] && (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {groupedTables[selectedCategory].map((table) => (
+              {/* Tables Grid */}
+              {groupedTables[selectedCategory] && (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {groupedTables[selectedCategory].map((table) => {
+                    const style = getCategoryStyle(selectedCategory);
+                    return (
                 <Card
                   key={table.id}
-                  className="cursor-pointer hover:shadow-lg transition-shadow relative"
+                  className={cn(
+                    "cursor-pointer hover:shadow-lg transition-all hover:-translate-y-0.5 relative bg-gradient-to-br border",
+                    style.gradient,
+                    style.border
+                  )}
                   onClick={() => navigate(buildPath(`/table/${table.slug}`))}
                 >
                   <CardHeader>
@@ -697,8 +838,11 @@ export default function DynamicTables() {
                     </p>
                   </CardContent>
                 </Card>
-            ))}
-            </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
           )}
         </div>
           )}
