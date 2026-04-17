@@ -565,6 +565,12 @@ export default function SharedDashboard() {
                 WooCommerce
               </TabsTrigger>
             )}
+            {availablePlatforms.includes('seo') && (
+              <TabsTrigger value="seo" className="flex items-center gap-2">
+                <Search className="h-4 w-4 text-purple-600" />
+                SEO
+              </TabsTrigger>
+            )}
           </TabsList>
         </Tabs>
       )}
