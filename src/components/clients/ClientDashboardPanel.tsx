@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { toPng } from "html-to-image";
+import { buildBrandedEmailHtml } from "@/lib/emailTemplate";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmailRecipientsSelector, type EmailOption } from "./EmailRecipientsSelector";
 
@@ -299,12 +300,22 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
           reader.readAsDataURL(blob!);
         });
 
+        const bodyHtml = buildBrandedEmailHtml({
+          title: `דשבורד ${dashboard.name}`,
+          subtitle: client?.name ? `עבור ${client.name}` : undefined,
+          message: messageText,
+          ctaUrl: effectiveShareLink || undefined,
+          ctaLabel: "צפה בדשבורד המלא",
+          hasAttachment: true,
+          attachmentNote: "צילום הדשבורד מצורף כקובץ לנוחותך",
+        });
+
         const { error: gmailError } = await supabase.functions.invoke("gmail-api", {
           body: {
             action: "send",
             to: emailRecipients.join(", "),
-            subject: `דשבורד ${dashboard.name}`,
-            body: `${messageText}<br/><br/><a href="${effectiveShareLink}">צפה בדשבורד המלא</a>`,
+            subject: `דשבורד ${dashboard.name}${client?.name ? ` - ${client.name}` : ""}`,
+            body: bodyHtml,
             attachments: [{ filename: "dashboard.png", mimeType: "image/png", data: base64Data }],
           },
         });

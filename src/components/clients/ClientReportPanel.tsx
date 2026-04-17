@@ -28,6 +28,7 @@ import {
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { ClientReportSnapshot } from "./ClientReportSnapshot";
 import { toPng } from "html-to-image";
+import { buildBrandedEmailHtml } from "@/lib/emailTemplate";
 import { EmailRecipientsSelector, type EmailOption } from "./EmailRecipientsSelector";
 
 interface ClientReportPanelProps {
@@ -344,19 +345,15 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
         });
 
         const subject = `דוח ${table.name}${client?.name ? ` - ${client.name}` : ""}`;
-        const safeMessage = messageText
-          ? messageText.replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br/>")
-          : "";
-        const bodyHtml = `
-          <div dir="rtl" style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto;">
-            <h2 style="color: #1e40af;">דוח ${table.name}</h2>
-            ${safeMessage ? `<p style="white-space: pre-wrap; font-size: 15px; color: #374151;">${safeMessage}</p>` : ""}
-            <p style="color: #6b7280;">הדוח מצורף כקובץ לנוחותך:</p>
-            ${effectiveShareLink ? `<p><a href="${effectiveShareLink}" style="display: inline-block; margin-top: 12px; padding: 12px 24px; background: #2563eb; color: white; text-decoration: none; border-radius: 6px; font-weight: bold;">📊 צפה בדוח המלא</a></p>` : ""}
-            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
-            <p style="font-size: 12px; color: #9ca3af; text-align: center;">נשלח באמצעות Marketing Captain</p>
-          </div>
-        `;
+        const bodyHtml = buildBrandedEmailHtml({
+          title: `דוח ${table.name}`,
+          subtitle: client?.name ? `עבור ${client.name}` : undefined,
+          message: messageText,
+          ctaUrl: effectiveShareLink || undefined,
+          ctaLabel: "צפה בדוח המלא",
+          hasAttachment: true,
+          attachmentNote: "הדוח המלא מצורף כקובץ תמונה לנוחותך",
+        });
 
         const { data, error } = await supabase.functions.invoke("gmail-api", {
           body: {
