@@ -106,15 +106,18 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
   });
 
   const { data: teamMembers } = useQuery({
-    queryKey: ["client-team-emails-dashboard", clientId],
+    queryKey: ["tenant-team-emails-dashboard", tenantId],
     queryFn: async () => {
       const { data } = await supabase
-        .from("client_team")
-        .select("id, campaigner_id, role_on_account, campaigners(full_name, email)")
-        .eq("client_id", clientId);
-      return (data || []).filter((t: any) => t.campaigners?.email);
+        .from("campaigners")
+        .select("id, full_name, email")
+        .eq("tenant_id", tenantId)
+        .eq("active", true)
+        .not("email", "is", null)
+        .order("full_name");
+      return (data || []).map((c: any) => ({ campaigners: { full_name: c.full_name, email: c.email } }));
     },
-    enabled: !!clientId,
+    enabled: !!tenantId,
   });
 
   const { data: shareLink } = useQuery({
