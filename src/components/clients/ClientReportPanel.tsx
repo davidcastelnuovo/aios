@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -48,8 +49,24 @@ function getSyncFunction(integrationType: string | null): string | null {
   }
 }
 
+function generateReadableToken(tableName: string): string {
+  const hebrewMap: Record<string, string> = {
+    'א': 'a', 'ב': 'b', 'ג': 'g', 'ד': 'd', 'ה': 'h', 'ו': 'v', 'ז': 'z',
+    'ח': 'ch', 'ט': 't', 'י': 'y', 'כ': 'k', 'ך': 'k', 'ל': 'l', 'מ': 'm',
+    'ם': 'm', 'נ': 'n', 'ן': 'n', 'ס': 's', 'ע': 'a', 'פ': 'p', 'ף': 'f',
+    'צ': 'ts', 'ץ': 'ts', 'ק': 'k', 'ר': 'r', 'ש': 'sh', 'ת': 't',
+  };
+  const firstWord = (tableName || 'report').trim().split(/\s+/)[0] || 'report';
+  const transliterated = firstWord.split('').map((ch) => hebrewMap[ch] || ch).join('');
+  const slug = transliterated.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8);
+  const shortId = Math.random().toString(36).slice(2, 6);
+  return `${slug || 'report'}-${shortId}`;
+}
+
 export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPanelProps) {
   const { buildPath } = useTenantPath();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const snapshotRef = useRef<HTMLDivElement>(null);
 
   // Screenshot state

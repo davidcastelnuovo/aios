@@ -15,17 +15,50 @@ export const ClientReportSnapshot = forwardRef<HTMLDivElement, Props>(
       queryFn: async () => {
         const { data, error } = await supabase
           .from("crm_tables")
-          .select("id, integration_type, integration_settings")
+          .select("id, tenant_id, integration_type, integration_settings")
           .eq("id", tableId)
           .maybeSingle();
 
         if (error) throw error;
-        return data as { integration_type: string | null; integration_settings?: any } | null;
+        return data as { tenant_id: string; integration_type: string | null; integration_settings?: any } | null;
       },
       staleTime: 5 * 60 * 1000,
     });
 
-    // Fetch fields
+    const isSeoTable =
+      tableMeta?.integration_type === "ahrefs" ||
+      tableMeta?.integration_settings?.data_source === "ahrefs_reports";
+
+    const seoClientId = (tableMeta?.integration_settings?.clientId ||
+      tableMeta?.integration_settings?.client_id) as string | undefined;
+    const seoTargetDomain = tableMeta?.integration_settings?.targetDomain as string | undefined;
+
+    // Fetch latest Ahrefs report for SEO snapshot
+    const { data: latestSeoReport } = useQuery({
+      queryKey: ["snapshot-seo-report", tableMeta?.tenant_id, seoClientId, seoTargetDomain],
+      queryFn: async () => {
+        if (!isSeoTable || !tableMeta?.tenant_id) return null;
+
+        let query = supabase
+          .from("ahrefs_reports")
+          .select("domain, report_date, report_data")
+          .eq("tenant_id", tableMeta.tenant_id)
+          .order("report_date", { ascending: false, nullsFirst: false })
+          .order("received_at", { ascending: false })
+          .limit(1);
+
+        if (seoClientId) query = query.eq("client_id", seoClientId);
+        if (seoTargetDomain) query = query.eq("domain", seoTargetDomain);
+
+        const { data, error } = await query.maybeSingle();
+        if (error) return null;
+        return data as { domain: string; report_date: string | null; report_data: any } | null;
+      },
+      enabled: !!isSeoTable && !!tableMeta?.tenant_id,
+      staleTime: 5 * 60 * 1000,
+    });
+
+    // Fetch fields (skip for SEO since we render custom layout)
     const { data: fields } = useQuery({
       queryKey: ["snapshot-fields", tableId],
       queryFn: async () => {
@@ -35,10 +68,11 @@ export const ClientReportSnapshot = forwardRef<HTMLDivElement, Props>(
         const f = (res.data as any)?.fields || [];
         return (f as any[]).sort((a: any, b: any) => a.position - b.position);
       },
+      enabled: !isSeoTable,
       staleTime: 5 * 60 * 1000,
     });
 
-    // Fetch records
+    // Fetch records (skip for SEO)
     const { data: records } = useQuery({
       queryKey: ["snapshot-records", tableId],
       queryFn: async () => {
@@ -48,6 +82,7 @@ export const ClientReportSnapshot = forwardRef<HTMLDivElement, Props>(
         const res = await supabase.functions.invoke(`crm-records?${params.toString()}`, { method: "GET" });
         return Array.isArray(res.data) ? res.data as any[] : [];
       },
+      enabled: !isSeoTable,
       staleTime: 5 * 60 * 1000,
     });
 
@@ -65,6 +100,42 @@ export const ClientReportSnapshot = forwardRef<HTMLDivElement, Props>(
     }, [records]);
 
     const isAdsTable = isAdsPlatform(tableMeta?.integration_type);
+
+    // SEO summary: top 10 keywords + snapshot metrics
+    const seoSummary = useMemo(() => {
+      if (!isSeoTable || !latestSeoReport?.report_data) return null;
+      const rd = latestSeoReport.report_data || {};
+      const snapshot = rd.snapshot || {};
+      const organic = Array.isArray(rd.organic_keywords) ? rd.organic_keywords : [];
+      const tracked = Array.isArray(rd.tracked_keywords) ? rd.tracked_keywords : [];
+      const all = [...tracked, ...organic];
+
+      // Dedupe by keyword (keep best position)
+      const map = new Map<string, any>();
+      for (const kw of all) {
+        const key = String(kw.keyword || "").toLowerCase().trim();
+        if (!key) continue;
+        const prev = map.get(key);
+        if (!prev || (kw.position != null && (prev.position == null || kw.position < prev.position))) {
+          map.set(key, kw);
+        }
+      }
+
+      const top10 = Array.from(map.values())
+        .filter((k: any) => k.position != null && k.position <= 10)
+        .sort((a: any, b: any) => (a.position || 999) - (b.position || 999))
+        .slice(0, 10);
+
+      return {
+        domain: latestSeoReport.domain,
+        reportDate: latestSeoReport.report_date,
+        org_traffic: snapshot.org_traffic ?? 0,
+        org_keywords_top3: snapshot.org_keywords_top3 ?? 0,
+        org_keywords_top10: snapshot.org_keywords_top10 ?? 0,
+        org_keywords_total: snapshot.org_keywords_total ?? 0,
+        top10,
+      };
+    }, [isSeoTable, latestSeoReport]);
 
     const adsSummary = useMemo(() => {
       if (!isAdsTable) return null;
@@ -178,11 +249,63 @@ export const ClientReportSnapshot = forwardRef<HTMLDivElement, Props>(
             📊 {tableName}
           </h2>
           <p style={{ fontSize: 12, color: "#5b6b80", margin: "4px 0 0" }}>
-            7 ימים אחרונים • {format(subDays(new Date(), 6), "dd/MM")} - {format(new Date(), "dd/MM/yyyy")}
+            {isSeoTable && seoSummary
+              ? `דוח SEO • ${seoSummary.domain}${seoSummary.reportDate ? ` • ${format(new Date(seoSummary.reportDate), "MM/yyyy")}` : ""}`
+              : `7 ימים אחרונים • ${format(subDays(new Date(), 6), "dd/MM")} - ${format(new Date(), "dd/MM/yyyy")}`}
           </p>
         </div>
 
-        {adsSummary ? (
+        {isSeoTable && seoSummary ? (
+          <>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
+              <SnapshotMetricCard title="תנועה אורגנית" value={formatCompactNumber(seoSummary.org_traffic)} />
+              <SnapshotMetricCard title="Top 3" value={formatCompactNumber(seoSummary.org_keywords_top3)} />
+              <SnapshotMetricCard title="Top 10" value={formatCompactNumber(seoSummary.org_keywords_top10)} />
+              <SnapshotMetricCard title="סה״כ ביטויים" value={formatCompactNumber(seoSummary.org_keywords_total)} />
+            </div>
+
+            <SnapshotSection title="🏆 Top 10 ביטויים מובילים">
+              {seoSummary.top10.length > 0 ? (
+                <table style={tableStyle}>
+                  <thead>
+                    <tr>
+                      <th style={thStyle}>#</th>
+                      <th style={thStyle}>ביטוי</th>
+                      <th style={thStyle}>מיקום</th>
+                      <th style={thStyle}>שינוי חודשי</th>
+                      <th style={thStyle}>נפח</th>
+                      <th style={thStyle}>תנועה</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {seoSummary.top10.map((kw: any, i: number) => {
+                      const change =
+                        kw.position_prev_month != null && kw.position != null
+                          ? kw.position_prev_month - kw.position
+                          : null;
+                      return (
+                        <tr key={i} style={{ background: i % 2 === 0 ? "#ffffff" : "#f9fafb" }}>
+                          <td style={tdStyle}>{i + 1}</td>
+                          <td style={{ ...tdStyle, fontWeight: 600 }}>{kw.keyword}</td>
+                          <td style={tdStyle}>{kw.position}</td>
+                          <td style={{ ...tdStyle, color: change == null ? "#9ca3af" : change > 0 ? "#10b981" : change < 0 ? "#ef4444" : "#6b7280" }}>
+                            {change == null ? "—" : change > 0 ? `▲ ${change}` : change < 0 ? `▼ ${Math.abs(change)}` : "—"}
+                          </td>
+                          <td style={tdStyle}>{kw.volume ? formatCompactNumber(Number(kw.volume)) : "—"}</td>
+                          <td style={tdStyle}>{kw.traffic ? formatCompactNumber(Number(kw.traffic)) : "—"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              ) : (
+                <div style={{ textAlign: "center", padding: 24, color: "#9ca3af", fontSize: 12 }}>
+                  אין ביטויים במיקומים 1-10 בדוח האחרון
+                </div>
+              )}
+            </SnapshotSection>
+          </>
+        ) : adsSummary ? (
           <>
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
               <SnapshotMetricCard title="הוצאה כוללת" value={formatCurrency(adsSummary.spend)} />
@@ -281,7 +404,7 @@ export const ClientReportSnapshot = forwardRef<HTMLDivElement, Props>(
           )
         )}
 
-        {!adsSummary && filteredRecords.length > 0 && (fields || []).length > 0 && (
+        {!adsSummary && !isSeoTable && filteredRecords.length > 0 && (fields || []).length > 0 && (
           <table
             style={tableStyle}
           >
@@ -312,9 +435,15 @@ export const ClientReportSnapshot = forwardRef<HTMLDivElement, Props>(
           </table>
         )}
 
-        {filteredRecords.length === 0 && (
+        {!isSeoTable && filteredRecords.length === 0 && (
           <div style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
             אין נתונים לתקופה זו
+          </div>
+        )}
+
+        {isSeoTable && !seoSummary && (
+          <div style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
+            אין דוח SEO זמין ללקוח זה
           </div>
         )}
       </div>
