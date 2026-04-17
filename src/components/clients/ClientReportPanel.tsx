@@ -76,6 +76,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
   const [isCapturing, setIsCapturing] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [captureReady, setCaptureReady] = useState(false);
+  const autoCapturedTableRef = useRef<string | null>(null);
 
   // Send controls state
   const [sendWhatsApp, setSendWhatsApp] = useState(true);
@@ -86,12 +87,6 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
   const [messageText, setMessageText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [screenshotBlob, setScreenshotBlob] = useState<Blob | null>(null);
-
-  // Load cached screenshot
-  useEffect(() => {
-    const cached = localStorage.getItem(CACHE_KEY_PREFIX + table.id);
-    if (cached) setScreenshotUrl(cached);
-  }, [table.id]);
 
   // Fetch client data
   const { data: client } = useQuery({
@@ -168,18 +163,26 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
     }
   }, [client]);
 
-  // Schedule capture after mount + delay for data to load
+  // Reset screenshot state and schedule a fresh capture for every table
   useEffect(() => {
-    const timer = setTimeout(() => setCaptureReady(true), 3000);
-    return () => clearTimeout(timer);
-  }, [table.id]);
+    autoCapturedTableRef.current = null;
+    setCaptureReady(false);
+    setScreenshotBlob(null);
 
-  // Auto-capture when ready
+    const cached = localStorage.getItem(CACHE_KEY_PREFIX + table.id);
+    setScreenshotUrl(cached || null);
+
+    const delay = table.integration_type === "ahrefs" ? 4000 : 3000;
+    const timer = window.setTimeout(() => setCaptureReady(true), delay);
+    return () => window.clearTimeout(timer);
+  }, [table.id, table.integration_type]);
+
+  // Auto-capture when ready, even if an old cached image exists
   useEffect(() => {
-    if (captureReady && !screenshotUrl && !isCapturing) {
-      captureScreenshot();
-    }
-  }, [captureReady]);
+    if (!captureReady || isCapturing || autoCapturedTableRef.current === table.id) return;
+    autoCapturedTableRef.current = table.id;
+    captureScreenshot();
+  }, [captureReady, isCapturing, table.id]);
 
   // Auto-sync on mount
   useEffect(() => {
