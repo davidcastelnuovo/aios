@@ -187,29 +187,50 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
 
     setIsCapturing(true);
     try {
-      await new Promise((r) => setTimeout(r, 1000));
-      const doc = iframe.contentDocument;
-      if (!doc || !doc.body) throw new Error("לא ניתן לגשת לתוכן הדשבורד");
+      // Wait extra time for charts/data to render
+      await new Promise((r) => setTimeout(r, 1500));
+
+      let doc: Document | null = null;
+      try {
+        doc = iframe.contentDocument;
+      } catch (e) {
+        console.error("Cannot access iframe contentDocument:", e);
+      }
+      if (!doc || !doc.body) {
+        throw new Error("לא ניתן לגשת לתוכן הדשבורד (cross-origin?)");
+      }
 
       const root = (doc.querySelector("main") as HTMLElement) || doc.body;
-      const topHeight = Math.min(root.scrollHeight, 850);
+      const topHeight = Math.min(root.scrollHeight || 800, 850);
+      const width = root.scrollWidth || iframe.clientWidth || 1200;
 
       const dataUrl = await toPng(root, {
         quality: 0.92,
         pixelRatio: 1.5,
         backgroundColor: "#ffffff",
         height: topHeight,
-        width: root.scrollWidth,
+        width,
+        skipFonts: true,
+        cacheBust: true,
       });
 
+      if (!dataUrl || dataUrl.length < 1000) {
+        throw new Error("הצילום ריק");
+      }
+
       setScreenshotUrl(dataUrl);
-      localStorage.setItem(CACHE_KEY_PREFIX + dashboard.id, dataUrl);
+      try {
+        localStorage.setItem(CACHE_KEY_PREFIX + dashboard.id, dataUrl);
+      } catch {
+        // localStorage quota exceeded - skip cache
+      }
       const res = await fetch(dataUrl);
       const blob = await res.blob();
       setScreenshotBlob(blob);
+      toast.success("צילום הדשבורד נוצר");
     } catch (err: any) {
       console.error("Dashboard screenshot error:", err);
-      toast.error("שגיאה בצילום הדשבורד");
+      toast.error(`שגיאה בצילום: ${err?.message || "לא ידוע"}`);
     } finally {
       setIsCapturing(false);
     }
