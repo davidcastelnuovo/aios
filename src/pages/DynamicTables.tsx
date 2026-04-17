@@ -446,9 +446,10 @@ export default function DynamicTables() {
     return Object.keys(groupedTables);
   }, [groupedTables]);
 
-  // Auto-select first category if none selected
+  // Auto-select first category if none selected, or if saved one no longer exists
   useMemo(() => {
-    if (!selectedCategory && categories.length > 0) {
+    if (categories.length === 0) return;
+    if (!selectedCategory || !categories.includes(selectedCategory)) {
       setSelectedCategory(categories[0]);
     }
   }, [categories, selectedCategory]);
