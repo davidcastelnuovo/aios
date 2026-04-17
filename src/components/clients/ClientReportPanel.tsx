@@ -159,7 +159,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
   useEffect(() => {
     if (client) {
       if (client.phone) setDirectPhone(client.phone);
-      if (client.email) setEmailAddress(client.email);
+      if (client.email) setEmailRecipients((prev) => (prev.length === 0 ? [client.email!] : prev));
       if (client.whatsapp_group_id) setSelectedGroupId(client.whatsapp_group_id);
     }
   }, [client]);
@@ -323,8 +323,8 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
       }
 
       if (sendEmail) {
-        if (!emailAddress) {
-          toast.error("יש להזין כתובת אימייל");
+        if (emailRecipients.length === 0) {
+          toast.error("יש לבחור לפחות נמען אימייל אחד");
           setIsSending(false);
           return;
         }
@@ -358,7 +358,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
         const { data, error } = await supabase.functions.invoke("gmail-api", {
           body: {
             action: "send",
-            to: emailAddress,
+            to: emailRecipients.join(", "),
             subject,
             body: bodyHtml,
             attachments: [
