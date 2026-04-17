@@ -1,53 +1,39 @@
 
-## האבחנה
 
-בדקתי את הנתונים בפועל לתאריך 16/04 בטבלת לידר:
-- **המערכת שלנו**: 15,955 ש"ח (29 רכישות)
-- **GA4 בצילום שלך**: 20,646 ש"ח
-- **הפער**: 4,691 ש"ח (~22.7%)
+## הבעיה
+שמות הטבלאות שנוצרו אוטומטית מתחילים בקידומת מבלבלת ("דוח SEO - ", "דוח גוגל אדס - ", "דוח פייסבוק - ") שמופיעה לפני שם הלקוח.
 
-### הסיבה
-המערכת מושכת מ-GA4 את המטריקה **`purchaseRevenue`** (הכנסות מרכישות E-commerce בלבד), בעוד שהעמודה "סה״כ הכנסות" שאתה רואה בצילום GA4 מציגה את **`totalRevenue`** — שזה מטריקה רחבה יותר הכוללת:
-- `purchaseRevenue` (רכישות) ✅ אנחנו מושכים
-- `subscriptionRevenue` (מנויים) ❌ חסר
-- `adRevenue` (הכנסות מפרסומות באתר) ❌ חסר
+## מקורות הקידומת בקוד
+1. **SEO**: `src/components/dynamic-tables/SeoReportDialog.tsx:185` → `דוח SEO - ${clientName}`
+2. **SEO (Ahrefs auto-link)**: `src/pages/AhrefsSettings.tsx:101` → `דוח SEO - ${clientName} - ${domain}`
+3. **SEO (Ahrefs webhook)**: `supabase/functions/ahrefs-webhook/index.ts:178` → `דוח SEO - ${domain}`
+4. **Facebook (AI tools)**: `supabase/functions/run-ai-agent/index.ts:1025` + `supabase/functions/ai-support-chat/index.ts:1821, 1900`
+5. **Google Ads (AI tools)**: `ai-support-chat/index.ts:1856, 1900`
 
-ב-LIDAR יש כנראה ~4,691 ש"ח של הכנסות ממקורות שאינם רכישות ישירות (כנראה הכנסות נוספות שמדווחות ב-GA4).
+> דיאלוגי **FacebookTableDialog / GoogleAdsTableDialog / FacebookEcommerceTableDialog** משתמשים בשם שהמשתמש מקליד ידנית — שם אין קידומת אוטומטית. לכן השמות עם "דוח פייסבוק/גוגל אדס" שראית הגיעו מיצירה אוטומטית של כרמן/הסוכנת.
 
-הוכחה: סך כל ה-`daily_source` ב-DB מסתכם בדיוק ל-15,955 — בדיוק מה שמופיע אצלנו, וזה מדויק עבור `purchaseRevenue`.
+## תוכנית
 
-### למה זה קורה
-ב-`supabase/functions/sync-google-analytics-data/index.ts` בקריאות ל-GA4 API מוגדרות המטריקות:
-```ts
-metrics: [
-  ...
-  { name: 'ecommercePurchases' },
-  { name: 'purchaseRevenue' },  // ← רק רכישות
-]
+### 1. הסרת הקידומת מקוד היצירה (5 מקומות)
+- `SeoReportDialog.tsx`: שם הטבלה יהיה `${clientName}` (אם יש דומיין שונה משם הלקוח, נצרף `${clientName} - ${domain}`).
+- `AhrefsSettings.tsx`: `${clientName} - ${domain}` (בלי "דוח SEO -").
+- `ahrefs-webhook/index.ts`: שם ברירת מחדל יהיה הדומיין בלבד (`${domain}`) במקרה שאין שיוך לקוח.
+- `run-ai-agent/index.ts` + `ai-support-chat/index.ts`: כל יצירת טבלה תקבל `name = ${client.name}` בלבד (גם facebook, גם google_ads, גם ב-batch).
+
+### 2. עדכון רטרואקטיבי של טבלאות קיימות (Migration)
+הרצת SQL שיעדכן את כל השורות הקיימות ב-`crm_tables`:
+```sql
+UPDATE crm_tables SET name = REGEXP_REPLACE(name, '^דוח SEO - ', '') WHERE name LIKE 'דוח SEO - %';
+UPDATE crm_tables SET name = REGEXP_REPLACE(name, '^דוח פייסבוק - ', '') WHERE name LIKE 'דוח פייסבוק - %';
+UPDATE crm_tables SET name = REGEXP_REPLACE(name, '^דוח גוגל אדס - ', '') WHERE name LIKE 'דוח גוגל אדס - %';
 ```
-ל-GA4 יש מטריקה נוספת `totalRevenue` שאיננו מבקשים.
+מעל 50 טבלאות יקבלו שם נקי (רק שם הלקוח, או שם הלקוח + דומיין במקרה של SEO מרובה דומיינים).
 
-## הפתרון המוצע
-
-### 1. הוספת `totalRevenue` ל-3 הקריאות הראשיות ב-GA4 API
-בקובץ `supabase/functions/sync-google-analytics-data/index.ts`:
-- `trafficSourceRequest` — להוסיף `{ name: 'totalRevenue' }`
-- `dailyRequest` — להוסיף `{ name: 'totalRevenue' }`
-- `dailySourceRequest` — להוסיף `{ name: 'totalRevenue' }`
-- `channelGroupRequest` — להוסיף `{ name: 'totalRevenue' }`
-
-### 2. הוספת שדה `total_revenue` ל-`fieldDefinitions` 
-שדה חדש שיציג בנפרד את סך ההכנסות הכולל (לעומת `purchase_value` שיישאר רק לרכישות).
-
-### 3. עדכון לוגיקת הצגה בדשבורד
-ב-`src/components/dynamic-tables/GoogleAnalyticsDashboard.tsx`:
-- להעדיף את `total_revenue` כשהוא קיים, ולעבור ל-`purchase_value` כ-fallback (כדי שלא תישבר תאימות לאחור).
-- הוספת תגית/הסבר על המספר: "הכנסות = רכישות + מנויים + פרסומות (כמו ב-GA4)".
-
-### 4. סנכרון מיידי לאחר השינוי
-לאחר deploy של הפונקציה, נצטרך להריץ סנכרון ידני של טבלת לידר כדי למשוך את `totalRevenue` ההיסטורי.
+### 3. הערות
+- ה-`slug` (המשמש ב-URL) **לא ישתנה** — אין שבירת קישורים.
+- עמוד דוחות הלקוח (`SeoCombinedSnapshot`, `ClientReportSnapshot`) ממשיך להציג "דוח SEO • דומיין" בכותרת הפנימית של הצילום — זה לא קשור לשם הטבלה ולא נוגעים בו.
+- אם תרצה גם להוריד את הטקסט "דוח SEO •" מתוך תוכן הצילום עצמו — נעשה את זה בנפרד; אבל המסך הזה לא הוזכר בבקשה הנוכחית.
 
 ## תוצאה
-לאחר הפתרון, המספר בדשבורד יתאים בדיוק למה שמופיע בעמודת "סה״כ הכנסות" של GA4 (20,646 ש"ח לאתמול), והפער ייעלם.
+כל הטבלאות (קיימות וחדשות) יופיעו עם שם הלקוח בלבד, ללא קידומת מבלבלת — ב-SEO, ב-Facebook וב-Google Ads.
 
-**שים לב**: ייתכן פער שיורי קטן (פחות מ-1%) בגלל מנגנון ה-sampling של GA4 בנתונים טריים (24–48 שעות אחרונות), אבל הוא ייעלם תוך יום-יומיים.
