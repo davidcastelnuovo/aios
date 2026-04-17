@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import ChatViewComponent from "@/components/chat/ChatView";
-import { User, Phone, PhoneCall, Building2, Clock, Search, Mail, Globe, CheckSquare, Trash2, MessageSquare, FileText, DollarSign, X, Edit, Pencil, Check, Users, Plus, UserPlus, BarChart3, FolderOpen, Link, KeyRound, Calendar as CalendarIcon } from "lucide-react";
+import { User, Phone, PhoneCall, Building2, Clock, Search, Mail, Globe, CheckSquare, Trash2, MessageSquare, FileText, DollarSign, X, Edit, Pencil, Check, Users, Plus, UserPlus, BarChart3, FolderOpen, Link, KeyRound, Calendar as CalendarIcon, Copy } from "lucide-react";
+import { DuplicateClientDialog } from "@/components/forms/DuplicateClientDialog";
 import { AssignPhoneFromWhatsAppDialog } from "@/components/chat/AssignPhoneFromWhatsAppDialog";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -72,6 +73,7 @@ export function ClientsChatView({
   );
   const [listSearch, setListSearch] = useState("");
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<string>(initialTab ?? "details");
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [selectedClientIds, setSelectedClientIds] = useState<Set<string>>(new Set());
@@ -667,12 +669,28 @@ export function ClientsChatView({
                 <Button
                   variant="outline"
                   size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setDuplicateDialogOpen(true)}
+                  title="שכפל לקוח"
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="icon"
                   className="h-8 w-8 text-destructive hover:text-destructive"
                   onClick={() => handleDelete(selectedClient.id)}
                   title="מחק לקוח"
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
+
+                <DuplicateClientDialog
+                  open={duplicateDialogOpen}
+                  onOpenChange={setDuplicateDialogOpen}
+                  client={selectedClient ? { id: selectedClient.id, name: selectedClient.name } : null}
+                />
               </div>
             </div>
 
