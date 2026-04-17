@@ -214,6 +214,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
         quality: 0.9,
         pixelRatio: 1.5,
         backgroundColor: "#ffffff",
+        skipFonts: true,
       });
 
       setScreenshotUrl(dataUrl);
@@ -233,6 +234,36 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
     }
   }, [table.id]);
 
+  const ensureShareLink = useCallback(async (): Promise<string | null> => {
+    if (shareLink) return shareLink;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+      const newToken = generateReadableToken(table.name);
+      const { data, error } = await supabase
+        .from("table_shares" as any)
+        .insert({
+          table_id: table.id,
+          tenant_id: tenantId,
+          created_by: user.id,
+          allowed_emails: [],
+          share_token: newToken,
+        } as any)
+        .select("share_token")
+        .single();
+      if (error) throw error;
+      const token = (data as any)?.share_token;
+      if (!token) return null;
+      const url = `https://after-lead.com/shared/table/${token}`;
+      queryClient.invalidateQueries({ queryKey: ["table-share-link", table.id] });
+      toast.success("נוצר קישור שיתוף חדש");
+      return url;
+    } catch (err) {
+      console.error("Failed to create share link", err);
+      return null;
+    }
+  }, [shareLink, table.id, table.name, tenantId, queryClient]);
+
   const handleSend = async () => {
     if (!screenshotBlob) {
       toast.error("לא נוצר צילום מסך");
@@ -245,6 +276,9 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
 
     setIsSending(true);
     try {
+      // Auto-create share link if missing
+      const effectiveShareLink = shareLink || (await ensureShareLink());
+
       if (sendWhatsApp) {
         const hasGroup = selectedGroupId && selectedGroupId !== "__none__";
         if (!hasGroup && !directPhone) {
