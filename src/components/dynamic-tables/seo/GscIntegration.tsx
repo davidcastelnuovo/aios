@@ -448,7 +448,39 @@ function GscQueriesTable({ data }: { data: GscKeywordData[] }) {
           <Search className="h-4 w-4" />
           ביטויי חיפוש ({formatNumber(sortedData.length)})
         </h4>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="inline-flex rounded-md border bg-background p-0.5">
+            <button
+              type="button"
+              onClick={() => setLangFilter("all")}
+              className={cn(
+                "px-2.5 h-7 text-xs font-medium rounded-sm transition-colors",
+                langFilter === "all" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+              )}
+            >
+              הכל ({formatNumber(langCounts.all)})
+            </button>
+            <button
+              type="button"
+              onClick={() => setLangFilter("he")}
+              className={cn(
+                "px-2.5 h-7 text-xs font-medium rounded-sm transition-colors",
+                langFilter === "he" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+              )}
+            >
+              עברית ({formatNumber(langCounts.he)})
+            </button>
+            <button
+              type="button"
+              onClick={() => setLangFilter("en")}
+              className={cn(
+                "px-2.5 h-7 text-xs font-medium rounded-sm transition-colors",
+                langFilter === "en" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+              )}
+            >
+              English ({formatNumber(langCounts.en)})
+            </button>
+          </div>
           <Input
             placeholder="חפש ביטוי..."
             value={searchFilter}
