@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -48,8 +49,24 @@ function getSyncFunction(integrationType: string | null): string | null {
   }
 }
 
+function generateReadableToken(tableName: string): string {
+  const hebrewMap: Record<string, string> = {
+    'א': 'a', 'ב': 'b', 'ג': 'g', 'ד': 'd', 'ה': 'h', 'ו': 'v', 'ז': 'z',
+    'ח': 'ch', 'ט': 't', 'י': 'y', 'כ': 'k', 'ך': 'k', 'ל': 'l', 'מ': 'm',
+    'ם': 'm', 'נ': 'n', 'ן': 'n', 'ס': 's', 'ע': 'a', 'פ': 'p', 'ף': 'f',
+    'צ': 'ts', 'ץ': 'ts', 'ק': 'k', 'ר': 'r', 'ש': 'sh', 'ת': 't',
+  };
+  const firstWord = (tableName || 'report').trim().split(/\s+/)[0] || 'report';
+  const transliterated = firstWord.split('').map((ch) => hebrewMap[ch] || ch).join('');
+  const slug = transliterated.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8);
+  const shortId = Math.random().toString(36).slice(2, 6);
+  return `${slug || 'report'}-${shortId}`;
+}
+
 export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPanelProps) {
   const { buildPath } = useTenantPath();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const snapshotRef = useRef<HTMLDivElement>(null);
 
   // Screenshot state
@@ -197,6 +214,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
         quality: 0.9,
         pixelRatio: 1.5,
         backgroundColor: "#ffffff",
+        skipFonts: true,
       });
 
       setScreenshotUrl(dataUrl);
@@ -216,6 +234,36 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
     }
   }, [table.id]);
 
+  const ensureShareLink = useCallback(async (): Promise<string | null> => {
+    if (shareLink) return shareLink;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+      const newToken = generateReadableToken(table.name);
+      const { data, error } = await supabase
+        .from("table_shares" as any)
+        .insert({
+          table_id: table.id,
+          tenant_id: tenantId,
+          created_by: user.id,
+          allowed_emails: [],
+          share_token: newToken,
+        } as any)
+        .select("share_token")
+        .single();
+      if (error) throw error;
+      const token = (data as any)?.share_token;
+      if (!token) return null;
+      const url = `https://after-lead.com/shared/table/${token}`;
+      queryClient.invalidateQueries({ queryKey: ["table-share-link", table.id] });
+      toast.success("נוצר קישור שיתוף חדש");
+      return url;
+    } catch (err) {
+      console.error("Failed to create share link", err);
+      return null;
+    }
+  }, [shareLink, table.id, table.name, tenantId, queryClient]);
+
   const handleSend = async () => {
     if (!screenshotBlob) {
       toast.error("לא נוצר צילום מסך");
@@ -228,6 +276,9 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
 
     setIsSending(true);
     try {
+      // Auto-create share link if missing
+      const effectiveShareLink = shareLink || (await ensureShareLink());
+
       if (sendWhatsApp) {
         const hasGroup = selectedGroupId && selectedGroupId !== "__none__";
         if (!hasGroup && !directPhone) {
@@ -241,7 +292,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
 
         const captionParts: string[] = [];
         if (messageText) captionParts.push(messageText);
-        if (shareLink) captionParts.push(`\n📊 צפה בדוח המלא: ${shareLink}`);
+        if (effectiveShareLink) captionParts.push(`\n📊 צפה בדוח המלא: ${effectiveShareLink}`);
         const fullCaption = captionParts.join("");
 
         const formData = new FormData();
@@ -297,7 +348,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
             <h2 style="color: #1e40af;">דוח ${table.name}</h2>
             ${safeMessage ? `<p style="white-space: pre-wrap; font-size: 15px; color: #374151;">${safeMessage}</p>` : ""}
             <p style="color: #6b7280;">הדוח מצורף כקובץ לנוחותך:</p>
-            ${shareLink ? `<p><a href="${shareLink}" style="display: inline-block; margin-top: 12px; padding: 12px 24px; background: #2563eb; color: white; text-decoration: none; border-radius: 6px; font-weight: bold;">📊 צפה בדוח המלא</a></p>` : ""}
+            ${effectiveShareLink ? `<p><a href="${effectiveShareLink}" style="display: inline-block; margin-top: 12px; padding: 12px 24px; background: #2563eb; color: white; text-decoration: none; border-radius: 6px; font-weight: bold;">📊 צפה בדוח המלא</a></p>` : ""}
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
             <p style="font-size: 12px; color: #9ca3af; text-align: center;">נשלח באמצעות Marketing Captain</p>
           </div>
@@ -325,7 +376,22 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
       }
     } catch (error: any) {
       console.error("Error sending report:", error);
-      toast.error("שגיאה בשליחת הדוח: " + error.message);
+      const msg = String(error?.message || "");
+      const isGmailAuthIssue =
+        msg.includes("Token refresh failed") ||
+        msg.includes("Gmail not connected") ||
+        msg.includes("invalid_grant");
+      if (isGmailAuthIssue) {
+        toast.error("חיבור ה-Gmail פג. יש להתחבר מחדש.", {
+          action: {
+            label: "התחבר מחדש",
+            onClick: () => navigate(buildPath("/gmail-settings")),
+          },
+          duration: 8000,
+        });
+      } else {
+        toast.error("שגיאה בשליחת הדוח: " + msg);
+      }
     } finally {
       setIsSending(false);
     }
@@ -473,9 +539,19 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
           </div>
         )}
 
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Link2 className={`h-3 w-3 shrink-0 ${shareLink ? "" : "opacity-50"}`} />
-          <span>{shareLink ? "קישור צפייה יצורף אוטומטית" : "אין קישור שיתוף פעיל"}</span>
+          <span className="flex-1">{shareLink ? "קישור צפייה יצורף אוטומטית" : "אין קישור שיתוף פעיל"}</span>
+          {!shareLink && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 text-xs"
+              onClick={() => ensureShareLink()}
+            >
+              צור קישור
+            </Button>
+          )}
         </div>
 
         <Textarea
