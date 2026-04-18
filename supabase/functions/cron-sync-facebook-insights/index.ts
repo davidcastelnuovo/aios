@@ -410,6 +410,81 @@ Deno.serve(async (req) => {
 
         results.synced++;
 
+        // === Zero-spend anomaly: account stopped spending ===
+        // For each campaign that spent in the prior 7 days but has spend=0 in the last 2 days → alert.
+        try {
+          const todayMs = Date.now();
+          const dayMs = 24 * 60 * 60 * 1000;
+          const last2Cutoff = new Date(todayMs - 2 * dayMs).toISOString().split('T')[0];
+          const prior7Cutoff = new Date(todayMs - 9 * dayMs).toISOString().split('T')[0];
+
+          const perCampaign: Record<string, { name: string; recent: number; prior: number }> = {};
+          for (const ins of insights) {
+            const c = perCampaign[ins.campaign_id] ||= { name: ins.campaign_name, recent: 0, prior: 0 };
+            if (ins.date >= last2Cutoff) c.recent += ins.spend;
+            else if (ins.date >= prior7Cutoff) c.prior += ins.spend;
+          }
+
+          for (const [cid, agg] of Object.entries(perCampaign)) {
+            if (agg.recent === 0 && agg.prior > 5) {
+              // Carmen task (idempotent: skip if open task exists in last 24h with same title)
+              const taskTitle = `🚨 חשבון פייסבוק עצר: ${agg.name}`;
+              const { data: existing } = await supabase
+                .from('agent_tasks')
+                .select('id')
+                .eq('tenant_id', table.tenant_id)
+                .eq('title', taskTitle)
+                .gte('created_at', new Date(todayMs - dayMs).toISOString())
+                .limit(1);
+
+              if (!existing || existing.length === 0) {
+                // Find any active Carmen agent for the tenant
+                const { data: agent } = await supabase
+                  .from('ai_agents')
+                  .select('id')
+                  .eq('tenant_id', table.tenant_id)
+                  .eq('active', true)
+                  .limit(1)
+                  .maybeSingle();
+
+                if (agent) {
+                  await supabase.from('agent_tasks').insert({
+                    tenant_id: table.tenant_id,
+                    agent_id: agent.id,
+                    title: taskTitle,
+                    description: `הקמפיין "${agg.name}" (${cid}) לא הוציא כסף ב-2 הימים האחרונים, למרות שהוציא ${agg.prior.toFixed(2)} ב-7 הימים הקודמים. ייתכן שהחשבון עצר/נחסם. בדקי ועדכני את הצוות.`,
+                    status: 'open',
+                    priority: 1,
+                    task_mode: 'anomaly_alert',
+                  });
+                }
+
+                // Trigger automation
+                const supabaseUrl2 = Deno.env.get('SUPABASE_URL')!;
+                const supabaseKey2 = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+                await fetch(`${supabaseUrl2}/functions/v1/trigger-automation`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey2}` },
+                  body: JSON.stringify({
+                    trigger_type: 'account_stopped_spending',
+                    tenant_id: table.tenant_id,
+                    data: {
+                      provider: 'facebook',
+                      campaign_name: agg.name,
+                      campaign_id: cid,
+                      table_name: table.name,
+                      recent_spend: agg.recent,
+                      prior_spend: agg.prior,
+                    },
+                  }),
+                }).catch(() => {});
+              }
+            }
+          }
+        } catch (zeroErr: any) {
+          console.error(`[zero-spend] ${table.name}:`, zeroErr.message);
+        }
+
         // === Check report_alerts and trigger automations ===
         try {
           const { data: alerts } = await supabase
