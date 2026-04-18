@@ -12,7 +12,7 @@ import { he } from "date-fns/locale";
 import { SeoSnapshotCards } from "./seo/SeoSnapshotCards";
 import { SeoTrafficChart } from "./seo/SeoTrafficChart";
 import { SeoKeywordsTable } from "./seo/SeoKeywordsTable";
-import { GscIntegration, type GscKeywordData } from "./seo/GscIntegration";
+import { GscIntegration, type GscKeywordData, type GscMultiPeriodData } from "./seo/GscIntegration";
 import { useAhrefsEnrichment, type AhrefsKeyword } from "@/hooks/useAhrefsEnrichment";
 
 interface SeoDashboardViewProps {
@@ -25,6 +25,7 @@ interface SeoDashboardViewProps {
 export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDashboardViewProps) {
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [gscData, setGscData] = useState<GscKeywordData[]>([]);
+  const [gscMultiPeriod, setGscMultiPeriod] = useState<GscMultiPeriodData | null>(null);
   const { fetchComparisons, comparisonData, resetComparisonData, isLoading: isEnriching } = useAhrefsEnrichment();
   const [hasAutoEnriched, setHasAutoEnriched] = useState(false);
   const [cachedComparison, setCachedComparison] = useState<{
@@ -45,6 +46,12 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
 
   const handleGscDataLoaded = useCallback((data: GscKeywordData[]) => {
     setGscData(data);
+  }, []);
+
+  const handleGscMultiPeriodLoaded = useCallback((data: GscMultiPeriodData) => {
+    setGscMultiPeriod(data);
+    // Also keep gscData in sync with the "current" period so existing aggregations keep working
+    setGscData(data.current);
   }, []);
 
   const { data: reports = [], isLoading } = useQuery({
