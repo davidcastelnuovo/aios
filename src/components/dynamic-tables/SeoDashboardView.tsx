@@ -261,6 +261,22 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
     if (prevPos === null && api3m?.best_position_prev != null) {
       prevPos = api3m.best_position_prev;
     }
+
+    // GSC historical fallback: when Ahrefs lacks comparison data, use GSC average position per period
+    let positionSource: 'ahrefs' | 'gsc' | undefined =
+      (prevPos != null || pos3m != null || posYear != null) ? 'ahrefs' : undefined;
+    if (prevPos == null) {
+      const gscPrev = gscPrevMonthMap.get(kwLower)?.position;
+      if (gscPrev != null) { prevPos = gscPrev; positionSource = positionSource ?? 'gsc'; }
+    }
+    if (pos3m == null) {
+      const gsc3 = gscThreeMonthMap.get(kwLower)?.position;
+      if (gsc3 != null) { pos3m = gsc3; positionSource = positionSource ?? 'gsc'; }
+    }
+    if (posYear == null) {
+      const gscY = gscYearlyMap.get(kwLower)?.position;
+      if (gscY != null) { posYear = gscY; positionSource = positionSource ?? 'gsc'; }
+    }
     
     // Fill volume/kd/cpc from data if missing
     const apiRow = api3m || apiYear;
@@ -283,6 +299,7 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
       position_prev_month: prevPos,
       position_3month: pos3m,
       position_yearly: posYear,
+      _position_source: positionSource,
       gsc_clicks: gscRow?.clicks ?? null,
       gsc_impressions: gscRow?.impressions ?? null,
       gsc_ctr: gscRow?.ctr ?? null,
