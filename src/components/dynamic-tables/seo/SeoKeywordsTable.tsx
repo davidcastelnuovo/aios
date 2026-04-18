@@ -174,32 +174,20 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywor
     .filter(k => k.position != null && k.position <= 10)
     .sort((a, b) => (a.position || 999) - (b.position || 999));
 
-  // 2. All keywords sorted by 3-month change (biggest improvement first)
+  // 2. All keywords with 3-month data, sorted by current position (best first)
   const by3MonthChange = [...allKeywords]
     .filter(k => k.position != null && k.position_3month != null)
-    .sort((a, b) => {
-      const changeA = (a.position_3month || 0) - (a.position || 0);
-      const changeB = (b.position_3month || 0) - (b.position || 0);
-      return changeB - changeA;
-    });
+    .sort((a, b) => (a.position || 999) - (b.position || 999));
 
-  // 3. All keywords sorted by yearly change (biggest improvement first)
+  // 3. All keywords with yearly data, sorted by current position (best first)
   const byYearlyChange = [...allKeywords]
     .filter(k => k.position != null && k.position_yearly != null)
-    .sort((a, b) => {
-      const changeA = (a.position_yearly || 0) - (a.position || 0);
-      const changeB = (b.position_yearly || 0) - (b.position || 0);
-      return changeB - changeA;
-    });
+    .sort((a, b) => (a.position || 999) - (b.position || 999));
 
-  // 4. All keywords sorted by monthly change (biggest improvement first)
+  // 4. All keywords with monthly data, sorted by current position (best first)
   const byMonthlyChange = [...allKeywords]
     .filter(k => k.position != null && k.position_prev_month != null)
-    .sort((a, b) => {
-      const changeA = (a.position_prev_month || 0) - (a.position || 0);
-      const changeB = (b.position_prev_month || 0) - (b.position || 0);
-      return changeB - changeA;
-    });
+    .sort((a, b) => (a.position || 999) - (b.position || 999));
 
   if (allKeywords.length === 0) return null;
 
