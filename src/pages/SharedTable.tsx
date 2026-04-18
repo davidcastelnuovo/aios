@@ -12,8 +12,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { FileSpreadsheet, Facebook, TrendingUp, TrendingDown, Minus, Globe } from "lucide-react";
+import { FileSpreadsheet, Facebook, TrendingUp, TrendingDown, Minus, Globe, Search, BarChart3 } from "lucide-react";
 import { PublicSeoView } from "@/components/dynamic-tables/PublicSeoView";
+import { PublicGscView } from "@/components/dynamic-tables/PublicGscView";
+import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnalyticsDashboard";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const DATE_FILTERS = [
   { value: 'today', label: 'היום' },
