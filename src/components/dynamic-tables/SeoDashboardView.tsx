@@ -513,6 +513,7 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
         domain={reportData?.domain || selectedReport?.domain}
         keywords={[]}
         onDataLoaded={handleGscDataLoaded}
+        onMultiPeriodLoaded={handleGscMultiPeriodLoaded}
         hideTable
       />
 
@@ -522,8 +523,8 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
         trackedKeywords={trackedKeywords}
         gscOnlyKeywords={gscOnlyKeywords}
         hasGscData={gscData.length > 0}
-        show3Month={effectiveComparison.threeMonth.size > 0}
-        showYearly={effectiveComparison.yearly.size > 0}
+        show3Month={effectiveComparison.threeMonth.size > 0 || gscThreeMonthMap.size > 0}
+        showYearly={effectiveComparison.yearly.size > 0 || gscYearlyMap.size > 0}
       />
 
       {/* HTML content fallback */}
