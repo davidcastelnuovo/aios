@@ -4,9 +4,10 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Globe, FileText, Calendar, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { SeoSnapshotCards } from "./seo/SeoSnapshotCards";
@@ -23,7 +24,27 @@ interface SeoDashboardViewProps {
 }
 
 export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDashboardViewProps) {
+  const queryClient = useQueryClient();
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
+  const [isFetchingSnapshot, setIsFetchingSnapshot] = useState(false);
+
+  const handleFetchSnapshot = useCallback(async () => {
+    setIsFetchingSnapshot(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('fetch-ahrefs-snapshot', {
+        body: { clientId },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success('הדוח נטען בהצלחה מ-Ahrefs');
+      await queryClient.invalidateQueries({ queryKey: ['seo-dashboard-reports', tenantId, clientId] });
+    } catch (err: any) {
+      console.error('fetch-ahrefs-snapshot failed:', err);
+      toast.error(err?.message || 'שליפת הדוח נכשלה. ודא שהוגדר דומיין ושיש מפתח Ahrefs.');
+    } finally {
+      setIsFetchingSnapshot(false);
+    }
+  }, [clientId, tenantId, queryClient]);
   const [gscData, setGscData] = useState<GscKeywordData[]>([]);
   const [gscMultiPeriod, setGscMultiPeriod] = useState<GscMultiPeriodData | null>(null);
   const { fetchComparisons, comparisonData, resetComparisonData, isLoading: isEnriching } = useAhrefsEnrichment();
@@ -433,9 +454,13 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
       <Card className="p-8 text-center" dir="rtl">
         <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
         <h3 className="font-semibold text-lg mb-1">אין דוחות SEO</h3>
-        <p className="text-muted-foreground text-sm">
-          לא נמצאו דוחות עבור לקוח זה. ודא שהאינטגרציה מחוברת ושולחת נתונים.
+        <p className="text-muted-foreground text-sm mb-4">
+          לא נמצאו דוחות עבור לקוח זה. אם יש פרויקט פעיל ב-Ahrefs, ניתן לסנכרן אותו עכשיו.
         </p>
+        <Button onClick={handleFetchSnapshot} disabled={isFetchingSnapshot} className="gap-2">
+          <RefreshCw className={`h-4 w-4 ${isFetchingSnapshot ? 'animate-spin' : ''}`} />
+          {isFetchingSnapshot ? 'מסנכרן מ-Ahrefs...' : 'סנכרן דוח מ-Ahrefs'}
+        </Button>
       </Card>
     );
   }
