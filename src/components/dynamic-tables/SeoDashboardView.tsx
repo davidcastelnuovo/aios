@@ -211,7 +211,7 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
   const rawOrganic = Array.isArray(reportData?.organic_keywords) ? reportData.organic_keywords : [];
   const rawTracked = Array.isArray(reportData?.tracked_keywords) ? reportData.tracked_keywords : [];
 
-  // Build GSC lookup map
+  // Build GSC lookup map (current period — used for clicks/impressions/CTR enrichment)
   const gscMap = useMemo(() => {
     const map = new Map<string, GscKeywordData>();
     for (const row of gscData) {
@@ -220,6 +220,20 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
     }
     return map;
   }, [gscData]);
+
+  // GSC historical period maps (for cross-period position comparisons)
+  function buildGscMap(rows: GscKeywordData[]): Map<string, GscKeywordData> {
+    const map = new Map<string, GscKeywordData>();
+    for (const row of rows || []) {
+      if (!row?.keyword) continue;
+      map.set(row.keyword.toLowerCase().trim(), row);
+    }
+    return map;
+  }
+  const gscPrevMonthMap = useMemo(() => buildGscMap(gscMultiPeriod?.prevMonth || []), [gscMultiPeriod]);
+  const gscThreeMonthMap = useMemo(() => buildGscMap(gscMultiPeriod?.threeMonth || []), [gscMultiPeriod]);
+  const gscYearlyMap = useMemo(() => buildGscMap(gscMultiPeriod?.yearly || []), [gscMultiPeriod]);
+  const hasGscHistory = gscPrevMonthMap.size > 0 || gscThreeMonthMap.size > 0 || gscYearlyMap.size > 0;
 
   function enrichKeyword(kw: any, effComparison: typeof comparisonData): any {
     const normalized = normalizeKeyword(kw);
