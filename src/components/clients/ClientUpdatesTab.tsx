@@ -189,15 +189,16 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
 
   // Add update mutation
   const addUpdateMutation = useMutation({
-    mutationFn: async (content: string) => {
+    mutationFn: async ({ content, updateType }: { content: string; updateType: string }) => {
       if (!tenantId || !user?.id) throw new Error("Missing tenant or user");
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from("client_updates")
         .insert({
           client_id: clientId,
           tenant_id: tenantId,
           user_id: user.id,
           content,
+          update_type: updateType,
         });
       if (error) throw error;
     },
