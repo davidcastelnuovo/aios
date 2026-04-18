@@ -99,7 +99,6 @@ export default function AhrefsSettings() {
       if (reportError) throw reportError;
 
       // Update client website if not set
-      const client = clients.find(c => c.id === clientId);
       if (client && !client.website) {
         const websiteUrl = domain.startsWith('http') ? domain : `https://${domain}`;
         await supabase
