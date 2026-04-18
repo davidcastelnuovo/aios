@@ -364,8 +364,8 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
   return (
     <div className="space-y-4 overflow-x-hidden w-full" dir="rtl">
 
-      {/* ── CRM: Communication Status Section ─────────────────────────── */}
-      <Card className="border-2 border-dashed border-muted-foreground/20">
+      {/* ── Unified: Client Status + Add Update ─────────────────────── */}
+      <Card>
         <CardContent className="p-3 sm:p-4 space-y-3">
           <div className="flex items-center gap-2">
             <MessageSquare className="h-4 w-4 text-primary" />
@@ -379,9 +379,8 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
             )}
           </div>
 
-          {/* Status + Interaction type row */}
-          <div className="flex gap-2 flex-wrap">
-            <div className="flex-1 min-w-[120px]">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
               <Label className="text-xs text-muted-foreground mb-1 block">מצב לקוח</Label>
               <Select value={commStatus} onValueChange={setCommStatus}>
                 <SelectTrigger className="h-8 text-sm">
@@ -396,52 +395,29 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
                 </SelectContent>
               </Select>
             </div>
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1 block">סוג עדכון</Label>
+              <Select value={newUpdateType} onValueChange={setNewUpdateType}>
+                <SelectTrigger className="h-8 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {INTERACTION_TYPES.map(opt => {
+                    const Icon = opt.icon;
+                    return (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        <span className="flex items-center gap-2">
+                          <Icon className="h-3.5 w-3.5" />
+                          {opt.label}
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
-          {/* Save button */}
-          <div className="flex justify-end">
-            <Button
-              size="sm"
-              onClick={() => saveCommMutation.mutate()}
-              disabled={saveCommMutation.isPending}
-            >
-              {saveCommMutation.isPending ? (
-                <Loader2 className="ml-2 h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Check className="ml-2 h-3.5 w-3.5" />
-              )}
-              שמור עדכון
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Separator />
-
-      {/* Add Update Form */}
-      <Card>
-        <CardContent className="p-3 sm:p-4 space-y-2">
-          <div>
-            <Label className="text-xs text-muted-foreground mb-1 block">סוג עדכון</Label>
-            <Select value={newUpdateType} onValueChange={setNewUpdateType}>
-              <SelectTrigger className="h-8 text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {INTERACTION_TYPES.map(opt => {
-                  const Icon = opt.icon;
-                  return (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      <span className="flex items-center gap-2">
-                        <Icon className="h-3.5 w-3.5" />
-                        {opt.label}
-                      </span>
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-          </div>
           <div className="flex gap-2">
             <Textarea
               placeholder="הוסף עדכון חדש..."
@@ -449,12 +425,16 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
               onChange={(e) => setNewUpdate(e.target.value)}
               className="min-h-[60px] resize-none flex-1"
             />
-            <Button 
-              onClick={handleAddUpdate} 
-              disabled={!newUpdate.trim() || addUpdateMutation.isPending}
+            <Button
+              onClick={() => {
+                if (!newUpdate.trim()) return;
+                saveCommMutation.mutate();
+                addUpdateMutation.mutate({ content: newUpdate.trim(), updateType: newUpdateType });
+              }}
+              disabled={!newUpdate.trim() || addUpdateMutation.isPending || saveCommMutation.isPending}
               className="self-end shrink-0"
             >
-              {addUpdateMutation.isPending ? (
+              {(addUpdateMutation.isPending || saveCommMutation.isPending) ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <Send className="h-4 w-4" />
