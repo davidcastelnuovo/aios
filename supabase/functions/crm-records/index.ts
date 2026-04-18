@@ -304,9 +304,8 @@ Deno.serve(async (req) => {
           position: data.count > 0 ? data.position / data.count : 0,
         }));
 
-        // Sort by impressions desc and take top 100
+        // Sort by impressions desc — return ALL queries (client filters/searches in UI)
         queryData.sort((a, b) => b.impressions - a.impressions);
-        const topQueries = queryData.slice(0, 100);
 
         // Calculate totals
         const totals = {
@@ -319,9 +318,9 @@ Deno.serve(async (req) => {
 
 
         return new Response(JSON.stringify({
-          queries: topQueries,
+          queries: queryData,
           totals,
-          totalRecords: allRecords.length,
+          totalRecords: scopedRecords.length,
         }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
