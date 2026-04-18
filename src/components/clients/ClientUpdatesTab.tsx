@@ -52,11 +52,14 @@ const MOOD_STATUS_OPTIONS = [
   { value: "not_progressing", label: "😔 לא מתקדם",            color: "text-orange-700", bg: "bg-orange-50 border-orange-200" },
 ];
 const INTERACTION_TYPES = [
-  { value: "call",     label: "שיחה",    icon: Phone },
-  { value: "email",    label: "מייל",    icon: Mail },
-  { value: "meeting",  label: "פגישה",   icon: Video },
-  { value: "whatsapp", label: "וואטסאפ", icon: MessageSquare },
-  { value: "other",    label: "אחר",     icon: AlertTriangle },
+  { value: "call",            label: "שיחה",          icon: Phone },
+  { value: "email",           label: "מייל",          icon: Mail },
+  { value: "meeting",         label: "פגישה",         icon: Video },
+  { value: "whatsapp",        label: "וואטסאפ",       icon: MessageSquare },
+  { value: "weekly_update",   label: "עדכון שבועי",   icon: AlertTriangle },
+  { value: "seo_update",      label: "עדכון SEO",     icon: AlertTriangle },
+  { value: "meeting_summary", label: "סיכום פגישה",   icon: Video },
+  { value: "other",           label: "אחר",           icon: AlertTriangle },
 ];
 
 export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps) {
