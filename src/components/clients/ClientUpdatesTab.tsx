@@ -70,7 +70,6 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
   // ── CRM: communication log state ──────────────────────────────────────────
   const [commStatus, setCommStatus] = useState<string>("happy");
   const [commInteraction, setCommInteraction] = useState<string>("call");
-  const [commNote, setCommNote] = useState("");
 
   // Fetch latest communication log for this client
   const { data: latestComm } = useQuery({
@@ -114,7 +113,7 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
       queryClient.invalidateQueries({ queryKey: ["communication-logs-latest"] });
       queryClient.invalidateQueries({ queryKey: ["comm-logs-agency"] });
       queryClient.invalidateQueries({ queryKey: ["clients"] });
-      setCommNote("");
+      // note field removed — nothing to reset
       toast.success("מצב תקשורת עודכן בהצלחה");
     },
     onError: (err: any) => toast.error(err?.message || "שגיאה בשמירת עדכון תקשורת"),
