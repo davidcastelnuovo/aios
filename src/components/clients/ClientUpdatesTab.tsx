@@ -395,7 +395,7 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
               </Select>
             </div>
             <div className="flex-1 min-w-[120px]">
-              <Label className="text-xs text-muted-foreground mb-1 block">סוג אינטראקציה</Label>
+              <Label className="text-xs text-muted-foreground mb-1 block">סוג עדכון</Label>
               <Select value={commInteraction} onValueChange={setCommInteraction}>
                 <SelectTrigger className="h-8 text-sm">
                   <SelectValue />
