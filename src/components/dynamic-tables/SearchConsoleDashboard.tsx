@@ -232,6 +232,26 @@ export function SearchConsoleDashboard({ tableId }: SearchConsoleDashboardProps)
 
   return (
     <div className="space-y-6" dir="rtl">
+      {/* Header with date range selector */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Search className="h-4 w-4" />
+          <span>טווח: <strong>{DATE_FILTER_LABELS[dateFilter]}</strong></span>
+        </div>
+        <Select value={dateFilter} onValueChange={(v) => setDateFilter(v as GscDateFilter)}>
+          <SelectTrigger className="h-8 text-xs w-[160px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {(Object.keys(DATE_FILTER_LABELS) as GscDateFilter[]).map((k) => (
+              <SelectItem key={k} value={k} className="text-xs">
+                {DATE_FILTER_LABELS[k]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
