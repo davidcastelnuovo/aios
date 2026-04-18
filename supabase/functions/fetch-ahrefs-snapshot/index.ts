@@ -104,7 +104,7 @@ Deno.serve(async (req) => {
     let usedDate: string | null = null;
     let lastErr = "";
     for (const d of tryDates) {
-      const overviewUrl = `https://api.ahrefs.com/v3/site-explorer/overview?target=${encodeURIComponent(domain)}&date=${d}&select=domain_rating,ahrefs_rank,organic_traffic,organic_keywords,backlinks,referring_domains,organic_value`;
+      const overviewUrl = `https://api.ahrefs.com/v3/site-explorer/overview?target=${encodeURIComponent(domain)}&date=${d}&protocol=both&mode=subdomains&output=json&select=domain_rating,ahrefs_rank,org_traffic,org_keywords,backlinks,refdomains,org_cost`;
       const overviewRes = await fetch(overviewUrl, {
         headers: { Authorization: `Bearer ${ahrefsApiKey}`, Accept: "application/json" },
       });
