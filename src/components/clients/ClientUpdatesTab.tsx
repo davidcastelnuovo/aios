@@ -270,7 +270,7 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
 
   const handleAddUpdate = () => {
     if (!newUpdate.trim()) return;
-    addUpdateMutation.mutate(newUpdate.trim());
+    addUpdateMutation.mutate({ content: newUpdate.trim(), updateType: newUpdateType });
   };
 
   const inProgressTasks = tasks?.filter(t => t.status === "open" || t.status === "in_progress") || [];
