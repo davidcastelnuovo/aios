@@ -157,16 +157,20 @@ export function GscIntegration({
   // Auto-link useEffect is declared further down (after updateSiteMutation is defined).
 
   const { data: gscData, isLoading: isLoadingData, refetch: refetchData } = useQuery({
-    queryKey: ["gsc-keyword-data", gscIntegration?.id, effectiveSiteUrl, keywords?.join(",")],
+    queryKey: ["gsc-keyword-data", gscIntegration?.id, effectiveSiteUrl, effectiveDateRange, keywords?.join(",")],
     queryFn: async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
+
+      const { startDate, endDate } = computeRange(effectiveDateRange);
 
       const response = await supabase.functions.invoke("fetch-gsc-data", {
         body: {
           integrationId: gscIntegration!.id,
           siteUrl: effectiveSiteUrl,
           keywords: keywords || [],
+          startDate,
+          endDate,
         },
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
