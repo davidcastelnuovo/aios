@@ -90,26 +90,43 @@ Deno.serve(async (req) => {
       );
     }
 
-    const today = new Date().toISOString().split("T")[0];
+    // Ahrefs returns 404 if there's no snapshot exactly on today's date.
+    // Try today, then walk back up to 7 days to find the latest available snapshot.
+    const tryDates: string[] = [];
+    for (let i = 0; i <= 7; i++) {
+      const d = new Date();
+      d.setUTCDate(d.getUTCDate() - i);
+      tryDates.push(d.toISOString().split("T")[0]);
+    }
 
-    // 1) Domain overview (snapshot)
-    const overviewUrl = `https://api.ahrefs.com/v3/site-explorer/overview?target=${encodeURIComponent(domain)}&date=${today}&select=domain_rating,ahrefs_rank,organic_traffic,organic_keywords,backlinks,referring_domains,organic_value`;
-    const overviewRes = await fetch(overviewUrl, {
-      headers: { Authorization: `Bearer ${ahrefsApiKey}`, Accept: "application/json" },
-    });
-    if (!overviewRes.ok) {
-      const errText = await overviewRes.text();
-      console.error("Ahrefs overview error:", errText);
+    // 1) Domain overview (snapshot) — find first date that returns 200
+    let overviewJson: any = null;
+    let usedDate: string | null = null;
+    let lastErr = "";
+    for (const d of tryDates) {
+      const overviewUrl = `https://api.ahrefs.com/v3/site-explorer/metrics?target=${encodeURIComponent(domain)}&date=${d}&protocol=both&mode=subdomains&output=json&volume_mode=monthly`;
+      const overviewRes = await fetch(overviewUrl, {
+        headers: { Authorization: `Bearer ${ahrefsApiKey}`, Accept: "application/json" },
+      });
+      if (overviewRes.ok) {
+        overviewJson = await overviewRes.json();
+        usedDate = d;
+        break;
+      }
+      lastErr = await overviewRes.text();
+      console.warn(`Ahrefs overview ${d} failed:`, overviewRes.status, lastErr);
+    }
+    if (!overviewJson || !usedDate) {
       return new Response(
-        JSON.stringify({ error: "Ahrefs overview fetch failed", details: errText }),
-        { status: overviewRes.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: "Ahrefs overview fetch failed", details: lastErr || "No snapshot found in last 7 days" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    const overviewJson = await overviewRes.json();
     const m = overviewJson?.metrics || overviewJson || {};
+    const today = usedDate;
 
     // 2) Organic keywords (top ~500)
-    const kwUrl = `https://api.ahrefs.com/v3/site-explorer/organic-keywords?target=${encodeURIComponent(domain)}&date=${today}&country=${country}&limit=500&select=keyword,volume,keyword_difficulty,cpc,traffic,position,url`;
+    const kwUrl = `https://api.ahrefs.com/v3/site-explorer/organic-keywords?target=${encodeURIComponent(domain)}&date=${today}&country=${country}&protocol=both&mode=subdomains&output=json&limit=500&select=keyword,volume,keyword_difficulty,cpc,traffic,position,url`;
     const kwRes = await fetch(kwUrl, {
       headers: { Authorization: `Bearer ${ahrefsApiKey}`, Accept: "application/json" },
     });
@@ -130,12 +147,13 @@ Deno.serve(async (req) => {
     }
 
     // Build report payload mirroring the webhook contract
+    // Ahrefs v3 returns metrics with these keys: domain_rating, ahrefs_rank, org_traffic, org_keywords, backlinks, refdomains, org_cost
     const snapshot = {
       dr: m.domain_rating,
-      org_traffic: m.organic_traffic,
-      org_keywords_total: m.organic_keywords,
+      org_traffic: m.org_traffic ?? m.organic_traffic,
+      org_keywords_total: m.org_keywords ?? m.organic_keywords,
       backlinks_live: m.backlinks,
-      referring_domains: m.referring_domains,
+      referring_domains: m.refdomains ?? m.referring_domains,
     };
 
     const reportPayload = {
