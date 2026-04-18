@@ -126,7 +126,7 @@ Deno.serve(async (req) => {
     const today = usedDate;
 
     // 2) Organic keywords (top ~500)
-    const kwUrl = `https://api.ahrefs.com/v3/site-explorer/organic-keywords?target=${encodeURIComponent(domain)}&date=${today}&country=${country}&limit=500&select=keyword,volume,keyword_difficulty,cpc,traffic,position,url`;
+    const kwUrl = `https://api.ahrefs.com/v3/site-explorer/organic-keywords?target=${encodeURIComponent(domain)}&date=${today}&country=${country}&protocol=both&mode=subdomains&output=json&limit=500&select=keyword,volume,keyword_difficulty,cpc,traffic,position,url`;
     const kwRes = await fetch(kwUrl, {
       headers: { Authorization: `Bearer ${ahrefsApiKey}`, Accept: "application/json" },
     });
@@ -147,12 +147,13 @@ Deno.serve(async (req) => {
     }
 
     // Build report payload mirroring the webhook contract
+    // Ahrefs v3 returns metrics with these keys: domain_rating, ahrefs_rank, org_traffic, org_keywords, backlinks, refdomains, org_cost
     const snapshot = {
       dr: m.domain_rating,
-      org_traffic: m.organic_traffic,
-      org_keywords_total: m.organic_keywords,
+      org_traffic: m.org_traffic ?? m.organic_traffic,
+      org_keywords_total: m.org_keywords ?? m.organic_keywords,
       backlinks_live: m.backlinks,
-      referring_domains: m.referring_domains,
+      referring_domains: m.refdomains ?? m.referring_domains,
     };
 
     const reportPayload = {
