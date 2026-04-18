@@ -13,6 +13,8 @@ import { toast } from "sonner";
 import { Link2, RefreshCw, Search, MousePointerClick, Eye, Target, ChevronsUpDown, Check, ArrowUpDown, Award } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+export type GscDateRange = '28d' | '3m' | '12m';
+
 interface GscIntegrationProps {
   tenantId: string;
   clientId: string;
@@ -23,6 +25,34 @@ interface GscIntegrationProps {
   onSiteSelected?: (siteUrl: string) => void;
   /** When true, hides the raw queries table — data is still fetched and passed via onDataLoaded */
   hideTable?: boolean;
+  /** Date range to fetch from GSC (default 28d) */
+  dateRange?: GscDateRange;
+  /** Show the in-card date range selector (default true). Set false when controlled externally. */
+  showDateRangeSelector?: boolean;
+  /** Called when the user changes the date range from the in-card selector */
+  onDateRangeChange?: (range: GscDateRange) => void;
+}
+
+const DATE_RANGE_DAYS: Record<GscDateRange, number> = {
+  '28d': 28,
+  '3m': 90,
+  '12m': 365,
+};
+
+const DATE_RANGE_LABELS: Record<GscDateRange, string> = {
+  '28d': 'חודש אחרון',
+  '3m': '3 חודשים',
+  '12m': 'שנה',
+};
+
+function computeRange(range: GscDateRange): { startDate: string; endDate: string } {
+  const days = DATE_RANGE_DAYS[range];
+  const end = new Date();
+  const start = new Date(end.getTime() - days * 24 * 60 * 60 * 1000);
+  return {
+    startDate: start.toISOString().split('T')[0],
+    endDate: end.toISOString().split('T')[0],
+  };
 }
 
 interface GscSite {
@@ -47,10 +77,23 @@ function normalizeDomain(value?: string) {
     .toLowerCase();
 }
 
-export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoaded, onSiteSelected, hideTable = false }: GscIntegrationProps) {
+export function GscIntegration({
+  tenantId,
+  clientId,
+  domain,
+  keywords,
+  onDataLoaded,
+  onSiteSelected,
+  hideTable = false,
+  dateRange,
+  showDateRangeSelector = true,
+  onDateRangeChange,
+}: GscIntegrationProps) {
   const queryClient = useQueryClient();
   const [selectedSite, setSelectedSite] = useState<string>("");
   const [sitePopoverOpen, setSitePopoverOpen] = useState(false);
+  const [internalDateRange, setInternalDateRange] = useState<GscDateRange>('28d');
+  const effectiveDateRange: GscDateRange = dateRange ?? internalDateRange;
 
   // Use per-user integration filtering (own + shared)
   const { data: gscIntegrations = [], isLoading: isLoadingIntegration } = useUserIntegrations(
