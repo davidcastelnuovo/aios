@@ -91,6 +91,39 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
   const [selectedClient, setSelectedClient] = useState("");
   const [selectedDomain, setSelectedDomain] = useState<string>("");
   const [isCreatingTable, setIsCreatingTable] = useState(false);
+  const [isFetchingFromAhrefs, setIsFetchingFromAhrefs] = useState(false);
+
+  const handleFetchFromAhrefs = async () => {
+    if (!selectedClient) return;
+    const client = clients.find(c => c.id === selectedClient);
+    const domain = normalizeDomain(client?.website);
+    if (!domain) {
+      toast({ title: 'אין דומיין מוגדר ללקוח', variant: 'destructive' });
+      return;
+    }
+    setIsFetchingFromAhrefs(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('fetch-ahrefs-snapshot', {
+        body: { clientId: selectedClient, domain },
+      });
+      if (error) throw error;
+      toast({
+        title: 'הדוח נוצר בהצלחה',
+        description: `${data?.keywords_count ?? 0} מילות מפתח נטענו עבור ${data?.domain || domain}`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['seo-reports', currentTenantId, selectedClient] });
+      queryClient.invalidateQueries({ queryKey: ['ahrefs-reports'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+    } catch (err: any) {
+      toast({
+        title: 'שגיאה ביצירת דוח מ-Ahrefs',
+        description: err?.message || 'נסה שוב מאוחר יותר',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsFetchingFromAhrefs(false);
+    }
+  };
 
   const { data: clients = [] } = useQuery({
     queryKey: ['seo-report-clients', currentTenantId],
@@ -298,12 +331,32 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
                   ))}
                 </div>
               ) : reports.length === 0 ? (
-                <Card className="p-8 text-center">
-                  <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
-                  <h3 className="font-semibold text-lg mb-1">אין דוחות SEO</h3>
-                  <p className="text-muted-foreground text-sm">
-                    לא נמצאו דוחות עבור לקוח זה. ודא שהאינטגרציה מחוברת ושולחת נתונים.
-                  </p>
+                <Card className="p-8 text-center space-y-4">
+                  <FileText className="h-12 w-12 mx-auto text-muted-foreground" />
+                  <div>
+                    <h3 className="font-semibold text-lg mb-1">אין דוחות SEO</h3>
+                    <p className="text-muted-foreground text-sm">
+                      {selectedClientObj?.website ? (
+                        <>ניתן ליצור דוח חדש ישירות מ-Ahrefs לפי הדומיין של הלקוח: <span className="font-medium">{normalizeDomain(selectedClientObj.website)}</span></>
+                      ) : (
+                        'ללקוח זה אין אתר מוגדר. הגדר אתר לקוח ונסה שוב, או חבר את האינטגרציה.'
+                      )}
+                    </p>
+                  </div>
+                  {selectedClientObj?.website && (
+                    <Button
+                      onClick={handleFetchFromAhrefs}
+                      disabled={isFetchingFromAhrefs}
+                      className="gap-2"
+                    >
+                      {isFetchingFromAhrefs ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <PlusCircle className="h-4 w-4" />
+                      )}
+                      {isFetchingFromAhrefs ? 'מייצר דוח...' : 'צור דוח חדש מ-Ahrefs'}
+                    </Button>
+                  )}
                 </Card>
               ) : (
                 <>
