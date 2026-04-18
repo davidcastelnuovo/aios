@@ -134,6 +134,99 @@ Deno.serve(async (req) => {
       const { data: ahrefsReports, error: reportsErr } = await reportsQuery;
       if (reportsErr) console.error("Error fetching ahrefs reports:", reportsErr);
 
+      // Fetch linked GA / GSC tables (per integration_settings or by client_id)
+      const linkedGaTableId = settings.linkedGaTableId || null;
+      const linkedGscTableId = settings.linkedGscTableId || null;
+
+      let gaTable: any = null;
+      let gscTable: any = null;
+      let gaRecords: any[] = [];
+      let gscRecords: any[] = [];
+
+      // Resolve GA table
+      try {
+        if (linkedGaTableId) {
+          const { data } = await supabase
+            .from("crm_tables")
+            .select("id, name, integration_settings")
+            .eq("id", linkedGaTableId)
+            .maybeSingle();
+          gaTable = data || null;
+        } else if (targetClientId) {
+          const { data } = await supabase
+            .from("crm_tables")
+            .select("id, name, integration_settings")
+            .eq("tenant_id", table.tenant_id)
+            .eq("integration_type", "google_analytics")
+            .eq("client_id", targetClientId)
+            .limit(1);
+          gaTable = data?.[0] || null;
+        }
+      } catch (e) {
+        console.error("Error resolving GA table:", e);
+      }
+
+      // Resolve GSC table
+      try {
+        if (linkedGscTableId) {
+          const { data } = await supabase
+            .from("crm_tables")
+            .select("id, name, integration_settings")
+            .eq("id", linkedGscTableId)
+            .maybeSingle();
+          gscTable = data || null;
+        } else if (targetClientId) {
+          const { data } = await supabase
+            .from("crm_tables")
+            .select("id, name, integration_settings")
+            .eq("tenant_id", table.tenant_id)
+            .eq("integration_type", "google_search_console")
+            .eq("client_id", targetClientId)
+            .limit(1);
+          gscTable = data?.[0] || null;
+        }
+      } catch (e) {
+        console.error("Error resolving GSC table:", e);
+      }
+
+      // Fetch GA records (paginated, up to 5000)
+      if (gaTable?.id) {
+        try {
+          for (let from = 0; from < 5000; from += 1000) {
+            const { data: page, error } = await supabase
+              .from("crm_records")
+              .select("id, data")
+              .eq("table_id", gaTable.id)
+              .order("created_at", { ascending: false })
+              .range(from, from + 999);
+            if (error || !page || page.length === 0) break;
+            gaRecords.push(...page);
+            if (page.length < 1000) break;
+          }
+        } catch (e) {
+          console.error("Error fetching GA records:", e);
+        }
+      }
+
+      // Fetch GSC records (paginated, up to 10000)
+      if (gscTable?.id) {
+        try {
+          for (let from = 0; from < 10000; from += 1000) {
+            const { data: page, error } = await supabase
+              .from("crm_records")
+              .select("id, data")
+              .eq("table_id", gscTable.id)
+              .order("created_at", { ascending: false })
+              .range(from, from + 999);
+            if (error || !page || page.length === 0) break;
+            gscRecords.push(...page);
+            if (page.length < 1000) break;
+          }
+        } catch (e) {
+          console.error("Error fetching GSC records:", e);
+        }
+      }
+
       return new Response(
         JSON.stringify({
           table: {
@@ -146,6 +239,10 @@ Deno.serve(async (req) => {
           fields: fields || [],
           records: [],
           ahrefs_reports: ahrefsReports || [],
+          ga_table: gaTable ? { id: gaTable.id, name: gaTable.name, integration_settings: gaTable.integration_settings } : null,
+          ga_records: gaRecords,
+          gsc_table: gscTable ? { id: gscTable.id, name: gscTable.name, integration_settings: gscTable.integration_settings } : null,
+          gsc_records: gscRecords,
           has_email_restriction: false,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
