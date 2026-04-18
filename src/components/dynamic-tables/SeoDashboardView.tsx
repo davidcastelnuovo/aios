@@ -15,6 +15,8 @@ import { SeoTrafficChart } from "./seo/SeoTrafficChart";
 import { SeoKeywordsTable } from "./seo/SeoKeywordsTable";
 import { GscIntegration, type GscKeywordData, type GscMultiPeriodData } from "./seo/GscIntegration";
 import { useAhrefsEnrichment, type AhrefsKeyword } from "@/hooks/useAhrefsEnrichment";
+import { AhrefsProjectPicker } from "./AhrefsProjectPicker";
+import { ListChecks } from "lucide-react";
 
 interface SeoDashboardViewProps {
   tenantId: string;
@@ -27,6 +29,7 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
   const queryClient = useQueryClient();
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [isFetchingSnapshot, setIsFetchingSnapshot] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const handleFetchSnapshot = useCallback(async () => {
     setIsFetchingSnapshot(true);
@@ -451,17 +454,31 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
 
   if (reports.length === 0) {
     return (
-      <Card className="p-8 text-center" dir="rtl">
-        <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
-        <h3 className="font-semibold text-lg mb-1">אין דוחות SEO</h3>
-        <p className="text-muted-foreground text-sm mb-4">
-          לא נמצאו דוחות עבור לקוח זה. אם יש פרויקט פעיל ב-Ahrefs, ניתן לסנכרן אותו עכשיו.
-        </p>
-        <Button onClick={handleFetchSnapshot} disabled={isFetchingSnapshot} className="gap-2">
-          <RefreshCw className={`h-4 w-4 ${isFetchingSnapshot ? 'animate-spin' : ''}`} />
-          {isFetchingSnapshot ? 'מסנכרן מ-Ahrefs...' : 'סנכרן דוח מ-Ahrefs'}
-        </Button>
-      </Card>
+      <>
+        <Card className="p-8 text-center" dir="rtl">
+          <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+          <h3 className="font-semibold text-lg mb-1">אין דוחות SEO</h3>
+          <p className="text-muted-foreground text-sm mb-4">
+            לא נמצאו דוחות עבור לקוח זה. ניתן לבחור פרויקט קיים מ-Ahrefs או לסנכרן לפי הדומיין של הלקוח.
+          </p>
+          <div className="flex items-center justify-center gap-2 flex-wrap">
+            <Button onClick={() => setPickerOpen(true)} variant="default" className="gap-2">
+              <ListChecks className="h-4 w-4" />
+              בחר פרויקט מ-Ahrefs
+            </Button>
+            <Button onClick={handleFetchSnapshot} disabled={isFetchingSnapshot} variant="outline" className="gap-2">
+              <RefreshCw className={`h-4 w-4 ${isFetchingSnapshot ? 'animate-spin' : ''}`} />
+              {isFetchingSnapshot ? 'מסנכרן...' : 'סנכרן לפי דומיין הלקוח'}
+            </Button>
+          </div>
+        </Card>
+        <AhrefsProjectPicker
+          open={pickerOpen}
+          onOpenChange={setPickerOpen}
+          clientId={clientId}
+          onSyncComplete={() => queryClient.invalidateQueries({ queryKey: ['seo-dashboard-reports', tenantId, clientId] })}
+        />
+      </>
     );
   }
 
@@ -484,6 +501,15 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
           >
             <RefreshCw className={`h-3.5 w-3.5 ${isEnriching ? 'animate-spin' : ''}`} />
             {isEnriching ? 'מסנכרן...' : 'סנכרון Ahrefs'}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPickerOpen(true)}
+            className="h-8 text-xs gap-1.5"
+          >
+            <ListChecks className="h-3.5 w-3.5" />
+            בחר פרויקט מ-Ahrefs
           </Button>
         </div>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -582,6 +608,13 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
           </CardContent>
         </Card>
       )}
+
+      <AhrefsProjectPicker
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        clientId={clientId}
+        onSyncComplete={() => queryClient.invalidateQueries({ queryKey: ['seo-dashboard-reports', tenantId, clientId] })}
+      />
     </div>
   );
 }
