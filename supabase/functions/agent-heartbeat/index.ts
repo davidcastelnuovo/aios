@@ -109,16 +109,57 @@ Deno.serve(async (req) => {
         }
       }
 
-      // 5. Generate daily summary
-      const summary = [
+      // 5. Recent anomaly tasks (last 24h) — surface to summary
+      const oneDayAgoIso = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString()
+      const { data: anomalyTasks } = await supabase
+        .from('agent_tasks')
+        .select('id, title, description, created_at')
+        .eq('tenant_id', tenantId)
+        .eq('task_mode', 'anomaly_alert')
+        .gte('created_at', oneDayAgoIso)
+        .order('created_at', { ascending: false })
+        .limit(20)
+
+      const anomalyCount = anomalyTasks?.length || 0
+
+      // 6. Generate daily summary
+      const summaryLines = [
         `סקירת Heartbeat - ${now.toISOString().split('T')[0]}`,
         `משימות שנסקרו: ${tasksReviewed}`,
         `משימות באיחור: ${overdueTasks?.length || 0}`,
         `משימות חסומות (סוכן): ${staleTasks?.length || 0}`,
+        `🚨 חריגות חשבונות (24 שעות): ${anomalyCount}`,
         `פעולות שבוצעו: ${actionsLog.length}`,
-      ].join('\n')
+      ]
+      if (anomalyTasks && anomalyTasks.length > 0) {
+        summaryLines.push('', 'חריגות שזוהו:')
+        for (const t of anomalyTasks.slice(0, 5)) summaryLines.push(`• ${t.title}`)
+      }
+      const summary = summaryLines.join('\n')
 
-      // 6. Log heartbeat
+      // 7. Send daily anomaly digest once per day to assigned campaigner (only at 09:00 IL ≈ 06:00 UTC)
+      const isDigestHour = now.getUTCHours() === 6
+      if (isDigestHour && anomalyCount > 0 && allowedActions.includes('reminders')) {
+        // Find any campaigner with a phone in this tenant
+        const { data: campaigner } = await supabase
+          .from('campaigners')
+          .select('full_name, phone')
+          .eq('tenant_id', tenantId)
+          .eq('active', true)
+          .not('phone', 'is', null)
+          .limit(1)
+          .maybeSingle()
+        if (campaigner?.phone) {
+          await fetch(`${SUPABASE_URL}/functions/v1/send-green-api-message`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+            body: JSON.stringify({ phone: campaigner.phone, message: summary, tenantId }),
+          }).catch(() => {})
+          actionsLog.push({ type: 'daily_digest_sent', to: campaigner.full_name, anomalies: anomalyCount })
+        }
+      }
+
+      // 8. Log heartbeat
       await supabase.from('heartbeat_logs').insert({
         tenant_id: tenantId,
         tasks_reviewed: tasksReviewed,
