@@ -67,6 +67,30 @@ export default function AhrefsSettings() {
   // Link report to client mutation
   const linkClientMutation = useMutation({
     mutationFn: async ({ reportId, clientId, domain }: { reportId: string; clientId: string; domain: string }) => {
+      // Validate that the domain matches the client's website
+      const client = clients.find(c => c.id === clientId);
+      const normalizeDomain = (s: string | null | undefined) =>
+        (s || '')
+          .toLowerCase()
+          .replace(/^https?:\/\//, '')
+          .replace(/^www\./, '')
+          .replace(/\/.*$/, '')
+          .trim();
+      const normalizedDomain = normalizeDomain(domain);
+      const normalizedWebsite = normalizeDomain(client?.website);
+      if (
+        normalizedWebsite &&
+        normalizedDomain &&
+        normalizedDomain !== normalizedWebsite
+      ) {
+        const ok = window.confirm(
+          `שים לב — הדומיין "${domain}" לא תואם את האתר של הלקוח (${client?.website}).\nלשייך בכל זאת?`
+        );
+        if (!ok) {
+          throw new Error('LINK_CANCELLED');
+        }
+      }
+
       // Update ALL reports for the same domain with this client_id
       const { error: reportError } = await supabase
         .from('ahrefs_reports')
