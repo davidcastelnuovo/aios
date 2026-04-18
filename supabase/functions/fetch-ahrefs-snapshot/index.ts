@@ -210,6 +210,49 @@ Deno.serve(async (req) => {
       referring_domains: m.refdomains ?? m.referring_domains,
     };
 
+    // 3) Historical comparisons — pull metrics for ~3 months ago and ~12 months ago.
+    // Ahrefs may not have a snapshot exactly on the target date, so we walk back up
+    // to 14 days from each anchor until we find one (using the same mode/protocol).
+    const fetchHistoricalMetrics = async (anchor: Date) => {
+      for (let i = 0; i <= 14; i++) {
+        const d = new Date(anchor);
+        d.setUTCDate(d.getUTCDate() - i);
+        const ds = d.toISOString().split("T")[0];
+        const url = `https://api.ahrefs.com/v3/site-explorer/metrics?target=${encodeURIComponent(domain)}&date=${ds}&protocol=${usedProtocol}&mode=${usedMode}&output=json&volume_mode=monthly`;
+        const r = await fetch(url, {
+          headers: { Authorization: `Bearer ${ahrefsApiKey}`, Accept: "application/json" },
+        });
+        if (r.ok) {
+          const j = await r.json();
+          const mm = j?.metrics || j || {};
+          return {
+            date: ds,
+            dr: mm.domain_rating,
+            org_traffic: mm.org_traffic ?? mm.organic_traffic,
+            org_keywords_total: mm.org_keywords ?? mm.organic_keywords,
+            backlinks_live: mm.backlinks,
+            referring_domains: mm.refdomains ?? mm.referring_domains,
+          };
+        }
+      }
+      return null;
+    };
+
+    const anchor3m = new Date(reportDate);
+    anchor3m.setUTCMonth(anchor3m.getUTCMonth() - 3);
+    const anchor12m = new Date(reportDate);
+    anchor12m.setUTCFullYear(anchor12m.getUTCFullYear() - 1);
+
+    const [snap3m, snap12m] = await Promise.all([
+      fetchHistoricalMetrics(anchor3m),
+      fetchHistoricalMetrics(anchor12m),
+    ]);
+
+    const comparison_data = {
+      "3_months": snap3m,
+      "12_months": snap12m,
+    };
+
     const reportPayload = {
       tenant_id: client.tenant_id,
       client_id: client.id,
@@ -222,7 +265,13 @@ Deno.serve(async (req) => {
         snapshot,
         organic_keywords,
       },
-      metadata: { source: "fetch-ahrefs-snapshot", triggered_by: user.id },
+      comparison_data,
+      metadata: {
+        source: "fetch-ahrefs-snapshot",
+        triggered_by: user.id,
+        used_mode: usedMode,
+        used_protocol: usedProtocol,
+      },
     };
 
     // POST to ahrefs-webhook so all auto-create + crm_records sync logic runs
