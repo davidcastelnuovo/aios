@@ -52,17 +52,21 @@ const MOOD_STATUS_OPTIONS = [
   { value: "not_progressing", label: "😔 לא מתקדם",            color: "text-orange-700", bg: "bg-orange-50 border-orange-200" },
 ];
 const INTERACTION_TYPES = [
-  { value: "call",     label: "שיחה",    icon: Phone },
-  { value: "email",    label: "מייל",    icon: Mail },
-  { value: "meeting",  label: "פגישה",   icon: Video },
-  { value: "whatsapp", label: "וואטסאפ", icon: MessageSquare },
-  { value: "other",    label: "אחר",     icon: AlertTriangle },
+  { value: "call",            label: "שיחה",          icon: Phone },
+  { value: "email",           label: "מייל",          icon: Mail },
+  { value: "meeting",         label: "פגישה",         icon: Video },
+  { value: "whatsapp",        label: "וואטסאפ",       icon: MessageSquare },
+  { value: "weekly_update",   label: "עדכון שבועי",   icon: AlertTriangle },
+  { value: "seo_update",      label: "עדכון SEO",     icon: AlertTriangle },
+  { value: "meeting_summary", label: "סיכום פגישה",   icon: Video },
+  { value: "other",           label: "אחר",           icon: AlertTriangle },
 ];
 
 export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps) {
   const [dateFilter, setDateFilter] = useState<DateFilter>("month");
   const [editingTask, setEditingTask] = useState<any>(null);
   const [newUpdate, setNewUpdate] = useState("");
+  const [newUpdateType, setNewUpdateType] = useState<string>("call");
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
   const { user } = useCurrentUser();
@@ -185,7 +189,7 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
 
   // Add update mutation
   const addUpdateMutation = useMutation({
-    mutationFn: async (content: string) => {
+    mutationFn: async ({ content, updateType }: { content: string; updateType: string }) => {
       if (!tenantId || !user?.id) throw new Error("Missing tenant or user");
       const { error } = await supabase
         .from("client_updates")
@@ -194,7 +198,8 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
           tenant_id: tenantId,
           user_id: user.id,
           content,
-        });
+          update_type: updateType,
+        } as any);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -265,7 +270,7 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
 
   const handleAddUpdate = () => {
     if (!newUpdate.trim()) return;
-    addUpdateMutation.mutate(newUpdate.trim());
+    addUpdateMutation.mutate({ content: newUpdate.trim(), updateType: newUpdateType });
   };
 
   const inProgressTasks = tasks?.filter(t => t.status === "open" || t.status === "in_progress") || [];
@@ -415,7 +420,28 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
 
       {/* Add Update Form */}
       <Card>
-        <CardContent className="p-3 sm:p-4">
+        <CardContent className="p-3 sm:p-4 space-y-2">
+          <div>
+            <Label className="text-xs text-muted-foreground mb-1 block">סוג עדכון</Label>
+            <Select value={newUpdateType} onValueChange={setNewUpdateType}>
+              <SelectTrigger className="h-8 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {INTERACTION_TYPES.map(opt => {
+                  const Icon = opt.icon;
+                  return (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      <span className="flex items-center gap-2">
+                        <Icon className="h-3.5 w-3.5" />
+                        {opt.label}
+                      </span>
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="flex gap-2">
             <Textarea
               placeholder="הוסף עדכון חדש..."
@@ -518,6 +544,17 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
                       </div>
                     ) : (
                       <>
+                        {update.update_type && (() => {
+                          const t = INTERACTION_TYPES.find(o => o.value === update.update_type);
+                          if (!t) return null;
+                          const Icon = t.icon;
+                          return (
+                            <Badge variant="outline" className="mb-2 gap-1 text-xs">
+                              <Icon className="h-3 w-3" />
+                              {t.label}
+                            </Badge>
+                          );
+                        })()}
                         <p className="text-sm whitespace-pre-wrap">{update.content}</p>
                         <div className="flex items-center justify-between mt-2">
                           <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
