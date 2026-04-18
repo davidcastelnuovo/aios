@@ -530,12 +530,12 @@ export default function DynamicTables() {
       {/* Main Tabs: Tables / Dashboards */}
       <Tabs value={mainTab} onValueChange={setMainTab} className="space-y-6">
         <div className="flex items-center justify-between">
-          <TabsList>
-            <TabsTrigger value="tables" className="gap-2">
+          <TabsList dir="rtl">
+            <TabsTrigger value="tables" className="gap-2 flex-row-reverse">
               <Table2 className="h-4 w-4" />
               דוחות
             </TabsTrigger>
-            <TabsTrigger value="dashboards" className="gap-2">
+            <TabsTrigger value="dashboards" className="gap-2 flex-row-reverse">
               <LayoutDashboard className="h-4 w-4" />
               דשבורדים
             </TabsTrigger>
