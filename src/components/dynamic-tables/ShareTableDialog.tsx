@@ -3,40 +3,41 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Share2, Copy, Plus, Trash2 } from "lucide-react";
-
-function generateReadableToken(tableName: string): string {
-  const hebrewMap: Record<string, string> = {
-    'א': 'a', 'ב': 'b', 'ג': 'g', 'ד': 'd', 'ה': 'h', 'ו': 'v', 'ז': 'z',
-    'ח': 'ch', 'ט': 't', 'י': 'y', 'כ': 'k', 'ך': 'k', 'ל': 'l', 'מ': 'm',
-    'ם': 'm', 'נ': 'n', 'ן': 'n', 'ס': 's', 'ע': 'a', 'פ': 'p', 'ף': 'f',
-    'צ': 'ts', 'ץ': 'ts', 'ק': 'k', 'ר': 'r', 'ש': 'sh', 'ת': 't',
-  };
-  const firstWord = tableName.trim().split(/\s+/)[0] || 'report';
-  const transliterated = firstWord
-    .split('')
-    .map(ch => hebrewMap[ch] || ch)
-    .join('');
-  const slug = transliterated
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '')
-    .slice(0, 8);
-  const shortId = Math.random().toString(36).slice(2, 6);
-  return `${slug || 'report'}-${shortId}`;
-}
+import { Share2, Copy, Plus, Trash2, Pencil, Check, X } from "lucide-react";
+import { buildDefaultShareToken, SLUG_REGEX } from "@/lib/share-slug";
 
 interface ShareTableDialogProps {
   tableId: string;
   tableName: string;
   tenantId: string;
+  clientId?: string | null;
 }
 
-export function ShareTableDialog({ tableId, tableName, tenantId }: ShareTableDialogProps) {
+export function ShareTableDialog({ tableId, tableName, tenantId, clientId }: ShareTableDialogProps) {
   const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingValue, setEditingValue] = useState("");
   const queryClient = useQueryClient();
+
+  // Pull the linked client's website so we can derive a default slug.
+  const { data: clientWebsite } = useQuery({
+    queryKey: ["client-website", clientId],
+    queryFn: async () => {
+      if (!clientId) return null;
+      const { data, error } = await supabase
+        .from("clients")
+        .select("website")
+        .eq("id", clientId)
+        .maybeSingle();
+      if (error) return null;
+      return data?.website ?? null;
+    },
+    enabled: open && !!clientId,
+  });
 
   const { data: shares = [], isLoading } = useQuery({
     queryKey: ["table-shares", tableId],
@@ -57,7 +58,10 @@ export function ShareTableDialog({ tableId, tableName, tenantId }: ShareTableDia
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      const readableToken = generateReadableToken(tableName);
+      const readableToken = buildDefaultShareToken({
+        website: clientWebsite,
+        fallbackName: tableName,
+      });
       const { data, error } = await supabase
         .from("table_shares" as any)
         .insert({
@@ -93,6 +97,29 @@ export function ShareTableDialog({ tableId, tableName, tenantId }: ShareTableDia
     },
   });
 
+  const updateSlugMutation = useMutation({
+    mutationFn: async ({ shareId, slug }: { shareId: string; slug: string }) => {
+      const { error } = await supabase
+        .from("table_shares" as any)
+        .update({ share_token: slug, updated_at: new Date().toISOString() } as any)
+        .eq("id", shareId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["table-shares", tableId] });
+      toast.success("הסלאג עודכן");
+      setEditingId(null);
+      setEditingValue("");
+    },
+    onError: (err: any) => {
+      if (err?.code === "23505") {
+        toast.error("הסלאג הזה כבר תפוס, בחר אחר");
+      } else {
+        toast.error("שגיאה בעדכון הסלאג");
+      }
+    },
+  });
+
   const deleteShareMutation = useMutation({
     mutationFn: async (shareId: string) => {
       const { error } = await supabase
@@ -114,6 +141,25 @@ export function ShareTableDialog({ tableId, tableName, tenantId }: ShareTableDia
   const copyLink = (token: string) => {
     navigator.clipboard.writeText(getShareUrl(token));
     toast.success("הקישור הועתק ללוח");
+  };
+
+  const startEditing = (shareId: string, currentToken: string) => {
+    setEditingId(shareId);
+    setEditingValue(currentToken);
+  };
+
+  const cancelEditing = () => {
+    setEditingId(null);
+    setEditingValue("");
+  };
+
+  const saveSlug = (shareId: string) => {
+    const trimmed = editingValue.trim();
+    if (!SLUG_REGEX.test(trimmed)) {
+      toast.error("סלאג חייב להיות 3-64 תווים: אותיות באנגלית, מספרים, מקפים או קווים תחתונים");
+      return;
+    }
+    updateSlugMutation.mutate({ shareId, slug: trimmed });
   };
 
   return (
@@ -146,6 +192,52 @@ export function ShareTableDialog({ tableId, tableName, tenantId }: ShareTableDia
 
           {shares.map((share: any) => (
             <div key={share.id} className="border rounded-lg p-4 space-y-3">
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">סלאג (מזהה הקישור)</Label>
+                {editingId === share.id ? (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={editingValue}
+                      onChange={(e) => setEditingValue(e.target.value)}
+                      placeholder="my-custom-slug"
+                      dir="ltr"
+                      className="text-left font-mono text-sm"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") saveSlug(share.id);
+                        if (e.key === "Escape") cancelEditing();
+                      }}
+                    />
+                    <Button
+                      size="sm"
+                      onClick={() => saveSlug(share.id)}
+                      disabled={updateSlugMutation.isPending}
+                    >
+                      <Check className="h-4 w-4" />
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={cancelEditing}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 px-2 py-1.5 bg-muted rounded text-xs font-mono text-left truncate" dir="ltr">
+                      {share.share_token}
+                    </code>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => startEditing(share.id, share.share_token)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground text-left" dir="ltr">
+                  {getShareUrl(share.share_token)}
+                </p>
+              </div>
+
               <div className="flex items-center gap-2 justify-end">
                 <Button variant="default" size="sm" onClick={() => copyLink(share.share_token)} className="shrink-0">
                   <Copy className="ml-1 h-4 w-4" />
