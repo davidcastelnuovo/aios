@@ -22,18 +22,53 @@ export function useUserIntegrations(
     queryFn: async () => {
       if (!tenantId || !userId) return [];
 
-      // 1. Fetch user's own integrations
-      const { data: ownIntegrations, error: ownError } = await supabase
+      // Tenant-scoped integrations: visible to all members of the tenant
+      // (e.g. Google Analytics is shared across the organization)
+      const TENANT_SCOPED_TYPES = new Set(['google_analytics']);
+      const isTenantScoped = TENANT_SCOPED_TYPES.has(integrationType);
+
+      // 1. Fetch user's own integrations (or all tenant integrations for tenant-scoped types)
+      let ownQuery = supabase
         .from('tenant_integrations')
         .select('*')
         .eq('tenant_id', tenantId)
         .eq('integration_type', integrationType)
-        .eq('is_active', true)
-        .eq('user_id', userId);
+        .eq('is_active', true);
+
+      if (!isTenantScoped) {
+        ownQuery = ownQuery.eq('user_id', userId);
+      }
+
+      const { data: ownIntegrations, error: ownError } = await ownQuery;
 
       if (ownError) throw ownError;
 
-      // 2. Fetch shared integrations via permissions
+      // For tenant-scoped types, mark _isOwn correctly based on actual ownership
+      if (isTenantScoped) {
+        const ownIds = new Set((ownIntegrations || []).map(i => i.id));
+        const sharedOwnerIds = (ownIntegrations || [])
+          .map(i => i.user_id)
+          .filter((id): id is string => !!id && id !== userId);
+
+        let ownerProfiles: Record<string, string> = {};
+        if (sharedOwnerIds.length > 0) {
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, full_name')
+            .in('id', sharedOwnerIds);
+          if (profiles) {
+            ownerProfiles = Object.fromEntries(profiles.map(p => [p.id, p.full_name || '']));
+          }
+        }
+
+        return (ownIntegrations || []).map(i => ({
+          ...i,
+          _isOwn: i.user_id === userId,
+          _sharedByName: i.user_id && i.user_id !== userId ? (ownerProfiles[i.user_id] || null) : null,
+        }));
+      }
+
+      // 2. Fetch shared integrations via permissions (for user-scoped types)
       const { data: permissions, error: permError } = await supabase
         .from('integration_user_permissions')
         .select('integration_id')
