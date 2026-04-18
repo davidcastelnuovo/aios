@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { Share2, Copy, Plus, Trash2, Pencil, Check, X } from "lucide-react";
+import { buildDefaultShareToken, SLUG_REGEX } from "@/lib/share-slug";
 
 interface ShareDashboardDialogProps {
   dashboardId: string;
@@ -15,13 +16,32 @@ interface ShareDashboardDialogProps {
   tenantId: string;
 }
 
-const SLUG_REGEX = /^[a-zA-Z0-9_-]{3,64}$/;
-
 export function ShareDashboardDialog({ dashboardId, dashboardName, tenantId }: ShareDashboardDialogProps) {
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
   const queryClient = useQueryClient();
+
+  // Look up the dashboard's linked client website to derive a default slug.
+  const { data: clientWebsite } = useQuery({
+    queryKey: ["dashboard-client-website", dashboardId],
+    queryFn: async () => {
+      const { data: dash } = await supabase
+        .from("crm_dashboards")
+        .select("client_id")
+        .eq("id", dashboardId)
+        .maybeSingle();
+      const clientId = (dash as any)?.client_id;
+      if (!clientId) return null;
+      const { data: client } = await supabase
+        .from("clients")
+        .select("website")
+        .eq("id", clientId)
+        .maybeSingle();
+      return client?.website ?? null;
+    },
+    enabled: open,
+  });
 
   const { data: shares = [], isLoading } = useQuery({
     queryKey: ["dashboard-shares", dashboardId],
@@ -44,6 +64,12 @@ export function ShareDashboardDialog({ dashboardId, dashboardName, tenantId }: S
       } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
+      const readableToken = buildDefaultShareToken({
+        website: clientWebsite,
+        fallbackName: dashboardName,
+        defaultPrefix: "dashboard",
+      });
+
       const { data, error } = await supabase
         .from("dashboard_shares")
         .insert({
@@ -51,6 +77,7 @@ export function ShareDashboardDialog({ dashboardId, dashboardName, tenantId }: S
           tenant_id: tenantId,
           created_by: user.id,
           allowed_emails: [],
+          share_token: readableToken,
         } as any)
         .select()
         .single();

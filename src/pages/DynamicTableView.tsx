@@ -2316,7 +2316,12 @@ export default function DynamicTableView() {
           </Dialog>
 
           {table?.id && table?.tenant_id && (
-            <ShareTableDialog tableId={table.id} tableName={table.name} tenantId={table.tenant_id} />
+            <ShareTableDialog
+              tableId={table.id}
+              tableName={table.name}
+              tenantId={table.tenant_id}
+              clientId={table.client_id || table.integration_settings?.clientId || null}
+            />
           )}
 
           <DropdownMenu>
