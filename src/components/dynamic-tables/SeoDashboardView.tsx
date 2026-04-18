@@ -608,6 +608,13 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
           </CardContent>
         </Card>
       )}
+
+      <AhrefsProjectPicker
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        clientId={clientId}
+        onSyncComplete={() => queryClient.invalidateQueries({ queryKey: ['seo-dashboard-reports', tenantId, clientId] })}
+      />
     </div>
   );
 }
