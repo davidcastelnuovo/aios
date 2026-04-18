@@ -433,7 +433,20 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
 
       {/* Add Update Form */}
       <Card>
-        <CardContent className="p-3 sm:p-4">
+        <CardContent className="p-3 sm:p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <Label className="text-xs text-muted-foreground shrink-0">סוג עדכון:</Label>
+            <Select value={newUpdateType} onValueChange={setNewUpdateType}>
+              <SelectTrigger className="h-8 text-sm w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {INTERACTION_TYPES.map(opt => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="flex gap-2">
             <Textarea
               placeholder="הוסף עדכון חדש..."
