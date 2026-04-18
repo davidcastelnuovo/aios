@@ -96,31 +96,31 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
 
   // Save communication log mutation
   const saveCommMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (statusOverride?: string) => {
       if (!tenantId || !user?.id) throw new Error("Missing tenant or user");
+      const statusToSave = statusOverride ?? commStatus;
       // Insert into communication_logs
       const { error: logError } = await (supabase as any)
         .from("communication_logs")
         .insert({
           client_id: clientId,
           tenant_id: tenantId,
-          status: commStatus,
+          status: statusToSave,
           interaction_type: commInteraction,
           created_by: user.id,
         });
       if (logError) throw logError;
       // Update mood_status directly (unified values)
-      await supabase.from("clients").update({ mood_status: commStatus } as any).eq("id", clientId);
+      await supabase.from("clients").update({ mood_status: statusToSave } as any).eq("id", clientId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["comm-log-latest", clientId] });
       queryClient.invalidateQueries({ queryKey: ["communication-logs-latest"] });
       queryClient.invalidateQueries({ queryKey: ["comm-logs-agency"] });
       queryClient.invalidateQueries({ queryKey: ["clients"] });
-      // note field removed — nothing to reset
-      toast.success("מצב תקשורת עודכן בהצלחה");
+      toast.success("מצב לקוח עודכן");
     },
-    onError: (err: any) => toast.error(err?.message || "שגיאה בשמירת עדכון תקשורת"),
+    onError: (err: any) => toast.error(err?.message || "שגיאה בשמירת עדכון"),
   });
 
   // Fetch tasks
@@ -382,7 +382,14 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div>
               <Label className="text-xs text-muted-foreground mb-1 block">מצב לקוח</Label>
-              <Select value={commStatus} onValueChange={setCommStatus}>
+              <Select
+                value={commStatus}
+                onValueChange={(value) => {
+                  setCommStatus(value);
+                  // Persist mood_status immediately so the main client badge updates
+                  saveCommMutation.mutate(value);
+                }}
+              >
                 <SelectTrigger className="h-8 text-sm">
                   <SelectValue />
                 </SelectTrigger>
@@ -428,7 +435,7 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
             <Button
               onClick={() => {
                 if (!newUpdate.trim()) return;
-                saveCommMutation.mutate();
+                saveCommMutation.mutate(commStatus);
                 addUpdateMutation.mutate({ content: newUpdate.trim(), updateType: newUpdateType });
               }}
               disabled={!newUpdate.trim() || addUpdateMutation.isPending || saveCommMutation.isPending}
