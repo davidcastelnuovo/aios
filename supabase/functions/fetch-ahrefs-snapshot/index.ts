@@ -47,10 +47,18 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json().catch(() => ({}));
-    const { clientId, domain: rawDomain, country = "il" } = body as {
+    const {
+      clientId,
+      domain: rawDomain,
+      country = "il",
+      mode: hintMode,
+      protocol: hintProtocol,
+    } = body as {
       clientId?: string;
       domain?: string;
       country?: string;
+      mode?: string;
+      protocol?: string;
     };
 
     if (!clientId) {
@@ -101,12 +109,24 @@ Deno.serve(async (req) => {
       tryDates.push(d.toISOString().split("T")[0]);
     }
 
-    const tryModes: Array<{ mode: string; protocol: string }> = [
+    // If the project picker passed mode/protocol from Ahrefs, try them first.
+    const baseModes: Array<{ mode: string; protocol: string }> = [
       { mode: "subdomains", protocol: "both" },
       { mode: "exact", protocol: "both" },
       { mode: "domain", protocol: "both" },
       { mode: "subdomains", protocol: "https" },
+      { mode: "exact", protocol: "https" },
+      { mode: "domain", protocol: "https" },
     ];
+    const tryModes: Array<{ mode: string; protocol: string }> =
+      hintMode || hintProtocol
+        ? [
+            { mode: hintMode || "subdomains", protocol: hintProtocol || "both" },
+            ...baseModes.filter(
+              (m) => !(m.mode === (hintMode || "subdomains") && m.protocol === (hintProtocol || "both"))
+            ),
+          ]
+        : baseModes;
 
     // 1) Domain overview (snapshot) — try mode/protocol combos, then dates
     let overviewJson: any = null;

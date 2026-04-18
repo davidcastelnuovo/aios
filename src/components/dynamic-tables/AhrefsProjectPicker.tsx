@@ -15,6 +15,8 @@ interface AhrefsProject {
   url: string;
   domain: string;
   keyword_count: number;
+  mode?: string;
+  protocol?: string;
 }
 
 interface AhrefsProjectPickerProps {
@@ -55,7 +57,12 @@ export function AhrefsProjectPicker({ open, onOpenChange, clientId, onSyncComple
     setSyncingId(project.project_id);
     try {
       const { data, error } = await supabase.functions.invoke("fetch-ahrefs-snapshot", {
-        body: { clientId, domain: project.domain },
+        body: {
+          clientId,
+          domain: project.domain,
+          mode: project.mode,
+          protocol: project.protocol,
+        },
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
