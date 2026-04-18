@@ -267,7 +267,93 @@ Deno.serve(async (req) => {
           }
           // Wait between tables
           await new Promise((r) => setTimeout(r, 2000));
+      }
+
+      // === Zero-spend anomaly per tenant table (read existing crm_records) ===
+      try {
+        const todayMs = Date.now();
+        const dayMs = 24 * 60 * 60 * 1000;
+        const last2Cutoff = new Date(todayMs - 2 * dayMs).toISOString().split('T')[0];
+        const prior7Cutoff = new Date(todayMs - 9 * dayMs).toISOString().split('T')[0];
+
+        for (const table of tenantTables) {
+          const { data: records } = await supabase
+            .from('crm_records')
+            .select('data')
+            .eq('table_id', table.id)
+            .eq('tenant_id', tenantId)
+            .gte('created_at', new Date(todayMs - 14 * dayMs).toISOString())
+            .limit(1000);
+
+          if (!records || records.length === 0) continue;
+
+          const perCampaign: Record<string, { name: string; recent: number; prior: number }> = {};
+          for (const rec of records) {
+            const d = rec.data as any;
+            const date = String(d?.date || '');
+            const cid = String(d?.campaign_id || '');
+            const name = String(d?.campaign_name || cid);
+            const cost = parseFloat(String(d?.cost || d?.spend || 0)) || 0;
+            if (!cid || !date) continue;
+            const c = perCampaign[cid] ||= { name, recent: 0, prior: 0 };
+            if (date >= last2Cutoff) c.recent += cost;
+            else if (date >= prior7Cutoff) c.prior += cost;
+          }
+
+          for (const [cid, agg] of Object.entries(perCampaign)) {
+            if (agg.recent === 0 && agg.prior > 5) {
+              const taskTitle = `🚨 חשבון Google Ads עצר: ${agg.name}`;
+              const { data: existing } = await supabase
+                .from('agent_tasks')
+                .select('id')
+                .eq('tenant_id', tenantId)
+                .eq('title', taskTitle)
+                .gte('created_at', new Date(todayMs - dayMs).toISOString())
+                .limit(1);
+
+              if (!existing || existing.length === 0) {
+                const { data: agent } = await supabase
+                  .from('ai_agents')
+                  .select('id')
+                  .eq('tenant_id', tenantId)
+                  .eq('active', true)
+                  .limit(1)
+                  .maybeSingle();
+
+                if (agent) {
+                  await supabase.from('agent_tasks').insert({
+                    tenant_id: tenantId,
+                    agent_id: agent.id,
+                    title: taskTitle,
+                    description: `הקמפיין "${agg.name}" (${cid}) לא הוציא כסף ב-2 הימים האחרונים, למרות שהוציא ${agg.prior.toFixed(2)} ב-7 הימים הקודמים. ייתכן שהחשבון עצר.`,
+                    status: 'open',
+                    priority: 1,
+                    task_mode: 'anomaly_alert',
+                  });
+                }
+
+                await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
+                  body: JSON.stringify({
+                    trigger_type: 'account_stopped_spending',
+                    tenant_id: tenantId,
+                    data: {
+                      provider: 'google_ads',
+                      campaign_name: agg.name,
+                      campaign_id: cid,
+                      table_name: table.name,
+                      recent_spend: agg.recent,
+                      prior_spend: agg.prior,
+                    },
+                  }),
+                }).catch(() => {});
+              }
+            }
+          }
         }
+      } catch (zeroErr: any) {
+        console.error(`[google-ads zero-spend] tenant ${tenantId}:`, zeroErr.message);
       }
     }
 
