@@ -462,29 +462,48 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
           </Button>
         </div>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          {reports.length > 1 && (
-            <Select
-              value={selectedReport?.id || ''}
-              onValueChange={(val) => setSelectedReportId(val)}
-            >
-              <SelectTrigger className="w-[200px] h-8 text-xs">
-                <SelectValue placeholder="בחר תאריך דוח" />
-              </SelectTrigger>
-              <SelectContent>
-                {reports.map((r) => (
-                  <SelectItem key={r.id} value={r.id}>
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-3 w-3" />
-                      {r.report_date 
-                        ? format(new Date(r.report_date), 'dd MMMM yyyy', { locale: he })
-                        : format(new Date(r.received_at), 'dd MMMM yyyy', { locale: he })
-                      }
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
+          {(() => {
+            const uniqueDomains = new Set(reports.map(r => r.domain));
+            const showDomain = uniqueDomains.size > 1;
+            if (reports.length <= 1) {
+              return selectedReport ? (
+                <Badge variant="outline" className="gap-1.5 font-normal">
+                  <Globe className="h-3 w-3" />
+                  {selectedReport.domain}
+                </Badge>
+              ) : null;
+            }
+            return (
+              <Select
+                value={selectedReport?.id || ''}
+                onValueChange={(val) => setSelectedReportId(val)}
+              >
+                <SelectTrigger className={`${showDomain ? 'w-[300px]' : 'w-[200px]'} h-8 text-xs`}>
+                  <SelectValue placeholder="בחר דוח" />
+                </SelectTrigger>
+                <SelectContent>
+                  {reports.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>
+                      <div className="flex items-center gap-2">
+                        {showDomain && (
+                          <>
+                            <Globe className="h-3 w-3" />
+                            <span className="font-medium">{r.domain}</span>
+                            <span className="text-muted-foreground">·</span>
+                          </>
+                        )}
+                        <Calendar className="h-3 w-3" />
+                        {r.report_date
+                          ? format(new Date(r.report_date), 'dd MMMM yyyy', { locale: he })
+                          : format(new Date(r.received_at), 'dd MMMM yyyy', { locale: he })
+                        }
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            );
+          })()}
           {campaignStartDate && (
             <Badge variant="secondary">
               תחילת קידום: {format(new Date(campaignStartDate), 'dd/MM/yyyy')}
