@@ -1858,6 +1858,7 @@ export type Database = {
           created_at: string
           id: string
           tenant_id: string
+          update_type: string | null
           updated_at: string
           user_id: string
         }
@@ -1867,6 +1868,7 @@ export type Database = {
           created_at?: string
           id?: string
           tenant_id: string
+          update_type?: string | null
           updated_at?: string
           user_id: string
         }
@@ -1876,6 +1878,7 @@ export type Database = {
           created_at?: string
           id?: string
           tenant_id?: string
+          update_type?: string | null
           updated_at?: string
           user_id?: string
         }
