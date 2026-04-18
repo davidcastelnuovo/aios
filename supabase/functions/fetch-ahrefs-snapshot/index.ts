@@ -196,7 +196,7 @@ Deno.serve(async (req) => {
       agency_id: client.agency_id,
       domain,
       report_type: "site_explorer",
-      report_date: today,
+      report_date: reportDate,
       report_data: {
         domain,
         snapshot,
