@@ -106,8 +106,13 @@ const getIntegrationIcon = (type: string | null) => {
   }
 };
 
-export default function SharedDashboard() {
-  const { shareToken } = useParams();
+interface SharedDashboardProps {
+  shareTokenOverride?: string;
+}
+
+export default function SharedDashboard({ shareTokenOverride }: SharedDashboardProps = {}) {
+  const params = useParams();
+  const shareToken = shareTokenOverride ?? params.shareToken;
   const queryClient = useQueryClient();
   const [dateFilter, setDateFilter] = useState('last_7_days');
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all');
