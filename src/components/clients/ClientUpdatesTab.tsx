@@ -387,7 +387,7 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
                 onValueChange={(value) => {
                   setCommStatus(value);
                   // Persist mood_status immediately so the main client badge updates
-                  saveCommMutation.mutate();
+                  saveCommMutation.mutate(value);
                 }}
               >
                 <SelectTrigger className="h-8 text-sm">
@@ -435,7 +435,7 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
             <Button
               onClick={() => {
                 if (!newUpdate.trim()) return;
-                saveCommMutation.mutate();
+                saveCommMutation.mutate(commStatus);
                 addUpdateMutation.mutate({ content: newUpdate.trim(), updateType: newUpdateType });
               }}
               disabled={!newUpdate.trim() || addUpdateMutation.isPending || saveCommMutation.isPending}
