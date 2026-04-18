@@ -91,6 +91,39 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
   const [selectedClient, setSelectedClient] = useState("");
   const [selectedDomain, setSelectedDomain] = useState<string>("");
   const [isCreatingTable, setIsCreatingTable] = useState(false);
+  const [isFetchingFromAhrefs, setIsFetchingFromAhrefs] = useState(false);
+
+  const handleFetchFromAhrefs = async () => {
+    if (!selectedClient) return;
+    const client = clients.find(c => c.id === selectedClient);
+    const domain = normalizeDomain(client?.website);
+    if (!domain) {
+      toast({ title: 'אין דומיין מוגדר ללקוח', variant: 'destructive' });
+      return;
+    }
+    setIsFetchingFromAhrefs(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('fetch-ahrefs-snapshot', {
+        body: { clientId: selectedClient, domain },
+      });
+      if (error) throw error;
+      toast({
+        title: 'הדוח נוצר בהצלחה',
+        description: `${data?.keywords_count ?? 0} מילות מפתח נטענו עבור ${data?.domain || domain}`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['seo-reports', currentTenantId, selectedClient] });
+      queryClient.invalidateQueries({ queryKey: ['ahrefs-reports'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+    } catch (err: any) {
+      toast({
+        title: 'שגיאה ביצירת דוח מ-Ahrefs',
+        description: err?.message || 'נסה שוב מאוחר יותר',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsFetchingFromAhrefs(false);
+    }
+  };
 
   const { data: clients = [] } = useQuery({
     queryKey: ['seo-report-clients', currentTenantId],
