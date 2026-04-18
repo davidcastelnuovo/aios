@@ -15,12 +15,21 @@ import { cn } from "@/lib/utils";
 
 export type GscDateRange = '28d' | '3m' | '12m';
 
+export interface GscMultiPeriodData {
+  current: GscKeywordData[];
+  prevMonth: GscKeywordData[];
+  threeMonth: GscKeywordData[];
+  yearly: GscKeywordData[];
+}
+
 interface GscIntegrationProps {
   tenantId: string;
   clientId: string;
   domain?: string;
   keywords?: string[];
   onDataLoaded?: (data: GscKeywordData[]) => void;
+  /** When set (and hideTable=true), fetches 4 historical periods (current, prevMonth, 3m ago, 1y ago) in parallel. */
+  onMultiPeriodLoaded?: (data: GscMultiPeriodData) => void;
   /** Called whenever a GSC site is selected/auto-linked, so callers can persist it on their own entity. */
   onSiteSelected?: (siteUrl: string) => void;
   /** When true, hides the raw queries table — data is still fetched and passed via onDataLoaded */
@@ -83,6 +92,7 @@ export function GscIntegration({
   domain,
   keywords,
   onDataLoaded,
+  onMultiPeriodLoaded,
   onSiteSelected,
   hideTable = false,
   dateRange,
@@ -181,6 +191,61 @@ export function GscIntegration({
       return rows as GscKeywordData[];
     },
     enabled: !!gscIntegration?.id && !!effectiveSiteUrl,
+  });
+
+  // Multi-period fetch: when caller wants historical comparisons (only in hideTable mode + callback present)
+  const enableMultiPeriod = !!onMultiPeriodLoaded && hideTable;
+  useQuery({
+    queryKey: ["gsc-multi-period", gscIntegration?.id, effectiveSiteUrl],
+    queryFn: async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
+      const dateMinus = (days: number) => {
+        const d = new Date();
+        d.setDate(d.getDate() - days);
+        return d.toISOString().split('T')[0];
+      };
+
+      // Each period: 28-day window ending at the given offset.
+      const periods = {
+        current:    { startOffset: 28,  endOffset: 0   },
+        prevMonth:  { startOffset: 58,  endOffset: 30  },
+        threeMonth: { startOffset: 118, endOffset: 90  },
+        yearly:     { startOffset: 393, endOffset: 365 },
+      } as const;
+
+      const entries = Object.entries(periods) as Array<[keyof typeof periods, { startOffset: number; endOffset: number }]>;
+      const responses = await Promise.all(
+        entries.map(([, p]) =>
+          supabase.functions.invoke("fetch-gsc-data", {
+            body: {
+              integrationId: gscIntegration!.id,
+              siteUrl: effectiveSiteUrl,
+              startDate: dateMinus(p.startOffset),
+              endDate: dateMinus(p.endOffset),
+            },
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          })
+        )
+      );
+
+      const result: GscMultiPeriodData = {
+        current: [],
+        prevMonth: [],
+        threeMonth: [],
+        yearly: [],
+      };
+      entries.forEach(([key], idx) => {
+        const rows = Array.isArray(responses[idx].data?.rows) ? responses[idx].data.rows : [];
+        result[key] = rows as GscKeywordData[];
+      });
+
+      onMultiPeriodLoaded?.(result);
+      return result;
+    },
+    enabled: !!gscIntegration?.id && !!effectiveSiteUrl && enableMultiPeriod,
+    staleTime: 10 * 60 * 1000,
   });
 
   const connectMutation = useMutation({

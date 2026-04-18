@@ -12,7 +12,7 @@ import { he } from "date-fns/locale";
 import { SeoSnapshotCards } from "./seo/SeoSnapshotCards";
 import { SeoTrafficChart } from "./seo/SeoTrafficChart";
 import { SeoKeywordsTable } from "./seo/SeoKeywordsTable";
-import { GscIntegration, type GscKeywordData } from "./seo/GscIntegration";
+import { GscIntegration, type GscKeywordData, type GscMultiPeriodData } from "./seo/GscIntegration";
 import { useAhrefsEnrichment, type AhrefsKeyword } from "@/hooks/useAhrefsEnrichment";
 
 interface SeoDashboardViewProps {
@@ -25,6 +25,7 @@ interface SeoDashboardViewProps {
 export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDashboardViewProps) {
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [gscData, setGscData] = useState<GscKeywordData[]>([]);
+  const [gscMultiPeriod, setGscMultiPeriod] = useState<GscMultiPeriodData | null>(null);
   const { fetchComparisons, comparisonData, resetComparisonData, isLoading: isEnriching } = useAhrefsEnrichment();
   const [hasAutoEnriched, setHasAutoEnriched] = useState(false);
   const [cachedComparison, setCachedComparison] = useState<{
@@ -45,6 +46,12 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
 
   const handleGscDataLoaded = useCallback((data: GscKeywordData[]) => {
     setGscData(data);
+  }, []);
+
+  const handleGscMultiPeriodLoaded = useCallback((data: GscMultiPeriodData) => {
+    setGscMultiPeriod(data);
+    // Also keep gscData in sync with the "current" period so existing aggregations keep working
+    setGscData(data.current);
   }, []);
 
   const { data: reports = [], isLoading } = useQuery({
@@ -204,7 +211,7 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
   const rawOrganic = Array.isArray(reportData?.organic_keywords) ? reportData.organic_keywords : [];
   const rawTracked = Array.isArray(reportData?.tracked_keywords) ? reportData.tracked_keywords : [];
 
-  // Build GSC lookup map
+  // Build GSC lookup map (current period — used for clicks/impressions/CTR enrichment)
   const gscMap = useMemo(() => {
     const map = new Map<string, GscKeywordData>();
     for (const row of gscData) {
@@ -213,6 +220,20 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
     }
     return map;
   }, [gscData]);
+
+  // GSC historical period maps (for cross-period position comparisons)
+  function buildGscMap(rows: GscKeywordData[]): Map<string, GscKeywordData> {
+    const map = new Map<string, GscKeywordData>();
+    for (const row of rows || []) {
+      if (!row?.keyword) continue;
+      map.set(row.keyword.toLowerCase().trim(), row);
+    }
+    return map;
+  }
+  const gscPrevMonthMap = useMemo(() => buildGscMap(gscMultiPeriod?.prevMonth || []), [gscMultiPeriod]);
+  const gscThreeMonthMap = useMemo(() => buildGscMap(gscMultiPeriod?.threeMonth || []), [gscMultiPeriod]);
+  const gscYearlyMap = useMemo(() => buildGscMap(gscMultiPeriod?.yearly || []), [gscMultiPeriod]);
+  const hasGscHistory = gscPrevMonthMap.size > 0 || gscThreeMonthMap.size > 0 || gscYearlyMap.size > 0;
 
   function enrichKeyword(kw: any, effComparison: typeof comparisonData): any {
     const normalized = normalizeKeyword(kw);
@@ -240,6 +261,22 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
     if (prevPos === null && api3m?.best_position_prev != null) {
       prevPos = api3m.best_position_prev;
     }
+
+    // GSC historical fallback: when Ahrefs lacks comparison data, use GSC average position per period
+    let positionSource: 'ahrefs' | 'gsc' | undefined =
+      (prevPos != null || pos3m != null || posYear != null) ? 'ahrefs' : undefined;
+    if (prevPos == null) {
+      const gscPrev = gscPrevMonthMap.get(kwLower)?.position;
+      if (gscPrev != null) { prevPos = gscPrev; positionSource = positionSource ?? 'gsc'; }
+    }
+    if (pos3m == null) {
+      const gsc3 = gscThreeMonthMap.get(kwLower)?.position;
+      if (gsc3 != null) { pos3m = gsc3; positionSource = positionSource ?? 'gsc'; }
+    }
+    if (posYear == null) {
+      const gscY = gscYearlyMap.get(kwLower)?.position;
+      if (gscY != null) { posYear = gscY; positionSource = positionSource ?? 'gsc'; }
+    }
     
     // Fill volume/kd/cpc from data if missing
     const apiRow = api3m || apiYear;
@@ -262,6 +299,7 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
       position_prev_month: prevPos,
       position_3month: pos3m,
       position_yearly: posYear,
+      _position_source: positionSource,
       gsc_clicks: gscRow?.clicks ?? null,
       gsc_impressions: gscRow?.impressions ?? null,
       gsc_ctr: gscRow?.ctr ?? null,
@@ -297,8 +335,8 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
       }, effectiveComparison));
     }
     return enriched;
-  }, [rawOrganic, rawTracked, prevMonthMap, gscMap, effectiveComparison]);
-  const trackedKeywords = useMemo(() => rawTracked.map(kw => enrichKeyword(kw, effectiveComparison)), [rawTracked, prevMonthMap, gscMap, effectiveComparison]);
+  }, [rawOrganic, rawTracked, prevMonthMap, gscMap, gscPrevMonthMap, gscThreeMonthMap, gscYearlyMap, effectiveComparison]);
+  const trackedKeywords = useMemo(() => rawTracked.map(kw => enrichKeyword(kw, effectiveComparison)), [rawTracked, prevMonthMap, gscMap, gscPrevMonthMap, gscThreeMonthMap, gscYearlyMap, effectiveComparison]);
 
   // Build GSC-only keywords: keywords in GSC that don't exist in Ahrefs data
   const gscOnlyKeywords = useMemo(() => {
@@ -312,24 +350,31 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
     }
     return gscData
       .filter(g => g.keyword && !ahrefsNames.has(g.keyword.toLowerCase().trim()))
-      .map(g => ({
-        keyword: g.keyword,
-        position: g.position ?? null,
-        traffic: null,
-        volume: null,
-        kd: null,
-        cpc: null,
-        url: null,
-        position_prev_month: null,
-        position_3month: null,
-        position_yearly: null,
-        gsc_clicks: g.clicks ?? null,
-        gsc_impressions: g.impressions ?? null,
-        gsc_ctr: g.ctr ?? null,
-        gsc_position: g.position ?? null,
-        _source: 'gsc' as const,
-      }));
-  }, [gscData, organicKeywords, trackedKeywords]);
+      .map(g => {
+        const k = g.keyword.toLowerCase().trim();
+        const prev = gscPrevMonthMap.get(k)?.position ?? null;
+        const m3 = gscThreeMonthMap.get(k)?.position ?? null;
+        const y1 = gscYearlyMap.get(k)?.position ?? null;
+        return {
+          keyword: g.keyword,
+          position: g.position ?? null,
+          traffic: null,
+          volume: null,
+          kd: null,
+          cpc: null,
+          url: null,
+          position_prev_month: prev,
+          position_3month: m3,
+          position_yearly: y1,
+          gsc_clicks: g.clicks ?? null,
+          gsc_impressions: g.impressions ?? null,
+          gsc_ctr: g.ctr ?? null,
+          gsc_position: g.position ?? null,
+          _position_source: (prev != null || m3 != null || y1 != null) ? 'gsc' as const : undefined,
+          _source: 'gsc' as const,
+        };
+      });
+  }, [gscData, organicKeywords, trackedKeywords, gscPrevMonthMap, gscThreeMonthMap, gscYearlyMap]);
 
   const domain = reportData?.domain || selectedReport?.domain;
 
@@ -468,6 +513,7 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
         domain={reportData?.domain || selectedReport?.domain}
         keywords={[]}
         onDataLoaded={handleGscDataLoaded}
+        onMultiPeriodLoaded={handleGscMultiPeriodLoaded}
         hideTable
       />
 
@@ -477,8 +523,8 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
         trackedKeywords={trackedKeywords}
         gscOnlyKeywords={gscOnlyKeywords}
         hasGscData={gscData.length > 0}
-        show3Month={effectiveComparison.threeMonth.size > 0}
-        showYearly={effectiveComparison.yearly.size > 0}
+        show3Month={effectiveComparison.threeMonth.size > 0 || gscThreeMonthMap.size > 0}
+        showYearly={effectiveComparison.yearly.size > 0 || gscYearlyMap.size > 0}
       />
 
       {/* HTML content fallback */}
