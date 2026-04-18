@@ -297,6 +297,27 @@ export function GscIntegration({
             )}
           </div>
           <div className="flex items-center gap-2">
+            {showDateRangeSelector && (
+              <Select
+                value={effectiveDateRange}
+                onValueChange={(v) => {
+                  const next = v as GscDateRange;
+                  setInternalDateRange(next);
+                  onDateRangeChange?.(next);
+                }}
+              >
+                <SelectTrigger className="h-7 text-xs w-[130px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(DATE_RANGE_LABELS) as GscDateRange[]).map((k) => (
+                    <SelectItem key={k} value={k} className="text-xs">
+                      {DATE_RANGE_LABELS[k]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             {availableSites.length > 0 && (
               <Popover open={sitePopoverOpen} onOpenChange={setSitePopoverOpen}>
                 <PopoverTrigger asChild>
