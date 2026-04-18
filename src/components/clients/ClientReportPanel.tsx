@@ -164,39 +164,67 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
     }
   }, [client]);
 
-  // Reset screenshot state and schedule a fresh capture for every table
+  // On every table open: clear stale screenshot, sync data, then capture fresh
   useEffect(() => {
     autoCapturedTableRef.current = null;
     setCaptureReady(false);
     setScreenshotBlob(null);
 
+    // Show stale cached image only as a placeholder while we sync+recapture
     const cached = localStorage.getItem(CACHE_KEY_PREFIX + table.id);
     setScreenshotUrl(cached || null);
 
-    // SEO tables need extra time to fetch GSC data via edge function
-    const delay = table.integration_type === "ahrefs" ? 6000 : 3000;
-    const timer = window.setTimeout(() => setCaptureReady(true), delay);
-    return () => window.clearTimeout(timer);
-  }, [table.id, table.integration_type]);
+    let cancelled = false;
 
-  // Auto-capture when ready, even if an old cached image exists
+    (async () => {
+      // 1. Sync underlying data (if integration supports it)
+      const syncFn = getSyncFunction(table.integration_type);
+      if (syncFn) {
+        setIsSyncing(true);
+        try {
+          await supabase.functions.invoke(syncFn, {
+            body: { tableId: table.id, tenantId },
+          });
+        } catch (err) {
+          console.error("Sync error:", err);
+        } finally {
+          if (!cancelled) setIsSyncing(false);
+        }
+      }
+
+      // 2. Force the snapshot subtree to refetch its queries (ahrefs/GSC/GA/etc.)
+      await queryClient.invalidateQueries({ queryKey: ["client-report-data", table.id] });
+      await queryClient.invalidateQueries({ queryKey: ["seo-combined-snapshot", table.id] });
+      await queryClient.invalidateQueries({ queryKey: ["ahrefs-reports"] });
+      await queryClient.invalidateQueries({ queryKey: ["gsc-keywords"] });
+
+      // 3. Wait for the snapshot DOM to render with fresh data, then capture
+      const delay = table.integration_type === "ahrefs" ? 6000 : 3000;
+      window.setTimeout(() => {
+        if (!cancelled) setCaptureReady(true);
+      }, delay);
+    })();
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [table.id, table.integration_type, tenantId]);
+
+  // Auto-capture when ready (always re-shoots, even if a cached image exists)
   useEffect(() => {
     if (!captureReady || isCapturing || autoCapturedTableRef.current === table.id) return;
     autoCapturedTableRef.current = table.id;
     captureScreenshot();
   }, [captureReady, isCapturing, table.id]);
 
-  // Auto-sync on mount
-  useEffect(() => {
-    const syncFn = getSyncFunction(table.integration_type);
-    if (syncFn) {
-      triggerSync();
-    }
-  }, [table.id]);
-
   const triggerSync = async () => {
     const syncFn = getSyncFunction(table.integration_type);
-    if (!syncFn) return;
+    if (!syncFn) {
+      // Even without a dedicated sync fn, refresh queries + recapture
+      await queryClient.invalidateQueries({ queryKey: ["client-report-data", table.id] });
+      await queryClient.invalidateQueries({ queryKey: ["seo-combined-snapshot", table.id] });
+      setTimeout(() => captureScreenshot(), 1500);
+      return;
+    }
 
     setIsSyncing(true);
     try {
@@ -205,6 +233,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
       await supabase.functions.invoke(syncFn, {
         body: { tableId: table.id, tenantId },
       });
+      await queryClient.invalidateQueries({ queryKey: ["client-report-data", table.id] });
     } catch (err) {
       console.error("Sync error:", err);
     } finally {
