@@ -544,6 +544,17 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
                       </div>
                     ) : (
                       <>
+                        {update.update_type && (() => {
+                          const t = INTERACTION_TYPES.find(o => o.value === update.update_type);
+                          if (!t) return null;
+                          const Icon = t.icon;
+                          return (
+                            <Badge variant="outline" className="mb-2 gap-1 text-xs">
+                              <Icon className="h-3 w-3" />
+                              {t.label}
+                            </Badge>
+                          );
+                        })()}
                         <p className="text-sm whitespace-pre-wrap">{update.content}</p>
                         <div className="flex items-center justify-between mt-2">
                           <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
