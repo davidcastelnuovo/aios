@@ -401,7 +401,7 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
                     <SelectTrigger>
                       <SelectValue placeholder="בחר נכס" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-w-[calc(100vw-3rem)]">
                       <div className="p-2 sticky top-0 bg-popover">
                         <div className="relative">
                           <Search className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -421,7 +421,7 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
                         </div>
                       ) : (
                         filteredProperties.map((prop) => (
-                          <SelectItem key={prop.id} value={prop.id}>
+                          <SelectItem key={prop.id} value={prop.id} className="whitespace-normal break-words">
                             {prop.name} ({prop.accountName})
                           </SelectItem>
                         ))
