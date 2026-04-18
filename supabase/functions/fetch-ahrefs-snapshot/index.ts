@@ -157,10 +157,10 @@ Deno.serve(async (req) => {
       );
     }
     const m = overviewJson?.metrics || overviewJson || {};
-    const today = usedDate;
+    const reportDate = usedDate;
 
-    // 2) Organic keywords (top ~500)
-    const kwUrl = `https://api.ahrefs.com/v3/site-explorer/organic-keywords?target=${encodeURIComponent(domain)}&date=${today}&country=${country}&protocol=both&mode=subdomains&output=json&limit=500&select=keyword,volume,keyword_difficulty,cpc,traffic,position,url`;
+    // 2) Organic keywords (top ~500) — use the same mode/protocol that worked
+    const kwUrl = `https://api.ahrefs.com/v3/site-explorer/organic-keywords?target=${encodeURIComponent(domain)}&date=${reportDate}&country=${country}&protocol=${usedProtocol}&mode=${usedMode}&output=json&limit=500&select=keyword,volume,keyword_difficulty,cpc,traffic,position,url`;
     const kwRes = await fetch(kwUrl, {
       headers: { Authorization: `Bearer ${ahrefsApiKey}`, Accept: "application/json" },
     });
