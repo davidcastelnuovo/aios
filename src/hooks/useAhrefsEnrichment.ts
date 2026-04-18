@@ -82,14 +82,28 @@ export function useAhrefsEnrichment() {
   ) => {
     setIsLoading(true);
     try {
-      const currentDate = reportDate || new Date().toISOString().split("T")[0];
       const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
       const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
       const session = (await supabase.auth.getSession()).data.session;
       const token = session?.access_token || anonKey;
 
-      // Calculate comparison dates
-      const baseDate = new Date(currentDate);
+      // Safe base date: never use future dates (Ahrefs has no data for them).
+      // Use the report date if it's in the past, otherwise fall back to 7 days ago
+      // (Ahrefs typically has data with a few days lag).
+      const today = new Date();
+      const safeRecentDate = new Date(today);
+      safeRecentDate.setDate(safeRecentDate.getDate() - 7);
+
+      let baseDate: Date;
+      if (reportDate) {
+        const reportDateObj = new Date(reportDate);
+        baseDate = reportDateObj > safeRecentDate ? safeRecentDate : reportDateObj;
+      } else {
+        baseDate = safeRecentDate;
+      }
+      const currentDate = baseDate.toISOString().split("T")[0];
+
+      // Calculate comparison dates (3 months back and 1 year back from base date)
       const threeMonthsAgo = new Date(baseDate);
       threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
       const oneYearAgo = new Date(baseDate);
@@ -97,6 +111,8 @@ export function useAhrefsEnrichment() {
 
       const date3m = threeMonthsAgo.toISOString().split("T")[0];
       const date1y = oneYearAgo.toISOString().split("T")[0];
+
+      console.log('[Ahrefs Enrichment] Date range:', { currentDate, date3m, date1y, originalReportDate: reportDate });
 
       // Fetch both periods in parallel
       const [threeMonthKw, yearlyKw] = await Promise.all([
