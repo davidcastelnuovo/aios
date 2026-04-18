@@ -335,8 +335,8 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
       }, effectiveComparison));
     }
     return enriched;
-  }, [rawOrganic, rawTracked, prevMonthMap, gscMap, effectiveComparison]);
-  const trackedKeywords = useMemo(() => rawTracked.map(kw => enrichKeyword(kw, effectiveComparison)), [rawTracked, prevMonthMap, gscMap, effectiveComparison]);
+  }, [rawOrganic, rawTracked, prevMonthMap, gscMap, gscPrevMonthMap, gscThreeMonthMap, gscYearlyMap, effectiveComparison]);
+  const trackedKeywords = useMemo(() => rawTracked.map(kw => enrichKeyword(kw, effectiveComparison)), [rawTracked, prevMonthMap, gscMap, gscPrevMonthMap, gscThreeMonthMap, gscYearlyMap, effectiveComparison]);
 
   // Build GSC-only keywords: keywords in GSC that don't exist in Ahrefs data
   const gscOnlyKeywords = useMemo(() => {
@@ -350,24 +350,31 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
     }
     return gscData
       .filter(g => g.keyword && !ahrefsNames.has(g.keyword.toLowerCase().trim()))
-      .map(g => ({
-        keyword: g.keyword,
-        position: g.position ?? null,
-        traffic: null,
-        volume: null,
-        kd: null,
-        cpc: null,
-        url: null,
-        position_prev_month: null,
-        position_3month: null,
-        position_yearly: null,
-        gsc_clicks: g.clicks ?? null,
-        gsc_impressions: g.impressions ?? null,
-        gsc_ctr: g.ctr ?? null,
-        gsc_position: g.position ?? null,
-        _source: 'gsc' as const,
-      }));
-  }, [gscData, organicKeywords, trackedKeywords]);
+      .map(g => {
+        const k = g.keyword.toLowerCase().trim();
+        const prev = gscPrevMonthMap.get(k)?.position ?? null;
+        const m3 = gscThreeMonthMap.get(k)?.position ?? null;
+        const y1 = gscYearlyMap.get(k)?.position ?? null;
+        return {
+          keyword: g.keyword,
+          position: g.position ?? null,
+          traffic: null,
+          volume: null,
+          kd: null,
+          cpc: null,
+          url: null,
+          position_prev_month: prev,
+          position_3month: m3,
+          position_yearly: y1,
+          gsc_clicks: g.clicks ?? null,
+          gsc_impressions: g.impressions ?? null,
+          gsc_ctr: g.ctr ?? null,
+          gsc_position: g.position ?? null,
+          _position_source: (prev != null || m3 != null || y1 != null) ? 'gsc' as const : undefined,
+          _source: 'gsc' as const,
+        };
+      });
+  }, [gscData, organicKeywords, trackedKeywords, gscPrevMonthMap, gscThreeMonthMap, gscYearlyMap]);
 
   const domain = reportData?.domain || selectedReport?.domain;
 
