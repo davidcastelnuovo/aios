@@ -12,13 +12,20 @@ interface SeoKeywordsTableProps {
   showYearly?: boolean;
 }
 
+function fmt(n: number, digits = 1): string {
+  if (Number.isInteger(n)) return String(n);
+  return Number(n.toFixed(digits)).toString();
+}
+
 function PositionChange({ value }: { value: number | null }) {
   if (value === null || value === undefined) return <span className="text-xs text-muted-foreground">—</span>;
-  if (value === 0) return <span className="text-xs text-muted-foreground">ללא שינוי</span>;
+  // Round to 1 decimal to avoid floating-point noise like 0.3999999999999999
+  const rounded = Math.round(value * 10) / 10;
+  if (rounded === 0) return <span className="text-xs text-muted-foreground">ללא שינוי</span>;
   return (
-    <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${value > 0 ? 'text-green-600' : 'text-red-500'}`}>
-      {value > 0 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
-      {Math.abs(value)}
+    <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${rounded > 0 ? 'text-green-600' : 'text-red-500'}`}>
+      {rounded > 0 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+      {fmt(Math.abs(rounded))}
     </span>
   );
 }
@@ -44,7 +51,7 @@ function KeywordRow({ kw, show3Month, showYearly, showPrevMonth, showGsc }: { kw
       <td className="p-3 text-center">
         {kw.position != null ? (
           <Badge variant={kw.position <= 3 ? 'default' : kw.position <= 10 ? 'secondary' : 'outline'} className="font-mono">
-            {kw.position}
+            {fmt(kw.position)}
           </Badge>
         ) : <span className="text-muted-foreground">—</span>}
       </td>
