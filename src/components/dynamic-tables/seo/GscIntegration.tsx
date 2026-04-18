@@ -15,12 +15,21 @@ import { cn } from "@/lib/utils";
 
 export type GscDateRange = '28d' | '3m' | '12m';
 
+export interface GscMultiPeriodData {
+  current: GscKeywordData[];
+  prevMonth: GscKeywordData[];
+  threeMonth: GscKeywordData[];
+  yearly: GscKeywordData[];
+}
+
 interface GscIntegrationProps {
   tenantId: string;
   clientId: string;
   domain?: string;
   keywords?: string[];
   onDataLoaded?: (data: GscKeywordData[]) => void;
+  /** When set (and hideTable=true), fetches 4 historical periods (current, prevMonth, 3m ago, 1y ago) in parallel. */
+  onMultiPeriodLoaded?: (data: GscMultiPeriodData) => void;
   /** Called whenever a GSC site is selected/auto-linked, so callers can persist it on their own entity. */
   onSiteSelected?: (siteUrl: string) => void;
   /** When true, hides the raw queries table — data is still fetched and passed via onDataLoaded */
@@ -83,6 +92,7 @@ export function GscIntegration({
   domain,
   keywords,
   onDataLoaded,
+  onMultiPeriodLoaded,
   onSiteSelected,
   hideTable = false,
   dateRange,
