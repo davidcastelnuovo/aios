@@ -15,6 +15,8 @@ import { SeoTrafficChart } from "./seo/SeoTrafficChart";
 import { SeoKeywordsTable } from "./seo/SeoKeywordsTable";
 import { GscIntegration, type GscKeywordData, type GscMultiPeriodData } from "./seo/GscIntegration";
 import { useAhrefsEnrichment, type AhrefsKeyword } from "@/hooks/useAhrefsEnrichment";
+import { AhrefsProjectPicker } from "./AhrefsProjectPicker";
+import { ListChecks } from "lucide-react";
 
 interface SeoDashboardViewProps {
   tenantId: string;
@@ -27,6 +29,7 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
   const queryClient = useQueryClient();
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [isFetchingSnapshot, setIsFetchingSnapshot] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const handleFetchSnapshot = useCallback(async () => {
     setIsFetchingSnapshot(true);
