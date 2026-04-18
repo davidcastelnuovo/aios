@@ -374,10 +374,10 @@ export default function GoogleAnalyticsSettings() {
                               setSharingIntegrationName(email);
                               setSharingOwnerId(integ.user_id);
                             }}
-                            title={isOwn ? "שתף עם חברי צוות" : "נהל שיתוף (חיבור משותף בארגון)"}
+                            title={isOwn ? "שתף עם חברי צוות" : "צפה בשיתופים (חיבור משותף בארגון)"}
                           >
                             <Share2 className="h-4 w-4 ml-1" />
-                            שתף
+                            {isOwn ? "שתף" : "שיתופים"}
                           </Button>
                           {isOwn && (
                             <Button
