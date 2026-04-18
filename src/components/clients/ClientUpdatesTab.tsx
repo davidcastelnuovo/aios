@@ -382,7 +382,14 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div>
               <Label className="text-xs text-muted-foreground mb-1 block">מצב לקוח</Label>
-              <Select value={commStatus} onValueChange={setCommStatus}>
+              <Select
+                value={commStatus}
+                onValueChange={(value) => {
+                  setCommStatus(value);
+                  // Persist mood_status immediately so the main client badge updates
+                  saveCommMutation.mutate();
+                }}
+              >
                 <SelectTrigger className="h-8 text-sm">
                   <SelectValue />
                 </SelectTrigger>
