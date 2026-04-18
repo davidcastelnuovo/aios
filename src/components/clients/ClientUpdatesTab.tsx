@@ -66,6 +66,7 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
   const [dateFilter, setDateFilter] = useState<DateFilter>("month");
   const [editingTask, setEditingTask] = useState<any>(null);
   const [newUpdate, setNewUpdate] = useState("");
+  const [newUpdateType, setNewUpdateType] = useState<string>("call");
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
   const { user } = useCurrentUser();
