@@ -406,29 +406,20 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
             </div>
           </div>
 
-          {/* Note (required) */}
-          <div>
-            <Label className="text-xs text-muted-foreground mb-1 block">הערה (חובה)</Label>
-            <div className="flex gap-2">
-              <Textarea
-                placeholder="מה סוכם השיחה / פגישה..."
-                value={commNote}
-                onChange={(e) => setCommNote(e.target.value)}
-                className="min-h-[50px] resize-none flex-1 text-sm"
-              />
-              <Button
-                size="sm"
-                onClick={() => saveCommMutation.mutate()}
-                disabled={!commNote.trim() || saveCommMutation.isPending}
-                className="self-end shrink-0"
-              >
-                {saveCommMutation.isPending ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Check className="h-3.5 w-3.5" />
-                )}
-              </Button>
-            </div>
+          {/* Save button */}
+          <div className="flex justify-end">
+            <Button
+              size="sm"
+              onClick={() => saveCommMutation.mutate()}
+              disabled={saveCommMutation.isPending}
+            >
+              {saveCommMutation.isPending ? (
+                <Loader2 className="ml-2 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Check className="ml-2 h-3.5 w-3.5" />
+              )}
+              שמור עדכון
+            </Button>
           </div>
         </CardContent>
       </Card>
