@@ -40,6 +40,15 @@ interface AggregatedData {
   totalRecords: number;
 }
 
+type GscDateFilter = 'last_30_days' | 'last_90_days' | 'last_365_days' | 'all';
+
+const DATE_FILTER_LABELS: Record<GscDateFilter, string> = {
+  last_30_days: 'חודש אחרון',
+  last_90_days: '3 חודשים',
+  last_365_days: 'שנה',
+  all: 'הכל',
+};
+
 export function SearchConsoleDashboard({ tableId }: SearchConsoleDashboardProps) {
   // Default: sort by position ascending (best rank = lowest number = first)
   const [sortBy, setSortBy] = useState<string>("position");
@@ -47,18 +56,20 @@ export function SearchConsoleDashboard({ tableId }: SearchConsoleDashboardProps)
   const [searchFilter, setSearchFilter] = useState("");
   const [trackedKeywords, setTrackedKeywords] = useState<string[]>([]);
   const [newKeyword, setNewKeyword] = useState("");
+  const [dateFilter, setDateFilter] = useState<GscDateFilter>('last_30_days');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch aggregated data from the server
   const { data: aggregatedData, isLoading } = useQuery({
-    queryKey: ['search-console-aggregated', tableId],
+    queryKey: ['search-console-aggregated', tableId, dateFilter],
     queryFn: async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
       
       const params = new URLSearchParams({ 
         table_id: tableId,
-        aggregated: 'search_console'
+        aggregated: 'search_console',
+        date_filter: dateFilter,
       });
       
       const response = await supabase.functions.invoke(`crm-records?${params.toString()}`, {
@@ -221,6 +232,26 @@ export function SearchConsoleDashboard({ tableId }: SearchConsoleDashboardProps)
 
   return (
     <div className="space-y-6" dir="rtl">
+      {/* Header with date range selector */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Search className="h-4 w-4" />
+          <span>טווח: <strong>{DATE_FILTER_LABELS[dateFilter]}</strong></span>
+        </div>
+        <Select value={dateFilter} onValueChange={(v) => setDateFilter(v as GscDateFilter)}>
+          <SelectTrigger className="h-8 text-xs w-[160px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {(Object.keys(DATE_FILTER_LABELS) as GscDateFilter[]).map((k) => (
+              <SelectItem key={k} value={k} className="text-xs">
+                {DATE_FILTER_LABELS[k]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>

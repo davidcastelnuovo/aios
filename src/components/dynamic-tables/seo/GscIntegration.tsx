@@ -13,6 +13,8 @@ import { toast } from "sonner";
 import { Link2, RefreshCw, Search, MousePointerClick, Eye, Target, ChevronsUpDown, Check, ArrowUpDown, Award } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+export type GscDateRange = '28d' | '3m' | '12m';
+
 interface GscIntegrationProps {
   tenantId: string;
   clientId: string;
@@ -23,6 +25,34 @@ interface GscIntegrationProps {
   onSiteSelected?: (siteUrl: string) => void;
   /** When true, hides the raw queries table — data is still fetched and passed via onDataLoaded */
   hideTable?: boolean;
+  /** Date range to fetch from GSC (default 28d) */
+  dateRange?: GscDateRange;
+  /** Show the in-card date range selector (default true). Set false when controlled externally. */
+  showDateRangeSelector?: boolean;
+  /** Called when the user changes the date range from the in-card selector */
+  onDateRangeChange?: (range: GscDateRange) => void;
+}
+
+const DATE_RANGE_DAYS: Record<GscDateRange, number> = {
+  '28d': 28,
+  '3m': 90,
+  '12m': 365,
+};
+
+const DATE_RANGE_LABELS: Record<GscDateRange, string> = {
+  '28d': 'חודש אחרון',
+  '3m': '3 חודשים',
+  '12m': 'שנה',
+};
+
+function computeRange(range: GscDateRange): { startDate: string; endDate: string } {
+  const days = DATE_RANGE_DAYS[range];
+  const end = new Date();
+  const start = new Date(end.getTime() - days * 24 * 60 * 60 * 1000);
+  return {
+    startDate: start.toISOString().split('T')[0],
+    endDate: end.toISOString().split('T')[0],
+  };
 }
 
 interface GscSite {
@@ -47,10 +77,23 @@ function normalizeDomain(value?: string) {
     .toLowerCase();
 }
 
-export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoaded, onSiteSelected, hideTable = false }: GscIntegrationProps) {
+export function GscIntegration({
+  tenantId,
+  clientId,
+  domain,
+  keywords,
+  onDataLoaded,
+  onSiteSelected,
+  hideTable = false,
+  dateRange,
+  showDateRangeSelector = true,
+  onDateRangeChange,
+}: GscIntegrationProps) {
   const queryClient = useQueryClient();
   const [selectedSite, setSelectedSite] = useState<string>("");
   const [sitePopoverOpen, setSitePopoverOpen] = useState(false);
+  const [internalDateRange, setInternalDateRange] = useState<GscDateRange>('28d');
+  const effectiveDateRange: GscDateRange = dateRange ?? internalDateRange;
 
   // Use per-user integration filtering (own + shared)
   const { data: gscIntegrations = [], isLoading: isLoadingIntegration } = useUserIntegrations(
@@ -114,16 +157,20 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
   // Auto-link useEffect is declared further down (after updateSiteMutation is defined).
 
   const { data: gscData, isLoading: isLoadingData, refetch: refetchData } = useQuery({
-    queryKey: ["gsc-keyword-data", gscIntegration?.id, effectiveSiteUrl, keywords?.join(",")],
+    queryKey: ["gsc-keyword-data", gscIntegration?.id, effectiveSiteUrl, effectiveDateRange, keywords?.join(",")],
     queryFn: async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
+
+      const { startDate, endDate } = computeRange(effectiveDateRange);
 
       const response = await supabase.functions.invoke("fetch-gsc-data", {
         body: {
           integrationId: gscIntegration!.id,
           siteUrl: effectiveSiteUrl,
           keywords: keywords || [],
+          startDate,
+          endDate,
         },
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
@@ -250,6 +297,27 @@ export function GscIntegration({ tenantId, clientId, domain, keywords, onDataLoa
             )}
           </div>
           <div className="flex items-center gap-2">
+            {showDateRangeSelector && (
+              <Select
+                value={effectiveDateRange}
+                onValueChange={(v) => {
+                  const next = v as GscDateRange;
+                  setInternalDateRange(next);
+                  onDateRangeChange?.(next);
+                }}
+              >
+                <SelectTrigger className="h-7 text-xs w-[130px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(DATE_RANGE_LABELS) as GscDateRange[]).map((k) => (
+                    <SelectItem key={k} value={k} className="text-xs">
+                      {DATE_RANGE_LABELS[k]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             {availableSites.length > 0 && (
               <Popover open={sitePopoverOpen} onOpenChange={setSitePopoverOpen}>
                 <PopoverTrigger asChild>

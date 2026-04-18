@@ -265,11 +265,24 @@ Deno.serve(async (req) => {
           if (page.length < pageSize) break;
         }
 
+        // Apply date range filter on data.date if provided
+        let scopedRecords = allRecords;
+        if (date_filter && date_filter !== 'all') {
+          const { startDate, endDate } = getDateRange(date_filter, date_from || undefined, date_to || undefined);
+          if (startDate) {
+            scopedRecords = scopedRecords.filter((r: any) => {
+              const rd = r.data?.date;
+              if (!rd) return true; // keep aggregated/summary records without a date
+              if (endDate) return rd >= startDate && rd <= endDate;
+              return rd >= startDate;
+            });
+          }
+        }
 
         // Aggregate by query
         const queryMap = new Map<string, { clicks: number; impressions: number; ctr: number; position: number; count: number }>();
         
-        allRecords.forEach((r: any) => {
+        scopedRecords.forEach((r: any) => {
           const query = r.data?.query || '';
           const existing = queryMap.get(query) || { clicks: 0, impressions: 0, ctr: 0, position: 0, count: 0 };
           
@@ -291,9 +304,8 @@ Deno.serve(async (req) => {
           position: data.count > 0 ? data.position / data.count : 0,
         }));
 
-        // Sort by impressions desc and take top 100
+        // Sort by impressions desc — return ALL queries (client filters/searches in UI)
         queryData.sort((a, b) => b.impressions - a.impressions);
-        const topQueries = queryData.slice(0, 100);
 
         // Calculate totals
         const totals = {
@@ -306,9 +318,9 @@ Deno.serve(async (req) => {
 
 
         return new Response(JSON.stringify({
-          queries: topQueries,
+          queries: queryData,
           totals,
-          totalRecords: allRecords.length,
+          totalRecords: scopedRecords.length,
         }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
