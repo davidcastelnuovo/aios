@@ -502,6 +502,15 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
             <RefreshCw className={`h-3.5 w-3.5 ${isEnriching ? 'animate-spin' : ''}`} />
             {isEnriching ? 'מסנכרן...' : 'סנכרון Ahrefs'}
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPickerOpen(true)}
+            className="h-8 text-xs gap-1.5"
+          >
+            <ListChecks className="h-3.5 w-3.5" />
+            בחר פרויקט מ-Ahrefs
+          </Button>
         </div>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           {(() => {
