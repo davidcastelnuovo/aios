@@ -95,7 +95,6 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
   const saveCommMutation = useMutation({
     mutationFn: async () => {
       if (!tenantId || !user?.id) throw new Error("Missing tenant or user");
-      if (!commNote.trim()) throw new Error("הערה חובה");
       // Insert into communication_logs
       const { error: logError } = await (supabase as any)
         .from("communication_logs")
@@ -104,7 +103,6 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
           tenant_id: tenantId,
           status: commStatus,
           interaction_type: commInteraction,
-          notes: commNote.trim(),
           created_by: user.id,
         });
       if (logError) throw logError;
