@@ -90,43 +90,77 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Ahrefs returns 404 if there's no snapshot exactly on today's date.
-    // Try today, then walk back up to 7 days to find the latest available snapshot.
-    const tryDates: string[] = [];
-    for (let i = 0; i <= 7; i++) {
+    // Strategy: try multiple modes (subdomains/exact/domain) and dates.
+    // For new Ahrefs projects there might be no historical snapshot for the
+    // exact target/protocol/mode combo, so we fall back gracefully.
+    const today = new Date().toISOString().split("T")[0];
+    const tryDates: string[] = [today];
+    for (let i = 1; i <= 14; i++) {
       const d = new Date();
       d.setUTCDate(d.getUTCDate() - i);
       tryDates.push(d.toISOString().split("T")[0]);
     }
 
-    // 1) Domain overview (snapshot) — find first date that returns 200
+    const tryModes: Array<{ mode: string; protocol: string }> = [
+      { mode: "subdomains", protocol: "both" },
+      { mode: "exact", protocol: "both" },
+      { mode: "domain", protocol: "both" },
+      { mode: "subdomains", protocol: "https" },
+    ];
+
+    // 1) Domain overview (snapshot) — try mode/protocol combos, then dates
     let overviewJson: any = null;
     let usedDate: string | null = null;
+    let usedMode = "subdomains";
+    let usedProtocol = "both";
     let lastErr = "";
-    for (const d of tryDates) {
-      const overviewUrl = `https://api.ahrefs.com/v3/site-explorer/metrics?target=${encodeURIComponent(domain)}&date=${d}&protocol=both&mode=subdomains&output=json&volume_mode=monthly`;
-      const overviewRes = await fetch(overviewUrl, {
-        headers: { Authorization: `Bearer ${ahrefsApiKey}`, Accept: "application/json" },
-      });
-      if (overviewRes.ok) {
-        overviewJson = await overviewRes.json();
-        usedDate = d;
-        break;
+    let lastStatus = 0;
+
+    outer: for (const { mode, protocol } of tryModes) {
+      for (const d of tryDates) {
+        const overviewUrl = `https://api.ahrefs.com/v3/site-explorer/metrics?target=${encodeURIComponent(domain)}&date=${d}&protocol=${protocol}&mode=${mode}&output=json&volume_mode=monthly`;
+        const overviewRes = await fetch(overviewUrl, {
+          headers: { Authorization: `Bearer ${ahrefsApiKey}`, Accept: "application/json" },
+        });
+        if (overviewRes.ok) {
+          overviewJson = await overviewRes.json();
+          usedDate = d;
+          usedMode = mode;
+          usedProtocol = protocol;
+          console.log(`Ahrefs overview OK: domain=${domain} date=${d} mode=${mode} protocol=${protocol}`);
+          break outer;
+        }
+        lastErr = await overviewRes.text();
+        lastStatus = overviewRes.status;
+        console.warn(`Ahrefs overview failed: domain=${domain} date=${d} mode=${mode} protocol=${protocol} status=${overviewRes.status} body=${lastErr.slice(0, 200)}`);
+        // 401/403 = auth issue, no point continuing
+        if (overviewRes.status === 401 || overviewRes.status === 403) {
+          break outer;
+        }
       }
-      lastErr = await overviewRes.text();
-      console.warn(`Ahrefs overview ${d} failed:`, overviewRes.status, lastErr);
     }
+
     if (!overviewJson || !usedDate) {
       return new Response(
-        JSON.stringify({ error: "Ahrefs overview fetch failed", details: lastErr || "No snapshot found in last 7 days" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({
+          error: "Ahrefs overview fetch failed",
+          details: lastErr || "No snapshot found",
+          status: lastStatus,
+          domain,
+          hint: lastStatus === 404
+            ? "אין snapshot זמין ב-Ahrefs עבור הדומיין הזה. ייתכן שהפרויקט נוצר זה עתה ו-Ahrefs עדיין לא ביצעה crawl ראשון (תהליך שיכול לקחת 24-48 שעות)."
+            : lastStatus === 401 || lastStatus === 403
+            ? "מפתח Ahrefs API לא תקין או חסר הרשאות."
+            : "בדוק שהדומיין נכון ושיש לך גישה אליו ב-Ahrefs.",
+        }),
+        { status: lastStatus === 401 || lastStatus === 403 ? 401 : 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
     const m = overviewJson?.metrics || overviewJson || {};
-    const today = usedDate;
+    const reportDate = usedDate;
 
-    // 2) Organic keywords (top ~500)
-    const kwUrl = `https://api.ahrefs.com/v3/site-explorer/organic-keywords?target=${encodeURIComponent(domain)}&date=${today}&country=${country}&protocol=both&mode=subdomains&output=json&limit=500&select=keyword,volume,keyword_difficulty,cpc,traffic,position,url`;
+    // 2) Organic keywords (top ~500) — use the same mode/protocol that worked
+    const kwUrl = `https://api.ahrefs.com/v3/site-explorer/organic-keywords?target=${encodeURIComponent(domain)}&date=${reportDate}&country=${country}&protocol=${usedProtocol}&mode=${usedMode}&output=json&limit=500&select=keyword,volume,keyword_difficulty,cpc,traffic,position,url`;
     const kwRes = await fetch(kwUrl, {
       headers: { Authorization: `Bearer ${ahrefsApiKey}`, Accept: "application/json" },
     });
@@ -162,7 +196,7 @@ Deno.serve(async (req) => {
       agency_id: client.agency_id,
       domain,
       report_type: "site_explorer",
-      report_date: today,
+      report_date: reportDate,
       report_data: {
         domain,
         snapshot,
