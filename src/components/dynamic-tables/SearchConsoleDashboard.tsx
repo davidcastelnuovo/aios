@@ -40,6 +40,15 @@ interface AggregatedData {
   totalRecords: number;
 }
 
+type GscDateFilter = 'last_30_days' | 'last_90_days' | 'last_365_days' | 'all';
+
+const DATE_FILTER_LABELS: Record<GscDateFilter, string> = {
+  last_30_days: 'חודש אחרון',
+  last_90_days: '3 חודשים',
+  last_365_days: 'שנה',
+  all: 'הכל',
+};
+
 export function SearchConsoleDashboard({ tableId }: SearchConsoleDashboardProps) {
   // Default: sort by position ascending (best rank = lowest number = first)
   const [sortBy, setSortBy] = useState<string>("position");
@@ -47,18 +56,20 @@ export function SearchConsoleDashboard({ tableId }: SearchConsoleDashboardProps)
   const [searchFilter, setSearchFilter] = useState("");
   const [trackedKeywords, setTrackedKeywords] = useState<string[]>([]);
   const [newKeyword, setNewKeyword] = useState("");
+  const [dateFilter, setDateFilter] = useState<GscDateFilter>('last_30_days');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch aggregated data from the server
   const { data: aggregatedData, isLoading } = useQuery({
-    queryKey: ['search-console-aggregated', tableId],
+    queryKey: ['search-console-aggregated', tableId, dateFilter],
     queryFn: async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
       
       const params = new URLSearchParams({ 
         table_id: tableId,
-        aggregated: 'search_console'
+        aggregated: 'search_console',
+        date_filter: dateFilter,
       });
       
       const response = await supabase.functions.invoke(`crm-records?${params.toString()}`, {
