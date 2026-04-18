@@ -1,55 +1,61 @@
 
 
-## הבעיה
-ללקוח **ג.ג - ישראל** מקושרים ב-DB **שני דוחות Ahrefs** עם אותו תאריך (2026-04-06):
-1. ✅ `ggds.co.il` — האתר הנכון של הלקוח
-2. ❌ `gg-ds.com` — דוח של אתר אחר (שייך בפועל ללקוח **ג.ג - אנגלית**)
+## Current state
 
-הסלקטור של הדוחות מציג **רק תאריך** ולא דומיין, ולכן כשבוחרים דוח לא רואים לאיזה אתר הוא שייך — והסנכרון/תצוגה מתבצעים לפעמים על `gg-ds.com` במקום על `ggds.co.il`. הסיבה השורשית: בעת שיוך דוח Ahrefs ללקוח, הקוד מעדכן `client_id` לכל הדוחות עם אותו `domain`, אבל אין מנגנון שמונע שיוך של דומיין שלא תואם את ה-website של הלקוח.
+**Cron schedule (Israel time = UTC+3):**
+| Job | Schedule (UTC) | Israel time | Coverage |
+|---|---|---|---|
+| `cron-sync-facebook-insights` | `30 4 * * 0` | Sun 07:30 **only** | Weekly, not 2×/day |
+| `cron-sync-facebook-ecommerce` | `0 5 * * *` | Daily 08:00 | Once a day |
+| `cron-sync-google-ads` | `0 4 * * *` | Daily 07:00 | Once a day |
+| `cron-sync-facebook-leads` | every minute | every minute | OK (leads only) |
+| Google Analytics, GSC, Ahrefs | – | – | **No cron at all** |
 
-## הפתרון
+**Carmen anomaly monitoring:**
+- `cron-sync-facebook-insights` does check `report_alerts` and fires automations on blocked / paused campaigns and CPL/spend thresholds — but it only runs **once a week** so alerts effectively don't fire.
+- `agent-heartbeat` exists and runs over `tenant_heartbeat_settings` (one tenant has it enabled), but `heartbeat_logs` has **0 rows** → the heartbeat cron is **not scheduled at all**, so Carmen never wakes up to monitor anything.
+- No alert exists for "spend = 0 for X days" (account stopped) — only threshold alerts on CPL/spend `>` value.
 
-### 1. תיקון נתונים (Data Migration)
-ניתוק הדוח של `gg-ds.com` מהלקוח **ג.ג - ישראל** והעברתו ללקוח **ג.ג - אנגלית** (שאצלו זה ה-website הנכון):
+## Plan
 
-```sql
-UPDATE ahrefs_reports
-SET client_id = 'b43ea2a4-ebed-40fb-893a-4bcee3c639a7'  -- ג.ג - אנגלית
-WHERE domain = 'gg-ds.com'
-  AND client_id = '1b87dfaf-8fe1-4874-9b57-dcffe2f1a86c';  -- ג.ג - ישראל
+### 1. Sync GA / GSC / Ahrefs daily
+Create three new cron-sync functions mirroring the FB ecommerce pattern (loop `crm_tables` by `integration_type`, invoke the existing `sync-*` per table, batched):
+- `cron-sync-google-analytics`
+- `cron-sync-google-search-console`
+- `cron-sync-ahrefs` (manual-only comparisons preserved per existing memory — only base snapshot)
+
+### 2. Reschedule all data syncs to 07:00 + 16:00 Israel (04:00 + 13:00 UTC)
+Replace existing cron jobs and add the new ones:
+
+```
+04:00 UTC + 13:00 UTC  →  07:00 + 16:00 Israel
+- cron-sync-facebook-insights   (change from weekly to 2×/day)
+- cron-sync-facebook-ecommerce  (change from 05:00 to 04:00 + add 13:00)
+- cron-sync-google-ads          (add 13:00)
+- cron-sync-google-analytics    (NEW)
+- cron-sync-google-search-console (NEW)
+- cron-sync-ahrefs              (NEW)
 ```
 
-### 2. שיפור UX — סלקטור דוחות מציג דומיין
-ב-`SeoDashboardView.tsx` (שורה ~474-485): להוסיף את ה-**דומיין** לטקסט של כל אופציה בסלקטור הדוחות, כך שכשללקוח יש מספר דומיינים מקושרים — רואים בבירור איזה דוח נבחר:
+### 3. Add "spend stopped" anomaly detection
+Extend the alert evaluator inside `cron-sync-facebook-insights` (and add the same logic to `cron-sync-google-ads`) with a built-in check that runs every sync without requiring a manual `report_alerts` row:
+- For each active campaign, if `spend = 0` for the last 2 consecutive days while it had spend in the prior 7 days → trigger automation `account_stopped_spending`.
+- Existing `effective_status` block detection stays (already works).
+- Push a Carmen task via `agent_tasks` so it appears in her queue and a WhatsApp reminder is sent to the assigned campaigner.
 
-```tsx
-<SelectItem key={r.id} value={r.id}>
-  <div className="flex items-center gap-2">
-    <Globe className="h-3 w-3" />
-    <span className="font-medium">{r.domain}</span>
-    <span className="text-muted-foreground">·</span>
-    <Calendar className="h-3 w-3" />
-    {format(new Date(r.report_date), 'dd MMM yyyy', { locale: he })}
-  </div>
-</SelectItem>
-```
+### 4. Activate Carmen heartbeat
+- Schedule `agent-heartbeat` every hour via `pg_cron`.
+- Extend `agent-heartbeat` to also read recent anomaly events (from step 3) and post a daily summary to the assigned campaigner via Green API.
 
-בנוסף, להציג את ה-`SelectTrigger` תמיד (גם אם יש רק דוח אחד) — או לפחות כשיש יותר מדומיין אחד — כדי שהמשתמש יוכל להחליף בקלות.
+### 5. Carmen visibility
+Create one self-managed recurring `agent_tasks` row per tenant with `schedule_type='recurring'` + `cron_expression='0 5,14 * * *'` titled "ניטור חשבונות פייסבוק/גוגל" so the user sees it in Carmen's task list and can confirm it ran (`last_run`, `run_count`).
 
-### 3. אזהרה בעת שיוך דוח שלא תואם website של הלקוח
-ב-`AhrefsSettings.tsx` (שורה ~67-133, `linkClientMutation`): לפני ביצוע ה-`UPDATE`, להשוות את ה-`domain` של הדוח ל-`client.website` המנורמל. אם לא תואם — להציג `confirm()` למשתמש:
-> "שים לב — הדומיין `{domain}` לא תואם את האתר של הלקוח (`{client.website}`). לשייך בכל זאת?"
-
-זה ימנע שגיאות שיוך עתידיות בלי לחסום מקרים לגיטימיים.
-
-## תוצאה
-- הדוח של `gg-ds.com` יופיע אצל **ג.ג - אנגלית** בלבד (איפה שצריך).
-- הסלקטור בלקוח **ג.ג - ישראל** יציג רק `ggds.co.il` — ולא יהיה יותר בלבול.
-- בלקוחות עם מספר דומיינים, הסלקטור יציג את הדומיין במפורש.
-- שיוכים שגויים בעתיד יוצגו לאישור לפני ביצוע.
-
-## פרטים טכניים — קבצים שיתעדכנו
-1. **Migration**: `UPDATE ahrefs_reports` (שאילתה אחת).
-2. **`src/components/dynamic-tables/SeoDashboardView.tsx`** — סלקטור דוחות עם הצגת דומיין + הצגה גם כשיש דוח יחיד עם רמז ברור.
-3. **`src/pages/AhrefsSettings.tsx`** — הוספת אזהרת mismatch בלוגיקת `linkClientMutation`.
+### Files touched
+- New: `supabase/functions/cron-sync-google-analytics/index.ts`
+- New: `supabase/functions/cron-sync-google-search-console/index.ts`
+- New: `supabase/functions/cron-sync-ahrefs/index.ts`
+- Edit: `supabase/functions/cron-sync-facebook-insights/index.ts` (add zero-spend anomaly)
+- Edit: `supabase/functions/cron-sync-google-ads/index.ts` (add same anomaly + alert eval)
+- Edit: `supabase/functions/agent-heartbeat/index.ts` (read anomaly events, daily summary)
+- Migration: drop & re-create the cron jobs at 04:00 + 13:00 UTC, schedule heartbeat hourly, seed recurring `agent_tasks`.
 
