@@ -31,6 +31,7 @@ import { SeoCombinedSnapshot } from "./SeoCombinedSnapshot";
 import { toPng } from "html-to-image";
 import { buildBrandedEmailHtml } from "@/lib/emailTemplate";
 import { EmailRecipientsSelector, type EmailOption } from "./EmailRecipientsSelector";
+import { WhatsAppGroupSelect } from "./WhatsAppGroupSelect";
 
 interface ClientReportPanelProps {
   table: any;
@@ -534,17 +535,13 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
 
         {sendWhatsApp && (
           <div className="space-y-2">
-            <Select value={selectedGroupId} onValueChange={setSelectedGroupId}>
-              <SelectTrigger className="h-8 text-xs">
-                <SelectValue placeholder="בחר קבוצה..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">ללא קבוצה - שלח לטלפון</SelectItem>
-                {groups?.map((g) => (
-                  <SelectItem key={g.id} value={g.id}>{g.group_name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <WhatsAppGroupSelect
+              groups={groups}
+              value={selectedGroupId}
+              onValueChange={setSelectedGroupId}
+              triggerClassName="h-8 text-xs"
+              noneLabel="ללא קבוצה - שלח לטלפון"
+            />
             {(!selectedGroupId || selectedGroupId === "__none__") && (
               <Input
                 value={directPhone}

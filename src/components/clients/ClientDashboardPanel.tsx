@@ -25,6 +25,7 @@ import { toPng } from "html-to-image";
 import { buildBrandedEmailHtml } from "@/lib/emailTemplate";
 import { EmailRecipientsSelector, type EmailOption } from "./EmailRecipientsSelector";
 import { ClientDashboardSnapshot } from "./ClientDashboardSnapshot";
+import { WhatsAppGroupSelect } from "./WhatsAppGroupSelect";
 
 interface ClientDashboardPanelProps {
   dashboard: { id: string; name: string };
@@ -413,13 +414,11 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
         </div>
 
         {sendWhatsApp && (
-          <Select value={selectedGroupId} onValueChange={setSelectedGroupId}>
-            <SelectTrigger><SelectValue placeholder="בחר קבוצה..." /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__none__">מספר טלפון ישיר</SelectItem>
-              {groups?.map((g) => <SelectItem key={g.id} value={g.id}>{g.group_name}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <WhatsAppGroupSelect
+            groups={groups}
+            value={selectedGroupId}
+            onValueChange={setSelectedGroupId}
+          />
         )}
 
         {sendEmail && (
