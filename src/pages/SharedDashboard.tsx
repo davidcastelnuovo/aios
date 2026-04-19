@@ -444,24 +444,52 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
     return Object.values(map).sort((a, b) => b.spend - a.spend);
   }, [platformFilter, records]);
 
+  const googleAdsRecords = useMemo(
+    () => records.filter((r: any) => (r._source || '') === 'google_ads'),
+    [records]
+  );
+
   // Google Ads campaign summary - mirrors DashboardView (uses conversions / conversions_value)
   const googleAdsCampaignSummary = useMemo(() => {
-    if (platformFilter !== 'google_ads') return [];
     const map: Record<string, { name: string; campaign_id: string; impressions: number; clicks: number; spend: number; conversions: number; conversions_value: number }> = {};
-    const gaRecords = records.filter((r: any) => (r._source || '') === 'google_ads');
-    gaRecords.forEach((r: any) => {
+
+    googleAdsRecords.forEach((r: any) => {
       const d = r.data || {};
       const name = d.campaign_name || d.campaign || 'ללא שם';
       const key = String(d.campaign_id || name);
-      if (!map[key]) map[key] = { name, campaign_id: String(d.campaign_id || ''), impressions: 0, clicks: 0, spend: 0, conversions: 0, conversions_value: 0 };
+      if (!map[key]) {
+        map[key] = {
+          name,
+          campaign_id: String(d.campaign_id || ''),
+          impressions: 0,
+          clicks: 0,
+          spend: 0,
+          conversions: 0,
+          conversions_value: 0,
+        };
+      }
       map[key].impressions += Number(d.impressions) || 0;
       map[key].clicks += Number(d.clicks) || 0;
       map[key].spend += Number(d.cost) || Number(d.spend) || 0;
       map[key].conversions += Number(d.conversions) || 0;
       map[key].conversions_value += Number(d.conversions_value) || 0;
     });
+
     return Object.values(map).sort((a, b) => b.spend - a.spend);
-  }, [platformFilter, records]);
+  }, [googleAdsRecords]);
+
+  const googleAdsTotals = useMemo(() => {
+    return googleAdsCampaignSummary.reduce(
+      (acc, c) => ({
+        impressions: acc.impressions + c.impressions,
+        clicks: acc.clicks + c.clicks,
+        spend: acc.spend + c.spend,
+        conversions: acc.conversions + c.conversions,
+        conversions_value: acc.conversions_value + c.conversions_value,
+      }),
+      { impressions: 0, clicks: 0, spend: 0, conversions: 0, conversions_value: 0 }
+    );
+  }, [googleAdsCampaignSummary]);
 
   if (isLoading) {
     return (
