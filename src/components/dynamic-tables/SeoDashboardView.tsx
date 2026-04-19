@@ -316,27 +316,21 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
       }
     }
     
-    // Merge GSC data (clicks, impressions, CTR)
-    // GSC position takes priority over Ahrefs estimated position when available,
-    // since GSC reports the real average position from Google Search.
+    // Merge GSC supplementary data (clicks, impressions, CTR, avg position).
+    // Ahrefs remains the PRIMARY position source so the SEO report stays consistent
+    // with the historical dashboard. GSC data is shown alongside, not as a replacement.
     const gscRow = gscMap.get(kwLower);
     const gscPos = gscRow?.position ?? null;
     const ahrefsPos = normalized.position;
-    const effectivePosition = gscPos != null ? gscPos : ahrefsPos;
-
-    // Recompute period changes against GSC current position when GSC is the source,
-    // so "shift" arrows stay consistent with the displayed position.
-    const recompute = (prev: number | null) =>
-      (prev != null && effectivePosition != null) ? prev : prev;
 
     return {
       ...normalized,
-      position: effectivePosition,
+      position: ahrefsPos,
       ahrefs_position: ahrefsPos,
       position_prev_month: prevPos,
       position_3month: pos3m,
       position_yearly: posYear,
-      _position_source: gscPos != null ? 'gsc' : positionSource,
+      _position_source: positionSource,
       gsc_clicks: gscRow?.clicks ?? null,
       gsc_impressions: gscRow?.impressions ?? null,
       gsc_ctr: gscRow?.ctr ?? null,

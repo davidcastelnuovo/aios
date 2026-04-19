@@ -1075,9 +1075,9 @@ export default function DashboardView() {
               <Button onClick={() => navigate(buildPath('/dynamic-tables'))}>עבור לניהול דוחות</Button>
             </Card>
           ) : platformFilter === 'seo' ? (
-            /* SEO tab: render SEO dashboard with Ahrefs + GA Organic data */
+            /* SEO tab: render full SEO report with Ahrefs + GSC + Analytics tabs */
             dashboard?.client_id && currentTenantId ? (
-              <SeoDashboardWithGa tenantId={currentTenantId} clientId={dashboard.client_id} />
+              <SeoReportTabs tenantId={currentTenantId} clientId={dashboard.client_id} />
             ) : null
           ) : platformFilter === 'google_analytics' ? (
             /* Analytics tab: render the same GoogleAnalyticsDashboard used in standalone table view */
