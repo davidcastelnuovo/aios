@@ -134,7 +134,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
     enabled: !!tenantId,
   });
 
-  // Fetch share link
+  // Fetch share link (any existing — active or inactive)
   const { data: shareLink } = useQuery({
     queryKey: ["table-share-link", table.id],
     queryFn: async () => {
@@ -142,7 +142,6 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
         .from("table_shares" as any)
         .select("share_token, is_active")
         .eq("table_id", table.id)
-        .eq("is_active", true)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
