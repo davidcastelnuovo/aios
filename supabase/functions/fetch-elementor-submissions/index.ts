@@ -373,7 +373,10 @@ serve(async (req) => {
         site: { id: site.id, name: site.site_name, url: site.site_url },
         total_available: totalAvailable,
         totals,
-        per_form: Array.from(perFormMap.values()).sort((a, b) => b.total - a.total),
+        per_form: Array.from(perFormMap.values()).map((f: any) => ({
+          ...f,
+          slugs: Array.from(f.slugs || []),
+        })).sort((a, b) => b.total - a.total),
         per_campaign: Array.from(perCampaignMap.values()).map((c) => ({
           ...c,
           forms: Array.from(c.forms),
