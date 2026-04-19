@@ -479,7 +479,7 @@ export default function WordPressSettings() {
 
   // Discover forms + slugs for the mapping site (last 90 days of submissions)
   const { data: discovery, isLoading: isLoadingDiscovery } = useQuery<{
-    per_form: Array<{ form_id: string; form_name: string; total: number; last_30_days: number; sources: Record<string, number> }>;
+    per_form: Array<{ form_id: string; form_name: string; total: number; last_30_days: number; sources: Record<string, number>; slugs?: string[]; sample_referer?: string | null }>;
     per_slug: Array<{ slug: string; submissions: number; google_ads_submissions: number; sample_gad_campaignids: string[] }>;
   }>({
     queryKey: ["wp-discovery", mappingSite?.id],
