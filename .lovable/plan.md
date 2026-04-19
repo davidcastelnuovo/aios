@@ -1,38 +1,66 @@
 
-## הבעיה
 
-בדיאלוג "שיוך אתר ללקוח" (Quick Link), בורר הסוכנות ריק כי השאילתה מסננת רק לפי `tenant_id` של האתר עצמו (`linkSite.tenant_id`). אבל אצלך הסוכנויות הרלוונטיות יושבות ב-tenants אחרים — נגישות דרך `agency_tenant_access` (cross-tenant) או דרך super-admin.
+## ✅ אישרתי באתר — יש 8 לידים מצפון הודו ולדאק
 
-מאותה סיבה גם הטופס המלא (הוספת/עריכת אתר) יציג רשימה ריקה כאשר ב-tenant הנוכחי אין סוכנויות.
+מהאתר eco-trip.landing-p.org בעמוד `/north-india-ladakh/` (90 הימים האחרונים):
+- **8 הגשות** ממקור Google Ads
+- כולן מצביעות על `gad_campaignid=23761421473`
 
-## הפתרון
+## ❌ הבעיה שזיהיתי — **3 באגים** ביישום הקודם
 
-### 1) הרחבת שאילתת הסוכנויות בדיאלוג ה-Quick Link
-- אם המשתמש הוא **super-admin** → לטעון את **כל הסוכנויות** מכל ה-tenants (עם תווית ארגון בסוגריים).
-- אחרת → לטעון סוכנויות מ-tenant של האתר **+** סוכנויות חוצות-ארגון דרך `agency_tenant_access` (אם לאתר יש tenant שונה מה-tenant של המשתמש).
-- אותה לוגיקה בדיוק עבור הלקוחות.
+### באג 1: שיוך לפי Campaign ID לא יעבוד **לעולם** במקרה הזה
+- בגוגל אדס הקמפיין נקרא `טיול לצפון הודו ולדאק - Pmax` עם **campaign_id = 23756715038**
+- באתר ה-`gad_campaignid` של 8 הלידים הוא **23761421473** (זה ה-Asset Group ID של PMax, לא ה-Campaign ID)
+- הם **לעולם לא יתאימו** בהשוואת ID ישירה → לכן `verified_leads = 0`
 
-### 2) זיהוי אוטומטי של tenant היעד בעת שינוי הסוכנות
-- כשנבחרת סוכנות שייכת ל-tenant אחר מאשר ה-tenant של האתר — להוסיף הודעה אינפורמטיבית: "סוכנות זו שייכת לארגון X. הלקוחות שיוצגו יהיו מארגון X."
-- (אופציונלי) לאפשר ל-super-admin **להעביר את האתר ל-tenant של הסוכנות** באוטומציה — או לפחות להציג בולט שזה לא יקרה אוטומטית.
+### באג 2: ה-fallback של slug-matching נכשל
+- ה-slug באתר: `north-india-ladakh`
+- שם הקמפיין: `טיול לצפון הודו ולדאק - Pmax`
+- ההשוואה הנוכחית מנסה לנרמל שם עברי מול slug באנגלית — חסר תרגום/מיפוי
 
-### 3) אותו תיקון בטופס המלא (הוספה/עריכה)
-- super-admin רואה את כל הסוכנויות מכל ה-tenants, מסוננות לפי הארגון שנבחר (אם נבחר).
-- משתמש רגיל רואה את הסוכנויות של ה-tenant שלו + cross-tenant.
+### באג 3: כפילות נוצרת + בעיה ב-`fetch-elementor-submissions`
+- בלוג של הסנכרון רואים `form_name=[object Object]` — הפונקציה לא מחלצת נכון את שם הטופס מ-Elementor
+- (לא קריטי לנושא הנוכחי, אבל פוגם)
 
-### 4) שיפור תצוגה
-- בכל שורה ב-Select של סוכנות/לקוח להציג גם את שם הארגון בסוגריים: `שם הסוכנות (ארגון)` — כדי למנוע בלבול כשמספר סוכנויות בשמות דומים מתחת לארגונים שונים.
+## 🛠 התוכנית לתיקון
+
+### 1. הוספת **שיוך לפי Slug של URL** (הפתרון העיקרי)
+במקום לסמוך על השם, נתבסס על מה שיש לנו — **ה-URL של ההגשה**:
+
+- בסנכרון Google Ads, נחשב **map חדש** מבוסס URL slug (`north-india-ladakh` → 8 לידים) במקום רק campaign_id.
+- ניצור **טבלה ידנית** של מיפוי `slug → campaign_id` שיישמר ברשומה של האתר (`social_media_wordpress_sites.campaign_url_mapping` — עמודה JSON חדשה).
+- **אוטומציה ראשונית**: אם slug מופיע בקליקים של גוגל אדס (דרך `final_url`/`destination_url` של ה-ad), נמלא את המיפוי אוטומטית. אם לא, המשתמש משייך ידנית פעם אחת.
+
+### 2. UI חדש: **כפתור "שייך עמודי נחיתה לקמפיינים"** בדף האתר
+- בדף `WordPressSettings` יתווסף כפתור שפותח דיאלוג.
+- מוצגת רשימה של כל ה-slugs שהתגלו באתר (מתוך ה-submissions) → שדה Select לכל slug עם רשימת הקמפיינים הקיימים בלקוח.
+- שמירה מעדכנת `campaign_url_mapping` באתר.
+
+### 3. תיקון לוגיקת ה-Verification ב-`sync-google-ads-data`
+- שיוך **ראשי**: לפי `campaign_url_mapping[slug] → campaign_id`
+- שיוך **משני** (fallback): לפי `gad_campaignid` ישיר (כשהם כן תואמים)
+- שיוך **שלישי** (fallback): לפי slug normalization מול שם הקמפיין
+- שמירת `verified_source` עם ה-slug שזוהה (לתצוגה).
+
+### 4. תיקון `fetch-elementor-submissions`
+- הוצאת `form_name` נכונה מהאובייקט (כרגע מקבל אובייקט במקום string).
+
+### 5. תיקון התצוגה ב-`DynamicTableView`
+- אם `verified_leads > conversions` → תג **כתום** (כבר קיים).
+- הוספת **טוטיפ מורחב** שמראה את ה-slug ומספר הלידים בפועל מהאתר.
 
 ## פירוט טכני
 
-קובץ אחד שמשתנה: `src/pages/WordPressSettings.tsx`
+**שינוי DB:** הוספת עמודה `campaign_url_mapping JSONB` ל-`social_media_wordpress_sites` במבנה:
+```json
+{ "north-india-ladakh": "23756715038", "antarctica": "23718662347", ... }
+```
 
-- שאילתת `linkAgencies` תעודכן:
-  - super-admin: `select id, name, tenant_id, tenants(name)` ללא פילטר tenant
-  - משתמש רגיל: שתי שאילתות מאוחדות — `agencies` ב-tenant שלו + `agencies` שהוא ניגש אליהן דרך `agency_tenant_access`
-- שאילתת `linkClients` תעודכן בדומה — אבל מסוננת לפי `agency_id` שנבחרה (הלקוח בהכרח שייך ל-tenant של הסוכנות).
-- אותו עדכון לשאילתות `agencies` ו-`clients` של הטופס המלא.
-- ב-`linkMutation` לעדכן גם את `tenant_id` של האתר אם הסוכנות שנבחרה שייכת ל-tenant אחר (אופציונלי, אבל נחוץ כדי שה-RLS יעבוד אחר כך).
+**קבצים שמשתנים:**
+- `supabase/functions/fetch-elementor-submissions/index.ts` — תיקון `form_name`, החזרת `slug` לכל הגשה
+- `supabase/functions/sync-google-ads-data/index.ts` — שימוש ב-`campaign_url_mapping` כשיוך ראשי
+- `src/pages/WordPressSettings.tsx` — כפתור + דיאלוג מיפוי slugs לקמפיינים
+- `src/pages/DynamicTableView.tsx` — טוליטיפ עם פירוט slug
 
-## ללא שינויי DB
-לא נדרשת מיגרציה. רק הרחבת ה-queries ב-frontend.
+**ללא כפילות חדשה** — נשארים על אותה ארכיטקטורה (פונקציה אחת מושכת לידים, השנייה מאמתת).
+
