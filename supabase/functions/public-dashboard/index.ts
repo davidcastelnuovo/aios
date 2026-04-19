@@ -12,24 +12,28 @@ function getDateRange(filter: string): { startDate: string | null; endDate: stri
   let startDate: string | null = null;
   let endDate: string | null = null;
 
+  // Standard: relative ranges end YESTERDAY (exclude today) to match
+  // crm-records edge function and DashboardView.wooDateRange.
+  const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+  const yesterdayStr = yesterday.toISOString().split("T")[0];
+
   switch (filter) {
     case "today":
       startDate = today.toISOString().split("T")[0];
       endDate = startDate;
       break;
-    case "yesterday": {
-      const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
-      startDate = yesterday.toISOString().split("T")[0];
-      endDate = startDate;
+    case "yesterday":
+      startDate = yesterdayStr;
+      endDate = yesterdayStr;
       break;
-    }
     case "last_7_days":
-      startDate = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-      endDate = today.toISOString().split("T")[0];
+      // 7 full days ending yesterday
+      startDate = new Date(yesterday.getTime() - 6 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+      endDate = yesterdayStr;
       break;
     case "this_month":
       startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
-      endDate = today.toISOString().split("T")[0];
+      endDate = yesterdayStr;
       break;
     case "last_month": {
       const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -39,12 +43,12 @@ function getDateRange(filter: string): { startDate: string | null; endDate: stri
       break;
     }
     case 'last_70_days':
-      startDate = new Date(today.getTime() - 70 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-      endDate = today.toISOString().split("T")[0];
+      startDate = new Date(yesterday.getTime() - 69 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+      endDate = yesterdayStr;
       break;
-    default: // last_30_days
-      startDate = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-      endDate = today.toISOString().split("T")[0];
+    default: // last_30_days — 30 full days ending yesterday
+      startDate = new Date(yesterday.getTime() - 29 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+      endDate = yesterdayStr;
       break;
   }
 
