@@ -425,7 +425,7 @@ Deno.serve(async (req) => {
       if (tableClientId) {
         const { data: wpSites } = await supabaseAdmin
           .from('social_media_wordpress_sites')
-          .select('id, site_url, campaign_url_mapping')
+          .select('id, site_url, campaign_url_mapping, campaign_form_mapping')
           .eq('client_id', tableClientId)
           .eq('is_active', true)
           .limit(1);
