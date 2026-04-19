@@ -26,7 +26,7 @@ import {
   Camera,
 } from "lucide-react";
 import { useTenantPath } from "@/hooks/useTenantPath";
-import { ClientReportSnapshot } from "./ClientReportSnapshot";
+import { ClientTableSnapshot } from "./ClientTableSnapshot";
 import { SeoCombinedSnapshot } from "./SeoCombinedSnapshot";
 import { toPng } from "html-to-image";
 import { buildBrandedEmailHtml } from "@/lib/emailTemplate";
@@ -634,10 +634,9 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
               tableName={table.name}
             />
           ) : (
-            <ClientReportSnapshot
+            <ClientTableSnapshot
               ref={snapshotRef}
-              tableId={table.id}
-              tableName={table.name}
+              tableSlug={table.slug}
             />
           )}
         </div>,
