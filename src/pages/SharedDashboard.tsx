@@ -491,6 +491,15 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
     );
   }, [googleAdsCampaignSummary]);
 
+  // Google Ads campaign type — driven strictly by table integration_settings.campaign_type.
+  const googleAdsCampaignType: 'leads' | 'ecommerce' = useMemo(() => {
+    const gaTables = (tables || []).filter((t: any) => t.integration_type === 'google_ads');
+    if (gaTables.some((t: any) => t.integration_settings?.campaign_type === 'ecommerce')) {
+      return 'ecommerce';
+    }
+    return 'leads';
+  }, [tables]);
+
   if (isLoading) {
     return (
       <div className="container mx-auto py-8 px-4 space-y-6" dir="rtl">
