@@ -1112,11 +1112,24 @@ export default function WordPressSettings() {
                 <SelectContent>
                   <SelectItem value="none">ללא</SelectItem>
                   {linkClients.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}{c.tenant_name && c.tenant_id !== linkSite?.tenant_id ? ` (${c.tenant_name})` : ""}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Cross-tenant warning when selected agency belongs to another org */}
+            {linkSelectedAgency && linkSite && linkSelectedAgency.tenant_id !== linkSite.tenant_id && (
+              <div className="rounded-lg border border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/20 p-3 flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+                <p className="text-xs text-blue-900 dark:text-blue-200">
+                  סוכנות זו שייכת לארגון <strong>{linkSelectedAgency.tenant_name}</strong>.
+                  בשמירה, האתר יועבר לארגון זה כדי שהשיוך יפעל כראוי.
+                </p>
+              </div>
+            )}
 
             {linkSite?.client_id && linkClient && linkClient !== linkSite.client_id && (
               <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 flex items-start gap-2">
