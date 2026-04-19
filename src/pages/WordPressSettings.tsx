@@ -643,7 +643,9 @@ export default function WordPressSettings() {
             <SelectContent>
               <SelectItem value="none">ללא</SelectItem>
               {clients.map((c) => (
-                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}{c.tenant_name && c.tenant_id !== (form.tenant_id || tenantId) ? ` (${c.tenant_name})` : ""}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
