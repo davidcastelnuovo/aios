@@ -2754,7 +2754,16 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                           {hasVerifiedData && (
                             <td className="p-2 text-center">
                               <div className="inline-flex items-center gap-1.5 justify-center">
-                                <span className={hasDiscrepancy ? "font-semibold text-amber-600" : "font-medium text-foreground"}>
+                                <span
+                                  className={hasDiscrepancy ? "font-semibold text-amber-600" : "font-medium text-foreground"}
+                                  title={(() => {
+                                    const sources = filteredRecords
+                                      .filter((r) => r.data?.campaign_name === campaignName && r.data?.verified_source)
+                                      .map((r) => r.data?.verified_source as string);
+                                    const uniqueSources = Array.from(new Set(sources));
+                                    return uniqueSources.length > 0 ? `מקור: ${uniqueSources.join(' | ')}` : '';
+                                  })()}
+                                >
                                   {verified.toLocaleString('he-IL')}
                                 </span>
                                 {hasDiscrepancy && (
