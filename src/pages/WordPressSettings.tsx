@@ -468,6 +468,80 @@ export default function WordPressSettings() {
     setLinkClient(site.client_id || "");
   };
 
+  const openMapping = (site: WordPressSite) => {
+    setMappingSite(site);
+    setMappingDraft({ ...(site.campaign_url_mapping || {}) });
+  };
+
+  // Discover slugs for the mapping site (last 90 days of submissions)
+  const { data: slugDiscovery, isLoading: isLoadingSlugs } = useQuery<{
+    per_slug: Array<{ slug: string; submissions: number; google_ads_submissions: number; sample_gad_campaignids: string[] }>;
+  }>({
+    queryKey: ["wp-discovered-slugs", mappingSite?.id],
+    queryFn: async () => {
+      if (!mappingSite) return { per_slug: [] };
+      const { data, error } = await supabase.functions.invoke("fetch-elementor-submissions", {
+        body: { site_id: mappingSite.id, days: 90 },
+      });
+      if (error) throw error;
+      return { per_slug: (data?.per_slug || []) as any[] };
+    },
+    enabled: !!mappingSite,
+    staleTime: 1000 * 60 * 5,
+  });
+  const discoveredSlugs = slugDiscovery?.per_slug || [];
+
+  // Campaigns for mapping site's client (Google Ads campaigns from synced records)
+  const { data: clientCampaigns = [] } = useQuery<Array<{ campaign_id: string; campaign_name: string }>>({
+    queryKey: ["wp-client-campaigns", mappingSite?.client_id],
+    queryFn: async () => {
+      if (!mappingSite?.client_id) return [];
+      const { data: tables, error: tErr } = await supabase
+        .from("crm_tables")
+        .select("id")
+        .eq("client_id", mappingSite.client_id)
+        .eq("integration_type", "google_ads");
+      if (tErr) throw tErr;
+      if (!tables || tables.length === 0) return [];
+      const tableIds = tables.map((t: any) => t.id);
+      const { data: records, error: rErr } = await supabase
+        .from("crm_records")
+        .select("data")
+        .in("table_id", tableIds)
+        .limit(1000);
+      if (rErr) throw rErr;
+      const map = new Map<string, string>();
+      for (const r of records || []) {
+        const cid = (r as any).data?.campaign_id;
+        const cname = (r as any).data?.campaign_name;
+        if (cid && cname && !map.has(cid)) map.set(cid, cname);
+      }
+      return Array.from(map.entries())
+        .map(([campaign_id, campaign_name]) => ({ campaign_id, campaign_name }))
+        .sort((a, b) => a.campaign_name.localeCompare(b.campaign_name));
+    },
+    enabled: !!mappingSite?.client_id,
+  });
+
+  const mappingMutation = useMutation({
+    mutationFn: async ({ id, mapping }: { id: string; mapping: Record<string, string> }) => {
+      const clean = Object.fromEntries(
+        Object.entries(mapping).filter(([_, v]) => v && v.length > 0)
+      );
+      const { error } = await supabase
+        .from("social_media_wordpress_sites" as any)
+        .update({ campaign_url_mapping: clean, updated_at: new Date().toISOString() })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["wordpress-sites-admin"] });
+      toast.success("המיפוי נשמר. סנכרן את דוח גוגל אדס כדי לראות את ההשפעה");
+      setMappingSite(null);
+    },
+    onError: (e: Error) => toast.error("שגיאה: " + e.message),
+  });
+
   // Map of clientId -> name for table display (across tenants for super-admin we fetch lazily per site tenant)
   const { data: clientsMap = {} } = useQuery<Record<string, string>>({
     queryKey: ["clients-map-for-wp", sites.map((s) => s.client_id).filter(Boolean).join(",")],
