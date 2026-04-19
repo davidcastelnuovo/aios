@@ -32,7 +32,7 @@ import { toast } from "sonner";
 import {
   Globe, Plus, Trash2, Loader2, ExternalLink, RefreshCw,
   ShoppingCart, ArrowLeft, Settings, CheckCircle2, AlertCircle,
-  Edit, Key, Link2, UserPlus,
+  Edit, Key, Link2, UserPlus, MapPin,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -53,6 +53,7 @@ interface WordPressSite {
   agency_id: string | null;
   notes: string | null;
   created_at: string;
+  campaign_url_mapping?: Record<string, string> | null;
 }
 
 interface Tenant {
