@@ -50,9 +50,10 @@ Deno.serve(async (req) => {
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
     const hasServiceRole = !!serviceRoleKey && authHeader === `Bearer ${serviceRoleKey}`;
 
-    let user: { id: string };
+    let user: { id: string | null };
     if (isInternalCron && hasServiceRole) {
-      user = { id: '00000000-0000-0000-0000-000000000000' };
+      // System cron: created_by must be NULL (placeholder UUID violates FK to auth.users)
+      user = { id: null };
     } else {
       const { data: { user: authedUser }, error: authError } = await supabase.auth.getUser();
       if (authError || !authedUser) {

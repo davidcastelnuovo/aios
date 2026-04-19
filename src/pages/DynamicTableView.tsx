@@ -2740,7 +2740,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode }: DynamicT
                           <td className="p-2 text-right font-medium">{campaignName}</td>
                           <td className="p-2 text-center">{data.impressions.toLocaleString('he-IL')}</td>
                           <td className="p-2 text-center">{data.clicks.toLocaleString('he-IL')}</td>
-                          <td className="p-2 text-center text-green-600 font-medium">{data.conversions.toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
+                          <td className="p-2 text-center text-green-600 font-medium">{Math.round(data.conversions).toLocaleString('he-IL')}</td>
                           <td className="p-2 text-center">₪{data.cost.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
                           {isEcommerce ? (
                             <>
@@ -2759,7 +2759,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode }: DynamicT
                       <td className="p-2 text-right">סה״כ</td>
                       <td className="p-2 text-center">{totals.impressions.toLocaleString('he-IL')}</td>
                       <td className="p-2 text-center">{totals.clicks.toLocaleString('he-IL')}</td>
-                      <td className="p-2 text-center text-green-600">{totals.conversions.toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
+                      <td className="p-2 text-center text-green-600">{Math.round(totals.conversions).toLocaleString('he-IL')}</td>
                       <td className="p-2 text-center">₪{totals.cost.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
                       {isEcommerce ? (
                         <>
