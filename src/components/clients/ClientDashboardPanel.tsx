@@ -21,7 +21,7 @@ import {
   Camera,
 } from "lucide-react";
 import { useTenantPath } from "@/hooks/useTenantPath";
-import { toPng } from "html-to-image";
+import { toPng, toJpeg } from "html-to-image";
 import { buildBrandedEmailHtml } from "@/lib/emailTemplate";
 import { EmailRecipientsSelector, type EmailOption } from "./EmailRecipientsSelector";
 import { ClientDashboardSnapshot } from "./ClientDashboardSnapshot";
@@ -222,9 +222,31 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
       // Wait for data to load and render inside the snapshot
       await new Promise((r) => setTimeout(r, 2500));
 
-      const dataUrl = await toPng(node, {
-        quality: 0.92,
-        pixelRatio: 1.5,
+      // Measure actual rendered dimensions to choose safe scale.
+      // SharedDashboard can be very tall (many cards/charts) → at pixelRatio 1.5
+      // we easily exceeded ~25MB and tripped Gmail / Green API / localStorage limits.
+      const rect = node.getBoundingClientRect();
+      const heightPx = Math.max(rect.height, node.scrollHeight || 0);
+      const widthPx = Math.max(rect.width, node.scrollWidth || 0);
+      const totalPx = heightPx * widthPx;
+
+      // Pick pixelRatio adaptively (max image area ≈ 1200×8000 = 9.6M px @1.0)
+      let pixelRatio = 1.5;
+      if (totalPx > 6_000_000) pixelRatio = 1.0;
+      if (totalPx > 12_000_000) pixelRatio = 0.85;
+      if (totalPx > 20_000_000) pixelRatio = 0.7;
+
+      console.log("[DashboardSnapshot] size", {
+        widthPx,
+        heightPx,
+        totalPx,
+        pixelRatio,
+      });
+
+      // Always use JPEG for dashboards — far smaller than PNG for chart-heavy content.
+      const dataUrl = await toJpeg(node, {
+        quality: 0.82,
+        pixelRatio,
         backgroundColor: "#ffffff",
         skipFonts: true,
         cacheBust: true,
@@ -234,16 +256,38 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
         throw new Error("הצילום ריק");
       }
 
-      setScreenshotUrl(dataUrl);
-      try {
-        localStorage.setItem(CACHE_KEY_PREFIX + dashboard.id, dataUrl);
-      } catch {
-        // localStorage quota exceeded - skip cache
-      }
       const res = await fetch(dataUrl);
       const blob = await res.blob();
+      const sizeMB = blob.size / (1024 * 1024);
+      console.log(
+        `[DashboardSnapshot] blob ${sizeMB.toFixed(2)}MB (${blob.type})`,
+      );
+
+      // Hard guard: Gmail caps attachments at 25MB. Anything over ~20MB
+      // also tends to fail in Green API. If we still exceed, abort cleanly.
+      if (sizeMB > 22) {
+        throw new Error(
+          `הצילום גדול מדי (${sizeMB.toFixed(1)}MB). נסה לפצל את הדשבורד לפחות כרטיסים.`,
+        );
+      }
+
+      setScreenshotUrl(dataUrl);
+      // Only cache if it fits comfortably in localStorage (~5MB quota).
+      if (dataUrl.length < 4_000_000) {
+        try {
+          localStorage.setItem(CACHE_KEY_PREFIX + dashboard.id, dataUrl);
+        } catch {
+          // localStorage quota exceeded - skip cache
+        }
+      } else {
+        try {
+          localStorage.removeItem(CACHE_KEY_PREFIX + dashboard.id);
+        } catch {
+          /* ignore */
+        }
+      }
       setScreenshotBlob(blob);
-      toast.success("צילום הדשבורד נוצר");
+      toast.success(`צילום הדשבורד נוצר (${sizeMB.toFixed(1)}MB)`);
       return blob;
     } catch (err: any) {
       console.error("Dashboard screenshot error:", err);
