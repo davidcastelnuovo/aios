@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +40,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 interface ClientUpdatesTabProps {
   clientId: string;
   clientName: string;
+  currentMoodStatus?: string | null;
 }
 
 type DateFilter = "week" | "month" | "all";
@@ -62,7 +63,7 @@ const INTERACTION_TYPES = [
   { value: "other",           label: "אחר",           icon: AlertTriangle },
 ];
 
-export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps) {
+export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: ClientUpdatesTabProps) {
   const [dateFilter, setDateFilter] = useState<DateFilter>("month");
   const [editingTask, setEditingTask] = useState<any>(null);
   const [newUpdate, setNewUpdate] = useState("");
@@ -72,8 +73,13 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
   const { user } = useCurrentUser();
 
   // ── CRM: communication log state ──────────────────────────────────────────
-  const [commStatus, setCommStatus] = useState<string>("happy");
+  const [commStatus, setCommStatus] = useState<string>(currentMoodStatus || "happy");
   const [commInteraction, setCommInteraction] = useState<string>("call");
+
+  // Sync local state with the actual client mood_status whenever it changes
+  useEffect(() => {
+    if (currentMoodStatus) setCommStatus(currentMoodStatus);
+  }, [currentMoodStatus]);
 
   // Fetch latest communication log for this client
   const { data: latestComm } = useQuery({
@@ -99,7 +105,13 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
     mutationFn: async (statusOverride?: string) => {
       if (!tenantId || !user?.id) throw new Error("Missing tenant or user");
       const statusToSave = statusOverride ?? commStatus;
-      // Insert into communication_logs
+      // 1) Update mood_status FIRST so the main badge syncs even if log insert fails
+      const { error: clientError } = await supabase
+        .from("clients")
+        .update({ mood_status: statusToSave } as any)
+        .eq("id", clientId);
+      if (clientError) throw clientError;
+      // 2) Then insert into communication_logs (best-effort)
       const { error: logError } = await (supabase as any)
         .from("communication_logs")
         .insert({
@@ -109,15 +121,15 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
           interaction_type: commInteraction,
           created_by: user.id,
         });
-      if (logError) throw logError;
-      // Update mood_status directly (unified values)
-      await supabase.from("clients").update({ mood_status: statusToSave } as any).eq("id", clientId);
+      if (logError) console.warn("communication_logs insert failed:", logError);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["comm-log-latest", clientId] });
       queryClient.invalidateQueries({ queryKey: ["communication-logs-latest"] });
       queryClient.invalidateQueries({ queryKey: ["comm-logs-agency"] });
       queryClient.invalidateQueries({ queryKey: ["clients"] });
+      queryClient.invalidateQueries({ queryKey: ["clients-chat"] });
+      queryClient.invalidateQueries({ queryKey: ["client", clientId] });
       toast.success("מצב לקוח עודכן");
     },
     onError: (err: any) => toast.error(err?.message || "שגיאה בשמירת עדכון"),

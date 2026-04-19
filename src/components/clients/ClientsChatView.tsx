@@ -1125,7 +1125,11 @@ export function ClientsChatView({
                 </TabsContent>
 
                 <TabsContent value="updates" className="mt-0">
-                  <ClientUpdatesTab clientId={selectedClient.id} clientName={selectedClient.name || "לקוח"} />
+                  <ClientUpdatesTab
+                    clientId={selectedClient.id}
+                    clientName={selectedClient.name || "לקוח"}
+                    currentMoodStatus={(selectedClient as any).mood_status}
+                  />
                 </TabsContent>
 
                 <TabsContent value="wordpress" className="mt-0">
