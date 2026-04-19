@@ -115,6 +115,12 @@ export default function SharedTable() {
     [data?.table?.integration_settings]
   );
 
+  // Honor table-level campaign_type as source of truth
+  const tableCampaignType = String((data?.table?.integration_settings as any)?.campaign_type || '').toLowerCase();
+  const forceLeadsOnly = tableCampaignType === 'leads' || tableCampaignType === 'lead';
+  const forceEcommerceOnly = tableCampaignType === 'ecommerce';
+  const isGoogleAds = integrationType === 'google_ads';
+
   // For integration tables: filter only daily records for analytics
   const filteredRecords = useMemo(() => {
     const recs = data?.records || [];
