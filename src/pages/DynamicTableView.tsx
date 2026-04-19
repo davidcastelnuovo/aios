@@ -2389,7 +2389,21 @@ export default function DynamicTableView({ embedTableSlug, embedMode }: DynamicT
 
             acc[campaignName].impressions += Number(record.data?.impressions) || 0;
             acc[campaignName].clicks += Number(record.data?.clicks) || 0;
-            acc[campaignName].leads += Number(record.data?.leads) || 0;
+            // Unified lead calculation: covers form leads (leadgen_grouped),
+            // website/pixel leads (website_leads, offsite_conversion_fb_pixel_lead, offsite_conversion),
+            // and standard leads/conversions. Picks the highest single source to avoid double-counting
+            // since the sync function already aggregates these into `leads` when possible.
+            const d = record.data || {};
+            const effectiveLeads = Math.max(
+              Number(d.leads) || 0,
+              Number(d.conversions) || 0,
+              Number(d.website_leads) || 0,
+              Number(d.offsite_conversion_fb_pixel_lead) || 0,
+              Number(d.offsite_conversion) || 0,
+              Number(d.leadgen_grouped) || 0,
+              Number(d.lead) || 0,
+            );
+            acc[campaignName].leads += effectiveLeads;
             acc[campaignName].spend += Number(record.data?.spend) || 0;
             acc[campaignName].purchases += Number(record.data?.purchases) || 0;
             acc[campaignName].purchase_value += Number(record.data?.purchase_value) || 0;
