@@ -93,7 +93,7 @@ const matchesPlatformFilter = (integrationType: string, filter: PlatformFilter):
 const formatNumber = (num: number) => {
   if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
   if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
-  return num.toFixed(num % 1 === 0 ? 0 : 1);
+  return Math.round(num).toString();
 };
 
 const formatCurrency = (num: number) =>
