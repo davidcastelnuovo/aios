@@ -25,6 +25,7 @@ import { toPng } from "html-to-image";
 import { buildBrandedEmailHtml } from "@/lib/emailTemplate";
 import { EmailRecipientsSelector, type EmailOption } from "./EmailRecipientsSelector";
 import { ClientDashboardSnapshot } from "./ClientDashboardSnapshot";
+import { WhatsAppGroupSelect } from "./WhatsAppGroupSelect";
 
 interface ClientDashboardPanelProps {
   dashboard: { id: string; name: string };
