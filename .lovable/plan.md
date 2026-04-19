@@ -1,66 +1,60 @@
 
+## הבעיה שצריך לתקן
+כרגע שכבת האימות בדוח Google Ads נשענת בעיקר על `slug` של העמוד. זה לא מתאים למקרה שלך: בפועל הזיהוי היציב יותר הוא לפי **טופס Elementor** (`form_id` / `form_name`), לא לפי עמוד נחיתה. לכן אפשר לראות מצב שבו אני יודע שיש 8 לידים בטופס הנכון, אבל הדוח לא משייך אותם לקמפיין הנכון.
 
-## ✅ אישרתי באתר — יש 8 לידים מצפון הודו ולדאק
+## מה אבנה
+### 1. אחליף את מנגנון המיפוי הראשי מ"עמוד" ל"טופס"
+- בדיאלוג ההגדרות של WordPress אחליף את "שיוך עמודי נחיתה לקמפיינים" ל-**"שיוך טפסים לקמפיינים"**.
+- אציג את כל הטפסים שהתגלו מהאתר (`per_form`) עם `form_name`, `form_id`, וכמות submissions.
+- לכל טופס יהיה Select של קמפיין Google Ads.
 
-מהאתר eco-trip.landing-p.org בעמוד `/north-india-ladakh/` (90 הימים האחרונים):
-- **8 הגשות** ממקור Google Ads
-- כולן מצביעות על `gad_campaignid=23761421473`
+### 2. אשמור מיפוי מסודר לפי טופס
+- אוסיף שדה JSON חדש באתר, למשל `campaign_form_mapping`.
+- המבנה יהיה:
+```json
+{
+  "form_123": "23756715038",
+  "form_456": "23718662347"
+}
+```
+- כך המיפוי יהיה חד וברור, בלי לערב עמודים כשלא צריך.
 
-## ❌ הבעיה שזיהיתי — **3 באגים** ביישום הקודם
+### 3. אעדכן את `sync-google-ads-data` כך שהאימות יעבוד לפי טופס
+סדר האימות החדש:
+1. **מיפוי ידני לפי `form_id -> campaign_id`**  
+2. fallback לפי `gad_campaignid` ישיר  
+3. רק אם צריך תאימות לאחור: fallback ישן/זמני ל-slug, אבל לא כמנגנון הראשי
 
-### באג 1: שיוך לפי Campaign ID לא יעבוד **לעולם** במקרה הזה
-- בגוגל אדס הקמפיין נקרא `טיול לצפון הודו ולדאק - Pmax` עם **campaign_id = 23756715038**
-- באתר ה-`gad_campaignid` של 8 הלידים הוא **23761421473** (זה ה-Asset Group ID של PMax, לא ה-Campaign ID)
-- הם **לעולם לא יתאימו** בהשוואת ID ישירה → לכן `verified_leads = 0`
+כך לא אבנה אינטגרציה חדשה, אלא רק אחליף את שכבת השיוך הקיימת למנגנון נכון.
 
-### באג 2: ה-fallback של slug-matching נכשל
-- ה-slug באתר: `north-india-ladakh`
-- שם הקמפיין: `טיול לצפון הודו ולדאק - Pmax`
-- ההשוואה הנוכחית מנסה לנרמל שם עברי מול slug באנגלית — חסר תרגום/מיפוי
+### 4. אנקה את הכפילות מה-UI ומהלוגיקה
+- אסיר מהזרימה הראשית את דיאלוג המיפוי לפי עמוד.
+- ב-`DynamicTableView` אציג tooltip/פירוט לפי **שם הטופס** שאומת, לא לפי slug.
+- אשאיר מקור אמת אחד:
+  - `fetch-elementor-submissions` מושך submissions
+  - `sync-google-ads-data` רק מאמת ומשייך אותם לדוח
 
-### באג 3: כפילות נוצרת + בעיה ב-`fetch-elementor-submissions`
-- בלוג של הסנכרון רואים `form_name=[object Object]` — הפונקציה לא מחלצת נכון את שם הטופס מ-Elementor
-- (לא קריטי לנושא הנוכחי, אבל פוגם)
+## למה זה יפתור את "צפון הודו ולדאק"
+אם 8 הלידים הגיעו דרך אותו טופס Elementor של "צפון הודו ולדאק", אז אחרי שנמפה את **הטופס הזה** לקמפיין המתאים:
+- כל ה-8 ישויכו לקמפיין הנכון
+- הדוח של Echo יתעדכן בהתאם בסנכרון
+- לא נהיה תלויים יותר בשם עמוד / slug / asset group
 
-## 🛠 התוכנית לתיקון
-
-### 1. הוספת **שיוך לפי Slug של URL** (הפתרון העיקרי)
-במקום לסמוך על השם, נתבסס על מה שיש לנו — **ה-URL של ההגשה**:
-
-- בסנכרון Google Ads, נחשב **map חדש** מבוסס URL slug (`north-india-ladakh` → 8 לידים) במקום רק campaign_id.
-- ניצור **טבלה ידנית** של מיפוי `slug → campaign_id` שיישמר ברשומה של האתר (`social_media_wordpress_sites.campaign_url_mapping` — עמודה JSON חדשה).
-- **אוטומציה ראשונית**: אם slug מופיע בקליקים של גוגל אדס (דרך `final_url`/`destination_url` של ה-ad), נמלא את המיפוי אוטומטית. אם לא, המשתמש משייך ידנית פעם אחת.
-
-### 2. UI חדש: **כפתור "שייך עמודי נחיתה לקמפיינים"** בדף האתר
-- בדף `WordPressSettings` יתווסף כפתור שפותח דיאלוג.
-- מוצגת רשימה של כל ה-slugs שהתגלו באתר (מתוך ה-submissions) → שדה Select לכל slug עם רשימת הקמפיינים הקיימים בלקוח.
-- שמירה מעדכנת `campaign_url_mapping` באתר.
-
-### 3. תיקון לוגיקת ה-Verification ב-`sync-google-ads-data`
-- שיוך **ראשי**: לפי `campaign_url_mapping[slug] → campaign_id`
-- שיוך **משני** (fallback): לפי `gad_campaignid` ישיר (כשהם כן תואמים)
-- שיוך **שלישי** (fallback): לפי slug normalization מול שם הקמפיין
-- שמירת `verified_source` עם ה-slug שזוהה (לתצוגה).
-
-### 4. תיקון `fetch-elementor-submissions`
-- הוצאת `form_name` נכונה מהאובייקט (כרגע מקבל אובייקט במקום string).
-
-### 5. תיקון התצוגה ב-`DynamicTableView`
-- אם `verified_leads > conversions` → תג **כתום** (כבר קיים).
-- הוספת **טוטיפ מורחב** שמראה את ה-slug ומספר הלידים בפועל מהאתר.
+## קבצים שאעדכן
+- `src/pages/WordPressSettings.tsx` — החלפת מיפוי Slugs במיפוי Forms
+- `supabase/functions/sync-google-ads-data/index.ts` — מעבר לאימות לפי `form_id`
+- `src/pages/DynamicTableView.tsx` — tooltip ותצוגת מקור לפי טופס
+- `supabase/functions/fetch-elementor-submissions/index.ts` — רק אם צריך חיזוק קטן לנתוני `per_form`, לא בנייה מחדש
+- מיגרציה חדשה להוספת `campaign_form_mapping`
 
 ## פירוט טכני
+- לא אבנה אינטגרציה כפולה.
+- לא אשכפל שליפת submissions.
+- אשמור על אותה ארכיטקטורה, אבל אחליף את מפתח השיוך מ-`slug` ל-`form_id`.
+- אם יש קוד ישן של slug-mapping בזרימה הראשית, אנקה אותו כדי שלא יהיו שני מנגנוני שיוך שמתחרים זה בזה.
 
-**שינוי DB:** הוספת עמודה `campaign_url_mapping JSONB` ל-`social_media_wordpress_sites` במבנה:
-```json
-{ "north-india-ladakh": "23756715038", "antarctica": "23718662347", ... }
-```
-
-**קבצים שמשתנים:**
-- `supabase/functions/fetch-elementor-submissions/index.ts` — תיקון `form_name`, החזרת `slug` לכל הגשה
-- `supabase/functions/sync-google-ads-data/index.ts` — שימוש ב-`campaign_url_mapping` כשיוך ראשי
-- `src/pages/WordPressSettings.tsx` — כפתור + דיאלוג מיפוי slugs לקמפיינים
-- `src/pages/DynamicTableView.tsx` — טוליטיפ עם פירוט slug
-
-**ללא כפילות חדשה** — נשארים על אותה ארכיטקטורה (פונקציה אחת מושכת לידים, השנייה מאמתת).
-
+## תוצאה צפויה
+אחרי המימוש:
+- נוכל לשייך את טופס "צפון הודו ולדאק" ישירות לקמפיין המתאים
+- להריץ סנכרון מחדש
+- ולראות בדוח את מספר הלידים המעודכן לפי מה שבאמת קיים באתר
