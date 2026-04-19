@@ -1059,6 +1059,18 @@ export default function WordPressSettings() {
                               {site.client_id ? <Link2 className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
                             </Button>
 
+                            {site.client_id && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="שייך עמודי נחיתה לקמפיינים"
+                                onClick={() => openMapping(site)}
+                                className={site.campaign_url_mapping && Object.keys(site.campaign_url_mapping).length > 0 ? "text-emerald-600" : "text-blue-600"}
+                              >
+                                <MapPin className="h-4 w-4" />
+                              </Button>
+                            )}
+
                             <Button
                               variant="ghost"
                               size="icon"
