@@ -2730,46 +2730,52 @@ export default function DynamicTableView({ embedTableSlug, embedMode }: DynamicT
                       )}
                     </tr>
                   </thead>
-                  <tbody>
+                   <tbody>
                     {Object.entries(campaignGroups).map(([campaignName, data]) => {
                       const costPerConversion = data.conversions > 0 ? data.cost / data.conversions : 0;
                       // Calculate ROAS as conversions value / cost
                       const roas = data.cost > 0 ? data.conversions_value / data.cost : 0;
+                      const gaCurrency = getCurrencySymbol(table.integration_settings?.currency);
                       return (
                         <tr key={campaignName} className="border-b hover:bg-muted/30">
                           <td className="p-2 text-right font-medium">{campaignName}</td>
                           <td className="p-2 text-center">{data.impressions.toLocaleString('he-IL')}</td>
                           <td className="p-2 text-center">{data.clicks.toLocaleString('he-IL')}</td>
                           <td className="p-2 text-center text-green-600 font-medium">{Math.round(data.conversions).toLocaleString('he-IL')}</td>
-                          <td className="p-2 text-center">₪{data.cost.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
+                          <td className="p-2 text-center">{gaCurrency}{data.cost.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
                           {isEcommerce ? (
                             <>
-                              <td className="p-2 text-center text-purple-600 font-medium">₪{data.conversions_value.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
+                              <td className="p-2 text-center text-purple-600 font-medium">{gaCurrency}{data.conversions_value.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
                               <td className="p-2 text-center text-blue-600 font-medium">{roas.toLocaleString('he-IL', { maximumFractionDigits: 2 })}x</td>
                             </>
                           ) : (
-                            <td className="p-2 text-center text-blue-600 font-medium">₪{costPerConversion.toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
+                            <td className="p-2 text-center text-blue-600 font-medium">{gaCurrency}{costPerConversion.toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
                           )}
                         </tr>
                       );
                     })}
                   </tbody>
                   <tfoot className="bg-primary/10 font-bold">
+                    {(() => {
+                      const gaCurrency = getCurrencySymbol(table.integration_settings?.currency);
+                      return (
                     <tr>
                       <td className="p-2 text-right">סה״כ</td>
                       <td className="p-2 text-center">{totals.impressions.toLocaleString('he-IL')}</td>
                       <td className="p-2 text-center">{totals.clicks.toLocaleString('he-IL')}</td>
                       <td className="p-2 text-center text-green-600">{Math.round(totals.conversions).toLocaleString('he-IL')}</td>
-                      <td className="p-2 text-center">₪{totals.cost.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
+                      <td className="p-2 text-center">{gaCurrency}{totals.cost.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
                       {isEcommerce ? (
                         <>
-                          <td className="p-2 text-center text-purple-600">₪{totals.conversions_value.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
+                          <td className="p-2 text-center text-purple-600">{gaCurrency}{totals.conversions_value.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
                           <td className="p-2 text-center text-blue-600">{totalRoas.toLocaleString('he-IL', { maximumFractionDigits: 2 })}x</td>
                         </>
                       ) : (
-                        <td className="p-2 text-center text-blue-600">₪{(totals.conversions > 0 ? totals.cost / totals.conversions : 0).toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
+                        <td className="p-2 text-center text-blue-600">{gaCurrency}{(totals.conversions > 0 ? totals.cost / totals.conversions : 0).toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
                       )}
                     </tr>
+                      );
+                    })()}
                   </tfoot>
                 </table>
               </div>

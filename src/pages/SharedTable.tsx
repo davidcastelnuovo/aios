@@ -50,8 +50,12 @@ const isEcommerceRecord = (d: any) =>
   Number(d?.purchase_value) > 0 ||
   Number(d?.add_to_cart) > 0;
 
-const formatCurrency = (num: number) =>
-  new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(num);
+const CURRENCY_CODE_MAP: Record<string, string> = { ILS: 'ILS', USD: 'USD', EUR: 'EUR' };
+const makeFormatCurrency = (currencyCode?: string | null) => {
+  const code = CURRENCY_CODE_MAP[(currencyCode || 'ILS').toUpperCase()] || 'ILS';
+  return (num: number) =>
+    new Intl.NumberFormat('he-IL', { style: 'currency', currency: code, maximumFractionDigits: 0 }).format(num);
+};
 const formatNumber = (num: number) => {
   if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
   if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
@@ -106,6 +110,10 @@ export default function SharedTable() {
 
   const integrationType = data?.table?.integration_type;
   const isIntegrationTable = isAdsPlatform(integrationType || '') || isAnalyticsPlatform(integrationType || '');
+  const formatCurrency = useMemo(
+    () => makeFormatCurrency((data?.table?.integration_settings as any)?.currency),
+    [data?.table?.integration_settings]
+  );
 
   // For integration tables: filter only daily records for analytics
   const filteredRecords = useMemo(() => {
