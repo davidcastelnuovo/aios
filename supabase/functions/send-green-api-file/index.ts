@@ -159,6 +159,7 @@ Deno.serve(async (req) => {
 
     const mimeType = file.type;
     const fileName = file.name;
+    const uploadBlob = new Blob([fileBytes], { type: mimeType });
 
     if (fileType === 'voice' || mimeType.startsWith('audio/')) {
       endpoint = `https://api.green-api.com/waInstance${instanceId}/sendFileByUpload/${apiToken}`;
@@ -166,7 +167,7 @@ Deno.serve(async (req) => {
       // For voice messages, use sendFileByUpload with audio file
       const uploadFormData = new FormData();
       uploadFormData.append('chatId', chatId);
-      uploadFormData.append('file', file, fileName);
+      uploadFormData.append('file', uploadBlob, fileName);
       if (caption) uploadFormData.append('caption', caption);
 
       
