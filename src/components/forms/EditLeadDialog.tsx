@@ -205,6 +205,47 @@ export function EditLeadDialog({ lead: initialLead, open: controlledOpen, onOpen
     enabled: !!lead.id && open,
   });
 
+  // CRITICAL: Reset the form whenever the lead changes or the dialog reopens.
+  // Without this, react-hook-form keeps the previous lead's defaultValues — so editing
+  // a different lead (e.g. Mordechai) would silently submit the *previous* lead's
+  // contact_name / phone / email and overwrite the new lead's data.
+  useEffect(() => {
+    if (!open) return;
+    form.reset({
+      company_name: lead.company_name || "",
+      contact_name: lead.contact_name || "",
+      email: lead.email || "",
+      phone: lead.phone || "",
+      source: lead.source || "other",
+      status: lead.status || "new",
+      response_status: lead.response_status || "",
+      estimated_deal_value: lead.estimated_deal_value?.toString() || "",
+      monthly_budget: lead.monthly_budget?.toString() || "",
+      proposal_date: lead.proposal_date ? new Date(lead.proposal_date) : undefined,
+      itai_meeting_date: lead.itai_meeting_date ? new Date(lead.itai_meeting_date) : undefined,
+      sale_date: lead.sale_date ? new Date(lead.sale_date) : undefined,
+      industry: lead.industry || "",
+      products: (() => {
+        if (!lead.products) return [];
+        try {
+          const parsed = JSON.parse(lead.products);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return lead.products ? [lead.products] : [];
+        }
+      })(),
+      notes: lead.notes || "",
+      sales_person_id: lead.sales_person_id || "",
+      agency_id: lead.agency_id || "",
+      folder_link: lead.folder_link || "",
+      lost_reason: lead.lost_reason || "",
+      created_at: lead.created_at ? new Date(lead.created_at) : new Date(),
+    });
+    // Intentionally key only on lead.id + open so we don't clobber user edits
+    // mid-session when react-query refetches and returns an equivalent object.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lead.id, open]);
+
   // Sync selected sales people when dialog opens or data loads
   // Using JSON.stringify to prevent infinite loop from array reference changes
   useEffect(() => {
