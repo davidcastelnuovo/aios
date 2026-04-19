@@ -109,6 +109,24 @@ export const ClientReportSnapshot = forwardRef<HTMLDivElement, Props>(
 
     const isAdsTable = isAdsPlatform(tableMeta?.integration_type);
 
+    // Resolve report mode: explicit override on the table wins over auto-detection.
+    // - facebook_ecommerce → always ecommerce
+    // - integration_settings.campaign_type === 'leads' → force leads
+    // - integration_settings.campaign_type === 'ecommerce' → force ecommerce
+    // - facebook_insights without override → force leads (default for FB lead-ads tables)
+    // - google_ads without override → leads (default)
+    // - otherwise → 'auto' (decide from data)
+    const reportMode: "leads" | "ecommerce" | "auto" = useMemo(() => {
+      const t = tableMeta?.integration_type;
+      const explicit = String(tableMeta?.integration_settings?.campaign_type || "").toLowerCase();
+      if (t === "facebook_ecommerce") return "ecommerce";
+      if (explicit === "leads") return "leads";
+      if (explicit === "ecommerce") return "ecommerce";
+      if (t === "facebook_insights") return "leads";
+      if (t === "google_ads") return "leads";
+      return "auto";
+    }, [tableMeta?.integration_type, tableMeta?.integration_settings]);
+
     // SEO summary: top 10 keywords + snapshot metrics
     const seoSummary = useMemo(() => {
       if (!isSeoTable || !latestSeoReport?.report_data) return null;
@@ -194,15 +212,31 @@ export const ClientReportSnapshot = forwardRef<HTMLDivElement, Props>(
 
       const allCampaigns = Object.values(campaignMap).sort((a: any, b: any) => b.spend - a.spend);
 
-      const ecommerceCampaigns = allCampaigns.filter((campaign: any) =>
-        (campaign.purchases > 0 || campaign.revenue > 0) ||
-        (campaign.addToCart > 0 && !(campaign.leads > 0 && campaign.purchases === 0 && campaign.revenue === 0))
-      );
+      // Decide split based on resolved reportMode (explicit user choice wins over data signals)
+      let ecommerceCampaigns: any[] = [];
+      let leadCampaigns: any[] = [];
 
-      const leadCampaigns = allCampaigns.filter((campaign: any) =>
-        (campaign.leads > 0 && campaign.purchases === 0 && campaign.revenue === 0) ||
-        (campaign.leads === 0 && campaign.purchases === 0 && campaign.revenue === 0 && campaign.addToCart === 0)
-      );
+      if (reportMode === "leads") {
+        // Force leads view: no ecommerce campaigns at all
+        leadCampaigns = allCampaigns;
+      } else if (reportMode === "ecommerce") {
+        // Force ecommerce view: all campaigns treated as ecommerce
+        ecommerceCampaigns = allCampaigns;
+      } else {
+        // auto-detect from data
+        ecommerceCampaigns = allCampaigns.filter((campaign: any) =>
+          (campaign.purchases > 0 || campaign.revenue > 0) ||
+          (campaign.addToCart > 0 && !(campaign.leads > 0 && campaign.purchases === 0 && campaign.revenue === 0))
+        );
+
+        leadCampaigns = allCampaigns.filter((campaign: any) =>
+          (campaign.leads > 0 && campaign.purchases === 0 && campaign.revenue === 0) ||
+          (campaign.leads === 0 && campaign.purchases === 0 && campaign.revenue === 0 && campaign.addToCart === 0)
+        );
+      }
+
+      const isLeadsMode = reportMode === "leads";
+      const isEcommerceMode = reportMode === "ecommerce";
 
       return {
         spend,
@@ -216,10 +250,20 @@ export const ClientReportSnapshot = forwardRef<HTMLDivElement, Props>(
         cpl: leads > 0 ? spend / leads : 0,
         ecommerceCampaigns,
         leadCampaigns,
-        hasEcommerce: ecommerceCampaigns.length > 0 || revenue > 0 || purchases > 0 || addToCart > 0,
-        hasLeads: leadCampaigns.length > 0 || leads > 0,
+        // In leads mode never show ecommerce KPIs, even if FB returned purchases/revenue
+        hasEcommerce: isLeadsMode
+          ? false
+          : isEcommerceMode
+            ? true
+            : (ecommerceCampaigns.length > 0 || revenue > 0 || purchases > 0 || addToCart > 0),
+        // In ecommerce mode never show lead KPIs
+        hasLeads: isEcommerceMode
+          ? false
+          : isLeadsMode
+            ? true
+            : (leadCampaigns.length > 0 || leads > 0),
       };
-    }, [filteredRecords, isAdsTable]);
+    }, [filteredRecords, isAdsTable, reportMode]);
 
     // Compute totals for numeric fields
     const numericFields = (fields || []).filter((f: any) =>
