@@ -110,6 +110,10 @@ export default function SharedTable() {
 
   const integrationType = data?.table?.integration_type;
   const isIntegrationTable = isAdsPlatform(integrationType || '') || isAnalyticsPlatform(integrationType || '');
+  const formatCurrency = useMemo(
+    () => makeFormatCurrency((data?.table?.integration_settings as any)?.currency),
+    [data?.table?.integration_settings]
+  );
 
   // For integration tables: filter only daily records for analytics
   const filteredRecords = useMemo(() => {
