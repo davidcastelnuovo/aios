@@ -1370,43 +1370,54 @@ export default function WordPressSettings() {
                       <div className="col-span-2 text-center">לידים (90 יום)</div>
                       <div className="col-span-5">קמפיין משויך</div>
                     </div>
-                    {discoveredForms.map((f) => (
-                      <div key={f.form_id} className="grid grid-cols-12 gap-2 items-center p-2 rounded border hover:bg-muted/30">
-                        <div className="col-span-5">
-                          <p className="text-sm font-medium">{f.form_name || `טופס ${f.form_id}`}</p>
-                          <p className="text-[10px] text-muted-foreground" dir="ltr">
-                            id: {f.form_id} · GA: {f.sources?.google_ads || 0} · FB: {f.sources?.facebook || 0}
-                          </p>
+                    {discoveredForms.map((f, idx) => {
+                      const formKey = f.form_id || `${f.form_name}-${idx}`;
+                      const slugLabel = (f.slugs || []).slice(0, 2).join(", ");
+                      return (
+                        <div key={formKey} className="grid grid-cols-12 gap-2 items-center p-2 rounded border hover:bg-muted/30">
+                          <div className="col-span-5">
+                            <p className="text-sm font-medium">
+                              {f.form_name && f.form_name !== "[object Object]" ? f.form_name : `טופס ${f.form_id || idx + 1}`}
+                            </p>
+                            {slugLabel && (
+                              <p className="text-[11px] text-muted-foreground" dir="ltr">
+                                /{slugLabel}
+                              </p>
+                            )}
+                            <p className="text-[10px] text-muted-foreground" dir="ltr">
+                              id: {f.form_id || "—"} · GA: {f.sources?.google_ads || 0} · FB: {f.sources?.facebook || 0}
+                            </p>
+                          </div>
+                          <div className="col-span-2 text-center">
+                            <Badge variant="secondary" className="text-xs">
+                              {f.total}
+                            </Badge>
+                          </div>
+                          <div className="col-span-5">
+                            <Select
+                              value={mappingDraft[formKey] || "none"}
+                              onValueChange={(v) =>
+                                setMappingDraft((prev) => ({ ...prev, [formKey]: v === "none" ? "" : v }))
+                              }
+                            >
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue placeholder={
+                                  clientCampaigns.length === 0 ? "אין קמפיינים מסונכרנים" : "בחר קמפיין..."
+                                } />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">ללא שיוך</SelectItem>
+                                {clientCampaigns.map((c) => (
+                                  <SelectItem key={c.campaign_id} value={c.campaign_id}>
+                                    {c.campaign_name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
                         </div>
-                        <div className="col-span-2 text-center">
-                          <Badge variant="secondary" className="text-xs">
-                            {f.total}
-                          </Badge>
-                        </div>
-                        <div className="col-span-5">
-                          <Select
-                            value={mappingDraft[f.form_id] || "none"}
-                            onValueChange={(v) =>
-                              setMappingDraft((prev) => ({ ...prev, [f.form_id]: v === "none" ? "" : v }))
-                            }
-                          >
-                            <SelectTrigger className="h-8 text-xs">
-                              <SelectValue placeholder={
-                                clientCampaigns.length === 0 ? "אין קמפיינים מסונכרנים" : "בחר קמפיין..."
-                              } />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">ללא שיוך</SelectItem>
-                              {clientCampaigns.map((c) => (
-                                <SelectItem key={c.campaign_id} value={c.campaign_id}>
-                                  {c.campaign_name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </TabsContent>
