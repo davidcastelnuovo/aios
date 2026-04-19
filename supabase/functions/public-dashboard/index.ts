@@ -8,46 +8,54 @@ const corsHeaders = {
 
 function getDateRange(filter: string): { startDate: string | null; endDate: string | null } {
   const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  // Compute everything in UTC so the range matches WooCommerce admin reports
+  // and the woocommerce_orders.date_created column (stored as UTC timestamptz).
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth();
+  const d = now.getUTCDate();
+  const today = new Date(Date.UTC(y, m, d));
+  const yesterday = new Date(Date.UTC(y, m, d - 1));
+  const yesterdayStr = yesterday.toISOString().split("T")[0];
+  const todayStr = today.toISOString().split("T")[0];
   let startDate: string | null = null;
   let endDate: string | null = null;
 
-  // Standard: relative ranges end YESTERDAY (exclude today) to match
-  // crm-records edge function and DashboardView.wooDateRange.
-  const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
-  const yesterdayStr = yesterday.toISOString().split("T")[0];
-
   switch (filter) {
     case "today":
-      startDate = today.toISOString().split("T")[0];
-      endDate = startDate;
+      startDate = todayStr;
+      endDate = todayStr;
       break;
     case "yesterday":
       startDate = yesterdayStr;
       endDate = yesterdayStr;
       break;
-    case "last_7_days":
-      // 7 full days ending yesterday
-      startDate = new Date(yesterday.getTime() - 6 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-      endDate = yesterdayStr;
+    case "last_7_days": {
+      // Most recent COMPLETED Sunday → Saturday week (UTC).
+      const dow = yesterday.getUTCDay(); // 0=Sun .. 6=Sat
+      const daysSinceSat = (dow + 1) % 7;
+      const sat = new Date(Date.UTC(y, m, d - 1 - daysSinceSat));
+      const sun = new Date(Date.UTC(sat.getUTCFullYear(), sat.getUTCMonth(), sat.getUTCDate() - 6));
+      startDate = sun.toISOString().split("T")[0];
+      endDate = sat.toISOString().split("T")[0];
       break;
+    }
     case "this_month":
-      startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
+      startDate = new Date(Date.UTC(y, m, 1)).toISOString().split("T")[0];
       endDate = yesterdayStr;
       break;
     case "last_month": {
-      const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+      const startOfLastMonth = new Date(Date.UTC(y, m - 1, 1));
+      const endOfLastMonth = new Date(Date.UTC(y, m, 0));
       startDate = startOfLastMonth.toISOString().split("T")[0];
       endDate = endOfLastMonth.toISOString().split("T")[0];
       break;
     }
     case 'last_70_days':
-      startDate = new Date(yesterday.getTime() - 69 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+      startDate = new Date(Date.UTC(y, m, d - 70)).toISOString().split("T")[0];
       endDate = yesterdayStr;
       break;
     default: // last_30_days — 30 full days ending yesterday
-      startDate = new Date(yesterday.getTime() - 29 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+      startDate = new Date(Date.UTC(y, m, d - 30)).toISOString().split("T")[0];
       endDate = yesterdayStr;
       break;
   }
@@ -210,7 +218,8 @@ Deno.serve(async (req) => {
           .in("site_id", siteIds)
           .order("date_created", { ascending: false })
           .limit(2000);
-        if (startDate) q = q.gte("date_created", startDate);
+        // Force UTC boundaries to match Woo admin and the dashboard UI.
+        if (startDate) q = q.gte("date_created", startDate + "T00:00:00.000Z");
         if (endDate) q = q.lte("date_created", endDate + "T23:59:59.999Z");
         const { data: orders } = await q;
         wooOrders = orders || [];

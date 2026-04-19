@@ -267,22 +267,43 @@ export default function DashboardView() {
     enabled: !!dashboard?.client_id && !!currentTenantId,
   });
 
-  // Fetch WooCommerce summary for the date range to include in totals
-  // NOTE: Relative ranges (last_7_days, etc.) end YESTERDAY to match crm-records edge function
-  // and external platforms. This avoids partial "today" data skewing comparisons.
+  // WooCommerce summary range — UTC boundaries to match Woo admin & WooCommerceDashboard.
+  // last_7_days = most recent COMPLETED Sunday→Saturday week (UTC).
+  // Other relative ranges end YESTERDAY (UTC).
   const wooDateRange = useMemo(() => {
     const now = new Date();
-    const end = new Date(now); end.setHours(23, 59, 59, 999);
-    const start = new Date(now); start.setHours(0, 0, 0, 0);
+    const y = now.getUTCFullYear();
+    const m = now.getUTCMonth();
+    const d = now.getUTCDate();
+    let start = new Date(Date.UTC(y, m, d - 1, 0, 0, 0, 0));
+    let end = new Date(Date.UTC(y, m, d - 1, 23, 59, 59, 999));
     switch (dateFilter) {
-      case 'today': break;
-      case 'yesterday': start.setDate(start.getDate() - 1); end.setDate(end.getDate() - 1); end.setHours(23, 59, 59, 999); break;
-      case 'last_7_days': start.setDate(start.getDate() - 7); end.setDate(end.getDate() - 1); end.setHours(23, 59, 59, 999); break;
-      case 'last_30_days': start.setDate(start.getDate() - 30); end.setDate(end.getDate() - 1); end.setHours(23, 59, 59, 999); break;
-      case 'last_70_days': start.setDate(start.getDate() - 70); end.setDate(end.getDate() - 1); end.setHours(23, 59, 59, 999); break;
-      case 'this_month': start.setDate(1); break;
-      case 'last_month': start.setMonth(start.getMonth() - 1, 1); end.setDate(0); end.setHours(23, 59, 59, 999); break;
-      default: start.setDate(start.getDate() - 7); end.setDate(end.getDate() - 1); end.setHours(23, 59, 59, 999);
+      case 'today':
+        start = new Date(Date.UTC(y, m, d, 0, 0, 0, 0));
+        end = new Date(Date.UTC(y, m, d, 23, 59, 59, 999));
+        break;
+      case 'yesterday':
+        break;
+      case 'last_7_days': {
+        const yesterday = new Date(Date.UTC(y, m, d - 1));
+        const dow = yesterday.getUTCDay();
+        const daysSinceSat = (dow + 1) % 7;
+        const sat = new Date(Date.UTC(y, m, d - 1 - daysSinceSat, 23, 59, 59, 999));
+        const sun = new Date(Date.UTC(sat.getUTCFullYear(), sat.getUTCMonth(), sat.getUTCDate() - 6, 0, 0, 0, 0));
+        start = sun; end = sat;
+        break;
+      }
+      case 'last_30_days': start = new Date(Date.UTC(y, m, d - 30, 0, 0, 0, 0)); break;
+      case 'last_70_days': start = new Date(Date.UTC(y, m, d - 70, 0, 0, 0, 0)); break;
+      case 'this_month':
+        start = new Date(Date.UTC(y, m, 1, 0, 0, 0, 0));
+        end = new Date(Date.UTC(y, m, d, 23, 59, 59, 999));
+        break;
+      case 'last_month':
+        start = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0, 0));
+        end = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999));
+        break;
+      default: start = new Date(Date.UTC(y, m, d - 7, 0, 0, 0, 0));
     }
     return { start: start.toISOString(), end: end.toISOString() };
   }, [dateFilter]);

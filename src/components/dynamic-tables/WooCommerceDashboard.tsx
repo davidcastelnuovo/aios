@@ -20,52 +20,58 @@ const formatCurrency = (n: number) =>
   new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(n);
 const formatNumber = (n: number) => new Intl.NumberFormat('he-IL').format(n);
 
-// Standard: relative ranges end YESTERDAY (exclude today) to align with
-// crm-records edge function, public-dashboard, and DashboardView.wooDateRange.
-// This prevents the "All" KPI card and the WooCommerce tab from disagreeing
-// because of partial "today" data.
+// Standard (UTC, aligned with WooCommerce admin):
+// - last_7_days = most recent COMPLETED week, Sunday → Saturday (UTC).
+//   e.g. if today is Wed Apr 23, the range is Sun Apr 13 → Sat Apr 19.
+// - Other relative ranges (30/70) end YESTERDAY in UTC.
+// All boundaries computed in UTC so they line up with woocommerce_orders.date_created
+// (which is stored as UTC timestamptz) and match Woo admin reports.
 const getDateRange = (filter: string): { start: Date; end: Date } => {
   const now = new Date();
-  const end = new Date(now);
-  end.setHours(23, 59, 59, 999);
-  const start = new Date(now);
-  start.setHours(0, 0, 0, 0);
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth();
+  const d = now.getUTCDate();
+  // Yesterday (UTC) full-day boundaries
+  let start = new Date(Date.UTC(y, m, d - 1, 0, 0, 0, 0));
+  let end = new Date(Date.UTC(y, m, d - 1, 23, 59, 59, 999));
 
   switch (filter) {
     case 'today':
+      start = new Date(Date.UTC(y, m, d, 0, 0, 0, 0));
+      end = new Date(Date.UTC(y, m, d, 23, 59, 59, 999));
       break;
     case 'yesterday':
-      start.setDate(start.getDate() - 1);
-      end.setDate(end.getDate() - 1);
-      end.setHours(23, 59, 59, 999);
+      // already set above
       break;
-    case 'last_7_days':
-      start.setDate(start.getDate() - 7);
-      end.setDate(end.getDate() - 1);
-      end.setHours(23, 59, 59, 999);
+    case 'last_7_days': {
+      // Most recent completed Sun→Sat week (UTC).
+      // Find the most recent Saturday on or before yesterday.
+      const yesterday = new Date(Date.UTC(y, m, d - 1));
+      const dow = yesterday.getUTCDay(); // 0=Sun .. 6=Sat
+      const daysSinceSat = (dow + 1) % 7; // Sat=0, Sun=1, ..., Fri=6
+      const sat = new Date(Date.UTC(y, m, d - 1 - daysSinceSat, 23, 59, 59, 999));
+      const sun = new Date(Date.UTC(sat.getUTCFullYear(), sat.getUTCMonth(), sat.getUTCDate() - 6, 0, 0, 0, 0));
+      start = sun;
+      end = sat;
       break;
+    }
     case 'last_30_days':
-      start.setDate(start.getDate() - 30);
-      end.setDate(end.getDate() - 1);
-      end.setHours(23, 59, 59, 999);
+      start = new Date(Date.UTC(y, m, d - 30, 0, 0, 0, 0));
+      // end already yesterday
       break;
     case 'last_70_days':
-      start.setDate(start.getDate() - 70);
-      end.setDate(end.getDate() - 1);
-      end.setHours(23, 59, 59, 999);
+      start = new Date(Date.UTC(y, m, d - 70, 0, 0, 0, 0));
       break;
     case 'this_month':
-      start.setDate(1);
+      start = new Date(Date.UTC(y, m, 1, 0, 0, 0, 0));
+      end = new Date(Date.UTC(y, m, d, 23, 59, 59, 999));
       break;
     case 'last_month':
-      start.setMonth(start.getMonth() - 1, 1);
-      end.setDate(0);
-      end.setHours(23, 59, 59, 999);
+      start = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0, 0));
+      end = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999));
       break;
     default:
-      start.setDate(start.getDate() - 7);
-      end.setDate(end.getDate() - 1);
-      end.setHours(23, 59, 59, 999);
+      start = new Date(Date.UTC(y, m, d - 7, 0, 0, 0, 0));
   }
   return { start, end };
 };
