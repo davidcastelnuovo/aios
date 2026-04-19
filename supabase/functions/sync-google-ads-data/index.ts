@@ -383,15 +383,13 @@ Deno.serve(async (req) => {
         const costMicros = parseInt(result.metrics?.costMicros || '0');
         const cost = costMicros / 1000000; // Convert micros to actual currency
         const conversions = parseFloat(result.metrics?.conversions || '0');
-        const allConversions = parseFloat(result.metrics?.allConversions || '0');
-        const conversionsValueRaw = parseFloat(result.metrics?.conversionsValue || '0');
-        const allConversionsValueRaw = parseFloat(result.metrics?.allConversionsValue || '0');
-        // Use `conversions` (primary conversions marked "Include in Conversions") to match
-        // Google Ads UI's main "Conversions" column. `all_conversions` includes secondary
-        // actions (cross-device, store visits, etc.) and would over-count vs the UI.
-        // Fallback to all_conversions ONLY when conversions == 0 (PMax/offline-only accounts).
-        const finalConversions = conversions > 0 ? conversions : allConversions;
-        const conversionsValue = conversionsValueRaw > 0 ? conversionsValueRaw : allConversionsValueRaw;
+        const conversionsValue = parseFloat(result.metrics?.conversionsValue || '0');
+        // ALWAYS use `metrics.conversions` to match the Google Ads UI's "Conversions" column.
+        // Previously we fell back to `all_conversions` when conversions==0, but that includes
+        // secondary actions (cross-device, store visits, view-through) and over-counted vs UI.
+        // If a campaign tracks conversions only via `all_conversions`, the user should see 0
+        // here — same as Google Ads UI shows in the primary Conversions column.
+        const finalConversions = conversions;
         const roas = cost > 0 ? conversionsValue / cost : 0;
 
         records.push({
