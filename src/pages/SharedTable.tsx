@@ -532,8 +532,8 @@ export default function SharedTable() {
                       <TableHead className="text-right">הוצאה</TableHead>
                       <TableHead className="text-right">חשיפות</TableHead>
                       <TableHead className="text-right">קליקים</TableHead>
-                      <TableHead className="text-right">לידים</TableHead>
-                      <TableHead className="text-right">עלות לליד</TableHead>
+                      <TableHead className="text-right">{isGoogleAds ? 'המרות' : 'לידים'}</TableHead>
+                      <TableHead className="text-right">{isGoogleAds ? 'עלות להמרה' : 'עלות לליד'}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
