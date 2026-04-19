@@ -215,7 +215,7 @@ Deno.serve(async (req) => {
     // Use FormData for file upload
     const uploadFormData = new FormData();
     uploadFormData.append('chatId', chatId);
-    uploadFormData.append('file', file, fileName);
+    uploadFormData.append('file', uploadBlob, fileName);
     if (caption) uploadFormData.append('caption', caption);
 
 
