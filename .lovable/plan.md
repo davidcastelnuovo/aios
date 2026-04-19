@@ -1,9 +1,33 @@
 
-The error is clear from the logs:
-```
-Error sending report: Green API error: {"error":"file should not be empty"}
-```
+## הבעיה
 
-This happens in `send-green-api-file` edge function. The dashboard snapshot is being captured (0.34MB blob, 1200x3108) but the file arrives empty at Green API.
+הדוח של עימגה (www.imaga.co.il) נראה חסר כי בטבלת `ahrefs_reports` יש רשומה "פגומה" שנוצרה ב-2026-04-07 בעת תהליך שיוך-לקוח. הרשומה הזו מכילה רק `{"_fix": "re-trigger client assignment"}` — אין בה snapshot, אין מילות מפתח, אין traffic_history.
 
-Let me investigate the send flow.
+מאחר ש-`SeoDashboardView` ממיין דוחות לפי `report_date DESC` ובוחר את הראשון כברירת מחדל, הוא בוחר את הרשומה הריקה הזו במקום את הדוח האמיתי מ-2026-04-06 שמכיל את כל הנתונים (25 מילות מפתח, snapshot מלא, היסטוריית traffic).
+
+מצב נתונים בפועל לעימגה:
+- `2026-04-07` — רשומת fix ריקה (_fix only) ← נבחר עכשיו, גורם לדוח להיראות חסר
+- `2026-04-06` — דוח מלא: 25 מילות מפתח, snapshot, traffic_history
+- `2026-04-01` — דוח ישן יותר, מלא
+
+## הפתרון
+
+### 1. סינון רשומות פגומות בצד הלקוח (תיקון מיידי)
+ב-`SeoDashboardView.tsx`, לסנן את הרשומות מ-`ahrefs_reports` כך שרשומות שמכילות רק את המפתח `_fix` (או חסרות `snapshot`/`organic_keywords`/`traffic_history` לחלוטין) לא ייכנסו לרשימה. אותו סינון להוסיף גם ב-`PublicSeoView.tsx` כדי שגם הקישור הציבורי יהיה תקין.
+
+### 2. ניקוי הרשומה הפגומה במסד
+מחיקה חד-פעמית של הרשומה `8f1ee1ec-e4db-4c74-ac6f-dea1f51d5976`, כדי שלא תופיע ברשימת הדוחות (כרגע מוצג "4 דוחות" במקום 3).
+
+### 3. מניעה לעתיד
+לבדוק את הקוד שיצר את רשומת ה-`_fix` (כנראה ב-`ahrefs-auth` או בלוגיקה של `ahrefs-client-linking`) ולוודא שאם אין נתוני snapshot — לעדכן רשומה קיימת במקום ליצור רשומה חדשה ריקה. אם זה תהליך חד-פעמי שכבר לא רץ, נשאיר את הסינון בלבד.
+
+## קבצים שיתעדכנו
+- `src/components/dynamic-tables/SeoDashboardView.tsx` — סינון רשומות ריקות מ-`reports`
+- `src/components/dynamic-tables/PublicSeoView.tsx` — אותו סינון בתצוגה הציבורית
+- מיגרציה: `DELETE FROM ahrefs_reports WHERE id = '8f1ee1ec-...'`
+- אופציונלי: בדיקה ועדכון של `ahrefs-client-linking-automation` למניעה עתידית
+
+## תוצאה
+- הדוח יציג מיד את הדוח של 06/04/2026 עם כל ה-25 מילות מפתח, snapshot, traffic, GSC ו-GA.
+- המונה יראה "3 דוחות" במקום 4.
+- לא יצוצו רשומות "ריקות" כאלה בעתיד.
