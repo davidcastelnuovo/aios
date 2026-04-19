@@ -64,6 +64,15 @@ interface Tenant {
 interface Client {
   id: string;
   name: string;
+  tenant_id?: string;
+  tenant_name?: string;
+}
+
+interface AgencyOpt {
+  id: string;
+  name: string;
+  tenant_id: string;
+  tenant_name?: string;
 }
 
 const emptyForm = {
@@ -111,40 +120,96 @@ export default function WordPressSettings() {
     enabled: isSuperAdmin,
   });
 
-  // Fetch agencies for the selected tenant
-  const { data: agencies = [] } = useQuery<{ id: string; name: string }[]>({
-    queryKey: ["agencies-for-wp", form.tenant_id || tenantId],
+  // Fetch agencies for the form
+  // - super-admin: all agencies across tenants (or filtered by chosen tenant_id)
+  // - regular user: agencies in their tenant + cross-tenant via agency_tenant_access
+  const { data: agencies = [] } = useQuery<AgencyOpt[]>({
+    queryKey: ["agencies-for-wp", form.tenant_id, tenantId, isSuperAdmin],
     queryFn: async () => {
-      const tid = form.tenant_id || tenantId;
-      if (!tid) return [];
-      const { data, error } = await supabase
+      if (isSuperAdmin) {
+        let q = supabase
+          .from("agencies")
+          .select("id, name, tenant_id, tenants(name)")
+          .order("name");
+        if (form.tenant_id) q = q.eq("tenant_id", form.tenant_id);
+        const { data, error } = await q;
+        if (error) throw error;
+        return (data || []).map((a: any) => ({
+          id: a.id,
+          name: a.name,
+          tenant_id: a.tenant_id,
+          tenant_name: a.tenants?.name,
+        }));
+      }
+
+      if (!tenantId) return [];
+
+      // Own tenant agencies
+      const ownPromise = supabase
         .from("agencies")
-        .select("id, name")
-        .eq("tenant_id", tid)
+        .select("id, name, tenant_id, tenants(name)")
+        .eq("tenant_id", tenantId)
         .order("name");
-      if (error) throw error;
-      return data || [];
+
+      // Cross-tenant via agency_tenant_access
+      const accessPromise = supabase
+        .from("agency_tenant_access")
+        .select("agency_id, agencies(id, name, tenant_id, tenants(name))")
+        .eq("accessing_tenant_id", tenantId);
+
+      const [ownRes, accessRes] = await Promise.all([ownPromise, accessPromise]);
+      if (ownRes.error) throw ownRes.error;
+      if (accessRes.error) throw accessRes.error;
+
+      const merged = new Map<string, AgencyOpt>();
+      (ownRes.data || []).forEach((a: any) =>
+        merged.set(a.id, { id: a.id, name: a.name, tenant_id: a.tenant_id, tenant_name: a.tenants?.name })
+      );
+      (accessRes.data || []).forEach((row: any) => {
+        const a = row.agencies;
+        if (a) merged.set(a.id, { id: a.id, name: a.name, tenant_id: a.tenant_id, tenant_name: a.tenants?.name });
+      });
+      return Array.from(merged.values()).sort((x, y) => x.name.localeCompare(y.name));
     },
-    enabled: !!(form.tenant_id || tenantId),
+    enabled: !!tenantId || isSuperAdmin,
   });
 
-  // Fetch clients for the selected tenant (filtered by agency if selected)
+  // Resolve effective tenant for clients query (follows the selected agency's tenant)
+  const selectedAgencyTenantId = form.agency_id
+    ? agencies.find((a) => a.id === form.agency_id)?.tenant_id
+    : undefined;
+
+  // Fetch clients - scoped to selected agency's tenant (if agency picked)
+  // Otherwise to chosen tenant_id (super-admin) or current tenant
   const { data: clients = [] } = useQuery<Client[]>({
-    queryKey: ["clients-for-wp", form.tenant_id || tenantId, form.agency_id],
+    queryKey: ["clients-for-wp", selectedAgencyTenantId, form.tenant_id, tenantId, form.agency_id, isSuperAdmin],
     queryFn: async () => {
-      const tid = form.tenant_id || tenantId;
-      if (!tid) return [];
+      const effTenant = selectedAgencyTenantId || form.tenant_id || tenantId;
+      if (!effTenant && !form.agency_id && !isSuperAdmin) return [];
+
       let q = supabase
         .from("clients")
-        .select("id, name")
-        .eq("tenant_id", tid)
+        .select("id, name, tenant_id, tenants(name)")
         .order("name");
-      if (form.agency_id) q = q.eq("agency_id", form.agency_id);
+
+      if (form.agency_id) {
+        q = q.eq("agency_id", form.agency_id);
+      } else if (effTenant) {
+        q = q.eq("tenant_id", effTenant);
+      } else {
+        return [];
+      }
+
       const { data, error } = await q;
       if (error) throw error;
-      return data || [];
+      return (data || []).map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        tenant_id: c.tenant_id,
+        tenant_name: c.tenants?.name,
+      }));
     },
-    enabled: !!(form.tenant_id || tenantId),
+    enabled: !!(form.agency_id || form.tenant_id || tenantId || isSuperAdmin),
   });
 
   // Fetch all WordPress sites (super admin sees all, others see own tenant)
@@ -269,12 +334,24 @@ export default function WordPressSettings() {
     },
   });
 
-  // Quick-link association mutation
+  // Quick-link association mutation - also syncs site's tenant_id to selected agency's tenant
   const linkMutation = useMutation({
-    mutationFn: async ({ id, agency_id, client_id }: { id: string; agency_id: string | null; client_id: string | null }) => {
+    mutationFn: async ({
+      id,
+      agency_id,
+      client_id,
+      tenant_id: newTenantId,
+    }: {
+      id: string;
+      agency_id: string | null;
+      client_id: string | null;
+      tenant_id?: string | null;
+    }) => {
+      const payload: any = { agency_id, client_id, updated_at: new Date().toISOString() };
+      if (newTenantId) payload.tenant_id = newTenantId;
       const { error } = await supabase
         .from("social_media_wordpress_sites" as any)
-        .update({ agency_id, client_id, updated_at: new Date().toISOString() })
+        .update(payload)
         .eq("id", id);
       if (error) throw error;
     },
@@ -287,30 +364,83 @@ export default function WordPressSettings() {
     onError: (e: Error) => toast.error("שגיאה: " + e.message),
   });
 
-  // Agencies/Clients for the quick-link dialog (scoped to the site's tenant)
-  const linkSiteTenantId = linkSite?.tenant_id;
-  const { data: linkAgencies = [] } = useQuery<{ id: string; name: string }[]>({
-    queryKey: ["agencies-for-link", linkSiteTenantId],
+  // Agencies for the quick-link dialog
+  // - super-admin: all agencies across all tenants
+  // - regular user: own tenant + cross-tenant via agency_tenant_access
+  const { data: linkAgencies = [] } = useQuery<AgencyOpt[]>({
+    queryKey: ["agencies-for-link", tenantId, isSuperAdmin],
     queryFn: async () => {
-      if (!linkSiteTenantId) return [];
-      const { data, error } = await supabase
-        .from("agencies").select("id, name").eq("tenant_id", linkSiteTenantId).order("name");
-      if (error) throw error;
-      return data || [];
+      if (isSuperAdmin) {
+        const { data, error } = await supabase
+          .from("agencies")
+          .select("id, name, tenant_id, tenants(name)")
+          .order("name");
+        if (error) throw error;
+        return (data || []).map((a: any) => ({
+          id: a.id,
+          name: a.name,
+          tenant_id: a.tenant_id,
+          tenant_name: a.tenants?.name,
+        }));
+      }
+
+      if (!tenantId) return [];
+
+      const ownPromise = supabase
+        .from("agencies")
+        .select("id, name, tenant_id, tenants(name)")
+        .eq("tenant_id", tenantId)
+        .order("name");
+
+      const accessPromise = supabase
+        .from("agency_tenant_access")
+        .select("agency_id, agencies(id, name, tenant_id, tenants(name))")
+        .eq("accessing_tenant_id", tenantId);
+
+      const [ownRes, accessRes] = await Promise.all([ownPromise, accessPromise]);
+      if (ownRes.error) throw ownRes.error;
+      if (accessRes.error) throw accessRes.error;
+
+      const merged = new Map<string, AgencyOpt>();
+      (ownRes.data || []).forEach((a: any) =>
+        merged.set(a.id, { id: a.id, name: a.name, tenant_id: a.tenant_id, tenant_name: a.tenants?.name })
+      );
+      (accessRes.data || []).forEach((row: any) => {
+        const a = row.agencies;
+        if (a) merged.set(a.id, { id: a.id, name: a.name, tenant_id: a.tenant_id, tenant_name: a.tenants?.name });
+      });
+      return Array.from(merged.values()).sort((x, y) => x.name.localeCompare(y.name));
     },
-    enabled: !!linkSiteTenantId,
+    enabled: !!tenantId || isSuperAdmin,
   });
+
+  // Clients for the quick-link dialog — scoped to the SELECTED agency's tenant
+  const linkSelectedAgency = linkAgencies.find((a) => a.id === linkAgency);
+  const linkEffectiveTenantId = linkSelectedAgency?.tenant_id || linkSite?.tenant_id;
+
   const { data: linkClients = [] } = useQuery<Client[]>({
-    queryKey: ["clients-for-link", linkSiteTenantId, linkAgency],
+    queryKey: ["clients-for-link", linkEffectiveTenantId, linkAgency],
     queryFn: async () => {
-      if (!linkSiteTenantId) return [];
-      let q = supabase.from("clients").select("id, name").eq("tenant_id", linkSiteTenantId).order("name");
-      if (linkAgency) q = q.eq("agency_id", linkAgency);
+      if (!linkEffectiveTenantId && !linkAgency) return [];
+      let q = supabase
+        .from("clients")
+        .select("id, name, tenant_id, tenants(name)")
+        .order("name");
+      if (linkAgency) {
+        q = q.eq("agency_id", linkAgency);
+      } else if (linkEffectiveTenantId) {
+        q = q.eq("tenant_id", linkEffectiveTenantId);
+      }
       const { data, error } = await q;
       if (error) throw error;
-      return data || [];
+      return (data || []).map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        tenant_id: c.tenant_id,
+        tenant_name: c.tenants?.name,
+      }));
     },
-    enabled: !!linkSiteTenantId,
+    enabled: !!(linkEffectiveTenantId || linkAgency),
   });
 
   const openLink = (site: WordPressSite) => {
@@ -486,7 +616,9 @@ export default function WordPressSettings() {
             <SelectContent>
               <SelectItem value="none">ללא</SelectItem>
               {agencies.map((a) => (
-                <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                <SelectItem key={a.id} value={a.id}>
+                  {a.name}{a.tenant_name ? ` (${a.tenant_name})` : ""}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -511,7 +643,9 @@ export default function WordPressSettings() {
             <SelectContent>
               <SelectItem value="none">ללא</SelectItem>
               {clients.map((c) => (
-                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}{c.tenant_name && c.tenant_id !== (form.tenant_id || tenantId) ? ` (${c.tenant_name})` : ""}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -954,7 +1088,9 @@ export default function WordPressSettings() {
                 <SelectContent>
                   <SelectItem value="none">ללא</SelectItem>
                   {linkAgencies.map((a) => (
-                    <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name}{a.tenant_name ? ` (${a.tenant_name})` : ""}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -976,11 +1112,24 @@ export default function WordPressSettings() {
                 <SelectContent>
                   <SelectItem value="none">ללא</SelectItem>
                   {linkClients.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}{c.tenant_name && c.tenant_id !== linkSite?.tenant_id ? ` (${c.tenant_name})` : ""}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Cross-tenant warning when selected agency belongs to another org */}
+            {linkSelectedAgency && linkSite && linkSelectedAgency.tenant_id !== linkSite.tenant_id && (
+              <div className="rounded-lg border border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/20 p-3 flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+                <p className="text-xs text-blue-900 dark:text-blue-200">
+                  סוכנות זו שייכת לארגון <strong>{linkSelectedAgency.tenant_name}</strong>.
+                  בשמירה, האתר יועבר לארגון זה כדי שהשיוך יפעל כראוי.
+                </p>
+              </div>
+            )}
 
             {linkSite?.client_id && linkClient && linkClient !== linkSite.client_id && (
               <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 flex items-start gap-2">
@@ -1006,6 +1155,10 @@ export default function WordPressSettings() {
                   id: linkSite.id,
                   agency_id: linkAgency || null,
                   client_id: linkClient || null,
+                  tenant_id:
+                    linkSelectedAgency && linkSelectedAgency.tenant_id !== linkSite.tenant_id
+                      ? linkSelectedAgency.tenant_id
+                      : null,
                 })}
                 disabled={linkMutation.isPending}
               >
