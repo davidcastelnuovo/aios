@@ -296,6 +296,29 @@ serve(async (req) => {
       c.forms.add(sub.form_name);
     }
 
+    // 6) Aggregate per slug (URL path) - useful for slug-based campaign mapping
+    const perSlugMap = new Map<string, any>();
+    for (const sub of parsed) {
+      if (!sub.slug) continue;
+      if (!perSlugMap.has(sub.slug)) {
+        perSlugMap.set(sub.slug, {
+          slug: sub.slug,
+          submissions: 0,
+          google_ads_submissions: 0,
+          last_submission_at: null as string | null,
+          sample_gad_campaignids: new Set<string>(),
+        });
+      }
+      const e = perSlugMap.get(sub.slug);
+      e.submissions++;
+      if (sub.source === "google_ads" || sub.source === "google") e.google_ads_submissions++;
+      if (sub.gad_campaignid) e.sample_gad_campaignids.add(sub.gad_campaignid);
+      const ts = new Date(sub.created_at).getTime();
+      if (!e.last_submission_at || new Date(e.last_submission_at).getTime() < ts) {
+        e.last_submission_at = sub.created_at;
+      }
+    }
+
     const totals = {
       total: parsed.length,
       google_ads: parsed.filter((s) => s.source === "google_ads").length,
@@ -315,6 +338,10 @@ serve(async (req) => {
         per_campaign: Array.from(perCampaignMap.values()).map((c) => ({
           ...c,
           forms: Array.from(c.forms),
+        })).sort((a, b) => b.submissions - a.submissions),
+        per_slug: Array.from(perSlugMap.values()).map((e) => ({
+          ...e,
+          sample_gad_campaignids: Array.from(e.sample_gad_campaignids),
         })).sort((a, b) => b.submissions - a.submissions),
         submissions: parsed,
       }),
