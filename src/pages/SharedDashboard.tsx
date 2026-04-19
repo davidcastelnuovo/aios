@@ -313,6 +313,18 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
   const combinedRoas = totalSummary.roas_spend > 0 ? totalSummary.roas_value / totalSummary.roas_spend : 0;
   const combinedCpl = totalSummary.results > 0 ? totalSummary.spend / totalSummary.results : 0;
 
+  // WooCommerce summary — aligns with PublicWooCommerceView so the "All" tab
+  // KPI cards match the WooCommerce tab exactly.
+  const wooSummary = useMemo(() => {
+    const validStatuses = ["completed", "processing", "on-hold"];
+    const valid = wooOrders.filter((o: any) => validStatuses.includes(o.status));
+    const revenue = valid.reduce((sum: number, o: any) => sum + Number(o.total || 0), 0);
+    const orderCount = valid.length;
+    return { revenue, orderCount };
+  }, [wooOrders]);
+
+  const hasWooData = hasWooCommerce && wooSummary.revenue > 0;
+
   // Analytics source breakdown
   const analyticsSourceBreakdown = useMemo(() => {
     const categorize = (sourceMedium: string): string => {
