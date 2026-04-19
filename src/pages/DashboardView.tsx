@@ -1421,8 +1421,19 @@ export default function DashboardView() {
                                   <TableHead className="text-right">CTR</TableHead>
                                   <TableHead className="text-right">CPC</TableHead>
                                   <TableHead className="text-right">הוצאה</TableHead>
-                                  <TableHead className="text-right">המרות</TableHead>
-                                  <TableHead className="text-right">עלות להמרה</TableHead>
+                                  {googleAdsCampaignType === 'ecommerce' ? (
+                                    <>
+                                      <TableHead className="text-right">רכישות</TableHead>
+                                      <TableHead className="text-right">הכנסות</TableHead>
+                                      <TableHead className="text-right">ROAS</TableHead>
+                                      <TableHead className="text-right">AOV</TableHead>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <TableHead className="text-right">המרות</TableHead>
+                                      <TableHead className="text-right">עלות להמרה</TableHead>
+                                    </>
+                                  )}
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
@@ -1430,6 +1441,8 @@ export default function DashboardView() {
                                   const ctr = c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0;
                                   const cpc = c.clicks > 0 ? c.spend / c.clicks : 0;
                                   const cpa = c.conversions > 0 ? c.spend / c.conversions : 0;
+                                  const roas = c.spend > 0 ? c.conversions_value / c.spend : 0;
+                                  const aov = c.conversions > 0 ? c.conversions_value / c.conversions : 0;
                                   return (
                                     <TableRow key={i}>
                                       <TableCell className="font-medium max-w-[300px]">{c.name}</TableCell>
@@ -1438,10 +1451,25 @@ export default function DashboardView() {
                                       <TableCell>{ctr.toFixed(2)}%</TableCell>
                                       <TableCell>{cpc > 0 ? formatCurrency(cpc) : '-'}</TableCell>
                                       <TableCell>{formatCurrency(c.spend)}</TableCell>
-                                      <TableCell className={c.conversions > 0 ? 'text-green-600 font-medium' : ''}>
-                                        {formatNumber(c.conversions)}
-                                      </TableCell>
-                                      <TableCell>{cpa > 0 ? formatCurrency(cpa) : '-'}</TableCell>
+                                      {googleAdsCampaignType === 'ecommerce' ? (
+                                        <>
+                                          <TableCell className={c.conversions > 0 ? 'text-green-600 font-medium' : ''}>
+                                            {formatNumber(c.conversions)}
+                                          </TableCell>
+                                          <TableCell className={c.conversions_value > 0 ? 'text-green-600 font-medium' : ''}>
+                                            {formatCurrency(c.conversions_value)}
+                                          </TableCell>
+                                          <TableCell>{roas > 0 ? roas.toFixed(2) : '-'}</TableCell>
+                                          <TableCell>{aov > 0 ? formatCurrency(aov) : '-'}</TableCell>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <TableCell className={c.conversions > 0 ? 'text-green-600 font-medium' : ''}>
+                                            {formatNumber(c.conversions)}
+                                          </TableCell>
+                                          <TableCell>{cpa > 0 ? formatCurrency(cpa) : '-'}</TableCell>
+                                        </>
+                                      )}
                                     </TableRow>
                                   );
                                 })}
@@ -1452,8 +1480,19 @@ export default function DashboardView() {
                                   <TableCell>{totalCtr.toFixed(2)}%</TableCell>
                                   <TableCell>{totalCpc > 0 ? formatCurrency(totalCpc) : '-'}</TableCell>
                                   <TableCell>{formatCurrency(googleAdsTotals.spend)}</TableCell>
-                                  <TableCell className="text-green-600">{formatNumber(googleAdsTotals.conversions)}</TableCell>
-                                  <TableCell>{totalCpa > 0 ? formatCurrency(totalCpa) : '-'}</TableCell>
+                                  {googleAdsCampaignType === 'ecommerce' ? (
+                                    <>
+                                      <TableCell className="text-green-600">{formatNumber(googleAdsTotals.conversions)}</TableCell>
+                                      <TableCell className="text-green-600">{formatCurrency(googleAdsTotals.conversions_value)}</TableCell>
+                                      <TableCell>{googleAdsTotals.spend > 0 ? (googleAdsTotals.conversions_value / googleAdsTotals.spend).toFixed(2) : '-'}</TableCell>
+                                      <TableCell>{googleAdsTotals.conversions > 0 ? formatCurrency(googleAdsTotals.conversions_value / googleAdsTotals.conversions) : '-'}</TableCell>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <TableCell className="text-green-600">{formatNumber(googleAdsTotals.conversions)}</TableCell>
+                                      <TableCell>{totalCpa > 0 ? formatCurrency(totalCpa) : '-'}</TableCell>
+                                    </>
+                                  )}
                                 </TableRow>
                               </TableBody>
                             </Table>
