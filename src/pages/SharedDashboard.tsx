@@ -674,16 +674,24 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
                   {showAnalyticsCards && (
                     <Card className="h-full bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
                       <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
-                        <p className="text-sm text-muted-foreground">הכנסות (Analytics)</p>
-                        <p className="text-3xl font-bold mt-2">{formatCurrency(totalSummary.revenue)}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {hasWooData ? "הכנסות (WooCommerce)" : "הכנסות (Analytics)"}
+                        </p>
+                        <p className="text-3xl font-bold mt-2">
+                          {formatCurrency(hasWooData ? wooSummary.revenue : totalSummary.revenue)}
+                        </p>
                       </CardContent>
                     </Card>
                   )}
                   {showAnalyticsCards && (
                     <Card className="h-full bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900">
                       <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
-                        <p className="text-sm text-muted-foreground">רכישות (Analytics)</p>
-                        <p className="text-3xl font-bold mt-2">{formatNumber(totalSummary.analyticsPurchases || totalSummary.results)}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {hasWooData ? "רכישות (WooCommerce)" : "רכישות (Analytics)"}
+                        </p>
+                        <p className="text-3xl font-bold mt-2">
+                          {formatNumber(hasWooData ? wooSummary.orderCount : (totalSummary.analyticsPurchases || totalSummary.results))}
+                        </p>
                       </CardContent>
                     </Card>
                   )}
