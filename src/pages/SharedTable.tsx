@@ -115,11 +115,17 @@ export default function SharedTable() {
     [data?.table?.integration_settings]
   );
 
-  // Honor table-level campaign_type as source of truth
+  // Deterministic table mode based on integration type + campaign_type setting
   const tableCampaignType = String((data?.table?.integration_settings as any)?.campaign_type || '').toLowerCase();
-  const forceLeadsOnly = tableCampaignType === 'leads' || tableCampaignType === 'lead';
-  const forceEcommerceOnly = tableCampaignType === 'ecommerce';
   const isGoogleAds = integrationType === 'google_ads';
+  const tableMode: 'leads' | 'ecommerce' =
+    integrationType === 'facebook_ecommerce' ? 'ecommerce' :
+    integrationType === 'facebook_insights' ? 'leads' :
+    integrationType === 'google_ads'
+      ? (tableCampaignType === 'ecommerce' ? 'ecommerce' : 'leads')
+      : (tableCampaignType === 'ecommerce' ? 'ecommerce' : 'leads');
+  const forceLeadsOnly = tableMode === 'leads';
+  const forceEcommerceOnly = tableMode === 'ecommerce';
 
   // For integration tables: filter only daily records for analytics
   const filteredRecords = useMemo(() => {
