@@ -1,71 +1,75 @@
 
+<final-text>
+## מה מצאתי
+בדקתי גם את הקוד וגם את הנתונים החיים של איריס גייר מול "פרימיום".
 
-## ההבנה
+### בנתונים החיים
+ללקוחה **איריס גייר** (`265024ab-a985-47d7-bd41-66b5d32a3e87`) מחוברות כרגע רק:
+- טבלת `facebook_insights` אחת: `1f3bafb0-5b83-4104-85fa-fecf4d0035f1`
+- טבלת `google_ads` אחת: `00c717a8-f179-41b1-9e74-34748553cfed`
 
-המשתמש מבקש שני שינויים:
+אין כרגע:
+- טבלת `facebook_ecommerce` מחוברת ללקוחה
+- דשבורד `crm_dashboards` מחובר ללקוחה
 
-### 1. סנכרון תמיד עד היום (כולל)
-לא משנה מה הפילטר התצוגתי (אתמול / שבוע שעבר / 30 ימים), כשהמשתמש לוחץ "סנכרן" — הסנכרון תמיד צריך למשוך נתונים **מתאריך ההתחלה של הפילטר ועד היום** (כולל היום), כדי לוודא שהנתונים תמיד עדכניים.
+כלומר: הבעיה כבר לא נובעת מ"טבלת איקומרס ישנה" שמחוברת לאיריס.
 
-### 2. סנכרון אוטומטי 2x ביום ל-Google Analytics
-כיום יש cron אוטומטי לפייסבוק (insights/leads/ecommerce) ול-Google Ads, אבל **אין cron ל-Google Analytics**. צריך להוסיף.
+### איפה כן הבעיה
+המסך/סנאפשוט של הדוח הרגיל (`ClientReportSnapshot`) עדיין מחליט לבד שזה "איקומרס" אם יש בנתונים:
+- `purchases`
+- `purchase_value`
+- `add_to_cart`
 
----
+וזה קורה גם אם בפועל אתה רוצה דוח לידים רגיל.
 
-## הבעיה הנוכחית
+בניגוד ל-`DashboardView`, הקוד של `ClientReportSnapshot`:
+- לא נותן עדיפות אמיתית ל-`integration_settings.campaign_type`
+- ולא מכריח תצוגת "לידים" כשיש override ידני
 
-בקובץ `src/pages/DynamicTableView.tsx` (שורות 161-227), הפונקציה `getMainFilterSyncRange` מחזירה `endDate = yesterday` עבור רוב הפילטרים (`last_7_days`, `last_30_days`, `yesterday` וכו'). זה תוקן בעבר עבור פייסבוק כדי להתאים את הספירה ל-FB UI, אבל זה גם משפיע על הסנכרון הידני של GA / GSC / Google Ads דרך `DashboardView.tsx` ועל סנכרון GA ב-`DynamicTableView.tsx`.
+לכן אצל איריס, בגלל שפייסבוק מחזיר גם נתוני רכישות/עגלה, הדוח נפתח כמו איקומרס.
 
-המשתמש רוצה: **הסנכרון תמיד יסתיים `today`**, גם כשהפילטר התצוגתי הוא "אתמול" או "שבוע שעבר" — כי הסנכרון אמור להביא את הנתונים העדכניים ביותר. הסינון בתצוגה יסנן בנפרד.
+### למה "פרימיום" נראה נכון
+אצל פרימיום יש טבלת `facebook_insights` רגילה בלי אותו טריגר ויזואלי של איקומרס, ולכן אותו מסך מוצג כתבנית לידים רגילה.  
+כלומר, צריך ליישם על איריס את אותו כלל תצוגה, לא לפי "מה פייסבוק החזיר", אלא לפי **סוג הדוח שהוגדר**.
 
----
+## התיקון שאבצע
+### 1. לתקן את מנגנון ההכרעה של דוח רגיל
+אעדכן את `src/components/clients/ClientReportSnapshot.tsx` כך שהסדר יהיה:
+1. אם `integration_settings.campaign_type` הוגדר ל-`leads` → תמיד תצוגת לידים
+2. אם הוגדר `ecommerce` → תמיד תצוגת איקומרס
+3. רק אם אין הגדרה מפורשת → fallback לזיהוי אוטומטי מתוך הנתונים
 
-## התיקון
+### 2. להחיל את זה גם על מבנה הטבלה עצמו
+במצב `leads`:
+- לא להציג KPI של הכנסות / רכישות / ROAS
+- לא לבנות בלוק "קמפייני איקומרס"
+- להציג מבנה כמו פרימיום:
+  - הוצאה
+  - חשיפות
+  - קליקים
+  - לידים
+  - עלות לליד
+  - טבלת קמפייני לידים רגילה
 
-### א. הפרדה בין "טווח תצוגה" ל"טווח סנכרון"
+### 3. לתקן את הרשומה של איריס ידנית
+אעדכן את טבלת `facebook_insights` של איריס (`1f3bafb0-5b83-4104-85fa-fecf4d0035f1`) כך שב-`integration_settings` יהיה:
+```json
+{ "campaign_type": "leads" }
+```
+כדי שהשינוי ייכנס מיידית גם עבור איריס עצמה.
 
-ב-`src/pages/DynamicTableView.tsx`, פונקציית `getMainFilterSyncRange` תשתנה כך ש-**`endDate` תמיד יהיה `today`** (פורמט `yyyy-MM-dd`), בלי קשר לפילטר. רק `startDate` ייקבע לפי הפילטר:
+### 4. לוודא שהבחירה הידנית באמת נשמרת במקום הנכון
+אבדוק את המסלול שבו אתה "מגדיר דוח לידים" כדי לוודא שהבחירה נכתבת על **טבלת ה-Facebook Insights עצמה**, ולא רק למצב זמני/מקום אחר.  
+אם צריך, איישר גם את מסך השמירה כדי שהבעיה לא תחזור אצל לקוחות אחרים.
 
-- `today` / `yesterday` / `last_7_days` / `last_14_days` / `last_30_days` / `last_90_days` / `last_180_days` / `last_365_days` → `startDate` לפי הפילטר, **`endDate = today`**.
-- `last_week` → סנכרון מתחילת השבוע שעבר עד **today** (במקום עד סוף השבוע שעבר).
-- `last_month` → סנכרון מתחילת החודש שעבר עד **today**.
-- `custom` → נשאר כמו שהמשתמש בחר ידנית (כי זו בחירה מפורשת).
-- `all` → נשאר `2020-01-01` עד `today`.
-
-**חשוב:** השינוי משפיע רק על **סנכרון** — הסינון בתצוגה (`DynamicTableView` filtering) ימשיך להציג את החלון הנכון לפי הפילטר. זה לא ישפיע על ספירת לידים בפייסבוק כי הספירה ב-UI נעשית מסינון נתונים ב-frontend, לא מהסנכרון.
-
-### ב. הוספת cron ל-Google Analytics
-
-1. **יצירת `supabase/functions/cron-sync-google-analytics/index.ts`** — פונקציה במבנה דומה ל-`cron-sync-facebook-insights`:
-   - שולפת את כל הטבלאות עם `integration_type = 'google_analytics'`.
-   - מחלקת ל-batches של 8 טבלאות.
-   - לכל טבלה — קוראת ל-`sync-google-analytics-data` עם `startDate = today - 30d` ו-`endDate = today` (סנכרון נע של 30 ימים אחרונים).
-   - מטפלת ב-self-invocation להמשך batches.
-   - מעדכנת `last_sync_at` בטבלה.
-
-2. **הוספת pg_cron schedule** — יידרש להריץ SQL דרך Supabase insert tool (לא migration, כי כולל ה-anon key הספציפי לפרויקט):
-   ```sql
-   select cron.schedule(
-     'cron-sync-google-analytics-2x-daily',
-     '0 6,18 * * *',  -- 06:00 ו-18:00 UTC (= 09:00 ו-21:00 שעון ישראל)
-     $$ select net.http_post(
-        url := 'https://jnzguisakdtcollxmgzd.supabase.co/functions/v1/cron-sync-google-analytics',
-        headers := '{"Content-Type":"application/json","Authorization":"Bearer <ANON_KEY>"}'::jsonb,
-        body := '{}'::jsonb
-     ) $$
-   );
-   ```
-
----
-
-## קבצים לעריכה
-
-1. **`src/pages/DynamicTableView.tsx`** (שורות 161-227) — שינוי `getMainFilterSyncRange` כך ש-`endDate` תמיד `today`.
-2. **`supabase/functions/cron-sync-google-analytics/index.ts`** — קובץ חדש, cron handler ל-GA.
-3. **SQL insert** — הוספת pg_cron schedule שמריץ את הפונקציה ב-06:00 וב-18:00 UTC (פעמיים ביום).
+## קבצים/אזורים שאעדכן
+- `src/components/clients/ClientReportSnapshot.tsx` — מקור הבעיה הראשי
+- ייתכן שגם מסך השמירה של סוג הדוח, אם יתברר שהבחירה לא נרשמת לטבלה הנכונה
+- עדכון ידני לרשומת `crm_tables` של איריס גייר
 
 ## תוצאה צפויה
-
-- **סנכרון ידני:** לא משנה אם המשתמש מסתכל על "אתמול" או "שבוע שעבר" — לחיצה על "סנכרן" תמיד תעדכן עד היום, כך שהנתונים העדכניים יקלטו.
-- **סנכרון אוטומטי:** Google Analytics יסתנכרן 2x ביום (כמו פייסבוק/Google Ads) — תמיד 30 ימים אחרונים, מסתיים בתאריך הריצה.
-
+- איריס גייר תיפתח כתבנית **דוח לידים רגיל**
+- המבנה יהיה כמו אצל פרימיום
+- גם אם פייסבוק מחזיר `purchases` / `add_to_cart`, זה לא יהפוך את הדוח לאיקומרס כל עוד הוגדר `leads`
+- לקוחות עתידיים עם override ידני לא יסבלו מאותה תקלה
+</final-text>
