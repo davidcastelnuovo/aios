@@ -222,15 +222,47 @@ serve(async (req) => {
     // 3) Parse + filter by date if requested
     const cutoff = days && Number(days) > 0 ? Date.now() - Number(days) * 86400000 : 0;
 
+    // Debug: log the structure of the first submission so we can see what fields exist
+    if (allSubmissions.length > 0) {
+      console.log("Sample submission keys:", Object.keys(allSubmissions[0]));
+      console.log("Sample submission (first 1000 chars):", JSON.stringify(allSubmissions[0]).slice(0, 1000));
+    }
+
     const parsed: ParsedSubmission[] = [];
     for (const s of allSubmissions) {
       const createdAt = s.created_at || s.date || s.created || new Date().toISOString();
       if (cutoff > 0 && new Date(createdAt).getTime() < cutoff) continue;
 
       const fields = s.values || s.fields || s.form_data || [];
-      const referer = s.referer || s.referrer || s.url || null;
-      const formId = String(s.form_id || s.form || s.formId || "");
-      const rawFormName = formsMap.get(formId) || s.form_name || s.form_label || formId || "טופס לא ידוע";
+      const referer = s.referer || s.referrer || s.url || s.user_url || null;
+
+      // Robust form_id extraction — Elementor returns various shapes:
+      //  - s.form_id (string)
+      //  - s.form = { id, name } (object)
+      //  - s.form (string id)
+      //  - s.element_id / s.post_id (fallbacks)
+      let formIdRaw: any =
+        s.form_id ??
+        (s.form && typeof s.form === "object" ? (s.form.id ?? s.form.form_id ?? s.form.ID) : s.form) ??
+        s.formId ??
+        s.element_id ??
+        s.post_id ??
+        "";
+      // If still object somehow, stringify cleanly
+      if (formIdRaw && typeof formIdRaw === "object") {
+        formIdRaw = formIdRaw.id || formIdRaw.value || JSON.stringify(formIdRaw);
+      }
+      const formId = String(formIdRaw || "").trim();
+
+      // Robust form_name extraction
+      let rawFormName: any =
+        s.form_name ??
+        (s.form && typeof s.form === "object" ? (s.form.name ?? s.form.title ?? s.form.label) : null) ??
+        s.form_label ??
+        s.post_title ??
+        formsMap.get(formId) ??
+        formId ??
+        "טופס לא ידוע";
       const formName = stringifyFormName(rawFormName, formId || "טופס לא ידוע");
       const slug = extractSlug(referer);
 
