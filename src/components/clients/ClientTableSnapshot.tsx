@@ -20,7 +20,7 @@ interface Props {
  * don't bleed in (and vice-versa).
  */
 export const ClientTableSnapshot = forwardRef<HTMLDivElement, Props>(
-  ({ tableSlug }, ref) => {
+  ({ tableSlug, summaryOnly = true }, ref) => {
     const [client] = useState(
       () =>
         new QueryClient({
