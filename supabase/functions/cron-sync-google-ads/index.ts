@@ -304,6 +304,7 @@ Deno.serve(async (req) => {
           }
           // Wait between tables
           await new Promise((r) => setTimeout(r, 2000));
+        }
       }
 
       // === Zero-spend anomaly per tenant table (read existing crm_records) ===
