@@ -1532,7 +1532,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     (table?.integration_settings?.last_sync_at || (!recordsLoading && records && records.length > 0));
 
   return (
-    <div className={cn("container mx-auto", isEmbed ? "py-2 px-2" : "py-8 px-4")}>
+    <div className={cn("container mx-auto", summaryOnly ? "p-0" : isEmbed ? "py-2 px-2" : "py-8 px-4")}>
       {/* Alert for tables that need scenario cloning */}
       {!isEmbed && needsScenarioClone && (
         <Alert className="mb-6 border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950">
