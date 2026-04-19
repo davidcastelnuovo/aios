@@ -367,16 +367,21 @@ Deno.serve(async (req) => {
         leadActionTypes.some((type) => actionTypeSet.has(type)) ||
         Array.from(actionTypeSet).some((type) => type.startsWith('offsite_conversion.custom'));
 
-      // If a campaign has leads but no actual purchases/revenue, classify as lead
-      // even if it has add_to_cart events
+      // PRIORITY: Campaign objective is the source of truth.
+      // If FB says it's a lead campaign (OUTCOME_LEADS / LEAD_GENERATION), it's a lead
+      // campaign — even with incidental purchase/add_to_cart pixel events from the website.
       const campaignType: 'lead' | 'ecommerce' | 'other' =
-        hasStrongEcommerceSignal && !(hasLeadSignal && purchases === 0 && purchaseValue === 0)
-          ? 'ecommerce'
-          : hasLeadSignal || isLeadObjective
-            ? 'lead'
-            : addToCart > 0 || addToCartActionTypePriority.some((type) => actionTypeSet.has(type))
+        isLeadObjective
+          ? 'lead'
+          : isEcommerceObjective
+            ? 'ecommerce'
+            : hasStrongEcommerceSignal && !(hasLeadSignal && purchases === 0 && purchaseValue === 0)
               ? 'ecommerce'
-              : 'other';
+              : hasLeadSignal
+                ? 'lead'
+                : addToCart > 0 || addToCartActionTypePriority.some((type) => actionTypeSet.has(type))
+                  ? 'ecommerce'
+                  : 'other';
 
       return {
         date: insight.date_start, // Use date_start as the single date field
