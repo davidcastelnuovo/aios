@@ -2408,7 +2408,11 @@ export default function DynamicTableView({ embedTableSlug, embedMode }: DynamicT
           }>);
 
           const entries = Object.entries(campaignGroups);
-          const ecommerceCampaigns = entries.filter(([, data]) =>
+          // Respect table-level campaign_type setting: if 'leads', NEVER show ecommerce table
+          // (even if Facebook reports stray purchase events from a tracking pixel)
+          const tableCampaignType = String(table?.integration_settings?.campaign_type || '').toLowerCase();
+          const forceLeadsOnly = tableCampaignType === 'leads' || tableCampaignType === 'lead';
+          const ecommerceCampaigns = forceLeadsOnly ? [] : entries.filter(([, data]) =>
             (data.campaign_type === 'ecommerce' ||
             data.purchases > 0 ||
             data.purchase_value > 0) &&
@@ -2417,7 +2421,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode }: DynamicT
             !(data.leads > 0 && data.purchases === 0 && data.purchase_value === 0)
           );
           // Campaigns with only add_to_cart but also leads → lead campaigns
-          const leadCampaigns = entries.filter(([, data]) =>
+          const leadCampaigns = forceLeadsOnly ? entries : entries.filter(([, data]) =>
             !(
               (data.campaign_type === 'ecommerce' ||
               data.purchases > 0 ||
