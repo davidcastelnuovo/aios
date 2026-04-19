@@ -2671,7 +2671,8 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                   all_conversions: 0,
                   all_conversions_value: 0,
                   roas_sum: 0,
-                  roas_count: 0
+                  roas_count: 0,
+                  verified_leads: 0,
                 };
               }
               acc[campaignName].impressions += Number(record.data?.impressions) || 0;
@@ -2683,13 +2684,14 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
               acc[campaignName].conversions_value += Number(record.data?.conversions_value) || Number(record.data?.purchase_value) || 0;
               acc[campaignName].all_conversions += Number(record.data?.all_conversions) || 0;
               acc[campaignName].all_conversions_value += Number(record.data?.all_conversions_value) || 0;
+              acc[campaignName].verified_leads += Number(record.data?.verified_leads) || 0;
               // Track ROAS if it's pre-calculated in the data
               if (record.data?.roas) {
                 acc[campaignName].roas_sum += Number(record.data.roas) || 0;
                 acc[campaignName].roas_count += 1;
               }
               return acc;
-            }, {} as Record<string, { impressions: number; clicks: number; conversions: number; cost: number; conversions_value: number; all_conversions: number; all_conversions_value: number; roas_sum: number; roas_count: number }>);
+            }, {} as Record<string, { impressions: number; clicks: number; conversions: number; cost: number; conversions_value: number; all_conversions: number; all_conversions_value: number; roas_sum: number; roas_count: number; verified_leads: number }>);
 
             const totals = Object.values(campaignGroups).reduce((acc, campaign) => ({
               impressions: acc.impressions + campaign.impressions,
@@ -2701,7 +2703,11 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
               all_conversions_value: acc.all_conversions_value + campaign.all_conversions_value,
               roas_sum: acc.roas_sum + campaign.roas_sum,
               roas_count: acc.roas_count + campaign.roas_count,
-            }), { impressions: 0, clicks: 0, conversions: 0, cost: 0, conversions_value: 0, all_conversions: 0, all_conversions_value: 0, roas_sum: 0, roas_count: 0 });
+              verified_leads: acc.verified_leads + campaign.verified_leads,
+            }), { impressions: 0, clicks: 0, conversions: 0, cost: 0, conversions_value: 0, all_conversions: 0, all_conversions_value: 0, roas_sum: 0, roas_count: 0, verified_leads: 0 });
+
+            // Detect if any record has verification data (means a WP site is connected and was checked)
+            const hasVerifiedData = filteredRecords.some(r => r.data?.verified_leads !== undefined && r.data?.verified_leads !== null);
             
             // Calculate total ROAS - always use total conversions value / total cost
             const totalRoas = totals.cost > 0 ? totals.conversions_value / totals.cost : 0;

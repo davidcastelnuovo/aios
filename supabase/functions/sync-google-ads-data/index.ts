@@ -23,6 +23,9 @@ interface GoogleAdsRecord {
   conversions_value: number;
   cost_per_conversion: number;
   roas: number;
+  // Verified leads from connected WordPress site (Elementor submissions with matching gad_campaignid)
+  verified_leads?: number;
+  verified_source?: string; // site URL we verified against, for transparency
 }
 
 Deno.serve(async (req) => {
@@ -409,11 +412,142 @@ Deno.serve(async (req) => {
     }
     console.log(`[sync-google-ads] total records parsed: ${records.length}`);
 
+    // ============================================================
+    // ENRICHMENT: Verify lead counts against connected WordPress site
+    // For each campaign_id, count actual Elementor form submissions where
+    // gad_campaignid matches. This catches discrepancies between Google Ads
+    // "Conversions" and real form submissions on the landing page.
+    // ============================================================
+    let verifiedSiteUrl: string | null = null;
+    try {
+      // Find an active WordPress site for this client (table.client_id)
+      const tableClientId = (table as any).client_id as string | null;
+      if (tableClientId) {
+        const { data: wpSites } = await supabaseAdmin
+          .from('social_media_wordpress_sites')
+          .select('id, site_url')
+          .eq('client_id', tableClientId)
+          .eq('is_active', true)
+          .limit(1);
+
+        const site = wpSites?.[0];
+        if (site) {
+          verifiedSiteUrl = site.site_url;
+          // Compute days from date range to limit submission scan
+          const daysDiff = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / 86400000) + 1);
+
+          const { data: subData, error: subErr } = await supabaseAdmin.functions.invoke(
+            'fetch-elementor-submissions',
+            { body: { site_id: site.id, days: Math.min(daysDiff, 90) } }
+          );
+
+          if (!subErr && subData?.success && Array.isArray(subData.submissions)) {
+            // Helper: extract URL slug (path segment) from referer
+            const extractSlug = (referer: string | null): string => {
+              if (!referer) return '';
+              try {
+                const u = new URL(referer);
+                // Take first non-empty path segment, decode it
+                const seg = u.pathname.split('/').filter(Boolean)[0] || '';
+                return decodeURIComponent(seg).toLowerCase();
+              } catch {
+                return '';
+              }
+            };
+
+            // Hebrew normalization helper for fuzzy campaign↔slug matching
+            const normalize = (s: string) =>
+              (s || '')
+                .toLowerCase()
+                .replace(/[-_]/g, ' ')
+                .replace(/[^\u0590-\u05FF\w\s]/g, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+
+            // Build two maps:
+            //  (a) by exact gad_campaignid -> day -> count
+            //  (b) by URL slug -> day -> count  (used as fallback)
+            const byCampaignId = new Map<string, Map<string, number>>();
+            const bySlug = new Map<string, Map<string, number>>();
+
+            for (const sub of subData.submissions) {
+              if (sub.source === 'test') continue;
+              const day = (sub.created_at || '').slice(0, 10);
+              if (!day) continue;
+
+              const cid = sub.gad_campaignid;
+              if (cid) {
+                if (!byCampaignId.has(cid)) byCampaignId.set(cid, new Map());
+                const dm = byCampaignId.get(cid)!;
+                dm.set(day, (dm.get(day) || 0) + 1);
+              }
+
+              // Only count slug for google_ads-sourced submissions to keep it relevant
+              if (sub.source === 'google_ads' || sub.source === 'google') {
+                const slug = extractSlug(sub.referer);
+                if (slug) {
+                  if (!bySlug.has(slug)) bySlug.set(slug, new Map());
+                  const dm = bySlug.get(slug)!;
+                  dm.set(day, (dm.get(day) || 0) + 1);
+                }
+              }
+            }
+
+            // Annotate each record. Strategy:
+            //  1) Exact match by campaign_id.
+            //  2) Fallback: fuzzy match campaign_name ↔ slug (token overlap >= 1).
+            const slugEntries = Array.from(bySlug.keys()).map((s) => ({ slug: s, tokens: normalize(s).split(' ').filter((t) => t.length > 1) }));
+
+            for (const rec of records) {
+              const dayMapById = byCampaignId.get(rec.campaign_id);
+              const exactCount = dayMapById?.get(rec.date) || 0;
+              if (exactCount > 0) {
+                rec.verified_leads = exactCount;
+                rec.verified_source = site.site_url;
+                continue;
+              }
+
+              // Fuzzy fallback: match campaign_name tokens against slug tokens
+              const cnTokens = normalize(rec.campaign_name).split(' ').filter((t) => t.length > 1);
+              if (cnTokens.length === 0) {
+                rec.verified_leads = exactCount;
+                continue;
+              }
+              let bestSlug: string | null = null;
+              let bestOverlap = 0;
+              for (const { slug, tokens } of slugEntries) {
+                const overlap = tokens.filter((t) => cnTokens.includes(t)).length;
+                if (overlap > bestOverlap) {
+                  bestOverlap = overlap;
+                  bestSlug = slug;
+                }
+              }
+              if (bestSlug && bestOverlap >= 1) {
+                const dm = bySlug.get(bestSlug)!;
+                const fuzzyCount = dm.get(rec.date) || 0;
+                rec.verified_leads = fuzzyCount;
+                if (fuzzyCount > 0) rec.verified_source = `${site.site_url}/${bestSlug}`;
+              } else {
+                rec.verified_leads = 0;
+              }
+            }
+            console.log(`[sync-google-ads] enriched with WP submissions: ${byCampaignId.size} by id, ${bySlug.size} slugs available`);
+          } else {
+            console.warn('[sync-google-ads] WP enrichment skipped:', subErr?.message || subData?.error);
+          }
+        } else {
+          console.log('[sync-google-ads] no active WP site for client; skipping verification');
+        }
+      }
+    } catch (enrichErr: any) {
+      // Non-fatal: continue with raw Google Ads data
+      console.warn('[sync-google-ads] enrichment error (non-fatal):', enrichErr?.message);
+    }
 
     // Create fields if they don't exist (use admin client - table may belong to a different tenant)
-    const fieldKeys = ['date', 'campaign_name', 'campaign_id', 'impressions', 'clicks', 'ctr', 'cpc', 'cost', 'conversions', 'conversions_value', 'cost_per_conversion', 'roas'];
-    const fieldNames = ['תאריך', 'שם הקמפיין', 'מזהה קמפיין', 'חשיפות', 'קליקים', 'אחוז קליקים', 'עלות לקליק', 'הוצאה', 'המרות', 'ערך המרות', 'עלות להמרה', 'ROAS'];
-    const fieldTypes = ['date', 'text', 'text', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number'];
+    const fieldKeys = ['date', 'campaign_name', 'campaign_id', 'impressions', 'clicks', 'ctr', 'cpc', 'cost', 'conversions', 'conversions_value', 'cost_per_conversion', 'roas', 'verified_leads'];
+    const fieldNames = ['תאריך', 'שם הקמפיין', 'מזהה קמפיין', 'חשיפות', 'קליקים', 'אחוז קליקים', 'עלות לקליק', 'הוצאה', 'המרות', 'ערך המרות', 'עלות להמרה', 'ROAS', 'לידים באתר'];
+    const fieldTypes = ['date', 'text', 'text', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number'];
 
     for (let i = 0; i < fieldKeys.length; i++) {
       const { data: existingField } = await supabaseAdmin
@@ -477,7 +611,8 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({
       success: true,
       records_synced: inserted,
-      last_sync_at: new Date().toISOString()
+      last_sync_at: new Date().toISOString(),
+      verified_against: verifiedSiteUrl,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
