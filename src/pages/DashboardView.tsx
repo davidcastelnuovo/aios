@@ -897,7 +897,9 @@ export default function DashboardView() {
     );
   }
 
-  const showAnalyticsCards = platformFilter === 'all' || platformFilter === 'google_analytics';
+  // Detect if there's actual Analytics data (any GA records present)
+  const hasAnalyticsData = allRecords.some((r: any) => isAnalyticsPlatform(r._source));
+  const showAnalyticsCards = (platformFilter === 'all' || platformFilter === 'google_analytics') && hasAnalyticsData;
   const showAdsCards = platformFilter === 'all' || platformFilter === 'facebook' || platformFilter === 'google_ads';
 
   return (
