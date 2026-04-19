@@ -93,22 +93,13 @@ export default function AhrefsSettings() {
       }
 
       // Update only valid SEO reports for the same domain with this client_id
-      const { error: reportError } = await supabase
+      const { data: reportsForDomain, error: reportError } = await supabase
         .from('ahrefs_reports')
         .select('id, report_data')
         .eq('domain', domain);
       if (reportError) throw reportError;
 
-      const validReportIds = (reportError ? [] : undefined);
-
-      const reportsForDomain = await supabase
-        .from('ahrefs_reports')
-        .select('id, report_data')
-        .eq('domain', domain);
-
-      if (reportsForDomain.error) throw reportsForDomain.error;
-
-      const validIds = (reportsForDomain.data || [])
+      const validIds = (reportsForDomain || [])
         .filter((report) => hasValidSeoReportData(report.report_data))
         .map((report) => report.id);
 
