@@ -61,6 +61,7 @@ export function LeadsChatView({
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [listSearch, setListSearch] = useState("");
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingLead, setEditingLead] = useState<any>(null);
   const [activeTab, setActiveTab] = useState("details");
   const [manageStagesOpen, setManageStagesOpen] = useState(false);
   const [manageStatusesOpen, setManageStatusesOpen] = useState(false);
@@ -514,7 +515,31 @@ export function LeadsChatView({
                   </Button>
                 )}
 
-                <EditLeadDialog lead={selectedLead} open={editDialogOpen} onOpenChange={setEditDialogOpen} />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  title="ערוך ליד"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditingLead(selectedLead);
+                    setEditDialogOpen(true);
+                  }}
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                {editingLead && (
+                  <EditLeadDialog
+                    key={editingLead.id}
+                    lead={editingLead}
+                    open={editDialogOpen}
+                    onOpenChange={(o) => {
+                      setEditDialogOpen(o);
+                      if (!o) setEditingLead(null);
+                    }}
+                    hideTrigger
+                  />
+                )}
 
                 <AddTaskForm
                   leadId={selectedLead.id}
