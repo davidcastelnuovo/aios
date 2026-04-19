@@ -13,6 +13,7 @@ interface ParsedSubmission {
   email: string | null;
   created_at: string;
   referer: string | null;
+  slug: string;
   source: "google_ads" | "google" | "facebook" | "organic" | "direct" | "test" | "other";
   gclid: string | null;
   gad_campaignid: string | null;
@@ -21,6 +22,34 @@ interface ParsedSubmission {
   utm_campaign: string | null;
   ip: string | null;
   raw_fields: Record<string, any>;
+}
+
+function extractSlug(referer: string | null): string {
+  if (!referer) return "";
+  try {
+    const u = new URL(referer);
+    const seg = u.pathname.split("/").filter(Boolean)[0] || "";
+    return decodeURIComponent(seg).toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+function stringifyFormName(name: any, fallback: string): string {
+  if (!name) return fallback;
+  if (typeof name === "string") return name;
+  if (typeof name === "object") {
+    // Elementor sometimes returns { rendered: "..." } or similar
+    return (
+      name.rendered ||
+      name.name ||
+      name.label ||
+      name.title ||
+      name.value ||
+      fallback
+    );
+  }
+  return String(name);
 }
 
 function getQueryParam(url: string | null, key: string): string | null {
