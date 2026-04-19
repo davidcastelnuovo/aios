@@ -17,6 +17,7 @@ import { GscIntegration, type GscKeywordData, type GscMultiPeriodData } from "./
 import { useAhrefsEnrichment, type AhrefsKeyword } from "@/hooks/useAhrefsEnrichment";
 import { AhrefsProjectPicker } from "./AhrefsProjectPicker";
 import { ListChecks } from "lucide-react";
+import { filterValidSeoReports } from "./seo/reportValidity";
 
 interface SeoDashboardViewProps {
   tenantId: string;
@@ -93,13 +94,15 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
     enabled: !!tenantId && !!clientId,
   });
 
+  const validReports = useMemo(() => filterValidSeoReports(reports), [reports]);
+
   // Selected report (default to latest)
   const selectedReport = useMemo(() => {
     if (selectedReportId) {
-      return reports.find(r => r.id === selectedReportId) || reports[0];
+      return validReports.find(r => r.id === selectedReportId) || validReports[0];
     }
-    return reports[0];
-  }, [reports, selectedReportId]);
+    return validReports[0];
+  }, [validReports, selectedReportId]);
 
   const reportData = selectedReport?.report_data as any;
 
@@ -192,8 +195,8 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
   }, [gaRecords, gaOrganicByMonth]);
 
   // Find previous month report for keyword comparison
-  const selectedIdx = reports.findIndex(r => r.id === selectedReport?.id);
-  const prevMonthReport = selectedIdx >= 0 && selectedIdx < reports.length - 1 ? reports[selectedIdx + 1] : null;
+  const selectedIdx = validReports.findIndex(r => r.id === selectedReport?.id);
+  const prevMonthReport = selectedIdx >= 0 && selectedIdx < validReports.length - 1 ? validReports[selectedIdx + 1] : null;
 
   // Normalize keyword fields from various source formats
   function normalizeKeyword(kw: any): any {
@@ -459,7 +462,7 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
     );
   }
 
-  if (reports.length === 0) {
+  if (validReports.length === 0) {
     return (
       <>
         <Card className="p-8 text-center" dir="rtl">
@@ -521,9 +524,9 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
         </div>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           {(() => {
-            const uniqueDomains = new Set(reports.map(r => r.domain));
+             const uniqueDomains = new Set(validReports.map(r => r.domain));
             const showDomain = uniqueDomains.size > 1;
-            if (reports.length <= 1) {
+             if (validReports.length <= 1) {
               return selectedReport ? (
                 <Badge variant="outline" className="gap-1.5 font-normal">
                   <Globe className="h-3 w-3" />
@@ -540,7 +543,7 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
                   <SelectValue placeholder="בחר דוח" />
                 </SelectTrigger>
                 <SelectContent>
-                  {reports.map((r) => (
+                  {validReports.map((r) => (
                     <SelectItem key={r.id} value={r.id}>
                       <div className="flex items-center gap-2">
                         {showDomain && (
@@ -567,7 +570,7 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
               תחילת קידום: {format(new Date(campaignStartDate), 'dd/MM/yyyy')}
             </Badge>
           )}
-          <Badge variant="secondary">{reports.length} דוחות</Badge>
+          <Badge variant="secondary">{validReports.length} דוחות</Badge>
         </div>
       </div>
 

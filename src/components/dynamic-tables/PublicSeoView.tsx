@@ -8,6 +8,7 @@ import { he } from "date-fns/locale";
 import { SeoSnapshotCards } from "./seo/SeoSnapshotCards";
 import { SeoTrafficChart } from "./seo/SeoTrafficChart";
 import { SeoKeywordsTable } from "./seo/SeoKeywordsTable";
+import { filterValidSeoReports } from "./seo/reportValidity";
 
 interface PublicSeoViewProps {
   tableName: string;
@@ -32,11 +33,12 @@ function normalizeKeyword(kw: any) {
 
 export function PublicSeoView({ tableName, reports }: PublicSeoViewProps) {
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
+  const validReports = useMemo(() => filterValidSeoReports(reports), [reports]);
 
   const selectedReport = useMemo(() => {
-    if (selectedReportId) return reports.find((r) => r.id === selectedReportId) || reports[0];
-    return reports[0];
-  }, [reports, selectedReportId]);
+    if (selectedReportId) return validReports.find((r) => r.id === selectedReportId) || validReports[0];
+    return validReports[0];
+  }, [validReports, selectedReportId]);
 
   const reportData = (selectedReport?.report_data as any) || {};
   const snapshot = reportData?.snapshot || {};
@@ -61,8 +63,8 @@ export function PublicSeoView({ tableName, reports }: PublicSeoViewProps) {
 
   // Previous month report for prev-month positions fallback
   const prevMonthMap = useMemo(() => {
-    const idx = reports.findIndex((r) => r.id === selectedReport?.id);
-    const prev = idx >= 0 && idx < reports.length - 1 ? reports[idx + 1] : null;
+    const idx = validReports.findIndex((r) => r.id === selectedReport?.id);
+    const prev = idx >= 0 && idx < validReports.length - 1 ? validReports[idx + 1] : null;
     const map = new Map<string, number | null>();
     if (!prev) return map;
     const rd = (prev.report_data as any) || {};
@@ -75,7 +77,7 @@ export function PublicSeoView({ tableName, reports }: PublicSeoViewProps) {
       if (!map.has(name)) map.set(name, kw.position ?? kw.best_position ?? null);
     }
     return map;
-  }, [reports, selectedReport?.id]);
+  }, [validReports, selectedReport?.id]);
 
   function enrich(kw: any) {
     const n = normalizeKeyword(kw);
@@ -136,7 +138,7 @@ export function PublicSeoView({ tableName, reports }: PublicSeoViewProps) {
 
   const trackedKeywords = useMemo(() => rawTracked.map(enrich), [rawTracked, comparison, prevMonthMap]);
 
-  if (!reports || reports.length === 0) {
+  if (!validReports || validReports.length === 0) {
     return (
       <Card className="p-8 text-center" dir="rtl">
         <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
@@ -157,7 +159,7 @@ export function PublicSeoView({ tableName, reports }: PublicSeoViewProps) {
           {reportData?.project_name && <Badge variant="outline">{reportData.project_name}</Badge>}
         </div>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          {reports.length > 1 && (
+           {validReports.length > 1 && (
             <Select
               value={selectedReport?.id || ""}
               onValueChange={(val) => setSelectedReportId(val)}
@@ -166,7 +168,7 @@ export function PublicSeoView({ tableName, reports }: PublicSeoViewProps) {
                 <SelectValue placeholder="בחר תאריך דוח" />
               </SelectTrigger>
               <SelectContent>
-                {reports.map((r) => (
+                 {validReports.map((r) => (
                   <SelectItem key={r.id} value={r.id}>
                     <div className="flex items-center gap-2">
                       <Calendar className="h-3 w-3" />
@@ -184,7 +186,7 @@ export function PublicSeoView({ tableName, reports }: PublicSeoViewProps) {
               תחילת קידום: {format(new Date(campaignStartDate), "dd/MM/yyyy")}
             </Badge>
           )}
-          <Badge variant="secondary">{reports.length} דוחות</Badge>
+           <Badge variant="secondary">{validReports.length} דוחות</Badge>
         </div>
       </div>
 
