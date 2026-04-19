@@ -128,7 +128,6 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
         .from("dashboard_shares")
         .select("share_token, is_active")
         .eq("dashboard_id", dashboard.id)
-        .eq("is_active", true)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
