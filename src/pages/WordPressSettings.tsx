@@ -32,8 +32,9 @@ import { toast } from "sonner";
 import {
   Globe, Plus, Trash2, Loader2, ExternalLink, RefreshCw,
   ShoppingCart, ArrowLeft, Settings, CheckCircle2, AlertCircle,
-  Edit, Key,
+  Edit, Key, Link2, UserPlus,
 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface WordPressSite {
   id: string;
@@ -89,6 +90,9 @@ export default function WordPressSettings() {
 
   const [addOpen, setAddOpen] = useState(false);
   const [editSite, setEditSite] = useState<WordPressSite | null>(null);
+  const [linkSite, setLinkSite] = useState<WordPressSite | null>(null);
+  const [linkAgency, setLinkAgency] = useState<string>("");
+  const [linkClient, setLinkClient] = useState<string>("");
   const [form, setForm] = useState({ ...emptyForm });
   const [filterTenant, setFilterTenant] = useState<string>("all");
   const [testingId, setTestingId] = useState<string | null>(null);
@@ -265,6 +269,69 @@ export default function WordPressSettings() {
     },
   });
 
+  // Quick-link association mutation
+  const linkMutation = useMutation({
+    mutationFn: async ({ id, agency_id, client_id }: { id: string; agency_id: string | null; client_id: string | null }) => {
+      const { error } = await supabase
+        .from("social_media_wordpress_sites" as any)
+        .update({ agency_id, client_id, updated_at: new Date().toISOString() })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["wordpress-sites-admin"] });
+      queryClient.invalidateQueries({ queryKey: ["wordpress-sites"] });
+      toast.success("השיוך עודכן בהצלחה");
+      setLinkSite(null);
+    },
+    onError: (e: Error) => toast.error("שגיאה: " + e.message),
+  });
+
+  // Agencies/Clients for the quick-link dialog (scoped to the site's tenant)
+  const linkSiteTenantId = linkSite?.tenant_id;
+  const { data: linkAgencies = [] } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ["agencies-for-link", linkSiteTenantId],
+    queryFn: async () => {
+      if (!linkSiteTenantId) return [];
+      const { data, error } = await supabase
+        .from("agencies").select("id, name").eq("tenant_id", linkSiteTenantId).order("name");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!linkSiteTenantId,
+  });
+  const { data: linkClients = [] } = useQuery<Client[]>({
+    queryKey: ["clients-for-link", linkSiteTenantId, linkAgency],
+    queryFn: async () => {
+      if (!linkSiteTenantId) return [];
+      let q = supabase.from("clients").select("id, name").eq("tenant_id", linkSiteTenantId).order("name");
+      if (linkAgency) q = q.eq("agency_id", linkAgency);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!linkSiteTenantId,
+  });
+
+  const openLink = (site: WordPressSite) => {
+    setLinkSite(site);
+    setLinkAgency(site.agency_id || "");
+    setLinkClient(site.client_id || "");
+  };
+
+  // Map of clientId -> name for table display (across tenants for super-admin we fetch lazily per site tenant)
+  const { data: clientsMap = {} } = useQuery<Record<string, string>>({
+    queryKey: ["clients-map-for-wp", sites.map((s) => s.client_id).filter(Boolean).join(",")],
+    queryFn: async () => {
+      const ids = Array.from(new Set(sites.map((s) => s.client_id).filter(Boolean) as string[]));
+      if (ids.length === 0) return {};
+      const { data, error } = await supabase.from("clients").select("id, name").in("id", ids);
+      if (error) throw error;
+      return Object.fromEntries((data || []).map((c: any) => [c.id, c.name]));
+    },
+    enabled: sites.length > 0,
+  });
+
   // Trigger WooCommerce sync
   const syncMutation = useMutation({
     mutationFn: async (siteId: string) => {
@@ -392,15 +459,29 @@ export default function WordPressSettings() {
         </p>
       </div>
 
-      {agencies.length > 0 && (
+      <div className="border rounded-lg p-3 space-y-3 bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900">
+        <div className="flex items-start gap-2">
+          <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+          <p className="text-xs text-amber-900 dark:text-amber-200 font-medium">
+            שיוך ללקוח חיוני כדי לקשר את לידי האתר (Elementor / Contact Form 7) אל דוח הלקוח.
+          </p>
+        </div>
+
         <div>
-          <Label>סוכנות מקושרת (אופציונלי)</Label>
+          <Label>סוכנות מקושרת</Label>
           <Select
             value={form.agency_id || "none"}
             onValueChange={(v) => setForm({ ...form, agency_id: v === "none" ? "" : v, client_id: "" })}
+            disabled={isSuperAdmin && !isEdit && !form.tenant_id}
           >
             <SelectTrigger>
-              <SelectValue placeholder="בחר סוכנות..." />
+              <SelectValue placeholder={
+                isSuperAdmin && !isEdit && !form.tenant_id
+                  ? "בחר תחילה ארגון..."
+                  : agencies.length === 0
+                    ? "אין סוכנויות בארגון זה"
+                    : "בחר סוכנות..."
+              } />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="none">ללא</SelectItem>
@@ -410,17 +491,22 @@ export default function WordPressSettings() {
             </SelectContent>
           </Select>
         </div>
-      )}
 
-      {clients.length > 0 && (
         <div>
-          <Label>לקוח מקושר (אופציונלי)</Label>
+          <Label>לקוח מקושר</Label>
           <Select
             value={form.client_id || "none"}
             onValueChange={(v) => setForm({ ...form, client_id: v === "none" ? "" : v })}
+            disabled={isSuperAdmin && !isEdit && !form.tenant_id}
           >
             <SelectTrigger>
-              <SelectValue placeholder="בחר לקוח..." />
+              <SelectValue placeholder={
+                isSuperAdmin && !isEdit && !form.tenant_id
+                  ? "בחר תחילה ארגון..."
+                  : clients.length === 0
+                    ? (form.agency_id ? "אין לקוחות לסוכנות זו" : "אין לקוחות בארגון")
+                    : "בחר לקוח..."
+              } />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="none">ללא</SelectItem>
@@ -430,7 +516,8 @@ export default function WordPressSettings() {
             </SelectContent>
           </Select>
         </div>
-      )}
+      </div>
+
 
       <div>
         <Label>הערות</Label>
@@ -622,6 +709,7 @@ export default function WordPressSettings() {
                     <TableRow>
                       {isSuperAdmin && <TableHead>ארגון</TableHead>}
                       <TableHead>אתר</TableHead>
+                      <TableHead>לקוח מקושר</TableHead>
                       <TableHead>WooCommerce</TableHead>
                       <TableHead>סנכרון אחרון</TableHead>
                       <TableHead>סטטוס</TableHead>
@@ -653,6 +741,26 @@ export default function WordPressSettings() {
                               <p className="text-xs text-muted-foreground mt-0.5">{site.notes}</p>
                             )}
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          {site.client_id ? (
+                            <Badge variant="outline" className="border-emerald-500/50 text-emerald-700 dark:text-emerald-400">
+                              <Link2 className="h-3 w-3 ml-1" />
+                              {clientsMap[site.client_id] || "לקוח"}
+                            </Badge>
+                          ) : (
+                            <TooltipProvider delayDuration={150}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Badge variant="outline" className="border-amber-500/60 text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 cursor-help">
+                                    <AlertCircle className="h-3 w-3 ml-1" />
+                                    לא משויך ללקוח
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent>לידים מהאתר לא יקושרו לדוח לקוח</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
                         </TableCell>
                         <TableCell>
                           {site.woocommerce_enabled ? (
@@ -713,6 +821,16 @@ export default function WordPressSettings() {
                                 )}
                               </Button>
                             )}
+
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title={site.client_id ? "ערוך שיוך לקוח" : "שייך ללקוח"}
+                              onClick={() => openLink(site)}
+                              className={site.client_id ? "" : "text-amber-600 hover:text-amber-700"}
+                            >
+                              {site.client_id ? <Link2 className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
+                            </Button>
 
                             <Button
                               variant="ghost"
@@ -799,6 +917,103 @@ export default function WordPressSettings() {
             {updateMutation.isPending && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
             שמור שינויים
           </Button>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick Link (Associate to Client) Dialog */}
+      <Dialog open={!!linkSite} onOpenChange={(o) => { if (!o) setLinkSite(null); }}>
+        <DialogContent dir="rtl" className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Link2 className="h-5 w-5 text-primary" />
+              שיוך אתר ללקוח
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-lg border bg-muted/30 p-3">
+              <p className="text-sm font-medium">{linkSite?.site_name || linkSite?.site_url}</p>
+              <p className="text-xs text-muted-foreground" dir="ltr">{linkSite?.site_url}</p>
+            </div>
+
+            <div className="rounded-lg border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/20 p-3 flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+              <p className="text-xs text-amber-900 dark:text-amber-200">
+                שיוך זה מחבר את לידי האתר (Elementor / Contact Form 7) אל הלקוח, כך שיופיעו בדוח שלו.
+              </p>
+            </div>
+
+            <div>
+              <Label>סוכנות</Label>
+              <Select
+                value={linkAgency || "none"}
+                onValueChange={(v) => { setLinkAgency(v === "none" ? "" : v); setLinkClient(""); }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={linkAgencies.length === 0 ? "אין סוכנויות" : "בחר סוכנות..."} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">ללא</SelectItem>
+                  {linkAgencies.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>לקוח</Label>
+              <Select
+                value={linkClient || "none"}
+                onValueChange={(v) => setLinkClient(v === "none" ? "" : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={
+                    linkClients.length === 0
+                      ? (linkAgency ? "אין לקוחות לסוכנות זו" : "אין לקוחות בארגון")
+                      : "בחר לקוח..."
+                  } />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">ללא</SelectItem>
+                  {linkClients.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {linkSite?.client_id && linkClient && linkClient !== linkSite.client_id && (
+              <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+                <p className="text-xs text-destructive">
+                  שינוי שיוך הלקוח לא יעביר לידים היסטוריים שכבר נמשכו תחת הלקוח הקודם.
+                </p>
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setLinkSite(null)}
+                disabled={linkMutation.isPending}
+              >
+                ביטול
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={() => linkSite && linkMutation.mutate({
+                  id: linkSite.id,
+                  agency_id: linkAgency || null,
+                  client_id: linkClient || null,
+                })}
+                disabled={linkMutation.isPending}
+              >
+                {linkMutation.isPending && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
+                שמור שיוך
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
