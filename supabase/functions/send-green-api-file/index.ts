@@ -118,10 +118,6 @@ Deno.serve(async (req) => {
       chatId = `${digits}@c.us`;
     }
 
-    // Convert file to base64
-    const arrayBuffer = await file.arrayBuffer();
-    const base64Data = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
-
     // Determine API endpoint based on file type
     let endpoint: string;
     let body: any;
