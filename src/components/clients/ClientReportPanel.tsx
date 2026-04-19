@@ -134,7 +134,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
     enabled: !!tenantId,
   });
 
-  // Fetch share link
+  // Fetch share link (any existing — active or inactive)
   const { data: shareLink } = useQuery({
     queryKey: ["table-share-link", table.id],
     queryFn: async () => {
@@ -142,7 +142,6 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
         .from("table_shares" as any)
         .select("share_token, is_active")
         .eq("table_id", table.id)
-        .eq("is_active", true)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -278,6 +277,32 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return null;
+
+      // Check for ANY existing share row (active or inactive) to avoid duplicates
+      const { data: existing } = await supabase
+        .from("table_shares" as any)
+        .select("share_token, is_active")
+        .eq("table_id", table.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const existingRow = existing as any;
+      if (existingRow?.share_token) {
+        // Reactivate if inactive
+        if (!existingRow.is_active) {
+          await supabase
+            .from("table_shares" as any)
+            .update({ is_active: true } as any)
+            .eq("table_id", table.id)
+            .eq("share_token", existingRow.share_token);
+        }
+        const url = `https://after-lead.com/shared/table/${existingRow.share_token}`;
+        queryClient.invalidateQueries({ queryKey: ["table-share-link", table.id] });
+        return url;
+      }
+
+      // No existing row — create new
       const newToken = generateReadableToken(table.name);
       const { data, error } = await supabase
         .from("table_shares" as any)
