@@ -1,42 +1,56 @@
 
-## הבעיה (שתי נפרדות)
 
-### בעיה 1: דשבורד הלקוח (DashboardView, האפליקציה הפרטית)
-ב-`DashboardView` כרטיס "הכנסות" מציג **WooCommerce** כשמחובר אתר, **אבל** הסכום שונה מטאב ה-WooCommerce:
-- כרטיס "הכנסות (WooCommerce)" משתמש ב-`wooSummary` שמסונן לפי `wooDateRange` (טווח שמסתיים אתמול)
-- טאב "WooCommerce" משתמש ב-`PublicWooCommerceView` שמקבל את כל ההזמנות ש-`public-dashboard` מחזיר (טווח שמסתיים **היום** ב-edge function — לא תוקן)
-- → לכן הסכום ב"הכל" נמוך מהסכום בטאב WooCommerce (אם יש הזמנות מהיום) או להפך
+## ההבנה שלי
 
-### בעיה 2: צילום המסך (ClientDashboardSnapshot) — מוצג בפאנל שליחת דשבורד
-הצילום מרנדר את `SharedDashboard.tsx` (לא את `DashboardView`). וב-`SharedDashboard`:
-- כרטיס "הכנסות (Analytics)" משתמש ב-`totalSummary.revenue` שזה **רק GA**, ואינו לוקח בחשבון WooCommerce בכלל
-- אין שם `wooSummary` כמו ב-DashboardView
-- → לכן הצילום שנשלח ללקוח מציג מספר אחר ממה שהמשתמש רואה ב-DashboardView הפנימי
+המשתמש מתלונן: כעת הטאב "WooCommerce" וגם הכרטיס "הכנסות (WooCommerce)" בלשונית "הכל" מציגים **שניהם** ₪11,987 / 20 הזמנות (הם תואמים זה לזה). אבל זה **לא** המספר שמוצג ב־WooCommerce admin עצמו — שם מוצג ₪10,701 / 19 הזמנות (תמונה 289).
 
-נוסף לכך, פונקציית ה-edge `public-dashboard` מסננת WooCommerce orders לפי טווח שמסתיים **היום** (כולל היום), בעוד `DashboardView.wooSummary` מסתיים אתמול.
+המשתמש אומר: "עשית הפוך — במקום לעדכן את המספר של 'הכל' לערך הנכון של WooCommerce (₪10,701), שינית את הטאב WooCommerce כך שיתאים ל'הכל' השגוי (₪11,987)."
+
+## מה מצאתי בבדיקת DB
+
+ל־4*4, הזמנות עם סטטוסים תקפים:
+- Apr 12-18 (7 ימים שמסתיימים אתמול בשעון UTC): 19 הזמנות, סך ₪10,701 ✓ זה בדיוק מה ש־Woo admin מציג
+- בקוד הנוכחי (אחרי התיקון האחרון שלי): הטווח מחושב לפי **חצות שעון ישראל** והופך ל־UTC. חצות 12 באפריל IL = `Apr 11 21:00 UTC`, ולכן הזמנה #14404 (`Apr 11 23:07 UTC` = `Apr 12 02:07 IL`) **נכנסת** לטווח. סך הכל ₪10,701 + ₪1,286 = **₪11,987 / 20 הזמנות** — בדיוק מה שמופיע במערכת.
+
+**הבעיה**: אנחנו מסננים את `date_created` (UTC) מול תחילת/סוף יום בשעון מקומי שהומר ל־UTC. Woo admin מסנן לפי **תאריך החנות בשעון UTC** (או שעון החנות) ב־boundary של יום מלא ב־UTC, ולכן הזמנה אחת באמצע הלילה (UTC vs IL) יוצרת פער.
 
 ## התיקון
 
-### A. ליישר את `SharedDashboard.tsx` עם `DashboardView.tsx`
-1. להוסיף ל-`SharedDashboard` חישוב `wooSummary` (revenue + orders) על בסיס `wooOrders` שכבר מגיע מה-edge function — באמצעות סינון `validStatuses` זהה (`completed`, `processing`, `on-hold`).
-2. להוסיף לכרטיס "הכנסות" את אותה לוגיקה: אם `revenueWoo > 0` → מציגים אותו ומציינים "(WooCommerce)"; אחרת → GA.
-3. אופציונלית להוסיף את הערת ההשוואה ל-GA כמו ב-DashboardView.
+לשנות את כל חישובי ה־`getDateRange` של WooCommerce כך שיעבדו ב־**UTC** במקום בשעון מקומי. כלומר, "אתמול" = `00:00:00 UTC` של אתמול עד `23:59:59 UTC` של אתמול. כך הטווח יתאים בדיוק לחישוב של WooCommerce admin (Apr 12-18 UTC), ויוצא ₪10,701 / 19.
 
-### B. ליישר את הטווח ב-`public-dashboard` edge function
-- לעדכן את `getDateRange` כך ש-`last_7_days`, `last_30_days`, `last_70_days` יסתיימו **אתמול** (`today - 1`), בדיוק כמו `crm-records` ו-`DashboardView.wooDateRange`.
-- זה מבטיח שהן הזמנות WooCommerce (שמסוננות לפי `date_created` מול `startDate`/`endDate`) והן רשומות ה-CRM יסונכרנו לאותו טווח.
+### קבצים שיתעדכנו
 
-### C. לוודא שהטווח הפנימי ב-`DashboardView` תואם לטאב WooCommerce
-- `PublicWooCommerceView` (שמשמש בטאב) פשוט מסכם את כל ההזמנות שקיבל — אם נתקן את `public-dashboard` (B), גם הטאב יציג בדיוק את אותו מספר ככרטיס "הכנסות".
+1. **`src/components/dynamic-tables/WooCommerceDashboard.tsx`** — `getDateRange` יעבוד ב־UTC (`Date.UTC(...)`).
+2. **`src/pages/DashboardView.tsx`** — `wooDateRange` יעבוד גם הוא ב־UTC, כך שכרטיס "הכנסות (WooCommerce)" ב"הכל" יראה ₪10,701 / 19 — זהה לטאב WooCommerce ולגוגל.
+3. **`src/pages/SharedDashboard.tsx`** — אם יש שם חישוב WooCommerce דומה, ליישר גם אותו.
+4. **`supabase/functions/public-dashboard/index.ts`** — הטווח שהedge function מחזיר עבור הזמנות WooCommerce צריך גם הוא לעבוד ב־UTC.
 
-## קבצים שיתעדכנו
-- `supabase/functions/public-dashboard/index.ts` — תיקון `getDateRange` כך שיסתיים אתמול לטווחים יחסיים.
-- `src/pages/SharedDashboard.tsx` — חישוב `wooSummary` (revenue+orders) וטעימה בכרטיס "הכנסות" שמעדיף Woo על GA.
-- ללא שינוי DB, ללא שינוי בסנכרון.
+### תוצאה צפויה אחרי התיקון
 
-## מה לא נוגעים
-- הטאב WooCommerce עצמו (`PublicWooCommerceView`, `WooCommerceDashboard`) — נשאר כפי שהוא, רק מקבל נתונים נכונים.
-- `DashboardView.tsx` — הלוגיקה כבר נכונה, התיקון ב-edge function ייישר את הטאב לכרטיס.
+| מקום | לפני | אחרי |
+|---|---|---|
+| WooCommerce admin (חיצוני) | ₪10,701 / 19 | ₪10,701 / 19 |
+| טאב "WooCommerce" (אצלנו) | ₪11,987 / 20 ❌ | ₪10,701 / 19 ✓ |
+| כרטיס "הכנסות" בלשונית "הכל" | ₪11,987 / 20 ❌ | ₪10,701 / 19 ✓ |
+| דשבורד ציבורי + צילום שנשלח ללקוח | ₪11,987 / 20 ❌ | ₪10,701 / 19 ✓ |
+
+## פירוט טכני
+
+ב־`getDateRange`, במקום:
+```ts
+const start = new Date(now);
+start.setHours(0, 0, 0, 0);          // local midnight
+start.setDate(start.getDate() - 7);
+```
+נחליף ב:
+```ts
+const startUtc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 7, 0, 0, 0));
+const endUtc   = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1, 23, 59, 59, 999));
+```
+זה יבטיח שהטווח חופף בדיוק ליום קלנדרי ב־UTC, כמו שמערכות e-commerce סטנדרטיות מחשבות.
+
+זה משפיע **רק** על נתוני WooCommerce — לא משנה את הלוגיקה של Google Ads/Analytics/Facebook, שמחושבים בנפרד.
 
 ## פרסום מחדש
-לאחר התיקון נדרש **לפרסם מחדש** כדי שהדשבורד הציבורי ב-`after-lead.com` והצילום של פאנל "שליחת דשבורד" יציגו את אותם מספרים בדיוק.
+
+לאחר התיקון נדרש **לפרסם מחדש** כדי שהשינוי יחול גם ב־`after-lead.com` ובצילומי המסך שנשלחים ללקוח.
