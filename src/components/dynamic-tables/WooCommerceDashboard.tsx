@@ -20,6 +20,10 @@ const formatCurrency = (n: number) =>
   new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(n);
 const formatNumber = (n: number) => new Intl.NumberFormat('he-IL').format(n);
 
+// Standard: relative ranges end YESTERDAY (exclude today) to align with
+// crm-records edge function, public-dashboard, and DashboardView.wooDateRange.
+// This prevents the "All" KPI card and the WooCommerce tab from disagreeing
+// because of partial "today" data.
 const getDateRange = (filter: string): { start: Date; end: Date } => {
   const now = new Date();
   const end = new Date(now);
@@ -36,13 +40,19 @@ const getDateRange = (filter: string): { start: Date; end: Date } => {
       end.setHours(23, 59, 59, 999);
       break;
     case 'last_7_days':
-      start.setDate(start.getDate() - 6);
+      start.setDate(start.getDate() - 7);
+      end.setDate(end.getDate() - 1);
+      end.setHours(23, 59, 59, 999);
       break;
     case 'last_30_days':
-      start.setDate(start.getDate() - 29);
+      start.setDate(start.getDate() - 30);
+      end.setDate(end.getDate() - 1);
+      end.setHours(23, 59, 59, 999);
       break;
     case 'last_70_days':
-      start.setDate(start.getDate() - 69);
+      start.setDate(start.getDate() - 70);
+      end.setDate(end.getDate() - 1);
+      end.setHours(23, 59, 59, 999);
       break;
     case 'this_month':
       start.setDate(1);
@@ -53,7 +63,9 @@ const getDateRange = (filter: string): { start: Date; end: Date } => {
       end.setHours(23, 59, 59, 999);
       break;
     default:
-      start.setDate(start.getDate() - 6);
+      start.setDate(start.getDate() - 7);
+      end.setDate(end.getDate() - 1);
+      end.setHours(23, 59, 59, 999);
   }
   return { start, end };
 };
