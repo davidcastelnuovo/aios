@@ -4,6 +4,7 @@ import DynamicTableView from "@/pages/DynamicTableView";
 
 interface Props {
   tableSlug: string;
+  summaryOnly?: boolean;
 }
 
 /**
@@ -19,7 +20,7 @@ interface Props {
  * don't bleed in (and vice-versa).
  */
 export const ClientTableSnapshot = forwardRef<HTMLDivElement, Props>(
-  ({ tableSlug }, ref) => {
+  ({ tableSlug, summaryOnly = true }, ref) => {
     const [client] = useState(
       () =>
         new QueryClient({
@@ -38,7 +39,7 @@ export const ClientTableSnapshot = forwardRef<HTMLDivElement, Props>(
         }}
       >
         <QueryClientProvider client={client}>
-          <DynamicTableView embedTableSlug={tableSlug} embedMode />
+          <DynamicTableView embedTableSlug={tableSlug} embedMode summaryOnly={summaryOnly} />
         </QueryClientProvider>
       </div>
     );

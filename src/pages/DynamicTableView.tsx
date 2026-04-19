@@ -91,9 +91,10 @@ interface CrmRecord {
 interface DynamicTableViewProps {
   embedTableSlug?: string;
   embedMode?: boolean;
+  summaryOnly?: boolean;
 }
 
-export default function DynamicTableView({ embedTableSlug, embedMode }: DynamicTableViewProps = {}) {
+export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnly }: DynamicTableViewProps = {}) {
   const params = useParams<{ tableSlug: string }>();
   const tableSlug = embedTableSlug || params.tableSlug;
   const navigate = useNavigate();
@@ -2786,7 +2787,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode }: DynamicT
       </div>
 
       {/* Google Analytics Dashboard */}
-      {hasGoogleAnalytics && filteredRecords && filteredRecords.length > 0 && (
+      {!summaryOnly && hasGoogleAnalytics && filteredRecords && filteredRecords.length > 0 && (
         <GoogleAnalyticsDashboard
           records={filteredRecords}
           externalDateFilter={dateFilter}
@@ -2797,19 +2798,19 @@ export default function DynamicTableView({ embedTableSlug, embedMode }: DynamicT
       )}
 
       {/* Google Search Console Dashboard */}
-      {hasGoogleSearchConsole && table?.id && (
+      {!summaryOnly && hasGoogleSearchConsole && table?.id && (
         <SearchConsoleDashboard tableId={table.id} />
       )}
 
       {/* SEO (Ahrefs) Dashboard with GSC & Analytics tabs */}
-      {hasAhrefs && table?.integration_settings?.data_source === 'ahrefs_reports' && table?.integration_settings?.clientId && table?.tenant_id && (
+      {!summaryOnly && hasAhrefs && table?.integration_settings?.data_source === 'ahrefs_reports' && table?.integration_settings?.clientId && table?.tenant_id && (
         <SeoReportTabs 
           tenantId={table.tenant_id} 
           clientId={table.integration_settings.clientId} 
         />
       )}
 
-      {hasAhrefs && table?.integration_settings?.data_source === 'ahrefs_reports' ? null : isLoading ? (
+      {!summaryOnly && (hasAhrefs && table?.integration_settings?.data_source === 'ahrefs_reports' ? null : isLoading ? (
         <Skeleton className="h-96 w-full" />
       ) : (
         <div className="border rounded-lg overflow-hidden bg-background shadow-sm">
@@ -3040,7 +3041,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode }: DynamicT
             </div>
           </div>
         </div>
-      )}
+      ))}
 
       {/* Make.com Automatic Sync Dialog for Google Ads */}
       <Dialog open={showMakeWebhookDialog} onOpenChange={setShowMakeWebhookDialog}>
