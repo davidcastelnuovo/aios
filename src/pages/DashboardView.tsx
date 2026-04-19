@@ -357,15 +357,24 @@ export default function DashboardView() {
 
   const campaignTypeByPlatform: Record<string, CampaignType> = useMemo(() => {
     const map: Record<string, CampaignType> = {};
+    // Track platforms where the user explicitly set campaign_type — those should NOT be auto-overridden
+    const explicitlySet = new Set<string>();
     // First set defaults from table settings
     tables.forEach((t: any) => {
       const key = t?.integration_type || 'unknown';
+      const explicitType = t?.integration_settings?.campaign_type;
+      if (explicitType === 'leads' || explicitType === 'ecommerce') {
+        map[key] = explicitType;
+        explicitlySet.add(key);
+        return;
+      }
       const ct = getCampaignType(t?.integration_type, t?.integration_settings);
       if (ct === 'ecommerce') map[key] = 'ecommerce';
     });
-    // Then override by scanning actual data for ecommerce signals
+    // Then override by scanning actual data for ecommerce signals — but ONLY for platforms not explicitly set by user
     allRecords.forEach((record: any) => {
       const source = record._source || 'unknown';
+      if (explicitlySet.has(source)) return; // user explicitly chose — don't override
       if (map[source] === 'ecommerce') return; // already detected
       const d = record.data || {};
       if (Number(d.purchases) > 0 || Number(d.purchase_value) > 0 || Number(d.add_to_cart) > 0 ||
