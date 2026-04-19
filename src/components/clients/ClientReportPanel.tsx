@@ -31,6 +31,7 @@ import { SeoCombinedSnapshot } from "./SeoCombinedSnapshot";
 import { toPng } from "html-to-image";
 import { buildBrandedEmailHtml } from "@/lib/emailTemplate";
 import { EmailRecipientsSelector, type EmailOption } from "./EmailRecipientsSelector";
+import { WhatsAppGroupSelect } from "./WhatsAppGroupSelect";
 
 interface ClientReportPanelProps {
   table: any;
