@@ -1190,14 +1190,19 @@ export default function WordPressSettings() {
               </Button>
               <Button
                 className="flex-1"
-                onClick={() => linkSite && linkMutation.mutate({
-                  id: linkSite.id,
-                  agency_id: linkAgency || null,
-                  client_id: linkClient || null,
-                  tenant_id:
-                    linkSelectedAgency && linkSelectedAgency.tenant_id !== linkSite.tenant_id
-                      ? linkSelectedAgency.tenant_id
-                      : null,
+                onClick={() => {
+                  if (!linkSite) return;
+                  const targetTenant =
+                    linkSelectedAgency?.tenant_id ||
+                    linkTenantId ||
+                    null;
+                  linkMutation.mutate({
+                    id: linkSite.id,
+                    agency_id: linkAgency || null,
+                    client_id: linkClient || null,
+                    tenant_id: targetTenant && targetTenant !== linkSite.tenant_id ? targetTenant : null,
+                  });
+                }}
                 })}
                 disabled={linkMutation.isPending}
               >
