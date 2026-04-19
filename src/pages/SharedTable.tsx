@@ -208,15 +208,14 @@ export default function SharedTable() {
     Object.values(map).forEach((c: any) => { c.leads = Math.round(c.leads); });
     const allCampaigns = Object.values(map).sort((a: any, b: any) => b.spend - a.spend);
 
-    // Honor table-level overrides
-    if (forceLeadsOnly) {
-      return { ecommerce: [], leads: allCampaigns, all: allCampaigns };
-    }
+    // Strict mode: table type determines layout (no auto-classification)
     if (forceEcommerceOnly) {
       return { ecommerce: allCampaigns, leads: [], all: allCampaigns };
     }
+    return { ecommerce: [], leads: allCampaigns, all: allCampaigns };
 
-    // Classify each campaign
+    // Legacy auto-classify (disabled)
+    // eslint-disable-next-line no-unreachable
     const ecommerceCampaigns = allCampaigns.filter((c: any) =>
       (c.purchases > 0 || c.revenue > 0) ||
       (c.addToCart > 0 && !(c.leads > 0 && c.purchases === 0 && c.revenue === 0))
