@@ -709,6 +709,7 @@ export default function WordPressSettings() {
                     <TableRow>
                       {isSuperAdmin && <TableHead>ארגון</TableHead>}
                       <TableHead>אתר</TableHead>
+                      <TableHead>לקוח מקושר</TableHead>
                       <TableHead>WooCommerce</TableHead>
                       <TableHead>סנכרון אחרון</TableHead>
                       <TableHead>סטטוס</TableHead>
