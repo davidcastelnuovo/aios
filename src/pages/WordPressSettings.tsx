@@ -269,6 +269,69 @@ export default function WordPressSettings() {
     },
   });
 
+  // Quick-link association mutation
+  const linkMutation = useMutation({
+    mutationFn: async ({ id, agency_id, client_id }: { id: string; agency_id: string | null; client_id: string | null }) => {
+      const { error } = await supabase
+        .from("social_media_wordpress_sites" as any)
+        .update({ agency_id, client_id, updated_at: new Date().toISOString() })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["wordpress-sites-admin"] });
+      queryClient.invalidateQueries({ queryKey: ["wordpress-sites"] });
+      toast.success("השיוך עודכן בהצלחה");
+      setLinkSite(null);
+    },
+    onError: (e: Error) => toast.error("שגיאה: " + e.message),
+  });
+
+  // Agencies/Clients for the quick-link dialog (scoped to the site's tenant)
+  const linkSiteTenantId = linkSite?.tenant_id;
+  const { data: linkAgencies = [] } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ["agencies-for-link", linkSiteTenantId],
+    queryFn: async () => {
+      if (!linkSiteTenantId) return [];
+      const { data, error } = await supabase
+        .from("agencies").select("id, name").eq("tenant_id", linkSiteTenantId).order("name");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!linkSiteTenantId,
+  });
+  const { data: linkClients = [] } = useQuery<Client[]>({
+    queryKey: ["clients-for-link", linkSiteTenantId, linkAgency],
+    queryFn: async () => {
+      if (!linkSiteTenantId) return [];
+      let q = supabase.from("clients").select("id, name").eq("tenant_id", linkSiteTenantId).order("name");
+      if (linkAgency) q = q.eq("agency_id", linkAgency);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!linkSiteTenantId,
+  });
+
+  const openLink = (site: WordPressSite) => {
+    setLinkSite(site);
+    setLinkAgency(site.agency_id || "");
+    setLinkClient(site.client_id || "");
+  };
+
+  // Map of clientId -> name for table display (across tenants for super-admin we fetch lazily per site tenant)
+  const { data: clientsMap = {} } = useQuery<Record<string, string>>({
+    queryKey: ["clients-map-for-wp", sites.map((s) => s.client_id).filter(Boolean).join(",")],
+    queryFn: async () => {
+      const ids = Array.from(new Set(sites.map((s) => s.client_id).filter(Boolean) as string[]));
+      if (ids.length === 0) return {};
+      const { data, error } = await supabase.from("clients").select("id, name").in("id", ids);
+      if (error) throw error;
+      return Object.fromEntries((data || []).map((c: any) => [c.id, c.name]));
+    },
+    enabled: sites.length > 0,
+  });
+
   // Trigger WooCommerce sync
   const syncMutation = useMutation({
     mutationFn: async (siteId: string) => {
