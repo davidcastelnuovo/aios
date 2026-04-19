@@ -23,6 +23,9 @@ interface GoogleAdsRecord {
   conversions_value: number;
   cost_per_conversion: number;
   roas: number;
+  // Verified leads from connected WordPress site (Elementor submissions with matching gad_campaignid)
+  verified_leads?: number;
+  verified_source?: string; // site URL we verified against, for transparency
 }
 
 Deno.serve(async (req) => {
