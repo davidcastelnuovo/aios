@@ -110,6 +110,7 @@ export default function WordPressSettings() {
   const [testingId, setTestingId] = useState<string | null>(null);
   const [mappingSite, setMappingSite] = useState<WordPressSite | null>(null);
   const [mappingDraft, setMappingDraft] = useState<Record<string, string>>({});
+  const [mappingMode, setMappingMode] = useState<"form" | "slug">("form");
 
   // Fetch all tenants (super admin only)
   const { data: allTenants = [] } = useQuery<Tenant[]>({
@@ -471,26 +472,33 @@ export default function WordPressSettings() {
 
   const openMapping = (site: WordPressSite) => {
     setMappingSite(site);
-    setMappingDraft({ ...(site.campaign_url_mapping || {}) });
+    setMappingMode("form");
+    // Default draft = current form mapping (primary). Slug mapping kept available too.
+    setMappingDraft({ ...(site.campaign_form_mapping || {}) });
   };
 
-  // Discover slugs for the mapping site (last 90 days of submissions)
-  const { data: slugDiscovery, isLoading: isLoadingSlugs } = useQuery<{
+  // Discover forms + slugs for the mapping site (last 90 days of submissions)
+  const { data: discovery, isLoading: isLoadingDiscovery } = useQuery<{
+    per_form: Array<{ form_id: string; form_name: string; total: number; last_30_days: number; sources: Record<string, number> }>;
     per_slug: Array<{ slug: string; submissions: number; google_ads_submissions: number; sample_gad_campaignids: string[] }>;
   }>({
-    queryKey: ["wp-discovered-slugs", mappingSite?.id],
+    queryKey: ["wp-discovery", mappingSite?.id],
     queryFn: async () => {
-      if (!mappingSite) return { per_slug: [] };
+      if (!mappingSite) return { per_form: [], per_slug: [] };
       const { data, error } = await supabase.functions.invoke("fetch-elementor-submissions", {
         body: { site_id: mappingSite.id, days: 90 },
       });
       if (error) throw error;
-      return { per_slug: (data?.per_slug || []) as any[] };
+      return {
+        per_form: (data?.per_form || []) as any[],
+        per_slug: (data?.per_slug || []) as any[],
+      };
     },
     enabled: !!mappingSite,
     staleTime: 1000 * 60 * 5,
   });
-  const discoveredSlugs = slugDiscovery?.per_slug || [];
+  const discoveredForms = discovery?.per_form || [];
+  const discoveredSlugs = discovery?.per_slug || [];
 
   // Campaigns for mapping site's client (Google Ads campaigns from synced records)
   const { data: clientCampaigns = [] } = useQuery<Array<{ campaign_id: string; campaign_name: string }>>({
@@ -525,13 +533,16 @@ export default function WordPressSettings() {
   });
 
   const mappingMutation = useMutation({
-    mutationFn: async ({ id, mapping }: { id: string; mapping: Record<string, string> }) => {
+    mutationFn: async ({ id, mapping, mode }: { id: string; mapping: Record<string, string>; mode: "form" | "slug" }) => {
       const clean = Object.fromEntries(
         Object.entries(mapping).filter(([_, v]) => v && v.length > 0)
       );
+      const payload: any = { updated_at: new Date().toISOString() };
+      if (mode === "form") payload.campaign_form_mapping = clean;
+      else payload.campaign_url_mapping = clean;
       const { error } = await supabase
         .from("social_media_wordpress_sites" as any)
-        .update({ campaign_url_mapping: clean, updated_at: new Date().toISOString() })
+        .update(payload)
         .eq("id", id);
       if (error) throw error;
     },
