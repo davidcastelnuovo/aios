@@ -90,6 +90,9 @@ export default function WordPressSettings() {
 
   const [addOpen, setAddOpen] = useState(false);
   const [editSite, setEditSite] = useState<WordPressSite | null>(null);
+  const [linkSite, setLinkSite] = useState<WordPressSite | null>(null);
+  const [linkAgency, setLinkAgency] = useState<string>("");
+  const [linkClient, setLinkClient] = useState<string>("");
   const [form, setForm] = useState({ ...emptyForm });
   const [filterTenant, setFilterTenant] = useState<string>("all");
   const [testingId, setTestingId] = useState<string | null>(null);
