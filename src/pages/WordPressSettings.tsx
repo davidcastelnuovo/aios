@@ -1093,19 +1093,42 @@ export default function WordPressSettings() {
             </div>
 
             <div>
+              <Label>ארגון</Label>
+              <Select
+                value={linkTenantId || "none"}
+                onValueChange={(v) => {
+                  const newTid = v === "none" ? "" : v;
+                  setLinkTenantId(newTid);
+                  setLinkAgency("");
+                  setLinkClient("");
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={linkTenants.length === 0 ? "אין ארגונים זמינים" : "בחר ארגון..."} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">כל הארגונים</SelectItem>
+                  {linkTenants.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
               <Label>סוכנות</Label>
               <Select
                 value={linkAgency || "none"}
                 onValueChange={(v) => { setLinkAgency(v === "none" ? "" : v); setLinkClient(""); }}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder={linkAgencies.length === 0 ? "אין סוכנויות" : "בחר סוכנות..."} />
+                  <SelectValue placeholder={linkFilteredAgencies.length === 0 ? "אין סוכנויות בארגון זה" : "בחר סוכנות..."} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">ללא</SelectItem>
-                  {linkAgencies.map((a) => (
+                  {linkFilteredAgencies.map((a) => (
                     <SelectItem key={a.id} value={a.id}>
-                      {a.name}{a.tenant_name ? ` (${a.tenant_name})` : ""}
+                      {a.name}{!linkTenantId && a.tenant_name ? ` (${a.tenant_name})` : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
