@@ -39,7 +39,7 @@ export const ClientTableSnapshot = forwardRef<HTMLDivElement, Props>(
         }}
       >
         <QueryClientProvider client={client}>
-          <DynamicTableView embedTableSlug={tableSlug} embedMode />
+          <DynamicTableView embedTableSlug={tableSlug} embedMode summaryOnly={summaryOnly} />
         </QueryClientProvider>
       </div>
     );
