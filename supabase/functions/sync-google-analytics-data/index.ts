@@ -205,10 +205,12 @@ serve(async (req) => {
 
     const dailySourceData = await dailySourceResponse.json();
 
-    // ====== REPORT 5: User Acquisition by Channel Group ======
+    // ====== REPORT 5: Traffic Acquisition by Session Channel Group ======
+    // Uses sessionDefaultChannelGroup to match GA4's "Traffic acquisition" report
+    // (per-session classification, not first-user attribution)
     const channelGroupRequest = {
       dateRanges: [{ startDate: actualStartDate, endDate: actualEndDate }],
-      dimensions: [{ name: 'date' }, { name: 'firstUserDefaultChannelGrouping' }],
+      dimensions: [{ name: 'date' }, { name: 'sessionDefaultChannelGroup' }],
       metrics: [
         { name: 'sessions' },
         { name: 'engagedSessions' },
