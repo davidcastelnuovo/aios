@@ -284,24 +284,23 @@ Deno.serve(async (req) => {
           .filter((a: any) => actionTypes.includes(String(a.action_type || '')))
           .reduce((sum: number, a: any) => sum + (parseFloat(a.value) || 0), 0);
 
-      // Extract lead count
-      let leads = 0;
+      // Extract lead count — take MAX between aggregate 'lead' and sum of all specific lead types.
+      // This ensures we never miss leads if FB doesn't include a category in the aggregate,
+      // and avoids double-counting when the aggregate already covers them.
       const aggregateLeadAction = allActions.find((a: any) => a.action_type === 'lead');
-      if (aggregateLeadAction) {
-        // If 'lead' exists, it's the aggregate - use it
-        leads = parseInt(aggregateLeadAction.value) || 0;
-      } else {
-        // Otherwise, sum up all other lead-like types + custom conversions
-        leads = allActions
-          .filter((a: any) => {
-            const type = String(a.action_type || '');
-            return (
-              leadActionTypes.slice(1).includes(type) ||
-              type.startsWith('offsite_conversion.custom')
-            );
-          })
-          .reduce((sum: number, a: any) => sum + (parseInt(a.value) || 0), 0);
-      }
+      const aggregateLeadValue = aggregateLeadAction ? (parseInt(aggregateLeadAction.value) || 0) : 0;
+
+      const specificLeadsSum = allActions
+        .filter((a: any) => {
+          const type = String(a.action_type || '');
+          return (
+            leadActionTypes.slice(1).includes(type) ||
+            type.startsWith('offsite_conversion.custom')
+          );
+        })
+        .reduce((sum: number, a: any) => sum + (parseInt(a.value) || 0), 0);
+
+      const leads = Math.max(aggregateLeadValue, specificLeadsSum);
 
       // Extract landing page views (Facebook action)
       const landingPageViews = allActions
