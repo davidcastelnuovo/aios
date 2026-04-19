@@ -459,15 +459,29 @@ export default function WordPressSettings() {
         </p>
       </div>
 
-      {agencies.length > 0 && (
+      <div className="border rounded-lg p-3 space-y-3 bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900">
+        <div className="flex items-start gap-2">
+          <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+          <p className="text-xs text-amber-900 dark:text-amber-200 font-medium">
+            שיוך ללקוח חיוני כדי לקשר את לידי האתר (Elementor / Contact Form 7) אל דוח הלקוח.
+          </p>
+        </div>
+
         <div>
-          <Label>סוכנות מקושרת (אופציונלי)</Label>
+          <Label>סוכנות מקושרת</Label>
           <Select
             value={form.agency_id || "none"}
             onValueChange={(v) => setForm({ ...form, agency_id: v === "none" ? "" : v, client_id: "" })}
+            disabled={isSuperAdmin && !isEdit && !form.tenant_id}
           >
             <SelectTrigger>
-              <SelectValue placeholder="בחר סוכנות..." />
+              <SelectValue placeholder={
+                isSuperAdmin && !isEdit && !form.tenant_id
+                  ? "בחר תחילה ארגון..."
+                  : agencies.length === 0
+                    ? "אין סוכנויות בארגון זה"
+                    : "בחר סוכנות..."
+              } />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="none">ללא</SelectItem>
@@ -477,17 +491,22 @@ export default function WordPressSettings() {
             </SelectContent>
           </Select>
         </div>
-      )}
 
-      {clients.length > 0 && (
         <div>
-          <Label>לקוח מקושר (אופציונלי)</Label>
+          <Label>לקוח מקושר</Label>
           <Select
             value={form.client_id || "none"}
             onValueChange={(v) => setForm({ ...form, client_id: v === "none" ? "" : v })}
+            disabled={isSuperAdmin && !isEdit && !form.tenant_id}
           >
             <SelectTrigger>
-              <SelectValue placeholder="בחר לקוח..." />
+              <SelectValue placeholder={
+                isSuperAdmin && !isEdit && !form.tenant_id
+                  ? "בחר תחילה ארגון..."
+                  : clients.length === 0
+                    ? (form.agency_id ? "אין לקוחות לסוכנות זו" : "אין לקוחות בארגון")
+                    : "בחר לקוח..."
+              } />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="none">ללא</SelectItem>
@@ -497,7 +516,8 @@ export default function WordPressSettings() {
             </SelectContent>
           </Select>
         </div>
-      )}
+      </div>
+
 
       <div>
         <Label>הערות</Label>
