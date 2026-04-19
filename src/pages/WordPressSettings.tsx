@@ -616,7 +616,9 @@ export default function WordPressSettings() {
             <SelectContent>
               <SelectItem value="none">ללא</SelectItem>
               {agencies.map((a) => (
-                <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                <SelectItem key={a.id} value={a.id}>
+                  {a.name}{a.tenant_name ? ` (${a.tenant_name})` : ""}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
