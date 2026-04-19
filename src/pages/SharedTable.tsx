@@ -431,7 +431,7 @@ export default function SharedTable() {
               <>
                 <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
                   <CardContent className="p-6">
-                    <p className="text-sm text-muted-foreground">לידים</p>
+                    <p className="text-sm text-muted-foreground">{isGoogleAds ? 'המרות' : 'לידים'}</p>
                     <p className="text-3xl font-bold mt-2">{formatNumber(summary.leads)}</p>
                   </CardContent>
                 </Card>
