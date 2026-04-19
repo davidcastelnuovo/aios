@@ -199,6 +199,11 @@ export function ClientWordPressTab({ clientId }: ClientWordPressTabProps) {
         ))}
       </div>
 
+      {/* Elementor Form Submissions summary — shown for every connected site */}
+      {sites.map((site) => (
+        <SubmissionsSummaryCard key={`subs-${site.id}`} siteId={site.id} siteName={site.site_name} />
+      ))}
+
       {/* Show data only if WooCommerce is enabled on at least one site */}
       {sites.some((s) => s.woocommerce_enabled) ? (
         <>
