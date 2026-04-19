@@ -91,9 +91,10 @@ interface CrmRecord {
 interface DynamicTableViewProps {
   embedTableSlug?: string;
   embedMode?: boolean;
+  summaryOnly?: boolean;
 }
 
-export default function DynamicTableView({ embedTableSlug, embedMode }: DynamicTableViewProps = {}) {
+export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnly }: DynamicTableViewProps = {}) {
   const params = useParams<{ tableSlug: string }>();
   const tableSlug = embedTableSlug || params.tableSlug;
   const navigate = useNavigate();
