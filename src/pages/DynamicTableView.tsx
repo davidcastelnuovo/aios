@@ -2721,6 +2721,9 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                       <th className="p-2 text-center font-medium">חשיפות</th>
                       <th className="p-2 text-center font-medium">קליקים</th>
                       <th className="p-2 text-center font-medium">המרות</th>
+                      {hasVerifiedData && (
+                        <th className="p-2 text-center font-medium" title="לידים בפועל באתר (Elementor) שמקורם בקמפיין הזה">לידים באתר</th>
+                      )}
                       <th className="p-2 text-center font-medium">עלות</th>
                       {isEcommerce ? (
                         <>
@@ -2738,12 +2741,33 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                       // Calculate ROAS as conversions value / cost
                       const roas = data.cost > 0 ? data.conversions_value / data.cost : 0;
                       const gaCurrency = getCurrencySymbol(table.integration_settings?.currency);
+                      const convInt = Math.round(data.conversions);
+                      const verified = data.verified_leads;
+                      const diff = verified - convInt;
+                      const hasDiscrepancy = hasVerifiedData && Math.abs(diff) >= 1;
                       return (
                         <tr key={campaignName} className="border-b hover:bg-muted/30">
                           <td className="p-2 text-right font-medium">{campaignName}</td>
                           <td className="p-2 text-center">{data.impressions.toLocaleString('he-IL')}</td>
                           <td className="p-2 text-center">{data.clicks.toLocaleString('he-IL')}</td>
-                          <td className="p-2 text-center text-green-600 font-medium">{Math.round(data.conversions).toLocaleString('he-IL')}</td>
+                          <td className="p-2 text-center text-green-600 font-medium">{convInt.toLocaleString('he-IL')}</td>
+                          {hasVerifiedData && (
+                            <td className="p-2 text-center">
+                              <div className="inline-flex items-center gap-1.5 justify-center">
+                                <span className={hasDiscrepancy ? "font-semibold text-amber-600" : "font-medium text-foreground"}>
+                                  {verified.toLocaleString('he-IL')}
+                                </span>
+                                {hasDiscrepancy && (
+                                  <span
+                                    title={diff > 0 ? `באתר נרשמו ${diff} לידים יותר ממה שגוגל אדס מדווח` : `גוגל אדס מדווח ${Math.abs(diff)} המרות יותר מהלידים בפועל באתר`}
+                                    className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-300"
+                                  >
+                                    {diff > 0 ? `+${diff}` : diff}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          )}
                           <td className="p-2 text-center">{gaCurrency}{data.cost.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
                           {isEcommerce ? (
                             <>
@@ -2760,12 +2784,29 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                   <tfoot className="bg-primary/10 font-bold">
                     {(() => {
                       const gaCurrency = getCurrencySymbol(table.integration_settings?.currency);
+                      const totalConvInt = Math.round(totals.conversions);
+                      const totalDiff = totals.verified_leads - totalConvInt;
+                      const totalDiscrepancy = hasVerifiedData && Math.abs(totalDiff) >= 1;
                       return (
                     <tr>
                       <td className="p-2 text-right">סה״כ</td>
                       <td className="p-2 text-center">{totals.impressions.toLocaleString('he-IL')}</td>
                       <td className="p-2 text-center">{totals.clicks.toLocaleString('he-IL')}</td>
-                      <td className="p-2 text-center text-green-600">{Math.round(totals.conversions).toLocaleString('he-IL')}</td>
+                      <td className="p-2 text-center text-green-600">{totalConvInt.toLocaleString('he-IL')}</td>
+                      {hasVerifiedData && (
+                        <td className="p-2 text-center">
+                          <div className="inline-flex items-center gap-1.5 justify-center">
+                            <span className={totalDiscrepancy ? "text-amber-600" : "text-foreground"}>
+                              {totals.verified_leads.toLocaleString('he-IL')}
+                            </span>
+                            {totalDiscrepancy && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-300">
+                                {totalDiff > 0 ? `+${totalDiff}` : totalDiff}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      )}
                       <td className="p-2 text-center">{gaCurrency}{totals.cost.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
                       {isEcommerce ? (
                         <>
