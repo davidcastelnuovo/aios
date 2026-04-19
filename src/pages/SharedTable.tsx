@@ -383,7 +383,7 @@ export default function SharedTable() {
               </Card>
             )}
 
-            {summary.hasEcommerce || isAnalyticsPlatform(integrationType!) ? (
+            {!forceLeadsOnly && (summary.hasEcommerce || isAnalyticsPlatform(integrationType!)) ? (
               <>
                 <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
                   <CardContent className="p-6">
