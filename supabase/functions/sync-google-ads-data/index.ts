@@ -50,14 +50,18 @@ Deno.serve(async (req) => {
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
     const hasServiceRole = !!serviceRoleKey && authHeader === `Bearer ${serviceRoleKey}`;
 
-    if (!(isInternalCron && hasServiceRole)) {
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      if (authError || !user) {
+    let user: { id: string };
+    if (isInternalCron && hasServiceRole) {
+      user = { id: '00000000-0000-0000-0000-000000000000' };
+    } else {
+      const { data: { user: authedUser }, error: authError } = await supabase.auth.getUser();
+      if (authError || !authedUser) {
         return new Response(JSON.stringify({ error: 'Unauthorized' }), {
           status: 401,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }
+      user = authedUser;
     }
 
     const { table_id } = await req.json();
