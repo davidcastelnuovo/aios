@@ -1,30 +1,40 @@
 
 
 ## הבעיה
-בצילום המסך מכרטיס הלקוח (תמונה 272) יש שטח לבן ריק ענק מתחת לטבלת הסיכום. המשתמש רוצה שהצילום יציג רק את הטבלה — בדיוק כמו שמתבצע מהדיאלוג בתוך הטבלה עצמה, בלי הרווח הלבן המיותר.
+הקישור הציבורי של טבלאות Google Ads (וכן Facebook) לא תמיד תואם לסוג הטבלה. כיום הלוגיקה ב-`SharedTable.tsx` מנסה לסווג אוטומטית קמפיינים כ-leads או ecommerce לפי הנתונים, מה שגורם לתצוגה מעורבת או לא נכונה. המשתמש רוצה: **סוג הטבלה קובע הכל** — טבלת לידים → תצוגת לידים בלבד; טבלת איקומרס → תצוגת איקומרס בלבד.
 
-## ניתוח
-ב-`ClientTableSnapshot.tsx` מוגדר `minHeight: "600px"` על ה-container — זה מה שיוצר את הריבוע הלבן הענק כשהתוכן (טבלת סיכום בלבד) קצר מ-600px.
+## הלוגיקה המתוקנת
+ב-`src/pages/SharedTable.tsx`, נחליף את הסיווג האוטומטי בקביעה דטרמיניסטית מתוך מטא-דאטה של הטבלה:
 
-בנוסף, ה-container ב-`DynamicTableView` עצמו עשוי לכלול padding/min-height של viewport (`min-h-screen` וכד') שמייצר רווח נוסף.
+```ts
+const tableMode: 'leads' | 'ecommerce' =
+  integrationType === 'facebook_ecommerce' ? 'ecommerce' :
+  integrationType === 'facebook_insights' ? 'leads' :
+  integrationType === 'google_ads'
+    ? (tableCampaignType === 'ecommerce' ? 'ecommerce' : 'leads')
+    : 'leads';
 
-## התיקון
+const forceLeadsOnly = tableMode === 'leads';
+const forceEcommerceOnly = tableMode === 'ecommerce';
+```
 
-### 1. `src/components/clients/ClientTableSnapshot.tsx`
-- להסיר את `minHeight: "600px"` מה-wrapper.
-- להוסיף `display: "inline-block"` או `height: "auto"` כדי שה-container יתכווץ בדיוק לגובה התוכן.
+## השינויים בפועל
 
-### 2. `src/pages/DynamicTableView.tsx`
-- כש-`summaryOnly` פעיל, להחיל class container מצומצם (ללא `min-h-screen` / padding גדול) כדי שהקומפוננטה תתפוס בדיוק את גובה טבלת הסיכום.
-- לוודא שה-container הראשי משתמש ב-`h-auto` במצב summaryOnly במקום `h-screen`/`min-h-screen`.
+### `src/pages/SharedTable.tsx`
+1. **שורות 119-122** — להחליף את החישוב הנוכחי של `forceLeadsOnly`/`forceEcommerceOnly` בלוגיקה החדשה לעיל המשלבת `integration_type` + `campaign_type`.
+2. **שורות 213-225 (`campaignSummary`)** — להסיר את ה-fallback של הסיווג האוטומטי. עכשיו תמיד יחזיר `{ ecommerce: allCampaigns, leads: [] }` או להפך, לפי `tableMode`. אין יותר תצוגה מעורבת.
+3. **שורות 175-176 (summary)** — `hasEcommerce`/`hasLeads` יקבעו ישירות לפי `tableMode` ולא לפי תוכן הנתונים.
+4. **כרטיסי KPI (שורות 386-451)** — הלוגיקה כבר תלויה ב-`forceLeadsOnly`, אז תיתן תוצאה נכונה אוטומטית כי הדגלים מחושבים נכון.
+5. **טבלאות קמפיינים (שורות 456 ו-521)** — אחת מהן תיהיה תמיד ריקה לפי המצב, כך שתוצג רק זו הרלוונטית.
 
-### 3. בדיקה שלוגיקת ה-html-to-image
-- צילום המסך מבוצע על ה-`ref` של ה-wrapper. אחרי שה-wrapper יתכווץ לגובה התוכן בלבד, הצילום יכלול רק את הטבלה ללא רווח לבן.
-
-## תוצאה צפויה
-צילום המסך בכרטיס הלקוח יציג רק את שורות "מעורבות 18.8 - מסנג'ר" + "סה"כ" בתוך מסגרת הטבלה — בדיוק כמו שמופיע בדיאלוג של הטבלה הדינמית, בלי שטח לבן ריק מתחת.
+## תוצאה
+- **טבלת `facebook_insights`** → תמיד תצוגת לידים (לידים, קליקים, CPL).
+- **טבלת `facebook_ecommerce`** → תמיד תצוגת איקומרס (הכנסות, רכישות, ROAS).
+- **טבלת `google_ads` עם `campaign_type=ecommerce`** → תצוגת איקומרס.
+- **טבלת `google_ads` עם `campaign_type=leads`** (ברירת מחדל) → תצוגת לידים — בדיוק כמו טבלת אקו.
 
 ## היקף
-- 2 קבצים: `src/components/clients/ClientTableSnapshot.tsx`, `src/pages/DynamicTableView.tsx`
-- ללא שינויי DB, ללא Edge Functions
+- קובץ אחד: `src/pages/SharedTable.tsx`.
+- ללא שינויי DB, ללא Edge Functions.
+- **חובה לפרסם מחדש** את האפליקציה כדי שהשינוי ישתקף ב-`after-lead.com`.
 
