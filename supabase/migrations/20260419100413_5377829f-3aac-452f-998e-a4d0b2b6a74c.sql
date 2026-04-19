@@ -1,0 +1,1 @@
+UPDATE social_media_wordpress_sites SET client_id = '5af32e16-162d-4025-addf-266bf0b17cf2' WHERE id = '3a015ca1-62cd-41c6-b978-66336da623fa';
