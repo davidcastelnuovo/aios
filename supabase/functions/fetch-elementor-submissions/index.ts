@@ -161,7 +161,7 @@ serve(async (req) => {
 
     // 1) Fetch forms list (so we have nice names)
     const formsMap = new Map<string, string>();
-    try {
+      try {
       const formsResp = await fetch(`${baseUrl}/wp-json/elementor/v1/forms?per_page=100`, {
         headers: authHeaders,
       });
@@ -170,7 +170,7 @@ serve(async (req) => {
         const list = Array.isArray(formsData) ? formsData : formsData?.data || [];
         for (const f of list) {
           const id = String(f.id || f.form_id || f.ID || "");
-          const name = f.name || f.label || f.title || f.form_name || id;
+          const name = stringifyFormName(f.name || f.label || f.title || f.form_name, id);
           if (id) formsMap.set(id, name);
         }
       }
