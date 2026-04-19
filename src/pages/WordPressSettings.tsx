@@ -32,8 +32,9 @@ import { toast } from "sonner";
 import {
   Globe, Plus, Trash2, Loader2, ExternalLink, RefreshCw,
   ShoppingCart, ArrowLeft, Settings, CheckCircle2, AlertCircle,
-  Edit, Key,
+  Edit, Key, Link2, UserPlus,
 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface WordPressSite {
   id: string;
