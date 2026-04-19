@@ -1,95 +1,80 @@
 
-המשתמש אומר:
-- "אנטרקטיקה" — Google Ads מציג 1 המרה (ולא 6 כמו שאני ראיתי קודם). אז המספר 6 שהמערכת מציגה שגוי.
-- "צפון הודו" — Google Ads מציג 1 המרה אבל בפועל היו 8 לידים.
+המשתמש בחר באופציה 3 — שניהם: כרטיס סיכום בטאב WordPress של הלקוח + דף מלא מנוהל.
 
-יש כאן פער בין:
-1. מה ש-Google Ads מציג ב-UI שלהם (נראה שזה המספר ה"נכון" לדעת המשתמש)
-2. מה שהמערכת שלנו מציגה אחרי הסנכרון
+אני יודע מהבדיקה הקודמת:
+- האתר חושף `/wp-json/elementor/v1/forms` ו-`/wp-json/elementor/v1/form-submissions`
+- האימות עם Application Password הקיים
+- כל submission כולל: email, referer (עם gclid/gad_campaignid), created_at, form_id, IP
 
-זה אומר שיש בעיה ב-`sync-google-ads-data` — או שהוא מושך metric שגוי, או שהוא צובר/מכפיל/לוקח attribution אחר.
+צריך לבנות:
+1. Edge function `fetch-elementor-submissions` — שולפת ומעבדת
+2. רכיב תצוגה לכרטיס סיכום בטאב WordPress של הלקוח
+3. דף מלא ב-route חדש
 
-צריך לבדוק:
-1. איזה GAQL query רץ ב-`sync-google-ads-data`
-2. איזה שדה conversions הוא בוחר (`metrics.conversions` vs `metrics.all_conversions` vs `metrics.conversions_value`)
-3. האם הוא מצרף segments שגורמים לכפילות (segments.date מכפיל לפי תאריך — זה תקין; אבל segments.conversion_action מכפיל לפי כל פעולת המרה — זה הבעיה הפוטנציאלית)
+לא צריך טבלאות DB — fetch בזמן אמת + cache קצר ב-React Query.
 
-אני צריך לקרוא את הקובץ כדי להציג plan מדויק.
+שומר את הplan קצר.
 
-ההשערה הסבירה:
-- אם הסנכרון משתמש ב-segments כמו `segments.conversion_action_category` או דומה — זה מכפיל את ה-rows ולכן conversions מצטבר בטעות
-- או שהוא משתמש ב-`metrics.all_conversions` במקום `metrics.conversions`
-- או שהוא לא מסנן לפי `segments.date` נכון ומקבל overlapping windows
+## מה אבנה
 
-בנוסף, ה-`webhook-google-ads-sync` (שראיתי בהקשר) פשוט מקבל records ושומר. אז הבעיה היא בצד ה-sync שמכין את ה-records ושולח לwebhook (או ישירות ב-edge function אחר).
+### 1) Edge function: `fetch-elementor-submissions`
+- מקבל `site_id` של אתר WordPress + טווח תאריכים אופציונלי
+- שולף את האתר מ-`social_media_wordpress_sites` (כולל credentials)
+- קורא ל-Elementor REST API עם pagination מלא:
+  - `/wp-json/elementor/v1/forms` — רשימת טפסים
+  - `/wp-json/elementor/v1/form-submissions?per_page=100` — כל ה-submissions
+- מחזיר JSON מאוגד:
+  - **per_form**: לכל טופס — שם, count, פילוח מקורות (Google/Facebook/Direct/Organic/Test)
+  - **per_campaign**: לפי `gad_campaignid` — מספר submissions לכל קמפיין גוגל
+  - **submissions[]**: רשימה גולמית עם email, referer, gclid, gad_campaignid, תאריך, form name
+- זיהוי טסטים אוטומטי: referer מכיל `gtm_debug` או `localhost`
 
-בנוסף — המשתמש מזכיר שלידים שונים מ-conversions:
-- "צפון הודו" — Google מדווח 1, אבל היו 8 לידים אמיתיים
-- "אנטרקטיקה" — Google מדווח 1, היה 1 ליד
+### 2) כרטיס סיכום בטאב WordPress של הלקוח
+מיקום: `ClientWordPressTab.tsx` (קיים)
+תוכן:
+- כותרת "Submissions בעמודי נחיתה" + כפתור "רענן"
+- 3 מטריקות בולטות: סה"כ Submissions / מ-Google Ads / טסטים שזוהו
+- טבלה קומפקטית: שם טופס | כמות 7 ימים | כמות 30 ימים | מקור עיקרי
+- קישור "פתח דף מלא →" לדף המנוהל
 
-זה בעצם בעיה אחרת: Google לא יודע לעקוב אחרי כל הלידים (אולי conversion tracking לא מותקן נכון על אחד מהקמפיינים, או שהלידים מגיעים מ-WhatsApp Click שלא נספרים כ-conversion).
+### 3) דף מלא: `/landing-page-submissions` (או תת-route תחת WordPress)
+- בורר אתר (אם יש כמה אתרים מחוברים)
+- בורר טווח תאריכים (7/30/90 ימים / מותאם)
+- 4 כרטיסי KPI: סה"כ / Google / Facebook / טסטים
+- טבלת טפסים מלאה עם sorting + סינון
+- לחיצה על שורה → drawer עם רשימת ה-emails + referer מלא לכל submission
+- טאב נוסף "לפי קמפיין גוגל" שמציג `gad_campaignid` ↔ כמות submissions (מוכן לקישור עתידי לדוח Google Ads)
 
-אז יש שתי שאלות נפרדות:
-1. **באג בסנכרון**: למה אנטרקטיקה מציג 6 אצלנו במקום 1 שגוגל מראה? → זה באג טהור.
-2. **גישה תוצרית**: מה לעשות עם הפער בין conversions של גוגל לבין מספר הלידים בפועל ב-CRM?
+### 4) Hook משותף: `useElementorSubmissions(siteId, dateRange)`
+- React Query עם cache של 5 דקות
+- משמש את שני הרכיבים (כרטיס + דף מלא) כדי לא לכפול קריאות
 
-ל-(1) צריך לתקן את הסנכרון.
-ל-(2) צריך להחליט: להציג גם "המרות גוגל" וגם "לידים בפועל ב-CRM" כדי שיראו את הפער.
+## מבנה זרימה
 
-צריך לקרוא את `sync-google-ads-data` כדי להבין:
-
-הסקירה הראשונית מספיקה לי להבין שצריך לבדוק את הסנכרון. אכין plan קצר.
-
-## הבעיה בקצרה
-
-יש כאן שני דברים שונים, וצריך לתקן את שניהם:
-
-### 1) באג בסנכרון של Google Ads
-- "אנטרקטיקה" — גוגל באמת מראה **1 המרה**, אבל אצלנו רשום **6**.
-- זה אומר שהסנכרון שלנו (`sync-google-ads-data`) מקבל מגוגל מספר שונה ממה שגוגל מציג ב-UI שלו.
-
-הסיבה הסבירה היא שה-GAQL query שלנו משתמש ב-segment שגורם לכפילויות:
-- שימוש ב-`segments.conversion_action` או `segments.conversion_action_category` — מפצל את ה-rows לפי כל סוג המרה ואז סוכמים ומקבלים יותר מדי
-- שימוש ב-`metrics.all_conversions` במקום `metrics.conversions` — סופר גם cross-device ו-view-through
-- שימוש ב-attribution model שונה מה-default של ה-UI
-
-### 2) פער בין "המרות לפי גוגל" ל"לידים בפועל ב-CRM"
-- "צפון הודו" — גוגל מדווח 1, אבל באמת נכנסו 8 לידים ל-CRM.
-- זה לא באג בסנכרון; זה אומר ש-conversion tracking של הקמפיין הזה לא תופס את כל הלידים (למשל לידים מ-WhatsApp click לא נספרים, או שה-tag לא הותקן/הופעל נכון).
-
-## מה אני מתכנן לעשות
-
-### שלב א — לתקן את הסנכרון כך שיתאים בדיוק למה שגוגל מציג
-1. לקרוא את `supabase/functions/sync-google-ads-data/index.ts` ולוודא:
-   - שה-query לא משתמש ב-segments שמייצרים כפילויות (להסיר `segments.conversion_action*`)
-   - שמשתמשים ב-`metrics.conversions` ולא ב-`metrics.all_conversions`
-   - שהאגרגציה לפי `campaign + date` בלבד (ללא segments נוספים)
-2. להריץ סנכרון מחדש לארגון ולוודא שהמספר של "אנטרקטיקה" יורד מ-6 ל-1, בהתאמה ל-UI של גוגל.
-
-### שלב ב — להוסיף עמודה של "לידים בפועל ב-CRM" ליד "המרות"
-כדי שתוכל לראות במקום אחד גם:
-- **המרות** — כמו שגוגל מדווח (לאחר התיקון יהיה תואם ל-UI שלו)
-- **לידים ב-CRM** — ספירה מתוך טבלת `leads` של אותו קמפיין באותם תאריכים
-
-ככה תוכל לראות מיד באיזה קמפיין יש פער ואיפה צריך לבדוק את ה-tracking בגוגל.
-
-### שלב ג — לחקור את "צפון הודו"
-לבדוק למה גוגל לא תופס שם את כל הלידים:
-- האם conversion tracking מותקן/פעיל בקמפיין הזה?
-- האם הלידים מגיעים מ-channel שלא נספר כ-conversion (למשל WhatsApp click במקום form submit)?
-- האם יש מיפוי שגוי של conversion action?
-
-זה דורש בדיקה מעבר לקוד, אבל אעזור לאבחן אחרי שהתיקון בשלב א' יוצא לדרך.
-
-## קבצים שיושפעו
-- `supabase/functions/sync-google-ads-data/index.ts` — תיקון GAQL query והסרת segments שגורמים לכפילות
-- `src/components/dynamic-tables/SeoReportTabs.tsx` או הקומפוננטה של דוח Google Ads — הוספת עמודה "לידים ב-CRM" (אזהה את הקובץ המדויק לאחר אישור)
+```text
+ClientWordPressTab ──┐
+                     ├──> useElementorSubmissions ──> fetch-elementor-submissions ──> WP REST API
+LandingPageSubsPage ─┘                                         │
+                                                               ▼
+                                                       social_media_wordpress_sites
+                                                       (credentials)
+```
 
 ## ללא שינויי DB
-לא נדרש שינוי טבלאות. רק תיקון לוגיקת סנכרון + תוספת עמודת תצוגה.
+שום מיגרציה. הכל בזמן אמת מ-WP. עתידית, אם תרצה היסטוריה — נוסיף טבלת snapshots.
 
 ## פירוט טכני קצר
-שורש הבאג כמעט בוודאות הוא ב-GAQL: כשמוסיפים `segments.X` ל-SELECT, גוגל מחזיר row לכל ערך של ה-segment, וה-`metrics.conversions` מתחלק בין השורות. אם הקוד שלנו עושה SUM עליהם — מקבלים פעמיים-שלוש את אותה המרה. הפתרון הוא:
-- להסיר segments מיותרים מה-SELECT
-- לקבץ אך ורק לפי `campaign.id + segments.date`
-- להשתמש ב-`metrics.conversions` (לא `all_conversions`)
+- חילוץ source מ-referer: regex על `gad_campaignid=`, `gclid=`, `fbclid=`, `utm_source=`, וזיהוי `gtm_debug`
+- pagination: לולאה עד שמתקבל `per_page` מלא, מקסימום 10 דפים (1000 submissions) לבטיחות
+- אימות: Basic Auth — `Authorization: Basic ${base64(username:app_password)}`
+- אם ה-API מחזיר 404/401 — fallback מסודר עם הודעה ברורה ב-UI ("Elementor Pro Submissions לא מופעל באתר")
+
+## קבצים שיושפעו / ייווצרו
+- **חדש**: `supabase/functions/fetch-elementor-submissions/index.ts`
+- **חדש**: `src/hooks/useElementorSubmissions.ts`
+- **חדש**: `src/pages/LandingPageSubmissions.tsx`
+- **חדש**: `src/components/landing-page-submissions/SubmissionsSummaryCard.tsx`
+- **חדש**: `src/components/landing-page-submissions/SubmissionsFullView.tsx`
+- **עדכון**: `src/components/clients/ClientWordPressTab.tsx` — הוספת הכרטיס
+- **עדכון**: `src/App.tsx` — route חדש `/t/:tenantSlug/landing-page-submissions`
+- **עדכון**: `src/components/layout/AppSidebar.tsx` — פריט תפריט (אופציונלי, תחת "אינטגרציות")
