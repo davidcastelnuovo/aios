@@ -1203,7 +1203,6 @@ export default function WordPressSettings() {
                     tenant_id: targetTenant && targetTenant !== linkSite.tenant_id ? targetTenant : null,
                   });
                 }}
-                })}
                 disabled={linkMutation.isPending}
               >
                 {linkMutation.isPending && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
