@@ -138,10 +138,17 @@ export function GoogleAnalyticsDashboard({
     return Number.isFinite(parsed) ? parsed : 0;
   };
 
-  // Calculate date range based on preset
+  // Calculate date range based on preset.
+  // STANDARD (mem://ui/date-range-calculation-standard):
+  // Relative ranges (last_N_days) END YESTERDAY (today excluded — partial data),
+  // matching Google Ads, GA's own "Last N days", crm-records, WooCommerceDashboard,
+  // and DashboardView.wooDateRange. Absolute presets (today, this_week, this_month)
+  // include today as appropriate.
   const getDateRange = (preset: DateRangePreset): { start: Date; end: Date } => {
     const today = new Date();
     today.setHours(23, 59, 59, 999);
+    const yesterday = subDays(today, 1);
+    yesterday.setHours(23, 59, 59, 999);
 
     switch (preset) {
       case 'all': {
@@ -157,9 +164,7 @@ export function GoogleAnalyticsDashboard({
       case 'yesterday': {
         const yesterdayStart = subDays(today, 1);
         yesterdayStart.setHours(0, 0, 0, 0);
-        const yesterdayEnd = subDays(today, 1);
-        yesterdayEnd.setHours(23, 59, 59, 999);
-        return { start: yesterdayStart, end: yesterdayEnd };
+        return { start: yesterdayStart, end: yesterday };
       }
       case 'this_week':
         return { start: startOfWeek(today, { weekStartsOn: 0 }), end: today };
@@ -171,11 +176,11 @@ export function GoogleAnalyticsDashboard({
         };
       }
       case 'last_7_days':
-        return { start: subDays(today, 6), end: today };
+        return { start: subDays(today, 7), end: yesterday };
       case 'last_14_days':
-        return { start: subDays(today, 13), end: today };
+        return { start: subDays(today, 14), end: yesterday };
       case 'last_30_days':
-        return { start: subDays(today, 29), end: today };
+        return { start: subDays(today, 30), end: yesterday };
       case 'this_month':
         return { start: startOfMonth(today), end: today };
       case 'last_month': {
@@ -183,11 +188,11 @@ export function GoogleAnalyticsDashboard({
         return { start: startOfMonth(lastMonth), end: endOfMonth(lastMonth) };
       }
       case 'last_90_days':
-        return { start: subDays(today, 89), end: today };
+        return { start: subDays(today, 90), end: yesterday };
       case 'last_180_days':
-        return { start: subDays(today, 179), end: today };
+        return { start: subDays(today, 180), end: yesterday };
       case 'last_365_days':
-        return { start: subDays(today, 364), end: today };
+        return { start: subDays(today, 365), end: yesterday };
       case 'custom':
         if (usesExternalFilter && externalCustomDateRange?.from && externalCustomDateRange?.to) {
           return { start: externalCustomDateRange.from, end: externalCustomDateRange.to };
@@ -195,9 +200,9 @@ export function GoogleAnalyticsDashboard({
         if (customDateRange.from && customDateRange.to) {
           return { start: customDateRange.from, end: customDateRange.to };
         }
-        return { start: subDays(today, 29), end: today };
+        return { start: subDays(today, 30), end: yesterday };
       default:
-        return { start: subDays(today, 29), end: today };
+        return { start: subDays(today, 30), end: yesterday };
     }
   };
 
