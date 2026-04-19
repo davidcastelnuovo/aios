@@ -54,6 +54,7 @@ interface WordPressSite {
   notes: string | null;
   created_at: string;
   campaign_url_mapping?: Record<string, string> | null;
+  campaign_form_mapping?: Record<string, string> | null;
 }
 
 interface Tenant {

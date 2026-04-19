@@ -463,13 +463,15 @@ Deno.serve(async (req) => {
                 .replace(/\s+/g, ' ')
                 .trim();
 
-            // Build three maps:
+            // Build maps:
             //  (a) by exact gad_campaignid -> day -> count
-            //  (b) by URL slug -> day -> count  (used for slug-based mapping + fuzzy fallback)
-            //  (c) totals by slug for transparency
+            //  (b) by URL slug -> day -> count  (legacy fallback)
+            //  (c) by Elementor form_id -> day -> count  (PRIMARY mapping key)
+            //  (d) totals by form for transparency
             const byCampaignId = new Map<string, Map<string, number>>();
             const bySlug = new Map<string, Map<string, number>>();
-            const slugTotals = new Map<string, number>();
+            const byFormId = new Map<string, Map<string, number>>();
+            const formTotals = new Map<string, { total: number; name: string }>();
 
             for (const sub of subData.submissions) {
               if (sub.source === 'test') continue;
@@ -483,21 +485,41 @@ Deno.serve(async (req) => {
                 dm.set(day, (dm.get(day) || 0) + 1);
               }
 
-              // Count slug for google_ads-sourced submissions
+              // Index by form_id (primary mapping key)
+              const fid = sub.form_id ? String(sub.form_id) : '';
+              if (fid) {
+                if (!byFormId.has(fid)) byFormId.set(fid, new Map());
+                const dm = byFormId.get(fid)!;
+                dm.set(day, (dm.get(day) || 0) + 1);
+                const cur = formTotals.get(fid);
+                formTotals.set(fid, {
+                  total: (cur?.total || 0) + 1,
+                  name: cur?.name || sub.form_name || fid,
+                });
+              }
+
+              // Legacy: count slug for google_ads-sourced submissions
               if (sub.source === 'google_ads' || sub.source === 'google') {
                 const slug = (sub.slug && sub.slug.length > 0) ? sub.slug : extractSlug(sub.referer);
                 if (slug) {
                   if (!bySlug.has(slug)) bySlug.set(slug, new Map());
                   const dm = bySlug.get(slug)!;
                   dm.set(day, (dm.get(day) || 0) + 1);
-                  slugTotals.set(slug, (slugTotals.get(slug) || 0) + 1);
                 }
               }
             }
 
-            // Read manual campaign_url_mapping ({ slug: campaign_id })
+            // PRIMARY: form_id -> campaign_id mapping
+            const formMapping: Record<string, string> = (site as any).campaign_form_mapping || {};
+            const campaignIdToForms = new Map<string, string[]>();
+            for (const [fid, cid] of Object.entries(formMapping)) {
+              if (!cid) continue;
+              if (!campaignIdToForms.has(cid)) campaignIdToForms.set(cid, []);
+              campaignIdToForms.get(cid)!.push(fid);
+            }
+
+            // LEGACY: slug -> campaign_id mapping (kept for backward compat)
             const manualMapping: Record<string, string> = (site as any).campaign_url_mapping || {};
-            // Build inverse: campaign_id -> [slugs]
             const campaignIdToSlugs = new Map<string, string[]>();
             for (const [slug, cid] of Object.entries(manualMapping)) {
               if (!cid) continue;
@@ -506,22 +528,24 @@ Deno.serve(async (req) => {
             }
 
             // Annotate each record. Strategy (priority order):
-            //  1) Manual slug→campaign mapping (most reliable)
+            //  1) Manual FORM→campaign mapping (most reliable - PRIMARY)
             //  2) Exact match by gad_campaignid
-            //  3) Fuzzy match campaign_name ↔ slug
+            //  3) Legacy slug→campaign mapping (backward compat)
+            //  4) Fuzzy match campaign_name ↔ slug
             const slugEntries = Array.from(bySlug.keys()).map((s) => ({ slug: s, tokens: normalize(s).split(' ').filter((t) => t.length > 1) }));
 
             for (const rec of records) {
-              // Strategy 1: manual mapping
-              const mappedSlugs = campaignIdToSlugs.get(rec.campaign_id) || [];
-              if (mappedSlugs.length > 0) {
+              // Strategy 1: manual FORM mapping (PRIMARY)
+              const mappedForms = campaignIdToForms.get(rec.campaign_id) || [];
+              if (mappedForms.length > 0) {
                 let mappedCount = 0;
-                for (const slug of mappedSlugs) {
-                  const dm = bySlug.get(slug);
+                for (const fid of mappedForms) {
+                  const dm = byFormId.get(fid);
                   if (dm) mappedCount += dm.get(rec.date) || 0;
                 }
                 rec.verified_leads = mappedCount;
-                rec.verified_source = `${site.site_url} (mapped: ${mappedSlugs.join(', ')})`;
+                const formNames = mappedForms.map((fid) => formTotals.get(fid)?.name || fid);
+                rec.verified_source = `${site.site_url} (טופס: ${formNames.join(', ')})`;
                 continue;
               }
 
@@ -534,7 +558,20 @@ Deno.serve(async (req) => {
                 continue;
               }
 
-              // Strategy 3: fuzzy fallback - match campaign_name tokens against slug tokens
+              // Strategy 3: legacy manual SLUG mapping
+              const mappedSlugs = campaignIdToSlugs.get(rec.campaign_id) || [];
+              if (mappedSlugs.length > 0) {
+                let mappedCount = 0;
+                for (const slug of mappedSlugs) {
+                  const dm = bySlug.get(slug);
+                  if (dm) mappedCount += dm.get(rec.date) || 0;
+                }
+                rec.verified_leads = mappedCount;
+                rec.verified_source = `${site.site_url} (slug: ${mappedSlugs.join(', ')})`;
+                continue;
+              }
+
+              // Strategy 4: fuzzy fallback - match campaign_name tokens against slug tokens
               const cnTokens = normalize(rec.campaign_name).split(' ').filter((t) => t.length > 1);
               if (cnTokens.length === 0) {
                 rec.verified_leads = exactCount;
@@ -558,7 +595,7 @@ Deno.serve(async (req) => {
                 rec.verified_leads = 0;
               }
             }
-            console.log(`[sync-google-ads] enrichment: ${byCampaignId.size} cids, ${bySlug.size} slugs, ${Object.keys(manualMapping).length} manual mappings`);
+            console.log(`[sync-google-ads] enrichment: ${byCampaignId.size} cids, ${byFormId.size} forms, ${bySlug.size} slugs, ${Object.keys(formMapping).length} form mappings, ${Object.keys(manualMapping).length} slug mappings`);
           } else {
             console.warn('[sync-google-ads] WP enrichment skipped:', subErr?.message || subData?.error);
           }
