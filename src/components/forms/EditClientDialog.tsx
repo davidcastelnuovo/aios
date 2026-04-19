@@ -364,16 +364,19 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate }: Ed
   });
   
   // Update financial fields when financialData is loaded
+  // IMPORTANT: depend on stable primitives only — depending on `client` (a new
+  // object reference on every parent refetch) caused form.setValue to fire on
+  // every keystroke-triggered invalidation, blurring inputs (e.g. website).
   useEffect(() => {
     if (financialData) {
       form.setValue("retainer", financialData.retainer?.toString() || "");
       form.setValue("monthly_budget", financialData.monthly_budget?.toString() || "");
     } else {
-      // Fallback to client's own data if no tenant-specific data exists
       form.setValue("retainer", client.retainer?.toString() || "");
       form.setValue("monthly_budget", client.monthly_budget?.toString() || "");
     }
-  }, [financialData, client, form]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [financialData?.retainer, financialData?.monthly_budget, client.id]);
 
   const showFinanceFields = canViewFinance();
 
