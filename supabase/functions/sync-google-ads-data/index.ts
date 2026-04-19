@@ -541,7 +541,8 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({
       success: true,
       records_synced: inserted,
-      last_sync_at: new Date().toISOString()
+      last_sync_at: new Date().toISOString(),
+      verified_against: verifiedSiteUrl,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
