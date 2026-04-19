@@ -1,29 +1,26 @@
 
-
 ## בעיה
-ב-`ClientUpdatesTab.tsx` הדרופדאון "מצב לקוח" משתמש ב-state מקומי `commStatus` שמאותחל קשיח ל-`"happy"`, ולא מסתנכרן עם המצב האמיתי של הלקוח (`client.mood_status`). תוצאה:
+בשדה "אתר" (URL) בטופס הוספת/עריכת לקוח — כל לחיצת מקש מאבדת את הפוקוס, ומחייבת ללחוץ שוב על השדה כדי להקליד את האות הבאה.
 
-1. הדרופדאון תמיד מציג "מבסוט" בפתיחה — גם אם הלקוח באמת "מתנדנד".
-2. אם המשתמש בוחר "מבסוט" (הערך שכבר מוצג), ה-`onValueChange` של Radix לא נורה → אין שמירה.
-3. הסטטוס הראשי בכותרת (`selectedClient.mood_status` ב-`ClientsChatView`) קורא ישירות מה-DB, ולכן הוא לא תואם לתצוגה המקומית.
+## שורש הבעיה (השערה)
+זו תופעה קלאסית ב-React שנגרמת מאחד משני דברים:
+1. **קומפוננטה מוגדרת בתוך קומפוננטה אחרת** — בכל render נוצרת פונקציה חדשה, React רואה "טייפ חדש" ומפרק/יוצר מחדש את ה-DOM → השדה מאבד פוקוס.
+2. **`key` דינמי שמשתנה בכל render** על הקונטיינר של השדה.
 
-## פתרון
+צריך לבדוק את `EditClientDialog.tsx` (וייתכן `AddClientDialog`) — במיוחד את שדה ה-URL/אתר.
 
-### 1. סנכרון `commStatus` עם המצב האמיתי
-- להעביר את `client.mood_status` כ-prop נוסף ל-`ClientUpdatesTab` מ-`ClientsChatView` ו-`EditClientDialog`.
-- לאתחל את `commStatus` ממנו, ולעדכן עם `useEffect` כשהוא משתנה (כדי שגם רענון מהכותרת יסתנכרן פנימה).
+## תוכנית
+1. לקרוא את `src/components/forms/EditClientDialog.tsx` ולמצוא את שדה ה-website/URL.
+2. לזהות אם:
+   - יש קומפוננטה מקוננת (מוגדרת בתוך ה-render).
+   - יש `key` דינמי.
+   - יש `useEffect` ש-resets state בכל הקלדה.
+   - השדה עטוף בקומפוננטה שנוצרת מחדש (למשל `<Field>` מותאם אישית).
+3. לתקן ע"י:
+   - הוצאת קומפוננטות מקוננות החוצה (מחוץ ל-render).
+   - הסרת `key` דינמי.
+   - או memoization מתאים.
 
-### 2. הבטחת שמירה מיידית
-- במקום `Select` רגיל שמסתמך על `onValueChange` (שלא נורה כשבוחרים את אותו ערך), להוסיף שמירה גם אם הערך זהה (לא יזיק) — או פשוט: לאחר שה-state האמיתי יסתנכרן, הבעיה הזו תיעלם.
-
-### 3. סדר פעולות במוטציה
-- לעדכן קודם את `clients.mood_status` ואז להוסיף ל-`communication_logs` — כך שגם אם רישום ה-log נכשל, הסטטוס נשמר.
-
-### 4. אינוולידציה של ה-cache הנכון
-- לוודא ש-`queryClient.invalidateQueries({ queryKey: ["clients"] })` מרענן את הרשימה ב-`ClientsChatView`. לבדוק את ה-queryKey המדויק של רשימת הלקוחות (ייתכן שזה `["clients", tenantId]`) ולהוסיף refetch מתאים.
-
-## קבצים לעריכה
-- `src/components/clients/ClientUpdatesTab.tsx` — הוספת prop `currentMoodStatus`, אתחול state ממנו, useEffect לסנכרון, היפוך סדר במוטציה.
-- `src/components/clients/ClientsChatView.tsx` — העברת `selectedClient.mood_status` כ-prop.
-- `src/components/forms/EditClientDialog.tsx` — העברת `client.mood_status` כ-prop.
-
+## קבצים לבדיקה ועריכה
+- `src/components/forms/EditClientDialog.tsx` (סביר)
+- `src/components/forms/AddClientDialog.tsx` (אם קיים אותו מבנה)
