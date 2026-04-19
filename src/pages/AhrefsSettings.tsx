@@ -16,6 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Input } from "@/components/ui/input";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
+import { hasValidSeoReportData } from "@/components/dynamic-tables/seo/reportValidity";
 
 const WEBHOOK_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ahrefs-webhook`;
 
@@ -91,12 +92,34 @@ export default function AhrefsSettings() {
         }
       }
 
-      // Update ALL reports for the same domain with this client_id
+      // Update only valid SEO reports for the same domain with this client_id
       const { error: reportError } = await supabase
         .from('ahrefs_reports')
-        .update({ client_id: clientId })
+        .select('id, report_data')
         .eq('domain', domain);
       if (reportError) throw reportError;
+
+      const validReportIds = (reportError ? [] : undefined);
+
+      const reportsForDomain = await supabase
+        .from('ahrefs_reports')
+        .select('id, report_data')
+        .eq('domain', domain);
+
+      if (reportsForDomain.error) throw reportsForDomain.error;
+
+      const validIds = (reportsForDomain.data || [])
+        .filter((report) => hasValidSeoReportData(report.report_data))
+        .map((report) => report.id);
+
+      if (validIds.length > 0) {
+        const { error: validUpdateError } = await supabase
+          .from('ahrefs_reports')
+          .update({ client_id: clientId })
+          .in('id', validIds);
+
+        if (validUpdateError) throw validUpdateError;
+      }
 
       // Update client website if not set
       if (client && !client.website) {
