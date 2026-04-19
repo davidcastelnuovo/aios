@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
     }
 
     const formData = await req.formData();
-    const file = formData.get('file') as File;
+    const rawFile = formData.get('file') as File | null;
     const clientId = formData.get('clientId') as string | null;
     const leadId = formData.get('leadId') as string | null;
     const groupId = formData.get('groupId') as string | null;
