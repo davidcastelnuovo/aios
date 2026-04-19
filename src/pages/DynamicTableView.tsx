@@ -2722,7 +2722,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                       <th className="p-2 text-center font-medium">קליקים</th>
                       <th className="p-2 text-center font-medium">המרות</th>
                       {hasVerifiedData && (
-                        <th className="p-2 text-center font-medium" title="לידים בפועל באתר (Elementor) שמקורם בקמפיין הזה">לידים באתר</th>
+                        <th className="p-2 text-center font-medium" title="לידים בפועל באתר (Elementor) — לפי שיוך טופס/עמוד לקמפיין">לידים באתר</th>
                       )}
                       <th className="p-2 text-center font-medium">עלות</th>
                       {isEcommerce ? (

@@ -1075,9 +1075,14 @@ export default function WordPressSettings() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                title="שייך עמודי נחיתה לקמפיינים"
+                                title="שייך טפסים / עמודי נחיתה לקמפיינים"
                                 onClick={() => openMapping(site)}
-                                className={site.campaign_url_mapping && Object.keys(site.campaign_url_mapping).length > 0 ? "text-emerald-600" : "text-blue-600"}
+                                className={
+                                  (site.campaign_form_mapping && Object.keys(site.campaign_form_mapping).length > 0) ||
+                                  (site.campaign_url_mapping && Object.keys(site.campaign_url_mapping).length > 0)
+                                    ? "text-emerald-600"
+                                    : "text-blue-600"
+                                }
                               >
                                 <MapPin className="h-4 w-4" />
                               </Button>
