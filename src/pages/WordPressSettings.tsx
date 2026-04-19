@@ -1155,6 +1155,10 @@ export default function WordPressSettings() {
                   id: linkSite.id,
                   agency_id: linkAgency || null,
                   client_id: linkClient || null,
+                  tenant_id:
+                    linkSelectedAgency && linkSelectedAgency.tenant_id !== linkSite.tenant_id
+                      ? linkSelectedAgency.tenant_id
+                      : null,
                 })}
                 disabled={linkMutation.isPending}
               >
