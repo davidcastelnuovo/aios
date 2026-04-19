@@ -191,13 +191,25 @@ export default function SharedTable() {
       map[name].spend += getSpendFromData(d);
       map[name].impressions += Number(d.impressions) || 0;
       map[name].clicks += Number(d.clicks) || 0;
-      // Always aggregate both types
-      map[name].purchases += getPurchasesFromData(d);
-      map[name].revenue += getRevenueFromData(d);
-      map[name].addToCart += getAddToCartFromData(d);
+      if (!(forceLeadsOnly && isGoogleAds)) {
+        map[name].purchases += getPurchasesFromData(d);
+        map[name].revenue += getRevenueFromData(d);
+        map[name].addToCart += getAddToCartFromData(d);
+      }
       map[name].leads += getLeadsFromData(d);
     });
+    // Round leads
+    Object.values(map).forEach((c: any) => { c.leads = Math.round(c.leads); });
     const allCampaigns = Object.values(map).sort((a: any, b: any) => b.spend - a.spend);
+
+    // Honor table-level overrides
+    if (forceLeadsOnly) {
+      return { ecommerce: [], leads: allCampaigns, all: allCampaigns };
+    }
+    if (forceEcommerceOnly) {
+      return { ecommerce: allCampaigns, leads: [], all: allCampaigns };
+    }
+
     // Classify each campaign
     const ecommerceCampaigns = allCampaigns.filter((c: any) =>
       (c.purchases > 0 || c.revenue > 0) ||
@@ -207,12 +219,11 @@ export default function SharedTable() {
       (c.leads > 0 && c.purchases === 0 && c.revenue === 0) ||
       (c.leads === 0 && c.purchases === 0 && c.revenue === 0 && c.addToCart === 0)
     );
-    // If no clear separation, show all as-is
     if (ecommerceCampaigns.length === 0 && leadCampaigns.length === 0) {
       return { ecommerce: [], leads: allCampaigns, all: allCampaigns };
     }
     return { ecommerce: ecommerceCampaigns, leads: leadCampaigns, all: allCampaigns };
-  }, [filteredRecords, integrationType]);
+  }, [filteredRecords, integrationType, forceLeadsOnly, forceEcommerceOnly, isGoogleAds]);
 
   // Generic table columns from fields or data keys
   const genericColumns = useMemo(() => {
