@@ -415,9 +415,23 @@ export default function WordPressSettings() {
     enabled: !!tenantId || isSuperAdmin,
   });
 
+  // Distinct tenants reachable in the link dialog (derived from linkAgencies)
+  const linkTenants = Array.from(
+    new Map(
+      linkAgencies
+        .filter((a) => a.tenant_id)
+        .map((a) => [a.tenant_id, { id: a.tenant_id, name: a.tenant_name || a.tenant_id }])
+    ).values()
+  ).sort((x, y) => x.name.localeCompare(y.name));
+
+  // Filter agencies by chosen tenant in the link dialog
+  const linkFilteredAgencies = linkTenantId
+    ? linkAgencies.filter((a) => a.tenant_id === linkTenantId)
+    : linkAgencies;
+
   // Clients for the quick-link dialog — scoped to the SELECTED agency's tenant
   const linkSelectedAgency = linkAgencies.find((a) => a.id === linkAgency);
-  const linkEffectiveTenantId = linkSelectedAgency?.tenant_id || linkSite?.tenant_id;
+  const linkEffectiveTenantId = linkSelectedAgency?.tenant_id || linkTenantId || linkSite?.tenant_id;
 
   const { data: linkClients = [] } = useQuery<Client[]>({
     queryKey: ["clients-for-link", linkEffectiveTenantId, linkAgency],
@@ -446,6 +460,7 @@ export default function WordPressSettings() {
 
   const openLink = (site: WordPressSite) => {
     setLinkSite(site);
+    setLinkTenantId(site.tenant_id || "");
     setLinkAgency(site.agency_id || "");
     setLinkClient(site.client_id || "");
   };
