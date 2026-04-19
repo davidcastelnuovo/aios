@@ -1,23 +1,40 @@
 
-The user has two issues:
+מה מצאתי:
+- התיקון הישן כבר קיים בקוד הנוכחי ב-`src/components/forms/EditLeadDialog.tsx`: יש גם `form.reset(...)` כש-`lead.id` משתנה וגם טעינה מחדש של `lead-detail`.
+- לכן זו כנראה לא אותה תקלה ישנה של `react-hook-form` בלבד.
+- ההבדל החשוב הוא שבכרטיסיות/כרטיסים כל ליד פותח `EditLeadDialog` משלו, אבל ב-`LeadsChatView` יש דיאלוג אחד משותף שנשען על `selectedLead` חי. זה מסביר למה הבעיה מופיעה רק בתצוגת הצ'אט של הלידים.
 
-1. **"טיול אינדונזיה" not displaying correctly** — looking at image-302, form `356` is named "טיול לאינדונזיה אלמנטור - ECO TRIP" and appears multiple times. From earlier context: form 356 is currently mapped to Madagascar PMax campaign (`23571578760`), which is wrong — it should be mapped to the Indonesia campaign.
+מה אבנה:
+1. אטפל ספציפית ב-`LeadsChatView`
+- אחליף את הזרימה מ-`selectedLead` חי ל-`editingLead` נפרד.
+- בלחיצה על עריכה אשמור snapshot של הליד הנבחר (`editingLead`) ורק אותו אעביר לדיאלוג.
+- כך החלפת ליד ברשימה או state פנימי אחר לא ימשכו בטעות פרטים של ליד אחר.
 
-2. **Remove the "-7", "+2", "-3" badges** in the "לידים באתר" column — these delta badges (showing diff between Google Ads reported leads vs site verified leads) are confusing the user.
+2. אחזק את `EditLeadDialog` לשימוש מבוקר
+- אוסיף תמיכה ברכיב בלי trigger פנימי כשמשתמשים בו במצב controlled.
+- ב-`LeadsChatView` ארנדר את הדיאלוג כ-`key={editingLead.id}` כדי לכפות remount מלא לכל ליד.
+- אסגור ואנקה `editingLead` ב-`onOpenChange(false)`.
 
-Let me locate the badge rendering in DynamicTableView.tsx.
+3. אבדוק אם נשאר state דולף בתוך הדיאלוג
+- אאפס גם state פנימי משני אם צריך (למשל tab פעיל / selected sales people / קבצים) כדי לוודא שאין זליגה בין לידים.
 
-For issue 1 — this is a data/mapping issue, not a code issue. The user needs to remap form 356 to the Indonesia campaign in WordPress Settings. But the user is reporting "doesn't display correctly" — could mean the form mapping UI is wrong, OR the campaign isn't being matched. Need to clarify what "not displaying correctly" means but the user already gave context — they mapped it but it shows wrong. Most likely the mapping needs updating, OR the Indonesia campaign doesn't exist as separate and only Madagascar/etc do.
+קבצים שכנראה ישתנו:
+- `src/components/leads/LeadsChatView.tsx`
+- `src/components/forms/EditLeadDialog.tsx`
 
-Actually re-reading: the user says "טיול אינדונזיה לא מציג נכון" — the Indonesia trip is not displaying correctly. Combined with the screenshots showing form 356 ("אינדונזיה אלמנטור") generating leads — the issue is that those leads aren't being attributed to the Indonesia campaign in the report.
+למה אני חושב שזה המקור:
+- בכרטיסיות זה עובד כי כל שורה מרנדרת `EditLeadDialog` נפרד עם `lead` קבוע.
+- בצ'אט יש דיאלוג משותף אחד: `EditLeadDialog lead={selectedLead} open={editDialogOpen}`.
+- זה דפוס קלאסי שיכול להשאיר dialog state/query/form על ליד קודם גם כשיש כבר reset חלקי.
 
-Best approach: I need to check what's actually in the campaign mapping and what Indonesia campaign exists. But this is plan mode — I'll propose:
-- Investigate the current mapping for form 356 and which campaign Indonesia should map to
-- Fix the mapping (or surface it clearly in UI so the user can remap)
-- Remove the delta badges from the "לידים באתר" column
+בדיקות שאעשה אחרי המימוש:
+- עריכה של רחלי
+- עריכה של צחי קוטנסקי
+- בדיקה שהדיאלוג לא מושך פרטים של נדב
+- בדיקה שבכרטיסיות עדיין תקין
+- בדיקה גם ב-preview וגם אחרי publish כדי לוודא שאין פער גרסה
 
-Plan focus:
-1. Remove the +/- delta badges from the verified leads column
-2. Investigate Indonesia mapping and either auto-fix or guide user
-
-Keep concise.
+פירוט טכני:
+- לא נדרש שינוי מסד נתונים.
+- לא אגע ב-RLS.
+- זה תיקון Frontend ממוקד בזרימת state והרכבת הדיאלוג.
