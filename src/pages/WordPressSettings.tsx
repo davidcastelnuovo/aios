@@ -919,6 +919,103 @@ export default function WordPressSettings() {
           </Button>
         </DialogContent>
       </Dialog>
+
+      {/* Quick Link (Associate to Client) Dialog */}
+      <Dialog open={!!linkSite} onOpenChange={(o) => { if (!o) setLinkSite(null); }}>
+        <DialogContent dir="rtl" className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Link2 className="h-5 w-5 text-primary" />
+              שיוך אתר ללקוח
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-lg border bg-muted/30 p-3">
+              <p className="text-sm font-medium">{linkSite?.site_name || linkSite?.site_url}</p>
+              <p className="text-xs text-muted-foreground" dir="ltr">{linkSite?.site_url}</p>
+            </div>
+
+            <div className="rounded-lg border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/20 p-3 flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+              <p className="text-xs text-amber-900 dark:text-amber-200">
+                שיוך זה מחבר את לידי האתר (Elementor / Contact Form 7) אל הלקוח, כך שיופיעו בדוח שלו.
+              </p>
+            </div>
+
+            <div>
+              <Label>סוכנות</Label>
+              <Select
+                value={linkAgency || "none"}
+                onValueChange={(v) => { setLinkAgency(v === "none" ? "" : v); setLinkClient(""); }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={linkAgencies.length === 0 ? "אין סוכנויות" : "בחר סוכנות..."} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">ללא</SelectItem>
+                  {linkAgencies.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>לקוח</Label>
+              <Select
+                value={linkClient || "none"}
+                onValueChange={(v) => setLinkClient(v === "none" ? "" : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={
+                    linkClients.length === 0
+                      ? (linkAgency ? "אין לקוחות לסוכנות זו" : "אין לקוחות בארגון")
+                      : "בחר לקוח..."
+                  } />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">ללא</SelectItem>
+                  {linkClients.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {linkSite?.client_id && linkClient && linkClient !== linkSite.client_id && (
+              <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+                <p className="text-xs text-destructive">
+                  שינוי שיוך הלקוח לא יעביר לידים היסטוריים שכבר נמשכו תחת הלקוח הקודם.
+                </p>
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setLinkSite(null)}
+                disabled={linkMutation.isPending}
+              >
+                ביטול
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={() => linkSite && linkMutation.mutate({
+                  id: linkSite.id,
+                  agency_id: linkAgency || null,
+                  client_id: linkClient || null,
+                })}
+                disabled={linkMutation.isPending}
+              >
+                {linkMutation.isPending && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
+                שמור שיוך
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
