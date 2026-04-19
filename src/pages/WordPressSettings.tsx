@@ -825,6 +825,16 @@ export default function WordPressSettings() {
                             <Button
                               variant="ghost"
                               size="icon"
+                              title={site.client_id ? "ערוך שיוך לקוח" : "שייך ללקוח"}
+                              onClick={() => openLink(site)}
+                              className={site.client_id ? "" : "text-amber-600 hover:text-amber-700"}
+                            >
+                              {site.client_id ? <Link2 className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
+                            </Button>
+
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               title="ערוך"
                               onClick={() => openEdit(site)}
                             >
