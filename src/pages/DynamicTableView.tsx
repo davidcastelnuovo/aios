@@ -2753,28 +2753,18 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                           <td className="p-2 text-center text-green-600 font-medium">{convInt.toLocaleString('he-IL')}</td>
                           {hasVerifiedData && (
                             <td className="p-2 text-center">
-                              <div className="inline-flex items-center gap-1.5 justify-center">
-                                <span
-                                  className={hasDiscrepancy ? "font-semibold text-amber-600" : "font-medium text-foreground"}
-                                  title={(() => {
-                                    const sources = filteredRecords
-                                      .filter((r) => r.data?.campaign_name === campaignName && r.data?.verified_source)
-                                      .map((r) => r.data?.verified_source as string);
-                                    const uniqueSources = Array.from(new Set(sources));
-                                    return uniqueSources.length > 0 ? `מקור: ${uniqueSources.join(' | ')}` : '';
-                                  })()}
-                                >
-                                  {verified.toLocaleString('he-IL')}
-                                </span>
-                                {hasDiscrepancy && (
-                                  <span
-                                    title={diff > 0 ? `באתר נרשמו ${diff} לידים יותר ממה שגוגל אדס מדווח` : `גוגל אדס מדווח ${Math.abs(diff)} המרות יותר מהלידים בפועל באתר`}
-                                    className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-300"
-                                  >
-                                    {diff > 0 ? `+${diff}` : diff}
-                                  </span>
-                                )}
-                              </div>
+                              <span
+                                className="font-medium text-foreground"
+                                title={(() => {
+                                  const sources = filteredRecords
+                                    .filter((r) => r.data?.campaign_name === campaignName && r.data?.verified_source)
+                                    .map((r) => r.data?.verified_source as string);
+                                  const uniqueSources = Array.from(new Set(sources));
+                                  return uniqueSources.length > 0 ? `מקור: ${uniqueSources.join(' | ')}` : '';
+                                })()}
+                              >
+                                {verified.toLocaleString('he-IL')}
+                              </span>
                             </td>
                           )}
                           <td className="p-2 text-center">{gaCurrency}{data.cost.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
@@ -2803,17 +2793,8 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                       <td className="p-2 text-center">{totals.clicks.toLocaleString('he-IL')}</td>
                       <td className="p-2 text-center text-green-600">{totalConvInt.toLocaleString('he-IL')}</td>
                       {hasVerifiedData && (
-                        <td className="p-2 text-center">
-                          <div className="inline-flex items-center gap-1.5 justify-center">
-                            <span className={totalDiscrepancy ? "text-amber-600" : "text-foreground"}>
-                              {totals.verified_leads.toLocaleString('he-IL')}
-                            </span>
-                            {totalDiscrepancy && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-300">
-                                {totalDiff > 0 ? `+${totalDiff}` : totalDiff}
-                              </span>
-                            )}
-                          </div>
+                        <td className="p-2 text-center text-foreground">
+                          {totals.verified_leads.toLocaleString('he-IL')}
                         </td>
                       )}
                       <td className="p-2 text-center">{gaCurrency}{totals.cost.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
