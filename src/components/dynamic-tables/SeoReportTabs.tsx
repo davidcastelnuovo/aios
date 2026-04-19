@@ -13,6 +13,7 @@ import { GscIntegration } from "./seo/GscIntegration";
 import { TrendingUp, Search, BarChart3, Settings2, RefreshCw, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { useUserIntegrations } from "@/hooks/useUserIntegrations";
 
 interface SeoReportTabsProps {
   tenantId: string;
@@ -194,25 +195,19 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
     }
   }, [selectedGaTableId, gaRecords]);
 
-  // Check GSC integration exists
-  const { data: gscIntegration } = useQuery({
-    queryKey: ['gsc-integration', tenantId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('tenant_integrations')
-        .select('id, settings')
-        .eq('tenant_id', tenantId)
-        .eq('integration_type', 'google_search_console')
-        .eq('is_active', true)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!tenantId,
-  });
+  // Check GSC integration exists — use the same source of truth as GscIntegration
+  // (useUserIntegrations) so the tab visibility matches the actual GSC access.
+  const { data: gscUserIntegrations } = useUserIntegrations(tenantId, 'google_search_console');
+  const { data: gaUserIntegrations } = useUserIntegrations(tenantId, 'google_analytics');
 
-  const hasGa = gaTables.length > 0;
-  const hasGsc = !!gscIntegration || gscTables.length > 0;
+  const hasGa =
+    gaTables.length > 0 ||
+    (Array.isArray(gaUserIntegrations) && gaUserIntegrations.length > 0);
+  const hasGsc =
+    (Array.isArray(gscUserIntegrations) && gscUserIntegrations.length > 0) ||
+    gscTables.length > 0 ||
+    !!savedGscTableId ||
+    !!savedGscSiteUrl;
 
   // If no related integrations at all, just render SEO dashboard directly
   if (!hasGsc && !hasGa) {
