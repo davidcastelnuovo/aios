@@ -220,10 +220,11 @@ Deno.serve(async (req) => {
     const endDateStr = endDate.toISOString().split('T')[0].replace(/-/g, '');
 
 
-    // Use Google Ads Query Language to fetch campaign performance
-    // Note: We fetch BOTH "conversions" (counted conversions) and "all_conversions"
-    // because some accounts (e.g. Performance Max with offline/store conversions)
-    // report value via all_conversions_value rather than conversions_value.
+    // Use Google Ads Query Language to fetch campaign performance.
+    // We intentionally use ONLY `metrics.conversions` (primary conversions) — not
+    // `metrics.all_conversions` — to match exactly the "Conversions" column shown in
+    // the Google Ads web UI. all_conversions includes secondary/cross-device/store visits
+    // which over-count compared to what the user sees in the UI.
     const query = `
       SELECT
         segments.date,
@@ -236,8 +237,6 @@ Deno.serve(async (req) => {
         metrics.cost_micros,
         metrics.conversions,
         metrics.conversions_value,
-        metrics.all_conversions,
-        metrics.all_conversions_value,
         metrics.cost_per_conversion
       FROM campaign
       WHERE segments.date BETWEEN '${startDate.toISOString().split('T')[0]}' AND '${endDate.toISOString().split('T')[0]}'
