@@ -894,22 +894,51 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
                     <p className="text-3xl font-bold mt-2">{formatNumber(googleAdsTotals.clicks)}</p>
                   </CardContent>
                 </Card>
-                <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900">
-                  <CardContent className="p-6 text-center">
-                    <p className="text-sm text-muted-foreground">המרות</p>
-                    <p className="text-3xl font-bold mt-2">{formatNumber(googleAdsTotals.conversions)}</p>
-                  </CardContent>
-                </Card>
-                <Card className="bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950 dark:to-amber-900">
-                  <CardContent className="p-6 text-center">
-                    <p className="text-sm text-muted-foreground">עלות להמרה</p>
-                    <p className="text-3xl font-bold mt-2">
-                      {googleAdsTotals.conversions > 0
-                        ? formatCurrency(googleAdsTotals.spend / googleAdsTotals.conversions)
-                        : '-'}
-                    </p>
-                  </CardContent>
-                </Card>
+                {googleAdsCampaignType === 'ecommerce' ? (
+                  <>
+                    <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900">
+                      <CardContent className="p-6 text-center">
+                        <p className="text-sm text-muted-foreground">רכישות</p>
+                        <p className="text-3xl font-bold mt-2">{formatNumber(googleAdsTotals.conversions)}</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
+                      <CardContent className="p-6 text-center">
+                        <p className="text-sm text-muted-foreground">הכנסות</p>
+                        <p className="text-3xl font-bold mt-2">{formatCurrency(googleAdsTotals.conversions_value)}</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950 dark:to-amber-900">
+                      <CardContent className="p-6 text-center">
+                        <p className="text-sm text-muted-foreground">ROAS</p>
+                        <p className="text-3xl font-bold mt-2">
+                          {googleAdsTotals.spend > 0
+                            ? (googleAdsTotals.conversions_value / googleAdsTotals.spend).toFixed(2)
+                            : '-'}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </>
+                ) : (
+                  <>
+                    <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900">
+                      <CardContent className="p-6 text-center">
+                        <p className="text-sm text-muted-foreground">המרות</p>
+                        <p className="text-3xl font-bold mt-2">{formatNumber(googleAdsTotals.conversions)}</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950 dark:to-amber-900">
+                      <CardContent className="p-6 text-center">
+                        <p className="text-sm text-muted-foreground">עלות להמרה</p>
+                        <p className="text-3xl font-bold mt-2">
+                          {googleAdsTotals.conversions > 0
+                            ? formatCurrency(googleAdsTotals.spend / googleAdsTotals.conversions)
+                            : '-'}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </>
+                )}
               </div>
 
               {googleAdsCampaignSummary.length > 0 && (() => {
