@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Globe, ShoppingCart, Package, Users, ExternalLink, RefreshCw, AlertCircle } from "lucide-react";
+import { SubmissionsSummaryCard } from "@/components/landing-page-submissions/SubmissionsSummaryCard";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { toast } from "sonner";

@@ -91,6 +91,7 @@ const TelegramSettings = lazy(() => import("./pages/TelegramSettings"));
 const GithubAgent = lazy(() => import("./pages/GithubAgent"));
 const SocialDashboard = lazy(() => import("./pages/SocialDashboard"));
 const WordPressSettings = lazy(() => import("./pages/WordPressSettings"));
+const LandingPageSubmissions = lazy(() => import("./pages/LandingPageSubmissions"));
 const UnifiedSettings = lazy(() => import("./pages/UnifiedSettings"));
 const UnifiedCallback = lazy(() => import("./pages/UnifiedCallback"));
 const DMMDashboard = lazy(() => import("./pages/DMMDashboard"));
@@ -221,6 +222,7 @@ const App = () => (
                   <Route path="/t/:tenantSlug/github-agent" element={<ProtectedRoute><AppLayout><GithubAgent /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/telephony-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><TelephonySettings /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/wordpress-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><WordPressSettings /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/landing-page-submissions" element={<ProtectedRoute><AppLayout><LandingPageSubmissions /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/unified-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><UnifiedSettings /></AppLayout></ProtectedRoute>} />
                   <Route path="/unified-callback" element={<Suspense fallback={<div />}><UnifiedCallback /></Suspense>} />
                   <Route path="/t/:tenantSlug/unified-callback" element={<Suspense fallback={<div />}><UnifiedCallback /></Suspense>} />
