@@ -33,9 +33,10 @@ export const ClientTableSnapshot = forwardRef<HTMLDivElement, Props>(
         ref={ref}
         style={{
           width: "1200px",
-          minHeight: "600px",
+          height: "auto",
           backgroundColor: "#ffffff",
           padding: "0",
+          display: "block",
         }}
       >
         <QueryClientProvider client={client}>
