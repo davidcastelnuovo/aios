@@ -182,12 +182,18 @@ export default function DynamicTableView() {
           endDate: format(endOfWeek(lastWeekDate, { weekStartsOn: 0 }), 'yyyy-MM-dd'),
         };
       }
-      case 'last_7_days':
-        return { startDate: format(subDays(today, 6), 'yyyy-MM-dd'), endDate };
-      case 'last_14_days':
-        return { startDate: format(subDays(today, 14), 'yyyy-MM-dd'), endDate };
-      case 'last_30_days':
-        return { startDate: format(subDays(today, 30), 'yyyy-MM-dd'), endDate };
+      case 'last_7_days': {
+        const yesterdayStr = format(subDays(today, 1), 'yyyy-MM-dd');
+        return { startDate: format(subDays(today, 7), 'yyyy-MM-dd'), endDate: yesterdayStr };
+      }
+      case 'last_14_days': {
+        const yesterdayStr = format(subDays(today, 1), 'yyyy-MM-dd');
+        return { startDate: format(subDays(today, 14), 'yyyy-MM-dd'), endDate: yesterdayStr };
+      }
+      case 'last_30_days': {
+        const yesterdayStr = format(subDays(today, 1), 'yyyy-MM-dd');
+        return { startDate: format(subDays(today, 30), 'yyyy-MM-dd'), endDate: yesterdayStr };
+      }
       case 'this_month':
         return { startDate: format(new Date(today.getFullYear(), today.getMonth(), 1), 'yyyy-MM-dd'), endDate };
       case 'last_month':
@@ -195,12 +201,18 @@ export default function DynamicTableView() {
           startDate: format(new Date(today.getFullYear(), today.getMonth() - 1, 1), 'yyyy-MM-dd'),
           endDate: format(new Date(today.getFullYear(), today.getMonth(), 0), 'yyyy-MM-dd'),
         };
-      case 'last_90_days':
-        return { startDate: format(subDays(today, 90), 'yyyy-MM-dd'), endDate };
-      case 'last_180_days':
-        return { startDate: format(subDays(today, 180), 'yyyy-MM-dd'), endDate };
-      case 'last_365_days':
-        return { startDate: format(subDays(today, 365), 'yyyy-MM-dd'), endDate };
+      case 'last_90_days': {
+        const yesterdayStr = format(subDays(today, 1), 'yyyy-MM-dd');
+        return { startDate: format(subDays(today, 90), 'yyyy-MM-dd'), endDate: yesterdayStr };
+      }
+      case 'last_180_days': {
+        const yesterdayStr = format(subDays(today, 1), 'yyyy-MM-dd');
+        return { startDate: format(subDays(today, 180), 'yyyy-MM-dd'), endDate: yesterdayStr };
+      }
+      case 'last_365_days': {
+        const yesterdayStr = format(subDays(today, 1), 'yyyy-MM-dd');
+        return { startDate: format(subDays(today, 365), 'yyyy-MM-dd'), endDate: yesterdayStr };
+      }
       case 'custom':
         if (customDateRange.from && customDateRange.to) {
           return {
@@ -310,16 +322,16 @@ export default function DynamicTableView() {
         break;
       }
       case 'last_7_days':
-        startDate = format(subDays(today, 6), 'yyyy-MM-dd');
-        endDate = format(today, 'yyyy-MM-dd');
+        startDate = format(subDays(today, 7), 'yyyy-MM-dd');
+        endDate = format(subDays(today, 1), 'yyyy-MM-dd');
         break;
       case 'last_14_days':
         startDate = format(subDays(today, 14), 'yyyy-MM-dd');
-        endDate = format(today, 'yyyy-MM-dd');
+        endDate = format(subDays(today, 1), 'yyyy-MM-dd');
         break;
       case 'last_30_days':
         startDate = format(subDays(today, 30), 'yyyy-MM-dd');
-        endDate = format(today, 'yyyy-MM-dd');
+        endDate = format(subDays(today, 1), 'yyyy-MM-dd');
         break;
       case 'this_month':
         startDate = format(new Date(now.getFullYear(), now.getMonth(), 1), 'yyyy-MM-dd');
@@ -333,15 +345,15 @@ export default function DynamicTableView() {
       }
       case 'last_90_days':
         startDate = format(subDays(today, 90), 'yyyy-MM-dd');
-        endDate = format(today, 'yyyy-MM-dd');
+        endDate = format(subDays(today, 1), 'yyyy-MM-dd');
         break;
       case 'last_180_days':
         startDate = format(subDays(today, 180), 'yyyy-MM-dd');
-        endDate = format(today, 'yyyy-MM-dd');
+        endDate = format(subDays(today, 1), 'yyyy-MM-dd');
         break;
       case 'last_365_days':
         startDate = format(subDays(today, 365), 'yyyy-MM-dd');
-        endDate = format(today, 'yyyy-MM-dd');
+        endDate = format(subDays(today, 1), 'yyyy-MM-dd');
         break;
       case 'custom':
         if (customDateRange.from && customDateRange.to) {

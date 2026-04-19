@@ -129,6 +129,7 @@ Deno.serve(async (req) => {
 
         // Calculate date range
         const now = new Date();
+        const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
         let since: Date;
         let until = new Date(now);
         
@@ -146,27 +147,34 @@ Deno.serve(async (req) => {
             break;
           case 'last_7_days':
             since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
+            until = yesterday;
             break;
           case 'last_14_days':
             since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 14);
+            until = yesterday;
             break;
           case 'this_month':
             since = new Date(now.getFullYear(), now.getMonth(), 1);
             break;
           case 'last_30_days':
             since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
+            until = yesterday;
             break;
           case 'last_90_days':
             since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 90);
+            until = yesterday;
             break;
           case 'last_180_days':
             since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 180);
+            until = yesterday;
             break;
           case 'last_365_days':
             since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 365);
+            until = yesterday;
             break;
           default:
             since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
+            until = yesterday;
         }
 
         const sinceStr = since.toISOString().split('T')[0];
@@ -233,6 +241,10 @@ Deno.serve(async (req) => {
           'offsite_conversion.fb_pixel_lead', // Landing page leads (standard pixel event)
           'onsite_conversion.lead_grouped', // On-site leads
           'app_custom_event.fb_mobile_lead', // App leads
+          'onsite_conversion.messaging_conversation_started_7d',
+          'messaging_conversation_started_7d',
+          'onsite_conversion.messaging_first_reply',
+          'messaging_first_reply',
         ];
         const purchaseActionTypes = ['purchase', 'omni_purchase', 'offsite_conversion.fb_pixel_purchase'];
         const addToCartActionTypes = ['add_to_cart', 'offsite_conversion.fb_pixel_add_to_cart'];
@@ -252,24 +264,19 @@ Deno.serve(async (req) => {
               .filter((a: any) => actionTypes.includes(String(a.action_type || '')))
               .reduce((sum: number, a: any) => sum + (parseFloat(a.value) || 0), 0);
 
-          // Extract lead count
-          let leads = 0;
+          // Extract lead count — MAX between aggregate 'lead' and sum of all specific lead types.
           const aggregateLeadAction = allActions.find((a: any) => a.action_type === 'lead');
-          if (aggregateLeadAction) {
-            // If 'lead' exists, it's the aggregate - use it
-            leads = parseInt(aggregateLeadAction.value) || 0;
-          } else {
-            // Otherwise, sum up all other lead-like types + custom conversions
-            leads = allActions
-              .filter((a: any) => {
-                const type = String(a.action_type || '');
-                return (
-                  leadActionTypes.slice(1).includes(type) ||
-                  type.startsWith('offsite_conversion.custom')
-                );
-              })
-              .reduce((sum: number, a: any) => sum + (parseInt(a.value) || 0), 0);
-          }
+          const aggregateLeadValue = aggregateLeadAction ? (parseInt(aggregateLeadAction.value) || 0) : 0;
+          const specificLeadsSum = allActions
+            .filter((a: any) => {
+              const type = String(a.action_type || '');
+              return (
+                leadActionTypes.slice(1).includes(type) ||
+                type.startsWith('offsite_conversion.custom')
+              );
+            })
+            .reduce((sum: number, a: any) => sum + (parseInt(a.value) || 0), 0);
+          const leads = Math.max(aggregateLeadValue, specificLeadsSum);
 
           // Extract landing page views (Facebook action)
           const landingPageViews = allActions
@@ -324,12 +331,19 @@ Deno.serve(async (req) => {
             leadActionTypes.some((type) => actionTypeSet.has(type)) ||
             Array.from(actionTypeSet).some((type) => type.startsWith('offsite_conversion.custom'));
 
+          // PRIORITY: Campaign objective is the source of truth.
           const campaignType: 'lead' | 'ecommerce' | 'other' =
-            hasEcommerceSignal || isEcommerceObjective
-              ? 'ecommerce'
-              : hasLeadSignal || isLeadObjective
-                ? 'lead'
-                : 'other';
+            isLeadObjective
+              ? 'lead'
+              : isEcommerceObjective
+                ? 'ecommerce'
+                : hasEcommerceSignal && !(hasLeadSignal && purchases === 0 && purchaseValue === 0)
+                  ? 'ecommerce'
+                  : hasLeadSignal
+                    ? 'lead'
+                    : hasEcommerceSignal
+                      ? 'ecommerce'
+                      : 'other';
 
           return {
             date: insight.date_start,
