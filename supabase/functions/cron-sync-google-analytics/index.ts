@@ -54,11 +54,13 @@ Deno.serve(async (req) => {
       errors: [] as string[],
     };
 
-    // Rolling 30-day window ending today
+    // Rolling 90-day window ending today (so dashboards/tables can show
+    // up to 90 days without having to re-sync; user actions that pick a
+    // shorter display window won't wipe historical data).
     const today = new Date();
     const endDate = today.toISOString().split('T')[0];
     const start = new Date(today);
-    start.setDate(start.getDate() - 30);
+    start.setDate(start.getDate() - 90);
     const startDate = start.toISOString().split('T')[0];
 
     for (const table of tables) {

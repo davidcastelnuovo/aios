@@ -807,21 +807,24 @@ export default function DashboardView() {
     setIsRefreshing(true);
     const syncToast = toast.loading('מסנכרן נתונים מכל המקורות...');
     try {
-      // Compute date range for analytics-style syncs (GA / GSC)
+      // Compute date range for analytics-style syncs (GA / GSC).
+      // ALWAYS sync at least the last 90 days (regardless of display filter)
+      // so switching the dashboard to a short window doesn't wipe history.
       const computeRange = () => {
         const now = new Date();
         const end = new Date(now);
+        const MIN_SYNC_DAYS = 90;
         const start = new Date(now);
+        let days = MIN_SYNC_DAYS;
         switch (dateFilter) {
-          case 'today': break;
-          case 'yesterday': start.setDate(start.getDate() - 1); end.setDate(end.getDate() - 1); break;
-          case 'last_7_days': start.setDate(start.getDate() - 6); break;
-          case 'last_30_days': start.setDate(start.getDate() - 29); break;
-          case 'last_70_days': start.setDate(start.getDate() - 69); break;
-          case 'this_month': start.setDate(1); break;
-          case 'last_month': start.setMonth(start.getMonth() - 1, 1); end.setDate(0); break;
-          default: start.setDate(start.getDate() - 6);
+          case 'last_70_days': days = Math.max(70, MIN_SYNC_DAYS); break;
+          case 'last_90_days': days = Math.max(90, MIN_SYNC_DAYS); break;
+          case 'last_180_days': days = 180; break;
+          case 'last_365_days': days = 365; break;
+          // All shorter ranges still pull MIN_SYNC_DAYS to preserve history.
+          default: days = MIN_SYNC_DAYS;
         }
+        start.setDate(start.getDate() - days);
         return { startDate: start.toISOString().slice(0, 10), endDate: end.toISOString().slice(0, 10) };
       };
       const { startDate, endDate } = computeRange();

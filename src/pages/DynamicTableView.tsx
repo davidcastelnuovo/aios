@@ -166,56 +166,51 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
   const isDateRangeReadyForSync = dateFilter !== 'custom' || (!!customDateRange.from && !!customDateRange.to);
 
   const getMainFilterSyncRange = () => {
-    // Sync ALWAYS ends today, regardless of the display filter — so the latest data is captured.
+    // Sync ALWAYS ends today and ALWAYS pulls at least the last 90 days,
+    // regardless of the display filter. This prevents the sync from wiping
+    // historical data when the user is viewing a short window like "7 days".
     // The view layer continues to filter the visible window separately.
+    // For longer display windows we still extend the sync range accordingly.
     const today = new Date();
     const endDate = format(today, 'yyyy-MM-dd');
+    const MIN_SYNC_DAYS = 90;
+
+    const rangeFromDays = (days: number) => ({
+      startDate: format(subDays(today, Math.max(days, MIN_SYNC_DAYS)), 'yyyy-MM-dd'),
+      endDate,
+    });
 
     switch (dateFilter) {
       case 'all':
         return { startDate: '2020-01-01', endDate };
       case 'today':
-        return { startDate: endDate, endDate };
       case 'yesterday':
-        return { startDate: format(subDays(today, 1), 'yyyy-MM-dd'), endDate };
       case 'this_week':
-        return { startDate: format(startOfWeek(today, { weekStartsOn: 0 }), 'yyyy-MM-dd'), endDate };
-      case 'last_week': {
-        const lastWeekDate = subWeeks(today, 1);
-        return {
-          startDate: format(startOfWeek(lastWeekDate, { weekStartsOn: 0 }), 'yyyy-MM-dd'),
-          endDate,
-        };
-      }
+      case 'last_week':
       case 'last_7_days':
-        return { startDate: format(subDays(today, 7), 'yyyy-MM-dd'), endDate };
       case 'last_14_days':
-        return { startDate: format(subDays(today, 14), 'yyyy-MM-dd'), endDate };
       case 'last_30_days':
-        return { startDate: format(subDays(today, 30), 'yyyy-MM-dd'), endDate };
       case 'this_month':
-        return { startDate: format(new Date(today.getFullYear(), today.getMonth(), 1), 'yyyy-MM-dd'), endDate };
       case 'last_month':
-        return {
-          startDate: format(new Date(today.getFullYear(), today.getMonth() - 1, 1), 'yyyy-MM-dd'),
-          endDate,
-        };
       case 'last_90_days':
-        return { startDate: format(subDays(today, 90), 'yyyy-MM-dd'), endDate };
+        return rangeFromDays(MIN_SYNC_DAYS);
       case 'last_180_days':
-        return { startDate: format(subDays(today, 180), 'yyyy-MM-dd'), endDate };
+        return rangeFromDays(180);
       case 'last_365_days':
-        return { startDate: format(subDays(today, 365), 'yyyy-MM-dd'), endDate };
+        return rangeFromDays(365);
       case 'custom':
         if (customDateRange.from && customDateRange.to) {
+          // Even for custom, never sync less than MIN_SYNC_DAYS to preserve history.
+          const customStart = format(customDateRange.from, 'yyyy-MM-dd');
+          const minStart = format(subDays(today, MIN_SYNC_DAYS), 'yyyy-MM-dd');
           return {
-            startDate: format(customDateRange.from, 'yyyy-MM-dd'),
-            endDate: format(customDateRange.to, 'yyyy-MM-dd'),
+            startDate: customStart < minStart ? customStart : minStart,
+            endDate: format(customDateRange.to, 'yyyy-MM-dd') > endDate ? endDate : format(customDateRange.to, 'yyyy-MM-dd'),
           };
         }
         throw new Error('יש לבחור טווח תאריכים מלא לפני סנכרון');
       default:
-        return { startDate: format(subDays(today, 30), 'yyyy-MM-dd'), endDate };
+        return rangeFromDays(MIN_SYNC_DAYS);
     }
   };
 

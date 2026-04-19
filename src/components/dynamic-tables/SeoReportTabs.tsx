@@ -168,7 +168,9 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
     mutationFn: async (tableId: string) => {
       const now = new Date();
       const endDate = now.toISOString().split('T')[0];
-      const startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      // Sync at least 90 days so we don't wipe historical data when triggering
+      // a manual GA sync from the SEO report (which only shows monthly trends).
+      const startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
       const response = await supabase.functions.invoke('sync-google-analytics-data', {
         method: 'POST',
         body: { tableId, startDate, endDate },
