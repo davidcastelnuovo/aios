@@ -332,7 +332,7 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
 
       if (sendWhatsApp) {
         const formData = new FormData();
-        formData.append("file", blob, `dashboard-${dashboard.name}.png`);
+        formData.append("file", blob, `dashboard-${dashboard.name}.jpg`);
         formData.append("tenantId", tenantId);
         formData.append("fileType", "image");
         const caption = `${messageText}\n\n📊 צפה בדשבורד המלא: ${effectiveShareUrl || ""}`;
@@ -379,7 +379,7 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
             to: emailRecipients.join(", "),
             subject: `דשבורד ${dashboard.name}${client?.name ? ` - ${client.name}` : ""}`,
             body: bodyHtml,
-            attachments: [{ filename: "dashboard.png", mimeType: "image/png", data: base64Data }],
+            attachments: [{ filename: "dashboard.jpg", mimeType: "image/jpeg", data: base64Data }],
           },
         });
         if (gmailError) {
