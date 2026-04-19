@@ -386,10 +386,12 @@ Deno.serve(async (req) => {
         const allConversions = parseFloat(result.metrics?.allConversions || '0');
         const conversionsValueRaw = parseFloat(result.metrics?.conversionsValue || '0');
         const allConversionsValueRaw = parseFloat(result.metrics?.allConversionsValue || '0');
-        // Prefer all_conversions_value if higher (PMax/offline accounts often report value here only)
-        const conversionsValue = Math.max(conversionsValueRaw, allConversionsValueRaw);
-        // Same logic for conversion COUNT — match Google Ads UI which shows all_conversions
-        const finalConversions = Math.max(conversions, allConversions);
+        // Use `conversions` (primary conversions marked "Include in Conversions") to match
+        // Google Ads UI's main "Conversions" column. `all_conversions` includes secondary
+        // actions (cross-device, store visits, etc.) and would over-count vs the UI.
+        // Fallback to all_conversions ONLY when conversions == 0 (PMax/offline-only accounts).
+        const finalConversions = conversions > 0 ? conversions : allConversions;
+        const conversionsValue = conversionsValueRaw > 0 ? conversionsValueRaw : allConversionsValueRaw;
         const roas = cost > 0 ? conversionsValue / cost : 0;
 
         records.push({
