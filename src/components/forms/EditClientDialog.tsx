@@ -1242,6 +1242,7 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate }: Ed
             <ClientUpdatesTab 
               clientId={client.id}
               clientName={client.name}
+              currentMoodStatus={(client as any).mood_status}
             />
           </TabsContent>
         </Tabs>
