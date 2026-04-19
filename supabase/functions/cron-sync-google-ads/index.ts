@@ -177,6 +177,43 @@ Deno.serve(async (req) => {
     }
 
     for (const [tenantId, tenantTables] of byTenant) {
+      // Split: direct_api tables can be synced via sync-google-ads-data without Make.
+      const directApiTables = tenantTables.filter((t: any) => {
+        const ds = (t.integration_settings as any)?.data_source;
+        return !ds || ds === 'direct_api';
+      });
+      const makeTables = tenantTables.filter((t: any) => {
+        const ds = (t.integration_settings as any)?.data_source;
+        return ds === 'make_api' || ds === 'webhook';
+      });
+
+      // ---- Direct API path: invoke sync-google-ads-data per table ----
+      for (const table of directApiTables) {
+        try {
+          const res = await fetch(`${supabaseUrl}/functions/v1/sync-google-ads-data`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${supabaseServiceKey}`,
+              'x-internal-cron': 'true',
+            },
+            body: JSON.stringify({ table_id: table.id }),
+          });
+          const txt = await res.text();
+          if (!res.ok) {
+            results.push({ table: table.name, status: 'error', source: 'direct_api', reason: `HTTP ${res.status}: ${txt.slice(0, 200)}` });
+          } else {
+            results.push({ table: table.name, status: 'synced', source: 'direct_api' });
+          }
+        } catch (err) {
+          results.push({ table: table.name, status: 'error', source: 'direct_api', reason: err instanceof Error ? err.message : String(err) });
+        }
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+
+      // ---- Make.com path (legacy) ----
+      if (makeTables.length === 0) continue;
+
       const { data: makeInt } = await supabase
         .from("tenant_integrations")
         .select("*")
@@ -185,7 +222,7 @@ Deno.serve(async (req) => {
         .single();
 
       if (!makeInt) {
-        for (const t of tenantTables) results.push({ table: t.name, status: "skipped", reason: "No Make integration" });
+        for (const t of makeTables) results.push({ table: t.name, status: "skipped", reason: "No Make integration" });
         continue;
       }
 
@@ -194,11 +231,11 @@ Deno.serve(async (req) => {
       const region = s?.region || "eu2";
 
       if (!apiToken) {
-        for (const t of tenantTables) results.push({ table: t.name, status: "skipped", reason: "No API token" });
+        for (const t of makeTables) results.push({ table: t.name, status: "skipped", reason: "No API token" });
         continue;
       }
 
-      for (const table of tenantTables) {
+      for (const table of makeTables) {
         const intSettings = table.integration_settings as any;
         const scenarioId = intSettings?.make_scenario_id;
         const customerId = intSettings?.customer_id;
@@ -267,6 +304,7 @@ Deno.serve(async (req) => {
           }
           // Wait between tables
           await new Promise((r) => setTimeout(r, 2000));
+        }
       }
 
       // === Zero-spend anomaly per tenant table (read existing crm_records) ===
