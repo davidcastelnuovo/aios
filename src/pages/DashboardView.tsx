@@ -778,6 +778,16 @@ export default function DashboardView() {
     );
   }, [googleAdsCampaignSummary]);
 
+  // Google Ads campaign type — driven strictly by table integration_settings.campaign_type.
+  // If any associated Google Ads table is set to 'ecommerce', treat the whole tab as ecommerce.
+  const googleAdsCampaignType: 'leads' | 'ecommerce' = useMemo(() => {
+    const gaTables = (tables || []).filter((t: any) => t.integration_type === 'google_ads');
+    if (gaTables.some((t: any) => t.integration_settings?.campaign_type === 'ecommerce')) {
+      return 'ecommerce';
+    }
+    return 'leads';
+  }, [tables]);
+
   // Group records by date for table
   const recordsByDate = useMemo(() => {
     const byDate: Record<string, any[]> = {};
@@ -1335,22 +1345,51 @@ export default function DashboardView() {
                         <p className="text-3xl font-bold mt-2">{formatNumber(googleAdsTotals.clicks)}</p>
                       </CardContent>
                     </Card>
-                    <Card className="h-full bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900">
-                      <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
-                        <p className="text-sm text-muted-foreground">המרות</p>
-                        <p className="text-3xl font-bold mt-2">{formatNumber(googleAdsTotals.conversions)}</p>
-                      </CardContent>
-                    </Card>
-                    <Card className="h-full bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950 dark:to-amber-900">
-                      <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
-                        <p className="text-sm text-muted-foreground">עלות להמרה</p>
-                        <p className="text-3xl font-bold mt-2">
-                          {googleAdsTotals.conversions > 0
-                            ? formatCurrency(googleAdsTotals.spend / googleAdsTotals.conversions)
-                            : '-'}
-                        </p>
-                      </CardContent>
-                    </Card>
+                    {googleAdsCampaignType === 'ecommerce' ? (
+                      <>
+                        <Card className="h-full bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900">
+                          <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
+                            <p className="text-sm text-muted-foreground">רכישות</p>
+                            <p className="text-3xl font-bold mt-2">{formatNumber(googleAdsTotals.conversions)}</p>
+                          </CardContent>
+                        </Card>
+                        <Card className="h-full bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
+                          <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
+                            <p className="text-sm text-muted-foreground">הכנסות</p>
+                            <p className="text-3xl font-bold mt-2">{formatCurrency(googleAdsTotals.conversions_value)}</p>
+                          </CardContent>
+                        </Card>
+                        <Card className="h-full bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950 dark:to-amber-900">
+                          <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
+                            <p className="text-sm text-muted-foreground">ROAS</p>
+                            <p className="text-3xl font-bold mt-2">
+                              {googleAdsTotals.spend > 0
+                                ? (googleAdsTotals.conversions_value / googleAdsTotals.spend).toFixed(2)
+                                : '-'}
+                            </p>
+                          </CardContent>
+                        </Card>
+                      </>
+                    ) : (
+                      <>
+                        <Card className="h-full bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900">
+                          <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
+                            <p className="text-sm text-muted-foreground">המרות</p>
+                            <p className="text-3xl font-bold mt-2">{formatNumber(googleAdsTotals.conversions)}</p>
+                          </CardContent>
+                        </Card>
+                        <Card className="h-full bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950 dark:to-amber-900">
+                          <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
+                            <p className="text-sm text-muted-foreground">עלות להמרה</p>
+                            <p className="text-3xl font-bold mt-2">
+                              {googleAdsTotals.conversions > 0
+                                ? formatCurrency(googleAdsTotals.spend / googleAdsTotals.conversions)
+                                : '-'}
+                            </p>
+                          </CardContent>
+                        </Card>
+                      </>
+                    )}
                   </div>
 
                   {googleAdsCampaignSummary.length > 0 && (() => {
@@ -1382,8 +1421,19 @@ export default function DashboardView() {
                                   <TableHead className="text-right">CTR</TableHead>
                                   <TableHead className="text-right">CPC</TableHead>
                                   <TableHead className="text-right">הוצאה</TableHead>
-                                  <TableHead className="text-right">המרות</TableHead>
-                                  <TableHead className="text-right">עלות להמרה</TableHead>
+                                  {googleAdsCampaignType === 'ecommerce' ? (
+                                    <>
+                                      <TableHead className="text-right">רכישות</TableHead>
+                                      <TableHead className="text-right">הכנסות</TableHead>
+                                      <TableHead className="text-right">ROAS</TableHead>
+                                      <TableHead className="text-right">AOV</TableHead>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <TableHead className="text-right">המרות</TableHead>
+                                      <TableHead className="text-right">עלות להמרה</TableHead>
+                                    </>
+                                  )}
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
@@ -1391,6 +1441,8 @@ export default function DashboardView() {
                                   const ctr = c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0;
                                   const cpc = c.clicks > 0 ? c.spend / c.clicks : 0;
                                   const cpa = c.conversions > 0 ? c.spend / c.conversions : 0;
+                                  const roas = c.spend > 0 ? c.conversions_value / c.spend : 0;
+                                  const aov = c.conversions > 0 ? c.conversions_value / c.conversions : 0;
                                   return (
                                     <TableRow key={i}>
                                       <TableCell className="font-medium max-w-[300px]">{c.name}</TableCell>
@@ -1399,10 +1451,25 @@ export default function DashboardView() {
                                       <TableCell>{ctr.toFixed(2)}%</TableCell>
                                       <TableCell>{cpc > 0 ? formatCurrency(cpc) : '-'}</TableCell>
                                       <TableCell>{formatCurrency(c.spend)}</TableCell>
-                                      <TableCell className={c.conversions > 0 ? 'text-green-600 font-medium' : ''}>
-                                        {formatNumber(c.conversions)}
-                                      </TableCell>
-                                      <TableCell>{cpa > 0 ? formatCurrency(cpa) : '-'}</TableCell>
+                                      {googleAdsCampaignType === 'ecommerce' ? (
+                                        <>
+                                          <TableCell className={c.conversions > 0 ? 'text-green-600 font-medium' : ''}>
+                                            {formatNumber(c.conversions)}
+                                          </TableCell>
+                                          <TableCell className={c.conversions_value > 0 ? 'text-green-600 font-medium' : ''}>
+                                            {formatCurrency(c.conversions_value)}
+                                          </TableCell>
+                                          <TableCell>{roas > 0 ? roas.toFixed(2) : '-'}</TableCell>
+                                          <TableCell>{aov > 0 ? formatCurrency(aov) : '-'}</TableCell>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <TableCell className={c.conversions > 0 ? 'text-green-600 font-medium' : ''}>
+                                            {formatNumber(c.conversions)}
+                                          </TableCell>
+                                          <TableCell>{cpa > 0 ? formatCurrency(cpa) : '-'}</TableCell>
+                                        </>
+                                      )}
                                     </TableRow>
                                   );
                                 })}
@@ -1413,8 +1480,19 @@ export default function DashboardView() {
                                   <TableCell>{totalCtr.toFixed(2)}%</TableCell>
                                   <TableCell>{totalCpc > 0 ? formatCurrency(totalCpc) : '-'}</TableCell>
                                   <TableCell>{formatCurrency(googleAdsTotals.spend)}</TableCell>
-                                  <TableCell className="text-green-600">{formatNumber(googleAdsTotals.conversions)}</TableCell>
-                                  <TableCell>{totalCpa > 0 ? formatCurrency(totalCpa) : '-'}</TableCell>
+                                  {googleAdsCampaignType === 'ecommerce' ? (
+                                    <>
+                                      <TableCell className="text-green-600">{formatNumber(googleAdsTotals.conversions)}</TableCell>
+                                      <TableCell className="text-green-600">{formatCurrency(googleAdsTotals.conversions_value)}</TableCell>
+                                      <TableCell>{googleAdsTotals.spend > 0 ? (googleAdsTotals.conversions_value / googleAdsTotals.spend).toFixed(2) : '-'}</TableCell>
+                                      <TableCell>{googleAdsTotals.conversions > 0 ? formatCurrency(googleAdsTotals.conversions_value / googleAdsTotals.conversions) : '-'}</TableCell>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <TableCell className="text-green-600">{formatNumber(googleAdsTotals.conversions)}</TableCell>
+                                      <TableCell>{totalCpa > 0 ? formatCurrency(totalCpa) : '-'}</TableCell>
+                                    </>
+                                  )}
                                 </TableRow>
                               </TableBody>
                             </Table>
