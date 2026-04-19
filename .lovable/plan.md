@@ -1,35 +1,39 @@
 
-## הבעיה
-כשיוצרים/שולחים דוח (`ClientReportPanel`) או דשבורד (`ClientDashboardPanel`), לפעמים נוצר קישור שיתוף **חדש** למרות שכבר קיים קישור באותה טבלה/דשבורד.
 
-### למה זה קורה
-ב-`ensureShareLink` / `ensureShareToken` הבדיקה היא רק `if (shareLink) return shareLink` — אבל ה-state `shareLink` מגיע מ-React Query עם תנאי `is_active = true` בלבד:
-```ts
-.eq("table_id", table.id)
-.eq("is_active", true)   // ← מסנן קישורים לא-פעילים
-.limit(1)
-```
+## ההבנה
+המשתמש רוצה:
+- **עמודה אחת בלבד** של "לידים" (לא לפצל לעמודות נפרדות).
+- **לא לפספס לידים** בגלל הגדרה של סוג תוצאה ספציפי.
+- **למשוך מפייסבוק את כל סוגי הלידים האפשריים** ולסכם אותם בעמודת לידים אחת.
 
-תוצאה — נוצר קישור כפול בשני מקרים:
-1. **קיים קישור לא פעיל** באותה טבלה (`is_active=false`) → השאילתה מחזירה `null` → `ensureShareLink` מכניס שורה חדשה.
-2. **השאילתה עדיין לא הושלמה** (race condition) כשהמשתמש לוחץ "שלח" מהר → `shareLink` עדיין `null` → נוצר קישור נוסף.
+## מצב נוכחי בקוד
+ב-`sync-facebook-insights/index.ts` (שורות ~210–235) כבר יש לוגיקה שמחפשת אגרגט `lead`, ואם לא קיים — סוכמת סוגים אחרים. **אבל** יש שם באג סמוי: כשקיים `lead` (אגרגט), הקוד מתעלם מסוגי לידים אחרים שעשויים להופיע בנפרד (למשל messaging, custom conversions). לפעמים הסוג `lead` לא כולל את כל הקטגוריות — וזה גורם לפער מול פייסבוק.
+
+בנוסף — בפייסבוק UI, "Results" של קמפיין מסוים (כמו טופס לידים) מציג רק את התוצאה הספציפית של הקמפיין, ואצלנו אנחנו רוצים את **המקסימום**.
 
 ## הפתרון
 
-### 1. `ensureShareLink` ב-`ClientReportPanel.tsx` (שורות 276–304)
-לפני `INSERT` — לבצע שאילתה ישירה ל-DB שמחפשת **כל** שיתוף קיים לטבלה (ללא סינון `is_active`):
-- אם נמצא קישור לא פעיל → להפעיל אותו מחדש (`UPDATE is_active = true`) ולהחזיר את ה-token הקיים.
-- אם לא נמצא כלום → רק אז ליצור חדש.
+### שינוי יחיד בלוגיקה ב-`sync-facebook-insights/index.ts`
+להחליף את לוגיקת חישוב ה-`leads` כך שתעבוד תמיד לפי **MAX** בין:
+1. סכום של כל סוגי הלידים הספציפיים (ללא ה-aggregate `lead`):
+   - `leadgen_grouped` (טפסי לידים)
+   - `offsite_conversion.fb_pixel_lead` (פיקסל)
+   - `onsite_conversion.lead_grouped`
+   - `app_custom_event.fb_mobile_lead`
+   - `messaging_conversation_started_7d` + `onsite_conversion.messaging_conversation_started_7d`
+   - `messaging_first_reply` + `onsite_conversion.messaging_first_reply`
+   - כל `offsite_conversion.custom.*` (Custom Conversions שמוגדרות כ-Result)
+2. הערך של ה-aggregate `lead` (אם קיים).
 
-### 2. `ensureShareToken` ב-`ClientDashboardPanel.tsx` (שורות 152–179)
-אותה לוגיקה — שאילתה ישירה ל-`dashboard_shares` לפי `dashboard_id`, החזרת קיים (גם לא פעיל אחרי הפעלה מחדש), אחרת יצירה חדשה.
+**MAX** מבטיח ששום סוג לא "יבלע" שני (בניגוד לסכימה שעלולה לכפול ספירות חופפות) ושלא נפספס שום סוג.
 
-### 3. עדכון השאילתה הראשית
-להסיר את `eq("is_active", true)` מ-`useQuery` של `table-share-link` ו-`dashboard-share-link`, כדי שגם קישור שלא פעיל יוצג ויטופל. במקום זאת — בצד ה-UI להציג חיווי "לא פעיל" (אופציונלי).
+### תוצאה צפויה
+- עמודת "לידים" אחת — ללא תוספת עמודות.
+- כל סוג ליד שפייסבוק מדווחת עליו ייספר.
+- במקרה של הקמפיין בתמונה (16 ב-FB) — נראה לפחות 16 (ייתכן יותר אם יש גם הודעות + טופס באותו קמפיין, וזה רצוי לפי בקשת המשתמש).
 
-## קבצים לעריכה
-- `src/components/clients/ClientReportPanel.tsx` — תיקון `ensureShareLink` + שאילתת `table-share-link`.
-- `src/components/clients/ClientDashboardPanel.tsx` — תיקון `ensureShareToken` + שאילתת `dashboard-share-link`.
+## קובץ לעריכה
+- `supabase/functions/sync-facebook-insights/index.ts` — שורות 210–235 בלבד (לוגיקת `leads`).
 
-## תוצאה צפויה
-לכל טבלה/דשבורד יהיה לכל היותר **קישור שיתוף אחד** — קיים יוּפעל מחדש במקום ייווצר חדש.
+לא נוספים שדות, לא נוספות עמודות, לא משתנה ה-schema של הטבלה.
+
