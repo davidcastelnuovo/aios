@@ -414,13 +414,13 @@ export default function SharedTable() {
                   <>
                     <Card className="bg-gradient-to-br from-cyan-50 to-cyan-100 dark:from-cyan-950 dark:to-cyan-900">
                       <CardContent className="p-6">
-                        <p className="text-sm text-muted-foreground">לידים</p>
+                        <p className="text-sm text-muted-foreground">{isGoogleAds ? 'המרות' : 'לידים'}</p>
                         <p className="text-3xl font-bold mt-2">{formatNumber(summary.leads)}</p>
                       </CardContent>
                     </Card>
                     <Card className="bg-gradient-to-br from-teal-50 to-teal-100 dark:from-teal-950 dark:to-teal-900">
                       <CardContent className="p-6">
-                        <p className="text-sm text-muted-foreground">עלות לליד (CPL)</p>
+                        <p className="text-sm text-muted-foreground">{isGoogleAds ? 'עלות להמרה' : 'עלות לליד (CPL)'}</p>
                         <p className="text-3xl font-bold mt-2">{formatCurrency(summary.cpl)}</p>
                       </CardContent>
                     </Card>
