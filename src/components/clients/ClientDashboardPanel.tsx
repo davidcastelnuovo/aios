@@ -153,6 +153,29 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return null;
+
+      // Check for ANY existing share row (active or inactive) to avoid duplicates
+      const { data: existing } = await supabase
+        .from("dashboard_shares")
+        .select("share_token, is_active")
+        .eq("dashboard_id", dashboard.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const existingRow = existing as any;
+      if (existingRow?.share_token) {
+        if (!existingRow.is_active) {
+          await supabase
+            .from("dashboard_shares")
+            .update({ is_active: true } as any)
+            .eq("dashboard_id", dashboard.id)
+            .eq("share_token", existingRow.share_token);
+        }
+        queryClient.invalidateQueries({ queryKey: ["dashboard-share-link", dashboard.id] });
+        return existingRow.share_token as string;
+      }
+
       const newToken = generateReadableToken(dashboard.name);
       const { data, error } = await supabase
         .from("dashboard_shares")
