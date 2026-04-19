@@ -743,6 +743,26 @@ export default function WordPressSettings() {
                           </div>
                         </TableCell>
                         <TableCell>
+                          {site.client_id ? (
+                            <Badge variant="outline" className="border-emerald-500/50 text-emerald-700 dark:text-emerald-400">
+                              <Link2 className="h-3 w-3 ml-1" />
+                              {clientsMap[site.client_id] || "לקוח"}
+                            </Badge>
+                          ) : (
+                            <TooltipProvider delayDuration={150}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Badge variant="outline" className="border-amber-500/60 text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 cursor-help">
+                                    <AlertCircle className="h-3 w-3 ml-1" />
+                                    לא משויך ללקוח
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent>לידים מהאתר לא יקושרו לדוח לקוח</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                        </TableCell>
+                        <TableCell>
                           {site.woocommerce_enabled ? (
                             <Badge variant="default" className="bg-purple-600">
                               <ShoppingCart className="h-3 w-3 ml-1" />
