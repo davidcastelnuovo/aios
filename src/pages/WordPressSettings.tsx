@@ -1314,13 +1314,13 @@ export default function WordPressSettings() {
         </DialogContent>
       </Dialog>
 
-      {/* Slug → Campaign Mapping Dialog */}
+      {/* Form/Slug → Campaign Mapping Dialog */}
       <Dialog open={!!mappingSite} onOpenChange={(o) => { if (!o) setMappingSite(null); }}>
         <DialogContent dir="rtl" className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <MapPin className="h-5 w-5 text-primary" />
-              שייך עמודי נחיתה לקמפיינים
+              שייך טפסים לקמפיינים
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 max-h-[70vh] overflow-y-auto">
@@ -1332,67 +1332,139 @@ export default function WordPressSettings() {
             <div className="rounded-lg border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/20 p-3 flex items-start gap-2">
               <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
               <p className="text-xs text-blue-900 dark:text-blue-200">
-                שיוך עמודי הנחיתה (slugs) לקמפיינים מאפשר אימות מדויק של לידים.
-                שימושי במיוחד כש-Google Ads מדווח Asset Group ID במקום Campaign ID (כמו ב-PMax).
+                שיוך לפי <strong>טופס Elementor</strong> הוא שיטת האימות הראשית. הוא מדויק יותר משיוך לפי עמוד נחיתה (slug),
+                במיוחד כש-Google Ads מדווח Asset Group ID במקום Campaign ID (כמו ב-PMax).
               </p>
             </div>
 
-            {isLoadingSlugs ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin" />
-              </div>
-            ) : discoveredSlugs.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8 text-sm">
-                לא נמצאו עמודי נחיתה ב-90 הימים האחרונים
-              </p>
-            ) : (
-              <div className="space-y-2">
-                <div className="grid grid-cols-12 gap-2 px-2 text-xs font-medium text-muted-foreground">
-                  <div className="col-span-5">עמוד נחיתה (slug)</div>
-                  <div className="col-span-2 text-center">לידים</div>
-                  <div className="col-span-5">קמפיין משויך</div>
-                </div>
-                {discoveredSlugs.map((s) => (
-                  <div key={s.slug} className="grid grid-cols-12 gap-2 items-center p-2 rounded border hover:bg-muted/30">
-                    <div className="col-span-5">
-                      <p className="font-mono text-xs" dir="ltr">/{s.slug}</p>
-                      {s.sample_gad_campaignids && s.sample_gad_campaignids.length > 0 && (
-                        <p className="text-[10px] text-muted-foreground" dir="ltr">
-                          gad: {s.sample_gad_campaignids.slice(0, 2).join(", ")}
-                        </p>
-                      )}
-                    </div>
-                    <div className="col-span-2 text-center">
-                      <Badge variant="secondary" className="text-xs">
-                        {s.google_ads_submissions}/{s.submissions}
-                      </Badge>
-                    </div>
-                    <div className="col-span-5">
-                      <Select
-                        value={mappingDraft[s.slug] || "none"}
-                        onValueChange={(v) =>
-                          setMappingDraft((prev) => ({ ...prev, [s.slug]: v === "none" ? "" : v }))
-                        }
-                      >
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue placeholder={
-                            clientCampaigns.length === 0 ? "אין קמפיינים מסונכרנים" : "בחר קמפיין..."
-                          } />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">ללא שיוך</SelectItem>
-                          {clientCampaigns.map((c) => (
-                            <SelectItem key={c.campaign_id} value={c.campaign_id}>
-                              {c.campaign_name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+            <Tabs value={mappingMode} onValueChange={(v) => {
+              const newMode = v as "form" | "slug";
+              setMappingMode(newMode);
+              setMappingDraft({
+                ...((newMode === "form" ? mappingSite?.campaign_form_mapping : mappingSite?.campaign_url_mapping) || {}),
+              });
+            }}>
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="form">לפי טופס (מומלץ)</TabsTrigger>
+                <TabsTrigger value="slug">לפי עמוד נחיתה (legacy)</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="form" className="mt-3">
+                {isLoadingDiscovery ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin" />
                   </div>
-                ))}
-              </div>
-            )}
+                ) : discoveredForms.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8 text-sm">
+                    לא נמצאו טפסים ב-90 הימים האחרונים
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-12 gap-2 px-2 text-xs font-medium text-muted-foreground">
+                      <div className="col-span-5">טופס</div>
+                      <div className="col-span-2 text-center">לידים (90 יום)</div>
+                      <div className="col-span-5">קמפיין משויך</div>
+                    </div>
+                    {discoveredForms.map((f) => (
+                      <div key={f.form_id} className="grid grid-cols-12 gap-2 items-center p-2 rounded border hover:bg-muted/30">
+                        <div className="col-span-5">
+                          <p className="text-sm font-medium">{f.form_name || `טופס ${f.form_id}`}</p>
+                          <p className="text-[10px] text-muted-foreground" dir="ltr">
+                            id: {f.form_id} · GA: {f.sources?.google_ads || 0} · FB: {f.sources?.facebook || 0}
+                          </p>
+                        </div>
+                        <div className="col-span-2 text-center">
+                          <Badge variant="secondary" className="text-xs">
+                            {f.total}
+                          </Badge>
+                        </div>
+                        <div className="col-span-5">
+                          <Select
+                            value={mappingDraft[f.form_id] || "none"}
+                            onValueChange={(v) =>
+                              setMappingDraft((prev) => ({ ...prev, [f.form_id]: v === "none" ? "" : v }))
+                            }
+                          >
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue placeholder={
+                                clientCampaigns.length === 0 ? "אין קמפיינים מסונכרנים" : "בחר קמפיין..."
+                              } />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">ללא שיוך</SelectItem>
+                              {clientCampaigns.map((c) => (
+                                <SelectItem key={c.campaign_id} value={c.campaign_id}>
+                                  {c.campaign_name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="slug" className="mt-3">
+                {isLoadingDiscovery ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  </div>
+                ) : discoveredSlugs.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8 text-sm">
+                    לא נמצאו עמודי נחיתה ב-90 הימים האחרונים
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-12 gap-2 px-2 text-xs font-medium text-muted-foreground">
+                      <div className="col-span-5">עמוד נחיתה (slug)</div>
+                      <div className="col-span-2 text-center">לידים</div>
+                      <div className="col-span-5">קמפיין משויך</div>
+                    </div>
+                    {discoveredSlugs.map((s) => (
+                      <div key={s.slug} className="grid grid-cols-12 gap-2 items-center p-2 rounded border hover:bg-muted/30">
+                        <div className="col-span-5">
+                          <p className="font-mono text-xs" dir="ltr">/{s.slug}</p>
+                          {s.sample_gad_campaignids && s.sample_gad_campaignids.length > 0 && (
+                            <p className="text-[10px] text-muted-foreground" dir="ltr">
+                              gad: {s.sample_gad_campaignids.slice(0, 2).join(", ")}
+                            </p>
+                          )}
+                        </div>
+                        <div className="col-span-2 text-center">
+                          <Badge variant="secondary" className="text-xs">
+                            {s.google_ads_submissions}/{s.submissions}
+                          </Badge>
+                        </div>
+                        <div className="col-span-5">
+                          <Select
+                            value={mappingDraft[s.slug] || "none"}
+                            onValueChange={(v) =>
+                              setMappingDraft((prev) => ({ ...prev, [s.slug]: v === "none" ? "" : v }))
+                            }
+                          >
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue placeholder={
+                                clientCampaigns.length === 0 ? "אין קמפיינים מסונכרנים" : "בחר קמפיין..."
+                              } />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">ללא שיוך</SelectItem>
+                              {clientCampaigns.map((c) => (
+                                <SelectItem key={c.campaign_id} value={c.campaign_id}>
+                                  {c.campaign_name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
 
             <div className="flex gap-2 pt-2 sticky bottom-0 bg-background pb-1">
               <Button
@@ -1407,12 +1479,12 @@ export default function WordPressSettings() {
                 className="flex-1"
                 onClick={() => {
                   if (!mappingSite) return;
-                  mappingMutation.mutate({ id: mappingSite.id, mapping: mappingDraft });
+                  mappingMutation.mutate({ id: mappingSite.id, mapping: mappingDraft, mode: mappingMode });
                 }}
                 disabled={mappingMutation.isPending}
               >
                 {mappingMutation.isPending && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
-                שמור מיפוי
+                שמור מיפוי {mappingMode === "form" ? "(טפסים)" : "(עמודים)"}
               </Button>
             </div>
           </div>
