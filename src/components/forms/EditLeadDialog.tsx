@@ -68,9 +68,10 @@ interface EditLeadDialogProps {
   lead: any;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean;
 }
 
-export function EditLeadDialog({ lead: initialLead, open: controlledOpen, onOpenChange }: EditLeadDialogProps) {
+export function EditLeadDialog({ lead: initialLead, open: controlledOpen, onOpenChange, hideTrigger = false }: EditLeadDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
@@ -459,11 +460,13 @@ const updateMutation = useMutation({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild onClick={(e) => e.stopPropagation()}>
-        <Button variant="outline" size="icon" className="h-8 w-8">
-          <Pencil className="h-4 w-4" />
-        </Button>
-      </DialogTrigger>
+      {!hideTrigger && (
+        <DialogTrigger asChild onClick={(e) => e.stopPropagation()}>
+          <Button variant="outline" size="icon" className="h-8 w-8">
+            <Pencil className="h-4 w-4" />
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" dir="rtl">
         <DialogHeader>
           <DialogTitle>ערוך ליד</DialogTitle>
