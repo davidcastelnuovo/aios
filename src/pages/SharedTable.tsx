@@ -115,6 +115,12 @@ export default function SharedTable() {
     [data?.table?.integration_settings]
   );
 
+  // Honor table-level campaign_type as source of truth
+  const tableCampaignType = String((data?.table?.integration_settings as any)?.campaign_type || '').toLowerCase();
+  const forceLeadsOnly = tableCampaignType === 'leads' || tableCampaignType === 'lead';
+  const forceEcommerceOnly = tableCampaignType === 'ecommerce';
+  const isGoogleAds = integrationType === 'google_ads';
+
   // For integration tables: filter only daily records for analytics
   const filteredRecords = useMemo(() => {
     const recs = data?.records || [];
@@ -141,21 +147,36 @@ export default function SharedTable() {
         spend += getSpendFromData(d);
         impressions += Number(d.impressions) || 0;
         clicks += Number(d.clicks) || 0;
-        // Always aggregate both - we'll display based on what exists
-        purchases += getPurchasesFromData(d);
-        revenue += getRevenueFromData(d);
-        addToCart += getAddToCartFromData(d);
+        // For Google Ads leads tables, never count conversions_value as revenue
+        if (!(forceLeadsOnly && isGoogleAds)) {
+          purchases += getPurchasesFromData(d);
+          revenue += getRevenueFromData(d);
+          addToCart += getAddToCartFromData(d);
+        }
         leads += getLeadsFromData(d);
       }
     });
 
+    // Round leads (Google Ads conversions can be fractional)
+    leads = Math.round(leads);
+
+    // Honor table-level overrides
+    if (forceLeadsOnly) {
+      purchases = 0;
+      revenue = 0;
+      addToCart = 0;
+    }
+    if (forceEcommerceOnly) {
+      leads = 0;
+    }
+
     const roas = spend > 0 ? revenue / spend : 0;
     const cpl = leads > 0 ? spend / leads : 0;
-    const hasEcommerce = purchases > 0 || revenue > 0 || addToCart > 0;
-    const hasLeads = leads > 0;
+    const hasEcommerce = !forceLeadsOnly && (purchases > 0 || revenue > 0 || addToCart > 0);
+    const hasLeads = !forceEcommerceOnly && (forceLeadsOnly || leads > 0);
 
     return { spend, impressions, clicks, leads, sessions, purchases, revenue, addToCart, roas, cpl, hasEcommerce, hasLeads };
-  }, [filteredRecords, integrationType, isIntegrationTable]);
+  }, [filteredRecords, integrationType, isIntegrationTable, forceLeadsOnly, forceEcommerceOnly, isGoogleAds]);
 
   // Campaign-level aggregation for Facebook / Google Ads
   const campaignSummary = useMemo(() => {
@@ -170,13 +191,25 @@ export default function SharedTable() {
       map[name].spend += getSpendFromData(d);
       map[name].impressions += Number(d.impressions) || 0;
       map[name].clicks += Number(d.clicks) || 0;
-      // Always aggregate both types
-      map[name].purchases += getPurchasesFromData(d);
-      map[name].revenue += getRevenueFromData(d);
-      map[name].addToCart += getAddToCartFromData(d);
+      if (!(forceLeadsOnly && isGoogleAds)) {
+        map[name].purchases += getPurchasesFromData(d);
+        map[name].revenue += getRevenueFromData(d);
+        map[name].addToCart += getAddToCartFromData(d);
+      }
       map[name].leads += getLeadsFromData(d);
     });
+    // Round leads
+    Object.values(map).forEach((c: any) => { c.leads = Math.round(c.leads); });
     const allCampaigns = Object.values(map).sort((a: any, b: any) => b.spend - a.spend);
+
+    // Honor table-level overrides
+    if (forceLeadsOnly) {
+      return { ecommerce: [], leads: allCampaigns, all: allCampaigns };
+    }
+    if (forceEcommerceOnly) {
+      return { ecommerce: allCampaigns, leads: [], all: allCampaigns };
+    }
+
     // Classify each campaign
     const ecommerceCampaigns = allCampaigns.filter((c: any) =>
       (c.purchases > 0 || c.revenue > 0) ||
@@ -186,12 +219,11 @@ export default function SharedTable() {
       (c.leads > 0 && c.purchases === 0 && c.revenue === 0) ||
       (c.leads === 0 && c.purchases === 0 && c.revenue === 0 && c.addToCart === 0)
     );
-    // If no clear separation, show all as-is
     if (ecommerceCampaigns.length === 0 && leadCampaigns.length === 0) {
       return { ecommerce: [], leads: allCampaigns, all: allCampaigns };
     }
     return { ecommerce: ecommerceCampaigns, leads: leadCampaigns, all: allCampaigns };
-  }, [filteredRecords, integrationType]);
+  }, [filteredRecords, integrationType, forceLeadsOnly, forceEcommerceOnly, isGoogleAds]);
 
   // Generic table columns from fields or data keys
   const genericColumns = useMemo(() => {
@@ -382,13 +414,13 @@ export default function SharedTable() {
                   <>
                     <Card className="bg-gradient-to-br from-cyan-50 to-cyan-100 dark:from-cyan-950 dark:to-cyan-900">
                       <CardContent className="p-6">
-                        <p className="text-sm text-muted-foreground">לידים</p>
+                        <p className="text-sm text-muted-foreground">{isGoogleAds ? 'המרות' : 'לידים'}</p>
                         <p className="text-3xl font-bold mt-2">{formatNumber(summary.leads)}</p>
                       </CardContent>
                     </Card>
                     <Card className="bg-gradient-to-br from-teal-50 to-teal-100 dark:from-teal-950 dark:to-teal-900">
                       <CardContent className="p-6">
-                        <p className="text-sm text-muted-foreground">עלות לליד (CPL)</p>
+                        <p className="text-sm text-muted-foreground">{isGoogleAds ? 'עלות להמרה' : 'עלות לליד (CPL)'}</p>
                         <p className="text-3xl font-bold mt-2">{formatCurrency(summary.cpl)}</p>
                       </CardContent>
                     </Card>
@@ -399,7 +431,7 @@ export default function SharedTable() {
               <>
                 <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
                   <CardContent className="p-6">
-                    <p className="text-sm text-muted-foreground">לידים</p>
+                    <p className="text-sm text-muted-foreground">{isGoogleAds ? 'המרות' : 'לידים'}</p>
                     <p className="text-3xl font-bold mt-2">{formatNumber(summary.leads)}</p>
                   </CardContent>
                 </Card>
@@ -500,8 +532,8 @@ export default function SharedTable() {
                       <TableHead className="text-right">הוצאה</TableHead>
                       <TableHead className="text-right">חשיפות</TableHead>
                       <TableHead className="text-right">קליקים</TableHead>
-                      <TableHead className="text-right">לידים</TableHead>
-                      <TableHead className="text-right">עלות לליד</TableHead>
+                      <TableHead className="text-right">{isGoogleAds ? 'המרות' : 'לידים'}</TableHead>
+                      <TableHead className="text-right">{isGoogleAds ? 'עלות להמרה' : 'עלות לליד'}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
