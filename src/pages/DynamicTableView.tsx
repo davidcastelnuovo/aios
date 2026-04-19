@@ -3041,7 +3041,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
             </div>
           </div>
         </div>
-      )}
+      ))}
 
       {/* Make.com Automatic Sync Dialog for Google Ads */}
       <Dialog open={showMakeWebhookDialog} onOpenChange={setShowMakeWebhookDialog}>
