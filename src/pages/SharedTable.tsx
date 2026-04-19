@@ -115,11 +115,17 @@ export default function SharedTable() {
     [data?.table?.integration_settings]
   );
 
-  // Honor table-level campaign_type as source of truth
+  // Deterministic table mode based on integration type + campaign_type setting
   const tableCampaignType = String((data?.table?.integration_settings as any)?.campaign_type || '').toLowerCase();
-  const forceLeadsOnly = tableCampaignType === 'leads' || tableCampaignType === 'lead';
-  const forceEcommerceOnly = tableCampaignType === 'ecommerce';
   const isGoogleAds = integrationType === 'google_ads';
+  const tableMode: 'leads' | 'ecommerce' =
+    integrationType === 'facebook_ecommerce' ? 'ecommerce' :
+    integrationType === 'facebook_insights' ? 'leads' :
+    integrationType === 'google_ads'
+      ? (tableCampaignType === 'ecommerce' ? 'ecommerce' : 'leads')
+      : (tableCampaignType === 'ecommerce' ? 'ecommerce' : 'leads');
+  const forceLeadsOnly = tableMode === 'leads';
+  const forceEcommerceOnly = tableMode === 'ecommerce';
 
   // For integration tables: filter only daily records for analytics
   const filteredRecords = useMemo(() => {
@@ -172,8 +178,8 @@ export default function SharedTable() {
 
     const roas = spend > 0 ? revenue / spend : 0;
     const cpl = leads > 0 ? spend / leads : 0;
-    const hasEcommerce = !forceLeadsOnly && (purchases > 0 || revenue > 0 || addToCart > 0);
-    const hasLeads = !forceEcommerceOnly && (forceLeadsOnly || leads > 0);
+    const hasEcommerce = forceEcommerceOnly;
+    const hasLeads = forceLeadsOnly;
 
     return { spend, impressions, clicks, leads, sessions, purchases, revenue, addToCart, roas, cpl, hasEcommerce, hasLeads };
   }, [filteredRecords, integrationType, isIntegrationTable, forceLeadsOnly, forceEcommerceOnly, isGoogleAds]);
@@ -202,15 +208,14 @@ export default function SharedTable() {
     Object.values(map).forEach((c: any) => { c.leads = Math.round(c.leads); });
     const allCampaigns = Object.values(map).sort((a: any, b: any) => b.spend - a.spend);
 
-    // Honor table-level overrides
-    if (forceLeadsOnly) {
-      return { ecommerce: [], leads: allCampaigns, all: allCampaigns };
-    }
+    // Strict mode: table type determines layout (no auto-classification)
     if (forceEcommerceOnly) {
       return { ecommerce: allCampaigns, leads: [], all: allCampaigns };
     }
+    return { ecommerce: [], leads: allCampaigns, all: allCampaigns };
 
-    // Classify each campaign
+    // Legacy auto-classify (disabled)
+    // eslint-disable-next-line no-unreachable
     const ecommerceCampaigns = allCampaigns.filter((c: any) =>
       (c.purchases > 0 || c.revenue > 0) ||
       (c.addToCart > 0 && !(c.leads > 0 && c.purchases === 0 && c.revenue === 0))
