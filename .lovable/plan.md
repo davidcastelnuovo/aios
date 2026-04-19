@@ -1,32 +1,42 @@
 
-## הבעיה
-- **בטבלת המקור (תמונה 3)**: ערך המרה = ₪6,317, רכישות = 7
-- **בדשבורד (תמונה 1)**: הכנסות = ₪2,361, רכישות = 4
-- **בגוגל אדס (תמונה 2)**: 6.88 המרות, ערך 6,316.63
+## הבעיה (שתי נפרדות)
 
-הטבלה תואמת לגוגל. הדשבורד מציג נתונים אחרים. הדשבורד אמור לשקף את הטבלה.
+### בעיה 1: דשבורד הלקוח (DashboardView, האפליקציה הפרטית)
+ב-`DashboardView` כרטיס "הכנסות" מציג **WooCommerce** כשמחובר אתר, **אבל** הסכום שונה מטאב ה-WooCommerce:
+- כרטיס "הכנסות (WooCommerce)" משתמש ב-`wooSummary` שמסונן לפי `wooDateRange` (טווח שמסתיים אתמול)
+- טאב "WooCommerce" משתמש ב-`PublicWooCommerceView` שמקבל את כל ההזמנות ש-`public-dashboard` מחזיר (טווח שמסתיים **היום** ב-edge function — לא תוקן)
+- → לכן הסכום ב"הכל" נמוך מהסכום בטאב WooCommerce (אם יש הזמנות מהיום) או להפך
 
-## חקירה נדרשת
-אני צריך לבדוק את הקוד שמחשב את `googleAdsCampaignSummary` ב-`DashboardView.tsx` (וגם ב-`SharedDashboard.tsx`) כדי להבין איך הוא מסכם נתונים. החשד:
+### בעיה 2: צילום המסך (ClientDashboardSnapshot) — מוצג בפאנל שליחת דשבורד
+הצילום מרנדר את `SharedDashboard.tsx` (לא את `DashboardView`). וב-`SharedDashboard`:
+- כרטיס "הכנסות (Analytics)" משתמש ב-`totalSummary.revenue` שזה **רק GA**, ואינו לוקח בחשבון WooCommerce בכלל
+- אין שם `wooSummary` כמו ב-DashboardView
+- → לכן הצילום שנשלח ללקוח מציג מספר אחר ממה שהמשתמש רואה ב-DashboardView הפנימי
 
-1. **דה-דופליקציה לא נכונה** — אולי הקוד מסיר רשומות לפי `campaign_id` ולוקח רק רשומה אחת במקום לסכם את כל הימים בטווח.
-2. **טווח תאריכים** — אולי הדשבורד מסנן לפי תאריך ראשי של רשומה (`created_at` או `date`) בעוד שהטבלה מסננת לפי `date` של הרשומה עצמה. תמונת הדשבורד מציגה "7 ימים אחרונים" וכך גם הטבלה.
-3. **שדות שונים** — אולי הסיכום משתמש ב-`conv_value` או שדה אחר במקום `conversions_value`.
+נוסף לכך, פונקציית ה-edge `public-dashboard` מסננת WooCommerce orders לפי טווח שמסתיים **היום** (כולל היום), בעוד `DashboardView.wooSummary` מסתיים אתמול.
 
-אצטרך:
-- `code--view src/pages/DashboardView.tsx` באזור `googleAdsCampaignSummary`
-- להשוות עם הקוד של הטבלה (`SharedTable.tsx` / `DynamicTableView.tsx`) כדי לראות איך היא מסכמת
-- אולי `supabase--read_query` כדי לראות את הרשומות הגולמיות של 4*4 ב-7 הימים האחרונים
+## התיקון
 
-## תיקון מתוכנן
-1. ליישר את לוגיקת הסיכום של הדשבורד עם זו של הטבלה — אותו פילטר תאריכים, אותו סיכום (`SUM(conversions)`, `SUM(conversions_value)`), אותה רזולוציה (יום-קמפיין במקום קמפיין יחיד).
-2. להחיל את אותו תיקון גם ב-`SharedDashboard.tsx` כדי שהדשבורד הציבורי יהיה זהה.
-3. אין שינוי DB, אין שינוי ב-sync — רק תצוגה.
+### A. ליישר את `SharedDashboard.tsx` עם `DashboardView.tsx`
+1. להוסיף ל-`SharedDashboard` חישוב `wooSummary` (revenue + orders) על בסיס `wooOrders` שכבר מגיע מה-edge function — באמצעות סינון `validStatuses` זהה (`completed`, `processing`, `on-hold`).
+2. להוסיף לכרטיס "הכנסות" את אותה לוגיקה: אם `revenueWoo > 0` → מציגים אותו ומציינים "(WooCommerce)"; אחרת → GA.
+3. אופציונלית להוסיף את הערת ההשוואה ל-GA כמו ב-DashboardView.
 
-## פירוט טכני
-- בודק את `useMemo` של `googleAdsCampaignSummary` בשני הקבצים.
-- מוודא שהאגרגציה מבוססת על כל ה-`crm_records` עם `_source === 'google_ads'` באותו טווח תאריכים שהדשבורד מציג.
-- מוודא ש-`conversions` ו-`conversions_value` נסכמים נכון (ולא מוחלפים על ידי ערך של רשומה בודדת).
+### B. ליישר את הטווח ב-`public-dashboard` edge function
+- לעדכן את `getDateRange` כך ש-`last_7_days`, `last_30_days`, `last_70_days` יסתיימו **אתמול** (`today - 1`), בדיוק כמו `crm-records` ו-`DashboardView.wooDateRange`.
+- זה מבטיח שהן הזמנות WooCommerce (שמסוננות לפי `date_created` מול `startDate`/`endDate`) והן רשומות ה-CRM יסונכרנו לאותו טווח.
+
+### C. לוודא שהטווח הפנימי ב-`DashboardView` תואם לטאב WooCommerce
+- `PublicWooCommerceView` (שמשמש בטאב) פשוט מסכם את כל ההזמנות שקיבל — אם נתקן את `public-dashboard` (B), גם הטאב יציג בדיוק את אותו מספר ככרטיס "הכנסות".
+
+## קבצים שיתעדכנו
+- `supabase/functions/public-dashboard/index.ts` — תיקון `getDateRange` כך שיסתיים אתמול לטווחים יחסיים.
+- `src/pages/SharedDashboard.tsx` — חישוב `wooSummary` (revenue+orders) וטעימה בכרטיס "הכנסות" שמעדיף Woo על GA.
+- ללא שינוי DB, ללא שינוי בסנכרון.
+
+## מה לא נוגעים
+- הטאב WooCommerce עצמו (`PublicWooCommerceView`, `WooCommerceDashboard`) — נשאר כפי שהוא, רק מקבל נתונים נכונים.
+- `DashboardView.tsx` — הלוגיקה כבר נכונה, התיקון ב-edge function ייישר את הטאב לכרטיס.
 
 ## פרסום מחדש
-לאחר התיקון נדרש **לפרסם מחדש** כדי שהשינוי יופיע גם ב-`after-lead.com`.
+לאחר התיקון נדרש **לפרסם מחדש** כדי שהדשבורד הציבורי ב-`after-lead.com` והצילום של פאנל "שליחת דשבורד" יציגו את אותם מספרים בדיוק.
