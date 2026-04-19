@@ -442,26 +442,96 @@ Deno.serve(async (req) => {
           );
 
           if (!subErr && subData?.success && Array.isArray(subData.submissions)) {
-            // Build map: campaign_id -> { date (YYYY-MM-DD) -> count }
-            const verifiedMap = new Map<string, Map<string, number>>();
+            // Helper: extract URL slug (path segment) from referer
+            const extractSlug = (referer: string | null): string => {
+              if (!referer) return '';
+              try {
+                const u = new URL(referer);
+                // Take first non-empty path segment, decode it
+                const seg = u.pathname.split('/').filter(Boolean)[0] || '';
+                return decodeURIComponent(seg).toLowerCase();
+              } catch {
+                return '';
+              }
+            };
+
+            // Hebrew normalization helper for fuzzy campaign↔slug matching
+            const normalize = (s: string) =>
+              (s || '')
+                .toLowerCase()
+                .replace(/[-_]/g, ' ')
+                .replace(/[^\u0590-\u05FF\w\s]/g, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+
+            // Build two maps:
+            //  (a) by exact gad_campaignid -> day -> count
+            //  (b) by URL slug -> day -> count  (used as fallback)
+            const byCampaignId = new Map<string, Map<string, number>>();
+            const bySlug = new Map<string, Map<string, number>>();
+
             for (const sub of subData.submissions) {
-              const cid = sub.gad_campaignid;
-              if (!cid) continue;
+              if (sub.source === 'test') continue;
               const day = (sub.created_at || '').slice(0, 10);
               if (!day) continue;
-              if (!verifiedMap.has(cid)) verifiedMap.set(cid, new Map());
-              const dayMap = verifiedMap.get(cid)!;
-              dayMap.set(day, (dayMap.get(day) || 0) + 1);
+
+              const cid = sub.gad_campaignid;
+              if (cid) {
+                if (!byCampaignId.has(cid)) byCampaignId.set(cid, new Map());
+                const dm = byCampaignId.get(cid)!;
+                dm.set(day, (dm.get(day) || 0) + 1);
+              }
+
+              // Only count slug for google_ads-sourced submissions to keep it relevant
+              if (sub.source === 'google_ads' || sub.source === 'google') {
+                const slug = extractSlug(sub.referer);
+                if (slug) {
+                  if (!bySlug.has(slug)) bySlug.set(slug, new Map());
+                  const dm = bySlug.get(slug)!;
+                  dm.set(day, (dm.get(day) || 0) + 1);
+                }
+              }
             }
 
-            // Annotate each record
+            // Annotate each record. Strategy:
+            //  1) Exact match by campaign_id.
+            //  2) Fallback: fuzzy match campaign_name ↔ slug (token overlap >= 1).
+            const slugEntries = Array.from(bySlug.keys()).map((s) => ({ slug: s, tokens: normalize(s).split(' ').filter((t) => t.length > 1) }));
+
             for (const rec of records) {
-              const dayMap = verifiedMap.get(rec.campaign_id);
-              const count = dayMap?.get(rec.date) || 0;
-              rec.verified_leads = count;
-              if (count > 0) rec.verified_source = site.site_url;
+              const dayMapById = byCampaignId.get(rec.campaign_id);
+              const exactCount = dayMapById?.get(rec.date) || 0;
+              if (exactCount > 0) {
+                rec.verified_leads = exactCount;
+                rec.verified_source = site.site_url;
+                continue;
+              }
+
+              // Fuzzy fallback: match campaign_name tokens against slug tokens
+              const cnTokens = normalize(rec.campaign_name).split(' ').filter((t) => t.length > 1);
+              if (cnTokens.length === 0) {
+                rec.verified_leads = exactCount;
+                continue;
+              }
+              let bestSlug: string | null = null;
+              let bestOverlap = 0;
+              for (const { slug, tokens } of slugEntries) {
+                const overlap = tokens.filter((t) => cnTokens.includes(t)).length;
+                if (overlap > bestOverlap) {
+                  bestOverlap = overlap;
+                  bestSlug = slug;
+                }
+              }
+              if (bestSlug && bestOverlap >= 1) {
+                const dm = bySlug.get(bestSlug)!;
+                const fuzzyCount = dm.get(rec.date) || 0;
+                rec.verified_leads = fuzzyCount;
+                if (fuzzyCount > 0) rec.verified_source = `${site.site_url}/${bestSlug}`;
+              } else {
+                rec.verified_leads = 0;
+              }
             }
-            console.log(`[sync-google-ads] enriched with WP submissions: ${verifiedMap.size} campaigns matched`);
+            console.log(`[sync-google-ads] enriched with WP submissions: ${byCampaignId.size} by id, ${bySlug.size} slugs available`);
           } else {
             console.warn('[sync-google-ads] WP enrichment skipped:', subErr?.message || subData?.error);
           }
