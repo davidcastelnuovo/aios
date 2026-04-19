@@ -23,6 +23,7 @@ import { ShareDashboardDialog } from "@/components/dynamic-tables/ShareDashboard
 import { useTenant } from "@/contexts/TenantContext";
 import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnalyticsDashboard";
 import { SeoDashboardView } from "@/components/dynamic-tables/SeoDashboardView";
+import { SeoDashboardWithGa } from "@/components/dynamic-tables/SeoDashboardWithGa";
 import { WooCommerceDashboard } from "@/components/dynamic-tables/WooCommerceDashboard";
 import {
   LineChart, Line, BarChart, Bar, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
@@ -1074,9 +1075,9 @@ export default function DashboardView() {
               <Button onClick={() => navigate(buildPath('/dynamic-tables'))}>עבור לניהול דוחות</Button>
             </Card>
           ) : platformFilter === 'seo' ? (
-            /* SEO tab: render SeoDashboardView with Ahrefs data */
+            /* SEO tab: render SEO dashboard with Ahrefs + GA Organic data */
             dashboard?.client_id && currentTenantId ? (
-              <SeoDashboardView tenantId={currentTenantId} clientId={dashboard.client_id} />
+              <SeoDashboardWithGa tenantId={currentTenantId} clientId={dashboard.client_id} />
             ) : null
           ) : platformFilter === 'google_analytics' ? (
             /* Analytics tab: render the same GoogleAnalyticsDashboard used in standalone table view */
