@@ -47,14 +47,34 @@ Deno.serve(async (req) => {
     const caption = formData.get('caption') as string || '';
     const fileType = formData.get('fileType') as string || 'document';
 
-    if (!file) {
+    if (!rawFile) {
       return new Response(JSON.stringify({ error: 'No file provided' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
+    // Buffer the file fully into memory before forwarding.
+    // Streaming a File from incoming FormData directly into an outgoing FormData
+    // can result in an empty body when the request is re-encoded — Green API then
+    // returns: {"error":"file should not be empty"}.
+    const fileBytes = new Uint8Array(await rawFile.arrayBuffer());
+    const safeFileName = rawFile.name && rawFile.name.length > 0 ? rawFile.name : 'file';
+    const safeMimeType = rawFile.type && rawFile.type.length > 0 ? rawFile.type : 'application/octet-stream';
+    const file = new File([fileBytes], safeFileName, { type: safeMimeType });
 
+    console.log('[send-green-api-file] received file', {
+      name: safeFileName,
+      type: safeMimeType,
+      size: fileBytes.byteLength,
+    });
+
+    if (fileBytes.byteLength === 0) {
+      return new Response(JSON.stringify({ error: 'File is empty (0 bytes)' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     // Determine tenant_id
     let resolvedTenantId = tenantId;
     let groupChatId: string | undefined;
