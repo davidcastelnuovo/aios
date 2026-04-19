@@ -2787,7 +2787,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       </div>
 
       {/* Google Analytics Dashboard */}
-      {hasGoogleAnalytics && filteredRecords && filteredRecords.length > 0 && (
+      {!summaryOnly && hasGoogleAnalytics && filteredRecords && filteredRecords.length > 0 && (
         <GoogleAnalyticsDashboard
           records={filteredRecords}
           externalDateFilter={dateFilter}
@@ -2798,12 +2798,12 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       )}
 
       {/* Google Search Console Dashboard */}
-      {hasGoogleSearchConsole && table?.id && (
+      {!summaryOnly && hasGoogleSearchConsole && table?.id && (
         <SearchConsoleDashboard tableId={table.id} />
       )}
 
       {/* SEO (Ahrefs) Dashboard with GSC & Analytics tabs */}
-      {hasAhrefs && table?.integration_settings?.data_source === 'ahrefs_reports' && table?.integration_settings?.clientId && table?.tenant_id && (
+      {!summaryOnly && hasAhrefs && table?.integration_settings?.data_source === 'ahrefs_reports' && table?.integration_settings?.clientId && table?.tenant_id && (
         <SeoReportTabs 
           tenantId={table.tenant_id} 
           clientId={table.integration_settings.clientId} 
