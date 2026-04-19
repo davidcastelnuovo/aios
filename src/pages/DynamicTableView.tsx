@@ -159,60 +159,46 @@ export default function DynamicTableView() {
   const isDateRangeReadyForSync = dateFilter !== 'custom' || (!!customDateRange.from && !!customDateRange.to);
 
   const getMainFilterSyncRange = () => {
+    // Sync ALWAYS ends today, regardless of the display filter — so the latest data is captured.
+    // The view layer continues to filter the visible window separately.
     const today = new Date();
     const endDate = format(today, 'yyyy-MM-dd');
 
     switch (dateFilter) {
       case 'all':
         return { startDate: '2020-01-01', endDate };
-      case 'today': {
-        const day = format(today, 'yyyy-MM-dd');
-        return { startDate: day, endDate: day };
-      }
-      case 'yesterday': {
-        const day = format(subDays(today, 1), 'yyyy-MM-dd');
-        return { startDate: day, endDate: day };
-      }
+      case 'today':
+        return { startDate: endDate, endDate };
+      case 'yesterday':
+        return { startDate: format(subDays(today, 1), 'yyyy-MM-dd'), endDate };
       case 'this_week':
         return { startDate: format(startOfWeek(today, { weekStartsOn: 0 }), 'yyyy-MM-dd'), endDate };
       case 'last_week': {
         const lastWeekDate = subWeeks(today, 1);
         return {
           startDate: format(startOfWeek(lastWeekDate, { weekStartsOn: 0 }), 'yyyy-MM-dd'),
-          endDate: format(endOfWeek(lastWeekDate, { weekStartsOn: 0 }), 'yyyy-MM-dd'),
+          endDate,
         };
       }
-      case 'last_7_days': {
-        const yesterdayStr = format(subDays(today, 1), 'yyyy-MM-dd');
-        return { startDate: format(subDays(today, 7), 'yyyy-MM-dd'), endDate: yesterdayStr };
-      }
-      case 'last_14_days': {
-        const yesterdayStr = format(subDays(today, 1), 'yyyy-MM-dd');
-        return { startDate: format(subDays(today, 14), 'yyyy-MM-dd'), endDate: yesterdayStr };
-      }
-      case 'last_30_days': {
-        const yesterdayStr = format(subDays(today, 1), 'yyyy-MM-dd');
-        return { startDate: format(subDays(today, 30), 'yyyy-MM-dd'), endDate: yesterdayStr };
-      }
+      case 'last_7_days':
+        return { startDate: format(subDays(today, 7), 'yyyy-MM-dd'), endDate };
+      case 'last_14_days':
+        return { startDate: format(subDays(today, 14), 'yyyy-MM-dd'), endDate };
+      case 'last_30_days':
+        return { startDate: format(subDays(today, 30), 'yyyy-MM-dd'), endDate };
       case 'this_month':
         return { startDate: format(new Date(today.getFullYear(), today.getMonth(), 1), 'yyyy-MM-dd'), endDate };
       case 'last_month':
         return {
           startDate: format(new Date(today.getFullYear(), today.getMonth() - 1, 1), 'yyyy-MM-dd'),
-          endDate: format(new Date(today.getFullYear(), today.getMonth(), 0), 'yyyy-MM-dd'),
+          endDate,
         };
-      case 'last_90_days': {
-        const yesterdayStr = format(subDays(today, 1), 'yyyy-MM-dd');
-        return { startDate: format(subDays(today, 90), 'yyyy-MM-dd'), endDate: yesterdayStr };
-      }
-      case 'last_180_days': {
-        const yesterdayStr = format(subDays(today, 1), 'yyyy-MM-dd');
-        return { startDate: format(subDays(today, 180), 'yyyy-MM-dd'), endDate: yesterdayStr };
-      }
-      case 'last_365_days': {
-        const yesterdayStr = format(subDays(today, 1), 'yyyy-MM-dd');
-        return { startDate: format(subDays(today, 365), 'yyyy-MM-dd'), endDate: yesterdayStr };
-      }
+      case 'last_90_days':
+        return { startDate: format(subDays(today, 90), 'yyyy-MM-dd'), endDate };
+      case 'last_180_days':
+        return { startDate: format(subDays(today, 180), 'yyyy-MM-dd'), endDate };
+      case 'last_365_days':
+        return { startDate: format(subDays(today, 365), 'yyyy-MM-dd'), endDate };
       case 'custom':
         if (customDateRange.from && customDateRange.to) {
           return {
