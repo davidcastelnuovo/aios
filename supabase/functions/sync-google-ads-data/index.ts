@@ -412,11 +412,72 @@ Deno.serve(async (req) => {
     }
     console.log(`[sync-google-ads] total records parsed: ${records.length}`);
 
+    // ============================================================
+    // ENRICHMENT: Verify lead counts against connected WordPress site
+    // For each campaign_id, count actual Elementor form submissions where
+    // gad_campaignid matches. This catches discrepancies between Google Ads
+    // "Conversions" and real form submissions on the landing page.
+    // ============================================================
+    let verifiedSiteUrl: string | null = null;
+    try {
+      // Find an active WordPress site for this client (table.client_id)
+      const tableClientId = (table as any).client_id as string | null;
+      if (tableClientId) {
+        const { data: wpSites } = await supabaseAdmin
+          .from('social_media_wordpress_sites')
+          .select('id, site_url')
+          .eq('client_id', tableClientId)
+          .eq('is_active', true)
+          .limit(1);
+
+        const site = wpSites?.[0];
+        if (site) {
+          verifiedSiteUrl = site.site_url;
+          // Compute days from date range to limit submission scan
+          const daysDiff = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / 86400000) + 1);
+
+          const { data: subData, error: subErr } = await supabaseAdmin.functions.invoke(
+            'fetch-elementor-submissions',
+            { body: { site_id: site.id, days: Math.min(daysDiff, 90) } }
+          );
+
+          if (!subErr && subData?.success && Array.isArray(subData.submissions)) {
+            // Build map: campaign_id -> { date (YYYY-MM-DD) -> count }
+            const verifiedMap = new Map<string, Map<string, number>>();
+            for (const sub of subData.submissions) {
+              const cid = sub.gad_campaignid;
+              if (!cid) continue;
+              const day = (sub.created_at || '').slice(0, 10);
+              if (!day) continue;
+              if (!verifiedMap.has(cid)) verifiedMap.set(cid, new Map());
+              const dayMap = verifiedMap.get(cid)!;
+              dayMap.set(day, (dayMap.get(day) || 0) + 1);
+            }
+
+            // Annotate each record
+            for (const rec of records) {
+              const dayMap = verifiedMap.get(rec.campaign_id);
+              const count = dayMap?.get(rec.date) || 0;
+              rec.verified_leads = count;
+              if (count > 0) rec.verified_source = site.site_url;
+            }
+            console.log(`[sync-google-ads] enriched with WP submissions: ${verifiedMap.size} campaigns matched`);
+          } else {
+            console.warn('[sync-google-ads] WP enrichment skipped:', subErr?.message || subData?.error);
+          }
+        } else {
+          console.log('[sync-google-ads] no active WP site for client; skipping verification');
+        }
+      }
+    } catch (enrichErr: any) {
+      // Non-fatal: continue with raw Google Ads data
+      console.warn('[sync-google-ads] enrichment error (non-fatal):', enrichErr?.message);
+    }
 
     // Create fields if they don't exist (use admin client - table may belong to a different tenant)
-    const fieldKeys = ['date', 'campaign_name', 'campaign_id', 'impressions', 'clicks', 'ctr', 'cpc', 'cost', 'conversions', 'conversions_value', 'cost_per_conversion', 'roas'];
-    const fieldNames = ['תאריך', 'שם הקמפיין', 'מזהה קמפיין', 'חשיפות', 'קליקים', 'אחוז קליקים', 'עלות לקליק', 'הוצאה', 'המרות', 'ערך המרות', 'עלות להמרה', 'ROAS'];
-    const fieldTypes = ['date', 'text', 'text', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number'];
+    const fieldKeys = ['date', 'campaign_name', 'campaign_id', 'impressions', 'clicks', 'ctr', 'cpc', 'cost', 'conversions', 'conversions_value', 'cost_per_conversion', 'roas', 'verified_leads'];
+    const fieldNames = ['תאריך', 'שם הקמפיין', 'מזהה קמפיין', 'חשיפות', 'קליקים', 'אחוז קליקים', 'עלות לקליק', 'הוצאה', 'המרות', 'ערך המרות', 'עלות להמרה', 'ROAS', 'לידים באתר'];
+    const fieldTypes = ['date', 'text', 'text', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number'];
 
     for (let i = 0; i < fieldKeys.length; i++) {
       const { data: existingField } = await supabaseAdmin
