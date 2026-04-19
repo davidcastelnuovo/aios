@@ -230,7 +230,9 @@ serve(async (req) => {
       const fields = s.values || s.fields || s.form_data || [];
       const referer = s.referer || s.referrer || s.url || null;
       const formId = String(s.form_id || s.form || s.formId || "");
-      const formName = formsMap.get(formId) || s.form_name || s.form_label || formId || "טופס לא ידוע";
+      const rawFormName = formsMap.get(formId) || s.form_name || s.form_label || formId || "טופס לא ידוע";
+      const formName = stringifyFormName(rawFormName, formId || "טופס לא ידוע");
+      const slug = extractSlug(referer);
 
       parsed.push({
         id: s.id,
@@ -239,6 +241,7 @@ serve(async (req) => {
         email: extractEmail(fields),
         created_at: createdAt,
         referer,
+        slug,
         source: classifySource(referer),
         gclid: getQueryParam(referer, "gclid"),
         gad_campaignid: getQueryParam(referer, "gad_campaignid"),
