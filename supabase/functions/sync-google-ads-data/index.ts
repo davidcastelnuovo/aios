@@ -43,12 +43,21 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+    // Allow service-role internal calls (e.g. from cron) to bypass user auth.
+    // The caller must include x-internal-cron: true AND a valid service role bearer token.
+    const isInternalCron = req.headers.get('x-internal-cron') === 'true';
+    const authHeader = req.headers.get('Authorization') || '';
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+    const hasServiceRole = !!serviceRoleKey && authHeader === `Bearer ${serviceRoleKey}`;
+
+    if (!(isInternalCron && hasServiceRole)) {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
     }
 
     const { table_id } = await req.json();
