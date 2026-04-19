@@ -4,6 +4,7 @@ import DynamicTableView from "@/pages/DynamicTableView";
 
 interface Props {
   tableSlug: string;
+  summaryOnly?: boolean;
 }
 
 /**
