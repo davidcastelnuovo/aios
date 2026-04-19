@@ -2810,7 +2810,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
         />
       )}
 
-      {hasAhrefs && table?.integration_settings?.data_source === 'ahrefs_reports' ? null : isLoading ? (
+      {!summaryOnly && (hasAhrefs && table?.integration_settings?.data_source === 'ahrefs_reports' ? null : isLoading ? (
         <Skeleton className="h-96 w-full" />
       ) : (
         <div className="border rounded-lg overflow-hidden bg-background shadow-sm">
