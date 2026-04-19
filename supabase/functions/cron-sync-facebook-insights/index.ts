@@ -276,7 +276,18 @@ Deno.serve(async (req) => {
               );
             })
             .reduce((sum: number, a: any) => sum + (parseInt(a.value) || 0), 0);
-          const leads = Math.max(aggregateLeadValue, specificLeadsSum);
+
+          // For Lead Form campaigns, prefer leadgen_grouped to match FB UI "Results" column.
+          const _campaignStatusForLeads = campaignStatuses[insight.campaign_id];
+          const _objectiveForLeads = String(_campaignStatusForLeads?.objective || '').toUpperCase();
+          const _isLeadFormObjective = ['OUTCOME_LEADS', 'LEAD_GENERATION'].includes(_objectiveForLeads);
+          const _leadgenGroupedValue = allActions
+            .filter((a: any) => String(a.action_type || '') === 'leadgen_grouped')
+            .reduce((sum: number, a: any) => sum + (parseInt(a.value) || 0), 0);
+
+          const leads = _isLeadFormObjective && _leadgenGroupedValue > 0
+            ? _leadgenGroupedValue
+            : Math.max(aggregateLeadValue, specificLeadsSum);
 
           // Extract landing page views (Facebook action)
           const landingPageViews = allActions
