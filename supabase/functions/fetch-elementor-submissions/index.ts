@@ -13,6 +13,7 @@ interface ParsedSubmission {
   email: string | null;
   created_at: string;
   referer: string | null;
+  slug: string;
   source: "google_ads" | "google" | "facebook" | "organic" | "direct" | "test" | "other";
   gclid: string | null;
   gad_campaignid: string | null;
@@ -21,6 +22,34 @@ interface ParsedSubmission {
   utm_campaign: string | null;
   ip: string | null;
   raw_fields: Record<string, any>;
+}
+
+function extractSlug(referer: string | null): string {
+  if (!referer) return "";
+  try {
+    const u = new URL(referer);
+    const seg = u.pathname.split("/").filter(Boolean)[0] || "";
+    return decodeURIComponent(seg).toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+function stringifyFormName(name: any, fallback: string): string {
+  if (!name) return fallback;
+  if (typeof name === "string") return name;
+  if (typeof name === "object") {
+    // Elementor sometimes returns { rendered: "..." } or similar
+    return (
+      name.rendered ||
+      name.name ||
+      name.label ||
+      name.title ||
+      name.value ||
+      fallback
+    );
+  }
+  return String(name);
 }
 
 function getQueryParam(url: string | null, key: string): string | null {
@@ -132,7 +161,7 @@ serve(async (req) => {
 
     // 1) Fetch forms list (so we have nice names)
     const formsMap = new Map<string, string>();
-    try {
+      try {
       const formsResp = await fetch(`${baseUrl}/wp-json/elementor/v1/forms?per_page=100`, {
         headers: authHeaders,
       });
@@ -141,7 +170,7 @@ serve(async (req) => {
         const list = Array.isArray(formsData) ? formsData : formsData?.data || [];
         for (const f of list) {
           const id = String(f.id || f.form_id || f.ID || "");
-          const name = f.name || f.label || f.title || f.form_name || id;
+          const name = stringifyFormName(f.name || f.label || f.title || f.form_name, id);
           if (id) formsMap.set(id, name);
         }
       }
@@ -201,7 +230,9 @@ serve(async (req) => {
       const fields = s.values || s.fields || s.form_data || [];
       const referer = s.referer || s.referrer || s.url || null;
       const formId = String(s.form_id || s.form || s.formId || "");
-      const formName = formsMap.get(formId) || s.form_name || s.form_label || formId || "טופס לא ידוע";
+      const rawFormName = formsMap.get(formId) || s.form_name || s.form_label || formId || "טופס לא ידוע";
+      const formName = stringifyFormName(rawFormName, formId || "טופס לא ידוע");
+      const slug = extractSlug(referer);
 
       parsed.push({
         id: s.id,
@@ -210,6 +241,7 @@ serve(async (req) => {
         email: extractEmail(fields),
         created_at: createdAt,
         referer,
+        slug,
         source: classifySource(referer),
         gclid: getQueryParam(referer, "gclid"),
         gad_campaignid: getQueryParam(referer, "gad_campaignid"),
@@ -264,6 +296,29 @@ serve(async (req) => {
       c.forms.add(sub.form_name);
     }
 
+    // 6) Aggregate per slug (URL path) - useful for slug-based campaign mapping
+    const perSlugMap = new Map<string, any>();
+    for (const sub of parsed) {
+      if (!sub.slug) continue;
+      if (!perSlugMap.has(sub.slug)) {
+        perSlugMap.set(sub.slug, {
+          slug: sub.slug,
+          submissions: 0,
+          google_ads_submissions: 0,
+          last_submission_at: null as string | null,
+          sample_gad_campaignids: new Set<string>(),
+        });
+      }
+      const e = perSlugMap.get(sub.slug);
+      e.submissions++;
+      if (sub.source === "google_ads" || sub.source === "google") e.google_ads_submissions++;
+      if (sub.gad_campaignid) e.sample_gad_campaignids.add(sub.gad_campaignid);
+      const ts = new Date(sub.created_at).getTime();
+      if (!e.last_submission_at || new Date(e.last_submission_at).getTime() < ts) {
+        e.last_submission_at = sub.created_at;
+      }
+    }
+
     const totals = {
       total: parsed.length,
       google_ads: parsed.filter((s) => s.source === "google_ads").length,
@@ -283,6 +338,10 @@ serve(async (req) => {
         per_campaign: Array.from(perCampaignMap.values()).map((c) => ({
           ...c,
           forms: Array.from(c.forms),
+        })).sort((a, b) => b.submissions - a.submissions),
+        per_slug: Array.from(perSlugMap.values()).map((e) => ({
+          ...e,
+          sample_gad_campaignids: Array.from(e.sample_gad_campaignids),
         })).sort((a, b) => b.submissions - a.submissions),
         submissions: parsed,
       }),

@@ -32,7 +32,7 @@ import { toast } from "sonner";
 import {
   Globe, Plus, Trash2, Loader2, ExternalLink, RefreshCw,
   ShoppingCart, ArrowLeft, Settings, CheckCircle2, AlertCircle,
-  Edit, Key, Link2, UserPlus,
+  Edit, Key, Link2, UserPlus, MapPin,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -53,6 +53,7 @@ interface WordPressSite {
   agency_id: string | null;
   notes: string | null;
   created_at: string;
+  campaign_url_mapping?: Record<string, string> | null;
 }
 
 interface Tenant {
@@ -106,6 +107,8 @@ export default function WordPressSettings() {
   const [form, setForm] = useState({ ...emptyForm });
   const [filterTenant, setFilterTenant] = useState<string>("all");
   const [testingId, setTestingId] = useState<string | null>(null);
+  const [mappingSite, setMappingSite] = useState<WordPressSite | null>(null);
+  const [mappingDraft, setMappingDraft] = useState<Record<string, string>>({});
 
   // Fetch all tenants (super admin only)
   const { data: allTenants = [] } = useQuery<Tenant[]>({
@@ -464,6 +467,80 @@ export default function WordPressSettings() {
     setLinkAgency(site.agency_id || "");
     setLinkClient(site.client_id || "");
   };
+
+  const openMapping = (site: WordPressSite) => {
+    setMappingSite(site);
+    setMappingDraft({ ...(site.campaign_url_mapping || {}) });
+  };
+
+  // Discover slugs for the mapping site (last 90 days of submissions)
+  const { data: slugDiscovery, isLoading: isLoadingSlugs } = useQuery<{
+    per_slug: Array<{ slug: string; submissions: number; google_ads_submissions: number; sample_gad_campaignids: string[] }>;
+  }>({
+    queryKey: ["wp-discovered-slugs", mappingSite?.id],
+    queryFn: async () => {
+      if (!mappingSite) return { per_slug: [] };
+      const { data, error } = await supabase.functions.invoke("fetch-elementor-submissions", {
+        body: { site_id: mappingSite.id, days: 90 },
+      });
+      if (error) throw error;
+      return { per_slug: (data?.per_slug || []) as any[] };
+    },
+    enabled: !!mappingSite,
+    staleTime: 1000 * 60 * 5,
+  });
+  const discoveredSlugs = slugDiscovery?.per_slug || [];
+
+  // Campaigns for mapping site's client (Google Ads campaigns from synced records)
+  const { data: clientCampaigns = [] } = useQuery<Array<{ campaign_id: string; campaign_name: string }>>({
+    queryKey: ["wp-client-campaigns", mappingSite?.client_id],
+    queryFn: async () => {
+      if (!mappingSite?.client_id) return [];
+      const { data: tables, error: tErr } = await supabase
+        .from("crm_tables")
+        .select("id")
+        .eq("client_id", mappingSite.client_id)
+        .eq("integration_type", "google_ads");
+      if (tErr) throw tErr;
+      if (!tables || tables.length === 0) return [];
+      const tableIds = tables.map((t: any) => t.id);
+      const { data: records, error: rErr } = await supabase
+        .from("crm_records")
+        .select("data")
+        .in("table_id", tableIds)
+        .limit(1000);
+      if (rErr) throw rErr;
+      const map = new Map<string, string>();
+      for (const r of records || []) {
+        const cid = (r as any).data?.campaign_id;
+        const cname = (r as any).data?.campaign_name;
+        if (cid && cname && !map.has(cid)) map.set(cid, cname);
+      }
+      return Array.from(map.entries())
+        .map(([campaign_id, campaign_name]) => ({ campaign_id, campaign_name }))
+        .sort((a, b) => a.campaign_name.localeCompare(b.campaign_name));
+    },
+    enabled: !!mappingSite?.client_id,
+  });
+
+  const mappingMutation = useMutation({
+    mutationFn: async ({ id, mapping }: { id: string; mapping: Record<string, string> }) => {
+      const clean = Object.fromEntries(
+        Object.entries(mapping).filter(([_, v]) => v && v.length > 0)
+      );
+      const { error } = await supabase
+        .from("social_media_wordpress_sites" as any)
+        .update({ campaign_url_mapping: clean, updated_at: new Date().toISOString() })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["wordpress-sites-admin"] });
+      toast.success("המיפוי נשמר. סנכרן את דוח גוגל אדס כדי לראות את ההשפעה");
+      setMappingSite(null);
+    },
+    onError: (e: Error) => toast.error("שגיאה: " + e.message),
+  });
 
   // Map of clientId -> name for table display (across tenants for super-admin we fetch lazily per site tenant)
   const { data: clientsMap = {} } = useQuery<Record<string, string>>({
@@ -982,6 +1059,18 @@ export default function WordPressSettings() {
                               {site.client_id ? <Link2 className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
                             </Button>
 
+                            {site.client_id && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="שייך עמודי נחיתה לקמפיינים"
+                                onClick={() => openMapping(site)}
+                                className={site.campaign_url_mapping && Object.keys(site.campaign_url_mapping).length > 0 ? "text-emerald-600" : "text-blue-600"}
+                              >
+                                <MapPin className="h-4 w-4" />
+                              </Button>
+                            )}
+
                             <Button
                               variant="ghost"
                               size="icon"
@@ -1207,6 +1296,111 @@ export default function WordPressSettings() {
               >
                 {linkMutation.isPending && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
                 שמור שיוך
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Slug → Campaign Mapping Dialog */}
+      <Dialog open={!!mappingSite} onOpenChange={(o) => { if (!o) setMappingSite(null); }}>
+        <DialogContent dir="rtl" className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MapPin className="h-5 w-5 text-primary" />
+              שייך עמודי נחיתה לקמפיינים
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+            <div className="rounded-lg border bg-muted/30 p-3">
+              <p className="text-sm font-medium">{mappingSite?.site_name || mappingSite?.site_url}</p>
+              <p className="text-xs text-muted-foreground" dir="ltr">{mappingSite?.site_url}</p>
+            </div>
+
+            <div className="rounded-lg border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/20 p-3 flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+              <p className="text-xs text-blue-900 dark:text-blue-200">
+                שיוך עמודי הנחיתה (slugs) לקמפיינים מאפשר אימות מדויק של לידים.
+                שימושי במיוחד כש-Google Ads מדווח Asset Group ID במקום Campaign ID (כמו ב-PMax).
+              </p>
+            </div>
+
+            {isLoadingSlugs ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin" />
+              </div>
+            ) : discoveredSlugs.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8 text-sm">
+                לא נמצאו עמודי נחיתה ב-90 הימים האחרונים
+              </p>
+            ) : (
+              <div className="space-y-2">
+                <div className="grid grid-cols-12 gap-2 px-2 text-xs font-medium text-muted-foreground">
+                  <div className="col-span-5">עמוד נחיתה (slug)</div>
+                  <div className="col-span-2 text-center">לידים</div>
+                  <div className="col-span-5">קמפיין משויך</div>
+                </div>
+                {discoveredSlugs.map((s) => (
+                  <div key={s.slug} className="grid grid-cols-12 gap-2 items-center p-2 rounded border hover:bg-muted/30">
+                    <div className="col-span-5">
+                      <p className="font-mono text-xs" dir="ltr">/{s.slug}</p>
+                      {s.sample_gad_campaignids && s.sample_gad_campaignids.length > 0 && (
+                        <p className="text-[10px] text-muted-foreground" dir="ltr">
+                          gad: {s.sample_gad_campaignids.slice(0, 2).join(", ")}
+                        </p>
+                      )}
+                    </div>
+                    <div className="col-span-2 text-center">
+                      <Badge variant="secondary" className="text-xs">
+                        {s.google_ads_submissions}/{s.submissions}
+                      </Badge>
+                    </div>
+                    <div className="col-span-5">
+                      <Select
+                        value={mappingDraft[s.slug] || "none"}
+                        onValueChange={(v) =>
+                          setMappingDraft((prev) => ({ ...prev, [s.slug]: v === "none" ? "" : v }))
+                        }
+                      >
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue placeholder={
+                            clientCampaigns.length === 0 ? "אין קמפיינים מסונכרנים" : "בחר קמפיין..."
+                          } />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">ללא שיוך</SelectItem>
+                          {clientCampaigns.map((c) => (
+                            <SelectItem key={c.campaign_id} value={c.campaign_id}>
+                              {c.campaign_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-2 sticky bottom-0 bg-background pb-1">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setMappingSite(null)}
+                disabled={mappingMutation.isPending}
+              >
+                ביטול
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={() => {
+                  if (!mappingSite) return;
+                  mappingMutation.mutate({ id: mappingSite.id, mapping: mappingDraft });
+                }}
+                disabled={mappingMutation.isPending}
+              >
+                {mappingMutation.isPending && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
+                שמור מיפוי
               </Button>
             </div>
           </div>
