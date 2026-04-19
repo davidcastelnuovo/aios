@@ -285,10 +285,13 @@ serve(async (req) => {
       });
     }
 
-    // 4) Aggregate per_form
+    // 4) Aggregate per_form — group by form_id when available, else by slug-based key
     const perFormMap = new Map<string, any>();
     for (const sub of parsed) {
-      const key = sub.form_id || sub.form_name;
+      // If we don't have a form_id, fall back to slug+form_name so different forms on different pages don't merge
+      const key = sub.form_id
+        ? `id:${sub.form_id}`
+        : `name:${sub.form_name}|slug:${sub.slug || "_"}`;
       if (!perFormMap.has(key)) {
         perFormMap.set(key, {
           form_id: sub.form_id,
@@ -298,11 +301,15 @@ serve(async (req) => {
           last_30_days: 0,
           sources: { google_ads: 0, google: 0, facebook: 0, organic: 0, direct: 0, test: 0, other: 0 },
           last_submission_at: null as string | null,
+          slugs: new Set<string>(),
+          sample_referer: null as string | null,
         });
       }
       const entry = perFormMap.get(key);
       entry.total++;
       entry.sources[sub.source]++;
+      if (sub.slug) entry.slugs.add(sub.slug);
+      if (!entry.sample_referer && sub.referer) entry.sample_referer = sub.referer;
       const ts = new Date(sub.created_at).getTime();
       const now = Date.now();
       if (ts >= now - 7 * 86400000) entry.last_7_days++;
