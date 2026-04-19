@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Globe, ShoppingCart, Package, Users, ExternalLink, RefreshCw, AlertCircle } from "lucide-react";
+import { SubmissionsSummaryCard } from "@/components/landing-page-submissions/SubmissionsSummaryCard";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { toast } from "sonner";
@@ -197,6 +198,11 @@ export function ClientWordPressTab({ clientId }: ClientWordPressTabProps) {
           </Card>
         ))}
       </div>
+
+      {/* Elementor Form Submissions summary — shown for every connected site */}
+      {sites.map((site) => (
+        <SubmissionsSummaryCard key={`subs-${site.id}`} siteId={site.id} siteName={site.site_name} />
+      ))}
 
       {/* Show data only if WooCommerce is enabled on at least one site */}
       {sites.some((s) => s.woocommerce_enabled) ? (
