@@ -100,6 +100,7 @@ export default function WordPressSettings() {
   const [addOpen, setAddOpen] = useState(false);
   const [editSite, setEditSite] = useState<WordPressSite | null>(null);
   const [linkSite, setLinkSite] = useState<WordPressSite | null>(null);
+  const [linkTenantId, setLinkTenantId] = useState<string>("");
   const [linkAgency, setLinkAgency] = useState<string>("");
   const [linkClient, setLinkClient] = useState<string>("");
   const [form, setForm] = useState({ ...emptyForm });
@@ -414,9 +415,23 @@ export default function WordPressSettings() {
     enabled: !!tenantId || isSuperAdmin,
   });
 
+  // Distinct tenants reachable in the link dialog (derived from linkAgencies)
+  const linkTenants = Array.from(
+    new Map(
+      linkAgencies
+        .filter((a) => a.tenant_id)
+        .map((a) => [a.tenant_id, { id: a.tenant_id, name: a.tenant_name || a.tenant_id }])
+    ).values()
+  ).sort((x, y) => x.name.localeCompare(y.name));
+
+  // Filter agencies by chosen tenant in the link dialog
+  const linkFilteredAgencies = linkTenantId
+    ? linkAgencies.filter((a) => a.tenant_id === linkTenantId)
+    : linkAgencies;
+
   // Clients for the quick-link dialog — scoped to the SELECTED agency's tenant
   const linkSelectedAgency = linkAgencies.find((a) => a.id === linkAgency);
-  const linkEffectiveTenantId = linkSelectedAgency?.tenant_id || linkSite?.tenant_id;
+  const linkEffectiveTenantId = linkSelectedAgency?.tenant_id || linkTenantId || linkSite?.tenant_id;
 
   const { data: linkClients = [] } = useQuery<Client[]>({
     queryKey: ["clients-for-link", linkEffectiveTenantId, linkAgency],
@@ -445,6 +460,7 @@ export default function WordPressSettings() {
 
   const openLink = (site: WordPressSite) => {
     setLinkSite(site);
+    setLinkTenantId(site.tenant_id || "");
     setLinkAgency(site.agency_id || "");
     setLinkClient(site.client_id || "");
   };
@@ -1077,19 +1093,42 @@ export default function WordPressSettings() {
             </div>
 
             <div>
+              <Label>ארגון</Label>
+              <Select
+                value={linkTenantId || "none"}
+                onValueChange={(v) => {
+                  const newTid = v === "none" ? "" : v;
+                  setLinkTenantId(newTid);
+                  setLinkAgency("");
+                  setLinkClient("");
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={linkTenants.length === 0 ? "אין ארגונים זמינים" : "בחר ארגון..."} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">כל הארגונים</SelectItem>
+                  {linkTenants.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
               <Label>סוכנות</Label>
               <Select
                 value={linkAgency || "none"}
                 onValueChange={(v) => { setLinkAgency(v === "none" ? "" : v); setLinkClient(""); }}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder={linkAgencies.length === 0 ? "אין סוכנויות" : "בחר סוכנות..."} />
+                  <SelectValue placeholder={linkFilteredAgencies.length === 0 ? "אין סוכנויות בארגון זה" : "בחר סוכנות..."} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">ללא</SelectItem>
-                  {linkAgencies.map((a) => (
+                  {linkFilteredAgencies.map((a) => (
                     <SelectItem key={a.id} value={a.id}>
-                      {a.name}{a.tenant_name ? ` (${a.tenant_name})` : ""}
+                      {a.name}{!linkTenantId && a.tenant_name ? ` (${a.tenant_name})` : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1151,15 +1190,19 @@ export default function WordPressSettings() {
               </Button>
               <Button
                 className="flex-1"
-                onClick={() => linkSite && linkMutation.mutate({
-                  id: linkSite.id,
-                  agency_id: linkAgency || null,
-                  client_id: linkClient || null,
-                  tenant_id:
-                    linkSelectedAgency && linkSelectedAgency.tenant_id !== linkSite.tenant_id
-                      ? linkSelectedAgency.tenant_id
-                      : null,
-                })}
+                onClick={() => {
+                  if (!linkSite) return;
+                  const targetTenant =
+                    linkSelectedAgency?.tenant_id ||
+                    linkTenantId ||
+                    null;
+                  linkMutation.mutate({
+                    id: linkSite.id,
+                    agency_id: linkAgency || null,
+                    client_id: linkClient || null,
+                    tenant_id: targetTenant && targetTenant !== linkSite.tenant_id ? targetTenant : null,
+                  });
+                }}
                 disabled={linkMutation.isPending}
               >
                 {linkMutation.isPending && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
