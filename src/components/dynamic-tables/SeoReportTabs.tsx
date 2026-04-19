@@ -13,6 +13,7 @@ import { GscIntegration } from "./seo/GscIntegration";
 import { TrendingUp, Search, BarChart3, Settings2, RefreshCw, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { useUserIntegrations } from "@/hooks/useUserIntegrations";
 
 interface SeoReportTabsProps {
   tenantId: string;
