@@ -147,21 +147,36 @@ export default function SharedTable() {
         spend += getSpendFromData(d);
         impressions += Number(d.impressions) || 0;
         clicks += Number(d.clicks) || 0;
-        // Always aggregate both - we'll display based on what exists
-        purchases += getPurchasesFromData(d);
-        revenue += getRevenueFromData(d);
-        addToCart += getAddToCartFromData(d);
+        // For Google Ads leads tables, never count conversions_value as revenue
+        if (!(forceLeadsOnly && isGoogleAds)) {
+          purchases += getPurchasesFromData(d);
+          revenue += getRevenueFromData(d);
+          addToCart += getAddToCartFromData(d);
+        }
         leads += getLeadsFromData(d);
       }
     });
 
+    // Round leads (Google Ads conversions can be fractional)
+    leads = Math.round(leads);
+
+    // Honor table-level overrides
+    if (forceLeadsOnly) {
+      purchases = 0;
+      revenue = 0;
+      addToCart = 0;
+    }
+    if (forceEcommerceOnly) {
+      leads = 0;
+    }
+
     const roas = spend > 0 ? revenue / spend : 0;
     const cpl = leads > 0 ? spend / leads : 0;
-    const hasEcommerce = purchases > 0 || revenue > 0 || addToCart > 0;
-    const hasLeads = leads > 0;
+    const hasEcommerce = !forceLeadsOnly && (purchases > 0 || revenue > 0 || addToCart > 0);
+    const hasLeads = !forceEcommerceOnly && (forceLeadsOnly || leads > 0);
 
     return { spend, impressions, clicks, leads, sessions, purchases, revenue, addToCart, roas, cpl, hasEcommerce, hasLeads };
-  }, [filteredRecords, integrationType, isIntegrationTable]);
+  }, [filteredRecords, integrationType, isIntegrationTable, forceLeadsOnly, forceEcommerceOnly, isGoogleAds]);
 
   // Campaign-level aggregation for Facebook / Google Ads
   const campaignSummary = useMemo(() => {
