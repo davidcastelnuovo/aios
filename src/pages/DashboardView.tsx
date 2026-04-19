@@ -778,6 +778,16 @@ export default function DashboardView() {
     );
   }, [googleAdsCampaignSummary]);
 
+  // Google Ads campaign type — driven strictly by table integration_settings.campaign_type.
+  // If any associated Google Ads table is set to 'ecommerce', treat the whole tab as ecommerce.
+  const googleAdsCampaignType: 'leads' | 'ecommerce' = useMemo(() => {
+    const gaTables = (tables || []).filter((t: any) => t.integration_type === 'google_ads');
+    if (gaTables.some((t: any) => t.integration_settings?.campaign_type === 'ecommerce')) {
+      return 'ecommerce';
+    }
+    return 'leads';
+  }, [tables]);
+
   // Group records by date for table
   const recordsByDate = useMemo(() => {
     const byDate: Record<string, any[]> = {};
