@@ -1,40 +1,68 @@
 
 
 ## הבעיה
-הקישור הציבורי של טבלאות Google Ads (וכן Facebook) לא תמיד תואם לסוג הטבלה. כיום הלוגיקה ב-`SharedTable.tsx` מנסה לסווג אוטומטית קמפיינים כ-leads או ecommerce לפי הנתונים, מה שגורם לתצוגה מעורבת או לא נכונה. המשתמש רוצה: **סוג הטבלה קובע הכל** — טבלת לידים → תצוגת לידים בלבד; טבלת איקומרס → תצוגת איקומרס בלבד.
+בדשבורד של "ארבע על ארבע" (לקוח promo), טבלת המקור היא **Google Ads ecommerce** (`integration_settings.campaign_type = 'ecommerce'`), אבל הלשונית **Google Ads בדשבורד** מציגה תמיד מטריקות של לידים:
+- כרטיסי KPI: "המרות 4", "עלות להמרה ₪163"
+- טבלת קמפיינים: עמודות "המרות" ו"עלות להמרה" בלבד
 
-## הלוגיקה המתוקנת
-ב-`src/pages/SharedTable.tsx`, נחליף את הסיווג האוטומטי בקביעה דטרמיניסטית מתוך מטא-דאטה של הטבלה:
+זה לא תואם לסוג הטבלה הראשית (אקומרס) — ולכן חסר: **הכנסות, רכישות, ROAS, AOV**.
 
+## איפה התיקון
+שני קבצים שמפרסמים את אותו תוכן (פנימי + ציבורי):
+1. `src/pages/DashboardView.tsx` (שורות 728–765, 1316–1430)
+2. `src/pages/SharedDashboard.tsx` (שורות 453–492, 867–980)
+
+לוגיקת הזיהוי `getCampaignType` שכבר קיימת:
 ```ts
-const tableMode: 'leads' | 'ecommerce' =
-  integrationType === 'facebook_ecommerce' ? 'ecommerce' :
-  integrationType === 'facebook_insights' ? 'leads' :
-  integrationType === 'google_ads'
-    ? (tableCampaignType === 'ecommerce' ? 'ecommerce' : 'leads')
-    : 'leads';
-
-const forceLeadsOnly = tableMode === 'leads';
-const forceEcommerceOnly = tableMode === 'ecommerce';
+if (integrationType === 'google_ads')
+  return integrationSettings?.campaign_type === 'ecommerce' ? 'ecommerce' : 'leads';
 ```
+היא נכונה, היא פשוט **לא בשימוש** ברינדור של לשונית Google Ads.
 
-## השינויים בפועל
+## מה ישתנה
 
-### `src/pages/SharedTable.tsx`
-1. **שורות 119-122** — להחליף את החישוב הנוכחי של `forceLeadsOnly`/`forceEcommerceOnly` בלוגיקה החדשה לעיל המשלבת `integration_type` + `campaign_type`.
-2. **שורות 213-225 (`campaignSummary`)** — להסיר את ה-fallback של הסיווג האוטומטי. עכשיו תמיד יחזיר `{ ecommerce: allCampaigns, leads: [] }` או להפך, לפי `tableMode`. אין יותר תצוגה מעורבת.
-3. **שורות 175-176 (summary)** — `hasEcommerce`/`hasLeads` יקבעו ישירות לפי `tableMode` ולא לפי תוכן הנתונים.
-4. **כרטיסי KPI (שורות 386-451)** — הלוגיקה כבר תלויה ב-`forceLeadsOnly`, אז תיתן תוצאה נכונה אוטומטית כי הדגלים מחושבים נכון.
-5. **טבלאות קמפיינים (שורות 456 ו-521)** — אחת מהן תיהיה תמיד ריקה לפי המצב, כך שתוצג רק זו הרלוונטית.
+### שלב 1 — זיהוי סוג הקמפיין של Google Ads בדשבורד
+חישוב חדש (מעל `googleAdsCampaignSummary`):
+```ts
+const googleAdsCampaignType: 'leads' | 'ecommerce' = useMemo(() => {
+  const gaTables = tables.filter((t: any) => t.integration_type === 'google_ads');
+  if (gaTables.some((t: any) => t.integration_settings?.campaign_type === 'ecommerce')) {
+    return 'ecommerce';
+  }
+  return 'leads';
+}, [tables]);
+```
+זה מסתמך **רק על הגדרת הטבלה** — לא על ניחוש מהדאטה — בדיוק כמו שביקשת בעבר ("סוג הטבלה קובע הכל").
 
-## תוצאה
-- **טבלת `facebook_insights`** → תמיד תצוגת לידים (לידים, קליקים, CPL).
-- **טבלת `facebook_ecommerce`** → תמיד תצוגת איקומרס (הכנסות, רכישות, ROAS).
-- **טבלת `google_ads` עם `campaign_type=ecommerce`** → תצוגת איקומרס.
-- **טבלת `google_ads` עם `campaign_type=leads`** (ברירת מחדל) → תצוגת לידים — בדיוק כמו טבלת אקו.
+### שלב 2 — רינדור מותנה של כרטיסי KPI
+- אם `googleAdsCampaignType === 'ecommerce'`:
+  - 5 כרטיסים: **הוצאה כוללת · חשיפות · קליקים · רכישות · הכנסות · ROAS** (6 — או נחליף את "חשיפות" ב-AOV כדי להישאר על 5)
+  - "רכישות" = `conversions` מהקמפיין
+  - "הכנסות" = `conversions_value`
+  - "ROAS" = `conversions_value / spend`
+- אחרת (כיום): כרטיסי לידים כמו שיש היום (המרות + עלות להמרה).
 
-## היקף
-- קובץ אחד: `src/pages/SharedTable.tsx`.
-- ללא שינויי DB, ללא Edge Functions.
-- **חובה לפרסם מחדש** את האפליקציה כדי שהשינוי ישתקף ב-`after-lead.com`.
+### שלב 3 — רינדור מותנה של טבלת קמפיינים
+- במצב `ecommerce`: עמודות = קמפיין · חשיפות · קליקים · CTR · CPC · הוצאה · **רכישות · הכנסות · ROAS · AOV**
+- במצב `leads` (קיים היום): קמפיין · חשיפות · קליקים · CTR · CPC · הוצאה · המרות · עלות להמרה
+
+הנתונים כבר נשלפים: `googleAdsCampaignSummary` מחזיר כבר `conversions` ו-`conversions_value` לכל קמפיין — צריך רק להחליף את התצוגה.
+
+### שלב 4 — שכפול ל-`SharedDashboard.tsx`
+אותה לוגיקה בדיוק (אותם קוד ושמות משתנים) — הציבורי משקף את הפנימי.
+
+## מה לא ישתנה (חשוב לא לשבור!)
+- **לשונית "הכל"** ולוגיקת `campaignTypeByPlatform` נשארות כמו שהן (כבר תומכות ב-ecommerce).
+- **Facebook Ads** — לוגיקה נפרדת, לא נוגעים.
+- **Analytics / SEO / WooCommerce** — לא משתנים.
+- **טבלת הראשית (`SharedTable.tsx`)** — לא נוגעים, אישרת אותה כבר.
+- אם הטבלה היא `leads` (ברירת מחדל) — הדשבורד יציג את אותה תצוגה כמו היום, אפס שינוי ויזואלי.
+
+## פירוט טכני (לבעלי עניין)
+- אין שינוי DB, אין Edge Functions, אין שינוי ב-sync.
+- שינוי הוא תצוגתי בלבד — שני קבצי דשבורד.
+- הסנכרון של Google Ads כבר שומר `conversions_value` ב-`crm_records.data`, אז כל הנתונים זמינים.
+
+## דרוש פרסום מחדש
+כדי שהדשבורד הציבורי ב-`after-lead.com` יציג את הלוגיקה החדשה, יש **לפרסם מחדש** אחרי השינוי.
 
