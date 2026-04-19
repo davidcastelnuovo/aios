@@ -1,49 +1,59 @@
 
 
-## שתי בעיות נפרדות באקו
+## הבעיה
 
-### בעיה 1: השיתוף מציג אפסים
-**שורש הבעיה**: ה-cron של Google Ads רץ הבוקר (08:23), מחק את כל 90 הרשומות הקיימות, ואז ניסה להכניס מחדש - **וקיבל שגיאת FK**: 
+קישור השיתוף של אקו (Google Ads, מוגדר כ-`campaign_type: 'leads'`) מציג כרטיסי **eCommerce** ("הכנסות", "רכישות", "ROAS") וטבלת **"קמפייני איקומרס"**, במקום תצוגת לידים נקייה.
 
+### למה זה קורה
+בדקתי את הנתונים בפועל בטבלת אקו - כל 90 הרשומות מכילות:
+- `cost`, `conversions`, `conversions_value` (שדות סטנדרטיים של Google Ads)
+- אין כלל `spend`, `leads`, `purchases`, `purchase_value`, `add_to_cart`, או שדה `campaign_type` ברשומה
+
+ב-`SharedTable.tsx`:
+- `getRevenueFromData` קורא את `conversions_value` ומחשיב כ-**revenue**
+- חלק מהרשומות יש להן `conversions_value: 1` (ערך זניח)
+- זה מפעיל `summary.hasEcommerce = true` → מוצגים כרטיסי eCommerce
+- בנוסף, `campaignSummary.ecommerce` מסווג קמפיינים עם `revenue > 0` כ-eCommerce → מוצגת טבלת "קמפייני איקומרס"
+
+**הקריטי**: ההגדרה `integration_settings.campaign_type = 'leads'` של הטבלה **מתעלמים ממנה לחלוטין** ב-SharedTable. ב-`DynamicTableView.tsx` (הדוח הפנימי) זה כבר תוקן (שורות 2427-2428: `forceLeadsOnly`), אבל לא הועתק ל-Shared.
+
+## התיקון
+
+### `src/pages/SharedTable.tsx`
+
+**1. כיבוד הגדרת `campaign_type` של הטבלה כמקור האמת**
+
+להוסיף helper בראש הקומפוננטה:
+```ts
+const tableCampaignType = String((data?.table?.integration_settings as any)?.campaign_type || '').toLowerCase();
+const forceLeadsOnly = tableCampaignType === 'leads' || tableCampaignType === 'lead';
+const forceEcommerceOnly = tableCampaignType === 'ecommerce';
 ```
-insert error: insert or update on table "crm_records" violates 
-foreign key constraint "crm_records_created_by_fkey"
+
+**2. ב-`summary` (שורות 128-158)** – לכבד את `forceLeadsOnly`:
+- אם `forceLeadsOnly`: לאפס `purchases`, `revenue`, `addToCart` ולוודא `hasEcommerce = false`
+- אם `forceEcommerceOnly`: לאפס `leads` ולוודא `hasLeads = false`
+- בנוסף, להחמיר את `getLeadsFromData` עבור Google Ads כך שלא ייספר `conversions_value` כ-revenue כשהטבלה מוגדרת leads.
+
+**3. ב-`campaignSummary` (שורות 161-194)** – להחיל את אותה לוגיקה כמו ב-DynamicTableView:
+```ts
+const ecommerceCampaigns = forceLeadsOnly ? [] : allCampaigns.filter(...);
+const leadCampaigns = forceLeadsOnly ? allCampaigns : (forceEcommerceOnly ? [] : allCampaigns.filter(...));
 ```
 
-הסיבה: בקריאה הפנימית מה-cron (השינוי שעשינו אתמול), הגדרנו `user.id = '00000000-0000-0000-0000-000000000000'` - מזהה placeholder שלא קיים ב-`auth.users`, ולכן ה-FK ב-`created_by` נכשל. 90 רשומות נמחקו ואף רשומה חדשה לא נכנסה.
+**4. כותרות עמודות בטבלת לידים** – להוסיף את העמודה "המרות" (conversions) ל-Google Ads בנוסף ל"לידים", כי בעולם של Google Ads המונח השגור הוא "המרות" ולא "לידים". וגם להציג עיגול לספרה שלמה כמו שעשינו בדוח הפנימי.
 
-זו לא בעיה ב-SharedTable - הקוד שלו תקין. פשוט **אין נתונים בטבלה** עכשיו (אישרתי ב-DB: 0 רשומות).
+### תוצאה צפויה
 
-### בעיה 2: המרות מוצגות עם נקודה עשרונית (9.6, 23.5)
-שורות 2743 ו-2762 ב-`DynamicTableView.tsx` משתמשות ב-`maximumFractionDigits: 1` עבור עמודת המרות.
+קישור השיתוף של אקו (`after-lead.com/shared/table/...`) יציג:
+- כרטיסי סיכום: **הוצאה כוללת**, **המרות**, **קליקים**, **CPL** (ללא Revenue/Purchases/ROAS)
+- טבלה אחת בלבד: **"קמפייני לידים"** עם כל ארבעת הקמפיינים (Pmax, אנטארקטיקה, מדגסקר, אינדונזיה)
+- אין יותר טבלת "קמפייני איקומרס"
+- ערכי המרות מעוגלים (10 במקום 9.6, 24 במקום 23.5)
+- מטבע בדולר ($) – כפי שכבר תוקן
 
-## התיקונים
-
-### 1. תיקון FK בסנכרון cron (קריטי)
-ב-`supabase/functions/sync-google-ads-data/index.ts`:
-- במקום `user.id = '00000000-...'`, נטען מזהה משתמש אמיתי קיים בטבלה (למשל `created_by` של רשומה ישנה כלשהי בטבלה, או הבעלים של ה-tenant מ-`tenant_users` שיש לו role=`owner`).
-- אם לא נמצא - ניפול חזרה ל-NULL (ה-FK ב-`created_by` כנראה nullable - נבדוק; אם לא, נעדכן את העמודה כך שתאפשר NULL לקריאות מערכת).
-
-### 2. סנכרון מיידי לאקו אחרי התיקון
-לאחר ה-deploy, נריץ סנכרון ידני ל-`e4c69369-8853-42af-ac5a-5ae3787947ce` כדי שהנתונים יחזרו לדוח ולשיתוף.
-
-### 3. עיגול המרות לספרה שלמה
-ב-`DynamicTableView.tsx` שורות 2743 + 2762:
-```tsx
-{data.conversions.toLocaleString('he-IL', { maximumFractionDigits: 0 })}
-```
-(במקום `1`). יציג 10 במקום 9.6, 24 במקום 23.5.
-
-### 4. בדיקת מקומות נוספים
-חיפוש מהיר על `conversions.*toLocaleString` או `conversions.*toFixed` בכל הקבצים (כולל SharedTable) - לוודא שאין הצגה עשרונית של המרות בשום view.
-
-## תוצאה צפויה
-- הקישור `after-lead.com/shared/table/eco` יציג מיידית את כל הנתונים (Pmax, יוון/אנטארקטיקה וכו') במקום אפסים.
-- עמודת המרות תציג ערכים שלמים בלבד (10, 24, 11, 8) הן בדוח הפנימי הן בשיתוף.
-- ה-cron שירוץ מחר ב-04:00 יעבוד כראוי - ימחק וייכניס נכון בלי FK error.
-
-## קבצים שיתעדכנו
-- `supabase/functions/sync-google-ads-data/index.ts` - תיקון user.id ל-cron
-- `src/pages/DynamicTableView.tsx` - שורות 2743, 2762 (עיגול)
-- אם ימצאו - מקומות נוספים שמציגים `conversions` עם עשרוניים
+### היקף השינוי
+- קובץ אחד בלבד: `src/pages/SharedTable.tsx`
+- ללא שינויי DB, ללא שינויי edge functions
+- אין השפעה על טבלאות אחרות: טבלאות eCommerce ימשיכו לעבוד (כי `campaign_type === 'ecommerce'` או `integration_type === 'facebook_ecommerce'`)
 
