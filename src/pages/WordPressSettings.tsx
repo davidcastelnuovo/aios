@@ -1301,6 +1301,111 @@ export default function WordPressSettings() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Slug → Campaign Mapping Dialog */}
+      <Dialog open={!!mappingSite} onOpenChange={(o) => { if (!o) setMappingSite(null); }}>
+        <DialogContent dir="rtl" className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MapPin className="h-5 w-5 text-primary" />
+              שייך עמודי נחיתה לקמפיינים
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+            <div className="rounded-lg border bg-muted/30 p-3">
+              <p className="text-sm font-medium">{mappingSite?.site_name || mappingSite?.site_url}</p>
+              <p className="text-xs text-muted-foreground" dir="ltr">{mappingSite?.site_url}</p>
+            </div>
+
+            <div className="rounded-lg border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/20 p-3 flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+              <p className="text-xs text-blue-900 dark:text-blue-200">
+                שיוך עמודי הנחיתה (slugs) לקמפיינים מאפשר אימות מדויק של לידים.
+                שימושי במיוחד כש-Google Ads מדווח Asset Group ID במקום Campaign ID (כמו ב-PMax).
+              </p>
+            </div>
+
+            {isLoadingSlugs ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin" />
+              </div>
+            ) : discoveredSlugs.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8 text-sm">
+                לא נמצאו עמודי נחיתה ב-90 הימים האחרונים
+              </p>
+            ) : (
+              <div className="space-y-2">
+                <div className="grid grid-cols-12 gap-2 px-2 text-xs font-medium text-muted-foreground">
+                  <div className="col-span-5">עמוד נחיתה (slug)</div>
+                  <div className="col-span-2 text-center">לידים</div>
+                  <div className="col-span-5">קמפיין משויך</div>
+                </div>
+                {discoveredSlugs.map((s) => (
+                  <div key={s.slug} className="grid grid-cols-12 gap-2 items-center p-2 rounded border hover:bg-muted/30">
+                    <div className="col-span-5">
+                      <p className="font-mono text-xs" dir="ltr">/{s.slug}</p>
+                      {s.sample_gad_campaignids && s.sample_gad_campaignids.length > 0 && (
+                        <p className="text-[10px] text-muted-foreground" dir="ltr">
+                          gad: {s.sample_gad_campaignids.slice(0, 2).join(", ")}
+                        </p>
+                      )}
+                    </div>
+                    <div className="col-span-2 text-center">
+                      <Badge variant="secondary" className="text-xs">
+                        {s.google_ads_submissions}/{s.submissions}
+                      </Badge>
+                    </div>
+                    <div className="col-span-5">
+                      <Select
+                        value={mappingDraft[s.slug] || "none"}
+                        onValueChange={(v) =>
+                          setMappingDraft((prev) => ({ ...prev, [s.slug]: v === "none" ? "" : v }))
+                        }
+                      >
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue placeholder={
+                            clientCampaigns.length === 0 ? "אין קמפיינים מסונכרנים" : "בחר קמפיין..."
+                          } />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">ללא שיוך</SelectItem>
+                          {clientCampaigns.map((c) => (
+                            <SelectItem key={c.campaign_id} value={c.campaign_id}>
+                              {c.campaign_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-2 sticky bottom-0 bg-background pb-1">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setMappingSite(null)}
+                disabled={mappingMutation.isPending}
+              >
+                ביטול
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={() => {
+                  if (!mappingSite) return;
+                  mappingMutation.mutate({ id: mappingSite.id, mapping: mappingDraft });
+                }}
+                disabled={mappingMutation.isPending}
+              >
+                {mappingMutation.isPending && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
+                שמור מיפוי
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
