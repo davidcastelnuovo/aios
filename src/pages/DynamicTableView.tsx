@@ -88,11 +88,17 @@ interface CrmRecord {
   data: Record<string, any>;
 }
 
-export default function DynamicTableView() {
-  const { tableSlug } = useParams<{ tableSlug: string }>();
+interface DynamicTableViewProps {
+  embedTableSlug?: string;
+  embedMode?: boolean;
+}
+
+export default function DynamicTableView({ embedTableSlug, embedMode }: DynamicTableViewProps = {}) {
+  const params = useParams<{ tableSlug: string }>();
+  const tableSlug = embedTableSlug || params.tableSlug;
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const isEmbed = searchParams.get('embed') === '1';
+  const isEmbed = embedMode || searchParams.get('embed') === '1';
   const { buildPath } = useTenantPath();
   const queryClient = useQueryClient();
   
