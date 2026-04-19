@@ -50,9 +50,14 @@ function KeywordRow({ kw, show3Month, showYearly, showPrevMonth, showGsc }: { kw
       </td>
       <td className="p-3 text-center">
         {kw.position != null ? (
-          <Badge variant={kw.position <= 3 ? 'default' : kw.position <= 10 ? 'secondary' : 'outline'} className="font-mono">
-            {fmt(kw.position)}
-          </Badge>
+          <span className="inline-flex items-center gap-1">
+            <Badge variant={kw.position <= 3 ? 'default' : kw.position <= 10 ? 'secondary' : 'outline'} className="font-mono">
+              {fmt(kw.position)}
+            </Badge>
+            {kw._position_source === 'gsc' && (
+              <Badge variant="outline" className="text-[9px] px-1 py-0 font-normal text-blue-600 border-blue-300" title="מיקום ממוצע מ-Google Search Console">GSC</Badge>
+            )}
+          </span>
         ) : <span className="text-muted-foreground">—</span>}
       </td>
       {showPrevMonth && (

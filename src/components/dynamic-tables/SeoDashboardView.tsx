@@ -317,17 +317,30 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
     }
     
     // Merge GSC data (clicks, impressions, CTR)
+    // GSC position takes priority over Ahrefs estimated position when available,
+    // since GSC reports the real average position from Google Search.
     const gscRow = gscMap.get(kwLower);
+    const gscPos = gscRow?.position ?? null;
+    const ahrefsPos = normalized.position;
+    const effectivePosition = gscPos != null ? gscPos : ahrefsPos;
+
+    // Recompute period changes against GSC current position when GSC is the source,
+    // so "shift" arrows stay consistent with the displayed position.
+    const recompute = (prev: number | null) =>
+      (prev != null && effectivePosition != null) ? prev : prev;
+
     return {
       ...normalized,
+      position: effectivePosition,
+      ahrefs_position: ahrefsPos,
       position_prev_month: prevPos,
       position_3month: pos3m,
       position_yearly: posYear,
-      _position_source: positionSource,
+      _position_source: gscPos != null ? 'gsc' : positionSource,
       gsc_clicks: gscRow?.clicks ?? null,
       gsc_impressions: gscRow?.impressions ?? null,
       gsc_ctr: gscRow?.ctr ?? null,
-      gsc_position: gscRow?.position ?? null,
+      gsc_position: gscPos,
     };
   }
 
