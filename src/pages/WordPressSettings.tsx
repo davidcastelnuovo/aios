@@ -120,40 +120,96 @@ export default function WordPressSettings() {
     enabled: isSuperAdmin,
   });
 
-  // Fetch agencies for the selected tenant
-  const { data: agencies = [] } = useQuery<{ id: string; name: string }[]>({
-    queryKey: ["agencies-for-wp", form.tenant_id || tenantId],
+  // Fetch agencies for the form
+  // - super-admin: all agencies across tenants (or filtered by chosen tenant_id)
+  // - regular user: agencies in their tenant + cross-tenant via agency_tenant_access
+  const { data: agencies = [] } = useQuery<AgencyOpt[]>({
+    queryKey: ["agencies-for-wp", form.tenant_id, tenantId, isSuperAdmin],
     queryFn: async () => {
-      const tid = form.tenant_id || tenantId;
-      if (!tid) return [];
-      const { data, error } = await supabase
+      if (isSuperAdmin) {
+        let q = supabase
+          .from("agencies")
+          .select("id, name, tenant_id, tenants(name)")
+          .order("name");
+        if (form.tenant_id) q = q.eq("tenant_id", form.tenant_id);
+        const { data, error } = await q;
+        if (error) throw error;
+        return (data || []).map((a: any) => ({
+          id: a.id,
+          name: a.name,
+          tenant_id: a.tenant_id,
+          tenant_name: a.tenants?.name,
+        }));
+      }
+
+      if (!tenantId) return [];
+
+      // Own tenant agencies
+      const ownPromise = supabase
         .from("agencies")
-        .select("id, name")
-        .eq("tenant_id", tid)
+        .select("id, name, tenant_id, tenants(name)")
+        .eq("tenant_id", tenantId)
         .order("name");
-      if (error) throw error;
-      return data || [];
+
+      // Cross-tenant via agency_tenant_access
+      const accessPromise = supabase
+        .from("agency_tenant_access")
+        .select("agency_id, agencies(id, name, tenant_id, tenants(name))")
+        .eq("accessing_tenant_id", tenantId);
+
+      const [ownRes, accessRes] = await Promise.all([ownPromise, accessPromise]);
+      if (ownRes.error) throw ownRes.error;
+      if (accessRes.error) throw accessRes.error;
+
+      const merged = new Map<string, AgencyOpt>();
+      (ownRes.data || []).forEach((a: any) =>
+        merged.set(a.id, { id: a.id, name: a.name, tenant_id: a.tenant_id, tenant_name: a.tenants?.name })
+      );
+      (accessRes.data || []).forEach((row: any) => {
+        const a = row.agencies;
+        if (a) merged.set(a.id, { id: a.id, name: a.name, tenant_id: a.tenant_id, tenant_name: a.tenants?.name });
+      });
+      return Array.from(merged.values()).sort((x, y) => x.name.localeCompare(y.name));
     },
-    enabled: !!(form.tenant_id || tenantId),
+    enabled: !!tenantId || isSuperAdmin,
   });
 
-  // Fetch clients for the selected tenant (filtered by agency if selected)
+  // Resolve effective tenant for clients query (follows the selected agency's tenant)
+  const selectedAgencyTenantId = form.agency_id
+    ? agencies.find((a) => a.id === form.agency_id)?.tenant_id
+    : undefined;
+
+  // Fetch clients - scoped to selected agency's tenant (if agency picked)
+  // Otherwise to chosen tenant_id (super-admin) or current tenant
   const { data: clients = [] } = useQuery<Client[]>({
-    queryKey: ["clients-for-wp", form.tenant_id || tenantId, form.agency_id],
+    queryKey: ["clients-for-wp", selectedAgencyTenantId, form.tenant_id, tenantId, form.agency_id, isSuperAdmin],
     queryFn: async () => {
-      const tid = form.tenant_id || tenantId;
-      if (!tid) return [];
+      const effTenant = selectedAgencyTenantId || form.tenant_id || tenantId;
+      if (!effTenant && !form.agency_id && !isSuperAdmin) return [];
+
       let q = supabase
         .from("clients")
-        .select("id, name")
-        .eq("tenant_id", tid)
+        .select("id, name, tenant_id, tenants(name)")
         .order("name");
-      if (form.agency_id) q = q.eq("agency_id", form.agency_id);
+
+      if (form.agency_id) {
+        q = q.eq("agency_id", form.agency_id);
+      } else if (effTenant) {
+        q = q.eq("tenant_id", effTenant);
+      } else {
+        return [];
+      }
+
       const { data, error } = await q;
       if (error) throw error;
-      return data || [];
+      return (data || []).map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        tenant_id: c.tenant_id,
+        tenant_name: c.tenants?.name,
+      }));
     },
-    enabled: !!(form.tenant_id || tenantId),
+    enabled: !!(form.agency_id || form.tenant_id || tenantId || isSuperAdmin),
   });
 
   // Fetch all WordPress sites (super admin sees all, others see own tenant)
