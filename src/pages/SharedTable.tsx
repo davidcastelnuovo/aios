@@ -178,8 +178,8 @@ export default function SharedTable() {
 
     const roas = spend > 0 ? revenue / spend : 0;
     const cpl = leads > 0 ? spend / leads : 0;
-    const hasEcommerce = !forceLeadsOnly && (purchases > 0 || revenue > 0 || addToCart > 0);
-    const hasLeads = !forceEcommerceOnly && (forceLeadsOnly || leads > 0);
+    const hasEcommerce = forceEcommerceOnly;
+    const hasLeads = forceLeadsOnly;
 
     return { spend, impressions, clicks, leads, sessions, purchases, revenue, addToCart, roas, cpl, hasEcommerce, hasLeads };
   }, [filteredRecords, integrationType, isIntegrationTable, forceLeadsOnly, forceEcommerceOnly, isGoogleAds]);
