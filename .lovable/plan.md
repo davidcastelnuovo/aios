@@ -1,77 +1,79 @@
 
-## מה קרה ולמה זה השתנה
-זו רגרסיה מהשינויים האחרונים, ובפועל קרו כאן שני דברים שונים:
+## המטרה
+כן — השינוי צריך להיות רוחבי בכל דוחות ה-SEO בתוך המערכת, כך שבחלק העליון יופיעו באופן עקבי הלשוניות:
+- SEO
+- Search Console
+- Analytics
 
-1. **ב-SEO המשולב החליפו את המיקום של Ahrefs במיקום של GSC**  
-   ב-`SeoDashboardView.tsx` יש כרגע קוד שמגדיר:
-   - `position = gsc_position` אם קיים
-   - ורק אם אין GSC הוא נופל חזרה ל-Ahrefs  
-   כלומר במקום "לשלב" — המערכת התחילה **להחליף**.
+ולשונית **Search Console** תאפשר להיכנס למסך האנליזה המלא של GSC, כולל חיפוש ביטויים, סינון, דירוגים, קליקים, חשיפות ו-CTR.
 
-2. **הלשונית של Google Search Console לא נקבעת באותה לוגיקה של השילוב עצמו**  
-   `SeoDashboardView` מושך GSC דרך `GscIntegration` + `useUserIntegrations`,  
-   אבל `SeoReportTabs` מחליט אם להציג לשונית GSC לפי בדיקה אחרת (`tenant_integrations` / `gscTables`).  
-   לכן יכול להיות מצב ש:
-   - נתוני GSC כן נטענים ומשולבים בטבלת ה-SEO
-   - אבל לשונית GSC עצמה לא מוצגת
+## מה בדקתי
+מצאתי שכרגע יש כבר תשתית טובה, אבל היא לא עקבית:
+- `DynamicTableView.tsx` כבר מרנדר `SeoReportTabs` עבור דוחות Ahrefs
+- `DashboardView.tsx` כבר חזר להשתמש ב-`SeoReportTabs`
+- בתוך `SeoReportTabs.tsx` הלשונית של GSC מוצגת לפי:
+  - `tenant_integrations`
+  - או קיום `crm_tables` של GSC
+- אבל `GscIntegration.tsx` עצמו עובד לפי `useUserIntegrations(...)`
 
-3. **בחלק מהמסכים הוחלף בכלל ה-render של דוח SEO**  
-   ב-`DashboardView.tsx` ה-SEO tab מרנדר `SeoDashboardWithGa` במקום `SeoReportTabs`, ולכן שם נעלמו הלשוניות של GSC/Analytics.
+כלומר יש כרגע **שתי לוגיקות שונות** לשאלה “האם יש GSC”, ולכן במקרים מסוימים:
+- המשתמש כן יכול לעבוד עם GSC
+- אבל הלשונית עצמה לא מופיעה
 
 ## מה אתקן
-אחזיר את ההתנהגות שהייתה ועבדה טוב: **גם Ahrefs וגם Google Search Console ביחד, בלי להחליף אחד את השני**.
 
-### שלב 1 — להחזיר את Ahrefs כמקור הראשי בדוח SEO
-- לא לדרוס יותר את `position` של Ahrefs עם `gsc_position`
-- לשמור את Ahrefs כמיקום הראשי בדוח ה-SEO
-- להציג את נתוני GSC **בנוסף**:
-  - מיקום ממוצע GSC
-  - קליקים
-  - חשיפות
-  - CTR
-- להשאיר `GSC-only keywords` כמו היום
+### 1) לאחד את תנאי ההצגה של לשונית Search Console
+אעדכן את `SeoReportTabs.tsx` כך שלשונית GSC תיקבע לפי אותה לוגיקה האמיתית של הגישה:
+- `useUserIntegrations(tenantId, 'google_search_console')`
+- ובנוסף fallback אם כבר יש `gscTables`, `linkedGscTableId` או `linkedGscSiteUrl`
 
-### שלב 2 — להחזיר את לשונית Google Search Console בצורה עקבית
-- לאחד את תנאי ההצגה של לשונית GSC עם אותה לוגיקת גישה שכבר מביאה את נתוני GSC בפועל
-- כלומר: אם למשתמש יש גישת GSC והדוח יודע למשוך ממנו נתונים, הלשונית תופיע
-- זה ימנע מצב שבו GSC "עובד ברקע" אבל הלשונית נעלמת
+המטרה: אם בפועל אפשר לעבוד עם GSC בדוח — הלשונית תמיד תופיע.
 
-### שלב 3 — ליישר גם את מסך הדשבורדים
-- לבדוק את `DashboardView.tsx`
-- אם צריך, להחזיר שם שימוש ב-`SeoReportTabs` או לעטוף אותו כך שיישאר:
+### 2) להשאיר את לשונית GSC גם כשאין עדיין טבלת GSC מקושרת
+אם יש חיבור GSC פעיל אבל עוד לא נבחרה טבלה/נכס:
+- הלשונית עדיין תופיע
+- ובתוכה יוצג `GscIntegration`
+- משם יהיה אפשר לבחור נכס ולחבר אותו לדוח
+
+כלומר: לא נסתיר את כל הלשונית רק כי חסר link אחד.
+
+### 3) לוודא שההתנהגות אחידה בכל מסכי דוחות ה-SEO
+אאמת ואשלים עקביות בין:
+- `DynamicTableView.tsx` — דוח SEO בתוך המערכת
+- `DashboardView.tsx` — דשבורדים
+- ואם צריך גם מסכי snapshot/embedded רלוונטיים
+
+המטרה: אותו מבנה לשוניות בכל מקום שבו מוצג דוח SEO פנימי.
+
+### 4) לא לפגוע בשילוב Ahrefs + GSC
+אשמור על ההתנהגות שכבר תוקנה:
+- Ahrefs נשאר מקור ה-SEO הראשי בטאב SEO
+- GSC נשאר גם כלשונית מלאה נפרדת
+- וגם כמידע משלים בתוך ניתוח מילות המפתח
+
+## קבצים שסביר שיעודכנו
+- `src/components/dynamic-tables/SeoReportTabs.tsx`
+- `src/pages/DashboardView.tsx` (רק אם צריך השלמה/יישור נוסף)
+- ייתכן גם `src/pages/DynamicTableView.tsx` אם אצטרך חיזוק תנאי render
+- ייתכן hook משותף קטן אם ארצה לרכז את לוגיקת availability
+
+## תוצאה צפויה
+בכל דוח SEO פנימי:
+- למעלה יופיעו הלשוניות:
   - SEO
   - Search Console
-  - Analytics  
-  ולא רק SEO משולב
-
-## קבצים שיתעדכנו
-- `src/components/dynamic-tables/SeoDashboardView.tsx`
-- `src/components/dynamic-tables/seo/SeoKeywordsTable.tsx`
-- `src/components/dynamic-tables/SeoReportTabs.tsx`
-- `src/pages/DashboardView.tsx`
-- ייתכן גם `src/components/dynamic-tables/SeoDashboardWithGa.tsx` אם יהיה צורך רק לשמור את GA בלי לאבד את מבנה הלשוניות
-
-## תוצאה צפויה אחרי התיקון
-- דוח ה-SEO יחזור להיות **משולב**:
-  - Ahrefs נשאר
-  - GSC נשאר
-  - לא מחליפים אחד את השני
-- לשונית **Google Search Console** תחזור להופיע באופן עקבי
-- בטבלת מילות המפתח יראו בבירור:
-  - מיקום Ahrefs
-  - נתוני GSC הנלווים
-- גם במסך הדוח וגם במסך הדשבורד תהיה אותה התנהגות, בלי פערים
+  - Analytics
+- בלשונית **Search Console** יהיה מסך GSC המלא:
+  - חיפוש ביטויים
+  - ניתוח מילות מפתח
+  - קליקים / חשיפות / CTR / מיקום
+  - סינוני טווח תאריכים
+- אם יש חיבור GSC אבל עדיין לא נבחר נכס, הלשונית עדיין תופיע ותאפשר לחבר אותו
 
 ## פירוט טכני קצר
-הבעיה המרכזית כרגע היא חוסר עקביות:
-- `SeoDashboardView` משתמש ב-GSC בתור overlay enrichment
-- `SeoReportTabs` משתמש בלוגיקת availability אחרת
-- `DashboardView` בכלל עוקף את `SeoReportTabs`
-
-הפתרון הוא:
-- להחזיר **source priority** של Ahrefs בטאב SEO
-- להציג GSC כמידע משלים
-- להשתמש באותה לוגיקת access/linking גם להצגת הלשונית וגם לטעינת הנתונים
+הבעיה אינה שאין רכיב GSC — הוא כבר קיים.  
+הבעיה היא ש-`SeoReportTabs` מחליט אם להציג את הלשונית לפי בדיקה אחת, בזמן ש-`GscIntegration` עובד לפי בדיקה אחרת.  
+הפתרון הוא לאחד את מקור האמת של “יש גישת GSC” כך שה-UI לא יסתיר יותר את הלשונית בטעות.
 
 ## ללא שינויי DB
-לא נדרש שינוי טבלאות או מיגרציות. זה תיקון פרונט-אנד ולוגיקת חיבור בלבד.
+לא נדרשות מיגרציות או שינויים בטבלאות. זה תיקון לוגיקה ורינדור בפרונטאנד בלבד.
