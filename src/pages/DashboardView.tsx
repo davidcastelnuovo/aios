@@ -268,6 +268,8 @@ export default function DashboardView() {
   });
 
   // Fetch WooCommerce summary for the date range to include in totals
+  // NOTE: Relative ranges (last_7_days, etc.) end YESTERDAY to match crm-records edge function
+  // and external platforms. This avoids partial "today" data skewing comparisons.
   const wooDateRange = useMemo(() => {
     const now = new Date();
     const end = new Date(now); end.setHours(23, 59, 59, 999);
@@ -275,12 +277,12 @@ export default function DashboardView() {
     switch (dateFilter) {
       case 'today': break;
       case 'yesterday': start.setDate(start.getDate() - 1); end.setDate(end.getDate() - 1); end.setHours(23, 59, 59, 999); break;
-      case 'last_7_days': start.setDate(start.getDate() - 6); break;
-      case 'last_30_days': start.setDate(start.getDate() - 29); break;
-      case 'last_70_days': start.setDate(start.getDate() - 69); break;
+      case 'last_7_days': start.setDate(start.getDate() - 7); end.setDate(end.getDate() - 1); end.setHours(23, 59, 59, 999); break;
+      case 'last_30_days': start.setDate(start.getDate() - 30); end.setDate(end.getDate() - 1); end.setHours(23, 59, 59, 999); break;
+      case 'last_70_days': start.setDate(start.getDate() - 70); end.setDate(end.getDate() - 1); end.setHours(23, 59, 59, 999); break;
       case 'this_month': start.setDate(1); break;
       case 'last_month': start.setMonth(start.getMonth() - 1, 1); end.setDate(0); end.setHours(23, 59, 59, 999); break;
-      default: start.setDate(start.getDate() - 6);
+      default: start.setDate(start.getDate() - 7); end.setDate(end.getDate() - 1); end.setHours(23, 59, 59, 999);
     }
     return { start: start.toISOString(), end: end.toISOString() };
   }, [dateFilter]);
