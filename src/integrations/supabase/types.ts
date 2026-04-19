@@ -5464,6 +5464,7 @@ export type Database = {
         Row: {
           agency_id: string | null
           app_password: string
+          campaign_form_mapping: Json | null
           campaign_url_mapping: Json | null
           client_id: string | null
           created_at: string
@@ -5485,6 +5486,7 @@ export type Database = {
         Insert: {
           agency_id?: string | null
           app_password: string
+          campaign_form_mapping?: Json | null
           campaign_url_mapping?: Json | null
           client_id?: string | null
           created_at?: string
@@ -5506,6 +5508,7 @@ export type Database = {
         Update: {
           agency_id?: string | null
           app_password?: string
+          campaign_form_mapping?: Json | null
           campaign_url_mapping?: Json | null
           client_id?: string | null
           created_at?: string
