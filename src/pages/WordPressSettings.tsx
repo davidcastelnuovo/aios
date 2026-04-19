@@ -64,6 +64,15 @@ interface Tenant {
 interface Client {
   id: string;
   name: string;
+  tenant_id?: string;
+  tenant_name?: string;
+}
+
+interface AgencyOpt {
+  id: string;
+  name: string;
+  tenant_id: string;
+  tenant_name?: string;
 }
 
 const emptyForm = {
