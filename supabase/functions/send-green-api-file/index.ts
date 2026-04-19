@@ -83,8 +83,10 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get Green API integration
-    const { data: integration } = await supabaseClient
+    // Get Green API integration — prefer the current user's connection,
+    // fall back to any active connection within the same tenant so reports
+    // can be sent even if the active user hasn't personally configured Green API.
+    let { data: integration } = await supabaseClient
       .from('tenant_integrations')
       .select('*')
       .eq('tenant_id', resolvedTenantId)
@@ -92,6 +94,19 @@ Deno.serve(async (req) => {
       .eq('integration_type', 'green_api')
       .eq('is_active', true)
       .maybeSingle();
+
+    if (!integration?.api_key || !integration?.settings?.instance_id) {
+      const { data: tenantIntegration } = await supabaseClient
+        .from('tenant_integrations')
+        .select('*')
+        .eq('tenant_id', resolvedTenantId)
+        .eq('integration_type', 'green_api')
+        .eq('is_active', true)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      integration = tenantIntegration;
+    }
 
     if (!integration?.api_key || !integration?.settings?.instance_id) {
       return new Response(JSON.stringify({ error: 'Green API not configured' }), {
