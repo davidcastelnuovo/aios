@@ -87,21 +87,24 @@ function getDateRange(filter: string, customFrom?: string, customTo?: string): {
       endDate = endOfLastWeek;
       break;
     }
+    // NOTE: Relative ranges end YESTERDAY (not today) to match DynamicTableView
+    // and external platforms (Google Ads, Facebook). Today is excluded because
+    // its data is partial/incomplete during the day.
     case 'last_7_days':
-      startDate = shiftDateString(today, -6);
-      endDate = today;
+      startDate = shiftDateString(today, -7);
+      endDate = shiftDateString(today, -1);
       break;
     case 'last_14_days':
-      startDate = shiftDateString(today, -13);
-      endDate = today;
+      startDate = shiftDateString(today, -14);
+      endDate = shiftDateString(today, -1);
       break;
     case 'last_30_days':
-      startDate = shiftDateString(today, -29);
-      endDate = today;
+      startDate = shiftDateString(today, -30);
+      endDate = shiftDateString(today, -1);
       break;
     case 'last_70_days':
-      startDate = shiftDateString(today, -69);
-      endDate = today;
+      startDate = shiftDateString(today, -70);
+      endDate = shiftDateString(today, -1);
       break;
     case 'this_month':
       startDate = getMonthStart(today);
@@ -115,16 +118,16 @@ function getDateRange(filter: string, customFrom?: string, customTo?: string): {
       break;
     }
     case 'last_90_days':
-      startDate = shiftDateString(today, -89);
-      endDate = today;
+      startDate = shiftDateString(today, -90);
+      endDate = shiftDateString(today, -1);
       break;
     case 'last_180_days':
-      startDate = shiftDateString(today, -179);
-      endDate = today;
+      startDate = shiftDateString(today, -180);
+      endDate = shiftDateString(today, -1);
       break;
     case 'last_365_days':
-      startDate = shiftDateString(today, -364);
-      endDate = today;
+      startDate = shiftDateString(today, -365);
+      endDate = shiftDateString(today, -1);
       break;
     case 'custom':
       if (customFrom && customTo) {
