@@ -128,6 +128,14 @@ export function GoogleAnalyticsDashboard({
   }, [externalDateFilter]);
   const [showComparison, setShowComparison] = useState(false);
   const [reportMode, setReportMode] = useState<'ecommerce' | 'leads'>(defaultReportMode || 'ecommerce');
+  // Keep local mode in sync when the persisted default arrives (async parent load)
+  // or when switching between dashboards/tables with different defaults.
+  useEffect(() => {
+    if (defaultReportMode && defaultReportMode !== reportMode) {
+      setReportMode(defaultReportMode);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultReportMode, dashboardId, tableId]);
   const [calendarOpen, setCalendarOpen] = useState(false);
 
   const toNumber = (value: unknown): number => {
