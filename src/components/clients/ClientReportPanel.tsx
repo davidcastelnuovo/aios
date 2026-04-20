@@ -255,11 +255,23 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
 
     setIsCapturing(true);
     try {
+      // If snapshot defines a `data-snapshot-end` marker, crop the screenshot
+      // to only include content above it (e.g. SEO report → header + KPI cards only).
+      const endMarker = node.querySelector<HTMLElement>('[data-snapshot-end="true"]');
+      let height: number | undefined;
+      if (endMarker) {
+        const nodeRect = node.getBoundingClientRect();
+        const markerRect = endMarker.getBoundingClientRect();
+        const computed = Math.ceil(markerRect.top - nodeRect.top);
+        if (computed > 100) height = computed;
+      }
+
       const dataUrl = await toPng(node, {
         quality: 0.9,
         pixelRatio: 1.5,
         backgroundColor: "#ffffff",
         skipFonts: true,
+        ...(height ? { height, canvasHeight: height } : {}),
       });
 
       setScreenshotUrl(dataUrl);
