@@ -90,12 +90,12 @@ export function EmailRecipientsSelector({
         <PopoverContent className="w-[320px] p-0" align="start" dir="rtl">
           <ScrollArea className="max-h-[280px]">
             <div className="p-2 space-y-1">
-              {options.length === 0 && (
+              {validOptions.length === 0 && (
                 <div className="text-xs text-muted-foreground px-2 py-3 text-center">
                   אין נמענים מהצוות
                 </div>
               )}
-              {options.map((opt) => {
+              {validOptions.map((opt) => {
                 const checked = selectedEmails.includes(opt.email);
                 return (
                   <div
