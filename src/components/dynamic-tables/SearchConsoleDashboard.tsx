@@ -457,12 +457,46 @@ export function SearchConsoleDashboard({ tableId, initialLangFilter, onLangFilte
         <CardHeader>
           <CardTitle className="text-lg flex items-center justify-between flex-wrap gap-2">
             <span>ביטויי חיפוש ({formatNumber(sortedQueries.length)})</span>
-            <Input
-              placeholder="חפש ביטוי..."
-              value={searchFilter}
-              onChange={(e) => setSearchFilter(e.target.value)}
-              className="h-8 w-[220px] text-sm font-normal"
-            />
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="inline-flex rounded-md border bg-background p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setLangFilter("all")}
+                  className={cn(
+                    "px-2.5 h-7 text-xs font-medium rounded-sm transition-colors",
+                    langFilter === "all" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                  )}
+                >
+                  הכל ({formatNumber(langCounts.all)})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLangFilter("he")}
+                  className={cn(
+                    "px-2.5 h-7 text-xs font-medium rounded-sm transition-colors",
+                    langFilter === "he" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                  )}
+                >
+                  עברית ({formatNumber(langCounts.he)})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLangFilter("en")}
+                  className={cn(
+                    "px-2.5 h-7 text-xs font-medium rounded-sm transition-colors",
+                    langFilter === "en" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                  )}
+                >
+                  English ({formatNumber(langCounts.en)})
+                </button>
+              </div>
+              <Input
+                placeholder="חפש ביטוי..."
+                value={searchFilter}
+                onChange={(e) => setSearchFilter(e.target.value)}
+                className="h-8 w-[220px] text-sm font-normal"
+              />
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent>
