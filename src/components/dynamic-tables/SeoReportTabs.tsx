@@ -14,6 +14,8 @@ import { TrendingUp, Search, BarChart3, Settings2, RefreshCw, Plus } from "lucid
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { useUserIntegrations } from "@/hooks/useUserIntegrations";
+import { useAhrefsReports } from "@/hooks/useAhrefsReports";
+import { filterValidSeoReports } from "./seo/reportValidity";
 
 interface SeoReportTabsProps {
   tenantId: string;
@@ -22,6 +24,15 @@ interface SeoReportTabsProps {
 
 export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
   const queryClient = useQueryClient();
+
+  // Check whether we actually have valid Ahrefs SEO reports for this client.
+  // If not, we'll default the active tab to Search Console so users see real data
+  // instead of the empty "אין דוחות SEO" state.
+  const { data: ahrefsReports } = useAhrefsReports({ clientId });
+  const hasValidAhrefsReports = useMemo(
+    () => filterValidSeoReports(ahrefsReports || []).length > 0,
+    [ahrefsReports]
+  );
 
   // Get the current SEO table's domain for GSC matching
   const { data: seoTable } = useQuery({
@@ -217,7 +228,7 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
 
   return (
     <div className="space-y-4" dir="rtl">
-      <Tabs defaultValue="seo" className="w-full">
+      <Tabs defaultValue={!hasValidAhrefsReports && hasGsc ? "gsc" : "seo"} className="w-full">
         <TabsList className="w-full justify-start gap-1">
           <TabsTrigger value="seo" className="gap-1.5">
             <TrendingUp className="h-4 w-4" />
