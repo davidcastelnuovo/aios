@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowUp, ArrowDown, Trophy, TrendingUp, Calendar, MousePointerClick, Eye, CalendarRange } from "lucide-react";
+import { ArrowUp, ArrowDown, Trophy, TrendingUp, Calendar, MousePointerClick, Eye, CalendarRange, Target } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
@@ -23,8 +23,8 @@ interface SeoKeywordsTableProps {
   hasGscData?: boolean;
   show3Month?: boolean;
   showYearly?: boolean;
-  /** Default tab to open. Defaults to "all" so the full merged dataset is visible immediately. */
-  defaultTab?: "top10" | "3month" | "yearly" | "monthly" | "all";
+  /** Default tab to open. Defaults to "tracked" so the user's tracked keywords are visible first. */
+  defaultTab?: "tracked" | "top10" | "3month" | "yearly" | "monthly" | "all";
   /** Initial language filter persisted at the report/table level. */
   initialLangFilter?: LangFilter;
   /** Called whenever the language filter changes — parent persists to DB. */
@@ -121,7 +121,13 @@ function KeywordTable({ keywords, title, icon, show3Month, showYearly, showPrevM
   showPrevMonth?: boolean;
   showGsc?: boolean;
 }) {
-  if (keywords.length === 0) return null;
+  if (keywords.length === 0) {
+    return (
+      <div dir="rtl" className="px-3 py-8 text-center text-sm text-muted-foreground">
+        אין ביטויים להצגה בפילטר הנוכחי
+      </div>
+    );
+  }
 
   return (
     <div dir="rtl">
@@ -176,7 +182,7 @@ function KeywordTable({ keywords, title, icon, show3Month, showYearly, showPrevM
   );
 }
 
-export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywords = [], hasGscData = false, show3Month = false, showYearly = false, defaultTab = "all", initialLangFilter, onLangFilterChange }: SeoKeywordsTableProps) {
+export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywords = [], hasGscData = false, show3Month = false, showYearly = false, defaultTab = "tracked", initialLangFilter, onLangFilterChange }: SeoKeywordsTableProps) {
   const [langFilter, setLangFilterState] = useState<LangFilter>(initialLangFilter ?? "all");
 
   // Sync if the parent loads the saved value asynchronously after first render
@@ -225,25 +231,35 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywor
     [mergedKeywords, langFilter]
   );
 
+  // Tracked keywords filtered by language and sorted: keywords with position first (asc), then nulls
+  const trackedFiltered = useMemo(() => {
+    const filtered = trackedKeywords.filter(kw => matchesLang(String(kw.keyword || ''), langFilter));
+    return [...filtered].sort((a, b) => {
+      const aPos = a.position ?? Number.POSITIVE_INFINITY;
+      const bPos = b.position ?? Number.POSITIVE_INFINITY;
+      return aPos - bPos;
+    });
+  }, [trackedKeywords, langFilter]);
+
+  // Sort helper: keywords with valid position first (ascending), then null/undefined positions at the end
+  const sortByPosition = (arr: any[]) =>
+    [...arr].sort((a, b) => {
+      const aPos = a.position ?? Number.POSITIVE_INFINITY;
+      const bPos = b.position ?? Number.POSITIVE_INFINITY;
+      return aPos - bPos;
+    });
+
   // 1. All keywords in top 10 positions (page 1)
-  const top10 = [...allKeywords]
-    .filter(k => k.position != null && k.position <= 10)
-    .sort((a, b) => (a.position || 999) - (b.position || 999));
+  const top10 = sortByPosition(allKeywords.filter(k => k.position != null && k.position <= 10));
 
   // 2. All keywords with 3-month data, sorted by current position (best first)
-  const by3MonthChange = [...allKeywords]
-    .filter(k => k.position != null && k.position_3month != null)
-    .sort((a, b) => (a.position || 999) - (b.position || 999));
+  const by3MonthChange = sortByPosition(allKeywords.filter(k => k.position != null && k.position_3month != null));
 
   // 3. All keywords with yearly data, sorted by current position (best first)
-  const byYearlyChange = [...allKeywords]
-    .filter(k => k.position != null && k.position_yearly != null)
-    .sort((a, b) => (a.position || 999) - (b.position || 999));
+  const byYearlyChange = sortByPosition(allKeywords.filter(k => k.position != null && k.position_yearly != null));
 
   // 4. All keywords with monthly data, sorted by current position (best first)
-  const byMonthlyChange = [...allKeywords]
-    .filter(k => k.position != null && k.position_prev_month != null)
-    .sort((a, b) => (a.position || 999) - (b.position || 999));
+  const byMonthlyChange = sortByPosition(allKeywords.filter(k => k.position != null && k.position_prev_month != null));
 
   if (mergedKeywords.length === 0) return null;
 
@@ -298,8 +314,13 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywor
         </CardTitle>
       </CardHeader>
       <CardContent className="p-0">
-        <Tabs defaultValue={defaultTab} className="w-full">
+        <Tabs defaultValue={trackedFiltered.length > 0 ? defaultTab : "all"} className="w-full">
           <TabsList dir="rtl" className="w-full justify-start rounded-none border-b bg-transparent h-auto p-0 gap-0">
+            {trackedKeywords.length > 0 && (
+              <TabsTrigger value="tracked" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
+                🎯 ביטויים במעקב ({trackedFiltered.length})
+              </TabsTrigger>
+            )}
             <TabsTrigger value="all" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
               📋 כל הביטויים ({allKeywords.length})
             </TabsTrigger>
@@ -316,6 +337,20 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywor
               📅 שינוי חודשי
             </TabsTrigger>
           </TabsList>
+
+          {trackedKeywords.length > 0 && (
+            <TabsContent value="tracked" className="mt-0">
+              <KeywordTable
+                keywords={trackedFiltered}
+                title={`ביטויים במעקב (${trackedFiltered.length})`}
+                icon={<Target className="h-4 w-4 text-primary" />}
+                show3Month={show3Month}
+                showYearly={showYearly}
+                showPrevMonth
+                showGsc={hasGscData}
+              />
+            </TabsContent>
+          )}
 
           <TabsContent value="top10" className="mt-0">
             <KeywordTable
