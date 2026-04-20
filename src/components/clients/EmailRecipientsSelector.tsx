@@ -20,10 +20,12 @@ export interface EmailOption {
   icon?: string;
 }
 
+type EmailsUpdater = string[] | ((prev: string[]) => string[]);
+
 interface EmailRecipientsSelectorProps {
   options: EmailOption[];
   selectedEmails: string[];
-  onChange: (emails: string[]) => void;
+  onChange: (emails: EmailsUpdater) => void;
 }
 
 export function EmailRecipientsSelector({
@@ -55,28 +57,30 @@ export function EmailRecipientsSelector({
     return !email || !EMAIL_REGEX.test(email);
   });
 
+  // Always use functional updates to avoid stale-state bugs when the user
+  // clicks multiple recipients in quick succession.
   const toggleEmail = (email: string) => {
-    const normalizedEmail = normalizeEmail(email);
-    if (selectedEmailSet.has(normalizedEmail)) {
-      onChange(selectedEmails.filter((e) => normalizeEmail(e) !== normalizedEmail));
-    } else {
-      onChange([...selectedEmails, normalizedEmail]);
-    }
+    const normalized = normalizeEmail(email);
+    onChange((prev) => {
+      const has = prev.some((e) => normalizeEmail(e) === normalized);
+      if (has) return prev.filter((e) => normalizeEmail(e) !== normalized);
+      return [...prev, normalized];
+    });
   };
 
   const removeEmail = (email: string) => {
-    const normalizedEmail = normalizeEmail(email);
-    onChange(selectedEmails.filter((e) => normalizeEmail(e) !== normalizedEmail));
+    const normalized = normalizeEmail(email);
+    onChange((prev) => prev.filter((e) => normalizeEmail(e) !== normalized));
   };
 
   const addManualEmail = () => {
     const trimmed = normalizeEmail(manualEmail);
     if (!trimmed) return;
-    // Basic email validation
     if (!EMAIL_REGEX.test(trimmed)) return;
-    if (!selectedEmailSet.has(trimmed)) {
-      onChange([...selectedEmails, trimmed]);
-    }
+    onChange((prev) => {
+      if (prev.some((e) => normalizeEmail(e) === trimmed)) return prev;
+      return [...prev, trimmed];
+    });
     setManualEmail("");
   };
 
@@ -136,10 +140,16 @@ export function EmailRecipientsSelector({
                   </div>
                 );
               })}
+              {invalidOptions.length > 0 && (
+                <div className="px-2 pt-2 pb-1 text-[10px] text-muted-foreground border-t mt-1">
+                  ללא כתובת אימייל (לא ניתן לבחור):
+                </div>
+              )}
               {invalidOptions.map((opt, index) => (
                 <div
                   key={`${opt.label}-${index}`}
                   className="flex items-start gap-2 px-2 py-1.5 rounded text-xs opacity-60"
+                  title="חסרה כתובת אימייל לאיש צוות זה"
                 >
                   <Checkbox checked={false} disabled className="mt-0.5" />
                   <div className="flex-1 min-w-0">
@@ -147,7 +157,7 @@ export function EmailRecipientsSelector({
                       {opt.icon} {opt.label}
                     </div>
                     <div className="text-muted-foreground truncate text-[10px]">
-                      {opt.email?.trim() ? opt.email : "אין אימייל מוגדר"}
+                      אין אימייל מוגדר
                     </div>
                   </div>
                 </div>
