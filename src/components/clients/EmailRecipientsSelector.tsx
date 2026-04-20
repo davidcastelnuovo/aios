@@ -162,7 +162,7 @@ export function EmailRecipientsSelector({
       {selectedEmails.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {selectedEmails.map((email) => {
-            const opt = options.find((o) => o.email === email);
+            const opt = validOptions.find((o) => o.email === email);
             return (
               <Badge
                 key={email}
