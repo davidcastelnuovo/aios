@@ -100,6 +100,7 @@ export function GscIntegration({
   dateRange,
   showDateRangeSelector = true,
   onDateRangeChange,
+  initialSiteUrl,
 }: GscIntegrationProps) {
   const queryClient = useQueryClient();
   const [selectedSite, setSelectedSite] = useState<string>("");
@@ -141,8 +142,9 @@ export function GscIntegration({
 
   // STRICT per-client isolation: do NOT fall back to global settings.site_url/siteUrl
   // (those caused selections to leak across clients).
+  // Source-of-truth order: explicit user pick > report-level saved URL (initialSiteUrl) > integration mapping.
   const clientSites = settings?.client_sites || {};
-  const persistedSiteUrl = selectedSite || clientSites[clientId] || "";
+  const persistedSiteUrl = selectedSite || initialSiteUrl || clientSites[clientId] || "";
   const normalizedDomain = normalizeDomain(domain);
   const matchedSite = normalizedDomain
     ? availableSites.find((site) => {
@@ -280,25 +282,32 @@ export function GscIntegration({
 
   const updateSiteMutation = useMutation({
     mutationFn: async (siteUrl: string) => {
-      if (!gscIntegration?.id) return;
+      if (!gscIntegration?.id) return { siteUrl, dbUpdated: false };
       const updatedClientSites = { ...clientSites, [clientId]: siteUrl };
       // Strip any legacy global site_url/siteUrl to prevent cross-client leakage.
       const { site_url: _legacySnake, siteUrl: _legacyCamel, ...cleanSettings } = settings || {};
-      const { error } = await supabase
-        .from("tenant_integrations")
-        .update({
-          settings: {
-            ...cleanSettings,
-            client_sites: updatedClientSites,
-            available_sites: availableSites,
-          },
-        })
-        .eq("id", gscIntegration.id);
-
-      if (error) throw error;
+      try {
+        const { error } = await supabase
+          .from("tenant_integrations")
+          .update({
+            settings: {
+              ...cleanSettings,
+              client_sites: updatedClientSites,
+              available_sites: availableSites,
+            },
+          })
+          .eq("id", gscIntegration.id);
+        if (error) throw error;
+        return { siteUrl, dbUpdated: true };
+      } catch (err) {
+        // RLS may block updating an integration shared by another user.
+        // Swallow the error — the report-level save (onSiteSelected) is the real source of truth.
+        console.warn('[GSC] tenant_integrations update blocked (likely shared integration RLS):', err);
+        return { siteUrl, dbUpdated: false };
+      }
     },
-    onSuccess: (_data, siteUrl) => {
-      queryClient.invalidateQueries({ queryKey: ["gsc-integration"] });
+    onSuccess: ({ siteUrl }) => {
+      queryClient.invalidateQueries({ queryKey: ["user-integrations"] });
       queryClient.invalidateQueries({ queryKey: ["gsc-keyword-data"] });
       onSiteSelected?.(siteUrl);
       toast.success("הנכס עודכן");
