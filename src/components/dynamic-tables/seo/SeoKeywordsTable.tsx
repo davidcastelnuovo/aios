@@ -314,8 +314,11 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywor
         </CardTitle>
       </CardHeader>
       <CardContent className="p-0">
-        <Tabs defaultValue={trackedFiltered.length > 0 ? defaultTab : "all"} className="w-full">
+        <Tabs defaultValue="top10" className="w-full">
           <TabsList dir="rtl" className="w-full justify-start rounded-none border-b bg-transparent h-auto p-0 gap-0">
+            <TabsTrigger value="top10" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
+              🏆 Top 10 מקודמים ({top10.length})
+            </TabsTrigger>
             {trackedKeywords.length > 0 && (
               <TabsTrigger value="tracked" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
                 🎯 ביטויים במעקב ({trackedFiltered.length})
@@ -323,9 +326,6 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywor
             )}
             <TabsTrigger value="all" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
               📋 כל הביטויים ({allKeywords.length})
-            </TabsTrigger>
-            <TabsTrigger value="top10" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
-              🏆 Top 10 מקודמים ({top10.length})
             </TabsTrigger>
             <TabsTrigger value="3month" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
               📈 שינוי 3 חודשים
