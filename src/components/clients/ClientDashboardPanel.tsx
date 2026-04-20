@@ -393,8 +393,9 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
           message: messageText,
           ctaUrl: effectiveShareUrl || undefined,
           ctaLabel: "צפה בדשבורד המלא",
-          hasAttachment: true,
-          attachmentNote: "צילום הדשבורד מצורף כקובץ לנוחותך",
+          hasAttachment: false,
+          inlineImageCid: "dashboard-snapshot",
+          inlineImageAlt: `דשבורד ${dashboard.name}`,
         });
 
         const { error: gmailError } = await supabase.functions.invoke("gmail-api", {
@@ -403,7 +404,13 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
             to: emailRecipients.join(", "),
             subject: `דשבורד ${dashboard.name}${client?.name ? ` - ${client.name}` : ""}`,
             body: bodyHtml,
-            attachments: [{ filename: "dashboard.jpg", mimeType: "image/jpeg", data: base64Data }],
+            attachments: [{
+              filename: "dashboard.jpg",
+              mimeType: "image/jpeg",
+              data: base64Data,
+              disposition: "inline",
+              cid: "dashboard-snapshot",
+            }],
           },
         });
         if (gmailError) {

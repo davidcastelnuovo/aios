@@ -411,8 +411,9 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
           message: messageText,
           ctaUrl: effectiveShareLink || undefined,
           ctaLabel: "צפה בדוח המלא",
-          hasAttachment: true,
-          attachmentNote: "הדוח המלא מצורף כקובץ תמונה לנוחותך",
+          hasAttachment: false,
+          inlineImageCid: "report-snapshot",
+          inlineImageAlt: `דוח ${table.name}`,
         });
 
         const { data, error } = await supabase.functions.invoke("gmail-api", {
@@ -426,6 +427,8 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
                 filename: `report-${table.name}.png`,
                 mimeType: "image/png",
                 data: base64Data,
+                disposition: "inline",
+                cid: "report-snapshot",
               },
             ],
           },
