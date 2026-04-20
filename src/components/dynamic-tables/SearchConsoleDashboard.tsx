@@ -18,8 +18,15 @@ import { cn } from "@/lib/utils";
 import Papa from "papaparse";
 import { toast } from "sonner";
 
+type LangFilter = "all" | "he" | "en";
+
+const HEBREW_REGEX = /[\u0590-\u05FF]/;
+const ENGLISH_REGEX = /[A-Za-z]/;
+
 interface SearchConsoleDashboardProps {
   tableId: string;
+  initialLangFilter?: LangFilter;
+  onLangFilterChange?: (lang: LangFilter) => void;
 }
 
 interface AggregatedData {
@@ -49,7 +56,7 @@ const DATE_FILTER_LABELS: Record<GscDateFilter, string> = {
   all: 'הכל',
 };
 
-export function SearchConsoleDashboard({ tableId }: SearchConsoleDashboardProps) {
+export function SearchConsoleDashboard({ tableId, initialLangFilter, onLangFilterChange }: SearchConsoleDashboardProps) {
   // Default: sort by position ascending (best rank = lowest number = first)
   const [sortBy, setSortBy] = useState<string>("position");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
@@ -57,7 +64,21 @@ export function SearchConsoleDashboard({ tableId }: SearchConsoleDashboardProps)
   const [trackedKeywords, setTrackedKeywords] = useState<string[]>([]);
   const [newKeyword, setNewKeyword] = useState("");
   const [dateFilter, setDateFilter] = useState<GscDateFilter>('last_30_days');
+  const [langFilter, setLangFilterState] = useState<LangFilter>(initialLangFilter ?? 'all');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync if parent changes saved value
+  useEffect(() => {
+    if (initialLangFilter && initialLangFilter !== langFilter) {
+      setLangFilterState(initialLangFilter);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialLangFilter]);
+
+  const setLangFilter = (next: LangFilter) => {
+    setLangFilterState(next);
+    onLangFilterChange?.(next);
+  };
 
   // Fetch aggregated data from the server
   const { data: aggregatedData, isLoading } = useQuery({

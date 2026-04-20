@@ -42,6 +42,10 @@ interface GscIntegrationProps {
   onDateRangeChange?: (range: GscDateRange) => void;
   /** Site URL persisted at the report/table level (source of truth — survives shared integrations & RLS). */
   initialSiteUrl?: string;
+  /** Language filter persisted at the report/table level. */
+  initialLangFilter?: "all" | "he" | "en";
+  /** Called whenever the language filter changes — parent persists to DB. */
+  onLangFilterChange?: (lang: "all" | "he" | "en") => void;
 }
 
 const DATE_RANGE_DAYS: Record<GscDateRange, number> = {
@@ -101,6 +105,8 @@ export function GscIntegration({
   showDateRangeSelector = true,
   onDateRangeChange,
   initialSiteUrl,
+  initialLangFilter,
+  onLangFilterChange,
 }: GscIntegrationProps) {
   const queryClient = useQueryClient();
   const [selectedSite, setSelectedSite] = useState<string>("");
@@ -508,7 +514,11 @@ export function GscIntegration({
           </div>
 
           {/* Queries Table */}
-          <GscQueriesTable data={gscData} />
+          <GscQueriesTable
+            data={gscData}
+            initialLangFilter={initialLangFilter}
+            onLangFilterChange={onLangFilterChange}
+          />
         </CardContent>
       )}
 
@@ -526,11 +536,32 @@ const ENGLISH_REGEX = /[A-Za-z]/;
 
 type LangFilter = "all" | "he" | "en";
 
-function GscQueriesTable({ data }: { data: GscKeywordData[] }) {
+function GscQueriesTable({
+  data,
+  initialLangFilter,
+  onLangFilterChange,
+}: {
+  data: GscKeywordData[];
+  initialLangFilter?: LangFilter;
+  onLangFilterChange?: (lang: LangFilter) => void;
+}) {
   const [sortBy, setSortBy] = useState<keyof GscKeywordData>("position");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [searchFilter, setSearchFilter] = useState("");
-  const [langFilter, setLangFilter] = useState<LangFilter>("all");
+  const [langFilter, setLangFilterState] = useState<LangFilter>(initialLangFilter ?? "all");
+
+  // Sync if the parent changes the saved value (e.g., after async DB load)
+  useEffect(() => {
+    if (initialLangFilter && initialLangFilter !== langFilter) {
+      setLangFilterState(initialLangFilter);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialLangFilter]);
+
+  const setLangFilter = (next: LangFilter) => {
+    setLangFilterState(next);
+    onLangFilterChange?.(next);
+  };
 
   const langCounts = useMemo(() => {
     let he = 0, en = 0, other = 0;
