@@ -228,9 +228,9 @@ export default function SummarizeRecordingDialog({
           // Stale detection: if processing for >5 minutes, assume crash
           const updatedAt = data.updated_at ? new Date(data.updated_at).getTime() : startedAt;
           const elapsed = Date.now() - updatedAt;
-          if (elapsed > 5 * 60 * 1000) {
+          if (elapsed > 3 * 60 * 1000) {
             stopPolling();
-            const errMsg = 'התמלול נתקע (timeout - מעל 5 דקות)';
+            const errMsg = 'התמלול נתקע (timeout - מעל 3 דקות)';
             setFailedError(errMsg);
             // Mark as failed in DB
             await supabase
