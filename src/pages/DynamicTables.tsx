@@ -1031,6 +1031,48 @@ export default function DynamicTables() {
         assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
       />
 
+      {/* Edit Dashboard Name Dialog */}
+      <Dialog open={!!editingDashboard} onOpenChange={(open) => { if (!open) { setEditingDashboard(null); setEditDashboardName(""); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>עריכת שם דשבורד</DialogTitle>
+            <DialogDescription>הזן שם חדש לדשבורד</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="dashboard-name">שם הדשבורד</Label>
+              <Input
+                id="dashboard-name"
+                value={editDashboardName}
+                onChange={(e) => setEditDashboardName(e.target.value)}
+                placeholder="שם הדשבורד"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && editDashboardName.trim() && editingDashboard) {
+                    renameDashboardMutation.mutate({ dashboardId: editingDashboard.id, name: editDashboardName.trim() });
+                  }
+                }}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setEditingDashboard(null); setEditDashboardName(""); }}>
+              ביטול
+            </Button>
+            <Button
+              onClick={() => {
+                if (editingDashboard && editDashboardName.trim()) {
+                  renameDashboardMutation.mutate({ dashboardId: editingDashboard.id, name: editDashboardName.trim() });
+                }
+              }}
+              disabled={!editDashboardName.trim() || renameDashboardMutation.isPending}
+            >
+              שמור
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Edit Dialog */}
       <Dialog open={!!editingTable} onOpenChange={(open) => !open && setEditingTable(null)}>
         <DialogContent>
