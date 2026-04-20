@@ -116,9 +116,29 @@ export function SearchConsoleDashboard({ tableId, initialLangFilter, onLangFilte
     }
   };
 
+  // Compute language counts (over all queries, before search filter)
+  const allQueries = aggregatedData?.queries || [];
+  const langCounts = (() => {
+    let he = 0, en = 0;
+    for (const r of allQueries) {
+      const k = r.query || "";
+      if (HEBREW_REGEX.test(k)) he++;
+      else if (ENGLISH_REGEX.test(k)) en++;
+    }
+    return { he, en, all: allQueries.length };
+  })();
+
   // Sort + filter queries
   const sortedQueries = (() => {
-    let rows = aggregatedData?.queries?.slice() || [];
+    let rows = allQueries.slice();
+    if (langFilter !== 'all') {
+      rows = rows.filter(r => {
+        const k = r.query || "";
+        if (langFilter === 'he') return HEBREW_REGEX.test(k);
+        if (langFilter === 'en') return ENGLISH_REGEX.test(k) && !HEBREW_REGEX.test(k);
+        return true;
+      });
+    }
     if (searchFilter.trim()) {
       const q = searchFilter.toLowerCase();
       rows = rows.filter(r => r.query.toLowerCase().includes(q));
