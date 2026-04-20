@@ -219,8 +219,23 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
 
     setIsCapturing(true);
     try {
-      // Wait for data to load and render inside the snapshot
-      await new Promise((r) => setTimeout(r, 2500));
+      // Wait until the snapshot signals it has finished loading data (max 25s).
+      // SharedDashboard sets data-snapshot-ready="true" on its root once
+      // useQuery resolved with real data (so all tabs / KPIs are populated).
+      const start = Date.now();
+      let ready = false;
+      while (Date.now() - start < 25000) {
+        if (node.querySelector('[data-snapshot-ready="true"]')) {
+          ready = true;
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      if (!ready) {
+        console.warn("[DashboardSnapshot] data-snapshot-ready never appeared, capturing anyway");
+      }
+      // Extra grace period for chart animations / images to settle
+      await new Promise((r) => setTimeout(r, 800));
 
       // Measure actual rendered dimensions to choose safe scale.
       // SharedDashboard can be very tall (many cards/charts) → at pixelRatio 1.5
@@ -298,7 +313,9 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
     }
   }, [dashboard.id]);
 
-  // Auto-capture once snapshot is mounted (only first time per dashboard)
+  // Auto-capture once snapshot is mounted (only first time per dashboard).
+  // captureScreenshot itself polls for data-snapshot-ready, so we just
+  // give the React tree a brief moment to mount before kicking off.
   useEffect(() => {
     if (
       snapshotMounted &&
@@ -307,7 +324,7 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
       autoCapturedRef.current !== dashboard.id
     ) {
       autoCapturedRef.current = dashboard.id;
-      const t = setTimeout(() => captureScreenshot(), 3000);
+      const t = setTimeout(() => captureScreenshot(), 500);
       return () => clearTimeout(t);
     }
   }, [snapshotMounted, screenshotUrl, isCapturing, captureScreenshot, dashboard.id]);
