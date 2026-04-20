@@ -66,9 +66,51 @@ export default function Recordings() {
         .select('*, clients(name), leads(company_name)')
         .eq('tenant_id', currentTenantId)
         .order('created_at', { ascending: false });
-      return data || [];
+      const list = data || [];
+
+      // Auto-cleanup: mark stale "processing" recordings as failed (no update for >10min)
+      const stale = list.filter((r: any) =>
+        r.transcription_status === 'processing' &&
+        !r.transcription &&
+        Date.now() - new Date(r.updated_at || r.created_at).getTime() > 10 * 60 * 1000
+      );
+      if (stale.length > 0) {
+        await supabase
+          .from('zoom_recordings')
+          .update({
+            transcription_status: 'failed',
+            transcription_error: 'תהליך התמלול נתקע (timeout)',
+          } as any)
+          .in('id', stale.map((r: any) => r.id));
+        // Reflect locally for current render
+        stale.forEach((r: any) => {
+          r.transcription_status = 'failed';
+          r.transcription_error = 'תהליך התמלול נתקע (timeout)';
+        });
+      }
+      return list;
     },
     enabled: !!currentTenantId,
+  });
+
+  const cancelTranscriptionMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const { error } = await supabase
+        .from('zoom_recordings')
+        .update({
+          transcription_status: 'failed',
+          transcription_error: 'בוטל ידנית',
+        } as any)
+        .in('id', ids);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['recordings'] });
+      toast({ title: "התמלול בוטל" });
+    },
+    onError: (err: any) => {
+      toast({ title: "שגיאה בביטול", description: err.message, variant: "destructive" });
+    },
   });
 
   const { data: clients = [] } = useQuery({
@@ -512,6 +554,36 @@ export default function Recordings() {
                         <TableCell>
                           <div className="flex items-center gap-1">
                             {transcriptionStatusBadge(rec)}
+                            {rec.transcription_status === 'processing' && !rec.transcription && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 text-destructive hover:text-destructive/80"
+                                title="עצור תמלול"
+                                onClick={() => {
+                                  const allIds = rec._group?.map((r: any) => r.id) || [rec.id];
+                                  cancelTranscriptionMutation.mutate(allIds);
+                                }}
+                                disabled={cancelTranscriptionMutation.isPending}
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            )}
+                            {rec.transcription_status === 'failed' && !rec.transcription && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                title="נסה שוב"
+                                onClick={() => {
+                                  const audioRec = rec._group?.find((r: any) => r.recording_type === 'audio_only') || rec;
+                                  setSelectedRecording(audioRec);
+                                  setSummarizeOpen(true);
+                                }}
+                              >
+                                <RotateCcw className="h-3 w-3" />
+                              </Button>
+                            )}
                             {rec.transcription && (
                               <Button
                                 variant="ghost"
