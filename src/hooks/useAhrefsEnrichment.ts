@@ -63,6 +63,12 @@ export function useAhrefsEnrichment() {
     }
 
     const result = await resp.json();
+    // Handle structured quota-exceeded response (returns 200 with success:false)
+    if (result?.success === false && result?.error === 'quota_exceeded') {
+      const err = new Error(result.message || 'מכסת ה-API של Ahrefs נגמרה');
+      (err as Error & { code?: string }).code = 'quota_exceeded';
+      throw err;
+    }
     return result.data?.keywords || [];
   };
 
@@ -128,8 +134,13 @@ export function useAhrefsEnrichment() {
       toast.success(`סונכרנו ${threeMonthKw.length} ביטויים (3 חודשים + שנה)`);
       return data;
     } catch (err: unknown) {
+      const code = (err as Error & { code?: string })?.code;
       const message = err instanceof Error ? err.message : "שגיאה בשליפת נתונים מ-Ahrefs";
-      toast.error(message);
+      if (code === 'quota_exceeded') {
+        toast.error(message, { duration: 6000 });
+      } else {
+        toast.error(message);
+      }
       return null;
     } finally {
       setIsLoading(false);

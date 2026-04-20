@@ -206,6 +206,21 @@ serve(async (req) => {
       if (!kwResp.ok) {
         const errText = await kwResp.text();
         console.error('Ahrefs keywords fetch failed:', errText);
+
+        // Detect API quota exhaustion and return a structured, user-friendly response
+        const isQuotaError = /API units? limit/i.test(errText) || /units? left:\s*0/i.test(errText);
+        if (isQuotaError) {
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: 'quota_exceeded',
+              message: 'מכסת ה-API של Ahrefs נגמרה. נסה שוב בחודש הבא או שדרג את החשבון.',
+              data: { keywords: [] },
+            }),
+            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
         return new Response(
           JSON.stringify({ error: 'Failed to fetch keywords', details: errText }),
           { status: kwResp.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
