@@ -23,6 +23,8 @@ interface SeoKeywordsTableProps {
   hasGscData?: boolean;
   show3Month?: boolean;
   showYearly?: boolean;
+  /** Default tab to open. Defaults to "all" so the full merged dataset is visible immediately. */
+  defaultTab?: "top10" | "3month" | "yearly" | "monthly" | "all";
 }
 
 function fmt(n: number, digits = 1): string {
@@ -170,7 +172,7 @@ function KeywordTable({ keywords, title, icon, show3Month, showYearly, showPrevM
   );
 }
 
-export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywords = [], hasGscData = false, show3Month = false, showYearly = false }: SeoKeywordsTableProps) {
+export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywords = [], hasGscData = false, show3Month = false, showYearly = false, defaultTab = "all" }: SeoKeywordsTableProps) {
   const [langFilter, setLangFilter] = useState<LangFilter>("all");
 
   // Merge all keywords (tracked + organic + gsc-only), deduplicate by keyword name
