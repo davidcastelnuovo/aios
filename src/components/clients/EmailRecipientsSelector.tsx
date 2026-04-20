@@ -11,6 +11,9 @@ import { Badge } from "@/components/ui/badge";
 import { ChevronDown, Plus, X, Mail } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const normalizeEmail = (email: string) => email.trim().toLowerCase();
+
 export interface EmailOption {
   email: string;
   label: string;
@@ -30,6 +33,7 @@ export function EmailRecipientsSelector({
 }: EmailRecipientsSelectorProps) {
   const [open, setOpen] = useState(false);
   const [manualEmail, setManualEmail] = useState("");
+  const selectedEmailSet = new Set(selectedEmails.map(normalizeEmail));
 
   // Filter out options without a valid email and dedupe by email,
   // otherwise multiple empty-email options all get toggled together.
@@ -37,8 +41,8 @@ export function EmailRecipientsSelector({
     const seen = new Set<string>();
     const out: EmailOption[] = [];
     for (const opt of options) {
-      const email = (opt.email || "").trim().toLowerCase();
-      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) continue;
+      const email = normalizeEmail(opt.email || "");
+      if (!email || !EMAIL_REGEX.test(email)) continue;
       if (seen.has(email)) continue;
       seen.add(email);
       out.push({ ...opt, email });
@@ -46,24 +50,31 @@ export function EmailRecipientsSelector({
     return out;
   })();
 
+  const invalidOptions = options.filter((opt) => {
+    const email = normalizeEmail(opt.email || "");
+    return !email || !EMAIL_REGEX.test(email);
+  });
+
   const toggleEmail = (email: string) => {
-    if (selectedEmails.includes(email)) {
-      onChange(selectedEmails.filter((e) => e !== email));
+    const normalizedEmail = normalizeEmail(email);
+    if (selectedEmailSet.has(normalizedEmail)) {
+      onChange(selectedEmails.filter((e) => normalizeEmail(e) !== normalizedEmail));
     } else {
-      onChange([...selectedEmails, email]);
+      onChange([...selectedEmails, normalizedEmail]);
     }
   };
 
   const removeEmail = (email: string) => {
-    onChange(selectedEmails.filter((e) => e !== email));
+    const normalizedEmail = normalizeEmail(email);
+    onChange(selectedEmails.filter((e) => normalizeEmail(e) !== normalizedEmail));
   };
 
   const addManualEmail = () => {
-    const trimmed = manualEmail.trim();
+    const trimmed = normalizeEmail(manualEmail);
     if (!trimmed) return;
     // Basic email validation
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return;
-    if (!selectedEmails.includes(trimmed)) {
+    if (!EMAIL_REGEX.test(trimmed)) return;
+    if (!selectedEmailSet.has(trimmed)) {
       onChange([...selectedEmails, trimmed]);
     }
     setManualEmail("");
@@ -90,13 +101,13 @@ export function EmailRecipientsSelector({
         <PopoverContent className="w-[320px] p-0" align="start" dir="rtl">
           <ScrollArea className="max-h-[280px]">
             <div className="p-2 space-y-1">
-              {validOptions.length === 0 && (
+              {validOptions.length === 0 && invalidOptions.length === 0 && (
                 <div className="text-xs text-muted-foreground px-2 py-3 text-center">
                   אין נמענים מהצוות
                 </div>
               )}
               {validOptions.map((opt) => {
-                const checked = selectedEmails.includes(opt.email);
+                const checked = selectedEmailSet.has(opt.email);
                 return (
                   <div
                     key={opt.email}
@@ -125,6 +136,22 @@ export function EmailRecipientsSelector({
                   </div>
                 );
               })}
+              {invalidOptions.map((opt, index) => (
+                <div
+                  key={`${opt.label}-${index}`}
+                  className="flex items-start gap-2 px-2 py-1.5 rounded text-xs opacity-60"
+                >
+                  <Checkbox checked={false} disabled className="mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium truncate">
+                      {opt.icon} {opt.label}
+                    </div>
+                    <div className="text-muted-foreground truncate text-[10px]">
+                      {opt.email?.trim() ? opt.email : "אין אימייל מוגדר"}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </ScrollArea>
           <div className="border-t p-2 space-y-1.5 bg-muted/30">
@@ -162,7 +189,7 @@ export function EmailRecipientsSelector({
       {selectedEmails.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {selectedEmails.map((email) => {
-            const opt = validOptions.find((o) => o.email === email);
+            const opt = validOptions.find((o) => o.email === normalizeEmail(email));
             return (
               <Badge
                 key={email}
