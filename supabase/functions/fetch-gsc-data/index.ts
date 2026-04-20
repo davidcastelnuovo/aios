@@ -23,7 +23,7 @@ serve(async (req) => {
   const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET') || '';
 
   try {
-    const { integrationId, siteUrl, startDate, endDate, keywords } = await req.json();
+    const { integrationId, siteUrl, startDate, endDate, keywords, aggregateAll } = await req.json();
 
     if (!integrationId || !siteUrl) {
       return new Response(
@@ -104,33 +104,48 @@ serve(async (req) => {
     const encodedSiteUrl = encodeURIComponent(siteUrl);
     const gscApiUrl = `https://www.googleapis.com/webmasters/v3/sites/${encodedSiteUrl}/searchAnalytics/query`;
 
-    const gscResponse = await fetch(gscApiUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody),
-    });
+    // Pagination: when aggregateAll=true, loop up to 5 pages (5,000 rows max).
+    // Otherwise, fetch a single page (1,000 rows).
+    const maxPages = aggregateAll ? 5 : 1;
+    const pageSize = 1000;
+    const collectedRows: any[] = [];
 
-    const gscData = await gscResponse.json();
+    for (let page = 0; page < maxPages; page++) {
+      const pagedBody = { ...requestBody, rowLimit: pageSize, startRow: page * pageSize };
+      const gscResponse = await fetch(gscApiUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(pagedBody),
+      });
 
-    if (!gscResponse.ok) {
-      console.error('GSC API error:', gscData);
-      const isPermissionDenied = gscResponse.status === 403;
-      return new Response(
-        JSON.stringify({
-          error: gscData.error?.message || 'GSC API error',
-          permissionDenied: isPermissionDenied,
-          siteUrl,
-          details: gscData,
-        }),
-        { status: gscResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      const gscData = await gscResponse.json();
+
+      if (!gscResponse.ok) {
+        console.error('GSC API error:', gscData);
+        const isPermissionDenied = gscResponse.status === 403;
+        return new Response(
+          JSON.stringify({
+            error: gscData.error?.message || 'GSC API error',
+            permissionDenied: isPermissionDenied,
+            siteUrl,
+            details: gscData,
+          }),
+          { status: gscResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const pageRows = Array.isArray(gscData.rows) ? gscData.rows : [];
+      collectedRows.push(...pageRows);
+
+      // Stop early if we got less than a full page (no more data).
+      if (pageRows.length < pageSize) break;
     }
 
     // Transform response
-    const rows = (gscData.rows || []).map((row: any) => ({
+    const rows = collectedRows.map((row: any) => ({
       keyword: row.keys?.[0] || '',
       clicks: row.clicks || 0,
       impressions: row.impressions || 0,

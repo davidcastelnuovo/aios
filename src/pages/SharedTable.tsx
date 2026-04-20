@@ -277,6 +277,32 @@ export default function SharedTable() {
     const hasGsc = gscRecords.length > 0;
     const showTabs = hasGa || hasGsc;
 
+    // Aggregate GSC records per keyword (sum clicks/impressions, weighted-average position by impressions).
+    const gscAggregated = (() => {
+      if (!hasGsc) return [];
+      const acc = new Map<string, { clicks: number; impressions: number; positionWeighted: number }>();
+      for (const rec of gscRecords) {
+        const d = rec.data || rec;
+        const kw = String(d.query || d.keyword || "").trim();
+        if (!kw) continue;
+        const clicks = Number(d.clicks) || 0;
+        const impressions = Number(d.impressions) || 0;
+        const position = Number(d.position) || 0;
+        const cur = acc.get(kw) || { clicks: 0, impressions: 0, positionWeighted: 0 };
+        cur.clicks += clicks;
+        cur.impressions += impressions;
+        cur.positionWeighted += position * impressions;
+        acc.set(kw, cur);
+      }
+      return Array.from(acc.entries()).map(([keyword, v]) => ({
+        keyword,
+        clicks: v.clicks,
+        impressions: v.impressions,
+        ctr: v.impressions > 0 ? Math.round((v.clicks / v.impressions) * 10000) / 100 : 0,
+        position: v.impressions > 0 ? Math.round((v.positionWeighted / v.impressions) * 10) / 10 : 0,
+      }));
+    })();
+
     return (
       <div className="min-h-screen bg-background" dir="rtl">
         <div className="w-full max-w-7xl mx-auto p-4 md:p-6 space-y-6">
@@ -312,6 +338,7 @@ export default function SharedTable() {
                 <PublicSeoView
                   tableName={data.table.name}
                   reports={data.ahrefs_reports || []}
+                  gscData={gscAggregated}
                 />
               </TabsContent>
 
@@ -331,6 +358,7 @@ export default function SharedTable() {
             <PublicSeoView
               tableName={data.table.name}
               reports={data.ahrefs_reports || []}
+              gscData={gscAggregated}
             />
           )}
         </div>
