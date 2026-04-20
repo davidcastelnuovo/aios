@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,8 +18,15 @@ import { cn } from "@/lib/utils";
 import Papa from "papaparse";
 import { toast } from "sonner";
 
+type LangFilter = "all" | "he" | "en";
+
+const HEBREW_REGEX = /[\u0590-\u05FF]/;
+const ENGLISH_REGEX = /[A-Za-z]/;
+
 interface SearchConsoleDashboardProps {
   tableId: string;
+  initialLangFilter?: LangFilter;
+  onLangFilterChange?: (lang: LangFilter) => void;
 }
 
 interface AggregatedData {
@@ -49,7 +56,7 @@ const DATE_FILTER_LABELS: Record<GscDateFilter, string> = {
   all: 'הכל',
 };
 
-export function SearchConsoleDashboard({ tableId }: SearchConsoleDashboardProps) {
+export function SearchConsoleDashboard({ tableId, initialLangFilter, onLangFilterChange }: SearchConsoleDashboardProps) {
   // Default: sort by position ascending (best rank = lowest number = first)
   const [sortBy, setSortBy] = useState<string>("position");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
@@ -57,7 +64,21 @@ export function SearchConsoleDashboard({ tableId }: SearchConsoleDashboardProps)
   const [trackedKeywords, setTrackedKeywords] = useState<string[]>([]);
   const [newKeyword, setNewKeyword] = useState("");
   const [dateFilter, setDateFilter] = useState<GscDateFilter>('last_30_days');
+  const [langFilter, setLangFilterState] = useState<LangFilter>(initialLangFilter ?? 'all');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync if parent changes saved value
+  useEffect(() => {
+    if (initialLangFilter && initialLangFilter !== langFilter) {
+      setLangFilterState(initialLangFilter);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialLangFilter]);
+
+  const setLangFilter = (next: LangFilter) => {
+    setLangFilterState(next);
+    onLangFilterChange?.(next);
+  };
 
   // Fetch aggregated data from the server
   const { data: aggregatedData, isLoading } = useQuery({
@@ -95,9 +116,29 @@ export function SearchConsoleDashboard({ tableId }: SearchConsoleDashboardProps)
     }
   };
 
+  // Compute language counts (over all queries, before search filter)
+  const allQueries = aggregatedData?.queries || [];
+  const langCounts = (() => {
+    let he = 0, en = 0;
+    for (const r of allQueries) {
+      const k = r.query || "";
+      if (HEBREW_REGEX.test(k)) he++;
+      else if (ENGLISH_REGEX.test(k)) en++;
+    }
+    return { he, en, all: allQueries.length };
+  })();
+
   // Sort + filter queries
   const sortedQueries = (() => {
-    let rows = aggregatedData?.queries?.slice() || [];
+    let rows = allQueries.slice();
+    if (langFilter !== 'all') {
+      rows = rows.filter(r => {
+        const k = r.query || "";
+        if (langFilter === 'he') return HEBREW_REGEX.test(k);
+        if (langFilter === 'en') return ENGLISH_REGEX.test(k) && !HEBREW_REGEX.test(k);
+        return true;
+      });
+    }
     if (searchFilter.trim()) {
       const q = searchFilter.toLowerCase();
       rows = rows.filter(r => r.query.toLowerCase().includes(q));
@@ -416,12 +457,46 @@ export function SearchConsoleDashboard({ tableId }: SearchConsoleDashboardProps)
         <CardHeader>
           <CardTitle className="text-lg flex items-center justify-between flex-wrap gap-2">
             <span>ביטויי חיפוש ({formatNumber(sortedQueries.length)})</span>
-            <Input
-              placeholder="חפש ביטוי..."
-              value={searchFilter}
-              onChange={(e) => setSearchFilter(e.target.value)}
-              className="h-8 w-[220px] text-sm font-normal"
-            />
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="inline-flex rounded-md border bg-background p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setLangFilter("all")}
+                  className={cn(
+                    "px-2.5 h-7 text-xs font-medium rounded-sm transition-colors",
+                    langFilter === "all" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                  )}
+                >
+                  הכל ({formatNumber(langCounts.all)})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLangFilter("he")}
+                  className={cn(
+                    "px-2.5 h-7 text-xs font-medium rounded-sm transition-colors",
+                    langFilter === "he" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                  )}
+                >
+                  עברית ({formatNumber(langCounts.he)})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLangFilter("en")}
+                  className={cn(
+                    "px-2.5 h-7 text-xs font-medium rounded-sm transition-colors",
+                    langFilter === "en" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                  )}
+                >
+                  English ({formatNumber(langCounts.en)})
+                </button>
+              </div>
+              <Input
+                placeholder="חפש ביטוי..."
+                value={searchFilter}
+                onChange={(e) => setSearchFilter(e.target.value)}
+                className="h-8 w-[220px] text-sm font-normal"
+              />
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent>

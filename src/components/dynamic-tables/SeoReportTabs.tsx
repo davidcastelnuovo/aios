@@ -43,6 +43,7 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
   const savedGaTableId = (seoTable?.integration_settings as any)?.linkedGaTableId || '';
   const savedGscTableId = (seoTable?.integration_settings as any)?.linkedGscTableId || '';
   const savedGscSiteUrl = (seoTable?.integration_settings as any)?.linkedGscSiteUrl || '';
+  const savedGscLangFilter = ((seoTable?.integration_settings as any)?.linkedGscLangFilter || 'all') as 'all' | 'he' | 'en';
 
   // Fetch ALL GA and GSC tables for this tenant
   const { data: relatedTables } = useQuery({
@@ -259,7 +260,11 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                     }}
                   />
                 )}
-                <SearchConsoleDashboard tableId={selectedGscTableId} />
+                <SearchConsoleDashboard
+                  tableId={selectedGscTableId}
+                  initialLangFilter={savedGscLangFilter}
+                  onLangFilterChange={(v) => saveLinkMutation.mutate({ key: 'linkedGscLangFilter', value: v })}
+                />
               </div>
             ) : (
               /* Otherwise show GSC integration component with site selector */
@@ -279,6 +284,8 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                   clientId={clientId}
                   domain={savedGscSiteUrl || targetDomain}
                   initialSiteUrl={savedGscSiteUrl}
+                  initialLangFilter={savedGscLangFilter}
+                  onLangFilterChange={(v) => saveLinkMutation.mutate({ key: 'linkedGscLangFilter', value: v })}
                   onSiteSelected={(siteUrl) => {
                     if (siteUrl && siteUrl !== savedGscSiteUrl) {
                       saveLinkMutation.mutate({ key: 'linkedGscSiteUrl', value: siteUrl });
