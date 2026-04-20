@@ -121,7 +121,13 @@ function KeywordTable({ keywords, title, icon, show3Month, showYearly, showPrevM
   showPrevMonth?: boolean;
   showGsc?: boolean;
 }) {
-  if (keywords.length === 0) return null;
+  if (keywords.length === 0) {
+    return (
+      <div dir="rtl" className="px-3 py-8 text-center text-sm text-muted-foreground">
+        אין ביטויים להצגה בפילטר הנוכחי
+      </div>
+    );
+  }
 
   return (
     <div dir="rtl">
