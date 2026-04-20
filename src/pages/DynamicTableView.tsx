@@ -1005,7 +1005,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
 
       // If data_source is ahrefs_reports, pull from DB instead of API
       if (settings.data_source === 'ahrefs_reports') {
-        const clientId = (settings.clientId || settings.client_id) as string;
+        const clientId = (table.client_id || settings.clientId || settings.client_id) as string;
         if (!clientId) throw new Error('Missing client ID for SEO report');
 
         // Pull ALL reports for this client (all months)
@@ -2848,10 +2848,10 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       )}
 
       {/* SEO (Ahrefs) Dashboard with GSC & Analytics tabs */}
-      {!summaryOnly && hasAhrefs && table?.integration_settings?.data_source === 'ahrefs_reports' && table?.integration_settings?.clientId && table?.tenant_id && (
+      {!summaryOnly && hasAhrefs && table?.integration_settings?.data_source === 'ahrefs_reports' && (table?.client_id || table?.integration_settings?.clientId || table?.integration_settings?.client_id) && table?.tenant_id && (
         <SeoReportTabs 
           tenantId={table.tenant_id} 
-          clientId={table.integration_settings.clientId} 
+          clientId={table.client_id || table.integration_settings?.clientId || table.integration_settings?.client_id} 
         />
       )}
       </div>
