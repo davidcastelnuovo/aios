@@ -31,6 +31,21 @@ export function EmailRecipientsSelector({
   const [open, setOpen] = useState(false);
   const [manualEmail, setManualEmail] = useState("");
 
+  // Filter out options without a valid email and dedupe by email,
+  // otherwise multiple empty-email options all get toggled together.
+  const validOptions = (() => {
+    const seen = new Set<string>();
+    const out: EmailOption[] = [];
+    for (const opt of options) {
+      const email = (opt.email || "").trim().toLowerCase();
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) continue;
+      if (seen.has(email)) continue;
+      seen.add(email);
+      out.push({ ...opt, email });
+    }
+    return out;
+  })();
+
   const toggleEmail = (email: string) => {
     if (selectedEmails.includes(email)) {
       onChange(selectedEmails.filter((e) => e !== email));
