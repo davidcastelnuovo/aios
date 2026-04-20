@@ -50,6 +50,23 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
     enabled: !!tenantId && !!clientId,
   });
 
+  // Fetch the client's own website as a fallback for GSC domain auto-match
+  // (when no Ahrefs SEO table exists for this client, targetDomain is empty).
+  const { data: clientRow } = useQuery({
+    queryKey: ['client-website', clientId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('clients')
+        .select('website')
+        .eq('id', clientId)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!clientId,
+  });
+  const clientWebsite = clientRow?.website || '';
+
   const targetDomain = (seoTable?.integration_settings as any)?.targetDomain || '';
   const savedGaTableId = (seoTable?.integration_settings as any)?.linkedGaTableId || '';
   const savedGscTableId = (seoTable?.integration_settings as any)?.linkedGscTableId || '';
