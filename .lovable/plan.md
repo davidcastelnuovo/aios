@@ -1,109 +1,45 @@
 
-לתיקון הבעיה הזאת אבצע מעבר מלוגיקה של “tenant פעיל” ללוגיקה של “הלקוח והסוכנות המשותפת שלו”, כך שדוח SEO ייטען נכון בלי קשר אם פתחת אותו מ-Marketing Captain או מ-DMM.
+## תיקון ספירת לידים של WhatsApp/Messenger בדוח Facebook
 
-## הבעיה המדויקת
-כרגע כמה חלקים ב-SEO עדיין מסוננים לפי `currentTenantId` / `tenantId` קשיח:
-- `DashboardView.tsx` מעביר ל-`SeoReportTabs` את ה-tenant הפעיל של המשתמש.
-- `SeoReportTabs.tsx` מחפש:
-  - טבלת SEO (`crm_tables`)
-  - טבלאות GSC / GA קשורות
-  - אינטגרציות GSC / GA דרך `useUserIntegrations`
-  כולם לפי `tenant_id = tenantId`.
-- `useAhrefsReports.ts` גם מחפש `ahrefs_reports` רק ב-tenant הפעיל.
+### הבעיה
+בדוח של "א.י זוהר עץ" קמפיינים שמייצרים שיחות WhatsApp/Messenger מציגים **0 לידים**, כי:
+1. הקמפיינים הם מסוג `OUTCOME_ENGAGEMENT` (Click-to-WhatsApp) ולא `OUTCOME_LEADS`.
+2. הסנכרון לא מבקש מפייסבוק את ה-attribution windows הנכונים, כך שאירועי `messaging_conversation_started_7d` לא חוזרים ב-`actions`.
+3. גם אם חזרו — הקמפיינים האלו מסווגים כ-`other` ולא כ-`lead`, כך שעמודת הלידים נשארת 0.
 
-במקרה של לקוח מסוכנות משותפת זה שגוי: הנתונים יכולים להיות משויכים ל-tenant אחר אבל עדיין להיות הלקוח הנכון.
+### מה אתקן (ממוקד, בלי לגעת ב-E-commerce / Lead Forms קיימים)
 
-## מה אבנה
+#### `supabase/functions/sync-facebook-insights/index.ts`
+שינוי מינימלי וממוקד:
 
-### 1. שכבת resolution אחת ל-SEO לפי הלקוח, לא לפי tenant פעיל
-אוסיף מסלול טעינה אחיד שמחשב את כל ה-scope הרלוונטי לדוח SEO:
-- הלקוח עצמו
-- `agency_id` של הלקוח
-- ה-tenants הרלוונטיים דרך `agency_tenant_access`
-- טבלת SEO/Ahrefs של הלקוח
-- טבלאות GSC/GA של אותו לקוח
-- tenant/source tenant של החיבורים
+1. **בקשת Insights API** — אוסיף:
+   - `action_attribution_windows=['7d_click','1d_view']`
+   - `use_unified_attribution_setting=true`
+   
+   זה חושף את אירועי ה-messaging בלי לשנות את שאר הנתונים (spend, impressions, purchases וכו').
 
-המטרה: כל המסכים של SEO ישתמשו באותו source-of-truth, ולא כל קומפוננטה תמציא tenant אחר.
+2. **חישוב לידים** — אוסיף מקור ליד נוסף בצד המקורות הקיימים:
+   - סכום של `onsite_conversion.messaging_conversation_started_7d` + הגרסה ה-bare `messaging_conversation_started_7d`
+   - אם סוג הקמפיין הוא `OUTCOME_ENGAGEMENT` / `MESSAGES` ויש אירועי messaging → יסווג כ-`lead` (במקום `other`).
+   - לקמפיינים של Lead Forms (`OUTCOME_LEADS`) הלוגיקה הקיימת של `leadgen_grouped` לא משתנה.
+   - לקמפיינים של E-commerce (`OUTCOME_SALES`) שום דבר לא משתנה — purchases ממשיכים לעבוד כמו שהם.
 
-### 2. תיקון `DashboardView.tsx`
-במקום:
-- להעביר ל-`SeoReportTabs` את `currentTenantId`
+3. **מניעת ספירה כפולה** — ניקח `MAX` בין ה-aggregate `lead` שפייסבוק מחזיר לבין סכום האירועים הספציפיים, כדי שקמפיין מעורב (Lead Form + Messaging) לא יספר פעמיים.
 
-אעדכן כך ש:
-- `SeoReportTabs` יקבל `clientId`
-- והוא עצמו יפתור את ה-scope של הלקוח והסוכנות המשותפת
-- לא תהיה תלות ב-tenant שממנו המשתמש פתח את הדשבורד
+### מה לא משתנה
+- טבלת `facebook_ecommerce` ומסלול ה-E-commerce
+- חישוב spend, impressions, clicks, CTR, CPC
+- קמפיינים מסוג Lead Form רגילים
+- UI של הטבלה (`SharedTable` / הדשבורד) — האגרגציה ב-frontend כבר יודעת לסכם `leads`
 
-כך YTS ייטען אותו דבר מכל צד.
+### בדיקות
+- קמפיין WhatsApp של "א.י זוהר עץ" → לידים > 0, CPL מחושב
+- קמפיין Lead Form רגיל → ממשיך לעבוד כרגיל
+- קמפיין E-commerce → ללא שינוי
+- קמפיין מעורב → ללא ספירה כפולה
 
-### 3. תיקון `SeoReportTabs.tsx`
-אעדכן את השאילתות כך שלא יהיו קשיחות ל-tenant יחיד:
-- חיפוש טבלת Ahrefs/SEO לפי `client_id` + נגישות דרך סוכנות משותפת
-- חיפוש טבלאות GSC/GA קשורות לפי `client_id` / `agency_id` נגיש, לא רק `tenant_id`
-- קישורי `linkedGscTableId`, `linkedGaTableId`, `linkedGscSiteUrl`, `linkedGscLangFilter` ימשיכו להישמר על טבלת ה-SEO עצמה, אבל הטבלה תימצא נכון גם אם נוצרה ב-tenant אחר
+### הערה
+לאחר הפריסה יש להריץ **סנכרון ידני של Facebook** כדי למשוך מחדש נתונים היסטוריים עם ה-attribution windows החדשים.
 
-בנוסף אשמור על fallback זהיר:
-- אם קיימת טבלת SEO מקושרת מפורשות — היא תקבל עדיפות
-- אם אין — יתבצע auto-match לפי הלקוח/דומיין כמו היום
-
-### 4. תיקון `useAhrefsReports.ts`
-אפסיק לסנן רק לפי ה-tenant הפעיל עבור דוחות SEO של לקוח משותף.
-במקום זאת, הלוגיקה תחזיר דוחות Ahrefs של אותו `client_id` מתוך ה-scope הנגיש של הסוכנות המשותפת.
-
-זה חשוב כי כרגע אפילו אם GSC נטען, דוחות Ahrefs עצמם יכולים “להיעלם” אם הם יושבים ב-tenant אחר.
-
-### 5. תיקון טעינת GSC/GA בדוח SEO
-`GscIntegration` ו-visibility של לשוניות GSC/GA יתבססו על אותו scope של הלקוח:
-- לא “יש חיבור ב-tenant הפעיל?”
-- אלא “יש חיבור/טבלה נגישה ללקוח הזה דרך הסוכנות המשותפת?”
-
-אם צריך, אוסיף hook/helper ייעודי ל-SEO שירחיב את `useUserIntegrations` רק למסלול הזה, בלי לשבור מסכים אחרים.
-
-### 6. שמירה על הפרדה ולא לשבור דוחות אחרים
-לא אבצע שינוי רוחבי עיוור בכל המערכת.
-התיקון יהיה ממוקד למסלול SEO:
-- `DashboardView`
-- `SeoReportTabs`
-- `SeoDashboardView` / `GscIntegration`
-- `useAhrefsReports`
-
-כך לקוחות רגילים ב-tenant יחיד ימשיכו לעבוד כמו היום, ולקוחות shared-agency יפסיקו להיות תלויים ב-tenant הפעיל.
-
-### 7. אימות שלא נשברה המערכת
-אבדוק לפחות את התרחישים הבאים:
-- YTS דרך Marketing Captain
-- אותו YTS דרך DMM
-- לקוח רגיל שאינו shared-agency
-- דוח SEO עם Ahrefs בלבד
-- דוח SEO עם GSC בלבד
-- דוח SEO עם Ahrefs + GSC + GA
-- קישור שיתוף / צילום מסך של SEO כדי לוודא שהם משקפים את אותו דוח
-
-## תוצאה צפויה
-אחרי התיקון:
-- לא יהיה משנה מאיזה tenant פתחת את הלקוח
-- אם הלקוח נגיש דרך סוכנות משותפת, דוח ה-SEO ייטען נכון
-- Ahrefs ו-Google Search Console יוצגו לפי הלקוח האמיתי
-- לא ייעלמו ביטויים רק בגלל שהחיבור או הטבלה נוצרו ב-tenant אחר
-
-## פרטים טכניים
-קבצים עיקריים לעדכון:
-- `src/pages/DashboardView.tsx`
-- `src/components/dynamic-tables/SeoReportTabs.tsx`
-- `src/components/dynamic-tables/SeoDashboardView.tsx`
-- `src/components/dynamic-tables/seo/GscIntegration.tsx`
-- `src/hooks/useAhrefsReports.ts`
-
-שורש הבעיה:
-```text
-active tenant != tenant where SEO/GSC/Ahrefs artifacts were created
-אבל
-client_id + agency sharing כן אמורים לאפשר גישה
-
-הקוד היום:
-tenant_id-based resolution
-
-התיקון:
-client/shared-agency-based resolution
-```
+### קובץ לעדכון
+- `supabase/functions/sync-facebook-insights/index.ts`
