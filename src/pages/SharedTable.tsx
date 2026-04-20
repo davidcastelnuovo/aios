@@ -338,6 +338,7 @@ export default function SharedTable() {
                 <PublicSeoView
                   tableName={data.table.name}
                   reports={data.ahrefs_reports || []}
+                  gscData={gscAggregated}
                 />
               </TabsContent>
 
@@ -357,6 +358,7 @@ export default function SharedTable() {
             <PublicSeoView
               tableName={data.table.name}
               reports={data.ahrefs_reports || []}
+              gscData={gscAggregated}
             />
           )}
         </div>
