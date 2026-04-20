@@ -176,7 +176,7 @@ function KeywordTable({ keywords, title, icon, show3Month, showYearly, showPrevM
   );
 }
 
-export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywords = [], hasGscData = false, show3Month = false, showYearly = false, defaultTab = "all", initialLangFilter, onLangFilterChange }: SeoKeywordsTableProps) {
+export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywords = [], hasGscData = false, show3Month = false, showYearly = false, defaultTab = "tracked", initialLangFilter, onLangFilterChange }: SeoKeywordsTableProps) {
   const [langFilter, setLangFilterState] = useState<LangFilter>(initialLangFilter ?? "all");
 
   // Sync if the parent loads the saved value asynchronously after first render
