@@ -543,8 +543,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
   const isSnapshotReady = !isLoading && !!data?.dashboard && Array.isArray(tables);
 
   return (
-    <div className="container mx-auto py-8 px-4 space-y-6" dir="rtl" data-snapshot-ready={isSnapshotReady ? "true" : "false"}>
-      <div data-snapshot-frame="true" className="space-y-6">
+    <div className="container mx-auto py-8 px-4 space-y-6" dir="rtl" data-snapshot-ready={isSnapshotReady ? "true" : "false"} data-snapshot-frame="true">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
