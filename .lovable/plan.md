@@ -1,60 +1,59 @@
 
-## מה קורה עכשיו
 
-יש כאן 2 בעיות נפרדות:
+## הבעיה
 
-1. **תמונת הדוח/דשבורד נטענת ישנה**  
-   ב-`ClientDashboardPanel.tsx` נשמר צילום ב-`localStorage`, וכשנכנסים מחדש הוא נטען מיד. הבעיה היא שהלוגיקה של ה-auto-capture רצה רק אם `!screenshotUrl`, ולכן ברגע שיש צילום שמור — לא מתבצע צילום חדש אוטומטי, ונשארת התמונה הישנה עד לצילום ידני.
+צילום הדשבורד היום מצלם את **כל ה-`SharedDashboard`** (KPIs, טבלת פלטפורמות, גרפים, Analytics dashboard, SEO, WooCommerce, וכו'). התוצאה היא תמונה ענקית וצרה שכשמכווצים אותה למייל/וואטסאפ — אי אפשר לקרוא כלום.
 
-2. **עדיין אי אפשר לבחור עוד נמענים מהצוות בצורה תקינה**  
-   יש כאן שילוב של 2 דברים:
-   - ה-selector עובד מול רשימת `campaigners` כללית של הטננט, לא מול **צוות הלקוח בפועל**.
-   - שורות רבות מופיעות כ-disabled כי אין להן אימייל תקין.
-   - בנוסף, ב-`EmailRecipientsSelector` העדכון הוא עם מערכים “רגילים” (`onChange([...selectedEmails, ...])`) ולא עם עדכון פונקציונלי, מה שעלול לגרום לבחירה לא יציבה כשמוסיפים כמה נמענים ברצף.
+המשתמש רוצה שהצילום יכלול **רק את החלק העליון** שמופיע בצילום שצירף:
+- **כותרת + טאבים של פלטפורמה** (הכל / Facebook / Google Ads / Analytics / SEO)
+- **כרטיסי ה-KPI** (CPL, קליקים, לידים, הוצאה כוללת, סשנים…)
+- **טבלת "פירוט לפי פלטפורמה"**
 
-## מה איישם
+ולעצור שם — בלי הגרפים הארוכים מתחת.
 
-### 1. תיקון טעינת התמונה הישנה
-אעדכן את `ClientDashboardPanel.tsx` כך ש:
-- צילום קיים מה-cache יוצג רק כ-placeholder זמני.
-- בכל פתיחה של הדשבורד יתבצע **capture חדש אוטומטית** גם אם כבר יש `screenshotUrl`.
-- ה-trigger לצילום לא ייחסם יותר בגלל קאש קיים.
-- אאפס גם `autoCapturedRef` / `screenshotBlob` בעת כניסה מחדש כדי שלא יישאר מצב ישן.
+## הפתרון
 
-התוצאה: המשתמש יראה מהר תמונה קיימת אם יש, אבל היא תוחלף אוטומטית בתמונה החדשה והמעודכנת.
+אסמן את חלק ה-"frame" הרצוי ב-`SharedDashboard` בתור region בעל `data-snapshot-frame="true"`, ואשנה את `captureScreenshot` ב-`ClientDashboardPanel` שיצלם **רק את ה-region הזה** במקום את ה-root כולו.
 
-### 2. תיקון בחירת נמענים מרובים
-אעדכן את `EmailRecipientsSelector.tsx` כך ש:
-- `onChange` יעבוד בעדכון פונקציונלי בטוח (`prev => ...`) במקום לבנות מערך מ-state שעלול להיות stale.
-- toggle/remove/add-manual יעבדו תמיד מול הערך האחרון.
-- אשמור על dedupe לפי אימייל כדי למנוע שוב מצב שבו בחירה אחת מסמנת “את כולם”.
+### 1. סימון ה-frame ב-`SharedDashboard.tsx`
 
-### 3. להביא את הנמענים ממקור נכון
-אעדכן את `ClientDashboardPanel.tsx` ו-`ClientReportPanel.tsx` כך שהרשימה תיבנה מ:
-- אימייל הלקוח
-- **אנשי הצוות המשויכים ללקוח** (`client_team` + `campaigners`)
-ולא מכל הקמפיינרים בטננט.
+עוטף ב-`<div data-snapshot-frame="true">…</div>` את הבלוק שמתחיל מהטאבים של הפלטפורמה ועד סוף טבלת "פירוט לפי פלטפורמה" (שורות ~595–1083 פלוס בלוק הטבלה ~1086–1183). ה-Header של הדשבורד (שם + לקוח + סוכנות) יישאר מחוץ ל-frame אבל אכלול אותו כדי שיהיה context. למעשה ה-frame יקיף:
+- Header (שם דשבורד + לקוח)
+- Platform Tabs
+- KPI cards
+- Platform Breakdown table
 
-אם אמצא שחלק מאנשי הצוות מחוברים דרך פרופיל משתמש אבל בלי אימייל ב-`campaigners`, אוסיף גם fallback ל-`profiles.email` לפי `campaigner_id`, כדי שלא יופיעו “ללא אימייל” כשכן יש להם אימייל במערכת.
+ויעצור **לפני** הגרפים (`Trends Over Time`, `Daily Performance Chart`, וכו').
 
-### 4. UX ברור יותר לנמענים ללא אימייל
-אשאיר אנשי צוות ללא אימייל גלויים, אבל אסמן אותם בצורה ברורה כלא-ניתנים לבחירה, כדי שלא ייראה כאילו “נעלמו” שוב.
+### 2. עדכון לוגיקת הצילום ב-`ClientDashboardPanel.tsx`
+
+ב-`captureScreenshot`:
+```ts
+const node = snapshotRef.current;
+const frame = node?.querySelector('[data-snapshot-frame="true"]') as HTMLElement | null;
+const target = frame || node; // fallback ל-node המלא אם ה-frame לא נמצא (למשל ב-SEO/WooCommerce only)
+```
+ולהעביר את `target` ל-`toJpeg(target, …)` במקום `node`. גם ה-readiness wait + מדידת `getBoundingClientRect` יעבדו על `target`.
+
+### 3. תאימות לאחור
+
+- אם הדשבורד הוא רק SEO / WooCommerce / Analytics (אין `data-snapshot-frame`), נופלים ל-node הרגיל — בדיוק כמו היום.
+- אם המשתמש בכל זאת ירצה את הצילום הארוך בעתיד, אפשר להוסיף toggle בעתיד; כרגע נשאר ברירת מחדל "מצומצם".
+
+## תוצאה
+
+- צילום קצר וקריא הכולל רק KPIs + טבלת פלטפורמות.
+- תמונה קטנה משמעותית בקילובייטים → אין יותר חששות מ-Gmail 25MB / Green API limits.
+- האיכות תהיה טובה כי `pixelRatio` יישאר גבוה (1.5) כש-totalPx קטן.
 
 ## קבצים שיתעדכנו
 
-- `src/components/clients/ClientDashboardPanel.tsx`
-- `src/components/clients/ClientReportPanel.tsx`
-- `src/components/clients/EmailRecipientsSelector.tsx`
-
-## תוצאה צפויה
-
-- כניסה לדו"חות/דשבורדים תטען אוטומטית **צילום חדש ועדכני**, ולא תיתקע על צילום ישן מהקאש.
-- יהיה אפשר לבחור **כמה נמענים שצריך** בלי שהבחירה תתבלגן.
-- הרשימה תייצג את **צוות הלקוח הרלוונטי**, ולא רשימת עובדים כללית.
-- אנשי צוות בלי אימייל יישארו מוצגים, אבל ברור למה אי אפשר לבחור אותם.
+- `src/pages/SharedDashboard.tsx` — עטיפת בלוק ה-KPI/Header/Tabs/Breakdown ב-`data-snapshot-frame="true"`.
+- `src/components/clients/ClientDashboardPanel.tsx` — `captureScreenshot` יעדיף לצלם את ה-frame הפנימי במקום את כל ה-node.
 
 ## פרטים טכניים
 
-- שורש באג התמונה: `ClientDashboardPanel` טוען cache ב-`useEffect`, ואז ה-auto-capture חסום ע"י התנאי `!screenshotUrl`.
-- שורש באג הנמענים: selector עם state updates לא פונקציונליים + מקור נתונים לא מדויק + שורות בלי אימייל תקין.
-- לא נדרש שינוי סכימה בבסיס הנתונים; זה תיקון frontend/query behavior בלבד.
+- אין שינוי בסכימה / Edge Functions.
+- אין השפעה על `PublicSeoView` / `GoogleAnalyticsDashboard` / `PublicWooCommerceView` (הם נבחרים ב-tab ייעודי וב-frame "All" לא יופיעו בצילום בכל מקרה).
+- ה-`isSnapshotReady` נשאר על ה-root כדי שה-poll ימשיך לעבוד; רק יעד ה-`toJpeg` משתנה.
+
