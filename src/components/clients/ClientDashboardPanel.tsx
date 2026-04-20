@@ -76,7 +76,7 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
       fetch(cached)
         .then((r) => r.blob())
         .then(setScreenshotBlob)
-        .catch(() => {});
+        .catch((e) => console.error("[Dashboard] Failed to restore cached blob:", e));
     }
   }, [dashboard.id]);
 
@@ -331,13 +331,20 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
 
   const handleSend = async () => {
     let blob = screenshotBlob;
-    if (!blob) {
-      toast.info("מצלם דשבורד...");
-      blob = await captureScreenshot();
-      if (!blob) {
-        toast.error("לא נוצר צילום מסך - לחץ על 'צלם מחדש' ונסה שוב");
-        return;
+    // Reuse the image already shown on screen — never re-capture on send
+    if (!blob && screenshotUrl) {
+      try {
+        const r = await fetch(screenshotUrl);
+        blob = await r.blob();
+        setScreenshotBlob(blob);
+      } catch (e) {
+        console.error("[Dashboard] Failed to convert screenshotUrl to blob:", e);
+        blob = null;
       }
+    }
+    if (!blob) {
+      toast.error("אין צילום זמין — לחץ על 'צלם מחדש' לפני שליחה");
+      return;
     }
     setIsSending(true);
     try {
