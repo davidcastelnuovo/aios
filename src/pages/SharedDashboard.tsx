@@ -544,6 +544,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
 
   return (
     <div className="container mx-auto py-8 px-4 space-y-6" dir="rtl" data-snapshot-ready={isSnapshotReady ? "true" : "false"}>
+      <div data-snapshot-frame="true" className="space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
