@@ -22,6 +22,12 @@ import { filterValidSeoReports } from "./seo/reportValidity";
 interface SeoDashboardViewProps {
   tenantId: string;
   clientId: string;
+  /**
+   * Optional list of all tenant_ids reachable for this client via shared
+   * agencies. When provided, ahrefs_reports are fetched across the full set
+   * (matching what SeoReportTabs already resolves for shared-agency clients).
+   */
+  accessibleTenantIds?: string[];
   /** CRM records from the linked Google Analytics table */
   gaRecords?: any[];
   /** GSC site URL persisted on the SEO crm_table — used as source of truth on first load. */
@@ -34,7 +40,7 @@ interface SeoDashboardViewProps {
   onLangFilterChange?: (lang: "all" | "he" | "en") => void;
 }
 
-export function SeoDashboardView({ tenantId, clientId, gaRecords = [], initialGscSiteUrl, onGscSiteSelected, initialLangFilter, onLangFilterChange }: SeoDashboardViewProps) {
+export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRecords = [], initialGscSiteUrl, onGscSiteSelected, initialLangFilter, onLangFilterChange }: SeoDashboardViewProps) {
   const queryClient = useQueryClient();
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [isFetchingSnapshot, setIsFetchingSnapshot] = useState(false);
@@ -87,19 +93,32 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [], initialGs
     setGscData(data.current);
   }, []);
 
+  // Build tenant scope: prefer the explicit shared-agency list when provided,
+  // else fall back to the single tenant prop. Without scoping by client_id we
+  // would cross-contaminate, so client_id is always the strongest filter and
+  // tenant filtering is supplementary (mostly so RLS errors stay clear).
+  const reportTenants =
+    Array.isArray(accessibleTenantIds) && accessibleTenantIds.length > 0
+      ? Array.from(new Set(accessibleTenantIds.filter(Boolean)))
+      : tenantId
+        ? [tenantId]
+        : [];
+
   const { data: reports = [], isLoading } = useQuery({
-    queryKey: ['seo-dashboard-reports', tenantId, clientId],
+    queryKey: ['seo-dashboard-reports', reportTenants.slice().sort().join(','), clientId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from('ahrefs_reports')
         .select('*')
-        .eq('tenant_id', tenantId)
         .eq('client_id', clientId)
         .order('report_date', { ascending: false });
+      if (reportTenants.length === 1) q = q.eq('tenant_id', reportTenants[0]);
+      else if (reportTenants.length > 1) q = q.in('tenant_id', reportTenants);
+      const { data, error } = await q;
       if (error) throw error;
       return data || [];
     },
-    enabled: !!tenantId && !!clientId,
+    enabled: !!clientId,
   });
 
   const validReports = useMemo(() => filterValidSeoReports(reports), [reports]);
@@ -597,6 +616,7 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [], initialGs
       {/* Google Search Console Integration — enriches keyword rows silently, no raw table shown here */}
       <GscIntegration
         tenantId={tenantId}
+        tenantIds={accessibleTenantIds}
         clientId={clientId}
         domain={reportData?.domain || selectedReport?.domain}
         keywords={[]}
