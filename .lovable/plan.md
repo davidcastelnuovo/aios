@@ -1,87 +1,70 @@
 
 
-## הבעיה אצל ד"ר הולדר
+## הבעיה
 
-מה שראית בצילום הוא שכן יש חיבור GSC (כתוב "מחובר") ויש בורר נכס שמראה `holderdent.com`, אבל יש שגיאה "אין נתונים זמינים עבור הנכס שנבחר".
+הביטויים של Google Search Console:
+1. **בעמוד הראשי (SEO)** — נטענים חלקית: רק "ביטויים אורגניים" של אהרפס מקבלים העשרה מ-GSC; ביטויים שמופיעים רק ב-GSC ולא באהרפס כן מתווספים, אבל הם מוגבלים ל-`rowLimit: 1000` ב-API ובלי צבירה לפי תקופה (לפעמים חוזרים פחות נתונים בגלל חתך זמן צר).
+2. **בקישור השיתוף** — לא נטענים בכלל. ה-`PublicSeoView` (הקומפוננטה שמרנדרת את לשונית "SEO" בשיתוף) פשוט מתעלמת מ-GSC: היא מעבירה `gscOnlyKeywords={[]}` ו-`hasGscData={false}` ל-`SeoKeywordsTable`. נתוני ה-GSC כן מגיעים ב-payload (`data.gsc_records` מהפונקציה `public-table`), אבל רק לשונית "Search Console" הנפרדת משתמשת בהם (`PublicGscView`). הם **לא** מוזרמים לתוך טאב ה-SEO הראשי.
 
-חיפוש בלוגים של ה-edge function `fetch-gsc-data` חשף את הסיבה המדויקת:
+בנוסף, בעמוד המאומת (לא משותף) — `SeoDashboardView` מסתמך על `GscIntegration` שמושך נתונים בלייב מ-API של גוגל (דורש access token של המשתמש המחובר, לא קיים בעמוד שיתוף ציבורי). לכן בקישור שיתוף ה-GSC לעולם לא ייטען בלייב — חייבים להזין אותו מתוך `gsc_records` שכבר נשלפו ב-edge function.
 
-```
-403 — User does not have sufficient permission for site 'sc-domain:holderdent.com'
-```
+## הפתרון
 
-### שורש הבעיה (data-level, לא UI bug)
+### 1. הזרמת `gsc_records` כ-`gscData` ל-`PublicSeoView` (שיתוף)
 
-יש לטננט שני חיבורי GSC של שני משתמשים שונים:
+בעמוד `SharedTable.tsx`, במקום לשלוח רק `reports` ל-`PublicSeoView` בטאב ה-SEO, להעביר גם את `gscRecords` המאוגדים לפי keyword (clicks, impressions, ctr, position ממוצע משוקלל לפי impressions — בדיוק כמו ש-`PublicGscView` כבר עושה).
 
-| Integration | מי מחובר | המיפוי של הולדר | רמת הרשאה |
-|-------------|----------|-----------------|-----------|
-| `1d6dd113…` (חדש) | משתמש A | `https://www.holderdent.com/` | **siteOwner** ✅ |
-| `d39a8451…` (ישן) | משתמש B | `sc-domain:holderdent.com` | **siteUnverifiedUser** ❌ |
-
-המשתמש שמסתכל עכשיו על הדשבורד נופל על החיבור הישן (`d39a8451`) שמיפה את הולדר ל-`sc-domain:holderdent.com` — נכס שאין לו הרשאת קריאה ב-Google. לכן GSC מחזיר 403 והממשק מציג "אין נתונים".
-
-חשוב: **אין שום טבלת `crm_tables` של אהרפס/GSC ספציפית להולדר** (יש רק אחת לטננט הזה — של ggh-law). אז אין `targetDomain` לאוטו-match, והקוד נופל על מה ש-`client_sites[clientId]` של ה-integration הראשון מחזיר.
-
-## התוכנית
-
-תיקון ב-3 שכבות, בלי לשבור את ה-multi-domain ובלי לפגוע בלקוחות אחרים.
-
-### 1. דילוג על נכסים ללא הרשאה ב-`GscIntegration.tsx`
-
-כשבונים את `availableSites` או בוחרים אוטומטית, לסנן החוצה כל נכס שה-`permissionLevel` שלו הוא `siteUnverifiedUser`. הנכסים האלה לא נגישים ל-API ולכן אין טעם להציג אותם או להיבחר אוטומטית.
+הצבירה תקרה פעם אחת ב-`SharedTable`, ותועבר כ-prop חדש ל-`PublicSeoView`:
 
 ```ts
-const usableSites = availableSites.filter(
-  s => s.permissionLevel !== 'siteUnverifiedUser'
-);
-// השתמש ב-usableSites ל-matchedSite, ל-fallback ולתצוגה ב-Popover.
+gscData: Array<{ keyword, clicks, impressions, ctr, position }>
 ```
 
-### 2. בחירת ה-integration "הטובה ביותר" בין כמה זמינות
+### 2. עדכון `PublicSeoView` להעשיר ביטויים מ-GSC ולהוסיף "GSC-only"
 
-ב-`GscIntegration.tsx` (שורה `gscIntegrations[0]`) — אם יש כמה integrations של GSC ל-tenant, לבחור את זו שכן יש לה מיפוי תקין ל-`clientId` הנוכחי עם נכס שאינו `siteUnverifiedUser`. רק אם אין כזו, ליפול על הראשונה.
+זהה ללוגיקה הקיימת ב-`SeoDashboardView`:
+- בונה `gscMap` מהמערך הנכנס.
+- בפונקציית `enrich`, ממלא `gsc_clicks/gsc_impressions/gsc_ctr/gsc_position` מתוך המפה.
+- בונה `gscOnlyKeywords` מ-GSC keywords שלא מופיעים באהרפס.
+- מעביר ל-`SeoKeywordsTable`:
+  ```tsx
+  gscOnlyKeywords={gscOnlyKeywords}
+  hasGscData={gscData.length > 0}
+  ```
 
-```ts
-const gscIntegration = useMemo(() => {
-  if (!gscIntegrations.length) return null;
-  // 1. integration שיש לה מיפוי לקוח לנכס מורשה
-  const withGoodMapping = gscIntegrations.find(i => {
-    const mapped = (i.settings as any)?.client_sites?.[clientId];
-    if (!mapped) return false;
-    const sites = (i.settings as any)?.available_sites || [];
-    const site = sites.find((s: any) => s.siteUrl === mapped);
-    return !site || site.permissionLevel !== 'siteUnverifiedUser';
-  });
-  return withGoodMapping || gscIntegrations[0];
-}, [gscIntegrations, clientId]);
-```
+זה יראה את אותם הביטויים בדיוק שמופיעים בעמוד המאומת — בלי קריאה ללייב API.
 
-### 3. אם המיפוי השמור הוא `siteUnverifiedUser` — לאפס ולנסות domain match אמיתי
+### 3. תיקון "טעינה חלקית" בעמוד המאומת
 
-אם `client_sites[clientId]` הקיים מצביע על נכס שלא נגיש, להתעלם ממנו ולנסות:
-1. `matchedSite` לפי `domain`/`website` (יסונן ל-usable בלבד)
-2. נכס יחיד זמין כ-fallback אחרון
+הסיבה ש-`SeoDashboardView` מציג רק חלק מהביטויים: הקריאה הנוכחית עם `dateRange='28d'` ו-`rowLimit: 1000` מקבלת רק את הביטויים מהחודש האחרון. אבל אהרפס מחזיר ביטויים היסטוריים — אין התאמה ל-keywords ישנים יותר.
 
-זה מבטיח שהולדר יבחר אוטומטית את `https://www.holderdent.com/` מהחיבור הנכון.
+תיקון: בקריאה היחידה (current) להגדיל את חלון הזמן לברירת מחדל של **90 יום** במקום 28 יום (כשנקרא במצב `hideTable + onMultiPeriodLoaded` מתוך `SeoDashboardView` — שם רוצים את האיחוד הרחב ביותר). זה כפול-משולש את ה-coverage של keywords ל-merge עם אהרפס.
 
-### 4. הודעה ברורה למשתמש כשאכן אין נכס נגיש
+**הקפדה לא לפגוע במקומות אחרים**: השינוי יחול רק על ה-period `current` של ה-multi-period query (הוא קיים רק כש-`enableMultiPeriod=true`, כלומר רק ב-`SeoDashboardView`). בלשונית "Search Console" הנפרדת ו-`GscIntegration` עם `hideTable=false` הלוגיקה נשמרת זהה (28d/3m/12m לפי הבורר).
 
-במקום "אין נתונים זמינים עבור הנכס שנבחר" כשמדובר ב-403, אזהיר ש-"אין הרשאות גישה לנכס הזה ב-Search Console" עם הצעה לבחור נכס אחר ידנית. זה ידרוש החזרת error code מה-edge function (כבר זמין בלוגים — רק לחשוף ב-response).
+### 4. שיפור קטן ל-`fetch-gsc-data`
 
-## הקבצים שיתעדכנו
+שמירה על `rowLimit: 1000` (זה המקסימום ה-API מחזיר במכה אחת). כדי לקבל יותר ביטויים, מתבצע pagination בעזרת `startRow`. אפשר לולאה של עד 5 דפים (5,000 ביטויים) רק כשמועבר flag חדש `aggregateAll: true` מהקריאה הראשית של ה-SEO dashboard.
 
-- `src/components/dynamic-tables/seo/GscIntegration.tsx` — סינון `siteUnverifiedUser`, בחירה חכמה של integration, איפוס מיפוי לא-נגיש.
-- `supabase/functions/fetch-gsc-data/index.ts` — להחזיר `permissionDenied: true` ב-response כשגוגל מחזיר 403, במקום רק לזרוק.
-- (אופציונלי) `src/components/dynamic-tables/SeoReportTabs.tsx` — להעביר את ה-`website` של הלקוח כ-`domain` ל-`GscIntegration` כדי לשפר את ה-auto-match (כיום זה תלוי ב-`targetDomain` של טבלת אהרפס שלא קיימת להולדר).
+הוספת `aggregateAll: true` בקריאה אחת — מתוך `useQuery` הראשי של `GscIntegration` כשהוא במצב `hideTable + onMultiPeriodLoaded` (מצב "SEO main"). שאר הקריאות נשארות חד-דפיות.
+
+## קבצים שיתעדכנו
+
+- **`src/pages/SharedTable.tsx`** — בלשונית SEO לעבד `gscRecords` למבנה keyword-aggregated ולהעביר ל-`PublicSeoView`.
+- **`src/components/dynamic-tables/PublicSeoView.tsx`** — קבלת prop חדש `gscData`, בניית `gscMap`, העשרת `enrich`, יצירת `gscOnlyKeywords`, העברה ל-`SeoKeywordsTable` עם `hasGscData=true`.
+- **`src/components/dynamic-tables/seo/GscIntegration.tsx`** — בקריאת `current` של ה-multi-period להעביר `aggregateAll: true` ולהשתמש בחלון של 90 יום (לא משפיע על ה-period maps האחרים).
+- **`supabase/functions/fetch-gsc-data/index.ts`** — תמיכה ב-`aggregateAll` (לולאת pagination על `startRow` עד 5,000 שורות, רק כשהדגל מוגדר).
 
 ## מה לא ישתנה
 
-- **multi-domain**: הסינון מתבצע per-site, לא per-tenant. אם ל-ggh-law יש את `https://ggh-law.co.il/` עם `siteOwner` — הוא ימשיך לעבוד בלי שינוי.
-- **per-client mapping**: `client_sites[clientId]` נשאר source of truth ראשי; רק אם המיפוי הקיים שבור (siteUnverifiedUser) ייעשה fallback.
-- **per-user integrations**: לוגיקת `useUserIntegrations` (own + shared) לא משתנה, רק הבחירה בין הזמינות.
+- לשונית "Search Console" הנפרדת ב-`SeoReportTabs` — נשארת זהה (משתמשת ב-`SearchConsoleDashboard` או ב-`GscIntegration` רגיל).
+- לשונית "Search Console" בקישור שיתוף — `PublicGscView` נשאר זהה.
+- בורר השפה (כל/עברית/English) שהוספנו אתמול ב-`GscQueriesTable` ו-`SeoKeywordsTable` — לא נוגעים.
+- מנגנון ה-multi-period (prevMonth/3m/yearly) — נשמר זהה.
+- אצל לקוחות בלי GSC — אין שינוי בכלל.
 
 ## תוצאה צפויה
 
-אצל הולדר, הקוד ידלג על `sc-domain:holderdent.com` (siteUnverifiedUser), יבחר את ה-integration שמיפתה ל-`https://www.holderdent.com/` (siteOwner), ויציג נתונים אמיתיים. אצל לקוחות אחרים שכבר עובדים — אין שינוי.
+- **בקישור השיתוף**: לשונית SEO תציג את כל הביטויים, כולל אלה שרק ב-GSC, עם clicks/impressions/CTR — בדיוק כמו בעמוד המאומת.
+- **בעמוד המאומת**: כיסוי משמעותית רחב יותר של ביטויים מ-GSC (עד 5,000 מ-90 יום), כך שכל ביטוי באהרפס שגם יש לו תנועה ב-GSC יקבל את ההעשרה ולא יישאר ריק.
 
