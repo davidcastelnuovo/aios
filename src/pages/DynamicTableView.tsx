@@ -2830,7 +2830,6 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
           })()}
         </Card>
       )}
-      </div>
 
       {/* Google Analytics Dashboard */}
       {!summaryOnly && hasGoogleAnalytics && filteredRecords && filteredRecords.length > 0 && (
@@ -2855,6 +2854,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
           clientId={table.integration_settings.clientId} 
         />
       )}
+      </div>
 
       {!summaryOnly && (hasAhrefs && table?.integration_settings?.data_source === 'ahrefs_reports' ? null : isLoading ? (
         <Skeleton className="h-96 w-full" />
