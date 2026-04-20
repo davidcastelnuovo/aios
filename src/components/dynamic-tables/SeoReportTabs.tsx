@@ -250,6 +250,8 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
             saveLinkMutation.mutate({ key: 'linkedGscSiteUrl', value: siteUrl });
           }
         }}
+        initialLangFilter={savedGscLangFilter}
+        onLangFilterChange={(v) => saveLinkMutation.mutate({ key: 'linkedGscLangFilter', value: v })}
       />
     );
   }
@@ -287,6 +289,8 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                 saveLinkMutation.mutate({ key: 'linkedGscSiteUrl', value: siteUrl });
               }
             }}
+            initialLangFilter={savedGscLangFilter}
+            onLangFilterChange={(v) => saveLinkMutation.mutate({ key: 'linkedGscLangFilter', value: v })}
           />
         </TabsContent>
 

@@ -83,6 +83,7 @@ export function SeoDashboardWithGa({ tenantId, clientId }: SeoDashboardWithGaPro
   });
 
   const savedGscSiteUrl = (seoTable?.integration_settings as any)?.linkedGscSiteUrl || "";
+  const savedLangFilter = ((seoTable?.integration_settings as any)?.linkedGscLangFilter || "all") as "all" | "he" | "en";
 
   const persistGscSiteUrl = async (siteUrl: string) => {
     if (!seoTable?.id || !siteUrl || siteUrl === savedGscSiteUrl) return;
@@ -94,6 +95,16 @@ export function SeoDashboardWithGa({ tenantId, clientId }: SeoDashboardWithGaPro
     }
   };
 
+  const persistLangFilter = async (lang: "all" | "he" | "en") => {
+    if (!seoTable?.id || lang === savedLangFilter) return;
+    try {
+      const newSettings = { ...((seoTable.integration_settings as any) || {}), linkedGscLangFilter: lang };
+      await supabase.from("crm_tables").update({ integration_settings: newSettings }).eq("id", seoTable.id);
+    } catch (err) {
+      console.warn("[SeoDashboardWithGa] failed to persist linkedGscLangFilter", err);
+    }
+  };
+
   return (
     <SeoDashboardView
       tenantId={tenantId}
@@ -101,6 +112,8 @@ export function SeoDashboardWithGa({ tenantId, clientId }: SeoDashboardWithGaPro
       gaRecords={gaRecords}
       initialGscSiteUrl={savedGscSiteUrl}
       onGscSiteSelected={persistGscSiteUrl}
+      initialLangFilter={savedLangFilter}
+      onLangFilterChange={persistLangFilter}
     />
   );
 }

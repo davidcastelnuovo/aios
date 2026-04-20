@@ -23,6 +23,8 @@ interface PublicSeoViewProps {
   reports: any[];
   /** Optional GSC data aggregated per keyword — enables enrichment + GSC-only rows. */
   gscData?: PublicGscKeyword[];
+  /** Initial language filter persisted on the SEO crm_table — read-only in public view. */
+  initialLangFilter?: "all" | "he" | "en";
 }
 
 function normalizeKeyword(kw: any) {
@@ -41,7 +43,7 @@ function normalizeKeyword(kw: any) {
   };
 }
 
-export function PublicSeoView({ tableName, reports, gscData = [] }: PublicSeoViewProps) {
+export function PublicSeoView({ tableName, reports, gscData = [], initialLangFilter }: PublicSeoViewProps) {
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const validReports = useMemo(() => filterValidSeoReports(reports), [reports]);
 
@@ -255,6 +257,7 @@ export function PublicSeoView({ tableName, reports, gscData = [] }: PublicSeoVie
         hasGscData={gscData.length > 0}
         show3Month={comparison.threeMonth.size > 0}
         showYearly={comparison.yearly.size > 0}
+        initialLangFilter={initialLangFilter}
       />
 
       {reportData?.html && (
