@@ -96,6 +96,8 @@ export default function DynamicTables() {
   const [showSeoReportDialog, setShowSeoReportDialog] = useState(false);
   const [editingTable, setEditingTable] = useState<CrmTable | null>(null);
   const [deletingTable, setDeletingTable] = useState<CrmTable | null>(null);
+  const [editingDashboard, setEditingDashboard] = useState<{ id: string; name: string } | null>(null);
+  const [editDashboardName, setEditDashboardName] = useState("");
   const [editName, setEditName] = useState("");
   const [editAgencyId, setEditAgencyId] = useState<string>("");
   const [editClientId, setEditClientId] = useState<string>("");
