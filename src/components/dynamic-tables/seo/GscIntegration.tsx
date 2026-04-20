@@ -260,14 +260,17 @@ export function GscIntegration({
       };
 
       // Each period: 28-day window ending at the given offset.
+      // EXCEPTION: `current` uses a 90-day window with full pagination (aggregateAll)
+      // so that the SEO dashboard can merge GSC traffic into ALL Ahrefs keywords
+      // (including older ones), not just last month's GSC keywords.
       const periods = {
-        current:    { startOffset: 28,  endOffset: 0   },
-        prevMonth:  { startOffset: 58,  endOffset: 30  },
-        threeMonth: { startOffset: 118, endOffset: 90  },
-        yearly:     { startOffset: 393, endOffset: 365 },
+        current:    { startOffset: 90,  endOffset: 0,   aggregateAll: true  },
+        prevMonth:  { startOffset: 58,  endOffset: 30,  aggregateAll: false },
+        threeMonth: { startOffset: 118, endOffset: 90,  aggregateAll: false },
+        yearly:     { startOffset: 393, endOffset: 365, aggregateAll: false },
       } as const;
 
-      const entries = Object.entries(periods) as Array<[keyof typeof periods, { startOffset: number; endOffset: number }]>;
+      const entries = Object.entries(periods) as Array<[keyof typeof periods, { startOffset: number; endOffset: number; aggregateAll: boolean }]>;
       const responses = await Promise.all(
         entries.map(([, p]) =>
           supabase.functions.invoke("fetch-gsc-data", {
@@ -276,6 +279,7 @@ export function GscIntegration({
               siteUrl: effectiveSiteUrl,
               startDate: dateMinus(p.startOffset),
               endDate: dateMinus(p.endOffset),
+              aggregateAll: p.aggregateAll,
             },
             headers: { Authorization: `Bearer ${session.access_token}` },
           })
