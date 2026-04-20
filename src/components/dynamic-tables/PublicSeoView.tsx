@@ -89,11 +89,22 @@ export function PublicSeoView({ tableName, reports, gscData = [] }: PublicSeoVie
     return map;
   }, [validReports, selectedReport?.id]);
 
+  // Map GSC keywords (already aggregated by SharedTable) for fast lookup.
+  const gscMap = useMemo(() => {
+    const m = new Map<string, PublicGscKeyword>();
+    for (const g of gscData) {
+      const name = String(g.keyword || "").toLowerCase().trim();
+      if (name) m.set(name, g);
+    }
+    return m;
+  }, [gscData]);
+
   function enrich(kw: any) {
     const n = normalizeKeyword(kw);
     const lower = String(n.keyword).toLowerCase().trim();
     const api3 = comparison.threeMonth.get(lower);
     const apiY = comparison.yearly.get(lower);
+    const gscRow = gscMap.get(lower);
 
     let prevPos = n.position_prev_month ?? prevMonthMap.get(lower) ?? null;
     if (prevPos == null && api3?.best_position_prev != null) prevPos = api3.best_position_prev;
@@ -107,10 +118,10 @@ export function PublicSeoView({ tableName, reports, gscData = [] }: PublicSeoVie
       position_prev_month: prevPos,
       position_3month: api3?.best_position_prev ?? null,
       position_yearly: apiY?.best_position_prev ?? null,
-      gsc_clicks: null,
-      gsc_impressions: null,
-      gsc_ctr: null,
-      gsc_position: null,
+      gsc_clicks: gscRow?.clicks ?? null,
+      gsc_impressions: gscRow?.impressions ?? null,
+      gsc_ctr: gscRow?.ctr ?? null,
+      gsc_position: gscRow?.position ?? null,
     };
   }
 
@@ -144,9 +155,38 @@ export function PublicSeoView({ tableName, reports, gscData = [] }: PublicSeoVie
       );
     }
     return enriched;
-  }, [rawOrganic, rawTracked, comparison, prevMonthMap]);
+  }, [rawOrganic, rawTracked, comparison, prevMonthMap, gscMap]);
 
-  const trackedKeywords = useMemo(() => rawTracked.map(enrich), [rawTracked, comparison, prevMonthMap]);
+  const trackedKeywords = useMemo(() => rawTracked.map(enrich), [rawTracked, comparison, prevMonthMap, gscMap]);
+
+  // GSC-only keywords: appear in GSC but not in Ahrefs organic/tracked.
+  const gscOnlyKeywords = useMemo(() => {
+    if (gscData.length === 0) return [];
+    const ahrefsNames = new Set<string>();
+    for (const kw of rawOrganic) ahrefsNames.add(String(kw.keyword || "").toLowerCase().trim());
+    for (const kw of rawTracked) ahrefsNames.add(String(kw.keyword || "").toLowerCase().trim());
+    return gscData
+      .filter((g) => {
+        const name = String(g.keyword || "").toLowerCase().trim();
+        return name && !ahrefsNames.has(name);
+      })
+      .map((g) => ({
+        keyword: g.keyword,
+        position: null,
+        traffic: 0,
+        volume: null,
+        kd: null,
+        cpc: null,
+        url: "",
+        position_prev_month: null,
+        position_3month: null,
+        position_yearly: null,
+        gsc_clicks: g.clicks,
+        gsc_impressions: g.impressions,
+        gsc_ctr: g.ctr,
+        gsc_position: g.position,
+      }));
+  }, [gscData, rawOrganic, rawTracked]);
 
   if (!validReports || validReports.length === 0) {
     return (
