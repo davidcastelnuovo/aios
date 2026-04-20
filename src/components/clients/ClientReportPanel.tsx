@@ -119,20 +119,26 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
     enabled: !!tenantId,
   });
 
-  // Fetch all active team members in tenant
+  // Team members assigned to THIS client (not the whole tenant).
+  // Keep entries even if email is missing so the user understands who's on the team.
   const { data: teamMembers } = useQuery({
-    queryKey: ["tenant-team-emails", tenantId],
+    queryKey: ["client-team-emails-report", clientId],
     queryFn: async () => {
       const { data } = await supabase
-        .from("campaigners")
-        .select("id, full_name, email")
-        .eq("tenant_id", tenantId)
-        .eq("active", true)
-        .not("email", "is", null)
-        .order("full_name");
-      return (data || []).map((c: any) => ({ campaigners: { full_name: c.full_name, email: c.email } }));
+        .from("client_team")
+        .select("role_on_account, campaigners:campaigner_id (id, full_name, email, active)")
+        .eq("client_id", clientId);
+      return (data || [])
+        .filter((t: any) => t.campaigners && t.campaigners.active !== false)
+        .map((t: any) => ({
+          role_on_account: t.role_on_account,
+          campaigners: {
+            full_name: t.campaigners.full_name,
+            email: t.campaigners.email || "",
+          },
+        }));
     },
-    enabled: !!tenantId,
+    enabled: !!clientId,
   });
 
   // Fetch share link (any existing — active or inactive)

@@ -69,15 +69,14 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
   const [isSending, setIsSending] = useState(false);
   const [screenshotBlob, setScreenshotBlob] = useState<Blob | null>(null);
 
+  // On every dashboard open: show cached image only as a placeholder,
+  // then force a fresh capture so the user always sees up-to-date data.
   useEffect(() => {
+    autoCapturedRef.current = null;
+    setScreenshotBlob(null);
     const cached = localStorage.getItem(CACHE_KEY_PREFIX + dashboard.id);
-    if (cached) {
-      setScreenshotUrl(cached);
-      fetch(cached)
-        .then((r) => r.blob())
-        .then(setScreenshotBlob)
-        .catch((e) => console.error("[Dashboard] Failed to restore cached blob:", e));
-    }
+    setScreenshotUrl(cached || null);
+    // Don't restore cached blob — we'll re-capture and produce a fresh one.
   }, [dashboard.id]);
 
   const { data: client } = useQuery({
@@ -107,19 +106,26 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
     enabled: !!tenantId,
   });
 
+  // Team members assigned to THIS client (not the whole tenant).
+  // Keep entries even if email is missing so the user understands who's on the team.
   const { data: teamMembers } = useQuery({
-    queryKey: ["tenant-team-emails-dashboard", tenantId],
+    queryKey: ["client-team-emails-dashboard", clientId],
     queryFn: async () => {
       const { data } = await supabase
-        .from("campaigners")
-        .select("id, full_name, email")
-        .eq("tenant_id", tenantId)
-        .eq("active", true)
-        .not("email", "is", null)
-        .order("full_name");
-      return (data || []).map((c: any) => ({ campaigners: { full_name: c.full_name, email: c.email } }));
+        .from("client_team")
+        .select("role_on_account, campaigners:campaigner_id (id, full_name, email, active)")
+        .eq("client_id", clientId);
+      return (data || [])
+        .filter((t: any) => t.campaigners && t.campaigners.active !== false)
+        .map((t: any) => ({
+          role_on_account: t.role_on_account,
+          campaigners: {
+            full_name: t.campaigners.full_name,
+            email: t.campaigners.email || "",
+          },
+        }));
     },
-    enabled: !!tenantId,
+    enabled: !!clientId,
   });
 
   const { data: shareLink } = useQuery({
@@ -313,13 +319,11 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
     }
   }, [dashboard.id]);
 
-  // Auto-capture once snapshot is mounted (only first time per dashboard).
-  // captureScreenshot itself polls for data-snapshot-ready, so we just
-  // give the React tree a brief moment to mount before kicking off.
+  // Auto-capture once the snapshot is mounted — every time we open this
+  // dashboard, regardless of any cached image already shown as placeholder.
   useEffect(() => {
     if (
       snapshotMounted &&
-      !screenshotUrl &&
       !isCapturing &&
       autoCapturedRef.current !== dashboard.id
     ) {
@@ -327,7 +331,7 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
       const t = setTimeout(() => captureScreenshot(), 500);
       return () => clearTimeout(t);
     }
-  }, [snapshotMounted, screenshotUrl, isCapturing, captureScreenshot, dashboard.id]);
+  }, [snapshotMounted, isCapturing, captureScreenshot, dashboard.id]);
 
   const handleSend = async () => {
     let blob = screenshotBlob;
