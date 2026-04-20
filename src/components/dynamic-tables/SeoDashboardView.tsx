@@ -616,6 +616,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
       {/* Google Search Console Integration — enriches keyword rows silently, no raw table shown here */}
       <GscIntegration
         tenantId={tenantId}
+        tenantIds={accessibleTenantIds}
         clientId={clientId}
         domain={reportData?.domain || selectedReport?.domain}
         keywords={[]}

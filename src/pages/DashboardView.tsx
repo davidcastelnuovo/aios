@@ -1076,9 +1076,12 @@ export default function DashboardView() {
               <Button onClick={() => navigate(buildPath('/dynamic-tables'))}>עבור לניהול דוחות</Button>
             </Card>
           ) : platformFilter === 'seo' ? (
-            /* SEO tab: render full SEO report with Ahrefs + GSC + Analytics tabs */
-            dashboard?.client_id && currentTenantId ? (
-              <SeoReportTabs tenantId={currentTenantId} clientId={dashboard.client_id} />
+            /* SEO tab: render full SEO report with Ahrefs + GSC + Analytics tabs.
+               Pass clientId only — SeoReportTabs resolves the cross-tenant scope itself
+               via useSeoScope, so shared-agency clients (e.g. YTS) load correctly
+               regardless of which tenant the user opened the dashboard from. */
+            dashboard?.client_id ? (
+              <SeoReportTabs clientId={dashboard.client_id} />
             ) : null
           ) : platformFilter === 'google_analytics' ? (
             /* Analytics tab: render the same GoogleAnalyticsDashboard used in standalone table view */
