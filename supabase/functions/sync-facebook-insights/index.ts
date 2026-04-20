@@ -284,10 +284,18 @@ Deno.serve(async (req) => {
       'add_to_cart',
     ];
 
+    console.log(`[sync-facebook-insights] Got ${(data.data || []).length} insight rows from FB`);
+
     const insights: InsightRecord[] = (data.data || []).map((insight: any) => {
       const allActions = [...(insight.actions ?? []), ...(insight.conversions ?? [])];
       const actionValues = insight.action_values ?? [];
       const actionTypeSet = new Set(allActions.map((a: any) => String(a.action_type || '')));
+
+      // Debug: log action types for messaging campaigns to help diagnose lead-counting issues
+      const _msgTypes = Array.from(actionTypeSet).filter((t: any) => String(t).includes('messaging') || String(t) === 'lead' || String(t).includes('leadgen'));
+      if (_msgTypes.length > 0) {
+        console.log(`[sync-facebook-insights] ${insight.campaign_name} (${insight.date_start}) lead/messaging action_types:`, _msgTypes);
+      }
 
       const getActionCount = (actionTypes: string[]) =>
         allActions
