@@ -278,6 +278,7 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                   tenantId={tenantId}
                   clientId={clientId}
                   domain={savedGscSiteUrl || targetDomain}
+                  initialSiteUrl={savedGscSiteUrl}
                   onSiteSelected={(siteUrl) => {
                     if (siteUrl && siteUrl !== savedGscSiteUrl) {
                       saveLinkMutation.mutate({ key: 'linkedGscSiteUrl', value: siteUrl });
