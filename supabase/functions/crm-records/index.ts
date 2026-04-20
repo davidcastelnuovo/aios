@@ -90,10 +90,20 @@ function getDateRange(filter: string, customFrom?: string, customTo?: string): {
     // NOTE: Relative ranges end YESTERDAY (not today) to match DynamicTableView
     // and external platforms (Google Ads, Facebook). Today is excluded because
     // its data is partial/incomplete during the day.
-    case 'last_7_days':
-      startDate = shiftDateString(today, -7);
-      endDate = shiftDateString(today, -1);
+    // last_7_days = most recent COMPLETED Sunday → Saturday week (matches the
+    // standard in mem://ui/date-range-calculation-standard and public-dashboard).
+    case 'last_7_days': {
+      const yesterday = shiftDateString(today, -1);
+      const yDow = getWeekdayIndexInTimeZone(new Date(yesterday + 'T12:00:00Z'));
+      // daysSinceSat: how many days back from yesterday to reach Saturday.
+      // yesterday Sun(0)→1, Mon(1)→2, ..., Sat(6)→0
+      const daysSinceSat = (yDow + 1) % 7;
+      const sat = shiftDateString(yesterday, -daysSinceSat);
+      const sun = shiftDateString(sat, -6);
+      startDate = sun;
+      endDate = sat;
       break;
+    }
     case 'last_14_days':
       startDate = shiftDateString(today, -14);
       endDate = shiftDateString(today, -1);
