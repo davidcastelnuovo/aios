@@ -245,7 +245,7 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
 
   return (
     <div className="space-y-4" dir="rtl">
-      <Tabs defaultValue={!hasValidAhrefsReports && hasGsc ? "gsc" : "seo"} className="w-full">
+      <Tabs defaultValue="seo" className="w-full">
         <TabsList className="w-full justify-start gap-1">
           <TabsTrigger value="seo" className="gap-1.5">
             <TrendingUp className="h-4 w-4" />
