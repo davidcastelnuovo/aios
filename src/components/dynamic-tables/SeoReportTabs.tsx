@@ -293,31 +293,6 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                   }}
                 />
               </div>
-            ) : (
-              /* Otherwise show GSC integration component with site selector */
-              <div className="space-y-3">
-                {gscTables.length > 0 && (
-                  <GscTableSelector
-                    tables={gscTables}
-                    selectedId={selectedGscTableId}
-                    onSelect={(id) => {
-                      setSelectedGscTableId(id);
-                      saveLinkMutation.mutate({ key: 'linkedGscTableId', value: id });
-                    }}
-                  />
-                )}
-                <GscIntegration
-                  tenantId={tenantId}
-                  clientId={clientId}
-                  domain={savedGscSiteUrl || targetDomain}
-                  initialSiteUrl={savedGscSiteUrl}
-                  onSiteSelected={(siteUrl) => {
-                    if (siteUrl && siteUrl !== savedGscSiteUrl) {
-                      saveLinkMutation.mutate({ key: 'linkedGscSiteUrl', value: siteUrl });
-                    }
-                  }}
-                />
-              </div>
             )}
           </TabsContent>
         )}
