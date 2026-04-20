@@ -235,7 +235,11 @@ Deno.serve(async (req) => {
     }
 
     // Fetch insights from Facebook with time_increment=1 for daily breakdown
-    const insightsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/insights?level=campaign&fields=campaign_id,campaign_name,impressions,clicks,cpm,ctr,actions,action_values,conversions,cost_per_action_type,cost_per_conversion,spend&time_range={"since":"${sinceStr}","until":"${untilStr}"}&time_increment=1&limit=500&access_token=${accessToken}`;
+    // action_attribution_windows + use_unified_attribution_setting expose messaging
+    // conversion events (WhatsApp / Messenger Click-to-Chat) that otherwise don't
+    // appear in the default `actions` response.
+    const attributionWindows = encodeURIComponent(JSON.stringify(['7d_click', '1d_view']));
+    const insightsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/insights?level=campaign&fields=campaign_id,campaign_name,impressions,clicks,cpm,ctr,actions,action_values,conversions,cost_per_action_type,cost_per_conversion,spend&time_range={"since":"${sinceStr}","until":"${untilStr}"}&time_increment=1&action_attribution_windows=${attributionWindows}&use_unified_attribution_setting=true&limit=500&access_token=${accessToken}`;
     
     const response = await fetch(insightsUrl);
     const data = await response.json();
