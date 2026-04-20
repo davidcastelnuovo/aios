@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ArrowUp, ArrowDown, Trophy, TrendingUp, Calendar, MousePointerClick, Eye, CalendarRange } from "lucide-react";
@@ -25,6 +25,10 @@ interface SeoKeywordsTableProps {
   showYearly?: boolean;
   /** Default tab to open. Defaults to "all" so the full merged dataset is visible immediately. */
   defaultTab?: "top10" | "3month" | "yearly" | "monthly" | "all";
+  /** Initial language filter persisted at the report/table level. */
+  initialLangFilter?: LangFilter;
+  /** Called whenever the language filter changes — parent persists to DB. */
+  onLangFilterChange?: (lang: LangFilter) => void;
 }
 
 function fmt(n: number, digits = 1): string {
@@ -172,8 +176,21 @@ function KeywordTable({ keywords, title, icon, show3Month, showYearly, showPrevM
   );
 }
 
-export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywords = [], hasGscData = false, show3Month = false, showYearly = false, defaultTab = "all" }: SeoKeywordsTableProps) {
-  const [langFilter, setLangFilter] = useState<LangFilter>("all");
+export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywords = [], hasGscData = false, show3Month = false, showYearly = false, defaultTab = "all", initialLangFilter, onLangFilterChange }: SeoKeywordsTableProps) {
+  const [langFilter, setLangFilterState] = useState<LangFilter>(initialLangFilter ?? "all");
+
+  // Sync if the parent loads the saved value asynchronously after first render
+  useEffect(() => {
+    if (initialLangFilter && initialLangFilter !== langFilter) {
+      setLangFilterState(initialLangFilter);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialLangFilter]);
+
+  const setLangFilter = (next: LangFilter) => {
+    setLangFilterState(next);
+    onLangFilterChange?.(next);
+  };
 
   // Merge all keywords (tracked + organic + gsc-only), deduplicate by keyword name
   const mergedKeywords = useMemo(() => {
