@@ -1188,6 +1188,9 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
             </Card>
           )}
 
+          {/* Snapshot end marker — limits screenshot to KPIs + Platform Breakdown */}
+          <div data-snapshot-end="true" aria-hidden="true" />
+
           {/* Analytics Source Breakdown */}
           {analyticsSourceBreakdown.length > 0 && platformFilter === 'all' && (
             <Card>
