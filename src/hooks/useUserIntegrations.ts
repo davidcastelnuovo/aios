@@ -8,19 +8,33 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
  * 2. Shared integrations (via integration_user_permissions)
  * 
  * Returns combined list with ownership info.
+ *
+ * Pass `tenantIds` (multiple) instead of `tenantId` to look up across a
+ * shared-agency scope (e.g. SEO reports for a client whose home tenant
+ * differs from where the GSC/GA integration was created). RLS still applies.
  */
 export function useUserIntegrations(
-  tenantId: string | undefined,
+  tenantId: string | string[] | undefined,
   integrationType: string,
   options?: { enabled?: boolean; returnAll?: boolean }
 ) {
   const { userId } = useCurrentUser();
-  const enabled = options?.enabled !== false && !!tenantId && !!userId;
+
+  // Normalize to a stable, deduped array of tenant IDs
+  const tenantIds = Array.isArray(tenantId)
+    ? Array.from(new Set(tenantId.filter(Boolean)))
+    : tenantId
+      ? [tenantId]
+      : [];
+  const enabled = options?.enabled !== false && tenantIds.length > 0 && !!userId;
+
+  // Stable cache key fragment
+  const tenantsKey = tenantIds.slice().sort().join(",");
 
   return useQuery({
-    queryKey: ['user-integrations', tenantId, integrationType, userId],
+    queryKey: ['user-integrations', tenantsKey, integrationType, userId],
     queryFn: async () => {
-      if (!tenantId || !userId) return [];
+      if (tenantIds.length === 0 || !userId) return [];
 
       // Tenant-scoped integrations: visible to all members of the tenant
       // (e.g. Google Analytics is shared across the organization)
@@ -31,7 +45,7 @@ export function useUserIntegrations(
       let ownQuery = supabase
         .from('tenant_integrations')
         .select('*')
-        .eq('tenant_id', tenantId)
+        .in('tenant_id', tenantIds)
         .eq('integration_type', integrationType)
         .eq('is_active', true);
 
@@ -45,7 +59,6 @@ export function useUserIntegrations(
 
       // For tenant-scoped types, mark _isOwn correctly based on actual ownership
       if (isTenantScoped) {
-        const ownIds = new Set((ownIntegrations || []).map(i => i.id));
         const sharedOwnerIds = (ownIntegrations || [])
           .map(i => i.user_id)
           .filter((id): id is string => !!id && id !== userId);
@@ -83,7 +96,7 @@ export function useUserIntegrations(
         const { data: shared, error: sharedError } = await supabase
           .from('tenant_integrations')
           .select('*')
-          .eq('tenant_id', tenantId)
+          .in('tenant_id', tenantIds)
           .eq('integration_type', integrationType)
           .eq('is_active', true)
           .in('id', sharedIntegrationIds);
@@ -132,7 +145,7 @@ export function useUserIntegrations(
  * Check if user has ANY active integration of a given type (own or shared).
  */
 export function useHasIntegrationAccess(
-  tenantId: string | undefined,
+  tenantId: string | string[] | undefined,
   integrationType: string
 ) {
   const { data: integrations } = useUserIntegrations(tenantId, integrationType);

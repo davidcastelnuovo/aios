@@ -21,25 +21,55 @@ interface UseAhrefsReportsOptions {
   domain?: string;
   reportType?: string;
   limit?: number;
+  /**
+   * Optional override: when fetching SEO reports for a shared-agency client,
+   * pass the full set of accessible tenant IDs (from useSeoScope) so reports
+   * created in a different tenant aren't filtered out. RLS still applies.
+   */
+  tenantIds?: string[];
 }
 
 export function useAhrefsReports(options: UseAhrefsReportsOptions = {}) {
   const { tenantId } = useCurrentTenant();
-  const { clientId, domain, reportType, limit = 50 } = options;
+  const { clientId, domain, reportType, limit = 50, tenantIds } = options;
+
+  const effectiveTenants =
+    Array.isArray(tenantIds) && tenantIds.length > 0
+      ? Array.from(new Set(tenantIds.filter(Boolean)))
+      : tenantId
+        ? [tenantId]
+        : [];
+
+  // When we have a clientId we trust it as the strongest scoping signal
+  // (RLS still enforces visibility). Without clientId we MUST require tenants.
+  const enabled = !!clientId || effectiveTenants.length > 0;
 
   return useQuery({
-    queryKey: ["ahrefs-reports", tenantId, clientId, domain, reportType, limit],
+    queryKey: [
+      "ahrefs-reports",
+      effectiveTenants.slice().sort().join(","),
+      clientId,
+      domain,
+      reportType,
+      limit,
+    ],
     queryFn: async () => {
-      if (!tenantId) return [];
-
       let query = supabase
         .from("ahrefs_reports" as any)
         .select("*")
-        .eq("tenant_id", tenantId)
         .order("received_at", { ascending: false })
         .limit(limit);
 
-      if (clientId) query = query.eq("client_id", clientId);
+      // Prefer client-scoped lookup (works across shared-agency tenants).
+      // Fall back to tenant filtering only if there's no clientId.
+      if (clientId) {
+        query = query.eq("client_id", clientId);
+      } else if (effectiveTenants.length === 1) {
+        query = query.eq("tenant_id", effectiveTenants[0]);
+      } else if (effectiveTenants.length > 1) {
+        query = query.in("tenant_id", effectiveTenants);
+      }
+
       if (domain) query = query.eq("domain", domain);
       if (reportType) query = query.eq("report_type", reportType);
 
@@ -50,6 +80,6 @@ export function useAhrefsReports(options: UseAhrefsReportsOptions = {}) {
       }
       return (data || []) as unknown as AhrefsReport[];
     },
-    enabled: !!tenantId,
+    enabled,
   });
 }
