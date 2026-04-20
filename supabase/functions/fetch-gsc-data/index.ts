@@ -117,8 +117,14 @@ serve(async (req) => {
 
     if (!gscResponse.ok) {
       console.error('GSC API error:', gscData);
+      const isPermissionDenied = gscResponse.status === 403;
       return new Response(
-        JSON.stringify({ error: gscData.error?.message || 'GSC API error', details: gscData }),
+        JSON.stringify({
+          error: gscData.error?.message || 'GSC API error',
+          permissionDenied: isPermissionDenied,
+          siteUrl,
+          details: gscData,
+        }),
         { status: gscResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

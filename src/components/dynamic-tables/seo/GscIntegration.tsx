@@ -118,7 +118,24 @@ export function GscIntegration({
   const { data: gscIntegrations = [], isLoading: isLoadingIntegration } = useUserIntegrations(
     tenantId, 'google_search_console'
   );
-  const gscIntegration = gscIntegrations[0] || null;
+
+  // When multiple GSC integrations exist for this tenant, prefer the one
+  // that already has a verified mapping for this client (i.e. the mapped
+  // siteUrl is NOT 'siteUnverifiedUser'). This avoids 403s from picking
+  // an integration whose stored mapping points at a property the user
+  // doesn't have API access to.
+  const gscIntegration = useMemo(() => {
+    if (!gscIntegrations.length) return null;
+    const withGoodMapping = gscIntegrations.find((i: any) => {
+      const mapped = (i.settings as any)?.client_sites?.[clientId];
+      if (!mapped) return false;
+      const sites = (i.settings as any)?.available_sites || [];
+      const site = sites.find((s: any) => s.siteUrl === mapped);
+      // Accept if we don't have permission metadata, or if it's not 'siteUnverifiedUser'
+      return !site || site.permissionLevel !== 'siteUnverifiedUser';
+    });
+    return withGoodMapping || gscIntegrations[0];
+  }, [gscIntegrations, clientId]);
 
   const settings = (gscIntegration?.settings as any) || {};
 
@@ -150,10 +167,34 @@ export function GscIntegration({
   // (those caused selections to leak across clients).
   // Source-of-truth order: explicit user pick > report-level saved URL (initialSiteUrl) > integration mapping.
   const clientSites = settings?.client_sites || {};
-  const persistedSiteUrl = selectedSite || initialSiteUrl || clientSites[clientId] || "";
+
+  // Filter out properties we have no API access to (siteUnverifiedUser → 403).
+  // We still keep them in `availableSites` for diagnostics, but never auto-select them.
+  const usableSites = useMemo(
+    () => availableSites.filter((s) => s.permissionLevel !== 'siteUnverifiedUser'),
+    [availableSites]
+  );
+
+  const isUsableSite = (siteUrl?: string) => {
+    if (!siteUrl) return false;
+    const meta = availableSites.find((s) => s.siteUrl === siteUrl);
+    // If we don't have metadata yet, allow it (avoids flicker before sites load)
+    return !meta || meta.permissionLevel !== 'siteUnverifiedUser';
+  };
+
+  // Drop a stored mapping that points at an unverified (no-access) property.
+  const storedClientSite = clientSites[clientId];
+  const storedClientSiteIsUsable = isUsableSite(storedClientSite);
+
+  const persistedSiteUrl =
+    selectedSite ||
+    (isUsableSite(initialSiteUrl) ? initialSiteUrl : "") ||
+    (storedClientSiteIsUsable ? storedClientSite : "") ||
+    "";
+
   const normalizedDomain = normalizeDomain(domain);
   const matchedSite = normalizedDomain
-    ? availableSites.find((site) => {
+    ? usableSites.find((site) => {
         const normalizedSite = normalizeDomain(site.siteUrl);
         return (
           normalizedSite === normalizedDomain ||
@@ -165,7 +206,8 @@ export function GscIntegration({
 
   // Auto-link by domain: only suggest if the report domain matches a GSC property.
   // Single-property auto-select kept as a convenience when there's nothing else to choose.
-  const fallbackSiteUrl = matchedSite?.siteUrl || (availableSites.length === 1 ? availableSites[0].siteUrl : "");
+  const fallbackSiteUrl =
+    matchedSite?.siteUrl || (usableSites.length === 1 ? usableSites[0].siteUrl : "");
   const effectiveSiteUrl = persistedSiteUrl || fallbackSiteUrl;
 
   useEffect(() => {
@@ -320,20 +362,21 @@ export function GscIntegration({
     },
   });
 
-  // Auto-link by domain: when no per-client mapping exists and the report's domain
-  // matches a GSC property, persist it automatically (per-client only).
+  // Auto-link by domain: when no per-client mapping exists (or the existing
+  // mapping points at a no-access property), and the report's domain matches
+  // a usable GSC property, persist it automatically (per-client only).
   useEffect(() => {
     if (
       gscIntegration?.id &&
       clientId &&
-      !clientSites[clientId] &&
+      (!clientSites[clientId] || !storedClientSiteIsUsable) &&
       matchedSite?.siteUrl &&
       !updateSiteMutation.isPending
     ) {
       updateSiteMutation.mutate(matchedSite.siteUrl);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gscIntegration?.id, clientId, matchedSite?.siteUrl]);
+  }, [gscIntegration?.id, clientId, matchedSite?.siteUrl, storedClientSiteIsUsable]);
 
   if (isLoadingIntegration) return null;
 
@@ -400,7 +443,7 @@ export function GscIntegration({
                 </SelectContent>
               </Select>
             )}
-            {availableSites.length > 0 && (
+            {usableSites.length > 0 && (
               <Popover open={sitePopoverOpen} onOpenChange={setSitePopoverOpen}>
                 <PopoverTrigger asChild>
                   <Button variant="outline" role="combobox" className="h-7 text-xs w-[220px] justify-between">
@@ -416,7 +459,7 @@ export function GscIntegration({
                     <CommandList>
                       <CommandEmpty>לא נמצאו נכסים</CommandEmpty>
                       <CommandGroup>
-                        {availableSites.map((site) => {
+                        {usableSites.map((site) => {
                           const label = site.siteUrl.replace("sc-domain:", "").replace("https://", "");
                           return (
                             <CommandItem
@@ -464,7 +507,15 @@ export function GscIntegration({
         </CardContent>
       )}
 
-      {!effectiveSiteUrl && availableSites.length > 0 && !isLoadingSites && (
+      {!isLoadingSites && availableSites.length > 0 && usableSites.length === 0 && (
+        <CardContent className="px-4 pb-3 pt-0">
+          <p className="text-xs text-muted-foreground text-center">
+            אין הרשאת גישה לאף נכס ב-Search Console. בקש מבעל הנכס לאמת אותך כמשתמש מורשה, או חבר חשבון Google אחר.
+          </p>
+        </CardContent>
+      )}
+
+      {!effectiveSiteUrl && usableSites.length > 0 && !isLoadingSites && (
         <CardContent className="px-4 pb-3 pt-0">
           <p className="text-xs text-muted-foreground text-center">בחר נכס Search Console כדי למשוך נתונים</p>
         </CardContent>
