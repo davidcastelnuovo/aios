@@ -209,25 +209,33 @@ serve(async (req) => {
       // Encode subject as RFC 2047 (UTF-8 base64) so Hebrew/non-ASCII renders correctly
       const encodedSubject = `=?UTF-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`;
       const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
+      // Inline images use Content-Disposition: inline + Content-ID, referenced from HTML via cid:<id>.
+      const hasInline = hasAttachments && attachments.some((a: any) => a?.disposition === 'inline' && a?.cid);
 
       let rawMessage = '';
 
       if (hasAttachments) {
         const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-        rawMessage = `To: ${to}\r\nSubject: ${encodedSubject}\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary="${boundary}"\r\n`;
+        const rootContentType = hasInline ? 'multipart/related' : 'multipart/mixed';
+        rawMessage = `To: ${to}\r\nSubject: ${encodedSubject}\r\nMIME-Version: 1.0\r\nContent-Type: ${rootContentType}; boundary="${boundary}"\r\n`;
         if (inReplyTo) {
           rawMessage += `In-Reply-To: ${inReplyTo}\r\nReferences: ${inReplyTo}\r\n`;
         }
         rawMessage += `\r\n--${boundary}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Transfer-Encoding: 7bit\r\n\r\n${emailBody || ''}\r\n`;
 
         for (const att of attachments) {
-          // att = { filename, mimeType, data (base64) }
+          // att = { filename, mimeType, data (base64), disposition?, cid? }
           const filename = att.filename || 'attachment';
           const mimeType = att.mimeType || 'application/octet-stream';
           const data = String(att.data || '').replace(/\r?\n/g, '');
           // Re-wrap base64 to 76-char lines as per RFC
           const wrapped = data.match(/.{1,76}/g)?.join('\r\n') || data;
-          rawMessage += `--${boundary}\r\nContent-Type: ${mimeType}; name="${filename}"\r\nContent-Disposition: attachment; filename="${filename}"\r\nContent-Transfer-Encoding: base64\r\n\r\n${wrapped}\r\n`;
+          const isInline = att?.disposition === 'inline' && att?.cid;
+          if (isInline) {
+            rawMessage += `--${boundary}\r\nContent-Type: ${mimeType}; name="${filename}"\r\nContent-Disposition: inline; filename="${filename}"\r\nContent-Transfer-Encoding: base64\r\nContent-ID: <${att.cid}>\r\nX-Attachment-Id: ${att.cid}\r\n\r\n${wrapped}\r\n`;
+          } else {
+            rawMessage += `--${boundary}\r\nContent-Type: ${mimeType}; name="${filename}"\r\nContent-Disposition: attachment; filename="${filename}"\r\nContent-Transfer-Encoding: base64\r\n\r\n${wrapped}\r\n`;
+          }
         }
         rawMessage += `--${boundary}--`;
       } else {
