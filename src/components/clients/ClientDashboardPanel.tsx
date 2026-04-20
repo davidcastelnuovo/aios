@@ -243,12 +243,30 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
       // Extra grace period for chart animations / images to settle
       await new Promise((r) => setTimeout(r, 800));
 
-      // Measure actual rendered dimensions to choose safe scale.
-      // SharedDashboard can be very tall (many cards/charts) → at pixelRatio 1.5
-      // we easily exceeded ~25MB and tripped Gmail / Green API / localStorage limits.
-      const rect = node.getBoundingClientRect();
-      const heightPx = Math.max(rect.height, node.scrollHeight || 0);
-      const widthPx = Math.max(rect.width, node.scrollWidth || 0);
+      // Prefer the explicit snapshot frame (Header + KPIs + Platform Breakdown only).
+      // Falls back to the entire node for SEO/WooCommerce/Analytics-only views.
+      const frame =
+        (node.querySelector('[data-snapshot-frame="true"]') as HTMLElement | null) ||
+        node;
+
+      // If a snapshot-end sentinel exists, clip height so we don't capture
+      // the long charts section below the breakdown table.
+      const endMarker = frame.querySelector(
+        '[data-snapshot-end="true"]',
+      ) as HTMLElement | null;
+
+      const frameRect = frame.getBoundingClientRect();
+      const widthPx = Math.max(frameRect.width, frame.scrollWidth || 0);
+      let heightPx = Math.max(frameRect.height, frame.scrollHeight || 0);
+
+      if (endMarker) {
+        const endRect = endMarker.getBoundingClientRect();
+        const clipped = endRect.bottom - frameRect.top;
+        if (clipped > 200 && clipped < heightPx) {
+          heightPx = clipped;
+        }
+      }
+
       const totalPx = heightPx * widthPx;
 
       // Pick pixelRatio adaptively (max image area ≈ 1200×8000 = 9.6M px @1.0)
@@ -262,15 +280,24 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
         heightPx,
         totalPx,
         pixelRatio,
+        clipped: !!endMarker,
       });
 
       // Always use JPEG for dashboards — far smaller than PNG for chart-heavy content.
-      const dataUrl = await toJpeg(node, {
+      const dataUrl = await toJpeg(frame, {
         quality: 0.82,
         pixelRatio,
         backgroundColor: "#ffffff",
         skipFonts: true,
         cacheBust: true,
+        width: widthPx,
+        height: heightPx,
+        canvasWidth: widthPx,
+        canvasHeight: heightPx,
+        style: {
+          height: `${heightPx}px`,
+          overflow: "hidden",
+        },
       });
 
       if (!dataUrl || dataUrl.length < 1000) {
