@@ -28,9 +28,13 @@ interface SeoDashboardViewProps {
   initialGscSiteUrl?: string;
   /** Persist callback when GSC site is selected/auto-linked at the report level. */
   onGscSiteSelected?: (siteUrl: string) => void;
+  /** Initial language filter for the keywords table, persisted on the SEO crm_table. */
+  initialLangFilter?: "all" | "he" | "en";
+  /** Persist callback when the language filter changes. */
+  onLangFilterChange?: (lang: "all" | "he" | "en") => void;
 }
 
-export function SeoDashboardView({ tenantId, clientId, gaRecords = [], initialGscSiteUrl, onGscSiteSelected }: SeoDashboardViewProps) {
+export function SeoDashboardView({ tenantId, clientId, gaRecords = [], initialGscSiteUrl, onGscSiteSelected, initialLangFilter, onLangFilterChange }: SeoDashboardViewProps) {
   const queryClient = useQueryClient();
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [isFetchingSnapshot, setIsFetchingSnapshot] = useState(false);
@@ -611,6 +615,8 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [], initialGs
         hasGscData={gscData.length > 0}
         show3Month={effectiveComparison.threeMonth.size > 0 || gscThreeMonthMap.size > 0}
         showYearly={effectiveComparison.yearly.size > 0 || gscYearlyMap.size > 0}
+        initialLangFilter={initialLangFilter}
+        onLangFilterChange={onLangFilterChange}
       />
 
       {/* HTML content fallback */}
