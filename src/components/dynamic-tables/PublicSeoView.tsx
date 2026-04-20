@@ -10,9 +10,19 @@ import { SeoTrafficChart } from "./seo/SeoTrafficChart";
 import { SeoKeywordsTable } from "./seo/SeoKeywordsTable";
 import { filterValidSeoReports } from "./seo/reportValidity";
 
+interface PublicGscKeyword {
+  keyword: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+}
+
 interface PublicSeoViewProps {
   tableName: string;
   reports: any[];
+  /** Optional GSC data aggregated per keyword — enables enrichment + GSC-only rows. */
+  gscData?: PublicGscKeyword[];
 }
 
 function normalizeKeyword(kw: any) {
@@ -31,7 +41,7 @@ function normalizeKeyword(kw: any) {
   };
 }
 
-export function PublicSeoView({ tableName, reports }: PublicSeoViewProps) {
+export function PublicSeoView({ tableName, reports, gscData = [] }: PublicSeoViewProps) {
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const validReports = useMemo(() => filterValidSeoReports(reports), [reports]);
 
