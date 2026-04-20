@@ -96,6 +96,8 @@ export default function DynamicTables() {
   const [showSeoReportDialog, setShowSeoReportDialog] = useState(false);
   const [editingTable, setEditingTable] = useState<CrmTable | null>(null);
   const [deletingTable, setDeletingTable] = useState<CrmTable | null>(null);
+  const [editingDashboard, setEditingDashboard] = useState<{ id: string; name: string } | null>(null);
+  const [editDashboardName, setEditDashboardName] = useState("");
   const [editName, setEditName] = useState("");
   const [editAgencyId, setEditAgencyId] = useState<string>("");
   const [editClientId, setEditClientId] = useState<string>("");
@@ -290,6 +292,26 @@ export default function DynamicTables() {
     },
     onError: (error: any) => {
       toast.error('שגיאה במחיקת הדשבורד: ' + error.message);
+    },
+  });
+
+  // Rename dashboard mutation
+  const renameDashboardMutation = useMutation({
+    mutationFn: async ({ dashboardId, name }: { dashboardId: string; name: string }) => {
+      const { error } = await supabase
+        .from('crm_dashboards')
+        .update({ name })
+        .eq('id', dashboardId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['crm-dashboards'] });
+      setEditingDashboard(null);
+      setEditDashboardName("");
+      toast.success('שם הדשבורד עודכן');
+    },
+    onError: (error: any) => {
+      toast.error('שגיאה בעדכון שם הדשבורד: ' + error.message);
     },
   });
 
@@ -907,18 +929,32 @@ export default function DynamicTables() {
                         {dashboard.name}
                       </CardTitle>
                       {canManageTables && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (confirm('האם אתה בטוח שברצונך למחוק את הדשבורד?')) {
-                              deleteDashboardMutation.mutate(dashboard.id);
-                            }
-                          }}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingDashboard({ id: dashboard.id, name: dashboard.name });
+                              setEditDashboardName(dashboard.name);
+                            }}
+                            title="ערוך שם דשבורד"
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirm('האם אתה בטוח שברצונך למחוק את הדשבורד?')) {
+                                deleteDashboardMutation.mutate(dashboard.id);
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
                       )}
                     </div>
                     <div className="flex flex-wrap gap-1 mt-2">
@@ -994,6 +1030,48 @@ export default function DynamicTables() {
         onOpenChange={setShowGSCDialog}
         assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
       />
+
+      {/* Edit Dashboard Name Dialog */}
+      <Dialog open={!!editingDashboard} onOpenChange={(open) => { if (!open) { setEditingDashboard(null); setEditDashboardName(""); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>עריכת שם דשבורד</DialogTitle>
+            <DialogDescription>הזן שם חדש לדשבורד</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="dashboard-name">שם הדשבורד</Label>
+              <Input
+                id="dashboard-name"
+                value={editDashboardName}
+                onChange={(e) => setEditDashboardName(e.target.value)}
+                placeholder="שם הדשבורד"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && editDashboardName.trim() && editingDashboard) {
+                    renameDashboardMutation.mutate({ dashboardId: editingDashboard.id, name: editDashboardName.trim() });
+                  }
+                }}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setEditingDashboard(null); setEditDashboardName(""); }}>
+              ביטול
+            </Button>
+            <Button
+              onClick={() => {
+                if (editingDashboard && editDashboardName.trim()) {
+                  renameDashboardMutation.mutate({ dashboardId: editingDashboard.id, name: editDashboardName.trim() });
+                }
+              }}
+              disabled={!editDashboardName.trim() || renameDashboardMutation.isPending}
+            >
+              שמור
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Dialog */}
       <Dialog open={!!editingTable} onOpenChange={(open) => !open && setEditingTable(null)}>
