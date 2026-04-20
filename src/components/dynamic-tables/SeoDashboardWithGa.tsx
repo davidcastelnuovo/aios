@@ -82,11 +82,25 @@ export function SeoDashboardWithGa({ tenantId, clientId }: SeoDashboardWithGaPro
     staleTime: 5 * 60 * 1000,
   });
 
+  const savedGscSiteUrl = (seoTable?.integration_settings as any)?.linkedGscSiteUrl || "";
+
+  const persistGscSiteUrl = async (siteUrl: string) => {
+    if (!seoTable?.id || !siteUrl || siteUrl === savedGscSiteUrl) return;
+    try {
+      const newSettings = { ...((seoTable.integration_settings as any) || {}), linkedGscSiteUrl: siteUrl };
+      await supabase.from("crm_tables").update({ integration_settings: newSettings }).eq("id", seoTable.id);
+    } catch (err) {
+      console.warn("[SeoDashboardWithGa] failed to persist linkedGscSiteUrl", err);
+    }
+  };
+
   return (
     <SeoDashboardView
       tenantId={tenantId}
       clientId={clientId}
       gaRecords={gaRecords}
+      initialGscSiteUrl={savedGscSiteUrl}
+      onGscSiteSelected={persistGscSiteUrl}
     />
   );
 }

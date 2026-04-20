@@ -23,6 +23,8 @@ interface SeoKeywordsTableProps {
   hasGscData?: boolean;
   show3Month?: boolean;
   showYearly?: boolean;
+  /** Default tab to open. Defaults to "all" so the full merged dataset is visible immediately. */
+  defaultTab?: "top10" | "3month" | "yearly" | "monthly" | "all";
 }
 
 function fmt(n: number, digits = 1): string {
@@ -170,7 +172,7 @@ function KeywordTable({ keywords, title, icon, show3Month, showYearly, showPrevM
   );
 }
 
-export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywords = [], hasGscData = false, show3Month = false, showYearly = false }: SeoKeywordsTableProps) {
+export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywords = [], hasGscData = false, show3Month = false, showYearly = false, defaultTab = "all" }: SeoKeywordsTableProps) {
   const [langFilter, setLangFilter] = useState<LangFilter>("all");
 
   // Merge all keywords (tracked + organic + gsc-only), deduplicate by keyword name
@@ -279,8 +281,11 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywor
         </CardTitle>
       </CardHeader>
       <CardContent className="p-0">
-        <Tabs defaultValue="top10" className="w-full">
+        <Tabs defaultValue={defaultTab} className="w-full">
           <TabsList dir="rtl" className="w-full justify-start rounded-none border-b bg-transparent h-auto p-0 gap-0">
+            <TabsTrigger value="all" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
+              📋 כל הביטויים ({allKeywords.length})
+            </TabsTrigger>
             <TabsTrigger value="top10" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
               🏆 Top 10 מקודמים ({top10.length})
             </TabsTrigger>
@@ -292,9 +297,6 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywor
             </TabsTrigger>
             <TabsTrigger value="monthly" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
               📅 שינוי חודשי
-            </TabsTrigger>
-            <TabsTrigger value="all" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
-              📋 טופ 50 אורגניות
             </TabsTrigger>
           </TabsList>
 
@@ -342,8 +344,8 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywor
 
           <TabsContent value="all" className="mt-0">
             <KeywordTable
-              keywords={[...keywords].sort((a, b) => (a.position || 999) - (b.position || 999)).slice(0, 50)}
-              title="טופ 50 ביטויים אורגניים"
+              keywords={[...allKeywords].sort((a, b) => (a.position ?? 999) - (b.position ?? 999))}
+              title={`כל הביטויים (${allKeywords.length})`}
               icon={<span>📋</span>}
               show3Month={show3Month}
               showYearly={showYearly}

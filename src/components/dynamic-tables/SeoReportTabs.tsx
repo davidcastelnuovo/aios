@@ -240,7 +240,18 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
 
   // If no related integrations at all, just render SEO dashboard directly
   if (!hasGsc && !hasGa) {
-    return <SeoDashboardView tenantId={tenantId} clientId={clientId} />;
+    return (
+      <SeoDashboardView
+        tenantId={tenantId}
+        clientId={clientId}
+        initialGscSiteUrl={savedGscSiteUrl}
+        onGscSiteSelected={(siteUrl) => {
+          if (siteUrl && siteUrl !== savedGscSiteUrl) {
+            saveLinkMutation.mutate({ key: 'linkedGscSiteUrl', value: siteUrl });
+          }
+        }}
+      />
+    );
   }
 
   return (
@@ -270,6 +281,12 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
             tenantId={tenantId}
             clientId={clientId}
             gaRecords={gaRecords || []}
+            initialGscSiteUrl={savedGscSiteUrl}
+            onGscSiteSelected={(siteUrl) => {
+              if (siteUrl && siteUrl !== savedGscSiteUrl) {
+                saveLinkMutation.mutate({ key: 'linkedGscSiteUrl', value: siteUrl });
+              }
+            }}
           />
         </TabsContent>
 
