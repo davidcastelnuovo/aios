@@ -228,6 +228,20 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
 
   const table = tables?.find((t) => t.slug === tableSlug);
 
+  // Default Facebook reports to "last 7 days" instead of "last 30 days"
+  const didSetFbDefaultRef = useRef(false);
+  useEffect(() => {
+    if (didSetFbDefaultRef.current) return;
+    if (!table) return;
+    if (
+      table.integration_type === 'facebook_insights' ||
+      table.integration_type === 'facebook_ecommerce'
+    ) {
+      setDateFilter('last_7_days');
+      didSetFbDefaultRef.current = true;
+    }
+  }, [table?.id, table?.integration_type]);
+
   // Fetch ad accounts for settings dialog
   const { data: adAccounts, isLoading: adAccountsLoading } = useQuery({
     queryKey: ['facebook-ad-accounts'],
