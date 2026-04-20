@@ -1,84 +1,83 @@
 
+המשתמש רוצה שכששולחים דשבורד באימייל, זה ישתמש בתמונה שכבר צולמה (auto-snapshot) במקום לצלם מחדש.
 
+אבדוק את הקוד הקיים כדי להבין איך זה עובד עכשיו.
+<lov-tool-use id="toolu_vrtx_01L1CT4vQqxuboJahdLZiLBh" name="code--search_files" integration-id="code" data="{\"query\": \"captureScreenshot|snapshot|sendDashboard|email.*dashboard\", \"include_patterns\": \"src/**/*.tsx,src/**/*.ts\"}">
+</lov-tool-use>
+
+<lov-tool-use id="toolu_vrtx_01Y71GX1gUEVSAUF4YffK6La" name="code--search_files" integration-id="code" data="{\"query\": \"captureScreenshot|sendDashboardEmail|snapshot_url|dashboard.*email\", \"include_patterns\": \"src/**/*.tsx,src/**/*.ts\"}">
+</lov-tool-use>
+
+<lov-tool-use id="toolu_vrtx_01QjqypchVz6Uy6PrKFc3tCi" name="code--view" integration-id="code" data="{\"file_path\": \"src/components/clients/ClientDashboardPanel.tsx\", \"lines\": \"200-450\"}">
+</lov-tool-use>
+I have enough context. The bug: `handleSend` checks `if (!blob)` where `blob = screenshotBlob`. If blob exists, it should reuse. But user says it re-captures. Let me check — actually looking at line 333-341, it does reuse `screenshotBlob` if it exists. So why is it re-capturing?
+
+Perhaps because the auto-capture is triggered on mount (line 319-330), and `screenshotBlob` wasn't set yet (only `screenshotUrl` was loaded from cache localStorage), so when user clicks send, blob is null → triggers re-capture.
+
+Let me check the cache restore logic:
+<lov-tool-use id="toolu_vrtx_0132pDofk99rkpy4PnbxA5bU" name="code--view" integration-id="code" data="{\"file_path\": \"src/components/clients/ClientDashboardPanel.tsx\", \"lines\": \"1-200\"}">
+</lov-tool-use>
+Now I understand. The cache logic looks correct — restores from localStorage. But:
+
+1. The auto-capture on mount will fire if `screenshotUrl` was loaded from cache but `setSnapshotMounted(true)` happens after `shareLink` resolves — and at that moment `screenshotUrl` is already set, so it should skip. But if cache miss → it auto-captures → fine.
+
+2. The real issue: when user clicks "send", if `screenshotBlob` is null (e.g., cache failed to convert to blob, or no cache existed and capture didn't complete), it re-captures. But user says "it captures again" — meaning `screenshotUrl` IS shown but `handleSend` triggers a new capture.
+
+Looking again: `handleSend` only captures if `!blob` (line 333-336). So `screenshotBlob` is null when sending. Possible causes:
+- Cache restore fetch failed silently
+- The auto-capture finished, set state, but somehow blob got cleared
+
+Most likely fix per user request: just use the existing `screenshotUrl` (data URL) to derive the blob on send if the blob is null — never re-capture on send. The image they see is what should be sent.
+
+<lov-plan>
 ## הבעיה
 
-ההקלטה מ-16/04 עדיין מציגה "מתמלל..." (סטטוס `processing`) למרות שהתהליך כנראה כבר נכשל מזמן. בקוד הנוכחי:
+כשהמשתמש לוחץ "שלח אימייל", הקוד הנוכחי ב-`handleSend` בודק רק את `screenshotBlob` (state נפרד). אם ה-blob חסר — גם כשתמונה כבר מוצגת על המסך מתוך ה-cache (`screenshotUrl`) — הוא מצלם מחדש, וזה תופס מצב לא-טעון של הדשבורד.
 
-1. **מנגנון ה-stale detection קיים אבל רק ב-Dialog** (`SummarizeRecordingDialog.tsx` שורות 227-245) — הוא מסמן `failed` רק אם המשתמש פותח את ה-Dialog והפולינג רץ. אם הוא לא פתוח, הסטטוס נשאר תקוע על `processing` לנצח.
-2. **אין כפתור "עצור"/"בטל"** בטבלה הראשית (`Recordings.tsx`) ליד הבדג' "מתמלל...".
-3. **אין ניקוי אוטומטי ברענון העמוד** של רשומות ישנות שתקועות.
+המקור: `useEffect` בקאש (שורות 72-81) מנסה להמיר את ה-cached data URL חזרה ל-blob דרך `fetch()`. אם זה נכשל בשקט (למשל data URL פגום, או network policy), `screenshotUrl` נשאר ו-`screenshotBlob` נשאר null → הלחיצה על "שלח" מפעילה `captureScreenshot()` חדש.
 
 ## הפתרון
 
-### 1. ניקוי אוטומטי של הקלטות תקועות בטעינת העמוד (`Recordings.tsx`)
+**עיקרון:** מה שרואים הוא מה ששולחים. לעולם לא לצלם מחדש מתוך `handleSend`.
 
-ב-`useQuery` של ה-recordings, אחרי שליפת הנתונים — לסמן כ-`failed` כל רשומה שעומדת ב:
-- `transcription_status === 'processing'`
-- AND `updated_at` ישן יותר מ-10 דקות
-- AND `transcription` ריק
+### שינוי ב-`src/components/clients/ClientDashboardPanel.tsx`
 
+בתוך `handleSend` (שורות 332-341):
+
+1. אם יש `screenshotBlob` — להשתמש בו.
+2. **אחרת, אם יש `screenshotUrl` (data URL) — להמיר אותו ל-blob ולשלוח** (בלי לצלם מחדש).
+3. רק אם אין כלום (לא תמונה ולא URL) — אז להציע צילום, או להציג שגיאה ברורה "אין צילום, לחץ על 'צלם מחדש'".
+
+קוד מוצע:
 ```ts
-// אחרי השליפה, לפני ההחזרה:
-const stale = data.filter(r => 
-  r.transcription_status === 'processing' &&
-  !r.transcription &&
-  Date.now() - new Date(r.updated_at).getTime() > 10 * 60 * 1000
-);
-if (stale.length > 0) {
-  await supabase.from('zoom_recordings')
-    .update({ 
-      transcription_status: 'failed', 
-      transcription_error: 'תהליך התמלול נתקע (timeout)' 
-    })
-    .in('id', stale.map(r => r.id));
-  // refetch
-}
+const handleSend = async () => {
+  let blob = screenshotBlob;
+  if (!blob && screenshotUrl) {
+    // Reuse the image already shown on screen — never re-capture on send
+    try {
+      const r = await fetch(screenshotUrl);
+      blob = await r.blob();
+      setScreenshotBlob(blob);
+    } catch {
+      blob = null;
+    }
+  }
+  if (!blob) {
+    toast.error("אין צילום זמין — לחץ על 'צלם מחדש' לפני שליחה");
+    return;
+  }
+  // ... continue with send
+};
 ```
 
-### 2. כפתור "עצור" ידני בטבלה (`Recordings.tsx` שורה 514)
-
-ליד ה-badge של "מתמלל..." להוסיף כפתור X קטן שמסמן ידנית כ-`failed`:
-
-```tsx
-{rec.transcription_status === 'processing' && !rec.transcription && (
-  <Button variant="ghost" size="icon" className="h-6 w-6"
-    onClick={() => cancelTranscriptionMutation.mutate(rec._group?.map(r => r.id) || [rec.id])}>
-    <X className="h-3 w-3" />
-  </Button>
-)}
-```
-
-עם mutation שמסמן את כל הרשומות בקבוצה כ-`failed` ומאפס את ה-status:
-```ts
-const cancelTranscriptionMutation = useMutation({
-  mutationFn: async (ids: string[]) => {
-    await supabase.from('zoom_recordings')
-      .update({ transcription_status: 'failed', transcription_error: 'בוטל ידנית' })
-      .in('id', ids);
-  },
-  onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: ['recordings'] });
-    toast({ title: "התמלול בוטל" });
-  },
-});
-```
-
-### 3. הקטנת זמן ה-stale detection ב-Dialog (`SummarizeRecordingDialog.tsx` שורה 231)
-
-מ-5 דקות ל-3 דקות — Whisper על קובץ זום ממוצע אמור להסתיים תוך פחות מזה. ערכים גבוהים גורמים לתחושת "תקוע".
-
-### 4. הצגת תלת־מצב חזותית של הסטטוס בטבלה
-
-כשהסטטוס `failed`, להוסיף ליד ה-badge "נכשל" כפתור 🔄 ל-retry שייפתח את ה-`SummarizeRecordingDialog` עם הקלטה זו.
-
-## קבצים שיתעדכנו
-
-- `src/pages/Recordings.tsx` — auto-cleanup ב-useQuery, כפתור עצור ידני, כפתור retry
-- `src/components/SummarizeRecordingDialog.tsx` — הקטנת timeout מ-5 ל-3 דקות
+בנוסף, ב-cache restore effect (שורות 72-81), להוסיף לוג שגיאה במקום `.catch(() => {})` השתוק, כדי שנדע אם ההמרה נכשלת.
 
 ## תוצאה
 
-- ההקלטה מ-16/04 תסומן אוטומטית כ-`failed` ברענון הבא של העמוד.
-- המשתמש יוכל בכל רגע ללחוץ X ידני כדי לעצור תהליך תקוע מבלי לחכות.
-- תהליכים תקועים יתגלו תוך 3 דקות במקום 5.
+- לחיצה על "שלח אימייל" תשלח **בדיוק את התמונה שמוצגת בתצוגה המקדימה**.
+- לא יקרה יותר צילום-מחדש אוטומטי בעת שליחה.
+- אם המשתמש רוצה צילום עדכני — הוא משתמש בכפתור "צלם מחדש" במפורש.
 
+## קובץ שיתעדכן
+
+- `src/components/clients/ClientDashboardPanel.tsx` — תיקון ב-`handleSend` + שיפור לוג ב-cache restore.
