@@ -293,7 +293,7 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                 <GscIntegration
                   tenantId={tenantId}
                   clientId={clientId}
-                  domain={savedGscSiteUrl || targetDomain}
+                  domain={savedGscSiteUrl || targetDomain || clientWebsite}
                   initialSiteUrl={savedGscSiteUrl}
                   initialLangFilter={savedGscLangFilter}
                   onLangFilterChange={(v) => saveLinkMutation.mutate({ key: 'linkedGscLangFilter', value: v })}
