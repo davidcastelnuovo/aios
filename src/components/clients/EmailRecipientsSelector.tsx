@@ -31,6 +31,21 @@ export function EmailRecipientsSelector({
   const [open, setOpen] = useState(false);
   const [manualEmail, setManualEmail] = useState("");
 
+  // Filter out options without a valid email and dedupe by email,
+  // otherwise multiple empty-email options all get toggled together.
+  const validOptions = (() => {
+    const seen = new Set<string>();
+    const out: EmailOption[] = [];
+    for (const opt of options) {
+      const email = (opt.email || "").trim().toLowerCase();
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) continue;
+      if (seen.has(email)) continue;
+      seen.add(email);
+      out.push({ ...opt, email });
+    }
+    return out;
+  })();
+
   const toggleEmail = (email: string) => {
     if (selectedEmails.includes(email)) {
       onChange(selectedEmails.filter((e) => e !== email));
@@ -75,12 +90,12 @@ export function EmailRecipientsSelector({
         <PopoverContent className="w-[320px] p-0" align="start" dir="rtl">
           <ScrollArea className="max-h-[280px]">
             <div className="p-2 space-y-1">
-              {options.length === 0 && (
+              {validOptions.length === 0 && (
                 <div className="text-xs text-muted-foreground px-2 py-3 text-center">
                   אין נמענים מהצוות
                 </div>
               )}
-              {options.map((opt) => {
+              {validOptions.map((opt) => {
                 const checked = selectedEmails.includes(opt.email);
                 return (
                   <div
@@ -147,7 +162,7 @@ export function EmailRecipientsSelector({
       {selectedEmails.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {selectedEmails.map((email) => {
-            const opt = options.find((o) => o.email === email);
+            const opt = validOptions.find((o) => o.email === email);
             return (
               <Badge
                 key={email}
