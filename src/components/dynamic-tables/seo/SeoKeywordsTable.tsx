@@ -171,21 +171,40 @@ function KeywordTable({ keywords, title, icon, show3Month, showYearly, showPrevM
 }
 
 export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywords = [], hasGscData = false, show3Month = false, showYearly = false }: SeoKeywordsTableProps) {
+  const [langFilter, setLangFilter] = useState<LangFilter>("all");
+
   // Merge all keywords (tracked + organic + gsc-only), deduplicate by keyword name
-  const allKeywords = [...trackedKeywords];
-  const trackedNames = new Set(trackedKeywords.map((k: any) => String(k.keyword || '').toLowerCase()));
-  for (const kw of keywords) {
-    if (!trackedNames.has(String(kw.keyword || '').toLowerCase())) {
-      allKeywords.push(kw);
+  const mergedKeywords = useMemo(() => {
+    const allKeywords = [...trackedKeywords];
+    const trackedNames = new Set(trackedKeywords.map((k: any) => String(k.keyword || '').toLowerCase()));
+    for (const kw of keywords) {
+      if (!trackedNames.has(String(kw.keyword || '').toLowerCase())) {
+        allKeywords.push(kw);
+      }
     }
-  }
-  // Add GSC-only keywords (already deduplicated against Ahrefs in SeoDashboardView)
-  const allNames = new Set(allKeywords.map((k: any) => String(k.keyword || '').toLowerCase()));
-  for (const kw of gscOnlyKeywords) {
-    if (!allNames.has(String(kw.keyword || '').toLowerCase())) {
-      allKeywords.push(kw);
+    const allNames = new Set(allKeywords.map((k: any) => String(k.keyword || '').toLowerCase()));
+    for (const kw of gscOnlyKeywords) {
+      if (!allNames.has(String(kw.keyword || '').toLowerCase())) {
+        allKeywords.push(kw);
+      }
     }
-  }
+    return allKeywords;
+  }, [keywords, trackedKeywords, gscOnlyKeywords]);
+
+  const langCounts = useMemo(() => {
+    let he = 0, en = 0;
+    for (const kw of mergedKeywords) {
+      const k = String(kw.keyword || '');
+      if (HEBREW_REGEX.test(k)) he++;
+      else if (ENGLISH_REGEX.test(k)) en++;
+    }
+    return { he, en, all: mergedKeywords.length };
+  }, [mergedKeywords]);
+
+  const allKeywords = useMemo(
+    () => mergedKeywords.filter(kw => matchesLang(String(kw.keyword || ''), langFilter)),
+    [mergedKeywords, langFilter]
+  );
 
   // 1. All keywords in top 10 positions (page 1)
   const top10 = [...allKeywords]
@@ -207,14 +226,48 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywor
     .filter(k => k.position != null && k.position_prev_month != null)
     .sort((a, b) => (a.position || 999) - (b.position || 999));
 
-  if (allKeywords.length === 0) return null;
+  if (mergedKeywords.length === 0) return null;
+
+  const formatNumber = (num: number) => new Intl.NumberFormat('he-IL').format(num);
 
   return (
     <Card dir="rtl">
       <CardHeader className="pb-2">
-        <CardTitle className="text-base flex items-center justify-between">
+        <CardTitle className="text-base flex items-center justify-between gap-3 flex-wrap">
           <span>ניתוח מילות מפתח</span>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center flex-wrap">
+            <div className="inline-flex rounded-md border bg-background p-0.5">
+              <button
+                type="button"
+                onClick={() => setLangFilter("all")}
+                className={cn(
+                  "px-2.5 h-7 text-xs font-medium rounded-sm transition-colors",
+                  langFilter === "all" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                )}
+              >
+                הכל ({formatNumber(langCounts.all)})
+              </button>
+              <button
+                type="button"
+                onClick={() => setLangFilter("he")}
+                className={cn(
+                  "px-2.5 h-7 text-xs font-medium rounded-sm transition-colors",
+                  langFilter === "he" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                )}
+              >
+                עברית ({formatNumber(langCounts.he)})
+              </button>
+              <button
+                type="button"
+                onClick={() => setLangFilter("en")}
+                className={cn(
+                  "px-2.5 h-7 text-xs font-medium rounded-sm transition-colors",
+                  langFilter === "en" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                )}
+              >
+                English ({formatNumber(langCounts.en)})
+              </button>
+            </div>
             {trackedKeywords.length > 0 && (
               <Badge variant="default" className="text-xs">🎯 {trackedKeywords.length} tracked</Badge>
             )}
