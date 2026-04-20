@@ -24,9 +24,13 @@ interface SeoDashboardViewProps {
   clientId: string;
   /** CRM records from the linked Google Analytics table */
   gaRecords?: any[];
+  /** GSC site URL persisted on the SEO crm_table — used as source of truth on first load. */
+  initialGscSiteUrl?: string;
+  /** Persist callback when GSC site is selected/auto-linked at the report level. */
+  onGscSiteSelected?: (siteUrl: string) => void;
 }
 
-export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDashboardViewProps) {
+export function SeoDashboardView({ tenantId, clientId, gaRecords = [], initialGscSiteUrl, onGscSiteSelected }: SeoDashboardViewProps) {
   const queryClient = useQueryClient();
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [isFetchingSnapshot, setIsFetchingSnapshot] = useState(false);
@@ -594,6 +598,8 @@ export function SeoDashboardView({ tenantId, clientId, gaRecords = [] }: SeoDash
         keywords={[]}
         onDataLoaded={handleGscDataLoaded}
         onMultiPeriodLoaded={handleGscMultiPeriodLoaded}
+        initialSiteUrl={initialGscSiteUrl}
+        onSiteSelected={onGscSiteSelected}
         hideTable
       />
 
