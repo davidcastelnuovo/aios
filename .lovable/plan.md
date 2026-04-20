@@ -1,57 +1,47 @@
 
 ## הבעיה
 
-המשתמש בג.ג רואה ש:
-1. **בחירת אתר ה-GSC לא נשמרת** — בדיקת ה-DB מראה ש-`linkedGscSiteUrl: sc-domain:ggds.co.il` נשמר נכון ברמת הטבלה, אבל ה-`client_sites` של ה-integration השני (שייך למשתמש אחר) ריק עבור ג.ג.
-2. **הזיהוי האוטומטי לא מצליח להתאים** את `targetDomain=ggds.co.il` ל-`gg-ds.com` (שני דומיינים שונים בעלי אותו לקוח).
+מסנן השפה בטבלת ביטויי החיפוש של GSC (`עברית/English/הכל`) הוא state מקומי בלבד (`useState`) ב-`GscQueriesTable` בתוך `src/components/dynamic-tables/seo/GscIntegration.tsx`. כל רענון/ניווט/פתיחה אצל אדם אחר — חוזר ל-`"all"`.
 
-### שני באגים בקוד:
-
-**באג #1 — Invalidation לא נכון:** `updateSiteMutation` (שורה 299) מבצע `invalidateQueries({ queryKey: ["gsc-integration"] })` בעוד ש-`useUserIntegrations` משתמש ב-`['user-integrations', tenantId, integrationType, userId]`. כתוצאה — ה-UI לא מתרענן אחרי שמירה.
-
-**באג #2 (העיקרי) — RLS חוסם את העדכון:** מדיניות ה-RLS על `tenant_integrations` מאפשרת UPDATE רק אם `user_id = auth.uid()`. כשהמשתמש הנוכחי משתמש ב-integration ש**שותפה אליו** מבעלים אחר (שמופיע דרך `user_has_integration_access`), הוא יכול לקרוא אבל לא לעדכן את `client_sites`. השמירה נכשלת בשקט.
-
-ב-ג.ג יש 2 חיבורי GSC: אחד של `bcd21d1c...` (שמור: `sc-domain:ggds.co.il`), ושני של `4d4de25a...` (ריק). תלוי באיזה משתמש מחובר — `useUserIntegrations` עלול להחזיר את החיבור השני, ולכן השמירה נכשלת.
+בנוסף, ה-`SearchConsoleDashboard` (הטבלה הנפרדת שמופיעה כשיש GSC table מקושר ל-SEO) **כלל לא כוללת** מסנן שפה — אז ההעדפה שנבחרה ב-GscIntegration כלל לא מועברת לתצוגה השמורה / שיתוף.
 
 ## הפתרון
 
-### 1. שמירה ברמת הטבלה כ-Source of Truth (לא ב-integration)
+### 1. שמירת בחירת השפה כברירת מחדל ברמת הדוח
 
-הקוד כבר תומך בזה דרך `linkedGscSiteUrl` ב-`crm_tables.integration_settings`. השינוי: **להעדיף את `linkedGscSiteUrl` לפני `client_sites`** של ה-integration.
+נוסיף שדה `linkedGscLangFilter` ל-`integration_settings` של ה-SEO table (אותו דפוס בדיוק כמו `linkedGscSiteUrl`).
 
-ב-`SeoReportTabs.tsx` (שורות 277-286) — ה-prop `domain` כבר מועבר נכון: `savedGscSiteUrl || targetDomain`. צריך **גם להעביר את `savedGscSiteUrl` כ-`initialSiteUrl`** ל-`GscIntegration`, ולהשתמש בו כ-prefer source.
+**ב-`SeoReportTabs.tsx`:**
+- לקרוא: `savedGscLangFilter = integration_settings?.linkedGscLangFilter || 'all'`
+- להעביר prop חדש `initialLangFilter={savedGscLangFilter}` ל-`GscIntegration` ול-`SearchConsoleDashboard`.
+- להעביר callback `onLangFilterChange={(v) => saveLinkMutation.mutate({ key: 'linkedGscLangFilter', value: v })}`.
 
-ב-`GscIntegration.tsx`:
-- להוסיף prop `initialSiteUrl?: string`
-- בחישוב `persistedSiteUrl` — להעדיף את `initialSiteUrl` (שמור על הטבלה) לפני `clientSites[clientId]`
-- ב-`updateSiteMutation` — להמשיך לעדכן את `client_sites` (ל-cache טוב), **אבל לקרוא ל-`onSiteSelected(siteUrl)` תמיד**, גם אם ה-DB update נכשל מ-RLS. ה-callback ב-`SeoReportTabs` כבר שומר ל-`crm_tables.integration_settings.linkedGscSiteUrl` (שלמשתמש יש הרשאה לעדכן).
+### 2. עדכון `GscIntegration.tsx` (`GscQueriesTable`)
 
-### 2. תיקון Invalidation Key
+- להוסיף props ל-`GscQueriesTable`: `initialLangFilter`, `onLangFilterChange`.
+- אתחול `useState<LangFilter>(initialLangFilter ?? 'all')`.
+- בכל קליק על כפתור — לקרוא ל-`onLangFilterChange(value)` (שמירה אוטומטית ל-DB).
 
-ב-`updateSiteMutation.onSuccess` להחליף:
-```ts
-queryClient.invalidateQueries({ queryKey: ["gsc-integration"] });
-// ⬇️
-queryClient.invalidateQueries({ queryKey: ["user-integrations"] });
-```
+### 3. עדכון `SearchConsoleDashboard.tsx`
 
-### 3. טיפול בשגיאות ב-RLS
+- להוסיף את אותו מסנן 3-כפתורים (`הכל / עברית / English`) מעל הטבלה — לוגיקה זהה (`HEBREW_REGEX`, `ENGLISH_REGEX`).
+- לקבל `initialLangFilter` ו-`onLangFilterChange` כ-props (אופציונליים).
+- לסנן את שורות הטבלה לפי המצב הנוכחי.
 
-ב-`updateSiteMutation`:
-- לעטוף את ה-update ב-try/catch
-- אם נכשל (RLS) — לרשום `console.warn` אבל **לא לזרוק שגיאה**, כי ה-`onSiteSelected` יבצע את השמירה האמיתית ברמת הטבלה.
+### 4. תמיכה בקישור השיתוף הציבורי
 
-### 4. תיקון נתון נגרר עבור ג.ג
-
-מאחר שה-`linkedGscSiteUrl` כבר נכון (`sc-domain:ggds.co.il`), אחרי התיקון — הדשבורד יציג מיד את הדומיין הנכון בלי תלות באיזה integration נטענה.
+ה-`PublicSeoView` הנוכחי לא מציג טבלת GSC keywords. אם יש שיתוף דשבורד ציבורי שכן מציג את ה-GSC table:
+- ה-`SearchConsoleDashboard` (שמתבצעת בו ההצגה) יקבל את `initialLangFilter` מתוך ה-`integration_settings` הציבורי שכבר חוזר מ-`public-dashboard` edge function.
+- במצב ציבורי — לא נעביר `onLangFilterChange` (קריאה בלבד), כך שהמשתמש החיצוני יראה כברירת מחדל את השפה ששמרתי, ויכול לעבור בין שפות מקומית באותה סשן.
 
 ## קבצים שיתעדכנו
 
-- `src/components/dynamic-tables/seo/GscIntegration.tsx` — prop חדש `initialSiteUrl`, prefer-order, fix invalidation key, swallow RLS errors.
-- `src/components/dynamic-tables/SeoReportTabs.tsx` — להעביר `initialSiteUrl={savedGscSiteUrl}` ל-`GscIntegration`.
+- `src/components/dynamic-tables/SeoReportTabs.tsx` — קריאת/שמירת `linkedGscLangFilter` והעברתו ל-2 הילדים.
+- `src/components/dynamic-tables/seo/GscIntegration.tsx` — `GscQueriesTable` יקבל `initialLangFilter` + `onLangFilterChange`.
+- `src/components/dynamic-tables/SearchConsoleDashboard.tsx` — הוספת מסנן שפה (3 כפתורים) + props חדשים.
 
 ## תוצאה
 
-- **שמירת בחירת אתר תעבוד גם כשה-integration משותף** — נשמר ברמת ה-SEO table (שלמשתמש תמיד יש הרשאה).
-- **ג.ג יציג את `ggds.co.il`** מיד אחרי הטעינה (כי כבר שמור ב-`linkedGscSiteUrl`).
-- **ה-UI יתרענן נכון** אחרי שמירה ידנית.
+- בחירת `עברית` נשמרת מיידית ב-DB (ב-`integration_settings.linkedGscLangFilter`).
+- ברענון, פתיחה ע"י משתמש אחר באותו ארגון, או קישור שיתוף — הטבלה תיפתח כברירת מחדל בשפה שנבחרה.
+- עובד בשני נתיבי הצגה (`GscIntegration` חי + `SearchConsoleDashboard` משולחן שמור).
