@@ -24,6 +24,12 @@ export interface GscMultiPeriodData {
 
 interface GscIntegrationProps {
   tenantId: string;
+  /**
+   * Optional set of all tenant_ids reachable for this client via shared
+   * agencies. When provided, GSC integration lookup spans the full set so
+   * connections created in a sibling tenant still resolve. RLS still applies.
+   */
+  tenantIds?: string[];
   clientId: string;
   domain?: string;
   keywords?: string[];
@@ -94,6 +100,7 @@ function normalizeDomain(value?: string) {
 
 export function GscIntegration({
   tenantId,
+  tenantIds,
   clientId,
   domain,
   keywords,
@@ -114,9 +121,12 @@ export function GscIntegration({
   const [internalDateRange, setInternalDateRange] = useState<GscDateRange>('28d');
   const effectiveDateRange: GscDateRange = dateRange ?? internalDateRange;
 
-  // Use per-user integration filtering (own + shared)
+  // Use per-user integration filtering (own + shared) across the full
+  // shared-agency tenant scope when provided.
+  const lookupTenants =
+    Array.isArray(tenantIds) && tenantIds.length > 0 ? tenantIds : tenantId;
   const { data: gscIntegrations = [], isLoading: isLoadingIntegration } = useUserIntegrations(
-    tenantId, 'google_search_console'
+    lookupTenants, 'google_search_console'
   );
 
   // When multiple GSC integrations exist for this tenant, prefer the one
