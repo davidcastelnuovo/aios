@@ -40,6 +40,8 @@ interface GscIntegrationProps {
   showDateRangeSelector?: boolean;
   /** Called when the user changes the date range from the in-card selector */
   onDateRangeChange?: (range: GscDateRange) => void;
+  /** Site URL persisted at the report/table level (source of truth — survives shared integrations & RLS). */
+  initialSiteUrl?: string;
 }
 
 const DATE_RANGE_DAYS: Record<GscDateRange, number> = {
