@@ -540,8 +540,10 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
   const showAnalyticsCards = platformFilter === 'all' || platformFilter === 'google_analytics';
   const showAdsCards = platformFilter === 'all' || platformFilter === 'facebook' || platformFilter === 'google_ads';
 
+  const isSnapshotReady = !isLoading && !!data?.dashboard && Array.isArray(tables);
+
   return (
-    <div className="container mx-auto py-8 px-4 space-y-6" dir="rtl">
+    <div className="container mx-auto py-8 px-4 space-y-6" dir="rtl" data-snapshot-ready={isSnapshotReady ? "true" : "false"}>
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
