@@ -2,76 +2,83 @@
 
 ## הבעיה
 
-הצילום של הדשבורד (image-304) מצולם לפני שכל הנתונים נטענו, ולכן הוא לא תואם לדשבורד החי (image-305).
+ההקלטה מ-16/04 עדיין מציגה "מתמלל..." (סטטוס `processing`) למרות שהתהליך כנראה כבר נכשל מזמן. בקוד הנוכחי:
 
-**ראיות מהשוואת הצילומים:**
-| | חי (305) | צילום (304) |
-|---|---|---|
-| לשוניות | הכל / Google Ads / Analytics / SEO | הכל / Analytics / SEO **(חסר Google Ads!)** |
-| Sessions | 91 | 109 |
-| CPL | ₪83 | ₪0 |
-| לידים | 5 | 0 |
-| הוצאה | ₪417 | ₪0 |
-
-**שורש הבעיה:**
-
-ב-`ClientDashboardSnapshot.tsx` רץ `<SharedDashboard />` בתוך `QueryClient` נפרד עם cache ריק. ה-edge function `public-dashboard` מבצע פעולות איטיות (pagination על `crm_records`, fetch ל-`woocommerce_orders`, `ahrefs_reports`, וסינון תאריכים) שלוקחות לעיתים 5-15 שניות.
-
-ב-`ClientDashboardPanel.tsx`:
-- שורה 310: `setTimeout(() => captureScreenshot(), 3000)` — המתנה של 3 שניות בלבד לפני קריאה ל-capture
-- שורה 223: `await new Promise((r) => setTimeout(r, 2500))` — בתוך ה-capture, עוד 2.5 שניות בלבד
-
-סה״כ ~5.5 שניות — זה לא מספיק כדי שכל ה-tabs (Google Ads, Analytics) יקבלו נתונים. הצילום נתפס כשה-`useQuery` עדיין `isLoading` או החזיר רק חלק מהנתונים, ולכן `availablePlatforms` עוד לא כולל את `google_ads` והכרטיסיות מציגות 0.
-
-הסיבה ש-Sessions=109 אבל לידים=0: רשומות GA טוענות עם דאטה חלקי, אבל עדיין לא נכנסו רשומות Google Ads → ה-CPL/לידים/הוצאה (שמגיעים ממקור Ads) הם 0.
+1. **מנגנון ה-stale detection קיים אבל רק ב-Dialog** (`SummarizeRecordingDialog.tsx` שורות 227-245) — הוא מסמן `failed` רק אם המשתמש פותח את ה-Dialog והפולינג רץ. אם הוא לא פתוח, הסטטוס נשאר תקוע על `processing` לנצח.
+2. **אין כפתור "עצור"/"בטל"** בטבלה הראשית (`Recordings.tsx`) ליד הבדג' "מתמלל...".
+3. **אין ניקוי אוטומטי ברענון העמוד** של רשומות ישנות שתקועות.
 
 ## הפתרון
 
-### 1. המתנה דטרמיניסטית לטעינה אמיתית (במקום `setTimeout` קבוע)
+### 1. ניקוי אוטומטי של הקלטות תקועות בטעינת העמוד (`Recordings.tsx`)
 
-לשנות את `ClientDashboardSnapshot.tsx` כך שיחשוף `onReady` callback או שישתמש במצב `data-ready`:
-
-- להעביר פנימה את ה-`QueryClient` בצורה שתאפשר ל-`ClientDashboardPanel` לעקוב אחרי מצב ה-query.
-- להוסיף `data-snapshot-ready="true"` על ה-root div של ה-snapshot כאשר `useQuery` הסתיים והנתונים מאוכלסים (רשומות + tables).
-
-### 2. בצד `captureScreenshot`
-
-להחליף את `await new Promise((r) => setTimeout(r, 2500))` ב-poll loop:
+ב-`useQuery` של ה-recordings, אחרי שליפת הנתונים — לסמן כ-`failed` כל רשומה שעומדת ב:
+- `transcription_status === 'processing'`
+- AND `updated_at` ישן יותר מ-10 דקות
+- AND `transcription` ריק
 
 ```ts
-// Wait until the snapshot signals it has data (max 20s)
-const start = Date.now();
-while (Date.now() - start < 20000) {
-  if (node.querySelector('[data-snapshot-ready="true"]')) break;
-  await new Promise(r => setTimeout(r, 250));
+// אחרי השליפה, לפני ההחזרה:
+const stale = data.filter(r => 
+  r.transcription_status === 'processing' &&
+  !r.transcription &&
+  Date.now() - new Date(r.updated_at).getTime() > 10 * 60 * 1000
+);
+if (stale.length > 0) {
+  await supabase.from('zoom_recordings')
+    .update({ 
+      transcription_status: 'failed', 
+      transcription_error: 'תהליך התמלול נתקע (timeout)' 
+    })
+    .in('id', stale.map(r => r.id));
+  // refetch
 }
-// extra 500ms for chart animations to finish
-await new Promise(r => setTimeout(r, 500));
 ```
 
-### 3. ביטול ה-auto-capture המוקדם
+### 2. כפתור "עצור" ידני בטבלה (`Recordings.tsx` שורה 514)
 
-ב-`useEffect` של auto-capture (שורה 302), להמתין לאיתות `data-snapshot-ready` במקום timeout שרירותי של 3 שניות. אם אין איתות תוך 25 שניות → toast עם "טעינה איטית, נסה שוב".
+ליד ה-badge של "מתמלל..." להוסיף כפתור X קטן שמסמן ידנית כ-`failed`:
 
-### 4. סימון ready ב-`SharedDashboard`
-
-ב-`SharedDashboard.tsx`, להוסיף על ה-wrapper הראשי:
 ```tsx
-<div data-snapshot-ready={!isLoading && !!data ? "true" : "false"}>
+{rec.transcription_status === 'processing' && !rec.transcription && (
+  <Button variant="ghost" size="icon" className="h-6 w-6"
+    onClick={() => cancelTranscriptionMutation.mutate(rec._group?.map(r => r.id) || [rec.id])}>
+    <X className="h-3 w-3" />
+  </Button>
+)}
 ```
-כך שה-snapshot wrapper יוכל לבדוק זאת.
 
-### 5. בדיקת cache busting
+עם mutation שמסמן את כל הרשומות בקבוצה כ-`failed` ומאפס את ה-status:
+```ts
+const cancelTranscriptionMutation = useMutation({
+  mutationFn: async (ids: string[]) => {
+    await supabase.from('zoom_recordings')
+      .update({ transcription_status: 'failed', transcription_error: 'בוטל ידנית' })
+      .in('id', ids);
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['recordings'] });
+    toast({ title: "התמלול בוטל" });
+  },
+});
+```
 
-`staleTime: 60_000` ב-`ClientDashboardSnapshot` עלול להחזיר cache ריק. להחליף ל-`staleTime: 0` ו-`gcTime: 0` כדי לכפות fetch טרי בכל פתיחה.
+### 3. הקטנת זמן ה-stale detection ב-Dialog (`SummarizeRecordingDialog.tsx` שורה 231)
+
+מ-5 דקות ל-3 דקות — Whisper על קובץ זום ממוצע אמור להסתיים תוך פחות מזה. ערכים גבוהים גורמים לתחושת "תקוע".
+
+### 4. הצגת תלת־מצב חזותית של הסטטוס בטבלה
+
+כשהסטטוס `failed`, להוסיף ליד ה-badge "נכשל" כפתור 🔄 ל-retry שייפתח את ה-`SummarizeRecordingDialog` עם הקלטה זו.
 
 ## קבצים שיתעדכנו
 
-- `src/pages/SharedDashboard.tsx` — הוספת `data-snapshot-ready` על ה-root
-- `src/components/clients/ClientDashboardSnapshot.tsx` — `staleTime: 0`, `gcTime: 0`
-- `src/components/clients/ClientDashboardPanel.tsx` — החלפת `setTimeout` ב-poll על `data-snapshot-ready` (גם ב-auto-capture וגם בתוך `captureScreenshot`)
+- `src/pages/Recordings.tsx` — auto-cleanup ב-useQuery, כפתור עצור ידני, כפתור retry
+- `src/components/SummarizeRecordingDialog.tsx` — הקטנת timeout מ-5 ל-3 דקות
 
 ## תוצאה
 
-הצילום ימתין באמת עד שכל הנתונים (Google Ads + Analytics + SEO + WooCommerce) נטענו ומוצגים, ואז יצלם — וייראה זהה למסך החי שהמשתמש רואה.
+- ההקלטה מ-16/04 תסומן אוטומטית כ-`failed` ברענון הבא של העמוד.
+- המשתמש יוכל בכל רגע ללחוץ X ידני כדי לעצור תהליך תקוע מבלי לחכות.
+- תהליכים תקועים יתגלו תוך 3 דקות במקום 5.
 
