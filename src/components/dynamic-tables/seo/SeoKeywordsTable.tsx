@@ -23,8 +23,8 @@ interface SeoKeywordsTableProps {
   hasGscData?: boolean;
   show3Month?: boolean;
   showYearly?: boolean;
-  /** Default tab to open. Defaults to "all" so the full merged dataset is visible immediately. */
-  defaultTab?: "top10" | "3month" | "yearly" | "monthly" | "all";
+  /** Default tab to open. Defaults to "tracked" so the user's tracked keywords are visible first. */
+  defaultTab?: "tracked" | "top10" | "3month" | "yearly" | "monthly" | "all";
   /** Initial language filter persisted at the report/table level. */
   initialLangFilter?: LangFilter;
   /** Called whenever the language filter changes — parent persists to DB. */
