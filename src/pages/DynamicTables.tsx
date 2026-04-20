@@ -929,18 +929,32 @@ export default function DynamicTables() {
                         {dashboard.name}
                       </CardTitle>
                       {canManageTables && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (confirm('האם אתה בטוח שברצונך למחוק את הדשבורד?')) {
-                              deleteDashboardMutation.mutate(dashboard.id);
-                            }
-                          }}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingDashboard({ id: dashboard.id, name: dashboard.name });
+                              setEditDashboardName(dashboard.name);
+                            }}
+                            title="ערוך שם דשבורד"
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirm('האם אתה בטוח שברצונך למחוק את הדשבורד?')) {
+                                deleteDashboardMutation.mutate(dashboard.id);
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
                       )}
                     </div>
                     <div className="flex flex-wrap gap-1 mt-2">
