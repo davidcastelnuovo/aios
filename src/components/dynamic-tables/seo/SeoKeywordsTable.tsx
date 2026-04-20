@@ -308,8 +308,13 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywor
         </CardTitle>
       </CardHeader>
       <CardContent className="p-0">
-        <Tabs defaultValue={defaultTab} className="w-full">
+        <Tabs defaultValue={trackedFiltered.length > 0 ? defaultTab : "all"} className="w-full">
           <TabsList dir="rtl" className="w-full justify-start rounded-none border-b bg-transparent h-auto p-0 gap-0">
+            {trackedKeywords.length > 0 && (
+              <TabsTrigger value="tracked" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
+                🎯 ביטויים במעקב ({trackedFiltered.length})
+              </TabsTrigger>
+            )}
             <TabsTrigger value="all" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
               📋 כל הביטויים ({allKeywords.length})
             </TabsTrigger>
@@ -326,6 +331,20 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywor
               📅 שינוי חודשי
             </TabsTrigger>
           </TabsList>
+
+          {trackedKeywords.length > 0 && (
+            <TabsContent value="tracked" className="mt-0">
+              <KeywordTable
+                keywords={trackedFiltered}
+                title={`ביטויים במעקב (${trackedFiltered.length})`}
+                icon={<Target className="h-4 w-4 text-primary" />}
+                show3Month={show3Month}
+                showYearly={showYearly}
+                showPrevMonth
+                showGsc={hasGscData}
+              />
+            </TabsContent>
+          )}
 
           <TabsContent value="top10" className="mt-0">
             <KeywordTable
