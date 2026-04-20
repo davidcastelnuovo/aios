@@ -63,6 +63,12 @@ export function useAhrefsEnrichment() {
     }
 
     const result = await resp.json();
+    // Handle structured quota-exceeded response (returns 200 with success:false)
+    if (result?.success === false && result?.error === 'quota_exceeded') {
+      const err = new Error(result.message || 'מכסת ה-API של Ahrefs נגמרה');
+      (err as Error & { code?: string }).code = 'quota_exceeded';
+      throw err;
+    }
     return result.data?.keywords || [];
   };
 
