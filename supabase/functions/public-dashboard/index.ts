@@ -114,11 +114,14 @@ Deno.serve(async (req) => {
     }
 
     // Fetch tables for this dashboard's client
+    // NOTE: We intentionally do NOT filter by tenant_id here — integration tables
+    // (Ahrefs / GA / Facebook) may have been created under a different tenant
+    // (e.g. MarketingCaptain) but linked to a client owned by another tenant
+    // (e.g. DMM). The share_token + is_active gate already authorizes this view.
     const { data: tables } = await supabase
       .from("crm_tables")
       .select("*")
-      .eq("client_id", dashboard.client_id)
-      .eq("tenant_id", dashboard.tenant_id);
+      .eq("client_id", dashboard.client_id);
 
     const allTables = tables || [];
 
@@ -143,11 +146,12 @@ Deno.serve(async (req) => {
       const tableRecords: any[] = [];
 
       for (let from = 0; ; from += pageSize) {
+        // Filter by table_id only — share_token already authorized this dashboard
+        // and the table is scoped via client_id above.
         const { data: page, error } = await supabase
           .from("crm_records")
           .select("*")
           .eq("table_id", table.id)
-          .eq("tenant_id", dashboard.tenant_id)
           .order("created_at", { ascending: false })
           .range(from, from + pageSize - 1);
 
@@ -186,10 +190,11 @@ Deno.serve(async (req) => {
     // ---- Ahrefs SEO reports for this client ----
     let ahrefsReports: any[] = [];
     if (dashboard.client_id) {
+      // Do not filter by tenant_id — Ahrefs reports may have been ingested under
+      // a different tenant but linked to this client.
       const { data: reports } = await supabase
         .from("ahrefs_reports")
         .select("id, domain, report_date, report_type, report_data, comparison_data, received_at")
-        .eq("tenant_id", dashboard.tenant_id)
         .eq("client_id", dashboard.client_id)
         .order("report_date", { ascending: false })
         .limit(50);
