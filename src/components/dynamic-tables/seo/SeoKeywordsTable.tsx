@@ -225,25 +225,35 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywor
     [mergedKeywords, langFilter]
   );
 
+  // Tracked keywords filtered by language and sorted: keywords with position first (asc), then nulls
+  const trackedFiltered = useMemo(() => {
+    const filtered = trackedKeywords.filter(kw => matchesLang(String(kw.keyword || ''), langFilter));
+    return [...filtered].sort((a, b) => {
+      const aPos = a.position ?? Number.POSITIVE_INFINITY;
+      const bPos = b.position ?? Number.POSITIVE_INFINITY;
+      return aPos - bPos;
+    });
+  }, [trackedKeywords, langFilter]);
+
+  // Sort helper: keywords with valid position first (ascending), then null/undefined positions at the end
+  const sortByPosition = (arr: any[]) =>
+    [...arr].sort((a, b) => {
+      const aPos = a.position ?? Number.POSITIVE_INFINITY;
+      const bPos = b.position ?? Number.POSITIVE_INFINITY;
+      return aPos - bPos;
+    });
+
   // 1. All keywords in top 10 positions (page 1)
-  const top10 = [...allKeywords]
-    .filter(k => k.position != null && k.position <= 10)
-    .sort((a, b) => (a.position || 999) - (b.position || 999));
+  const top10 = sortByPosition(allKeywords.filter(k => k.position != null && k.position <= 10));
 
   // 2. All keywords with 3-month data, sorted by current position (best first)
-  const by3MonthChange = [...allKeywords]
-    .filter(k => k.position != null && k.position_3month != null)
-    .sort((a, b) => (a.position || 999) - (b.position || 999));
+  const by3MonthChange = sortByPosition(allKeywords.filter(k => k.position != null && k.position_3month != null));
 
   // 3. All keywords with yearly data, sorted by current position (best first)
-  const byYearlyChange = [...allKeywords]
-    .filter(k => k.position != null && k.position_yearly != null)
-    .sort((a, b) => (a.position || 999) - (b.position || 999));
+  const byYearlyChange = sortByPosition(allKeywords.filter(k => k.position != null && k.position_yearly != null));
 
   // 4. All keywords with monthly data, sorted by current position (best first)
-  const byMonthlyChange = [...allKeywords]
-    .filter(k => k.position != null && k.position_prev_month != null)
-    .sort((a, b) => (a.position || 999) - (b.position || 999));
+  const byMonthlyChange = sortByPosition(allKeywords.filter(k => k.position != null && k.position_prev_month != null));
 
   if (mergedKeywords.length === 0) return null;
 
