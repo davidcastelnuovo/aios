@@ -139,36 +139,66 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
   const campaignStartDate = reportData?.campaign_start_date || snapshotCampaignStart?.date;
   const trafficHistory = Array.isArray(reportData?.traffic_history) ? reportData.traffic_history : [];
 
-  // Monthly organic sessions for the chart — derived from daily_source records (organic only)
-  // Note: daily_source may be incomplete due to GA API row limits; used for trend chart only
+  // Monthly NON-PAID sessions for the chart — sum of all traffic except paid sources.
+  // Includes: Organic Search, Direct, Referral, Organic Social, Email, Unassigned, Organic Video, etc.
+  // Excludes: Paid Search, Paid Social, Display, Cross-network, Paid Shopping, Paid Video.
   const gaOrganicByMonth = useMemo(() => {
     if (!gaRecords || gaRecords.length === 0) return [];
 
-    // Prefer monthly_organic records (24-month history from GA sync)
+    const isPaidChannel = (cg: string) => {
+      const v = cg.toLowerCase();
+      return v.startsWith('paid') || v === 'cross-network' || v === 'display' || v.includes('paid');
+    };
+    const isPaidMedium = (sm: string) => {
+      const v = sm.toLowerCase();
+      return /\b(cpc|ppc|paid|cpm|cpv|paidsearch|display)\b/.test(v);
+    };
+
+    // Prefer monthly_channel records if synced (full channel breakdown by month)
+    const monthlyChannelRows = gaRecords.filter((r: any) => r.data?.report_type === 'monthly_channel');
+    if (monthlyChannelRows.length > 0) {
+      const monthMap = new Map<string, number>();
+      for (const r of monthlyChannelRows) {
+        const cg = String(r.data?.channel_group || '');
+        if (isPaidChannel(cg)) continue;
+        const month = r.data?.month as string;
+        if (!month) continue;
+        const sessions = Number(r.data?.sessions) || 0;
+        monthMap.set(month, (monthMap.get(month) || 0) + sessions);
+      }
+      if (monthMap.size > 0) {
+        return Array.from(monthMap.entries())
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([month, sessions]) => ({ month, sessions }));
+      }
+    }
+
+    // Fallback: derive from daily_source records (exclude paid mediums)
+    const dailySourceRows = gaRecords.filter((r: any) => r.data?.report_type === 'daily_source');
+    if (dailySourceRows.length > 0) {
+      const monthMap = new Map<string, number>();
+      for (const r of dailySourceRows) {
+        const sm = String(r.data?.source_medium || '');
+        if (isPaidMedium(sm)) continue;
+        const date = r.data?.date;
+        if (!date) continue;
+        const monthKey = String(date).substring(0, 7);
+        const sessions = Number(r.data?.sessions) || 0;
+        monthMap.set(monthKey, (monthMap.get(monthKey) || 0) + sessions);
+      }
+      if (monthMap.size > 0) {
+        return Array.from(monthMap.entries())
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([month, sessions]) => ({ month, sessions }));
+      }
+    }
+
+    // Last fallback: monthly_organic (organic only — better than nothing)
     const monthlyOrganic = gaRecords
       .filter((r: any) => r.data?.report_type === 'monthly_organic')
       .map((r: any) => ({ month: r.data.month as string, sessions: Number(r.data.sessions) || 0 }))
       .sort((a, b) => a.month.localeCompare(b.month));
-
-    if (monthlyOrganic.length > 0) return monthlyOrganic;
-
-    // Fallback: derive from daily_source records
-    const monthMap = new Map<string, number>();
-    for (const r of gaRecords) {
-      const reportType = r.data?.report_type;
-      // Only use daily_source rows — 'daily' rows have no source breakdown (total traffic)
-      if (reportType !== 'daily_source') continue;
-      const sourceMedium = String(r.data?.source_medium || '').toLowerCase();
-      if (!sourceMedium.includes('organic')) continue;
-      const date = r.data?.date;
-      if (!date) continue;
-      const monthKey = date.substring(0, 7); // YYYY-MM
-      const sessions = Number(r.data?.sessions) || 0;
-      monthMap.set(monthKey, (monthMap.get(monthKey) || 0) + sessions);
-    }
-    return Array.from(monthMap.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([month, sessions]) => ({ month, sessions }));
+    return monthlyOrganic;
   }, [gaRecords]);
 
   // Snapshot organic sessions — from channel_group 'Organic Search' filtered to current month
