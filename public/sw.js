@@ -1,4 +1,4 @@
-const CACHE_NAME = 'afterlead-v1';
+const CACHE_NAME = 'afterlead-v2';
 const STATIC_ASSETS = [
   '/',
   '/favicon.png',
