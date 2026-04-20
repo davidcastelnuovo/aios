@@ -1,7 +1,20 @@
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ArrowUp, ArrowDown, Trophy, TrendingUp, Calendar, MousePointerClick, Eye, CalendarRange } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
+
+const HEBREW_REGEX = /[\u0590-\u05FF]/;
+const ENGLISH_REGEX = /[A-Za-z]/;
+type LangFilter = "all" | "he" | "en";
+
+function matchesLang(keyword: string, lang: LangFilter): boolean {
+  if (lang === "all") return true;
+  if (lang === "he") return HEBREW_REGEX.test(keyword);
+  if (lang === "en") return ENGLISH_REGEX.test(keyword) && !HEBREW_REGEX.test(keyword);
+  return true;
+}
 
 interface SeoKeywordsTableProps {
   keywords: any[];
