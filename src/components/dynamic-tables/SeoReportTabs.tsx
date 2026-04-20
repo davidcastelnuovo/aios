@@ -16,39 +16,46 @@ import { Badge } from "@/components/ui/badge";
 import { useUserIntegrations } from "@/hooks/useUserIntegrations";
 import { useAhrefsReports } from "@/hooks/useAhrefsReports";
 import { filterValidSeoReports } from "./seo/reportValidity";
+import { useSeoScope } from "@/hooks/useSeoScope";
 
 interface SeoReportTabsProps {
-  tenantId: string;
+  /**
+   * Optional: tenant_id of the SEO/Ahrefs crm_table when known by the caller
+   * (e.g. when opening the standalone SEO table view inside DynamicTableView).
+   * The component still resolves the FULL accessible-tenant scope from clientId
+   * so shared-agency reports load regardless of where they were created.
+   */
+  tenantId?: string;
   clientId: string;
 }
 
 export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
   const queryClient = useQueryClient();
 
+  // Resolve the full SEO scope (client tenant + accessible tenants via shared agencies)
+  const { data: scope } = useSeoScope(clientId);
+  const accessibleTenantIds = scope?.accessibleTenantIds || [];
+
+  // Find the SEO/Ahrefs table across all accessible tenants. Prefer the explicit
+  // table from scope; if none, derive a stable tenant_id for the report from
+  // either the table's tenant_id, the client's home tenant, or the prop.
+  const seoTable = scope?.seoTable || null;
+  const reportTenantId =
+    seoTable?.tenant_id ||
+    scope?.clientTenantId ||
+    tenantId ||
+    "";
+
   // Check whether we actually have valid Ahrefs SEO reports for this client.
-  // If not, we'll default the active tab to Search Console so users see real data
-  // instead of the empty "אין דוחות SEO" state.
-  const { data: ahrefsReports } = useAhrefsReports({ clientId });
+  // Use client-scoped lookup so reports stored under a sibling tenant still load.
+  const { data: ahrefsReports } = useAhrefsReports({
+    clientId,
+    tenantIds: accessibleTenantIds,
+  });
   const hasValidAhrefsReports = useMemo(
     () => filterValidSeoReports(ahrefsReports || []).length > 0,
     [ahrefsReports]
   );
-
-  // Get the current SEO table's domain for GSC matching
-  const { data: seoTable } = useQuery({
-    queryKey: ['seo-table-info', tenantId, clientId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('crm_tables')
-        .select('id, integration_settings')
-        .eq('tenant_id', tenantId)
-        .eq('integration_type', 'ahrefs')
-        .limit(100);
-      if (error) throw error;
-      return data?.find(t => (t.integration_settings as any)?.clientId === clientId) || null;
-    },
-    enabled: !!tenantId && !!clientId,
-  });
 
   // Fetch the client's own website as a fallback for GSC domain auto-match
   // (when no Ahrefs SEO table exists for this client, targetDomain is empty).
@@ -73,30 +80,9 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
   const savedGscSiteUrl = (seoTable?.integration_settings as any)?.linkedGscSiteUrl || '';
   const savedGscLangFilter = ((seoTable?.integration_settings as any)?.linkedGscLangFilter || 'all') as 'all' | 'he' | 'en';
 
-  // Fetch ALL GA and GSC tables for this tenant
-  const { data: relatedTables } = useQuery({
-    queryKey: ['seo-related-tables', tenantId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('crm_tables')
-        .select('id, name, slug, integration_type, integration_settings, client_id')
-        .eq('tenant_id', tenantId)
-        .in('integration_type', ['google_search_console', 'google_analytics']);
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!tenantId,
-  });
-
-  const gaTables = useMemo(() => 
-    relatedTables?.filter(t => t.integration_type === 'google_analytics') || [],
-    [relatedTables]
-  );
-
-  const gscTables = useMemo(() =>
-    relatedTables?.filter(t => t.integration_type === 'google_search_console') || [],
-    [relatedTables]
-  );
+  // GA / GSC tables come from the scope (already searched across all accessible tenants)
+  const gaTables = scope?.gaTables || [];
+  const gscTables = scope?.gscTables || [];
 
   // Selected GA table (from saved or first available)
   const [selectedGaTableId, setSelectedGaTableId] = useState<string>("");
@@ -143,7 +129,7 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['seo-table-info'] });
+      queryClient.invalidateQueries({ queryKey: ['seo-scope', clientId] });
       toast.success('החיבור נשמר');
     },
   });
@@ -224,10 +210,12 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
     }
   }, [selectedGaTableId, gaRecords]);
 
-  // Check GSC integration exists — use the same source of truth as GscIntegration
-  // (useUserIntegrations) so the tab visibility matches the actual GSC access.
-  const { data: gscUserIntegrations } = useUserIntegrations(tenantId, 'google_search_console');
-  const { data: gaUserIntegrations } = useUserIntegrations(tenantId, 'google_analytics');
+  // Check GSC/GA integration access across ALL accessible tenants (shared agency).
+  // RLS still gates what the user can actually see, but we no longer restrict by
+  // the active session tenant — that previously hid integrations created in
+  // a sibling tenant for shared-agency clients.
+  const { data: gscUserIntegrations } = useUserIntegrations(accessibleTenantIds, 'google_search_console');
+  const { data: gaUserIntegrations } = useUserIntegrations(accessibleTenantIds, 'google_analytics');
 
   const hasGa =
     gaTables.length > 0 ||
@@ -242,8 +230,9 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
   if (!hasGsc && !hasGa) {
     return (
       <SeoDashboardView
-        tenantId={tenantId}
+        tenantId={reportTenantId}
         clientId={clientId}
+        accessibleTenantIds={accessibleTenantIds}
         initialGscSiteUrl={savedGscSiteUrl}
         onGscSiteSelected={(siteUrl) => {
           if (siteUrl && siteUrl !== savedGscSiteUrl) {
@@ -280,8 +269,9 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
 
         <TabsContent value="seo">
           <SeoDashboardView
-            tenantId={tenantId}
+            tenantId={reportTenantId}
             clientId={clientId}
+            accessibleTenantIds={accessibleTenantIds}
             gaRecords={gaRecords || []}
             initialGscSiteUrl={savedGscSiteUrl}
             onGscSiteSelected={(siteUrl) => {
@@ -329,7 +319,8 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                   />
                 )}
                 <GscIntegration
-                  tenantId={tenantId}
+                  tenantId={reportTenantId}
+                  tenantIds={accessibleTenantIds}
                   clientId={clientId}
                   domain={savedGscSiteUrl || targetDomain || clientWebsite}
                   initialSiteUrl={savedGscSiteUrl}
@@ -458,7 +449,7 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
         onOpenChange={(open) => {
           setShowGaDialog(open);
           if (!open) {
-            queryClient.invalidateQueries({ queryKey: ['seo-related-tables'] });
+            queryClient.invalidateQueries({ queryKey: ['seo-scope', clientId] });
           }
         }}
       />
