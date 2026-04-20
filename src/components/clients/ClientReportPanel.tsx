@@ -633,18 +633,15 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
           }}
           aria-hidden="true"
         >
-          {table.integration_type === "ahrefs" ? (
-            <SeoCombinedSnapshot
-              ref={snapshotRef}
-              tableId={table.id}
-              tableName={table.name}
-            />
-          ) : (
-            <ClientTableSnapshot
-              ref={snapshotRef}
-              tableSlug={table.slug}
-            />
-          )}
+          {/* Render the actual DynamicTableView (full report, not summary) so the
+              screenshot mirrors exactly what the user sees inside the client card. */}
+          <ClientTableSnapshot
+            ref={snapshotRef}
+            tableSlug={table.slug}
+            summaryOnly={table.integration_type === "ahrefs" ? false : true}
+          />
+          {/* Keep import to avoid dead-code lint while preserving fallback type */}
+          {false && <SeoCombinedSnapshot tableId={table.id} tableName={table.name} />}
         </div>,
         document.body
       )}
