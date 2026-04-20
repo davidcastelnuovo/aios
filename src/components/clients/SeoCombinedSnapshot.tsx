@@ -357,6 +357,9 @@ export const SeoCombinedSnapshot = forwardRef<HTMLDivElement, Props>(
           </div>
         )}
 
+        {/* Snapshot end marker — limits screenshot to header + KPI cards only */}
+        <div data-snapshot-end="true" aria-hidden="true" />
+
         {/* Ahrefs Top 10 */}
         <Section title="🏆 Ahrefs — Top 10 ביטויים מובילים">
           {ahrefsTop10.length > 0 ? (
