@@ -218,6 +218,14 @@ export function GscIntegration({
 
   // Auto-link useEffect is declared further down (after updateSiteMutation is defined).
 
+  // When multi-period is active (SEO dashboard hideTable mode), the multi-period
+  // "current" fetch (90d + aggregateAll, up to 5,000 rows) is the SINGLE source of
+  // truth for current keywords. Skip the redundant 28d fetch to prevent a race
+  // condition where the 28d response (fewer keywords) overwrites the multi-period
+  // result on first load.
+  const enableMultiPeriod = !!onMultiPeriodLoaded && hideTable;
+  const enableSinglePeriod = !!gscIntegration?.id && !!effectiveSiteUrl && !enableMultiPeriod;
+
   const { data: gscData, isLoading: isLoadingData, refetch: refetchData } = useQuery({
     queryKey: ["gsc-keyword-data", gscIntegration?.id, effectiveSiteUrl, effectiveDateRange, keywords?.join(",")],
     queryFn: async () => {
@@ -242,11 +250,8 @@ export function GscIntegration({
       onDataLoaded?.(rows);
       return rows as GscKeywordData[];
     },
-    enabled: !!gscIntegration?.id && !!effectiveSiteUrl,
+    enabled: enableSinglePeriod,
   });
-
-  // Multi-period fetch: when caller wants historical comparisons (only in hideTable mode + callback present)
-  const enableMultiPeriod = !!onMultiPeriodLoaded && hideTable;
   useQuery({
     queryKey: ["gsc-multi-period", gscIntegration?.id, effectiveSiteUrl],
     queryFn: async () => {
