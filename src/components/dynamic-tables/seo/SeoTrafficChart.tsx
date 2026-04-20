@@ -37,9 +37,9 @@ export function SeoTrafficChart({ trafficHistory, gaOrganicByMonth = [] }: SeoTr
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-base flex items-center gap-2">
-          תנועה אורגנית
+          תנועה לאתר (לא ממומנת)
           <span className="text-xs font-normal text-muted-foreground">
-            {isGaData ? '— Sessions אורגניים (Google Analytics)' : '— הערכת Ahrefs'}
+            {isGaData ? '— Sessions מכל המקורות הלא-ממומנים (Google Analytics)' : '— הערכת Ahrefs'}
           </span>
         </CardTitle>
       </CardHeader>
@@ -52,7 +52,7 @@ export function SeoTrafficChart({ trafficHistory, gaOrganicByMonth = [] }: SeoTr
             <Tooltip
               formatter={(value: number) => [
                 value != null ? value.toLocaleString() : '—',
-                isGaData ? 'Sessions אורגניים' : 'תנועה אורגנית',
+                isGaData ? 'Sessions לא-ממומנים' : 'תנועה אורגנית',
               ]}
               labelFormatter={(label) => `תאריך: ${label}`}
             />
