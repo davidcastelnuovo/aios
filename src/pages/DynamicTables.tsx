@@ -295,6 +295,26 @@ export default function DynamicTables() {
     },
   });
 
+  // Rename dashboard mutation
+  const renameDashboardMutation = useMutation({
+    mutationFn: async ({ dashboardId, name }: { dashboardId: string; name: string }) => {
+      const { error } = await supabase
+        .from('crm_dashboards')
+        .update({ name })
+        .eq('id', dashboardId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['crm-dashboards'] });
+      setEditingDashboard(null);
+      setEditDashboardName("");
+      toast.success('שם הדשבורד עודכן');
+    },
+    onError: (error: any) => {
+      toast.error('שגיאה בעדכון שם הדשבורד: ' + error.message);
+    },
+  });
+
   const deleteTableMutation = useMutation({
     mutationFn: async (tableId: string) => {
       const { data: { session } } = await supabase.auth.getSession();
