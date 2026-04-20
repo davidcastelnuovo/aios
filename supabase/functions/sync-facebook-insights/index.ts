@@ -235,7 +235,11 @@ Deno.serve(async (req) => {
     }
 
     // Fetch insights from Facebook with time_increment=1 for daily breakdown
-    const insightsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/insights?level=campaign&fields=campaign_id,campaign_name,impressions,clicks,cpm,ctr,actions,action_values,conversions,cost_per_action_type,cost_per_conversion,spend&time_range={"since":"${sinceStr}","until":"${untilStr}"}&time_increment=1&limit=500&access_token=${accessToken}`;
+    // action_attribution_windows + use_unified_attribution_setting expose messaging
+    // conversion events (WhatsApp / Messenger Click-to-Chat) that otherwise don't
+    // appear in the default `actions` response.
+    const attributionWindows = encodeURIComponent(JSON.stringify(['7d_click', '1d_view']));
+    const insightsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/insights?level=campaign&fields=campaign_id,campaign_name,impressions,clicks,cpm,ctr,actions,action_values,conversions,cost_per_action_type,cost_per_conversion,spend&time_range={"since":"${sinceStr}","until":"${untilStr}"}&time_increment=1&action_attribution_windows=${attributionWindows}&use_unified_attribution_setting=true&limit=500&access_token=${accessToken}`;
     
     const response = await fetch(insightsUrl);
     const data = await response.json();
@@ -377,6 +381,17 @@ Deno.serve(async (req) => {
       const objective = String(campaignStatus?.objective || '').toUpperCase();
       const isEcommerceObjective = ['OUTCOME_SALES', 'PRODUCT_CATALOG_SALES', 'SALES'].includes(objective);
       const isLeadObjective = ['OUTCOME_LEADS', 'LEAD_GENERATION'].includes(objective);
+      const isMessagingObjective = ['OUTCOME_ENGAGEMENT', 'MESSAGES'].includes(objective);
+
+      // Messaging / WhatsApp conversation starts count as leads for Engagement campaigns
+      const messagingActionTypes = [
+        'onsite_conversion.messaging_conversation_started_7d',
+        'messaging_conversation_started_7d',
+        'onsite_conversion.messaging_first_reply',
+        'messaging_first_reply',
+      ];
+      const hasMessagingSignal = messagingActionTypes.some((type) => actionTypeSet.has(type));
+
       const hasEcommerceSignal =
         purchases > 0 ||
         purchaseValue > 0 ||
@@ -392,18 +407,21 @@ Deno.serve(async (req) => {
       // PRIORITY: Campaign objective is the source of truth.
       // If FB says it's a lead campaign (OUTCOME_LEADS / LEAD_GENERATION), it's a lead
       // campaign — even with incidental purchase/add_to_cart pixel events from the website.
+      // Messaging/Engagement campaigns with WhatsApp/Messenger conversions also count as leads.
       const campaignType: 'lead' | 'ecommerce' | 'other' =
         isLeadObjective
           ? 'lead'
-          : isEcommerceObjective
-            ? 'ecommerce'
-            : hasStrongEcommerceSignal && !(hasLeadSignal && purchases === 0 && purchaseValue === 0)
+          : isMessagingObjective && hasMessagingSignal
+            ? 'lead'
+            : isEcommerceObjective
               ? 'ecommerce'
-              : hasLeadSignal
-                ? 'lead'
-                : addToCart > 0 || addToCartActionTypePriority.some((type) => actionTypeSet.has(type))
-                  ? 'ecommerce'
-                  : 'other';
+              : hasStrongEcommerceSignal && !(hasLeadSignal && purchases === 0 && purchaseValue === 0)
+                ? 'ecommerce'
+                : hasLeadSignal
+                  ? 'lead'
+                  : addToCart > 0 || addToCartActionTypePriority.some((type) => actionTypeSet.has(type))
+                    ? 'ecommerce'
+                    : 'other';
 
       return {
         date: insight.date_start, // Use date_start as the single date field
