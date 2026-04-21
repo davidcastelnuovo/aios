@@ -1,45 +1,47 @@
 
-## תיקון ספירת לידים של WhatsApp/Messenger בדוח Facebook
+## תיקון: קישור שיתוף של דוח SEO מציג "אין דוחות SEO"
 
 ### הבעיה
-בדוח של "א.י זוהר עץ" קמפיינים שמייצרים שיחות WhatsApp/Messenger מציגים **0 לידים**, כי:
-1. הקמפיינים הם מסוג `OUTCOME_ENGAGEMENT` (Click-to-WhatsApp) ולא `OUTCOME_LEADS`.
-2. הסנכרון לא מבקש מפייסבוק את ה-attribution windows הנכונים, כך שאירועי `messaging_conversation_started_7d` לא חוזרים ב-`actions`.
-3. גם אם חזרו — הקמפיינים האלו מסווגים כ-`other` ולא כ-`lead`, כך שעמודת הלידים נשארת 0.
+בקישור השיתוף `https://after-lead.com/shared/table/dvrvn-7r67` של "דורון לוין" מופיע "אין דוחות SEO", למרות שבתצוגה הפנימית הדוח נטען מצוין.
 
-### מה אתקן (ממוקד, בלי לגעת ב-E-commerce / Lead Forms קיימים)
+### שורש הבעיה
+בדקתי את ה-DB:
 
-#### `supabase/functions/sync-facebook-insights/index.ts`
-שינוי מינימלי וממוקד:
+| מקור | client_id |
+|---|---|
+| `crm_tables.client_id` (הנכון) | `cb3d38ec…` (דורון לוין) |
+| `integration_settings.clientId` (ישן/תקוע) | `496e649a…` |
+| `ahrefs_reports` קיים עבור | `cb3d38ec…` בלבד |
 
-1. **בקשת Insights API** — אוסיף:
-   - `action_attribution_windows=['7d_click','1d_view']`
-   - `use_unified_attribution_setting=true`
-   
-   זה חושף את אירועי ה-messaging בלי לשנות את שאר הנתונים (spend, impressions, purchases וכו').
+ב-Edge Function `public-table` שורה 120:
+```ts
+const targetClientId = settings.clientId || table.client_id;
+```
+הסדר הפוך — ה-`settings.clientId` הישן גובר על `table.client_id` האמיתי, ולכן השאילתה מחפשת דוחות תחת לקוח שגוי ומחזירה 0 תוצאות.
 
-2. **חישוב לידים** — אוסיף מקור ליד נוסף בצד המקורות הקיימים:
-   - סכום של `onsite_conversion.messaging_conversation_started_7d` + הגרסה ה-bare `messaging_conversation_started_7d`
-   - אם סוג הקמפיין הוא `OUTCOME_ENGAGEMENT` / `MESSAGES` ויש אירועי messaging → יסווג כ-`lead` (במקום `other`).
-   - לקמפיינים של Lead Forms (`OUTCOME_LEADS`) הלוגיקה הקיימת של `leadgen_grouped` לא משתנה.
-   - לקמפיינים של E-commerce (`OUTCOME_SALES`) שום דבר לא משתנה — purchases ממשיכים לעבוד כמו שהם.
+זוהי **בדיוק אותה הבעיה** שתיקנתי בעבר ב-`DynamicTableView.tsx` (הסיפור של Woodhill / Berliner) — רק שהיא קיימת גם במסלול הציבורי של ה-Edge Function.
 
-3. **מניעת ספירה כפולה** — ניקח `MAX` בין ה-aggregate `lead` שפייסבוק מחזיר לבין סכום האירועים הספציפיים, כדי שקמפיין מעורב (Lead Form + Messaging) לא יספר פעמיים.
+### התיקון
+
+#### `supabase/functions/public-table/index.ts`
+שינוי ממוקד בשורה 120:
+
+```ts
+// לפני
+const targetClientId = settings.clientId || table.client_id;
+
+// אחרי — מעדיפים את ה-client_id האמיתי של הטבלה
+const targetClientId = table.client_id || settings.clientId;
+```
+
+זה ייישר את לוגיקת המסלול הציבורי עם המסלול הפנימי שכבר מתוקן, ויחזיר את הדוח של דורון לוין (וכל לקוח דומה שהיה לו פעם `clientId` ישן בתוך ה-settings).
 
 ### מה לא משתנה
-- טבלת `facebook_ecommerce` ומסלול ה-E-commerce
-- חישוב spend, impressions, clicks, CTR, CPC
-- קמפיינים מסוג Lead Form רגילים
-- UI של הטבלה (`SharedTable` / הדשבורד) — האגרגציה ב-frontend כבר יודעת לסכם `leads`
+- שאר הלוגיקה (GA, GSC, פילטר תאריכים, paginated records) — ללא שינוי
+- טבלאות אחרות שאין להן `client_id` ישיר ימשיכו להישען על `settings.clientId` כ-fallback
 
-### בדיקות
-- קמפיין WhatsApp של "א.י זוהר עץ" → לידים > 0, CPL מחושב
-- קמפיין Lead Form רגיל → ממשיך לעבוד כרגיל
-- קמפיין E-commerce → ללא שינוי
-- קמפיין מעורב → ללא ספירה כפולה
-
-### הערה
-לאחר הפריסה יש להריץ **סנכרון ידני של Facebook** כדי למשוך מחדש נתונים היסטוריים עם ה-attribution windows החדשים.
+### בדיקה
+לאחר הפריסה, פתיחת `https://after-lead.com/shared/table/dvrvn-7r67` תציג את הדוח המלא (Ahrefs + GSC + Analytics אם מקושרים), בדומה לתצוגה הפנימית.
 
 ### קובץ לעדכון
-- `supabase/functions/sync-facebook-insights/index.ts`
+- `supabase/functions/public-table/index.ts` (שורה 120)
