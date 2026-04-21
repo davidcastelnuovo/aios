@@ -1,14 +1,16 @@
-import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useMemo, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Megaphone, Phone, Mail, Briefcase, Search, Users, ListChecks, Calendar as CalendarIcon, Building2 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Megaphone, Phone, Mail, Briefcase, Search, Users, ListChecks, Calendar as CalendarIcon, Building2, Pencil, Check, X } from "lucide-react";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
@@ -16,6 +18,7 @@ import { EditCampaignerDialog } from "@/components/forms/EditCampaignerDialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CampaignerTasksTab } from "./CampaignerTasksTab";
 import { CampaignerMeetingTab } from "./CampaignerMeetingTab";
+import { toast } from "sonner";
 
 type ActiveFilter = "active" | "inactive" | "all";
 
