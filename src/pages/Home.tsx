@@ -52,6 +52,7 @@ const CATEGORIES: Category[] = [
       { key: "clients", label: "לקוחות", description: "ניהול לקוחות ופרטי קשר", route: "/clients", icon: Users, permission: "clients", color: "bg-teal-500/10 text-teal-600" },
       { key: "client-onboarding", label: "לקוחות בקליטה", description: "תהליך קליטת לקוחות חדשים", route: "/client-onboarding", icon: UserPlus, permission: "client_onboarding", color: "bg-teal-500/10 text-teal-600" },
       { key: "tasks", label: "משימות", description: "ניהול משימות ומעקב התקדמות", route: "/tasks", icon: CheckSquare, permission: "tasks", color: "bg-teal-500/10 text-teal-600" },
+      { key: "time-tracking", label: "מעקב זמן", description: "מעקב שעות עבודה", route: "/time-tracking", icon: Clock, permission: "time_tracking", color: "bg-teal-500/10 text-teal-600" },
     ],
   },
   {
