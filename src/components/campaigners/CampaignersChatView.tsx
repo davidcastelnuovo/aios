@@ -172,9 +172,9 @@ export function CampaignersChatView() {
     (c?.client_team || []).reduce((t: number, a: any) => t + (a.campaigner_payment || 0), 0);
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] gap-4 min-w-0" dir="rtl">
+    <div className="flex h-[calc(100vh-8rem)] gap-4" dir="rtl">
       {/* Right column - list */}
-      <aside className="w-[320px] shrink-0 border rounded-lg bg-card flex flex-col overflow-hidden min-w-0">
+      <aside className="w-80 shrink-0 border rounded-lg bg-card flex flex-col overflow-hidden">
         <div className="p-3 border-b space-y-2">
           <div className="relative">
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
