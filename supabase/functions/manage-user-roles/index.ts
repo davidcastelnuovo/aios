@@ -139,7 +139,7 @@ serve(async (req: Request) => {
             if (profile.email) {
               const { data: existingSalesPerson } = await supabaseAdmin
                 .from("sales_people")
-                .select("id")
+                .select("id, email, full_name")
                 .eq("tenant_id", tenantId)
                 .eq("email", profile.email)
                 .eq("active", true)
@@ -148,6 +148,21 @@ serve(async (req: Request) => {
               if (existingSalesPerson) {
                 salesPersonId = existingSalesPerson.id;
                 reusedExisting = true;
+
+                // ודא שלאיש המכירות הקיים יש email/full_name (סנכרון מהפרופיל אם חסר)
+                const spPatch: Record<string, any> = {};
+                if (!existingSalesPerson.email && profile.email) spPatch.email = profile.email;
+                if (
+                  (!existingSalesPerson.full_name ||
+                    existingSalesPerson.full_name === "" ||
+                    existingSalesPerson.full_name === "איש מכירות") &&
+                  profile.full_name
+                ) {
+                  spPatch.full_name = profile.full_name;
+                }
+                if (Object.keys(spPatch).length > 0) {
+                  await supabaseAdmin.from("sales_people").update(spPatch).eq("id", salesPersonId);
+                }
               }
             }
 
@@ -233,7 +248,7 @@ serve(async (req: Request) => {
             if (profile.email) {
               const { data: existingCampaigner } = await supabaseAdmin
                 .from("campaigners")
-                .select("id")
+                .select("id, email, full_name")
                 .eq("tenant_id", tenantId)
                 .eq("email", profile.email)
                 .eq("active", true)
@@ -242,6 +257,21 @@ serve(async (req: Request) => {
               if (existingCampaigner) {
                 campaignerId = existingCampaigner.id;
                 reusedExisting = true;
+
+                // ודא שלקמפיינר הקיים יש email/full_name (סנכרון מהפרופיל אם חסר)
+                const cPatch: Record<string, any> = {};
+                if (!existingCampaigner.email && profile.email) cPatch.email = profile.email;
+                if (
+                  (!existingCampaigner.full_name ||
+                    existingCampaigner.full_name === "" ||
+                    existingCampaigner.full_name === "קמפיינר") &&
+                  profile.full_name
+                ) {
+                  cPatch.full_name = profile.full_name;
+                }
+                if (Object.keys(cPatch).length > 0) {
+                  await supabaseAdmin.from("campaigners").update(cPatch).eq("id", campaignerId);
+                }
               }
             }
 

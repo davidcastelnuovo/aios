@@ -37,6 +37,7 @@ import { EditUserNameDialog } from "@/components/forms/EditUserNameDialog";
 import EditSalesPersonAgenciesDialog from "@/components/forms/EditSalesPersonAgenciesDialog";
 import EditManagedAgenciesDialog from "@/components/forms/EditManagedAgenciesDialog";
 import { ResetPasswordDialog } from "@/components/forms/ResetPasswordDialog";
+import { syncProfileToTeamMember } from "@/hooks/useSyncProfileTeamMember";
 import { getAllModules } from "@/lib/modules";
 import {
   Dialog,
@@ -448,6 +449,10 @@ export default function Users() {
         .eq("id", userId);
       
       if (error) throw error;
+
+      if (campaignerId) {
+        await syncProfileToTeamMember(userId);
+      }
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
@@ -473,6 +478,10 @@ export default function Users() {
         .eq("id", userId);
       
       if (error) throw error;
+
+      if (salesPersonId) {
+        await syncProfileToTeamMember(userId);
+      }
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
