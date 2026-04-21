@@ -382,6 +382,12 @@ export function GscIntegration({
   const updateSiteMutation = useMutation({
     mutationFn: async (siteUrl: string) => {
       if (!gscIntegration?.id) return { siteUrl, dbUpdated: false };
+      // In fallback mode we don't own the integration row — skip the DB write
+      // entirely and let the report-level persistence (onSiteSelected) be the
+      // source of truth. This avoids RLS errors and unnecessary toasts.
+      if (isFallbackIntegration) {
+        return { siteUrl, dbUpdated: false };
+      }
       const updatedClientSites = { ...clientSites, [clientId]: siteUrl };
       // Strip any legacy global site_url/siteUrl to prevent cross-client leakage.
       const { site_url: _legacySnake, siteUrl: _legacyCamel, ...cleanSettings } = settings || {};
@@ -405,11 +411,11 @@ export function GscIntegration({
         return { siteUrl, dbUpdated: false };
       }
     },
-    onSuccess: ({ siteUrl }) => {
+    onSuccess: ({ siteUrl, dbUpdated }) => {
       queryClient.invalidateQueries({ queryKey: ["user-integrations"] });
       queryClient.invalidateQueries({ queryKey: ["gsc-keyword-data"] });
       onSiteSelected?.(siteUrl);
-      toast.success("הנכס עודכן");
+      if (dbUpdated) toast.success("הנכס עודכן");
     },
   });
 
