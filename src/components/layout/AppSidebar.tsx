@@ -158,7 +158,6 @@ const MENU_TABS: MenuTab[] = [
         label: "צוות מכירות",
         items: [
           { key: "sales-people", label: "אנשי מכירות", route: "/sales-people", icon: UserCheck },
-          { key: "campaigners", label: "קמפיינרים", route: "/campaigners", icon: Megaphone },
         ],
       },
       {
