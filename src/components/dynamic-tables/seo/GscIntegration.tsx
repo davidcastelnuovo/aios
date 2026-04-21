@@ -557,12 +557,18 @@ export function GscIntegration({
               size="sm"
               className="h-7 w-7 p-0"
               onClick={() => {
-                refetchSites();
-                refetchData();
+                if (!isFallbackIntegration) refetchSites();
+                // In multi-period mode (central SEO dashboard) refresh the
+                // multi-period query, otherwise refresh the single-period one.
+                if (enableMultiPeriod) {
+                  refetchMulti();
+                } else {
+                  refetchData();
+                }
               }}
-              disabled={isLoadingData || isLoadingSites}
+              disabled={isLoadingData || isLoadingMulti || isLoadingSites}
             >
-              <RefreshCw className={`h-3 w-3 ${(isLoadingData || isLoadingSites) ? "animate-spin" : ""}`} />
+              <RefreshCw className={`h-3 w-3 ${(isLoadingData || isLoadingMulti || isLoadingSites) ? "animate-spin" : ""}`} />
             </Button>
           </div>
         </div>
