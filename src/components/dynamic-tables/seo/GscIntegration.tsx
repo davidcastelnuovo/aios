@@ -364,7 +364,25 @@ export function GscIntegration({
     staleTime: 10 * 60 * 1000,
   });
 
-  const connectMutation = useMutation({
+  // Sync query results back to the parent even when React Query serves them
+  // from cache (in which case `queryFn` does not run and the inline
+  // onDataLoaded/onMultiPeriodLoaded calls inside queryFn are skipped).
+  // Without this, opening the central SEO report after the first fetch shows
+  // only Ahrefs keywords until the user clicks "sync".
+  useEffect(() => {
+    if (gscData && Array.isArray(gscData)) {
+      onDataLoaded?.(gscData);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gscData]);
+
+  useEffect(() => {
+    if (multiPeriodData) {
+      onMultiPeriodLoaded?.(multiPeriodData);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [multiPeriodData]);
+
     mutationFn: async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
