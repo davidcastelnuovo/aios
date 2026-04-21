@@ -117,7 +117,7 @@ Deno.serve(async (req) => {
     // public viewer can render the visual SEO dashboard instead of a raw table.
     if (table.integration_type === "ahrefs") {
       const settings = (table.integration_settings as any) || {};
-      const targetClientId = settings.clientId || table.client_id;
+      const targetClientId = table.client_id || settings.clientId;
       const targetDomain = settings.targetDomain || null;
 
       let reportsQuery = supabase
