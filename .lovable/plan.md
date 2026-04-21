@@ -1,64 +1,55 @@
 
-
-## תיקון: ביטויי Search Console נטענים אוטומטית בדוח SEO המרכזי
+## תיקון: GSC ייטען אוטומטית גם בדוח ה-SEO המרכזי
 
 ### הבעיה
-בקישור הציבורי GSC נטען אוטומטית כי `public-table` רץ עם service-role ובוחר אינטגרציית GSC כלשהי בטננט שמותאמת לאתר. בדוח הפנימי (`SeoDashboardView` → `GscIntegration`) משתמשים ב-`useUserIntegrations` שמחזיר **רק** אינטגרציות בבעלות המשתמש המחובר או ששותפו אליו במפורש דרך `integration_user_permissions`.
+בדוח המרכזי של SEO, ביטויי Google Search Console נכנסים לטבלת המילים רק אחרי פעולה ידנית, למרות שבכרטיס Search Console ובקישור השיתוף הנתונים קיימים.
 
-מצב נוכחי לדורון לוין:
-- בטננט `MarketingCaptain` יש אינטגרציית GSC של **David** עם מיפוי תקין `cb3d38ec... → https://www.dl-cpa.co.il/`
-- ויש גם אינטגרציה של **אנה** ללא מיפוי
-- כל משתמש אחר → `gscIntegrations = []` → אין `gscIntegration` → אין fetch → אין ביטויים בטבלה המרכזית עד שמסנכרנים ידנית.
+שורש הבעיה בקוד הנוכחי:
+1. `useResolvedGscIntegration` מפעיל fallback ארגוני רק כשאין למשתמש שום אינטגרציית GSC אישית/משותפת.
+2. אם למשתמש יש אינטגרציה אישית אבל היא לא ממופה ללקוח הזה, או שאין לה `siteUrl` usable, ה-fallback לא נכנס לפעולה.
+3. ב-`GscIntegration` במצב `hideTable` הדוח המרכזי נשען על מסלול multi-period, אבל כפתור הרענון וה-state הגלוי עדיין מחוברים למסלול single-period, מה שיוצר התנהגות לא עקבית.
 
-### הפתרון
-הוספת מנגנון fallback פנימי שכאשר אין למשתמש אינטגרציה משלו/משותפת, המערכת תזהה אוטומטית אינטגרציית GSC פעילה בטננט שיש לה את ה-`siteUrl` המתאים ללקוח — ותשתמש בה לקריאות `fetch-gsc-data` (שכבר רצה עם service-role ולא דורשת בעלות).
+התוצאה: אצל דורון לוין ה-SEO המרכזי נשאר “Ahrefs בלבד” בטעינה הראשונה, ורק אחרי פעולה ידנית מופיעים ביטויי GSC לצד Ahrefs.
 
-#### 1. Edge Function חדשה: `resolve-seo-gsc-integration`
-קלט: `{ clientId, tenantIds: string[], expectedSiteUrl?: string }`
-לוגיקה (service-role):
-1. שולפת את כל אינטגרציות `google_search_console` הפעילות בכל ה-tenants הנגישים.
-2. סדר עדיפות:
-   - אינטגרציה שבה `settings.client_sites[clientId]` מוגדר ושווה ל-`expectedSiteUrl` (אם נמסר) או לפחות לא ריק.
-   - אינטגרציה שב-`settings.available_sites` יש את ה-`expectedSiteUrl` עם `permissionLevel != 'siteUnverifiedUser'`.
-   - אינטגרציה ראשונה שיש לה כל מיפוי תקין כלשהו ל-`clientId`.
-   - אינטגרציה פעילה כלשהי (fallback אחרון).
-3. מחזירה `{ integrationId, siteUrl, ownerEmail }` — לא חושפת tokens.
+### מה אבנה
+#### 1. שדרוג resolver של GSC כך שיבדוק “אינטגרציה usable”, לא רק “אינטגרציה קיימת”
+אעדכן את `useResolvedGscIntegration` כך שה-fallback הארגוני יופעל גם במצב שבו:
+- יש למשתמש אינטגרציה אישית/משותפת,
+- אבל אין בה מיפוי תקין ל-`clientId`,
+- או שאין התאמה ל-`linkedGscSiteUrl` / דומיין הדוח,
+- או שהמיפוי מוביל לנכס לא usable.
 
-#### 2. Hook חדש: `useResolvedGscIntegration`
-```ts
-useResolvedGscIntegration({ clientId, tenantIds, savedSiteUrl })
-→ { integrationId, siteUrl, isFallback, isLoading }
-```
-- מנסה קודם `useUserIntegrations` (אינטגרציה אישית/משותפת).
-- אם אין → קורא ל-`resolve-seo-gsc-integration` ומחזיר את ה-fallback.
+כלומר, סדר העדיפויות יהיה:
+1. אינטגרציה אישית/משותפת שיש לה מיפוי usable ללקוח/אתר.
+2. fallback ארגוני שמוחזר מהפונקציה `resolve-seo-gsc-integration`.
 
-#### 3. עדכון `GscIntegration.tsx`
-- מקבל prop אופציונלי: `resolvedFallback?: { integrationId, siteUrl }`.
-- אם `useUserIntegrations` ריק והגיע fallback — משתמש ב-`resolvedFallback.integrationId` ב-queries של `fetch-gsc-data` ובמסלול של `gsc-multi-period`.
-- מציג Badge קטן: "GSC משותף בארגון" (ללא חסימה, ללא כפתור "חבר GSC" כשיש fallback).
-- ה-`updateSiteMutation` (כתיבה ל-`tenant_integrations`) **לא** ירוץ במצב fallback (כדי לא להיכשל ב-RLS) — ה-site URL נשמר ברמת ה-table דרך `onSiteSelected` שכבר עובד.
+#### 2. התאמת `SeoDashboardView` כדי לפתור לפי דומיין הדוח עצמו
+אעדכן את `SeoDashboardView` כך שה-resolver יקבל גם את דומיין הדוח/האתר השמור (`linkedGscSiteUrl` אם קיים, אחרת דומיין הדוח), כדי שההכרעה תהיה מדויקת כבר בטעינה הראשונה ולא רק אחרי refetch.
 
-#### 4. עדכון `SeoDashboardView.tsx`
-- קורא ל-`useResolvedGscIntegration` ומעביר את ה-`resolvedFallback` ל-`GscIntegration`.
-- מעביר את `initialGscSiteUrl` כ-`expectedSiteUrl` ל-resolver.
+#### 3. עדכון `GscIntegration` כך שישתמש ב-fallback גם כשיש אינטגרציה אישית לא מתאימה
+אעדכן את בחירת ה-`gscIntegration` בתוך `GscIntegration`:
+- אם יש אינטגרציה אישית usable — נמשיך להשתמש בה.
+- אם אין אינטגרציה usable ללקוח הזה — נשתמש ב-`resolvedFallback` גם אם קיימת אינטגרציה אישית אחרת.
 
-### מה לא משתנה
-- `useUserIntegrations` ללא שינוי — עדיפות לאינטגרציה אישית של המשתמש.
-- אין שינויי RLS, אין מיגרציות.
-- `public-table` (קישור שיתוף) — לא נוגעים, ממשיך לעבוד כמו עכשיו.
-- שאר הלקוחות (Berliner, Woodhill וכו') — הלוגיקה הקיימת ממשיכה לעבוד; ה-fallback מופעל רק כש-`useUserIntegrations` ריק.
-- מסלולים אחרים (Ahrefs, GA, פילטר תאריכים, comparison cache, language filter) — ללא נגיעה.
-- כל משתמש שיחבר GSC משלו ימשיך לראות את האינטגרציה האישית (עדיפות גבוהה יותר).
+כך הנתונים של GSC ייטענו אוטומטית לטבלת המילים המרכזית לצד Ahrefs.
 
-### בדיקות
-1. דורון לוין → `/t/marketingcaptain/table/seo-report-...` → ביטויי GSC מופיעים אוטומטית בטבלת הביטויים המרכזית, ליד ביטויי Ahrefs, ללא לחיצה על "סנכרון".
-2. דוחות SEO אחרים שכבר עובדים → ללא רגרסיה.
-3. משתמש שחיבר GSC משלו → רואה את האינטגרציה האישית (לא fallback), Badge "GSC משותף" לא מופיע.
-4. קישור השיתוף הציבורי `dvrvn-7r67` → ממשיך לעבוד ללא שינוי.
+#### 4. תיקון מסלול הרענון במצב `hideTable`
+אעדכן את כפתור הרענון וה-state של `GscIntegration` כך שבמצב הדוח המרכזי (`hideTable`) הם ירעננו את ה-query של multi-period ולא את ה-single-period המנוטרל. זה ישמור על התנהגות עקבית גם אחרי הטעינה האוטומטית.
 
-### קבצים
-- `supabase/functions/resolve-seo-gsc-integration/index.ts` (חדש)
-- `src/hooks/useResolvedGscIntegration.ts` (חדש)
-- `src/components/dynamic-tables/seo/GscIntegration.tsx` (תוספת prop ולוגיקת fallback)
-- `src/components/dynamic-tables/SeoDashboardView.tsx` (העברת ה-fallback)
+### מה לא ישתנה
+- אין שינוי ב-DB, RLS או טבלאות.
+- אין שינוי בקישור השיתוף הציבורי.
+- אינטגרציה אישית של המשתמש עדיין תקבל עדיפות כשהיא באמת מתאימה ללקוח.
+- דוחות אחרים שכבר עובדים לא ייפגעו, כי ה-fallback יורחב רק למקרים שבהם החיבור האישי אינו usable עבור אותו לקוח.
 
+### בדיקות שאבצע אחרי המימוש
+1. דורון לוין — פתיחת הדוח המרכזי תציג מיד גם ביטויי GSC לצד Ahrefs, בלי ללחוץ על סנכרון.
+2. משתמש עם GSC אישי תקין — ימשיך לראות את החיבור האישי ולא fallback.
+3. משתמש עם GSC אישי לא ממופה — יקבל auto-fallback ארגוני אוטומטי.
+4. דוחות SEO אחרים עובדים — לא תהיה רגרסיה.
+5. לשונית Search Console וקישור השיתוף — ימשיכו לעבוד כרגיל.
+
+### קבצים לעדכון
+- `src/hooks/useResolvedGscIntegration.ts`
+- `src/components/dynamic-tables/SeoDashboardView.tsx`
+- `src/components/dynamic-tables/seo/GscIntegration.tsx`
