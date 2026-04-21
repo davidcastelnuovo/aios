@@ -505,13 +505,8 @@ function EditableRow({
 
   if (editing) {
     return (
-      <div className="flex items-center justify-end gap-2">
-        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={commit}>
-          <Check className="h-3 w-3 text-primary" />
-        </Button>
-        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={cancel}>
-          <X className="h-3 w-3 text-muted-foreground" />
-        </Button>
+      <div className="flex items-center justify-start gap-2">
+        {label && <span className="text-muted-foreground text-sm shrink-0">{label}</span>}
         {type === "textarea" ? (
           <Textarea
             value={draft}
@@ -533,17 +528,22 @@ function EditableRow({
             autoFocus
           />
         )}
-        {label && <span className="text-muted-foreground text-sm shrink-0">{label}</span>}
+        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={cancel}>
+          <X className="h-3 w-3 text-muted-foreground" />
+        </Button>
+        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={commit}>
+          <Check className="h-3 w-3 text-primary" />
+        </Button>
       </div>
     );
   }
 
   return (
     <div
-      className="flex items-center justify-end gap-2 group cursor-pointer"
+      className="flex items-center justify-start gap-2 group cursor-pointer"
       onClick={() => setEditing(true)}
     >
-      <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+      {label && <span className="text-muted-foreground text-sm shrink-0">{label}</span>}
       {isLink && value ? (
         <a
           href={`${linkPrefix || ""}${value}`}
@@ -559,7 +559,7 @@ function EditableRow({
           {value || <span className="text-muted-foreground font-normal">—</span>}
         </span>
       )}
-      {label && <span className="text-muted-foreground text-sm shrink-0">{label}</span>}
+      <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
     </div>
   );
 }
@@ -602,12 +602,12 @@ function AgenciesRow({
       }}
     >
       <PopoverTrigger asChild>
-        <div className="flex items-center justify-end gap-2 group cursor-pointer">
-          <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+        <div className="flex items-center justify-start gap-2 group cursor-pointer">
+          <span className="text-muted-foreground text-sm shrink-0">:סוכנויות</span>
           <span className="font-medium truncate">
             {currentLabels || <span className="text-muted-foreground font-normal">—</span>}
           </span>
-          <span className="text-muted-foreground text-sm shrink-0">:סוכנויות</span>
+          <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
         </div>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-64 p-2 max-h-72 overflow-y-auto" dir="rtl">
