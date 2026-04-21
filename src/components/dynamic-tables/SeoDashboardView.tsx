@@ -15,6 +15,7 @@ import { SeoTrafficChart } from "./seo/SeoTrafficChart";
 import { SeoKeywordsTable } from "./seo/SeoKeywordsTable";
 import { GscIntegration, type GscKeywordData, type GscMultiPeriodData } from "./seo/GscIntegration";
 import { useAhrefsEnrichment, type AhrefsKeyword } from "@/hooks/useAhrefsEnrichment";
+import { useResolvedGscIntegration } from "@/hooks/useResolvedGscIntegration";
 import { AhrefsProjectPicker } from "./AhrefsProjectPicker";
 import { ListChecks } from "lucide-react";
 import { filterValidSeoReports } from "./seo/reportValidity";
@@ -103,6 +104,15 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
       : tenantId
         ? [tenantId]
         : [];
+
+  // Resolve a tenant-wide GSC integration as a fallback when the current
+  // user has no personal/shared one — so internal viewers see Search Console
+  // keywords automatically (parity with the public shared link).
+  const resolvedGsc = useResolvedGscIntegration({
+    clientId,
+    tenantIds: reportTenants,
+    savedSiteUrl: initialGscSiteUrl,
+  });
 
   const { data: reports = [], isLoading } = useQuery({
     queryKey: ['seo-dashboard-reports', reportTenants.slice().sort().join(','), clientId],
@@ -654,6 +664,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
         onMultiPeriodLoaded={handleGscMultiPeriodLoaded}
         initialSiteUrl={initialGscSiteUrl}
         onSiteSelected={onGscSiteSelected}
+        resolvedFallback={resolvedGsc}
         hideTable
       />
 

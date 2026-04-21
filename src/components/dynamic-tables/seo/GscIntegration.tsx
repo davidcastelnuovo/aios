@@ -52,6 +52,17 @@ interface GscIntegrationProps {
   initialLangFilter?: "all" | "he" | "en";
   /** Called whenever the language filter changes — parent persists to DB. */
   onLangFilterChange?: (lang: "all" | "he" | "en") => void;
+  /**
+   * Tenant-wide fallback when the current user has no personal/shared GSC
+   * integration. Resolved server-side by `resolve-seo-gsc-integration` and
+   * used only when `useUserIntegrations` returns nothing. fetch-gsc-data runs
+   * with service-role so this works without exposing tokens.
+   */
+  resolvedFallback?: {
+    integrationId: string | null;
+    siteUrl: string | null;
+    ownerEmail?: string | null;
+  } | null;
 }
 
 const DATE_RANGE_DAYS: Record<GscDateRange, number> = {
@@ -114,6 +125,7 @@ export function GscIntegration({
   initialSiteUrl,
   initialLangFilter,
   onLangFilterChange,
+  resolvedFallback,
 }: GscIntegrationProps) {
   const queryClient = useQueryClient();
   const [selectedSite, setSelectedSite] = useState<string>("");
@@ -135,7 +147,25 @@ export function GscIntegration({
   // an integration whose stored mapping points at a property the user
   // doesn't have API access to.
   const gscIntegration = useMemo(() => {
-    if (!gscIntegrations.length) return null;
+    if (!gscIntegrations.length) {
+      // No personal/shared integration → use the org-wide fallback (if any).
+      if (resolvedFallback?.integrationId) {
+        return {
+          id: resolvedFallback.integrationId,
+          settings: {
+            google_email: resolvedFallback.ownerEmail || null,
+            // Surface the resolver's chosen siteUrl as a per-client mapping so
+            // the existing site-resolution code paths "just work".
+            client_sites: resolvedFallback.siteUrl
+              ? { [clientId]: resolvedFallback.siteUrl }
+              : {},
+            available_sites: [],
+          },
+          _isFallback: true,
+        } as any;
+      }
+      return null;
+    }
     const withGoodMapping = gscIntegrations.find((i: any) => {
       const mapped = (i.settings as any)?.client_sites?.[clientId];
       if (!mapped) return false;
@@ -145,7 +175,9 @@ export function GscIntegration({
       return !site || site.permissionLevel !== 'siteUnverifiedUser';
     });
     return withGoodMapping || gscIntegrations[0];
-  }, [gscIntegrations, clientId]);
+  }, [gscIntegrations, clientId, resolvedFallback]);
+
+  const isFallbackIntegration = !!(gscIntegration as any)?._isFallback;
 
   const settings = (gscIntegration?.settings as any) || {};
 
@@ -169,7 +201,7 @@ export function GscIntegration({
       if (response.error) throw response.error;
       return Array.isArray(response.data?.sites) ? (response.data.sites as GscSite[]) : [];
     },
-    enabled: !!gscIntegration?.id,
+    enabled: !!gscIntegration?.id && !isFallbackIntegration,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -350,6 +382,12 @@ export function GscIntegration({
   const updateSiteMutation = useMutation({
     mutationFn: async (siteUrl: string) => {
       if (!gscIntegration?.id) return { siteUrl, dbUpdated: false };
+      // In fallback mode we don't own the integration row — skip the DB write
+      // entirely and let the report-level persistence (onSiteSelected) be the
+      // source of truth. This avoids RLS errors and unnecessary toasts.
+      if (isFallbackIntegration) {
+        return { siteUrl, dbUpdated: false };
+      }
       const updatedClientSites = { ...clientSites, [clientId]: siteUrl };
       // Strip any legacy global site_url/siteUrl to prevent cross-client leakage.
       const { site_url: _legacySnake, siteUrl: _legacyCamel, ...cleanSettings } = settings || {};
@@ -373,11 +411,11 @@ export function GscIntegration({
         return { siteUrl, dbUpdated: false };
       }
     },
-    onSuccess: ({ siteUrl }) => {
+    onSuccess: ({ siteUrl, dbUpdated }) => {
       queryClient.invalidateQueries({ queryKey: ["user-integrations"] });
       queryClient.invalidateQueries({ queryKey: ["gsc-keyword-data"] });
       onSiteSelected?.(siteUrl);
-      toast.success("הנכס עודכן");
+      if (dbUpdated) toast.success("הנכס עודכן");
     },
   });
 
@@ -434,6 +472,11 @@ export function GscIntegration({
             <Badge variant="secondary" className="text-xs">
               {settings?.google_email || "מחובר"}
             </Badge>
+            {isFallbackIntegration && (
+              <Badge variant="outline" className="text-xs">
+                GSC משותף בארגון
+              </Badge>
+            )}
             {hideTable && gscData && gscData.length > 0 && (
               <Badge variant="outline" className="text-xs text-green-700 border-green-300 bg-green-50">
                 {gscData.length} ביטויים נטענו
