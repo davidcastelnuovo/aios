@@ -61,9 +61,7 @@ export function CampaignersChatView() {
 
       return (data || []).map((c: any) => ({
         ...c,
-        client_team: (c.client_team || []).filter(
-          (ct: any) => ct.clients?.status === "active" || ct.clients?.status === "onboarding"
-        ),
+        client_team: (c.client_team || []).filter((ct: any) => ct.clients),
       }));
     },
     enabled: !!tenantId,
