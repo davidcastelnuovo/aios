@@ -61,9 +61,7 @@ export function CampaignersChatView() {
 
       return (data || []).map((c: any) => ({
         ...c,
-        client_team: (c.client_team || []).filter(
-          (ct: any) => ct.clients?.status === "active" || ct.clients?.status === "onboarding"
-        ),
+        client_team: (c.client_team || []).filter((ct: any) => ct.clients),
       }));
     },
     enabled: !!tenantId,
@@ -154,14 +152,6 @@ export function CampaignersChatView() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-medium truncate">{c.full_name}</span>
-                          <Badge
-                            variant="outline"
-                            className={`shrink-0 text-xs ${
-                              c.active ? "bg-success/10 text-success border-success/20" : "bg-muted"
-                            }`}
-                          >
-                            {c.active ? "פעיל" : "לא פעיל"}
-                          </Badge>
                         </div>
                         {c.role && c.role.length > 0 && (
                           <div className="text-xs text-muted-foreground truncate">{c.role.join(", ")}</div>
@@ -170,7 +160,7 @@ export function CampaignersChatView() {
                           <div className="text-xs text-muted-foreground truncate">{agencyNames}</div>
                         )}
                         <div className="text-xs text-muted-foreground mt-0.5">
-                          לקוחות פעילים: {c.client_team?.length || 0}
+                          לקוחות משויכים: {c.client_team?.length || 0}
                         </div>
                       </div>
                     </button>
@@ -223,12 +213,6 @@ export function CampaignersChatView() {
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <Badge
-                  variant="outline"
-                  className={selected.active ? "bg-success/10 text-success border-success/20" : "bg-muted"}
-                >
-                  {selected.active ? "פעיל" : "לא פעיל"}
-                </Badge>
                 <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
                   ערוך פרטים
                 </Button>
