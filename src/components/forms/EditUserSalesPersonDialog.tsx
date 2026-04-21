@@ -22,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { useAutoCreateTeamMember } from "@/hooks/useAutoCreateTeamMember";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { syncProfileToTeamMember } from "@/hooks/useSyncProfileTeamMember";
 
 interface EditUserSalesPersonDialogProps {
   userId: string | null;
@@ -114,10 +115,16 @@ export function EditUserSalesPersonDialog({
         .eq("id", userId);
 
       if (error) throw error;
+
+      // סנכרון אימייל/שם לאיש המכירות אם חסר
+      if (salesPersonId) {
+        await syncProfileToTeamMember(userId);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
       queryClient.invalidateQueries({ queryKey: ["user-sales-person", userId] });
+      queryClient.invalidateQueries({ queryKey: ["sales-people-all"] });
       toast.success("איש מכירות עודכן בהצלחה");
       onClose();
     },

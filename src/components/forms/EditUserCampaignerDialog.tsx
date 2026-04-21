@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { useAutoCreateTeamMember } from "@/hooks/useAutoCreateTeamMember";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useTeamRoles } from "@/hooks/useTeamRoles";
+import { syncProfileToTeamMember } from "@/hooks/useSyncProfileTeamMember";
 import { Checkbox } from "@/components/ui/checkbox";
 
 interface EditUserCampaignerDialogProps {
@@ -123,10 +124,16 @@ export function EditUserCampaignerDialog({
         .eq("id", userId);
 
       if (error) throw error;
+
+      // סנכרון אימייל/שם לקמפיינר אם חסר
+      if (actualCampaignerId) {
+        await syncProfileToTeamMember(userId);
+      }
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
       await queryClient.invalidateQueries({ queryKey: ["user-campaigner"] });
+      await queryClient.invalidateQueries({ queryKey: ["campaigners"] });
       await queryClient.refetchQueries({ queryKey: ["users-with-roles"] });
       toast.success("איש הצוות המשויך עודכן בהצלחה");
       onOpenChange(false);

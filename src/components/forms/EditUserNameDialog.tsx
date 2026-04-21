@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { syncProfileToTeamMember } from "@/hooks/useSyncProfileTeamMember";
 
 interface EditUserNameDialogProps {
   userId: string | null;
@@ -42,9 +43,14 @@ export function EditUserNameDialog({
         .eq("id", userId);
 
       if (error) throw error;
+
+      // סנכרון השם לקמפיינר/איש מכירות (רק אם ריק/דיפולטי)
+      await syncProfileToTeamMember(userId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
+      queryClient.invalidateQueries({ queryKey: ["campaigners"] });
+      queryClient.invalidateQueries({ queryKey: ["sales-people-all"] });
       toast.success("השם עודכן בהצלחה");
       onClose();
     },
