@@ -147,7 +147,25 @@ export function GscIntegration({
   // an integration whose stored mapping points at a property the user
   // doesn't have API access to.
   const gscIntegration = useMemo(() => {
-    if (!gscIntegrations.length) return null;
+    if (!gscIntegrations.length) {
+      // No personal/shared integration → use the org-wide fallback (if any).
+      if (resolvedFallback?.integrationId) {
+        return {
+          id: resolvedFallback.integrationId,
+          settings: {
+            google_email: resolvedFallback.ownerEmail || null,
+            // Surface the resolver's chosen siteUrl as a per-client mapping so
+            // the existing site-resolution code paths "just work".
+            client_sites: resolvedFallback.siteUrl
+              ? { [clientId]: resolvedFallback.siteUrl }
+              : {},
+            available_sites: [],
+          },
+          _isFallback: true,
+        } as any;
+      }
+      return null;
+    }
     const withGoodMapping = gscIntegrations.find((i: any) => {
       const mapped = (i.settings as any)?.client_sites?.[clientId];
       if (!mapped) return false;
@@ -157,7 +175,9 @@ export function GscIntegration({
       return !site || site.permissionLevel !== 'siteUnverifiedUser';
     });
     return withGoodMapping || gscIntegrations[0];
-  }, [gscIntegrations, clientId]);
+  }, [gscIntegrations, clientId, resolvedFallback]);
+
+  const isFallbackIntegration = !!(gscIntegration as any)?._isFallback;
 
   const settings = (gscIntegration?.settings as any) || {};
 
