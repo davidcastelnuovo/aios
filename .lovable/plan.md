@@ -1,59 +1,58 @@
 
-מובן. בדקתי את הזרימה בפועל, והבעיה עכשיו נראית יותר נקודתית וברורה:
 
-### הבעיה המדויקת
-בדוח ה-SEO המרכזי, רכיב `GscIntegration` כן יודע למשוך נתוני GSC במצב `hideTable`, אבל הוא מעביר אותם ל-`SeoDashboardView` רק מתוך `queryFn` של React Query (`onMultiPeriodLoaded` / `onDataLoaded`).
+## תצוגת צ'אט/פרטים לצוות (קמפיינרים) — כמו לקוחות ולידים
 
-זה יוצר באג חשוב:
-- אם ה-query נטען מחדש מהשרת — הנתונים עוברים למעלה, והטבלה מתעדכנת.
-- אבל אם React Query מחזיר תוצאה מקאש בפתיחה הראשונית של הדוח, `queryFn` לא רץ מחדש, ולכן `SeoDashboardView` לא מקבל `gscData`.
-- התוצאה: בטבלת SEO המרכזית רואים רק Ahrefs, ורק אחרי לחיצה על רענון/סנכרון ה-GSC “מופיע”.
+### מה נבנה
+מסך חדש לצוות בסגנון "צ'אט CRM": רשימת אנשי צוות בצד ימין (25%) ופאנל פרטים בצד שמאל (75%) עם לשוניות — בדיוק כמו הלקוחות. כברירת מחדל יוצג תחת `/t/:tenantSlug/campaigners` במקום הגריד הקיים, עם כפתור מעבר לתצוגת גריד הישנה אם רוצים.
 
-כלומר, הבעיה כבר לא רק ברזולוציית האינטגרציה — אלא בזה שה-state של הדוח המרכזי תלוי ב-side effect מתוך query, במקום להסתנכרן גם מה-data עצמו.
+### עמודה ימנית — רשימת צוות
+- שדה חיפוש (שם, טלפון, אימייל).
+- סינון: פעיל / לא פעיל / הכל.
+- כל פריט: שם מלא, תפקיד (מ-`role`), סוכנויות משויכות (מ-`campaigner_agencies`), Badge "פעיל/לא פעיל", מספר לקוחות פעילים (מ-`client_team`).
+- בחירת איש צוות פותחת אותו בפאנל השמאלי.
 
-### מה אתקן
-#### 1. אייצב את הסנכרון בין `GscIntegration` ל-`SeoDashboardView`
-אעדכן את `GscIntegration.tsx` כך שהעברת הנתונים להורה (`onDataLoaded` / `onMultiPeriodLoaded`) תתבצע גם דרך `useEffect` שמאזין לנתוני ה-query עצמם, ולא רק מתוך `queryFn`.
+### עמודה שמאלית — פרטי איש צוות + לשוניות
+חלק עליון (Header):
+- שם איש הצוות (עריכה inline → `campaigners.full_name`).
+- טלפון, אימייל, תפקיד (עריכה inline).
+- סוכנויות משויכות (תצוגה + כפתור עריכה שפותח את `EditCampaignerDialog` הקיים).
+- Toggle "פעיל".
 
-בפועל:
-- כשה-query של `gsc-multi-period` חוזר מקאש או מ-fetch רגיל — `onMultiPeriodLoaded(result)` ירוץ.
-- כשה-query הרגיל של `gsc-keyword-data` חוזר — `onDataLoaded(rows)` ירוץ.
-- כך `SeoDashboardView` תמיד יקבל את הנתונים, גם בטעינה אוטומטית מהקאש.
+לשוניות (`Tabs`):
+1. **פרטים** — שדות עריכה: `phone`, `email`, `role[]`, `notes`, ניהול `campaigner_agencies`. שימוש חוזר בלוגיקה מתוך `EditCampaignerDialog`.
+2. **לקוחות משויכים** — הבלוק הקיים מ-`Campaigners.tsx` (טבלת `client_team` עם שם לקוח + עמודת תשלום ל-canViewFinance + שורת סה"כ).
+3. **משימות** — רכיב חדש `CampaignerTasksTab` בהשראת `ClientTasksTab`:
+   - שאילתה: `tasks.select(...).eq("campaigner_id", campaignerId)` עם פילטר תאריך (שבוע/חודש/הכל).
+   - שתי עמודות: בביצוע / הושלם, שינוי סטטוס, פתיחת `EditTaskDialog`.
+   - כפתור "הוסף משימה" שפותח `AddTaskForm` עם `defaultCampaignerId={campaignerId}` ו-`task_category="quick"` כברירת מחדל (המשתמש יוכל לשייך ללקוח/ליד אם רוצה).
+4. **פגישות** — רכיב חדש `CampaignerMeetingTab` בהשראת `ClientMeetingTab`:
+   - שימוש ב-`useMeetingScheduler(tenantId)` הקיים.
+   - בחירת תאריך + שעת התחלה/סיום + נושא + מיקום + הודעה אישית.
+   - "שלח זימון ל:" — האימייל של איש הצוות עצמו (`campaigner.email`) כברירת מחדל מסומן.
+   - בנוסף checkbox-ים להזמנת חברי צוות נוספים מהארגון (אותה שאילתת `team-members-for-meeting-tab` הקיימת).
+   - הרחבת `useMeetingScheduler.scheduleMeeting` לקבל `contactType: 'lead' | 'client' | 'campaigner'` — במצב `campaigner` לא נעשה `update` בטבלת `leads`/`clients`, רק יצירת אירוע ביומן + טריגר אוטומציה אופציונלי `meeting_created` עם `campaigner_id`.
 
-#### 2. אמנע דריסה/איפוס שגוי של `gscData`
-אבדוק ואתקן את הסדר שבו `GscIntegration` מאפס ל-`[]` כשאין `effectiveSiteUrl`, כדי שלא יהיה מצב של:
-- render ראשון מאפס נתונים,
-- ואז query cached קיים אבל לא דוחף אותם חזרה להורה.
-
-המטרה היא שלא יהיה race condition בין reset מוקדם לבין נתוני multi-period שכבר זמינים.
-
-#### 3. אשאיר את הדוח המרכזי מבוסס על multi-period בלבד
-במצב `hideTable` אמשיך להשתמש ב-`gsc-multi-period` כמקור האמת של הדוח המרכזי, כי זה מה שמעשיר גם את:
-- `gscMap`
-- `gscOnlyKeywords`
-- ההשוואות ל-Prev Month / 3 Months / Yearly
-
-לא אגע בלוגיקה של לשונית Search Console עצמה, כדי לא לשבור את הדוחות האחרים.
-
-#### 4. אשמור על אי-פגיעה בדוחות שכבר עובדים
-לא אשנה:
-- את מבנה טבלת `SeoKeywordsTable`
-- את לוגיקת Ahrefs
-- את ה-public shared SEO report
-- את מנגנון ה-fallback של GSC מעבר לנדרש
-
-השינוי יהיה ממוקד רק בסנכרון state בין `GscIntegration` לבין `SeoDashboardView`.
+### קבצים חדשים
+- `src/components/campaigners/CampaignersChatView.tsx` — הרכיב הראשי (split + רשימה + header + Tabs).
+- `src/components/campaigners/CampaignerTasksTab.tsx` — לשונית משימות.
+- `src/components/campaigners/CampaignerMeetingTab.tsx` — לשונית פגישות.
 
 ### קבצים לעדכון
-- `src/components/dynamic-tables/seo/GscIntegration.tsx`
-- אם יהיה צורך קטן בלבד לסנכרון בטוח יותר: `src/components/dynamic-tables/SeoDashboardView.tsx`
+- `src/pages/Campaigners.tsx` — להחליף את ברירת המחדל לתצוגת `CampaignersChatView`, עם toggle (Grid / Chat View) שמשמר את הגריד הקיים כאופציה.
+- `src/hooks/useMeetingScheduler.ts` — הוספת `'campaigner'` ל-`contactType` ודילוג על עדכון טבלאות לידים/לקוחות במצב הזה.
 
-### בדיקות אחרי המימוש
-1. דורון לוין — פתיחת לשונית `SEO` תציג מיד את ביטויי GSC בתוך הטבלה המרכזית, בלי ללחוץ על סנכרון.
-2. רענון עמוד מלא — הנתונים עדיין יופיעו אוטומטית.
-3. מעבר בין דוחות SEO שונים — לא יישארו נתוני GSC ישנים מדוח קודם.
-4. לשונית `Google Search Console` תמשיך לעבוד כרגיל.
-5. דוחות SEO אחרים שכבר עובדים — ללא רגרסיה.
+### מה לא משתנה
+- אין שינויי DB / RLS / מיגרציות.
+- טבלת `campaigners` ו-`campaigner_agencies` לא משתנות.
+- `AddCampaignerForm`, `EditCampaignerDialog`, `AddTaskForm`, `EditTaskDialog` — ללא שינוי, נשתמש בהם כפי שהם.
+- מודולי לקוחות/לידים — ללא נגיעה.
+- הסיידבר — נשאר כפי שהוא (קמפיינרים תחת "ניהול שוטף").
 
-### מה כנראה יפתור את זה סופית
-הבעיה נראית כרגע כבעיה של hydration/cache synchronization, לא של חוסר נתונים. לכן התיקון הזה הוא הממוקד ביותר כדי ש-GSC יופיע אוטומטית בטבלה עצמה, בדיוק כפי שאתה מבקש.
+### בדיקות
+1. כניסה ל-`/t/marketingcaptain/campaigners` מציגה רשימת צוות מימין ופאנל פרטים משמאל.
+2. בחירת איש צוות מציגה פרטים עדכניים, כולל סוכנויות ולקוחות משויכים.
+3. לשונית "משימות" טוענת רק את משימות אותו איש צוות, ניתן להוסיף משימה חדשה משויכת אליו.
+4. לשונית "פגישות" יוצרת אירוע ביומן עם זימון לאימייל של איש הצוות (אם קיים) + חברי צוות נבחרים, ללא שגיאות.
+5. Toggle Grid/Chat עובד; תצוגת הגריד הישנה ממשיכה לפעול.
+6. אין רגרסיה במסכי לקוחות/לידים/משימות.
+
