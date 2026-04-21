@@ -152,14 +152,6 @@ export function CampaignersChatView() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-medium truncate">{c.full_name}</span>
-                          <Badge
-                            variant="outline"
-                            className={`shrink-0 text-xs ${
-                              c.active ? "bg-success/10 text-success border-success/20" : "bg-muted"
-                            }`}
-                          >
-                            {c.active ? "פעיל" : "לא פעיל"}
-                          </Badge>
                         </div>
                         {c.role && c.role.length > 0 && (
                           <div className="text-xs text-muted-foreground truncate">{c.role.join(", ")}</div>
@@ -168,7 +160,7 @@ export function CampaignersChatView() {
                           <div className="text-xs text-muted-foreground truncate">{agencyNames}</div>
                         )}
                         <div className="text-xs text-muted-foreground mt-0.5">
-                          לקוחות פעילים: {c.client_team?.length || 0}
+                          לקוחות משויכים: {c.client_team?.length || 0}
                         </div>
                       </div>
                     </button>
