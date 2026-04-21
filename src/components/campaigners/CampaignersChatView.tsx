@@ -602,12 +602,12 @@ function AgenciesRow({
       }}
     >
       <PopoverTrigger asChild>
-        <div className="flex items-center justify-end gap-2 group cursor-pointer">
-          <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+        <div className="flex items-center justify-start gap-2 group cursor-pointer">
+          <span className="text-muted-foreground text-sm shrink-0">:סוכנויות</span>
           <span className="font-medium truncate">
             {currentLabels || <span className="text-muted-foreground font-normal">—</span>}
           </span>
-          <span className="text-muted-foreground text-sm shrink-0">:סוכנויות</span>
+          <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
         </div>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-64 p-2 max-h-72 overflow-y-auto" dir="rtl">
