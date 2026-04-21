@@ -472,6 +472,11 @@ export function GscIntegration({
             <Badge variant="secondary" className="text-xs">
               {settings?.google_email || "מחובר"}
             </Badge>
+            {isFallbackIntegration && (
+              <Badge variant="outline" className="text-xs">
+                GSC משותף בארגון
+              </Badge>
+            )}
             {hideTable && gscData && gscData.length > 0 && (
               <Badge variant="outline" className="text-xs text-green-700 border-green-300 bg-green-50">
                 {gscData.length} ביטויים נטענו
