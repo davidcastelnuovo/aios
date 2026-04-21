@@ -172,9 +172,9 @@ export function CampaignersChatView() {
     (c?.client_team || []).reduce((t: number, a: any) => t + (a.campaigner_payment || 0), 0);
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] gap-4 min-w-0" dir="rtl">
+    <div className="flex h-[calc(100vh-8rem)] gap-4" dir="rtl">
       {/* Right column - list */}
-      <aside className="w-[320px] shrink-0 border rounded-lg bg-card flex flex-col overflow-hidden min-w-0">
+      <aside className="w-80 shrink-0 border rounded-lg bg-card flex flex-col overflow-hidden">
         <div className="p-3 border-b space-y-2">
           <div className="relative">
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -211,10 +211,10 @@ export function CampaignersChatView() {
                   .filter(Boolean)
                   .join(", ");
                 return (
-                  <li key={c.id} className="min-w-0">
+                  <li key={c.id}>
                     <button
                       onClick={() => setSelectedId(c.id)}
-                      className={`w-full text-right px-3 py-3 flex items-start gap-3 hover:bg-muted/50 transition-colors min-w-0 ${
+                      className={`w-full text-right px-3 py-3 flex items-start gap-3 hover:bg-muted/50 transition-colors ${
                         isSelected ? "bg-muted" : ""
                       }`}
                     >
@@ -223,7 +223,7 @@ export function CampaignersChatView() {
                           {getInitials(c.full_name)}
                         </AvatarFallback>
                       </Avatar>
-                      <div className="flex-1 min-w-0 overflow-hidden">
+                      <div className="flex-1 min-w-0">
                         <div className="font-medium truncate">{c.full_name}</div>
                         {c.role && c.role.length > 0 && (
                           <div className="text-xs text-muted-foreground truncate">{c.role.join(", ")}</div>
@@ -231,7 +231,7 @@ export function CampaignersChatView() {
                         {agencyNames && (
                           <div className="text-xs text-muted-foreground truncate">{agencyNames}</div>
                         )}
-                        <div className="text-xs text-muted-foreground mt-0.5 truncate">
+                        <div className="text-xs text-muted-foreground mt-0.5">
                           לקוחות משויכים: {c.client_team?.length || 0}
                         </div>
                       </div>
