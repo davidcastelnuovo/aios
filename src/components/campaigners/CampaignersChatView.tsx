@@ -437,7 +437,7 @@ export function CampaignersChatView() {
             />
           </>
         )}
-      </section>
+      </div>
     </div>
   );
 }
