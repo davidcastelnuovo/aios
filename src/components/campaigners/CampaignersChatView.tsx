@@ -67,6 +67,23 @@ export function CampaignersChatView() {
       toast.error("שגיאה בעדכון");
       return false;
     }
+
+    // סנכרון full_name חזרה לפרופיל המקושר רק אם הפרופיל ריק (לא דורסים אימייל)
+    if (patch.full_name) {
+      const { data: linkedProfile } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .eq("campaigner_id", id)
+        .maybeSingle();
+      if (linkedProfile && (!linkedProfile.full_name || linkedProfile.full_name === "")) {
+        await supabase
+          .from("profiles")
+          .update({ full_name: patch.full_name })
+          .eq("id", linkedProfile.id);
+        queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
+      }
+    }
+
     toast.success("עודכן");
     refetchCampaigners();
     return true;
