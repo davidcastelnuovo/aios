@@ -201,7 +201,7 @@ export function GscIntegration({
       if (response.error) throw response.error;
       return Array.isArray(response.data?.sites) ? (response.data.sites as GscSite[]) : [];
     },
-    enabled: !!gscIntegration?.id,
+    enabled: !!gscIntegration?.id && !isFallbackIntegration,
     staleTime: 5 * 60 * 1000,
   });
 
