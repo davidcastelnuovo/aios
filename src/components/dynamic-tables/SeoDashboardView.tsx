@@ -106,12 +106,19 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
         : [];
 
   // Resolve a tenant-wide GSC integration as a fallback when the current
-  // user has no personal/shared one — so internal viewers see Search Console
-  // keywords automatically (parity with the public shared link).
+  // user has no personal/shared one — OR when their personal one isn't
+  // mapped/usable for this client/site. Mirrors public-link parity so internal
+  // viewers see Search Console keywords automatically without a manual sync.
+  const firstReportDomain = useMemo(() => {
+    const r = (Array.isArray(reports) ? reports : []).find((x: any) => x?.domain);
+    return r?.domain as string | undefined;
+  }, [reports]);
+
   const resolvedGsc = useResolvedGscIntegration({
     clientId,
     tenantIds: reportTenants,
     savedSiteUrl: initialGscSiteUrl,
+    expectedDomain: firstReportDomain,
   });
 
   const { data: reports = [], isLoading } = useQuery({

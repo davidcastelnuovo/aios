@@ -141,31 +141,32 @@ export function GscIntegration({
     lookupTenants, 'google_search_console'
   );
 
-  // When multiple GSC integrations exist for this tenant, prefer the one
-  // that already has a verified mapping for this client (i.e. the mapped
-  // siteUrl is NOT 'siteUnverifiedUser'). This avoids 403s from picking
-  // an integration whose stored mapping points at a property the user
-  // doesn't have API access to.
+  // Selection priority for the GSC integration to use:
+  //   1. A personal/shared integration that has a USABLE mapping for THIS client.
+  //   2. The org-wide fallback resolved server-side (if available).
+  //   3. The first personal integration as a last resort (lets the user pick a site manually).
   const gscIntegration = useMemo(() => {
+    const buildFallback = () => {
+      if (!resolvedFallback?.integrationId) return null;
+      return {
+        id: resolvedFallback.integrationId,
+        settings: {
+          google_email: resolvedFallback.ownerEmail || null,
+          // Surface the resolver's chosen siteUrl as a per-client mapping so
+          // the existing site-resolution code paths "just work".
+          client_sites: resolvedFallback.siteUrl
+            ? { [clientId]: resolvedFallback.siteUrl }
+            : {},
+          available_sites: [],
+        },
+        _isFallback: true,
+      } as any;
+    };
+
     if (!gscIntegrations.length) {
-      // No personal/shared integration → use the org-wide fallback (if any).
-      if (resolvedFallback?.integrationId) {
-        return {
-          id: resolvedFallback.integrationId,
-          settings: {
-            google_email: resolvedFallback.ownerEmail || null,
-            // Surface the resolver's chosen siteUrl as a per-client mapping so
-            // the existing site-resolution code paths "just work".
-            client_sites: resolvedFallback.siteUrl
-              ? { [clientId]: resolvedFallback.siteUrl }
-              : {},
-            available_sites: [],
-          },
-          _isFallback: true,
-        } as any;
-      }
-      return null;
+      return buildFallback();
     }
+
     const withGoodMapping = gscIntegrations.find((i: any) => {
       const mapped = (i.settings as any)?.client_sites?.[clientId];
       if (!mapped) return false;
@@ -174,7 +175,13 @@ export function GscIntegration({
       // Accept if we don't have permission metadata, or if it's not 'siteUnverifiedUser'
       return !site || site.permissionLevel !== 'siteUnverifiedUser';
     });
-    return withGoodMapping || gscIntegrations[0];
+    if (withGoodMapping) return withGoodMapping;
+
+    // Personal integration exists but isn't usable for this client → prefer the
+    // org-wide fallback so GSC data still loads automatically (same behavior
+    // as the public shared link). Fall back to the first personal integration
+    // only if no org fallback is available.
+    return buildFallback() || gscIntegrations[0];
   }, [gscIntegrations, clientId, resolvedFallback]);
 
   const isFallbackIntegration = !!(gscIntegration as any)?._isFallback;
