@@ -1,14 +1,17 @@
-import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useMemo, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Megaphone, Phone, Mail, Briefcase, Search, Users, ListChecks, Calendar as CalendarIcon, Building2 } from "lucide-react";
+import { Megaphone, Phone, Mail, Briefcase, Search, Users, ListChecks, Calendar as CalendarIcon, Building2, Pencil, Check, X } from "lucide-react";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
@@ -16,6 +19,7 @@ import { EditCampaignerDialog } from "@/components/forms/EditCampaignerDialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CampaignerTasksTab } from "./CampaignerTasksTab";
 import { CampaignerMeetingTab } from "./CampaignerMeetingTab";
+import { toast } from "sonner";
 
 type ActiveFilter = "active" | "inactive" | "all";
 
@@ -33,10 +37,63 @@ export function CampaignersChatView() {
   const { tenantId } = useCurrentTenant();
   const { selectedAgency } = useAgency();
   const { canViewFinance } = useUserPermissions();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
+
+  const { data: agenciesList } = useQuery({
+    queryKey: ["agencies-for-campaigners", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from("agencies")
+        .select("id, name")
+        .eq("tenant_id", tenantId)
+        .order("name");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenantId,
+  });
+
+  const refetchCampaigners = () =>
+    queryClient.invalidateQueries({ queryKey: ["campaigners", tenantId] });
+
+  const updateCampaignerField = async (id: string, patch: Record<string, any>) => {
+    const { error } = await supabase.from("campaigners").update(patch).eq("id", id);
+    if (error) {
+      toast.error("שגיאה בעדכון");
+      return false;
+    }
+    toast.success("עודכן");
+    refetchCampaigners();
+    return true;
+  };
+
+  const updateCampaignerAgencies = async (campaignerId: string, agencyIds: string[]) => {
+    const { error: delErr } = await supabase
+      .from("campaigner_agencies")
+      .delete()
+      .eq("campaigner_id", campaignerId);
+    if (delErr) {
+      toast.error("שגיאה בעדכון סוכנויות");
+      return;
+    }
+    if (agencyIds.length > 0) {
+      const { error: insErr } = await supabase
+        .from("campaigner_agencies")
+        .insert(agencyIds.map((agency_id) => ({ campaigner_id: campaignerId, agency_id })));
+      if (insErr) {
+        toast.error("שגיאה בשמירת סוכנויות");
+        return;
+      }
+    }
+    toast.success("עודכן");
+    refetchCampaigners();
+  };
+
 
   const { data: campaigners, isLoading } = useQuery({
     queryKey: ["campaigners", tenantId],
@@ -239,34 +296,52 @@ export function CampaignersChatView() {
               <div className="flex-1 overflow-y-auto p-4">
                 <TabsContent value="details" className="mt-0 space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <DetailRow icon={Phone} label="טלפון" value={selected.phone} dir="ltr" />
-                    <DetailRow icon={Mail} label="אימייל" value={selected.email} />
-                    <DetailRow
+                    <EditableField
+                      icon={Phone}
+                      label="טלפון"
+                      value={selected.phone}
+                      dir="ltr"
+                      onSave={(v) => updateCampaignerField(selected.id, { phone: v || null })}
+                    />
+                    <EditableField
+                      icon={Mail}
+                      label="אימייל"
+                      value={selected.email}
+                      type="email"
+                      onSave={(v) => updateCampaignerField(selected.id, { email: v || null })}
+                    />
+                    <EditableField
                       icon={Briefcase}
                       label="תפקיד"
-                      value={selected.role && selected.role.length > 0 ? selected.role.join(", ") : null}
+                      value={selected.role && selected.role.length > 0 ? selected.role.join(", ") : ""}
+                      placeholder="הפרד בפסיקים"
+                      onSave={(v) =>
+                        updateCampaignerField(selected.id, {
+                          role: v ? v.split(",").map((s) => s.trim()).filter(Boolean) : null,
+                        })
+                      }
                     />
-                    <DetailRow
-                      icon={Building2}
-                      label="סוכנויות"
-                      value={
+                    <AgenciesEditableField
+                      currentAgencyIds={(selected.campaigner_agencies || []).map((ca: any) => ca.agency_id)}
+                      currentLabels={
                         (selected.campaigner_agencies || [])
                           .map((ca: any) => ca?.agencies?.name)
                           .filter(Boolean)
-                          .join(", ") || null
+                          .join(", ") || ""
                       }
+                      allAgencies={agenciesList || []}
+                      onSave={(ids) => updateCampaignerAgencies(selected.id, ids)}
                     />
                   </div>
-                  {selected.notes && (
-                    <div className="p-3 rounded-md bg-muted/50 text-sm">
-                      <div className="text-xs font-medium text-muted-foreground mb-1">הערות</div>
-                      {selected.notes}
-                    </div>
-                  )}
+                  <EditableNotes
+                    value={selected.notes || ""}
+                    onSave={(v) => updateCampaignerField(selected.id, { notes: v || null })}
+                  />
                   <Button variant="outline" onClick={() => setEditOpen(true)}>
                     ערוך פרטים מלאים
                   </Button>
                 </TabsContent>
+
 
                 <TabsContent value="clients" className="mt-0">
                   {selected.client_team && selected.client_team.length > 0 ? (
@@ -358,3 +433,220 @@ function DetailRow({
     </div>
   );
 }
+
+function EditableField({
+  icon: Icon,
+  label,
+  value,
+  dir,
+  type = "text",
+  placeholder,
+  onSave,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string | null | undefined;
+  dir?: string;
+  type?: string;
+  placeholder?: string;
+  onSave: (v: string) => void | Promise<any>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value || "");
+
+  useEffect(() => {
+    setDraft(value || "");
+  }, [value, editing]);
+
+  const commit = async () => {
+    if ((draft || "") !== (value || "")) {
+      await onSave(draft);
+    }
+    setEditing(false);
+  };
+
+  return (
+    <div className="p-3 rounded-md bg-muted/30 border group relative">
+      <div className="text-xs text-muted-foreground flex items-center gap-1.5 mb-1">
+        <Icon className="h-3.5 w-3.5" />
+        {label}
+      </div>
+      {editing ? (
+        <div className="flex items-center gap-1">
+          <Input
+            autoFocus
+            type={type}
+            dir={dir}
+            value={draft}
+            placeholder={placeholder}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commit();
+              if (e.key === "Escape") setEditing(false);
+            }}
+            className="h-8 text-sm"
+          />
+          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={commit}>
+            <Check className="h-4 w-4" />
+          </Button>
+          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditing(false)}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="w-full text-right text-sm font-medium flex items-center justify-between gap-2 hover:text-primary transition-colors"
+          dir={dir}
+        >
+          <span className="truncate">
+            {value || <span className="text-muted-foreground font-normal">—</span>}
+          </span>
+          <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-60 shrink-0" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function AgenciesEditableField({
+  currentAgencyIds,
+  currentLabels,
+  allAgencies,
+  onSave,
+}: {
+  currentAgencyIds: string[];
+  currentLabels: string;
+  allAgencies: { id: string; name: string }[];
+  onSave: (ids: string[]) => void | Promise<any>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState<string[]>(currentAgencyIds);
+
+  useEffect(() => {
+    setSelected(currentAgencyIds);
+  }, [currentAgencyIds.join(",")]);
+
+  const toggle = (id: string) => {
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const commit = async () => {
+    const a = [...selected].sort().join(",");
+    const b = [...currentAgencyIds].sort().join(",");
+    if (a !== b) await onSave(selected);
+    setOpen(false);
+  };
+
+  return (
+    <div className="p-3 rounded-md bg-muted/30 border group">
+      <div className="text-xs text-muted-foreground flex items-center gap-1.5 mb-1">
+        <Building2 className="h-3.5 w-3.5" />
+        סוכנויות
+      </div>
+      <Popover
+        open={open}
+        onOpenChange={(o) => {
+          if (!o) commit();
+          else setOpen(true);
+        }}
+      >
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="w-full text-right text-sm font-medium flex items-center justify-between gap-2 hover:text-primary transition-colors"
+          >
+            <span className="truncate">
+              {currentLabels || <span className="text-muted-foreground font-normal">—</span>}
+            </span>
+            <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-60 shrink-0" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-64 p-2 max-h-72 overflow-y-auto" dir="rtl">
+          {allAgencies.length === 0 ? (
+            <div className="text-sm text-muted-foreground p-2">אין סוכנויות</div>
+          ) : (
+            allAgencies.map((a) => (
+              <label
+                key={a.id}
+                className="flex items-center gap-2 p-2 rounded hover:bg-muted cursor-pointer text-sm"
+              >
+                <Checkbox
+                  checked={selected.includes(a.id)}
+                  onCheckedChange={() => toggle(a.id)}
+                />
+                <span className="truncate">{a.name}</span>
+              </label>
+            ))
+          )}
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
+function EditableNotes({
+  value,
+  onSave,
+}: {
+  value: string;
+  onSave: (v: string) => void | Promise<any>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+
+  useEffect(() => {
+    setDraft(value);
+  }, [value, editing]);
+
+  const commit = async () => {
+    if (draft !== value) await onSave(draft);
+    setEditing(false);
+  };
+
+  return (
+    <div className="p-3 rounded-md bg-muted/50 border group">
+      <div className="text-xs font-medium text-muted-foreground mb-1 flex items-center justify-between">
+        <span>הערות</span>
+        {!editing && (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            <Pencil className="h-3 w-3" />
+          </button>
+        )}
+      </div>
+      {editing ? (
+        <div className="space-y-2">
+          <Textarea
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={3}
+            className="text-sm"
+          />
+          <div className="flex gap-2 justify-end">
+            <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+              ביטול
+            </Button>
+            <Button size="sm" onClick={commit}>
+              שמור
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="w-full text-right text-sm whitespace-pre-wrap"
+        >
+          {value || <span className="text-muted-foreground font-normal">— הוסף הערות</span>}
+        </button>
+      )}
+    </div>
+  );
+}
+
