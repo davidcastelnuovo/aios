@@ -11,7 +11,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Megaphone, Phone, Mail, Briefcase, Search, Users, ListChecks, Calendar as CalendarIcon, Building2, Pencil, Check, X } from "lucide-react";
+import { Megaphone, Phone, Mail, Briefcase, Search, Users, ListChecks, Calendar as CalendarIcon, Building2, Pencil, Check, X, ChevronDown } from "lucide-react";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
@@ -604,12 +604,24 @@ function AgenciesRow({
       }}
     >
       <PopoverTrigger asChild>
-        <div className="flex items-center justify-start gap-2 group cursor-pointer">
+        <div className="flex items-center justify-start gap-2 group">
           <span className="text-muted-foreground text-sm shrink-0">:סוכנויות</span>
-          <span className="font-medium truncate">
-            {currentLabels || <span className="text-muted-foreground font-normal">—</span>}
-          </span>
-          <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+          <button
+            type="button"
+            className="flex items-center gap-2 border rounded-md px-3 py-1.5 hover:bg-muted/50 transition-colors text-sm cursor-pointer"
+          >
+            {currentAgencyIds.length > 0 ? (
+              <>
+                <Badge variant="secondary" className="h-5 px-1.5 text-xs">
+                  {currentAgencyIds.length}
+                </Badge>
+                <span className="font-medium">סוכנויות</span>
+              </>
+            ) : (
+              <span className="text-muted-foreground">ללא סוכנויות</span>
+            )}
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          </button>
         </div>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-64 p-2 max-h-72 overflow-y-auto" dir="rtl">
