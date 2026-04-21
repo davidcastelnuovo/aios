@@ -198,7 +198,7 @@ export function useMeetingScheduler(tenantId?: string) {
     contactName: string;
     contactEmail?: string;
     contactId: string;
-    contactType: 'lead' | 'client';
+    contactType: 'lead' | 'client' | 'campaigner';
     additionalEmails?: string[];
     onSuccess?: () => void;
   }) => {
