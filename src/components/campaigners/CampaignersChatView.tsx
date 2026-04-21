@@ -213,12 +213,6 @@ export function CampaignersChatView() {
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <Badge
-                  variant="outline"
-                  className={selected.active ? "bg-success/10 text-success border-success/20" : "bg-muted"}
-                >
-                  {selected.active ? "פעיל" : "לא פעיל"}
-                </Badge>
                 <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
                   ערוך פרטים
                 </Button>
