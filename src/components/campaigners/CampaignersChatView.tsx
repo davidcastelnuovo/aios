@@ -220,8 +220,8 @@ export function CampaignersChatView() {
             </div>
 
             {/* Tabs */}
-            <Tabs defaultValue="details" className="flex-1 flex flex-col overflow-hidden">
-              <TabsList className="ms-4 mt-3 w-fit">
+            <Tabs dir="rtl" defaultValue="details" className="flex-1 flex flex-col overflow-hidden">
+              <TabsList className="mr-4 mt-3 w-fit">
                 <TabsTrigger value="details" className="gap-1.5">
                   <Megaphone className="h-4 w-4" /> פרטים
                 </TabsTrigger>
