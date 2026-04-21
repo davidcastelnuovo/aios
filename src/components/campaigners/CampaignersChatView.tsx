@@ -34,7 +34,7 @@ export function CampaignersChatView() {
   const { selectedAgency } = useAgency();
   const { canViewFinance } = useUserPermissions();
   const [search, setSearch] = useState("");
-  const [activeFilter, setActiveFilter] = useState<ActiveFilter>("active");
+  const [activeFilter, setActiveFilter] = useState<ActiveFilter>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
 
