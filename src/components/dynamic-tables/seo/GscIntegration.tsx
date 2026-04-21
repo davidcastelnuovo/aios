@@ -259,11 +259,17 @@ export function GscIntegration({
     matchedSite?.siteUrl || (usableSites.length === 1 ? usableSites[0].siteUrl : "");
   const effectiveSiteUrl = persistedSiteUrl || fallbackSiteUrl;
 
+  // Reset to empty ONLY when we truly have no integration at all. Avoid wiping
+  // parent state just because effectiveSiteUrl is momentarily empty between
+  // renders (e.g. integration loaded but availableSites still resolving),
+  // which previously caused GSC keywords to disappear from the central SEO
+  // table on initial load when data came from React Query cache.
   useEffect(() => {
-    if (!effectiveSiteUrl) {
+    if (!gscIntegration?.id) {
       onDataLoaded?.([]);
     }
-  }, [effectiveSiteUrl, onDataLoaded, clientId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gscIntegration?.id, clientId]);
 
   // Auto-link useEffect is declared further down (after updateSiteMutation is defined).
 
