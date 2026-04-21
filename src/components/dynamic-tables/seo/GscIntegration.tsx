@@ -307,7 +307,7 @@ export function GscIntegration({
     },
     enabled: enableSinglePeriod,
   });
-  const { isLoading: isLoadingMulti, refetch: refetchMulti } = useQuery({
+  const { data: multiPeriodData, isLoading: isLoadingMulti, refetch: refetchMulti } = useQuery({
     queryKey: ["gsc-multi-period", gscIntegration?.id, effectiveSiteUrl],
     queryFn: async () => {
       const { data: { session } } = await supabase.auth.getSession();
