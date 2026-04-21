@@ -52,6 +52,7 @@ const CATEGORIES: Category[] = [
       { key: "clients", label: "לקוחות", description: "ניהול לקוחות ופרטי קשר", route: "/clients", icon: Users, permission: "clients", color: "bg-teal-500/10 text-teal-600" },
       { key: "client-onboarding", label: "לקוחות בקליטה", description: "תהליך קליטת לקוחות חדשים", route: "/client-onboarding", icon: UserPlus, permission: "client_onboarding", color: "bg-teal-500/10 text-teal-600" },
       { key: "tasks", label: "משימות", description: "ניהול משימות ומעקב התקדמות", route: "/tasks", icon: CheckSquare, permission: "tasks", color: "bg-teal-500/10 text-teal-600" },
+      { key: "time-tracking", label: "מעקב זמן", description: "מעקב שעות עבודה", route: "/time-tracking", icon: Clock, permission: "time_tracking", color: "bg-teal-500/10 text-teal-600" },
     ],
   },
   {
@@ -86,7 +87,6 @@ const CATEGORIES: Category[] = [
       { key: "suppliers", label: "ספקים", description: "ניהול ספקים וחוזים", route: "/suppliers", icon: Truck, permission: "suppliers", color: "bg-violet-500/10 text-violet-600" },
       // { key: "finance", ... } // hidden
       { key: "accounting-integrations", label: "הנהלת חשבונות", description: "אינטגרציות לתוכנות חשבונאות", route: "/accounting-integrations", icon: BarChart3, permission: "accounting", color: "bg-violet-500/10 text-violet-600" },
-      { key: "time-tracking", label: "מעקב זמן", description: "מעקב שעות עבודה", route: "/time-tracking", icon: Clock, permission: "time_tracking", color: "bg-violet-500/10 text-violet-600" },
       { key: "automations", label: "אוטומציות", description: "בניית תהליכים אוטומטיים", route: "/automations", icon: Zap, permission: "automations", color: "bg-violet-500/10 text-violet-600" },
       { key: "agents", label: "סוכני AI", description: "ניהול סוכני בינה מלאכותית", route: "/agents", icon: Bot, color: "bg-violet-500/10 text-violet-600" },
       { key: "branding", label: "התאמת מערכת", description: "עיצוב ומיתוג המערכת", route: "/branding", icon: Palette, permission: "branding", color: "bg-violet-500/10 text-violet-600" },
