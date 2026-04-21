@@ -105,6 +105,15 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
         ? [tenantId]
         : [];
 
+  // Resolve a tenant-wide GSC integration as a fallback when the current
+  // user has no personal/shared one — so internal viewers see Search Console
+  // keywords automatically (parity with the public shared link).
+  const resolvedGsc = useResolvedGscIntegration({
+    clientId,
+    tenantIds: reportTenants,
+    savedSiteUrl: initialGscSiteUrl,
+  });
+
   const { data: reports = [], isLoading } = useQuery({
     queryKey: ['seo-dashboard-reports', reportTenants.slice().sort().join(','), clientId],
     queryFn: async () => {
