@@ -1,49 +1,55 @@
 
-## תיקון ממוקד לרשימת הקמפיינרים בלבד
 
-### מה הבעיה בפועל
-הבעיה כרגע אינה ב"טופס הפרטים" אלא ב-`aside` של רשימת הקמפיינרים:
-- הטקסט בתוך כל שורה נדחף/נחתך ונראה כאילו הוא מתחיל מאמצע הכרטיס.
-- יש רווח לבן גדול בין האווטאר לבין השם/הסוכנויות.
-- שינויי RTL שנעשו על כל הקונטיינר של ה-Chat View משפיעים גם על רשימת הצד, למרות שהתקלה המקורית הייתה רק בכרטיס הפרטים.
+## תיקון רשימת הקמפיינרים והדיאלוג הפנימי לפי הדפוס של לידים/לקוחות
 
-מהצילום ומהקוד הנוכחי רואים שהרשימה משתמשת ב-`dir="rtl"` ברמת הקונטיינר הראשי, ובתוך כל שורת רשימה יש `flex-1 min-w-0` + `text-right` + `truncate`, מה שיוצר פריסה לא נכונה לרשימת הצד.
+### מקור הבעיה
+- `CampaignersChatView` משתמש כיום ב-`flex-row-reverse` ב-wrapper הראשי + `dir="rtl"` על כל אזור בנפרד. זה גורם לכך שכשהשם או רשימת הסוכנויות ארוכים, הכפתור "מתנפח" וה-`flex-1 min-w-0` לא ממש נחתך — מה שדוחף את האווטאר/השם לאמצע.
+- בלידים ובלקוחות הדפוס שעובד הוא: **`dir="rtl"` יחיד על ה-wrapper הראשי**, ה-sidebar הוא הילד הראשון (ולכן ב-RTL יושב אוטומטית בימין), ועל הכפתור עצמו מוסיפים `overflow-hidden` + `style={{ maxWidth: '100%', boxSizing: 'border-box' }}` כדי למנוע מהתוכן להגדיל את רוחב השורה.
 
-### מה אעדכן
-1. **אבודד את ה-RTL רק לאזור שצריך אותו**
-   - אשאיר את ה-RTL בכרטיס הפרטים/הלשוניות.
-   - אסיר את התלות ב-RTL מרשימת הקמפיינרים עצמה, כדי להחזיר את מבנה השורה שעבד קודם.
+### מה אעדכן ב-`src/components/campaigners/CampaignersChatView.tsx`
 
-2. **אשחזר את מבנה שורת הרשימה למבנה היציב**
-   - אווטאר בצד קבוע.
-   - בלוק טקסט צמוד אליו, בלי "מריחה" של התוכן על כל הרוחב.
-   - שם, תפקידים, סוכנויות ומספר לקוחות יוצגו בבלוק מסודר אחד.
+**1. Wrapper ראשי (החזרת רשימה לימין בצורה יציבה)**
+- `<div dir="rtl" className="flex h-full min-h-0 max-h-full border rounded-lg overflow-hidden bg-background">` — בלי `flex-row-reverse`, בלי `gap-4`.
+- להסיר את ה-`dir="rtl"` הכפול מ-`<aside>` ומה-`<section>`.
 
-3. **אתקן חיתוך טקסט בלי לשבור RTL**
-   - `truncate` רק על השדות שצריכים קיצור.
-   - `min-w-0` רק במקום שבו הוא באמת נדרש.
-   - מניעת מצב שבו הטקסט נחתך מהאמצע או גולש מתחת ל-scrollbar.
+**2. עמודת הרשימה (זהה ללידים/לקוחות)**
+- `w-[25%] min-w-[240px] max-w-[25%] border-l flex flex-col bg-muted/20 overflow-hidden`.
+- חיפוש + סלקט סטטוס נשארים כפי שהם.
+- `ScrollArea` → להחליף ל-`<div className="flex-1 overflow-y-auto overflow-x-hidden">` עם `<div className="divide-y w-full">` בפנים (אותו דפוס שעובד נקי בלידים).
 
-4. **לא אגע שוב בלשונית הפרטים או בדיאלוגים**
-   - לא אשנה את `EditableRow`, לא את `EditCampaignerDialog`, ולא את סנכרון המשתמשים.
-   - התיקון יהיה רק בלייאאוט של רשימת הצד.
+**3. שורת איש צוות (קריטי לתיקון)**
+- `<button>` עם `style={{ maxWidth: '100%', boxSizing: 'border-box' }}` ו-`className="w-full p-3 hover:bg-muted/50 transition-colors cursor-pointer overflow-hidden"`.
+- בפנים: `<div className="flex items-start gap-2">`.
+- אווטאר עגול 10×10 עם `shrink-0`.
+- בלוק טקסט: `<div className="flex-1 min-w-0 text-right">` שמכיל:
+  - שם: `<span className="block font-semibold text-sm truncate text-right">` — `truncate` במקום `whitespace-nowrap`, כך שמות ארוכים נחתכים עם `…` ולא דוחפים את ה-layout.
+  - תפקידים: שורה משלה עם `truncate text-xs text-muted-foreground`.
+  - סוכנויות: שורה משלה עם `truncate text-xs text-muted-foreground` — וזה החלק הקריטי שגרם לבעיה הנוכחית.
+  - לקוחות משויכים: שורה תחתונה.
+- מסגרת בחירה: `bg-primary/10 border-r-4 border-r-primary` (זהה ללידים) במקום `bg-muted` הסטנדרטי.
 
-5. **בדיקה לפני שאכריז שזה תקין**
-   - לא אסמן "תוקן" עד שהרשימה נראית תקין בפועל בפריוויו:
-     - שמות נראים בתחילת השורה ליד האווטאר
-     - סוכנויות לא קופצות לאמצע
-     - אין רווח לבן חריג
-     - ה-scroll נשאר תקין
+**4. עמודת פרטים (לא נוגעים בלוגיקה)**
+- `<div className="flex-1 min-h-0 flex flex-col overflow-hidden">` במקום `<section dir="rtl">`.
+- כל שאר התוכן (Header, Tabs, EditableRow, AgenciesRow, EditCampaignerDialog) נשאר בדיוק כמו שהוא, כולל הסנכרון בין משתמשים לקמפיינרים — לא נוגעים.
 
-### קובץ שיתעדכן
-- `src/components/campaigners/CampaignersChatView.tsx`
+### דיאלוג עריכת הפרטים (`EditCampaignerDialog`)
+- אוודא ש-`DialogContent` כולל `max-w-2xl max-h-[90vh] overflow-y-auto` ו-`dir="rtl"` כדי שייכנס בנוחות גם במסך קטן.
+- אם חסר — אוסיף. אם כבר קיים — לא נוגע. בלי שינוי בשדות, בולידציה או בהרשאות.
+
+### מה לא משתנה
+- לוגיקת השאילתות (`campaigners` query, `updateCampaignerField`, `updateCampaignerAgencies`).
+- סנכרון `profiles` ↔ `campaigners` (full_name).
+- כל הלשוניות (פרטים, לקוחות משויכים, משימות, פגישות).
+- `EditableRow`, `AgenciesRow`.
+- הרשאות, RLS, סוכנויות.
 
 ### תוצאה צפויה
-- רשימת הקמפיינרים תחזור להיראות כמו לפני הניסיון לתקן RTL.
-- כרטיס הפרטים יישאר RTL.
-- לא תהיה פגיעה בדיאלוגים, בגישות, בסנכרון, או בתצוגת Grid.
+- רשימת הקמפיינרים יושבת בצד ימין, יציבה, עם אווטאר צמוד לימין ושם/תפקיד/סוכנויות בעמודה לידו.
+- שמות וסוכנויות ארוכים נחתכים ב-`…` ולא דוחפים את ה-layout.
+- עמודת הפרטים בצד שמאל, רוחבה גמיש, נכנסת תמיד.
+- דיאלוג עריכת פרטים מלאים נכנס נכון גם במסכים בינוניים.
 
-### פרטים טכניים
-- אעביר את `dir="rtl"` מה-wrapper הכללי לאזור הפרטים בלבד, או אעקוף אותו מקומית ב-`aside`.
-- אעדכן את מחלקות ה-`flex` של כפתור השורה והטקסט הפנימי כדי להחזיר זרימה יציבה.
-- אשמור על `ScrollArea` והגובה הקיים, בלי לשנות לוגיקת דאטה או שאילתות.
+### קבצים שיתעדכנו
+- `src/components/campaigners/CampaignersChatView.tsx` — שכתוב של ה-wrapper הראשי, ה-sidebar ושורת הקמפיינר בלבד.
+- `src/components/forms/EditCampaignerDialog.tsx` — רק אם חסרים `max-w-2xl max-h-[90vh] overflow-y-auto dir="rtl"` ב-`DialogContent`.
+
