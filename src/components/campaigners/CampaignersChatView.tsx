@@ -37,10 +37,63 @@ export function CampaignersChatView() {
   const { tenantId } = useCurrentTenant();
   const { selectedAgency } = useAgency();
   const { canViewFinance } = useUserPermissions();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
+
+  const { data: agenciesList } = useQuery({
+    queryKey: ["agencies-for-campaigners", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from("agencies")
+        .select("id, name")
+        .eq("tenant_id", tenantId)
+        .order("name");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenantId,
+  });
+
+  const refetchCampaigners = () =>
+    queryClient.invalidateQueries({ queryKey: ["campaigners", tenantId] });
+
+  const updateCampaignerField = async (id: string, patch: Record<string, any>) => {
+    const { error } = await supabase.from("campaigners").update(patch).eq("id", id);
+    if (error) {
+      toast.error("שגיאה בעדכון");
+      return false;
+    }
+    toast.success("עודכן");
+    refetchCampaigners();
+    return true;
+  };
+
+  const updateCampaignerAgencies = async (campaignerId: string, agencyIds: string[]) => {
+    const { error: delErr } = await supabase
+      .from("campaigner_agencies")
+      .delete()
+      .eq("campaigner_id", campaignerId);
+    if (delErr) {
+      toast.error("שגיאה בעדכון סוכנויות");
+      return;
+    }
+    if (agencyIds.length > 0) {
+      const { error: insErr } = await supabase
+        .from("campaigner_agencies")
+        .insert(agencyIds.map((agency_id) => ({ campaigner_id: campaignerId, agency_id })));
+      if (insErr) {
+        toast.error("שגיאה בשמירת סוכנויות");
+        return;
+      }
+    }
+    toast.success("עודכן");
+    refetchCampaigners();
+  };
+
 
   const { data: campaigners, isLoading } = useQuery({
     queryKey: ["campaigners", tenantId],
