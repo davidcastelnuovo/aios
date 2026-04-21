@@ -128,6 +128,12 @@ const MENU_TABS: MenuTab[] = [
         ],
       },
       {
+        label: "צוות",
+        items: [
+          { key: "campaigners", label: "קמפיינרים", route: "/campaigners", icon: Megaphone },
+        ],
+      },
+      {
         label: "תקשורת",
         items: [
           { key: "chat", label: "צ'אט", route: "/chat", icon: MessageSquare },
