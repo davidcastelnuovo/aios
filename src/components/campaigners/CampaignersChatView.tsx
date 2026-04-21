@@ -172,10 +172,10 @@ export function CampaignersChatView() {
     (c?.client_team || []).reduce((t: number, a: any) => t + (a.campaigner_payment || 0), 0);
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] gap-4 flex-row-reverse">
-      {/* Right column - list */}
-      <aside dir="rtl" className="w-80 shrink-0 border rounded-lg bg-card flex flex-col overflow-hidden">
-        <div className="p-3 border-b space-y-2">
+    <div dir="rtl" className="flex h-[calc(100vh-8rem)] min-h-0 max-h-full border rounded-lg overflow-hidden bg-background">
+      {/* Right column - list (first child = right in RTL) */}
+      <aside className="w-[25%] min-w-[240px] max-w-[25%] border-l flex flex-col bg-muted/20 overflow-hidden">
+        <div className="p-3 border-b space-y-2 shrink-0">
           <div className="relative">
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -197,13 +197,13 @@ export function CampaignersChatView() {
           </Select>
         </div>
 
-        <ScrollArea className="flex-1">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden">
           {isLoading ? (
             <div className="p-4 text-sm text-muted-foreground text-center">טוען...</div>
           ) : filteredCampaigners.length === 0 ? (
             <div className="p-4 text-sm text-muted-foreground text-center">לא נמצאו אנשי צוות</div>
           ) : (
-            <ul className="divide-y">
+            <div className="divide-y w-full">
               {filteredCampaigners.map((c: any) => {
                 const isSelected = selected?.id === c.id;
                 const agencyNames = (c.campaigner_agencies || [])
@@ -211,41 +211,43 @@ export function CampaignersChatView() {
                   .filter(Boolean)
                   .join(", ");
                 return (
-                  <li key={c.id}>
-                    <button
-                      onClick={() => setSelectedId(c.id)}
-                      className={`w-full text-right px-3 py-3 flex items-start gap-3 hover:bg-muted/50 transition-colors ${
-                        isSelected ? "bg-muted" : ""
-                      }`}
-                    >
+                  <button
+                    key={c.id}
+                    onClick={() => setSelectedId(c.id)}
+                    style={{ maxWidth: '100%', boxSizing: 'border-box' }}
+                    className={`w-full p-3 hover:bg-muted/50 transition-colors cursor-pointer overflow-hidden text-right ${
+                      isSelected ? "bg-primary/10 border-r-4 border-r-primary" : ""
+                    }`}
+                  >
+                    <div className="flex items-start gap-2">
                       <Avatar className="h-10 w-10 shrink-0">
                         <AvatarFallback className={c.active ? "bg-success/10 text-success" : "bg-muted"}>
                           {getInitials(c.full_name)}
                         </AvatarFallback>
                       </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium truncate">{c.full_name}</div>
+                      <div className="flex-1 min-w-0 text-right">
+                        <span className="block font-semibold text-sm truncate text-right">{c.full_name}</span>
                         {c.role && c.role.length > 0 && (
-                          <div className="text-xs text-muted-foreground truncate">{c.role.join(", ")}</div>
+                          <span className="block text-xs text-muted-foreground truncate">{c.role.join(", ")}</span>
                         )}
                         {agencyNames && (
-                          <div className="text-xs text-muted-foreground truncate">{agencyNames}</div>
+                          <span className="block text-xs text-muted-foreground truncate">{agencyNames}</span>
                         )}
-                        <div className="text-xs text-muted-foreground mt-0.5">
+                        <span className="block text-xs text-muted-foreground mt-0.5 truncate">
                           לקוחות משויכים: {c.client_team?.length || 0}
-                        </div>
+                        </span>
                       </div>
-                    </button>
-                  </li>
+                    </div>
+                  </button>
                 );
               })}
-            </ul>
+            </div>
           )}
-        </ScrollArea>
+        </div>
       </aside>
 
       {/* Left column - details */}
-      <section dir="rtl" className="flex-1 border rounded-lg bg-card flex flex-col overflow-hidden">
+      <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden bg-card">
         {!selected ? (
           <div className="flex-1 flex items-center justify-center text-muted-foreground">
             בחר איש צוות מהרשימה
