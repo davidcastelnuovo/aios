@@ -383,6 +383,7 @@ export function GscIntegration({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [multiPeriodData]);
 
+  const connectMutation = useMutation({
     mutationFn: async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
