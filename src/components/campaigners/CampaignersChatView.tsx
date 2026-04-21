@@ -295,49 +295,64 @@ export function CampaignersChatView() {
 
               <div className="flex-1 overflow-y-auto p-4">
                 <TabsContent value="details" className="mt-0 space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <EditableField
-                      icon={Phone}
-                      label="טלפון"
-                      value={selected.phone}
-                      dir="ltr"
-                      onSave={(v) => updateCampaignerField(selected.id, { phone: v || null })}
-                    />
-                    <EditableField
-                      icon={Mail}
-                      label="אימייל"
-                      value={selected.email}
-                      type="email"
-                      onSave={(v) => updateCampaignerField(selected.id, { email: v || null })}
-                    />
-                    <EditableField
-                      icon={Briefcase}
-                      label="תפקיד"
-                      value={selected.role && selected.role.length > 0 ? selected.role.join(", ") : ""}
-                      placeholder="הפרד בפסיקים"
-                      onSave={(v) =>
-                        updateCampaignerField(selected.id, {
-                          role: v ? v.split(",").map((s) => s.trim()).filter(Boolean) : null,
-                        })
-                      }
-                    />
-                    <AgenciesEditableField
-                      currentAgencyIds={(selected.campaigner_agencies || []).map((ca: any) => ca.agency_id)}
-                      currentLabels={
-                        (selected.campaigner_agencies || [])
-                          .map((ca: any) => ca?.agencies?.name)
-                          .filter(Boolean)
-                          .join(", ") || ""
-                      }
-                      allAgencies={agenciesList || []}
-                      onSave={(ids) => updateCampaignerAgencies(selected.id, ids)}
+                  <div className="bg-card border border-border/60 rounded-xl p-4 space-y-3 text-right shadow-sm">
+                    <h3 className="font-semibold text-sm flex items-center gap-2 justify-end text-foreground">
+                      פרטי איש צוות
+                      <Megaphone className="h-4 w-4 text-primary" />
+                    </h3>
+                    <div className="space-y-2 text-sm">
+                      <EditableRow
+                        label=":טלפון"
+                        value={selected.phone}
+                        isLink
+                        linkPrefix="tel:"
+                        onSave={(v) => updateCampaignerField(selected.id, { phone: v || null })}
+                      />
+                      <EditableRow
+                        label=":אימייל"
+                        value={selected.email}
+                        isLink
+                        linkPrefix="mailto:"
+                        onSave={(v) => updateCampaignerField(selected.id, { email: v || null })}
+                      />
+                      <EditableRow
+                        label=":תפקיד"
+                        value={selected.role && selected.role.length > 0 ? selected.role.join(", ") : ""}
+                        placeholder="הפרד בפסיקים"
+                        onSave={(v) =>
+                          updateCampaignerField(selected.id, {
+                            role: v ? v.split(",").map((s) => s.trim()).filter(Boolean) : null,
+                          })
+                        }
+                      />
+                      <AgenciesRow
+                        currentAgencyIds={(selected.campaigner_agencies || []).map((ca: any) => ca.agency_id)}
+                        currentLabels={
+                          (selected.campaigner_agencies || [])
+                            .map((ca: any) => ca?.agencies?.name)
+                            .filter(Boolean)
+                            .join(", ") || ""
+                        }
+                        allAgencies={agenciesList || []}
+                        onSave={(ids) => updateCampaignerAgencies(selected.id, ids)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="bg-card border border-border/60 rounded-xl p-4 space-y-2 text-right shadow-sm">
+                    <h3 className="font-semibold text-sm flex items-center gap-2 justify-end text-foreground">
+                      הערות
+                      <Pencil className="h-4 w-4 text-primary" />
+                    </h3>
+                    <EditableRow
+                      label=""
+                      value={selected.notes}
+                      type="textarea"
+                      onSave={(v) => updateCampaignerField(selected.id, { notes: v || null })}
                     />
                   </div>
-                  <EditableNotes
-                    value={selected.notes || ""}
-                    onSave={(v) => updateCampaignerField(selected.id, { notes: v || null })}
-                  />
-                  <Button variant="outline" onClick={() => setEditOpen(true)}>
+
+                  <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
                     ערוך פרטים מלאים
                   </Button>
                 </TabsContent>
