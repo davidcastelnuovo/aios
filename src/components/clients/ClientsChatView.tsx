@@ -75,6 +75,13 @@ export function ClientsChatView({
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<string>(initialTab ?? "details");
+
+  // Guard: redirect away from "business" tab if user lacks finance view permission
+  useEffect(() => {
+    if (activeTab === "business" && !canViewFinance) {
+      setActiveTab("details");
+    }
+  }, [activeTab, canViewFinance]);
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [selectedClientIds, setSelectedClientIds] = useState<Set<string>>(new Set());
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
@@ -696,15 +703,17 @@ export function ClientsChatView({
 
             {/* Detail tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0 flex flex-col overflow-hidden">
-              <TabsList className="mx-4 mt-3 grid grid-cols-10 w-auto max-w-4xl h-9 bg-muted/50 mr-4 ml-auto">
+              <TabsList className={cn("mx-4 mt-3 grid w-auto max-w-4xl h-9 bg-muted/50 mr-4 ml-auto", canViewFinance ? "grid-cols-10" : "grid-cols-9")}>
                 <TabsTrigger value="details" className="text-xs gap-1">
                   <FileText className="h-3.5 w-3.5" />
                   פרטי לקוח
                 </TabsTrigger>
-                <TabsTrigger value="business" className="text-xs gap-1">
-                  <DollarSign className="h-3.5 w-3.5" />
-                  מידע עסקי
-                </TabsTrigger>
+                {canViewFinance && (
+                  <TabsTrigger value="business" className="text-xs gap-1">
+                    <DollarSign className="h-3.5 w-3.5" />
+                    מידע עסקי
+                  </TabsTrigger>
+                )}
                 <TabsTrigger value="docs" className="text-xs gap-1">
                   <FolderOpen className="h-3.5 w-3.5" />
                   מסמכים
@@ -1082,31 +1091,29 @@ export function ClientsChatView({
 
                 </TabsContent>
 
-                <TabsContent value="business" className="mt-0 space-y-6">
-                  <div className="bg-card border border-border/60 rounded-xl p-4 space-y-3 text-right shadow-sm">
-                    <h3 className="font-semibold text-sm flex items-center gap-2 justify-end">
-                      מידע עסקי
-                      <DollarSign className="h-4 w-4 text-primary" />
-                    </h3>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setChangeAgencyOpen(true)}>
-                          <Edit className="h-3 w-3 ml-1" />
-                          שנה
-                        </Button>
-                        <span className="font-medium">{selectedClient.agencies?.name || "—"}</span>
-                        <span className="text-muted-foreground">:סוכנות</span>
+                {canViewFinance && (
+                  <TabsContent value="business" className="mt-0 space-y-6">
+                    <div className="bg-card border border-border/60 rounded-xl p-4 space-y-3 text-right shadow-sm">
+                      <h3 className="font-semibold text-sm flex items-center gap-2 justify-end">
+                        מידע עסקי
+                        <DollarSign className="h-4 w-4 text-primary" />
+                      </h3>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setChangeAgencyOpen(true)}>
+                            <Edit className="h-3 w-3 ml-1" />
+                            שנה
+                          </Button>
+                          <span className="font-medium">{selectedClient.agencies?.name || "—"}</span>
+                          <span className="text-muted-foreground">:סוכנות</span>
+                        </div>
+                        <EditableField label=":ריטיינר" value={selectedClient.retainer?.toString() || ""} field="retainer" clientId={selectedClient.id} type="number" />
+                        <EditableField label=":תקציב חודשי" value={selectedClient.monthly_budget?.toString() || ""} field="monthly_budget" clientId={selectedClient.id} type="number" />
+                        <EditableField label=":תעשייה" value={selectedClient.industry} field="industry" clientId={selectedClient.id} />
                       </div>
-                      {canViewFinance && (
-                        <>
-                          <EditableField label=":ריטיינר" value={selectedClient.retainer?.toString() || ""} field="retainer" clientId={selectedClient.id} type="number" />
-                          <EditableField label=":תקציב חודשי" value={selectedClient.monthly_budget?.toString() || ""} field="monthly_budget" clientId={selectedClient.id} type="number" />
-                        </>
-                      )}
-                      <EditableField label=":תעשייה" value={selectedClient.industry} field="industry" clientId={selectedClient.id} />
                     </div>
-                  </div>
-                </TabsContent>
+                  </TabsContent>
+                )}
 
                 <TabsContent value="docs" className="mt-0 space-y-4" dir="rtl">
                   <ClientDocsEditor client={selectedClient} tenantId={tenantId || ""} />
