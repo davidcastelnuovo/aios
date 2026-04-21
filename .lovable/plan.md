@@ -1,47 +1,64 @@
 
-## תיקון: קישור שיתוף של דוח SEO מציג "אין דוחות SEO"
+
+## תיקון: ביטויי Search Console נטענים אוטומטית בדוח SEO המרכזי
 
 ### הבעיה
-בקישור השיתוף `https://after-lead.com/shared/table/dvrvn-7r67` של "דורון לוין" מופיע "אין דוחות SEO", למרות שבתצוגה הפנימית הדוח נטען מצוין.
+בקישור הציבורי GSC נטען אוטומטית כי `public-table` רץ עם service-role ובוחר אינטגרציית GSC כלשהי בטננט שמותאמת לאתר. בדוח הפנימי (`SeoDashboardView` → `GscIntegration`) משתמשים ב-`useUserIntegrations` שמחזיר **רק** אינטגרציות בבעלות המשתמש המחובר או ששותפו אליו במפורש דרך `integration_user_permissions`.
 
-### שורש הבעיה
-בדקתי את ה-DB:
+מצב נוכחי לדורון לוין:
+- בטננט `MarketingCaptain` יש אינטגרציית GSC של **David** עם מיפוי תקין `cb3d38ec... → https://www.dl-cpa.co.il/`
+- ויש גם אינטגרציה של **אנה** ללא מיפוי
+- כל משתמש אחר → `gscIntegrations = []` → אין `gscIntegration` → אין fetch → אין ביטויים בטבלה המרכזית עד שמסנכרנים ידנית.
 
-| מקור | client_id |
-|---|---|
-| `crm_tables.client_id` (הנכון) | `cb3d38ec…` (דורון לוין) |
-| `integration_settings.clientId` (ישן/תקוע) | `496e649a…` |
-| `ahrefs_reports` קיים עבור | `cb3d38ec…` בלבד |
+### הפתרון
+הוספת מנגנון fallback פנימי שכאשר אין למשתמש אינטגרציה משלו/משותפת, המערכת תזהה אוטומטית אינטגרציית GSC פעילה בטננט שיש לה את ה-`siteUrl` המתאים ללקוח — ותשתמש בה לקריאות `fetch-gsc-data` (שכבר רצה עם service-role ולא דורשת בעלות).
 
-ב-Edge Function `public-table` שורה 120:
+#### 1. Edge Function חדשה: `resolve-seo-gsc-integration`
+קלט: `{ clientId, tenantIds: string[], expectedSiteUrl?: string }`
+לוגיקה (service-role):
+1. שולפת את כל אינטגרציות `google_search_console` הפעילות בכל ה-tenants הנגישים.
+2. סדר עדיפות:
+   - אינטגרציה שבה `settings.client_sites[clientId]` מוגדר ושווה ל-`expectedSiteUrl` (אם נמסר) או לפחות לא ריק.
+   - אינטגרציה שב-`settings.available_sites` יש את ה-`expectedSiteUrl` עם `permissionLevel != 'siteUnverifiedUser'`.
+   - אינטגרציה ראשונה שיש לה כל מיפוי תקין כלשהו ל-`clientId`.
+   - אינטגרציה פעילה כלשהי (fallback אחרון).
+3. מחזירה `{ integrationId, siteUrl, ownerEmail }` — לא חושפת tokens.
+
+#### 2. Hook חדש: `useResolvedGscIntegration`
 ```ts
-const targetClientId = settings.clientId || table.client_id;
+useResolvedGscIntegration({ clientId, tenantIds, savedSiteUrl })
+→ { integrationId, siteUrl, isFallback, isLoading }
 ```
-הסדר הפוך — ה-`settings.clientId` הישן גובר על `table.client_id` האמיתי, ולכן השאילתה מחפשת דוחות תחת לקוח שגוי ומחזירה 0 תוצאות.
+- מנסה קודם `useUserIntegrations` (אינטגרציה אישית/משותפת).
+- אם אין → קורא ל-`resolve-seo-gsc-integration` ומחזיר את ה-fallback.
 
-זוהי **בדיוק אותה הבעיה** שתיקנתי בעבר ב-`DynamicTableView.tsx` (הסיפור של Woodhill / Berliner) — רק שהיא קיימת גם במסלול הציבורי של ה-Edge Function.
+#### 3. עדכון `GscIntegration.tsx`
+- מקבל prop אופציונלי: `resolvedFallback?: { integrationId, siteUrl }`.
+- אם `useUserIntegrations` ריק והגיע fallback — משתמש ב-`resolvedFallback.integrationId` ב-queries של `fetch-gsc-data` ובמסלול של `gsc-multi-period`.
+- מציג Badge קטן: "GSC משותף בארגון" (ללא חסימה, ללא כפתור "חבר GSC" כשיש fallback).
+- ה-`updateSiteMutation` (כתיבה ל-`tenant_integrations`) **לא** ירוץ במצב fallback (כדי לא להיכשל ב-RLS) — ה-site URL נשמר ברמת ה-table דרך `onSiteSelected` שכבר עובד.
 
-### התיקון
-
-#### `supabase/functions/public-table/index.ts`
-שינוי ממוקד בשורה 120:
-
-```ts
-// לפני
-const targetClientId = settings.clientId || table.client_id;
-
-// אחרי — מעדיפים את ה-client_id האמיתי של הטבלה
-const targetClientId = table.client_id || settings.clientId;
-```
-
-זה ייישר את לוגיקת המסלול הציבורי עם המסלול הפנימי שכבר מתוקן, ויחזיר את הדוח של דורון לוין (וכל לקוח דומה שהיה לו פעם `clientId` ישן בתוך ה-settings).
+#### 4. עדכון `SeoDashboardView.tsx`
+- קורא ל-`useResolvedGscIntegration` ומעביר את ה-`resolvedFallback` ל-`GscIntegration`.
+- מעביר את `initialGscSiteUrl` כ-`expectedSiteUrl` ל-resolver.
 
 ### מה לא משתנה
-- שאר הלוגיקה (GA, GSC, פילטר תאריכים, paginated records) — ללא שינוי
-- טבלאות אחרות שאין להן `client_id` ישיר ימשיכו להישען על `settings.clientId` כ-fallback
+- `useUserIntegrations` ללא שינוי — עדיפות לאינטגרציה אישית של המשתמש.
+- אין שינויי RLS, אין מיגרציות.
+- `public-table` (קישור שיתוף) — לא נוגעים, ממשיך לעבוד כמו עכשיו.
+- שאר הלקוחות (Berliner, Woodhill וכו') — הלוגיקה הקיימת ממשיכה לעבוד; ה-fallback מופעל רק כש-`useUserIntegrations` ריק.
+- מסלולים אחרים (Ahrefs, GA, פילטר תאריכים, comparison cache, language filter) — ללא נגיעה.
+- כל משתמש שיחבר GSC משלו ימשיך לראות את האינטגרציה האישית (עדיפות גבוהה יותר).
 
-### בדיקה
-לאחר הפריסה, פתיחת `https://after-lead.com/shared/table/dvrvn-7r67` תציג את הדוח המלא (Ahrefs + GSC + Analytics אם מקושרים), בדומה לתצוגה הפנימית.
+### בדיקות
+1. דורון לוין → `/t/marketingcaptain/table/seo-report-...` → ביטויי GSC מופיעים אוטומטית בטבלת הביטויים המרכזית, ליד ביטויי Ahrefs, ללא לחיצה על "סנכרון".
+2. דוחות SEO אחרים שכבר עובדים → ללא רגרסיה.
+3. משתמש שחיבר GSC משלו → רואה את האינטגרציה האישית (לא fallback), Badge "GSC משותף" לא מופיע.
+4. קישור השיתוף הציבורי `dvrvn-7r67` → ממשיך לעבוד ללא שינוי.
 
-### קובץ לעדכון
-- `supabase/functions/public-table/index.ts` (שורה 120)
+### קבצים
+- `supabase/functions/resolve-seo-gsc-integration/index.ts` (חדש)
+- `src/hooks/useResolvedGscIntegration.ts` (חדש)
+- `src/components/dynamic-tables/seo/GscIntegration.tsx` (תוספת prop ולוגיקת fallback)
+- `src/components/dynamic-tables/SeoDashboardView.tsx` (העברת ה-fallback)
+
