@@ -245,7 +245,7 @@ export function CampaignersChatView() {
       </aside>
 
       {/* Left column - details */}
-      <section className="flex-1 border rounded-lg bg-card flex flex-col overflow-hidden">
+      <section dir="rtl" className="flex-1 border rounded-lg bg-card flex flex-col overflow-hidden">
         {!selected ? (
           <div className="flex-1 flex items-center justify-center text-muted-foreground">
             בחר איש צוות מהרשימה
