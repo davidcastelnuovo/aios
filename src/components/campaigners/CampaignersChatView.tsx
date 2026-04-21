@@ -449,21 +449,21 @@ function DetailRow({
   );
 }
 
-function EditableField({
-  icon: Icon,
+function EditableRow({
   label,
   value,
-  dir,
   type = "text",
   placeholder,
+  isLink,
+  linkPrefix,
   onSave,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: string | null | undefined;
-  dir?: string;
-  type?: string;
+  type?: "text" | "email" | "number" | "textarea";
   placeholder?: string;
+  isLink?: boolean;
+  linkPrefix?: string;
   onSave: (v: string) => void | Promise<any>;
 }) {
   const [editing, setEditing] = useState(false);
@@ -474,58 +474,82 @@ function EditableField({
   }, [value, editing]);
 
   const commit = async () => {
-    if ((draft || "") !== (value || "")) {
-      await onSave(draft);
-    }
+    if ((draft || "") !== (value || "")) await onSave(draft);
     setEditing(false);
   };
 
-  return (
-    <div className="p-3 rounded-md bg-muted/30 border group relative">
-      <div className="text-xs text-muted-foreground flex items-center gap-1.5 mb-1">
-        <Icon className="h-3.5 w-3.5" />
-        {label}
-      </div>
-      {editing ? (
-        <div className="flex items-center gap-1">
-          <Input
-            autoFocus
-            type={type}
-            dir={dir}
+  const cancel = () => {
+    setDraft(value || "");
+    setEditing(false);
+  };
+
+  const handleKey = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && type !== "textarea") commit();
+    if (e.key === "Escape") cancel();
+  };
+
+  if (editing) {
+    return (
+      <div className="flex items-center justify-end gap-2">
+        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={commit}>
+          <Check className="h-3 w-3 text-primary" />
+        </Button>
+        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={cancel}>
+          <X className="h-3 w-3 text-muted-foreground" />
+        </Button>
+        {type === "textarea" ? (
+          <Textarea
             value={draft}
-            placeholder={placeholder}
             onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") commit();
-              if (e.key === "Escape") setEditing(false);
-            }}
-            className="h-8 text-sm"
+            onKeyDown={handleKey}
+            className="text-sm h-20 text-right"
+            dir="rtl"
+            autoFocus
           />
-          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={commit}>
-            <Check className="h-4 w-4" />
-          </Button>
-          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditing(false)}>
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setEditing(true)}
-          className="w-full text-right text-sm font-medium flex items-center justify-between gap-2 hover:text-primary transition-colors"
-          dir={dir}
+        ) : (
+          <Input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={handleKey}
+            type={type === "number" ? "number" : type === "email" ? "email" : "text"}
+            placeholder={placeholder}
+            className="text-sm h-7 text-right"
+            dir="rtl"
+            autoFocus
+          />
+        )}
+        {label && <span className="text-muted-foreground text-sm shrink-0">{label}</span>}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="flex items-center justify-end gap-2 group cursor-pointer"
+      onClick={() => setEditing(true)}
+    >
+      <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+      {isLink && value ? (
+        <a
+          href={`${linkPrefix || ""}${value}`}
+          target={linkPrefix?.startsWith("http") || linkPrefix === undefined ? "_blank" : undefined}
+          rel="noreferrer"
+          className="font-medium text-primary hover:underline truncate"
+          onClick={(e) => e.stopPropagation()}
         >
-          <span className="truncate">
-            {value || <span className="text-muted-foreground font-normal">—</span>}
-          </span>
-          <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-60 shrink-0" />
-        </button>
+          {value}
+        </a>
+      ) : (
+        <span className="font-medium whitespace-pre-wrap">
+          {value || <span className="text-muted-foreground font-normal">—</span>}
+        </span>
       )}
+      {label && <span className="text-muted-foreground text-sm shrink-0">{label}</span>}
     </div>
   );
 }
 
-function AgenciesEditableField({
+function AgenciesRow({
   currentAgencyIds,
   currentLabels,
   allAgencies,
@@ -555,113 +579,42 @@ function AgenciesEditableField({
   };
 
   return (
-    <div className="p-3 rounded-md bg-muted/30 border group">
-      <div className="text-xs text-muted-foreground flex items-center gap-1.5 mb-1">
-        <Building2 className="h-3.5 w-3.5" />
-        סוכנויות
-      </div>
-      <Popover
-        open={open}
-        onOpenChange={(o) => {
-          if (!o) commit();
-          else setOpen(true);
-        }}
-      >
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            className="w-full text-right text-sm font-medium flex items-center justify-between gap-2 hover:text-primary transition-colors"
-          >
-            <span className="truncate">
-              {currentLabels || <span className="text-muted-foreground font-normal">—</span>}
-            </span>
-            <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-60 shrink-0" />
-          </button>
-        </PopoverTrigger>
-        <PopoverContent align="end" className="w-64 p-2 max-h-72 overflow-y-auto" dir="rtl">
-          {allAgencies.length === 0 ? (
-            <div className="text-sm text-muted-foreground p-2">אין סוכנויות</div>
-          ) : (
-            allAgencies.map((a) => (
-              <label
-                key={a.id}
-                className="flex items-center gap-2 p-2 rounded hover:bg-muted cursor-pointer text-sm"
-              >
-                <Checkbox
-                  checked={selected.includes(a.id)}
-                  onCheckedChange={() => toggle(a.id)}
-                />
-                <span className="truncate">{a.name}</span>
-              </label>
-            ))
-          )}
-        </PopoverContent>
-      </Popover>
-    </div>
-  );
-}
-
-function EditableNotes({
-  value,
-  onSave,
-}: {
-  value: string;
-  onSave: (v: string) => void | Promise<any>;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value);
-
-  useEffect(() => {
-    setDraft(value);
-  }, [value, editing]);
-
-  const commit = async () => {
-    if (draft !== value) await onSave(draft);
-    setEditing(false);
-  };
-
-  return (
-    <div className="p-3 rounded-md bg-muted/50 border group">
-      <div className="text-xs font-medium text-muted-foreground mb-1 flex items-center justify-between">
-        <span>הערות</span>
-        {!editing && (
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="opacity-0 group-hover:opacity-100 transition-opacity"
-          >
-            <Pencil className="h-3 w-3" />
-          </button>
-        )}
-      </div>
-      {editing ? (
-        <div className="space-y-2">
-          <Textarea
-            autoFocus
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            rows={3}
-            className="text-sm"
-          />
-          <div className="flex gap-2 justify-end">
-            <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
-              ביטול
-            </Button>
-            <Button size="sm" onClick={commit}>
-              שמור
-            </Button>
-          </div>
+    <Popover
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) commit();
+        else setOpen(true);
+      }}
+    >
+      <PopoverTrigger asChild>
+        <div className="flex items-center justify-end gap-2 group cursor-pointer">
+          <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+          <span className="font-medium truncate">
+            {currentLabels || <span className="text-muted-foreground font-normal">—</span>}
+          </span>
+          <span className="text-muted-foreground text-sm shrink-0">:סוכנויות</span>
         </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setEditing(true)}
-          className="w-full text-right text-sm whitespace-pre-wrap"
-        >
-          {value || <span className="text-muted-foreground font-normal">— הוסף הערות</span>}
-        </button>
-      )}
-    </div>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-64 p-2 max-h-72 overflow-y-auto" dir="rtl">
+        {allAgencies.length === 0 ? (
+          <div className="text-sm text-muted-foreground p-2">אין סוכנויות</div>
+        ) : (
+          allAgencies.map((a) => (
+            <label
+              key={a.id}
+              className="flex items-center gap-2 p-2 rounded hover:bg-muted cursor-pointer text-sm"
+            >
+              <Checkbox
+                checked={selected.includes(a.id)}
+                onCheckedChange={() => toggle(a.id)}
+              />
+              <span className="truncate">{a.name}</span>
+            </label>
+          ))
+        )}
+      </PopoverContent>
+    </Popover>
   );
 }
+
 
