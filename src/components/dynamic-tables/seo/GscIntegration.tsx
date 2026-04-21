@@ -52,6 +52,17 @@ interface GscIntegrationProps {
   initialLangFilter?: "all" | "he" | "en";
   /** Called whenever the language filter changes — parent persists to DB. */
   onLangFilterChange?: (lang: "all" | "he" | "en") => void;
+  /**
+   * Tenant-wide fallback when the current user has no personal/shared GSC
+   * integration. Resolved server-side by `resolve-seo-gsc-integration` and
+   * used only when `useUserIntegrations` returns nothing. fetch-gsc-data runs
+   * with service-role so this works without exposing tokens.
+   */
+  resolvedFallback?: {
+    integrationId: string | null;
+    siteUrl: string | null;
+    ownerEmail?: string | null;
+  } | null;
 }
 
 const DATE_RANGE_DAYS: Record<GscDateRange, number> = {
@@ -114,6 +125,7 @@ export function GscIntegration({
   initialSiteUrl,
   initialLangFilter,
   onLangFilterChange,
+  resolvedFallback,
 }: GscIntegrationProps) {
   const queryClient = useQueryClient();
   const [selectedSite, setSelectedSite] = useState<string>("");
