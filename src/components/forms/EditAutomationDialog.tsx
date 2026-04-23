@@ -33,6 +33,7 @@ import { toast } from "sonner";
 import { Info, Copy, ExternalLink } from "lucide-react";
 import { useLeadStatuses } from "@/hooks/useLeadStatuses";
 import { MessageTemplateBuilder } from "./MessageTemplateBuilder";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 const formSchema = z.object({
   name: z.string().min(1, "שם האוטומציה הוא שדה חובה"),
@@ -126,6 +127,7 @@ interface EditAutomationDialogProps {
 export function EditAutomationDialog({ automation, open, onOpenChange }: EditAutomationDialogProps) {
   const queryClient = useQueryClient();
   const { activeStatuses: leadStatuses } = useLeadStatuses();
+  const { tenantId } = useCurrentTenant();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -334,7 +336,8 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
           configuration: configuration,
           conditions: conditions,
         })
-        .eq("id", automation.id);
+        .eq("id", automation.id)
+        .eq("tenant_id", tenantId || automation.tenant_id);
 
       if (error) throw error;
     },
