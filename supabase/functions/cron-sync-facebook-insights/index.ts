@@ -129,7 +129,7 @@ Deno.serve(async (req) => {
 
         // Calculate date range
         const now = new Date();
-        const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         let since: Date;
         let until = new Date(now);
         
@@ -147,34 +147,34 @@ Deno.serve(async (req) => {
             break;
           case 'last_7_days':
             since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
-            until = yesterday;
+            until = today;
             break;
           case 'last_14_days':
             since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 14);
-            until = yesterday;
+            until = today;
             break;
           case 'this_month':
             since = new Date(now.getFullYear(), now.getMonth(), 1);
             break;
           case 'last_30_days':
             since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
-            until = yesterday;
+            until = today;
             break;
           case 'last_90_days':
             since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 90);
-            until = yesterday;
+            until = today;
             break;
           case 'last_180_days':
             since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 180);
-            until = yesterday;
+            until = today;
             break;
           case 'last_365_days':
             since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 365);
-            until = yesterday;
+            until = today;
             break;
           default:
             since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
-            until = yesterday;
+            until = today;
         }
 
         const sinceStr = since.toISOString().split('T')[0];
