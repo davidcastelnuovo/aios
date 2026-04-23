@@ -1179,6 +1179,18 @@ Deno.serve(async (req) => {
                     throw new Error('Telegram chat_id is required')
                   }
                   
+                  // Verify tenant has an active bot (primary OR shared shadow record)
+                  const { data: tgBotState } = await supabase
+                    .from('telegram_bot_state')
+                    .select('id, shared_from_state_id')
+                    .eq('tenant_id', tenantId)
+                    .eq('is_active', true)
+                    .maybeSingle()
+                  
+                  if (!tgBotState) {
+                    throw new Error('לארגון זה אין בוט טלגרם פעיל. יש לחבר בוט בהגדרות הטלגרם או לבקש שיתוף מארגון אחר.')
+                  }
+                  
                   const GATEWAY_URL = 'https://connector-gateway.lovable.dev/telegram'
                   const telegramResponse = await fetch(`${GATEWAY_URL}/sendMessage`, {
                     method: 'POST',
