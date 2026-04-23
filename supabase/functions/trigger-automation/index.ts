@@ -1158,10 +1158,19 @@ Deno.serve(async (req) => {
                     stepConfig.message_template = stepConfig.message_template.replace(/\{\{agent_output\}\}/g, agentText)
                     stepConfig.message_template = stepConfig.message_template.replace(/\{\{previous_step_output\}\}/g, agentText)
                   }
-                  // Replace contact_name variable
-                  const contactName = stepData?.contact_name || stepData?.sender_name || stepData?.name || ''
+                  // Replace contact_name variable (special alias)
                   if (stepConfig.message_template) {
+                    const contactName = stepData?.contact_name || stepData?.sender_name || stepData?.name || ''
                     stepConfig.message_template = stepConfig.message_template.replace(/\{\{contact_name\}\}/g, contactName)
+                  }
+                  // Generic field replacement: replace {{field_name}} with any value from stepData (lead fields, etc.)
+                  if (stepConfig.message_template) {
+                    stepConfig.message_template = stepConfig.message_template.replace(/\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}/g, (match: string, key: string) => {
+                      const value = stepData?.[key]
+                      if (value === undefined || value === null) return match
+                      if (typeof value === 'object') return JSON.stringify(value)
+                      return String(value)
+                    })
                   }
                   // Resolve chat_id - could be dynamic variable
                   let telegramChatId = stepConfig.telegram_chat_id || ''

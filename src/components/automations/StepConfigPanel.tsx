@@ -898,9 +898,28 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [] }
                   className="w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm text-right"
                   dir="rtl"
                 />
-                <p className="text-xs text-muted-foreground text-right">
-                  משתנים זמינים: {'{{contact_name}}'}, {'{{agent_output}}'}, {'{{previous_step_output}}'}
-                </p>
+                <div className="text-xs text-muted-foreground text-right space-y-1">
+                  <p className="font-semibold">משתנים זמינים:</p>
+                  <p>שדות ליד: {'{{contact_name}}'}, {'{{phone}}'}, {'{{email}}'}, {'{{company_name}}'}, {'{{source}}'}, {'{{status}}'}, {'{{lead_id}}'}</p>
+                  <p>שדות צ'אט: {'{{sender_name}}'}, {'{{sender_phone}}'}, {'{{message_text}}'}, {'{{chat_id}}'}</p>
+                  <p>פלטים: {'{{agent_output}}'}, {'{{previous_step_output}}'}</p>
+                  <p className="text-[10px] opacity-70">טיפ: ניתן להשתמש בכל שדה שמגיע מהטריגר בפורמט {'{{field_name}}'}</p>
+                </div>
+                <div className="flex flex-wrap gap-1 pt-1">
+                  {['contact_name', 'phone', 'email', 'company_name', 'source', 'status', 'lead_id'].map((field) => (
+                    <button
+                      key={field}
+                      type="button"
+                      onClick={() => {
+                        const current = node.configuration?.message_template || '';
+                        handleConfigChange("message_template", current + `{{${field}}}`);
+                      }}
+                      className="text-xs px-2 py-0.5 rounded bg-sky-500/20 hover:bg-sky-500/30 text-sky-700 dark:text-sky-300 transition-colors"
+                    >
+                      + {field}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div className="space-y-2">
                 <Label className="text-right block">Parse Mode</Label>
