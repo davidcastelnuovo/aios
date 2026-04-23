@@ -615,8 +615,12 @@ Deno.serve(async (req) => {
 
 
             // === CRITICAL: Validate trigger step matches incoming payload ===
+            // In TEST mode (direct execution by automationId with test=true),
+            // we bypass trigger filter validation so the test always runs end-to-end
+            // and shows up in the run history.
+            const isTestRun = Boolean(requestBody.automationId) && Boolean(payloadData?.test)
             const triggerStep = flowSteps?.find((s: any) => s.step_type === 'trigger')
-            if (triggerStep) {
+            if (triggerStep && !isTestRun) {
               // Check action_type match (e.g. whatsapp_message_received vs lead_created)
               const triggerActionType = triggerStep.action_type
               const incomingTriggerType = (requestBody as any).trigger_type || (requestBody as any).triggerType
@@ -625,6 +629,14 @@ Deno.serve(async (req) => {
                 (triggerActionType === 'carmen_whatsapp_session' && incomingTriggerType === 'whatsapp_message_received')
 
               if (!triggerTypesMatch) {
+                // Log skipped run so it appears in history
+                await supabase.from('automation_logs').insert({
+                  automation_id: automation.id,
+                  success: false,
+                  error_message: `דולג: trigger_type_mismatch (${triggerActionType} ≠ ${incomingTriggerType})`,
+                  payload: payloadData,
+                  execution_time_ms: Date.now() - startTime,
+                })
                 return { skipped: true, reason: 'trigger_type_mismatch' }
               }
               // Also validate trigger step filters (group_id, keyword, etc.)
@@ -635,6 +647,14 @@ Deno.serve(async (req) => {
                 Boolean(payloadData?._carmen_session_id && !payloadData?._carmen_session_ended)
               )
               if (!validation.matches) {
+                // Log skipped run so it appears in history
+                await supabase.from('automation_logs').insert({
+                  automation_id: automation.id,
+                  success: false,
+                  error_message: `דולג: ${validation.reason || 'trigger_config_mismatch'}`,
+                  payload: payloadData,
+                  execution_time_ms: Date.now() - startTime,
+                })
                 return { skipped: true, reason: validation.reason || 'trigger_config_mismatch' }
               }
             }
