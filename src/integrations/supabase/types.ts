@@ -6616,6 +6616,7 @@ export type Database = {
           created_at: string
           id: string
           is_active: boolean
+          shared_from_state_id: string | null
           tenant_id: string
           update_offset: number
           updated_at: string
@@ -6626,6 +6627,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          shared_from_state_id?: string | null
           tenant_id: string
           update_offset?: number
           updated_at?: string
@@ -6636,15 +6638,23 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          shared_from_state_id?: string | null
           tenant_id?: string
           update_offset?: number
           updated_at?: string
         }
         Relationships: [
           {
+            foreignKeyName: "telegram_bot_state_shared_from_state_id_fkey"
+            columns: ["shared_from_state_id"]
+            isOneToOne: false
+            referencedRelation: "telegram_bot_state"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "telegram_bot_state_tenant_id_fkey"
             columns: ["tenant_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },

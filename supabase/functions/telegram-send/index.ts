@@ -28,17 +28,17 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Verify bot is active for this tenant
+    // Verify bot is active for this tenant (primary OR shared shadow record)
     const { data: botState } = await supabase
       .from('telegram_bot_state')
-      .select('id')
+      .select('id, shared_from_state_id')
       .eq('tenant_id', tenant_id)
       .eq('is_active', true)
       .maybeSingle();
 
     if (!botState) {
       return new Response(
-        JSON.stringify({ success: false, error: 'No active Telegram bot for this tenant' }),
+        JSON.stringify({ success: false, error: 'No active Telegram bot for this tenant (neither primary nor shared)' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
