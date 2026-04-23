@@ -163,12 +163,15 @@ export default function FlowEditor() {
     enabled: !!automationId,
   });
 
-  // ── Init from DB ───────────────────────────────────────────────────────────
+  // ── Init from DB (only once, to avoid overwriting user edits on refetch) ───
+
+  const initializedMetaRef = useRef(false);
 
   useEffect(() => {
-    if (automation) {
+    if (automation && !initializedMetaRef.current) {
       setAutomationName(automation.name);
       setAutomationActive(automation.active ?? true);
+      initializedMetaRef.current = true;
     }
   }, [automation]);
 
@@ -526,11 +529,34 @@ export default function FlowEditor() {
   const toggleActiveMutation = useMutation({
     mutationFn: async (nextActive: boolean) => {
       if (!automationId) throw new Error("Missing automation id");
-      await supabase.from("automations").update({ active: nextActive } as any).eq("id", automationId);
+      const { error } = await supabase
+        .from("automations")
+        .update({ active: nextActive } as any)
+        .eq("id", automationId);
+      if (error) throw error;
+      return nextActive;
+    },
+    onMutate: async (nextActive: boolean) => {
+      // Optimistic UI: flip the switch immediately so the user sees feedback
+      const previous = automationActive;
+      setAutomationActive(nextActive);
+      return { previous };
     },
     onSuccess: (_, nextActive) => {
-      setAutomationActive(nextActive);
+      queryClient.invalidateQueries({ queryKey: ["automation", automationId] });
+      queryClient.invalidateQueries({ queryKey: ["automations"] });
       toast({ title: nextActive ? "אוטומציה הופעלה" : "אוטומציה הושהתה" });
+    },
+    onError: (err: any, _nextActive, context) => {
+      // Roll back the optimistic update
+      if (context?.previous !== undefined) {
+        setAutomationActive(context.previous);
+      }
+      toast({
+        title: "שגיאה בהפעלה/השהיה",
+        description: err.message,
+        variant: "destructive",
+      });
     },
   });
 
