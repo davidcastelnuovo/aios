@@ -628,9 +628,23 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
             </Button>
           )}
           <div className="flex-1">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h2 className="font-medium text-base">{contact.name}</h2>
               <ChatProviderIndicator provider={contact.active_chat_provider} size="sm" />
+              {contactType === 'telegram' && telegramChatId && (
+                <Badge
+                  variant="secondary"
+                  className="h-5 text-xs gap-1 cursor-pointer hover:bg-secondary/80"
+                  onClick={() => {
+                    navigator.clipboard.writeText(telegramChatId);
+                    toast.success(`Chat ID הועתק: ${telegramChatId}`);
+                  }}
+                  title="לחץ להעתקת ה-Chat ID"
+                >
+                  <span className="font-mono">ID: {telegramChatId}</span>
+                  <Copy className="h-3 w-3" />
+                </Badge>
+              )}
             </div>
           </div>
           {isMobile && (
