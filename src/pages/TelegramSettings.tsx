@@ -4,13 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Send, Bot, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { ArrowLeft, Send, Bot, CheckCircle, XCircle, Loader2, Share2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useTenant } from "@/contexts/TenantContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { ShareTelegramConnectionSection } from "@/components/forms/ShareTelegramConnectionSection";
 
 export default function TelegramSettings() {
   const navigate = useNavigate();
@@ -90,7 +91,24 @@ export default function TelegramSettings() {
     onError: () => toast.error("שגיאה בניתוק הבוט"),
   });
 
+  const removeShareMutation = useMutation({
+    mutationFn: async () => {
+      if (!botState?.id) throw new Error("Missing state");
+      const { error } = await supabase
+        .from("telegram_bot_state")
+        .delete()
+        .eq("id", botState.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("השיתוף הוסר");
+      queryClient.invalidateQueries({ queryKey: ["telegram-bot-state"] });
+    },
+    onError: (e: Error) => toast.error("שגיאה: " + e.message),
+  });
+
   const isConnected = botState?.is_active;
+  const isShared = !!(botState as any)?.shared_from_state_id;
 
   return (
     <div className="h-full overflow-y-auto">
@@ -125,6 +143,12 @@ export default function TelegramSettings() {
           <CardContent>
             {isConnected && botState ? (
               <div className="space-y-4">
+                {isShared && (
+                  <div className="p-3 rounded-lg border border-sky-500/30 bg-sky-500/10 flex items-center gap-2 text-sm">
+                    <Share2 className="h-4 w-4 text-sky-500" />
+                    <span>בוט משותף מארגון אחר — אתה יכול לשלוח הודעות דרכו, אך לא לנהל את הטוקן.</span>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <span className="text-muted-foreground">שם הבוט:</span>
@@ -139,9 +163,15 @@ export default function TelegramSettings() {
                     <p className="font-medium">{messageCount}</p>
                   </div>
                 </div>
-                <Button variant="destructive" size="sm" onClick={() => disconnectBot.mutate()}>
-                  נתק בוט
-                </Button>
+                {isShared ? (
+                  <Button variant="destructive" size="sm" onClick={() => removeShareMutation.mutate()}>
+                    הסר שיתוף
+                  </Button>
+                ) : (
+                  <Button variant="destructive" size="sm" onClick={() => disconnectBot.mutate()}>
+                    נתק בוט
+                  </Button>
+                )}
               </div>
             ) : (
               <div className="space-y-4">
@@ -176,6 +206,14 @@ export default function TelegramSettings() {
             )}
           </CardContent>
         </Card>
+
+        {/* Sharing section - only for primary (non-shared) bots */}
+        {isConnected && botState && !isShared && currentTenantId && (
+          <ShareTelegramConnectionSection
+            botStateId={botState.id}
+            currentTenantId={currentTenantId}
+          />
+        )}
 
         {/* How it works */}
         <Card>

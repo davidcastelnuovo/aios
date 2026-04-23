@@ -17,11 +17,12 @@ Deno.serve(async () => {
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-  // Get all active bots
+  // Get all active PRIMARY bots (skip shared shadow records to avoid duplicate polling)
   const { data: bots, error: botsErr } = await supabase
     .from('telegram_bot_state')
     .select('*')
-    .eq('is_active', true);
+    .eq('is_active', true)
+    .is('shared_from_state_id', null);
 
   if (botsErr) {
     return new Response(JSON.stringify({ error: botsErr.message }), { status: 500 });
