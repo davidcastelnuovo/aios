@@ -58,7 +58,7 @@ function toRFNode(nd: FlowNodeData, onDelete: (id: string) => void, onSelect: (i
 
 export default function FlowEditor() {
   const { automationId } = useParams<{ automationId: string }>();
-  const { tenantId } = useCurrentTenant();
+  const { tenantId, isActiveTenantSynced } = useCurrentTenant();
   const { buildPath } = useTenantPath();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -136,31 +136,33 @@ export default function FlowEditor() {
   const { data: automation } = useQuery({
     queryKey: ["automation", automationId],
     queryFn: async () => {
-      if (!automationId) return null;
+      if (!automationId || !tenantId) return null;
       const { data, error } = await supabase
         .from("automations")
         .select("*")
         .eq("id", automationId)
+        .eq("tenant_id", tenantId)
         .single();
       if (error) throw error;
       return data;
     },
-    enabled: !!automationId,
+    enabled: !!automationId && !!tenantId && isActiveTenantSynced,
   });
 
   const { data: steps } = useQuery({
     queryKey: ["automation-flow-steps", automationId],
     queryFn: async () => {
-      if (!automationId) return [];
+      if (!automationId || !tenantId) return [];
       const { data, error } = await supabase
         .from("automation_flow_steps" as any)
         .select("*")
         .eq("automation_id", automationId)
+        .eq("tenant_id", tenantId)
         .order("sort_order", { ascending: true });
       if (error) throw error;
       return data as any[];
     },
-    enabled: !!automationId,
+    enabled: !!automationId && !!tenantId && isActiveTenantSynced,
   });
 
   // ── Init from DB (only once, to avoid overwriting user edits on refetch) ───
@@ -496,14 +498,18 @@ export default function FlowEditor() {
           is_flow: true,
           ...(flowTriggerType ? { trigger_type: flowTriggerType } : {}),
         } as any)
-        .eq("id", automationId);
+        .eq("id", automationId)
+        .eq("tenant_id", tenantId)
+        .select("id")
+        .single();
       if (updateError) throw updateError;
 
       // Delete old steps
       const { error: deleteError } = await supabase
         .from("automation_flow_steps" as any)
         .delete()
-        .eq("automation_id", automationId);
+        .eq("automation_id", automationId)
+        .eq("tenant_id", tenantId);
       if (deleteError) throw deleteError;
 
       // Insert new steps
@@ -530,12 +536,16 @@ export default function FlowEditor() {
 
   const toggleActiveMutation = useMutation({
     mutationFn: async (nextActive: boolean) => {
-      if (!automationId) throw new Error("Missing automation id");
-      const { error } = await supabase
+      if (!automationId || !tenantId) throw new Error("Missing automation data");
+      const { data, error } = await supabase
         .from("automations")
         .update({ active: nextActive } as any)
-        .eq("id", automationId);
+        .eq("id", automationId)
+        .eq("tenant_id", tenantId)
+        .select("id")
+        .single();
       if (error) throw error;
+      if (!data) throw new Error("הפלוו לא נמצא בארגון הפעיל");
       return nextActive;
     },
     onMutate: async (nextActive: boolean) => {
