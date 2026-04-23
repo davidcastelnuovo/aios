@@ -1,48 +1,59 @@
 
 
-## למה אין נתונים של היום בטבלת "כלכלידר" — והפתרון
+## שיתוף חיבור טלגרם בין ארגונים (כמו פייסבוק)
 
 ### האבחנה
-הסנכרון רץ בהצלחה הבוקר ב-08:28, אבל הרשומה הכי מאוחרת בטבלה היא של **20.4** (אתמול). היום (21.4) חסר לחלוטין, גם כשעושים סנכרון ידני.
+האוטומציה "התראה לטלגרם" יושבת בארגון **Yuval-Uzana**, אבל לארגון הזה אין רשומת בוט פעילה ב-`telegram_bot_state`. רק שני ארגונים מוגדרים כיום עם בוט פעיל:
+- **MarketingCaptain** (Carmen / @Afterleafbot)
+- **DMM** (Carmen / @Afterleafbot)
 
-הסיבה נמצאת ב-`supabase/functions/sync-facebook-insights/index.ts`: בכל אפשרויות טווח התאריכים (`last_7_days`, `last_30_days`, `last_90_days` וכו'), ה-`until` מוגדר ל-**`yesterday`** — כלומר מבקשים מפייסבוק נתונים שמסתיימים אתמול, והיום הנוכחי בכלל לא מבוקש מה-API.
+ה-Bot Token עצמו הוא **גלובלי** במערכת (env var `TELEGRAM_API_KEY` ב-Lovable Cloud), אבל הקוד הקיים (`TelegramSettings`, `telegram-send`, וה-poller) עובד מול `telegram_bot_state` per-tenant בלבד. כדי שאוטומציה בארגון של יובל תוכל להישען על אותו בוט בלי שיובל יצטרך ליצור בוט חדש דרך BotFather, נוסיף מנגנון שיתוף זהה בעיקרון לזה של פייסבוק.
 
-```ts
-case 'last_30_days':
-  since = ...;
-  until = yesterday;   // ← זו הבעיה
-```
+### העיקרון
+מוסיפים עמודה `shared_from_state_id` ל-`telegram_bot_state` (כמו `shared_from_integration_id` ב-`tenant_integrations`). ארגון יכול להיווצר עם רשומה "צל" שמצביעה על בוט פעיל בארגון אחר, ובכל מקום בקוד שצריך לוודא בוט פעיל — בודקים גם את הצל וגם את המקור.
 
-זו התנהגות "שמרנית" שבעבר נועדה למנוע נתונים חלקיים של היום, אבל היא יוצרת חוויה רעה: אתה רואה קמפיין רץ בלייב, ובדשבורד אין כלום.
+### שינויים בבסיס הנתונים (migration)
+1. הוספת `shared_from_state_id uuid REFERENCES telegram_bot_state(id) ON DELETE CASCADE` לטבלת `telegram_bot_state`.
+2. הסרת הייחודיות הקיימת על `tenant_id` אם קיימת unique constraint שמונעת רשומה כפולה (יישאר UNIQUE רק לרשומות "אמיתיות"; לרשומות שיתוף יותר חופשי).
+3. הוספת RLS חדש: בעלים של ארגון המקור יכול ליצור/למחוק רשומות שיתוף לארגונים שהוא חבר בהם.
 
-### הפתרון
-לעדכן את `sync-facebook-insights` (ובמקביל גם את `sync-facebook-ecommerce` שמתנהג באותה צורה) כך ש-`until = today` לכל טווחי התאריכים, ולא `yesterday`. כך:
-- נתוני היום ימשכו מ-Facebook Graph API (שתומך בזה — `time_increment=1` יחזיר רשומה נפרדת ליום הנוכחי).
-- בכל סנכרון נוסף במהלך היום, ה-UPSERT הקיים (לפי `date` + `campaign_id`) יעדכן את הרשומה של היום עם המספרים העדכניים.
-- היסטוריה לא נפגעת — ימי עבר נשארים יציבים.
+### שינויים בקוד
 
-### מה אעדכן
+**1. רכיב חדש `ShareTelegramConnectionSection.tsx`** (מחקה את `ShareFacebookConnectionSection`):
+- מציג רשימת ארגונים אחרים שהמשתמש חבר בהם.
+- צ'קבוקסים לבחירה + כפתור "שמור שיתופים".
+- ה-mutation מבצע insert/delete של רשומות צל ב-`telegram_bot_state` עם `shared_from_state_id` מצביע לבוט המקורי.
 
-**1. `supabase/functions/sync-facebook-insights/index.ts`**
-- בכל ה-`case` בלוק חישוב התאריכים: להחליף `until = yesterday;` ב-`until = today;`.
-- להסיר את המשתנה `yesterday` אם הוא לא בשימוש אחר.
+**2. עדכון `src/pages/TelegramSettings.tsx`**:
+- הצגת באנר "בוט משותף מארגון X" כשהבוט הנוכחי הוא צל (`shared_from_state_id` קיים) — כולל כפתור "הסר שיתוף".
+- הצגת `ShareTelegramConnectionSection` רק כשמדובר בבוט מקורי (לא משותף).
+- הסתרת טופס "Bot Token" כשהבוט הוא משותף.
 
-**2. `supabase/functions/sync-facebook-ecommerce/index.ts`**
-- אם יש בה אותה לוגיקה (אבדוק ואיישר) — אבצע את אותו תיקון.
+**3. עדכון `supabase/functions/trigger-automation/index.ts`** (שלב `send_telegram` בשורה ~1154):
+- אין צורך לשנות את לוגיקת השליחה (היא משתמשת ב-`TELEGRAM_API_KEY` הגלובלי), אבל **כן צריך** להוסיף בדיקת קיום בוט פעיל ל-tenant (כדי לתת שגיאה ברורה אם אין שיתוף).
+- הבדיקה: יש ל-tenant רשומה ב-`telegram_bot_state` עם `is_active=true` — אם זו רשומת צל, נטען גם את ה-`bot_username` מהמקור לתיעוד ההודעה היוצאת.
 
-**3. בדיקה אחרי הפריסה**
-- להריץ סנכרון ידני של "כלכלידר".
-- לוודא שמופיעה רשומה עם `date = 2026-04-21` בטבלה.
+**4. עדכון `supabase/functions/telegram-send/index.ts`**:
+- אם `botState` של ה-tenant הוא צל, בכל זאת מאשר שליחה (הבוט הגלובלי תקף).
 
-### מה לא משתנה
-- לוגיקת ה-UPSERT, הסכמה של הטבלה, השדות (`date`, `campaign_name` וכו').
-- ה-cron הקיים (`cron-sync-facebook-insights`) — ימשיך לרוץ באותה תדירות, רק יקבל גם את היום.
-- חישוב טווחי התצוגה ב-frontend (last 7/30 days) — ה-frontend כבר תומך בלהציג את היום אם הוא קיים.
+**5. עדכון `supabase/functions/telegram-poll/index.ts`**:
+- כשמדלגים על רשומות צל בלולאת ה-poll (אין צורך לבצע long-polling פעמיים על אותו בוט). הצל ירש offset מהמקור — נסנן `shared_from_state_id IS NULL` בשליפת הבוטים.
+- ההודעות הנכנסות יישארו ב-tenant של המקור (`MarketingCaptain`); זה תקין כי `chat_id` של יובל (6267185334) מקושר אישית, לא ל-tenant.
 
-### הערה על דיוק נתוני "היום"
-נתוני היום בפייסבוק עדיין "חיים" — מספרי חשיפות, הוצאה ולידים יזחלו למעלה במהלך היום ויתייצבו רק אחרי שהיום נסגר. זה צפוי וזו ההתנהגות הסטנדרטית של Ads Manager. הסנכרון האוטומטי (יומי) ימשיך לרענן ערכים אחרי שהיום נסגר.
+### תהליך השימוש מצד המשתמש
+1. נכנסים ל-`TelegramSettings` בארגון **MarketingCaptain** (שם הבוט המקורי).
+2. בכרטיס "שתף חיבור עם ארגונים אחרים" מסמנים את **Yuval-Uzana**.
+3. לוחצים שמור — נוצרת רשומת צל פעילה ב-`telegram_bot_state` עבור Yuval-Uzana.
+4. האוטומציה "התראה לטלגרם" מתחילה לעבוד מיד (היא כבר מקונפגת עם chat_id `6267185334` של יובל).
+
+### תוצאה צפויה
+הליד הבא שייכנס דרך הסנכרון האוטומטי לארגון Yuval-Uzana יפעיל את האוטומציה, ויובל יקבל הודעת טלגרם דרך @Afterleafbot עם פרטי הליד.
 
 ### קבצים שיתעדכנו
-- `supabase/functions/sync-facebook-insights/index.ts`
-- `supabase/functions/sync-facebook-ecommerce/index.ts` (אם רלוונטי — אאמת לפני שינוי)
+- migration חדש: עמודה `shared_from_state_id` ב-`telegram_bot_state` + RLS
+- `src/components/forms/ShareTelegramConnectionSection.tsx` (חדש)
+- `src/pages/TelegramSettings.tsx`
+- `supabase/functions/trigger-automation/index.ts`
+- `supabase/functions/telegram-send/index.ts`
+- `supabase/functions/telegram-poll/index.ts`
 
