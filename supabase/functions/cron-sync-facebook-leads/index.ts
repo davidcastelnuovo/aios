@@ -569,35 +569,12 @@ serve(async (req) => {
             const resolvedName = mappedName || fieldData.full_name || fieldData.company || fieldData.name || null;
             const resolvedContact = mappedName || fieldData.full_name || `${fieldData.first_name || ''} ${fieldData.last_name || ''}`.trim() || null;
             
-            // Build notes with actual field values for later enrichment
-            const notesLines = [`leadgen_id: ${leadgenId}`, `Facebook Form: ${info.formId}`];
-            for (const [k, v] of Object.entries(fieldData)) {
-              if (v) notesLines.push(`fb_${k}: ${v}`);
-            }
-            notesLines.push(`Created: ${fbLead.created_time || 'unknown'}`, 'Source: Flow-based sync');
-            
-            const leadRecord: Record<string, any> = {
-              tenant_id: info.tenantId,
-              source: 'paid_ads',
-              status: 'new',
-              notes: notesLines.join('\n'),
-              company_name: resolvedName || 'ליד מפייסבוק',
-              contact_name: resolvedContact,
-              email: mappedEmail || fieldData.email || null,
-              phone: mappedPhone || fieldData.phone_number || fieldData.phone || null,
-            };
-            
-            const { data: newLead, error: insertError } = await supabase
-              .from('leads')
-              .insert(leadRecord)
-              .select()
-              .single();
-            
-            if (insertError) {
-              errors.push(`Flow lead ${leadgenId}: ${insertError.message}`);
-              continue;
-            }
-            
+            // ⚠️ FLOW-ONLY MODE: Do NOT auto-create the lead in this tenant's CRM.
+            // The flow's job is only to TRIGGER the automation (e.g. Telegram alert),
+            // not to import third-party leads into the org. The lead stays in the
+            // origin tenant where the Facebook page actually belongs.
+            // We still send full lead data (name, phone, email, fb_ fields) to the
+            // automation so message templates work normally.
             totalSynced++;
             
             // Build fb_ fields for trigger payload
@@ -606,7 +583,12 @@ serve(async (req) => {
               fbFields[`fb_${k}`] = v;
             }
             
+            const resolvedPhone = mappedPhone || fieldData.phone_number || fieldData.phone || null;
+            const resolvedEmail = mappedEmail || fieldData.email || null;
+            const resolvedCompany = resolvedName || 'ליד מפייסבוק';
+            
             // Trigger automation — directly target the specific flow automation
+            // (no lead_id because we did NOT create a CRM lead in this tenant)
             try {
               await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
                 method: 'POST',
@@ -618,16 +600,14 @@ serve(async (req) => {
                   automationId: info.automationId,
                   source: 'flow',
                   data: {
-                    id: newLead.id,
-                    lead_id: newLead.id,
-                    company_name: newLead.company_name,
-                    contact_name: newLead.contact_name,
-                    phone: newLead.phone,
-                    email: newLead.email,
-                    status: newLead.status,
-                    source: newLead.source,
-                    agency_id: newLead.agency_id,
+                    company_name: resolvedCompany,
+                    contact_name: resolvedContact,
+                    phone: resolvedPhone,
+                    email: resolvedEmail,
+                    status: 'new',
+                    source: 'paid_ads',
                     facebook_form_id: info.formId,
+                    facebook_leadgen_id: leadgenId,
                     ...fbFields,
                   },
                   tenant_id: info.tenantId,
