@@ -68,7 +68,7 @@ export default function Automations() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [testDialogOpen, setTestDialogOpen] = useState(false);
   const [selectedAutomation, setSelectedAutomation] = useState<any>(null);
-  const { tenantId } = useCurrentTenant();
+  const { tenantId, isActiveTenantSynced } = useCurrentTenant();
   const { buildPath } = useTenantPath();
 
   // Fetch automations
@@ -86,6 +86,7 @@ export default function Automations() {
       if (error) throw error;
       return data;
     },
+    enabled: !!tenantId && isActiveTenantSynced,
   });
 
   // Fetch logs for selected automation
@@ -110,10 +111,12 @@ export default function Automations() {
   // Toggle automation active status
   const toggleActiveMutation = useMutation({
     mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
+      if (!tenantId) throw new Error("Missing tenant");
       const { error } = await supabase
         .from("automations")
         .update({ active })
-        .eq("id", id);
+        .eq("id", id)
+        .eq("tenant_id", tenantId);
       
       if (error) throw error;
     },
