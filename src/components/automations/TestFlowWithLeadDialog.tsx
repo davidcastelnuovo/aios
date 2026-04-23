@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useToast } from "@/hooks/use-toast";
@@ -77,6 +77,7 @@ export function TestFlowWithLeadDialog({
 }: TestFlowWithLeadDialogProps) {
   const { tenantId } = useCurrentTenant();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
@@ -412,6 +413,9 @@ export function TestFlowWithLeadDialog({
       setTestResults(results);
       const successCount = results.filter((r) => r.success).length;
       toast({ title: "בדיקה הושלמה", description: `${successCount}/${results.length} הצליחו` });
+      // Refresh execution history so the new run shows up immediately
+      queryClient.invalidateQueries({ queryKey: ["automation-logs-flow", automationId] });
+      queryClient.invalidateQueries({ queryKey: ["automation-logs", automationId] });
     },
     onError: (error: any) => {
       setTestResults([{ leadId: "", leadName: "", success: false, error: error.message }]);
