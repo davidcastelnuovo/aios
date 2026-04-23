@@ -2,7 +2,7 @@ import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, AlertCircle, Ban, Building2 } from "lucide-react";
+import { ArrowLeft, AlertCircle, Ban, Building2, Copy } from "lucide-react";
 import ChatMessageList from "./ChatMessageList";
 import ChatInput from "./ChatInput";
 import { ManyChatControls } from "./ManyChatControls";
