@@ -519,6 +519,8 @@ export default function FlowEditor() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["automation-flow-steps", automationId] });
+      queryClient.invalidateQueries({ queryKey: ["automation", automationId] });
+      queryClient.invalidateQueries({ queryKey: ["automations"] });
       toast({ title: "הפלוו נשמר בהצלחה!" });
     },
     onError: (err: any) => {
