@@ -217,7 +217,6 @@ serve(async (req) => {
                 },
                 body: JSON.stringify({
                   trigger_type: 'lead_created',
-                  source: 'crm',
                   data: {
                     id: newLead.id,
                     lead_id: newLead.id,
