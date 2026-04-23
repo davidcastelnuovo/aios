@@ -287,18 +287,25 @@ export default function Chat() {
       
       if (error || !data) return [];
       
-      // Group by chat_id to get unique contacts
+      // Group by chat_id to get unique contacts.
+      // Names live on inbound messages (sender_name/sender_username may be null on outbound),
+      // so iterate ordered by created_at desc but upgrade the name when we find a better one.
       const chatMap = new Map<string, any>();
       for (const msg of data) {
         const chatIdStr = String(msg.chat_id);
-        if (!chatMap.has(chatIdStr)) {
-          // Count unread (inbound messages) - for now all are "read"
+        const existing = chatMap.get(chatIdStr);
+        if (!existing) {
           chatMap.set(chatIdStr, {
             chat_id: chatIdStr,
             name: msg.sender_name || msg.sender_username || chatIdStr,
             last_message_at: msg.created_at,
             unread_count: 0,
           });
+        } else if (
+          (existing.name === chatIdStr || !existing.name) &&
+          (msg.sender_name || msg.sender_username)
+        ) {
+          existing.name = msg.sender_name || msg.sender_username;
         }
       }
       
