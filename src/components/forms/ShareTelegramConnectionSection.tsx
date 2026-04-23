@@ -66,7 +66,7 @@ export function ShareTelegramConnectionSection({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("telegram_bot_state")
-        .select("bot_name, bot_username, bot_id")
+        .select("bot_name, bot_username")
         .eq("id", botStateId)
         .maybeSingle();
       if (error) throw error;
@@ -89,7 +89,6 @@ export function ShareTelegramConnectionSection({
           is_active: true,
           bot_name: sourceBot?.bot_name || "Shared Bot",
           bot_username: sourceBot?.bot_username || "",
-          bot_id: sourceBot?.bot_id || 0,
           update_offset: 0,
         });
         if (error) throw error;
