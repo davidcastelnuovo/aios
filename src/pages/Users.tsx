@@ -1013,33 +1013,23 @@ export default function Users() {
                 </div>
                 <div className="md:col-span-2">
                   <Label>הרשאות מודולים</Label>
-                  <div className="border rounded-md p-3 space-y-2 max-h-48 overflow-y-auto">
-                  {getAllModules().map((module) => (
-                    <div key={module.id} className="flex items-center space-x-2 space-x-reverse">
-                      <input
-                        type="checkbox"
-                        id={`module-${module.id}`}
-                        checked={selectedModules.includes(module.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedModules([...selectedModules, module.id]);
-                          } else {
-                            setSelectedModules(selectedModules.filter((id) => id !== module.id));
-                          }
-                        }}
-                        className="rounded border-gray-300 text-primary focus:ring-primary"
-                      />
-                      <label
-                        htmlFor={`module-${module.id}`}
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                      >
-                        {module.label}
-                      </label>
-                    </div>
-                  ))}
+                  <div className="mt-2 max-h-[400px] overflow-y-auto pr-1">
+                    <PermissionsSelector
+                      value={Object.fromEntries(
+                        getAllModules().map((m) => [m.id, selectedModules.includes(m.id)])
+                      )}
+                      onChange={(next) => {
+                        setSelectedModules(
+                          Object.entries(next)
+                            .filter(([, v]) => v)
+                            .map(([k]) => k)
+                        );
+                      }}
+                      idPrefix="invite-perms"
+                    />
                   </div>
                   {selectedModules.length > 0 && (
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="text-xs text-muted-foreground mt-2">
                       נבחרו {selectedModules.length} מודולים
                     </p>
                   )}
@@ -1047,31 +1037,6 @@ export default function Users() {
                     מודולים שלא נבחרו יהיו נעולים למשתמש
                   </p>
                 </div>
-              </div>
-            </ScrollArea>
-            <div className="pt-4 border-t">
-              <Button
-                onClick={() =>
-                  inviteUserMutation.mutate({
-                    email: inviteEmail,
-                    fullName: inviteFullName || undefined,
-                    role: inviteRole,
-                    agencyIds: selectedAgencies,
-                    modulePermissions: selectedModules,
-                    campaignerId: selectedCampaignerId || undefined,
-                    salesPersonId: selectedSalesPersonId || undefined,
-                  })
-                }
-                disabled={!inviteEmail || inviteUserMutation.isPending}
-                className="w-full"
-              >
-                {inviteUserMutation.isPending ? "שולח..." : "שלח הזמנה"}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-        </div>
-      </div>
 
       {isSuperAdmin ? (
         <Tabs defaultValue="users" dir="rtl">
