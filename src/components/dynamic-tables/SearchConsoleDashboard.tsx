@@ -47,9 +47,10 @@ interface AggregatedData {
   totalRecords: number;
 }
 
-type GscDateFilter = 'last_30_days' | 'last_90_days' | 'last_365_days' | 'all';
+type GscDateFilter = 'last_7_days' | 'last_30_days' | 'last_90_days' | 'last_365_days' | 'all';
 
 const DATE_FILTER_LABELS: Record<GscDateFilter, string> = {
+  last_7_days: '7 ימים',
   last_30_days: 'חודש אחרון',
   last_90_days: '3 חודשים',
   last_365_days: 'שנה',
@@ -63,7 +64,7 @@ export function SearchConsoleDashboard({ tableId, initialLangFilter, onLangFilte
   const [searchFilter, setSearchFilter] = useState("");
   const [trackedKeywords, setTrackedKeywords] = useState<string[]>([]);
   const [newKeyword, setNewKeyword] = useState("");
-  const [dateFilter, setDateFilter] = useState<GscDateFilter>('last_30_days');
+  const [dateFilter, setDateFilter] = useState<GscDateFilter>('last_7_days');
   const [langFilter, setLangFilterState] = useState<LangFilter>(initialLangFilter ?? 'all');
   const fileInputRef = useRef<HTMLInputElement>(null);
 

@@ -15,9 +15,10 @@ interface PublicGscViewProps {
   records: Array<{ id: string; data: Record<string, any> }>;
 }
 
-type GscDateFilter = "last_30_days" | "last_90_days" | "last_365_days" | "all";
+type GscDateFilter = "last_7_days" | "last_30_days" | "last_90_days" | "last_365_days" | "all";
 
 const DATE_FILTER_LABELS: Record<GscDateFilter, string> = {
+  last_7_days: "7 ימים",
   last_30_days: "חודש אחרון",
   last_90_days: "3 חודשים",
   last_365_days: "שנה",
@@ -26,7 +27,10 @@ const DATE_FILTER_LABELS: Record<GscDateFilter, string> = {
 
 function getCutoffDate(filter: GscDateFilter): string | null {
   if (filter === "all") return null;
-  const days = filter === "last_30_days" ? 30 : filter === "last_90_days" ? 90 : 365;
+  const days =
+    filter === "last_7_days" ? 7 :
+    filter === "last_30_days" ? 30 :
+    filter === "last_90_days" ? 90 : 365;
   const d = new Date();
   d.setDate(d.getDate() - days);
   return d.toISOString().split("T")[0];
@@ -36,7 +40,7 @@ export function PublicGscView({ records }: PublicGscViewProps) {
   const [sortBy, setSortBy] = useState<string>("position");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [searchFilter, setSearchFilter] = useState("");
-  const [dateFilter, setDateFilter] = useState<GscDateFilter>("last_30_days");
+  const [dateFilter, setDateFilter] = useState<GscDateFilter>("last_7_days");
 
   // Aggregate per query, weighted by impressions for position/CTR
   const aggregated = useMemo(() => {

@@ -96,7 +96,7 @@ export function GoogleAnalyticsDashboard({
   defaultReportMode,
 }: GoogleAnalyticsDashboardProps) {
   const mapExternalPreset = (ext?: string): DateRangePreset => {
-    if (!ext) return 'last_30_days';
+    if (!ext) return 'last_7_days';
     const map: Record<string, DateRangePreset> = {
       'all': 'all',
       'today': 'today',
@@ -113,7 +113,7 @@ export function GoogleAnalyticsDashboard({
       'last_365_days': 'last_365_days',
       'custom': 'custom',
     };
-    return map[ext] || 'last_30_days';
+    return map[ext] || 'last_7_days';
   };
 
   const usesExternalFilter = typeof externalDateFilter === 'string';
