@@ -1,59 +1,62 @@
+# תיקון פער בין דוח פנימי לדוח שיתוף (BeaverTech ודוחות אחרים)
 
+## הסיבה לפער
 
-## שיתוף חיבור טלגרם בין ארגונים (כמו פייסבוק)
+יש **שתי לוגיקות נפרדות** לחישוב טווח תאריכים — אחת בפרונט (`DynamicTableView.tsx`) ואחת ב-edge function (`public-table/index.ts`). הן לא תואמות.
 
-### האבחנה
-האוטומציה "התראה לטלגרם" יושבת בארגון **Yuval-Uzana**, אבל לארגון הזה אין רשומת בוט פעילה ב-`telegram_bot_state`. רק שני ארגונים מוגדרים כיום עם בוט פעיל:
-- **MarketingCaptain** (Carmen / @Afterleafbot)
-- **DMM** (Carmen / @Afterleafbot)
+**דוגמה — "7 ימים אחרונים" כשהיום 26.4:**
 
-ה-Bot Token עצמו הוא **גלובלי** במערכת (env var `TELEGRAM_API_KEY` ב-Lovable Cloud), אבל הקוד הקיים (`TelegramSettings`, `telegram-send`, וה-poller) עובד מול `telegram_bot_state` per-tenant בלבד. כדי שאוטומציה בארגון של יובל תוכל להישען על אותו בוט בלי שיובל יצטרך ליצור בוט חדש דרך BotFather, נוסיף מנגנון שיתוף זהה בעיקרון לזה של פייסבוק.
+| מקור | טווח | תוצאה |
+|---|---|---|
+| דוח פנימי | `today-7` עד `today-1` = **19.4–25.4** (7 ימים מלאים, ללא היום) | 8 לידים, 1,048₪ |
+| קישור שיתוף | `today-6` עד `today` = **20.4–26.4** (כולל היום) | 5 לידים, 878₪ |
 
-### העיקרון
-מוסיפים עמודה `shared_from_state_id` ל-`telegram_bot_state` (כמו `shared_from_integration_id` ב-`tenant_integrations`). ארגון יכול להיווצר עם רשומה "צל" שמצביעה על בוט פעיל בארגון אחר, ובכל מקום בקוד שצריך לוודא בוט פעיל — בודקים גם את הצל וגם את המקור.
+זה גם יסביר למה השיתוף מציג פחות — היום (26.4) לרוב חסר/חלקי בנתוני פייסבוק (סנכרון יומי), אז כשהוא נכלל בטווח אבל ימים מההיסטוריה (19.4) נופלים החוצה — מקבלים נתון נמוך יותר.
 
-### שינויים בבסיס הנתונים (migration)
-1. הוספת `shared_from_state_id uuid REFERENCES telegram_bot_state(id) ON DELETE CASCADE` לטבלת `telegram_bot_state`.
-2. הסרת הייחודיות הקיימת על `tenant_id` אם קיימת unique constraint שמונעת רשומה כפולה (יישאר UNIQUE רק לרשומות "אמיתיות"; לרשומות שיתוף יותר חופשי).
-3. הוספת RLS חדש: בעלים של ארגון המקור יכול ליצור/למחוק רשומות שיתוף לארגונים שהוא חבר בהם.
+## הבדלים נוספים שמצאתי
 
-### שינויים בקוד
+1. **אופציות חסרות בשיתוף**: ב-edge function יש רק `today / yesterday / last_7_days / this_month / last_month / last_70_days`. כל שאר האפשרויות (last_14, last_30, last_90, last_180, last_365, this_week, last_week, custom) נופלות ל-default = `last_30_days`. זה אומר שאם המשתמש בוחר משהו אחר — מקבל טווח אחר לגמרי.
 
-**1. רכיב חדש `ShareTelegramConnectionSection.tsx`** (מחקה את `ShareFacebookConnectionSection`):
-- מציג רשימת ארגונים אחרים שהמשתמש חבר בהם.
-- צ'קבוקסים לבחירה + כפתור "שמור שיתופים".
-- ה-mutation מבצע insert/delete של רשומות צל ב-`telegram_bot_state` עם `shared_from_state_id` מצביע לבוט המקורי.
+2. **סינון `report_type === 'daily'`**: ב-SharedTable מסונן רק לטבלאות אנליטיקס; בדוח הפנימי לא מסנן בכלל לפי שדה זה. עבור פייסבוק זה לא צריך לשנות (כל הרשומות יומיות), אבל שווה ליישר.
 
-**2. עדכון `src/pages/TelegramSettings.tsx`**:
-- הצגת באנר "בוט משותף מארגון X" כשהבוט הנוכחי הוא צל (`shared_from_state_id` קיים) — כולל כפתור "הסר שיתוף".
-- הצגת `ShareTelegramConnectionSection` רק כשמדובר בבוט מקורי (לא משותף).
-- הסתרת טופס "Bot Token" כשהבוט הוא משותף.
+3. **הצד הפנימי שולח טווח לפי שדה `record.data.date` בלבד**, והצד של השיתוף תומך גם ב-`date_start` — קל ליישר את שניהם.
 
-**3. עדכון `supabase/functions/trigger-automation/index.ts`** (שלב `send_telegram` בשורה ~1154):
-- אין צורך לשנות את לוגיקת השליחה (היא משתמשת ב-`TELEGRAM_API_KEY` הגלובלי), אבל **כן צריך** להוסיף בדיקת קיום בוט פעיל ל-tenant (כדי לתת שגיאה ברורה אם אין שיתוף).
-- הבדיקה: יש ל-tenant רשומה ב-`telegram_bot_state` עם `is_active=true` — אם זו רשומת צל, נטען גם את ה-`bot_username` מהמקור לתיעוד ההודעה היוצאת.
+## מה אני מתכנן לתקן
 
-**4. עדכון `supabase/functions/telegram-send/index.ts`**:
-- אם `botState` של ה-tenant הוא צל, בכל זאת מאשר שליחה (הבוט הגלובלי תקף).
+### 1. יישור פונקציית `getDateRange` ב-edge function `public-table`
+ליישר 1:1 לפי הלוגיקה של `DynamicTableView`:
+- `last_7_days` → `today-7` עד `today-1` (לא כולל היום)
+- להוסיף את כל האפשרויות החסרות: `last_14_days`, `last_30_days`, `last_90_days`, `last_180_days`, `last_365_days`, `this_week`, `last_week`, `all`, `custom`
+- לתמוך ב-`custom_start` / `custom_end` query params לטווח מותאם
+- להוסיף תמיכה ב-`all` (ללא סינון תאריך)
 
-**5. עדכון `supabase/functions/telegram-poll/index.ts`**:
-- כשמדלגים על רשומות צל בלולאת ה-poll (אין צורך לבצע long-polling פעמיים על אותו בוט). הצל ירש offset מהמקור — נסנן `shared_from_state_id IS NULL` בשליפת הבוטים.
-- ההודעות הנכנסות יישארו ב-tenant של המקור (`MarketingCaptain`); זה תקין כי `chat_id` של יובל (6267185334) מקושר אישית, לא ל-tenant.
+### 2. יישור `SharedTable.tsx`
+- להוסיף לבורר התאריכים את כל האופציות שקיימות בדוח הפנימי (כולל "מותאם")
+- להוסיף תמיכה ב-custom range (date picker) ולשלוח `custom_start`/`custom_end` לפונקציה
+- לוודא ש-default ל-Facebook הוא `last_7_days` (כבר ככה — להשאיר)
 
-### תהליך השימוש מצד המשתמש
-1. נכנסים ל-`TelegramSettings` בארגון **MarketingCaptain** (שם הבוט המקורי).
-2. בכרטיס "שתף חיבור עם ארגונים אחרים" מסמנים את **Yuval-Uzana**.
-3. לוחצים שמור — נוצרת רשומת צל פעילה ב-`telegram_bot_state` עבור Yuval-Uzana.
-4. האוטומציה "התראה לטלגרם" מתחילה לעבוד מיד (היא כבר מקונפגת עם chat_id `6267185334` של יובל).
+### 3. יישור פילטר רשומות
+- בצד פונקציית השיתוף: לקרוא גם `record.data.date` וגם `record.data.date_start` (כבר כך — להשאיר)
+- להסיר את הסינון של `report_type === 'daily'` מצד `SharedTable.tsx` כי הצד הפנימי לא עושה את זה — או לחילופין להוסיף את אותו הסינון בצד הפנימי. אני אבחר **להסיר ב-SharedTable** כדי לשמור על נאמנות מלאה לדוח הפנימי.
 
-### תוצאה צפויה
-הליד הבא שייכנס דרך הסנכרון האוטומטי לארגון Yuval-Uzana יפעיל את האוטומציה, ויובל יקבל הודעת טלגרם דרך @Afterleafbot עם פרטי הליד.
+### 4. סינון לפי `is_active` בקמפיינים — לוודא שלא חסר
+לוודא שאין הבדל בלוגיקת ה-aggregation של קמפיינים (`campaignSummary`) בין שני המסכים. הבדיקה הראשונית מראה שהלוגיקה זהה — אם אמצא הפרש, ארשום פה.
 
-### קבצים שיתעדכנו
-- migration חדש: עמודה `shared_from_state_id` ב-`telegram_bot_state` + RLS
-- `src/components/forms/ShareTelegramConnectionSection.tsx` (חדש)
-- `src/pages/TelegramSettings.tsx`
-- `supabase/functions/trigger-automation/index.ts`
-- `supabase/functions/telegram-send/index.ts`
-- `supabase/functions/telegram-poll/index.ts`
+## אזהרות וזהירות לדוחות אחרים
 
+- **דוחות Ahrefs/SEO**: יש להם זרם נפרד בפונקציה (`if (table.integration_type === "ahrefs")`) שמחזיר `ahrefs_reports / ga_records / gsc_records` — **לא נוגעים בו**. הוא מתעלם בכלל מ-`dateFilter`.
+- **דוחות Google Analytics / GSC עצמאיים** (כשמופיעים כטבלת אינטגרציה רגילה): כן יושפעו מתיקון `getDateRange`, אבל זה הרצוי — גם הם יציגו את אותו טווח כמו הדוח הפנימי.
+- **טבלאות CRM רגילות (לא אינטגרציה)**: סינון התאריך פועל על `record.data.date` שלרוב לא קיים → כל הרשומות יוחזרו. ללא שינוי באפקט.
+- **דוחות E-commerce של פייסבוק**: אותה לוגיקת תאריך — יישתפר באותה מידה.
+- **`SharedDashboard`** (קישור שיתוף לדשבורד מרובה טבלאות): לא בטיפול הזה — שונה ארכיטקטונית. אם יש אותו פער גם שם, נטפל בנפרד.
+
+## קבצים שיתעדכנו
+
+- `supabase/functions/public-table/index.ts` — הרחבת `getDateRange` + תמיכה ב-custom range
+- `src/pages/SharedTable.tsx` — הרחבת בורר התאריכים, custom date picker, הסרת פילטר `report_type === 'daily'`
+
+## מה לא ישתנה
+
+- הדוח הפנימי (`DynamicTableView.tsx`) — נשאר כמקור האמת
+- כל זרם ה-Ahrefs/SEO בפונקציית השיתוף
+- לוגיקת קמפיינים, KPI, חישוב CPL/ROAS — זהה כבר היום
