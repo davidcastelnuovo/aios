@@ -1,62 +1,34 @@
-# תיקון פער בין דוח פנימי לדוח שיתוף (BeaverTech ודוחות אחרים)
+## הבעיה
 
-## הסיבה לפער
+דיאלוג **עריכת הרשאות** של משתמש קיים (`EditUserPermissionsDialog`) כבר בנוי כמו שצריך — מחולק לקטגוריות עם אייקונים, badges, צ'קבוקס "בחר הכל לקטגוריה", וכל המודולים נכונים (`PERMISSION_CATEGORIES`).
 
-יש **שתי לוגיקות נפרדות** לחישוב טווח תאריכים — אחת בפרונט (`DynamicTableView.tsx`) ואחת ב-edge function (`public-table/index.ts`). הן לא תואמות.
+אבל בדיאלוג **הזמנת משתמש חדש** (`Users.tsx`, שורות 1014-1048) עדיין יש רשימה ישנה ושטוחה של צ'קבוקסים שמבוססת על `getAllModules()` בלי קטגוריות, בלי אייקונים, ובלי אותה חלוקה.
 
-**דוגמה — "7 ימים אחרונים" כשהיום 26.4:**
+## הפתרון
 
-| מקור | טווח | תוצאה |
-|---|---|---|
-| דוח פנימי | `today-7` עד `today-1` = **19.4–25.4** (7 ימים מלאים, ללא היום) | 8 לידים, 1,048₪ |
-| קישור שיתוף | `today-6` עד `today` = **20.4–26.4** (כולל היום) | 5 לידים, 878₪ |
+לחלץ את ה-UI הפנימי של `EditUserPermissionsDialog` לרכיב משותף ולהשתמש בו בשני המקומות. ככה גם הזמנת משתמש חדש וגם עריכת הרשאות יראו וירגישו בדיוק אותו דבר, וכל שינוי עתידי ל-`PERMISSION_CATEGORIES` יתעדכן אוטומטית בשני הזרמים.
 
-זה גם יסביר למה השיתוף מציג פחות — היום (26.4) לרוב חסר/חלקי בנתוני פייסבוק (סנכרון יומי), אז כשהוא נכלל בטווח אבל ימים מההיסטוריה (19.4) נופלים החוצה — מקבלים נתון נמוך יותר.
+## שינויים
 
-## הבדלים נוספים שמצאתי
+### 1. רכיב חדש: `src/components/forms/PermissionsSelector.tsx`
+רכיב controlled שמקבל:
+- `value: Record<string, boolean>` — מצב ההרשאות הנוכחי
+- `onChange: (next) => void` — handler לעדכון
 
-1. **אופציות חסרות בשיתוף**: ב-edge function יש רק `today / yesterday / last_7_days / this_month / last_month / last_70_days`. כל שאר האפשרויות (last_14, last_30, last_90, last_180, last_365, this_week, last_week, custom) נופלות ל-default = `last_30_days`. זה אומר שאם המשתמש בוחר משהו אחר — מקבל טווח אחר לגמרי.
+מרנדר את אותו UI שכבר קיים ב-`EditUserPermissionsDialog`:
+- לולאה על `PERMISSION_CATEGORIES`
+- לכל קטגוריה: אייקון, badge צבעוני, מונה (X/Y), צ'קבוקס "בחר הכל" (כולל מצב indeterminate)
+- לכל מודול: צ'קבוקס + label + description
 
-2. **סינון `report_type === 'daily'`**: ב-SharedTable מסונן רק לטבלאות אנליטיקס; בדוח הפנימי לא מסנן בכלל לפי שדה זה. עבור פייסבוק זה לא צריך לשנות (כל הרשומות יומיות), אבל שווה ליישר.
+### 2. עדכון `EditUserPermissionsDialog.tsx`
+להשאיר את כל לוגיקת ה-data (טעינה מ-DB, שמירה, owner detection) ולהחליף את גוף ה-render הפנימי בשימוש ב-`<PermissionsSelector value={permissions} onChange={setPermissions} />`. אין שינוי פונקציונלי — רק ארגון מחדש.
 
-3. **הצד הפנימי שולח טווח לפי שדה `record.data.date` בלבד**, והצד של השיתוף תומך גם ב-`date_start` — קל ליישר את שניהם.
+### 3. עדכון `src/pages/Users.tsx` (דיאלוג הזמנת משתמש)
+- להחליף את ה-`state` הקיים `selectedModules: string[]` ב-`selectedModulesMap: Record<string, boolean>` (כדי להתאים לחתימת הרכיב המשותף).
+- להמיר ברירות מחדל לפי תפקיד (קמפיינר → dashboard, clients, tasks, chat, time_tracking; שאר התפקידים כמו שכבר קיים) למפה.
+- להחליף את ה-block של שורות 1013-1048 ב-`<PermissionsSelector value={selectedModulesMap} onChange={setSelectedModulesMap} />`.
+- להמיר את המפה חזרה למערך `string[]` של מודולים מאופשרים (`Object.entries(...).filter(...).map(...)`) לפני שליחה ל-`inviteUserMutation` (שדה `modulePermissions`), כדי לא לשבור את ה-edge function.
+- לעדכן את כפתור "בחר הכל" הקיים (שורה 935) שיעדכן את המפה במקום את המערך.
 
-## מה אני מתכנן לתקן
-
-### 1. יישור פונקציית `getDateRange` ב-edge function `public-table`
-ליישר 1:1 לפי הלוגיקה של `DynamicTableView`:
-- `last_7_days` → `today-7` עד `today-1` (לא כולל היום)
-- להוסיף את כל האפשרויות החסרות: `last_14_days`, `last_30_days`, `last_90_days`, `last_180_days`, `last_365_days`, `this_week`, `last_week`, `all`, `custom`
-- לתמוך ב-`custom_start` / `custom_end` query params לטווח מותאם
-- להוסיף תמיכה ב-`all` (ללא סינון תאריך)
-
-### 2. יישור `SharedTable.tsx`
-- להוסיף לבורר התאריכים את כל האופציות שקיימות בדוח הפנימי (כולל "מותאם")
-- להוסיף תמיכה ב-custom range (date picker) ולשלוח `custom_start`/`custom_end` לפונקציה
-- לוודא ש-default ל-Facebook הוא `last_7_days` (כבר ככה — להשאיר)
-
-### 3. יישור פילטר רשומות
-- בצד פונקציית השיתוף: לקרוא גם `record.data.date` וגם `record.data.date_start` (כבר כך — להשאיר)
-- להסיר את הסינון של `report_type === 'daily'` מצד `SharedTable.tsx` כי הצד הפנימי לא עושה את זה — או לחילופין להוסיף את אותו הסינון בצד הפנימי. אני אבחר **להסיר ב-SharedTable** כדי לשמור על נאמנות מלאה לדוח הפנימי.
-
-### 4. סינון לפי `is_active` בקמפיינים — לוודא שלא חסר
-לוודא שאין הבדל בלוגיקת ה-aggregation של קמפיינים (`campaignSummary`) בין שני המסכים. הבדיקה הראשונית מראה שהלוגיקה זהה — אם אמצא הפרש, ארשום פה.
-
-## אזהרות וזהירות לדוחות אחרים
-
-- **דוחות Ahrefs/SEO**: יש להם זרם נפרד בפונקציה (`if (table.integration_type === "ahrefs")`) שמחזיר `ahrefs_reports / ga_records / gsc_records` — **לא נוגעים בו**. הוא מתעלם בכלל מ-`dateFilter`.
-- **דוחות Google Analytics / GSC עצמאיים** (כשמופיעים כטבלת אינטגרציה רגילה): כן יושפעו מתיקון `getDateRange`, אבל זה הרצוי — גם הם יציגו את אותו טווח כמו הדוח הפנימי.
-- **טבלאות CRM רגילות (לא אינטגרציה)**: סינון התאריך פועל על `record.data.date` שלרוב לא קיים → כל הרשומות יוחזרו. ללא שינוי באפקט.
-- **דוחות E-commerce של פייסבוק**: אותה לוגיקת תאריך — יישתפר באותה מידה.
-- **`SharedDashboard`** (קישור שיתוף לדשבורד מרובה טבלאות): לא בטיפול הזה — שונה ארכיטקטונית. אם יש אותו פער גם שם, נטפל בנפרד.
-
-## קבצים שיתעדכנו
-
-- `supabase/functions/public-table/index.ts` — הרחבת `getDateRange` + תמיכה ב-custom range
-- `src/pages/SharedTable.tsx` — הרחבת בורר התאריכים, custom date picker, הסרת פילטר `report_type === 'daily'`
-
-## מה לא ישתנה
-
-- הדוח הפנימי (`DynamicTableView.tsx`) — נשאר כמקור האמת
-- כל זרם ה-Ahrefs/SEO בפונקציית השיתוף
-- לוגיקת קמפיינים, KPI, חישוב CPL/ROAS — זהה כבר היום
+## תוצאה למשתמש
+דיאלוג הזמנת משתמש חדש יציג את אותו UI מודרני ומחולק לקטגוריות שכבר קיים בעריכת משתמש, כולל ההרשאה ל"אינטגרציות לידים" וכל שאר המודולים החסרים שכבר היו ב-`PERMISSION_CATEGORIES`. לא נוצרת כפילות קוד ולא נכתב דיאלוג חדש.

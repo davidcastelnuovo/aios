@@ -9,48 +9,12 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
-import { PERMISSION_CATEGORIES, getAllModules } from "@/lib/modules";
-import {
-  ClipboardList,
-  MessageSquare,
-  TrendingUp,
-  Share2,
-  Building2,
-  Zap,
-  Plug,
-  Settings,
-  ShieldAlert,
-} from "lucide-react";
-
-// ─── אייקון לכל קטגוריה ────────────────────────────────────────────────────
-const CATEGORY_ICONS: Record<string, React.ReactNode> = {
-  daily:         <ClipboardList className="h-4 w-4" />,
-  communication: <MessageSquare className="h-4 w-4" />,
-  sales:         <TrendingUp className="h-4 w-4" />,
-  marketing:     <Share2 className="h-4 w-4" />,
-  organization:  <Building2 className="h-4 w-4" />,
-  automation:    <Zap className="h-4 w-4" />,
-  integrations:  <Plug className="h-4 w-4" />,
-  settings:      <Settings className="h-4 w-4" />,
-  special:       <ShieldAlert className="h-4 w-4" />,
-};
-
-// ─── צבע badge לכל קטגוריה ─────────────────────────────────────────────────
-const CATEGORY_COLORS: Record<string, string> = {
-  daily:         "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
-  communication: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
-  sales:         "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
-  marketing:     "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
-  organization:  "bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-300",
-  automation:    "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300",
-  integrations:  "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
-  settings:      "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300",
-  special:       "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
-};
+import { getAllModules } from "@/lib/modules";
+import { PermissionsSelector } from "@/components/forms/PermissionsSelector";
 
 // ─── Props ──────────────────────────────────────────────────────────────────
 interface EditUserPermissionsDialogProps {
@@ -168,36 +132,6 @@ export function EditUserPermissionsDialog({
     updatePermissionsMutation.mutate(permissions);
   };
 
-  const togglePermission = (moduleId: string) => {
-    setPermissions(prev => ({ ...prev, [moduleId]: !prev[moduleId] }));
-  };
-
-  // בחירת/ביטול כל הקטגוריה
-  const toggleCategory = (categoryId: string, value: boolean) => {
-    const cat = PERMISSION_CATEGORIES.find(c => c.id === categoryId);
-    if (!cat) return;
-    setPermissions(prev => {
-      const next = { ...prev };
-      cat.modules.forEach(m => { next[m.id] = value; });
-      return next;
-    });
-  };
-
-  // האם כל הקטגוריה מסומנת
-  const isCategoryFullyChecked = (categoryId: string): boolean => {
-    const cat = PERMISSION_CATEGORIES.find(c => c.id === categoryId);
-    if (!cat) return false;
-    return cat.modules.every(m => permissions[m.id] === true);
-  };
-
-  // האם חלק מהקטגוריה מסומן
-  const isCategoryPartiallyChecked = (categoryId: string): boolean => {
-    const cat = PERMISSION_CATEGORIES.find(c => c.id === categoryId);
-    if (!cat) return false;
-    const checked = cat.modules.filter(m => permissions[m.id] === true).length;
-    return checked > 0 && checked < cat.modules.length;
-  };
-
   // ספירת הרשאות פעילות
   const activeCount = Object.values(permissions).filter(Boolean).length;
   const totalCount = allModules.length;
@@ -215,77 +149,12 @@ export function EditUserPermissionsDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
-          {PERMISSION_CATEGORIES.map((category) => {
-            const fullyChecked = isCategoryFullyChecked(category.id);
-            const partiallyChecked = isCategoryPartiallyChecked(category.id);
-            const colorClass = CATEGORY_COLORS[category.id] ?? "bg-gray-100 text-gray-800";
-            const icon = CATEGORY_ICONS[category.id];
-            const categoryActiveCount = category.modules.filter(m => permissions[m.id]).length;
-
-            return (
-              <div
-                key={category.id}
-                className="rounded-lg border bg-card overflow-hidden"
-              >
-                {/* כותרת קטגוריה */}
-                <div className="flex items-center justify-between px-4 py-3 bg-muted/40 border-b">
-                  <div className="flex items-center gap-2">
-                    {/* Checkbox לבחירת כל הקטגוריה */}
-                    <Checkbox
-                      id={`cat-${category.id}`}
-                      checked={fullyChecked}
-                      data-state={partiallyChecked ? "indeterminate" : undefined}
-                      className={partiallyChecked ? "opacity-70" : ""}
-                      onCheckedChange={(checked) =>
-                        toggleCategory(category.id, !!checked)
-                      }
-                    />
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${colorClass}`}>
-                      {icon}
-                      {category.label}
-                    </span>
-                    {category.description && (
-                      <span className="text-xs text-muted-foreground hidden sm:inline">
-                        {category.description}
-                      </span>
-                    )}
-                  </div>
-                  <Badge variant="outline" className="text-xs">
-                    {categoryActiveCount}/{category.modules.length}
-                  </Badge>
-                </div>
-
-                {/* מודולים */}
-                <div className="divide-y">
-                  {category.modules.map((module) => (
-                    <div
-                      key={module.id}
-                      className="flex items-start gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors"
-                    >
-                      <Checkbox
-                        id={`module-${module.id}`}
-                        checked={permissions[module.id] ?? false}
-                        onCheckedChange={() => togglePermission(module.id)}
-                        className="mt-0.5"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <label
-                          htmlFor={`module-${module.id}`}
-                          className="text-sm font-medium leading-none cursor-pointer"
-                        >
-                          {module.label}
-                        </label>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {module.description}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
+        <div className="py-2">
+          <PermissionsSelector
+            value={permissions}
+            onChange={setPermissions}
+            idPrefix="edit-perms"
+          />
         </div>
 
         {/* כפתורי פעולה */}
