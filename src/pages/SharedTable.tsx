@@ -18,14 +18,23 @@ import { PublicGscView } from "@/components/dynamic-tables/PublicGscView";
 import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnalyticsDashboard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
+// Date filter options — must match the internal DynamicTableView so the
+// shared link presents the same windows as the internal report.
 const DATE_FILTERS = [
   { value: 'today', label: 'היום' },
   { value: 'yesterday', label: 'אתמול' },
+  { value: 'this_week', label: 'השבוע' },
+  { value: 'last_week', label: 'שבוע שעבר' },
   { value: 'last_7_days', label: '7 ימים אחרונים' },
+  { value: 'last_14_days', label: '14 יום אחרונים' },
   { value: 'last_30_days', label: '30 יום אחרונים' },
   { value: 'last_70_days', label: '70 יום אחרונים' },
+  { value: 'last_90_days', label: '90 יום אחרונים' },
+  { value: 'last_180_days', label: '180 יום אחרונים' },
+  { value: 'last_365_days', label: 'שנה אחרונה' },
   { value: 'this_month', label: 'החודש הנוכחי' },
   { value: 'last_month', label: 'חודש קודם' },
+  { value: 'all', label: 'הכל' },
 ];
 
 // --- Helpers (same as SharedDashboard) ---
