@@ -103,6 +103,8 @@ Deno.serve(async (req) => {
     const url = new URL(req.url);
     const shareToken = url.searchParams.get("token");
     const dateFilter = url.searchParams.get("date_filter") || "last_30_days";
+    const customStart = url.searchParams.get("custom_start");
+    const customEnd = url.searchParams.get("custom_end");
 
     if (!shareToken) {
       return new Response(JSON.stringify({ error: "Missing token" }), {
