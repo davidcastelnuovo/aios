@@ -46,6 +46,7 @@ export type ModulePermission =
   | "automations"
   | "agents"
   // ── אינטגרציות ────────────────────────────────────────────────────────
+  | "integrations"
   | "lead_integrations"
   | "chat_integrations"
   | "manychat_settings"
@@ -115,6 +116,7 @@ export function useUserPermissions() {
       "sales_dashboard",
       "leads",
       "sales_people",
+      "integrations",
       "lead_integrations",
       "automations",
       "tenants",
