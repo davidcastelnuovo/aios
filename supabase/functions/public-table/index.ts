@@ -6,49 +6,92 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-function getDateRange(filter: string): { startDate: string | null; endDate: string | null } {
+function fmt(d: Date): string {
+  // Format as yyyy-MM-dd in local time (matches DynamicTableView's format(d, 'yyyy-MM-dd'))
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function subDays(base: Date, days: number): Date {
+  const d = new Date(base.getFullYear(), base.getMonth(), base.getDate());
+  d.setDate(d.getDate() - days);
+  return d;
+}
+
+/**
+ * Mirror of getDateRange logic in src/pages/DynamicTableView.tsx
+ * (the internal report). MUST stay in sync so the public share link
+ * shows the exact same numbers as the internal view.
+ *
+ * Notably: "last_N_days" excludes today (today-N .. today-1) — same as
+ * the internal view, because today's data is usually partial during the day.
+ */
+function getDateRange(
+  filter: string,
+  customStart?: string | null,
+  customEnd?: string | null,
+): { startDate: string | null; endDate: string | null } {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  let startDate: string | null = null;
-  let endDate: string | null = null;
 
   switch (filter) {
+    case "all":
+      return { startDate: null, endDate: null };
     case "today":
-      startDate = today.toISOString().split("T")[0];
-      endDate = startDate;
-      break;
+      return { startDate: fmt(today), endDate: fmt(today) };
     case "yesterday": {
-      const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
-      startDate = yesterday.toISOString().split("T")[0];
-      endDate = startDate;
-      break;
+      const y = subDays(today, 1);
+      return { startDate: fmt(y), endDate: fmt(y) };
+    }
+    case "this_week": {
+      // Week starts on Sunday (weekStartsOn: 0 in DynamicTableView)
+      const start = new Date(today);
+      start.setDate(today.getDate() - today.getDay());
+      return { startDate: fmt(start), endDate: fmt(today) };
+    }
+    case "last_week": {
+      const startOfThisWeek = new Date(today);
+      startOfThisWeek.setDate(today.getDate() - today.getDay());
+      const endLW = subDays(startOfThisWeek, 1);
+      const startLW = subDays(endLW, 6);
+      return { startDate: fmt(startLW), endDate: fmt(endLW) };
     }
     case "last_7_days":
-      startDate = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-      endDate = today.toISOString().split("T")[0];
-      break;
+      return { startDate: fmt(subDays(today, 7)), endDate: fmt(subDays(today, 1)) };
+    case "last_14_days":
+      return { startDate: fmt(subDays(today, 14)), endDate: fmt(subDays(today, 1)) };
+    case "last_30_days":
+      return { startDate: fmt(subDays(today, 30)), endDate: fmt(subDays(today, 1)) };
+    case "last_70_days":
+      return { startDate: fmt(subDays(today, 70)), endDate: fmt(subDays(today, 1)) };
+    case "last_90_days":
+      return { startDate: fmt(subDays(today, 90)), endDate: fmt(subDays(today, 1)) };
+    case "last_180_days":
+      return { startDate: fmt(subDays(today, 180)), endDate: fmt(subDays(today, 1)) };
+    case "last_365_days":
+      return { startDate: fmt(subDays(today, 365)), endDate: fmt(subDays(today, 1)) };
     case "this_month":
-      startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
-      endDate = today.toISOString().split("T")[0];
-      break;
-    case "last_month": {
-      const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
-      startDate = startOfLastMonth.toISOString().split("T")[0];
-      endDate = endOfLastMonth.toISOString().split("T")[0];
-      break;
-    }
-    case 'last_70_days':
-      startDate = new Date(today.getTime() - 70 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-      endDate = today.toISOString().split("T")[0];
-      break;
-    default: // last_30_days
-      startDate = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-      endDate = today.toISOString().split("T")[0];
-      break;
+      return {
+        startDate: fmt(new Date(now.getFullYear(), now.getMonth(), 1)),
+        endDate: fmt(today),
+      };
+    case "last_month":
+      return {
+        startDate: fmt(new Date(now.getFullYear(), now.getMonth() - 1, 1)),
+        endDate: fmt(new Date(now.getFullYear(), now.getMonth(), 0)),
+      };
+    case "custom":
+      if (customStart && customEnd) {
+        return { startDate: customStart, endDate: customEnd };
+      }
+      // Fall through to default if custom range incomplete
+      return { startDate: fmt(subDays(today, 30)), endDate: fmt(subDays(today, 1)) };
+    default:
+      // Default mirrors internal default: last_30_days
+      return { startDate: fmt(subDays(today, 30)), endDate: fmt(subDays(today, 1)) };
   }
-
-  return { startDate, endDate };
 }
 
 Deno.serve(async (req) => {
