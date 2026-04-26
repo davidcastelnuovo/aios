@@ -39,6 +39,7 @@ import EditManagedAgenciesDialog from "@/components/forms/EditManagedAgenciesDia
 import { ResetPasswordDialog } from "@/components/forms/ResetPasswordDialog";
 import { syncProfileToTeamMember } from "@/hooks/useSyncProfileTeamMember";
 import { getAllModules } from "@/lib/modules";
+import { PermissionsSelector } from "@/components/forms/PermissionsSelector";
 import {
   Dialog,
   DialogContent,
