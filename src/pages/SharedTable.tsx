@@ -136,14 +136,14 @@ export default function SharedTable() {
   const forceLeadsOnly = tableMode === 'leads';
   const forceEcommerceOnly = tableMode === 'ecommerce';
 
-  // For integration tables: filter only daily records for analytics
+  // Records to feed into KPI/aggregation logic. We intentionally do NOT
+  // pre-filter by report_type here so the public shared view stays
+  // identical to the internal DynamicTableView (which never filters by
+  // report_type either). The edge function already applies the date
+  // window using the same logic as the internal view.
   const filteredRecords = useMemo(() => {
-    const recs = data?.records || [];
-    if (isAnalyticsPlatform(integrationType || '')) {
-      return recs.filter((r: any) => r.data?.report_type === 'daily' || !r.data?.report_type);
-    }
-    return recs;
-  }, [data, integrationType]);
+    return data?.records || [];
+  }, [data]);
 
   // Summary for integration tables
   const summary = useMemo(() => {
