@@ -13,44 +13,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
-import { PERMISSION_CATEGORIES, getAllModules } from "@/lib/modules";
-import {
-  ClipboardList,
-  MessageSquare,
-  TrendingUp,
-  Share2,
-  Building2,
-  Zap,
-  Plug,
-  Settings,
-  ShieldAlert,
-} from "lucide-react";
-
-// ─── אייקון לכל קטגוריה ────────────────────────────────────────────────────
-const CATEGORY_ICONS: Record<string, React.ReactNode> = {
-  daily:         <ClipboardList className="h-4 w-4" />,
-  communication: <MessageSquare className="h-4 w-4" />,
-  sales:         <TrendingUp className="h-4 w-4" />,
-  marketing:     <Share2 className="h-4 w-4" />,
-  organization:  <Building2 className="h-4 w-4" />,
-  automation:    <Zap className="h-4 w-4" />,
-  integrations:  <Plug className="h-4 w-4" />,
-  settings:      <Settings className="h-4 w-4" />,
-  special:       <ShieldAlert className="h-4 w-4" />,
-};
-
-// ─── צבע badge לכל קטגוריה ─────────────────────────────────────────────────
-const CATEGORY_COLORS: Record<string, string> = {
-  daily:         "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
-  communication: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
-  sales:         "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
-  marketing:     "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
-  organization:  "bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-300",
-  automation:    "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300",
-  integrations:  "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
-  settings:      "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300",
-  special:       "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
-};
+import { getAllModules } from "@/lib/modules";
+import { PermissionsSelector } from "@/components/forms/PermissionsSelector";
 
 // ─── Props ──────────────────────────────────────────────────────────────────
 interface EditUserPermissionsDialogProps {
