@@ -1037,6 +1037,31 @@ export default function Users() {
                     מודולים שלא נבחרו יהיו נעולים למשתמש
                   </p>
                 </div>
+              </div>
+            </ScrollArea>
+            <div className="pt-4 border-t">
+              <Button
+                onClick={() =>
+                  inviteUserMutation.mutate({
+                    email: inviteEmail,
+                    fullName: inviteFullName || undefined,
+                    role: inviteRole,
+                    agencyIds: selectedAgencies,
+                    modulePermissions: selectedModules,
+                    campaignerId: selectedCampaignerId || undefined,
+                    salesPersonId: selectedSalesPersonId || undefined,
+                  })
+                }
+                disabled={!inviteEmail || inviteUserMutation.isPending}
+                className="w-full"
+              >
+                {inviteUserMutation.isPending ? "שולח..." : "שלח הזמנה"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+        </div>
+      </div>
 
       {isSuperAdmin ? (
         <Tabs defaultValue="users" dir="rtl">
