@@ -293,7 +293,7 @@ const modulePermissions: Record<string, string> = {
   agents: "agents",
   // ── אינטגרציות ──────────────────────────────────────────────────────
   "lead-integrations": "lead_integrations",
-  integrations: "lead_integrations",
+  integrations: "integrations",
   "chat-integrations": "chat_integrations",
   "manychat-settings": "manychat_settings",
   "green-api-settings": "green_api_settings",

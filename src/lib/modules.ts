@@ -270,6 +270,12 @@ export const PERMISSION_CATEGORIES: PermissionCategory[] = [
     description: "חיבורים לכלים ושירותים חיצוניים",
     modules: [
       {
+        id: "integrations",
+        label: "אינטגרציות (כללי)",
+        description: "גישה למסך האינטגרציות המרכזי",
+        category: "integrations",
+      },
+      {
         id: "lead_integrations",
         label: "אינטגרציות לידים",
         description: "ניהול אינטגרציות לידים, פייסבוק, גוגל ועוד",
