@@ -420,8 +420,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Calculate date range
-    const { startDate, endDate } = getDateRange(dateFilter);
+    // Calculate date range — mirror of internal DynamicTableView logic
+    const { startDate, endDate } = getDateRange(dateFilter, customStart, customEnd);
 
     // Fetch records WITH PAGINATION (bypass 1000-row default limit)
     const allRecords: any[] = [];
@@ -444,18 +444,18 @@ Deno.serve(async (req) => {
       if (page.length < pageSize) break;
     }
 
-    // Filter by date
-    const filteredRecords = allRecords.filter((r: any) => {
-      const recordDate = r.data?.date || r.data?.date_start;
-      if (!recordDate) return true;
-      if (startDate && endDate) {
-        return recordDate >= startDate && recordDate <= endDate;
-      }
-      if (startDate) {
-        return recordDate >= startDate;
-      }
-      return true;
-    });
+    // Filter by date — uses ONLY record.data.date so it matches the internal
+    // DynamicTableView 1:1 (which also reads record.data.date). For "all"
+    // (startDate === null) — return everything.
+    const filteredRecords = !startDate
+      ? allRecords
+      : allRecords.filter((r: any) => {
+          const recordDate = r.data?.date;
+          if (!recordDate) return true; // keep non-dated records (matches internal)
+          if (endDate) return recordDate >= startDate && recordDate <= endDate;
+          return recordDate >= startDate;
+        });
+
 
 
     return new Response(
