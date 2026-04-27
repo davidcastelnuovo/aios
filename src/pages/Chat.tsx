@@ -569,6 +569,7 @@ export default function Chat() {
                   <SelectItem value="whatsapp">וואטסאפ</SelectItem>
                   <SelectItem value="telegram">טלגרם</SelectItem>
                   <SelectItem value="manychat">ManyChat</SelectItem>
+                  <SelectItem value="agents">סוכני AI 🤖</SelectItem>
                 </SelectContent>
               </Select>
             </div>
