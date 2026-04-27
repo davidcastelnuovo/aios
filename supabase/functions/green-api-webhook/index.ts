@@ -315,7 +315,14 @@ async function sendGreenApiMessage(
   }
 }
 
+// Carmen sessions auto-expire after this many minutes of inactivity.
+// Without this, a session that started once would route every future message
+// in that chat to Carmen forever, even without the trigger keyword.
+const CARMEN_SESSION_IDLE_MINUTES = 60;
+
 // Find an active Carmen session for a given chat (strict match: connection + chat_id + phone)
+// Auto-expires sessions idle for more than CARMEN_SESSION_IDLE_MINUTES.
+// Sessions in 'paused' status are treated as if no session exists (require new trigger keyword).
 async function findActiveCarmenSession(
   supabase: any,
   tenantId: string,
@@ -334,7 +341,22 @@ async function findActiveCarmenSession(
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
-  return data || null;
+
+  if (!data) return null;
+
+  // Check inactivity timeout
+  const lastActivity = new Date(data.last_message_at || data.created_at).getTime();
+  const ageMinutes = (Date.now() - lastActivity) / 60000;
+  if (ageMinutes > CARMEN_SESSION_IDLE_MINUTES) {
+    console.log(`[CARMEN] Session ${data.id} idle for ${ageMinutes.toFixed(1)} min — auto-expiring`);
+    await supabase
+      .from('carmen_whatsapp_sessions')
+      .update({ status: 'expired', ended_at: new Date().toISOString() })
+      .eq('id', data.id);
+    return null;
+  }
+
+  return data;
 }
 
 // Find the Carmen agent for a tenant (looks for agent named כרמן/Carmen)
