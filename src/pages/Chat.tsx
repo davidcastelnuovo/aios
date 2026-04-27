@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import ChatView from "@/components/chat/ChatView";
+import AgentSessionsPanel from "@/components/chat/AgentSessionsPanel";
 import { EditClientDialog } from "@/components/forms/EditClientDialog";
 import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
 import { ChatTagsManager } from "@/components/chat/ChatTagsManager";
@@ -79,7 +80,7 @@ export default function Chat() {
   const [searchTerm, setSearchTerm] = useState("");
   const debouncedSearch = useDebouncedValue(searchTerm, 300);
   const [contactFilter, setContactFilter] = useState<"all" | "clients" | "leads" | "groups" | "unknown" | "telegram">("all");
-  const [platformFilter, setPlatformFilter] = useState<"all" | "whatsapp" | "telegram" | "manychat">("all");
+  const [platformFilter, setPlatformFilter] = useState<"all" | "whatsapp" | "telegram" | "manychat" | "agents">("all");
   const [showTodayOnly, setShowTodayOnly] = useState(false);
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
   const [selectedContact, setSelectedContact] = useState<{ id: string; type: 'client' | 'lead' | 'group' | 'unknown' | 'telegram'; senderPhone?: string; name?: string; telegramChatId?: string } | null>(
@@ -551,6 +552,28 @@ export default function Chat() {
     );
   }
 
+  if (platformFilter === "agents") {
+    return (
+      <div className="flex h-screen overflow-hidden gap-4 p-2" dir="rtl">
+        <Card className="flex flex-col w-auto h-auto p-2 shrink-0">
+          <Select value={platformFilter} onValueChange={(v: any) => setPlatformFilter(v)}>
+            <SelectTrigger className="h-8 w-auto gap-1 border-none shadow-none text-base font-semibold px-2 hover:bg-accent">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="bg-background z-50">
+              <SelectItem value="all">צ'אט</SelectItem>
+              <SelectItem value="whatsapp">וואטסאפ</SelectItem>
+              <SelectItem value="telegram">טלגרם</SelectItem>
+              <SelectItem value="manychat">ManyChat</SelectItem>
+              <SelectItem value="agents">סוכני AI 🤖</SelectItem>
+            </SelectContent>
+          </Select>
+        </Card>
+        <AgentSessionsPanel />
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen overflow-hidden gap-4" dir="rtl">
       {/* Contact List */}
@@ -568,6 +591,7 @@ export default function Chat() {
                   <SelectItem value="whatsapp">וואטסאפ</SelectItem>
                   <SelectItem value="telegram">טלגרם</SelectItem>
                   <SelectItem value="manychat">ManyChat</SelectItem>
+                  <SelectItem value="agents">סוכני AI 🤖</SelectItem>
                 </SelectContent>
               </Select>
             </div>
