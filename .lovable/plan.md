@@ -1,34 +1,32 @@
 ## הבעיה
 
-דיאלוג **עריכת הרשאות** של משתמש קיים (`EditUserPermissionsDialog`) כבר בנוי כמו שצריך — מחולק לקטגוריות עם אייקונים, badges, צ'קבוקס "בחר הכל לקטגוריה", וכל המודולים נכונים (`PERMISSION_CATEGORIES`).
+הדוח הפנימי של תבניכול עובד יפה, אבל הקישור הציבורי `/shared/table/tbnykvl-z987` מציג "אין דוחות SEO".
 
-אבל בדיאלוג **הזמנת משתמש חדש** (`Users.tsx`, שורות 1014-1048) עדיין יש רשימה ישנה ושטוחה של צ'קבוקסים שמבוססת על `getAllModules()` בלי קטגוריות, בלי אייקונים, ובלי אותה חלוקה.
+## שורש הבעיה
 
-## הפתרון
+טבלת ה-CRM של תבניכול מקושרת לשני מזהי לקוחות שונים:
 
-לחלץ את ה-UI הפנימי של `EditUserPermissionsDialog` לרכיב משותף ולהשתמש בו בשני המקומות. ככה גם הזמנת משתמש חדש וגם עריכת הרשאות יראו וירגישו בדיוק אותו דבר, וכל שינוי עתידי ל-`PERMISSION_CATEGORIES` יתעדכן אוטומטית בשני הזרמים.
+- `crm_tables.client_id` = `7844b22e...` ("פעמית עסקים")
+- `integration_settings.clientId` = `3a5408b1...` ("פעמית סטור" — שזה הלקוח שאליו באמת שייך הדומיין `www.tavnicol.co.il`)
 
-## שינויים
+דוחות ה-Ahrefs של תבניכול נשמרו עם `client_id = 3a5408b1`. הדוח הפנימי (`useAhrefsReports`) מסתמך על ה-`clientId` שמגיע מ-`integration_settings`/URL ולכן מוצא אותם.
 
-### 1. רכיב חדש: `src/components/forms/PermissionsSelector.tsx`
-רכיב controlled שמקבל:
-- `value: Record<string, boolean>` — מצב ההרשאות הנוכחי
-- `onChange: (next) => void` — handler לעדכון
+לעומת זאת, ה-edge function `public-table` בודק:
+```ts
+const targetClientId = table.client_id || settings.clientId;
+```
+ולכן מעדיף את `7844b22e` הלא-נכון, ולא מחזיר אף דוח Ahrefs ⇒ מסך ריק.
 
-מרנדר את אותו UI שכבר קיים ב-`EditUserPermissionsDialog`:
-- לולאה על `PERMISSION_CATEGORIES`
-- לכל קטגוריה: אייקון, badge צבעוני, מונה (X/Y), צ'קבוקס "בחר הכל" (כולל מצב indeterminate)
-- לכל מודול: צ'קבוקס + label + description
+## התיקון
 
-### 2. עדכון `EditUserPermissionsDialog.tsx`
-להשאיר את כל לוגיקת ה-data (טעינה מ-DB, שמירה, owner detection) ולהחליף את גוף ה-render הפנימי בשימוש ב-`<PermissionsSelector value={permissions} onChange={setPermissions} />`. אין שינוי פונקציונלי — רק ארגון מחדש.
+**קובץ יחיד**: `supabase/functions/public-table/index.ts`
 
-### 3. עדכון `src/pages/Users.tsx` (דיאלוג הזמנת משתמש)
-- להחליף את ה-`state` הקיים `selectedModules: string[]` ב-`selectedModulesMap: Record<string, boolean>` (כדי להתאים לחתימת הרכיב המשותף).
-- להמיר ברירות מחדל לפי תפקיד (קמפיינר → dashboard, clients, tasks, chat, time_tracking; שאר התפקידים כמו שכבר קיים) למפה.
-- להחליף את ה-block של שורות 1013-1048 ב-`<PermissionsSelector value={selectedModulesMap} onChange={setSelectedModulesMap} />`.
-- להמיר את המפה חזרה למערך `string[]` של מודולים מאופשרים (`Object.entries(...).filter(...).map(...)`) לפני שליחה ל-`inviteUserMutation` (שדה `modulePermissions`), כדי לא לשבור את ה-edge function.
-- לעדכן את כפתור "בחר הכל" הקיים (שורה 935) שיעדכן את המפה במקום את המערך.
+1. שינוי סדר ההעדפה ל-`settings.clientId || table.client_id` כדי להתיישר עם הלוגיקה של הדוח הפנימי.
+2. הוספת fallback: אם עדיין לא נמצאו דוחות וקיים `targetDomain` ב-`integration_settings`, לבצע שאילתה נוספת לפי `domain` בלבד (חוצה את כל ה-`accessibleTenantIds`) — כך שגם טבלאות עם `client_id` שגוי או חסר עדיין יציגו את הדוחות.
+3. החלת אותו תיקון על איתור טבלאות GA/GSC המקושרות (אם הן מתבססות על `targetClientId`).
 
-## תוצאה למשתמש
-דיאלוג הזמנת משתמש חדש יציג את אותו UI מודרני ומחולק לקטגוריות שכבר קיים בעריכת משתמש, כולל ההרשאה ל"אינטגרציות לידים" וכל שאר המודולים החסרים שכבר היו ב-`PERMISSION_CATEGORIES`. לא נוצרת כפילות קוד ולא נכתב דיאלוג חדש.
+זה מסדר את תבניכול וגם מונע את אותה תקלה בכל קישור שיתוף עתידי שבו `client_id` של הטבלה לא תואם ל-`integration_settings.clientId`.
+
+## בדיקה
+
+לאחר הפריסה אנווט ל-`https://after-lead.com/shared/table/tbnykvl-z987` ואוודא שמופיע אותו דוח SEO שרואים בתצוגה הפנימית, כולל ה-KPIs, הדומיינים והגרפים.
