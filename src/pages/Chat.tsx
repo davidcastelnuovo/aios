@@ -552,6 +552,28 @@ export default function Chat() {
     );
   }
 
+  if (platformFilter === "agents") {
+    return (
+      <div className="flex h-screen overflow-hidden gap-4 p-2" dir="rtl">
+        <Card className="flex flex-col w-auto h-auto p-2 shrink-0">
+          <Select value={platformFilter} onValueChange={(v: any) => setPlatformFilter(v)}>
+            <SelectTrigger className="h-8 w-auto gap-1 border-none shadow-none text-base font-semibold px-2 hover:bg-accent">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="bg-background z-50">
+              <SelectItem value="all">צ'אט</SelectItem>
+              <SelectItem value="whatsapp">וואטסאפ</SelectItem>
+              <SelectItem value="telegram">טלגרם</SelectItem>
+              <SelectItem value="manychat">ManyChat</SelectItem>
+              <SelectItem value="agents">סוכני AI 🤖</SelectItem>
+            </SelectContent>
+          </Select>
+        </Card>
+        <AgentSessionsPanel />
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen overflow-hidden gap-4" dir="rtl">
       {/* Contact List */}
