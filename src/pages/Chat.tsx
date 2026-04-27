@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import ChatView from "@/components/chat/ChatView";
+import AgentSessionsPanel from "@/components/chat/AgentSessionsPanel";
 import { EditClientDialog } from "@/components/forms/EditClientDialog";
 import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
 import { ChatTagsManager } from "@/components/chat/ChatTagsManager";
