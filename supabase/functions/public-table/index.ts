@@ -162,7 +162,12 @@ Deno.serve(async (req) => {
     // public viewer can render the visual SEO dashboard instead of a raw table.
     if (table.integration_type === "ahrefs") {
       const settings = (table.integration_settings as any) || {};
-      const targetClientId = table.client_id || settings.clientId;
+      // IMPORTANT: prefer settings.clientId over table.client_id.
+      // The internal SEO report (useAhrefsReports) is driven by the clientId
+      // saved in the SEO settings/URL, and Ahrefs reports are stored under
+      // that same clientId. table.client_id sometimes points at a different
+      // (sibling) client and would silently filter out all reports.
+      const targetClientId = settings.clientId || table.client_id;
       const targetDomain = settings.targetDomain || null;
       const linkedGscSiteUrl = settings.linkedGscSiteUrl || null;
 
