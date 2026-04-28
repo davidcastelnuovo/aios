@@ -44,7 +44,7 @@ import { ClientUpdatesTab } from "@/components/clients/ClientUpdatesTab";
 import { ClientLinkedFiles } from "@/components/clients/ClientLinkedFiles";
 import { Calendar } from "@/components/ui/calendar";
 import { Card } from "@/components/ui/card";
-import { format, startOfMonth } from "date-fns";
+import { addMonths, format, startOfMonth } from "date-fns";
 import { he } from "date-fns/locale";
 import { useFolderLinksAndAttachments } from "@/hooks/useFolderLinksAndAttachments";
 import { useMeetingScheduler } from "@/hooks/useMeetingScheduler";
@@ -73,9 +73,10 @@ interface EditClientDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onDuplicate?: () => void;
+  financeExpenseMonth?: string;
 }
 
-export function EditClientDialog({ client, open, onOpenChange, onDuplicate }: EditClientDialogProps) {
+export function EditClientDialog({ client, open, onOpenChange, onDuplicate, financeExpenseMonth }: EditClientDialogProps) {
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
   const { getFieldLabel } = useCustomFieldLabels('client');
@@ -365,10 +366,13 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate }: Ed
   });
 
   const { data: clientFinanceExpenses = [] } = useQuery({
-    queryKey: ["client-finance-expenses", client?.id, tenantId],
+    queryKey: ["client-finance-expenses", client?.id, tenantId, financeExpenseMonth],
     queryFn: async () => {
       if (!client?.id || !tenantId) return [];
-      const monthStart = format(startOfMonth(new Date()), "yyyy-MM-dd");
+      const monthStart = financeExpenseMonth
+        ? `${financeExpenseMonth}-01`
+        : format(startOfMonth(new Date()), "yyyy-MM-dd");
+      const nextMonthStart = format(addMonths(new Date(monthStart), 1), "yyyy-MM-dd");
 
       const { data, error } = await supabase
         .from("finance")
@@ -377,6 +381,7 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate }: Ed
         .eq("tenant_id", tenantId)
         .eq("type", "expense")
         .gte("date", monthStart)
+        .lt("date", nextMonthStart)
         .order("date", { ascending: false });
 
       if (error) throw error;
