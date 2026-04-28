@@ -214,6 +214,10 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
       toast.error('יש לבחור חשבון מודעות');
       return;
     }
+    if (assignedClientIds && !clientId) {
+      toast.error('יש לבחור לקוח');
+      return;
+    }
     createMutation.mutate();
   };
 

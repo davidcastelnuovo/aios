@@ -133,6 +133,11 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
       return;
     }
 
+    if (assignedClientIds && !selectedClient) {
+      toast({ title: "יש לבחור לקוח", variant: "destructive" });
+      return;
+    }
+
     setIsCreating(true);
     try {
       const slug = tableName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
