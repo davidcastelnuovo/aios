@@ -374,7 +374,7 @@ export function FacebookTableDialog({ open, onOpenChange, assignedClientIds }: F
 
             {agencyId && (
               <div className="space-y-2">
-                <Label>שיוך ללקוח (אופציונלי)</Label>
+                <Label>{assignedClientIds ? 'שיוך ללקוח' : 'שיוך ללקוח (אופציונלי)'}</Label>
                 <Input
                   placeholder="חפש לקוח..."
                   value={clientSearch}
