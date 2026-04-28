@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useTenant } from "@/contexts/TenantContext";
 import { useAgency } from "@/contexts/AgencyContext";
+import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
