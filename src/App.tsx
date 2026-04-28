@@ -167,7 +167,7 @@ const App = () => (
                   <Route path="/t/:tenantSlug/tasks" element={<ProtectedRoute requiredPermission="tasks"><AppLayout><Tasks /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/client-onboarding" element={<ProtectedRoute requiredPermission="client_onboarding"><AppLayout><ClientOnboarding /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/time-tracking" element={<ProtectedRoute requiredPermission="time_tracking"><AppLayout><TimeTracking /></AppLayout></ProtectedRoute>} />
-                  <Route path="/t/:tenantSlug/reports" element={<ProtectedRoute requiredPermission="reports"><AppLayout><Reports /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/reports" element={<ProtectedRoute requiredPermission="finance"><AppLayout><Reports /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/my-profile" element={<ProtectedRoute><AppLayout><MyProfile /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/users" element={<ProtectedRoute requiredPermission="users"><AppLayout><Users /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/sales-dashboard" element={<ProtectedRoute requiredPermission="sales_dashboard"><AppLayout><SalesDashboard /></AppLayout></ProtectedRoute>} />
