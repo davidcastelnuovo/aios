@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { EditClientDialog } from "@/components/forms/EditClientDialog";
-import { format, subMonths } from "date-fns";
+import { addMonths, format, subMonths } from "date-fns";
 import { he } from "date-fns/locale";
 
 const getMonthOptions = () => {
@@ -206,6 +206,29 @@ export default function AccountingIntegrations() {
     enabled: !!currentTenantId,
   });
 
+  // Fetch tenant-scoped client expenses from finance for the selected month
+  const { data: financeExpenses } = useQuery({
+    queryKey: ["accounting-finance-expenses", currentTenantId, selectedMonth],
+    queryFn: async () => {
+      if (!currentTenantId) return [];
+
+      const monthStart = `${selectedMonth}-01`;
+      const nextMonthStart = format(addMonths(new Date(monthStart), 1), "yyyy-MM-dd");
+
+      const { data, error } = await supabase
+        .from("finance")
+        .select("id, client_id, agency_id, amount, category, notes, date")
+        .eq("tenant_id", currentTenantId)
+        .eq("type", "expense")
+        .gte("date", monthStart)
+        .lt("date", nextMonthStart);
+
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentTenantId,
+  });
+
 
 
 
@@ -268,8 +291,25 @@ export default function AccountingIntegrations() {
         map.set(p.client_id, (map.get(p.client_id) || 0) + p.campaigner_payment);
       }
     });
+    // Finance expenses per client, strictly scoped to the active tenant + selected month
+    financeExpenses?.forEach((expense) => {
+      if (expense.client_id && expense.amount) {
+        map.set(expense.client_id, (map.get(expense.client_id) || 0) + Number(expense.amount));
+      }
+    });
     return map;
-  }, [campaignerPayments]);
+  }, [campaignerPayments, financeExpenses]);
+
+  const clientFinanceExpensesMap = useMemo(() => {
+    const map = new Map<string, Array<any>>();
+    financeExpenses?.forEach((expense) => {
+      if (!expense.client_id) return;
+      const list = map.get(expense.client_id) || [];
+      list.push(expense);
+      map.set(expense.client_id, list);
+    });
+    return map;
+  }, [financeExpenses]);
 
   // One-time incomes grouped by client
   const clientOneTimeMap = useMemo(() => {
