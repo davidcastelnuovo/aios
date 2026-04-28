@@ -1,83 +1,71 @@
-## הבעיה והפתרון
+## הבעיה
 
-### 1. כרמן מופיעה לבד בצ'אט עם עצמי (באג)
+הילה (campaigner) לא מצליחה ליצור טבלת Facebook ללקוח שמשויך אליה. המקור הוא ב-RLS של `crm_tables`: יש רק שתי policies לפעולות כתיבה — `Owners can manage all tables in tenant` ו-`Team managers can manage their tables`. אין שום policy שמתירה ל-`campaigner` לבצע INSERT/UPDATE/DELETE, ולכן כל ניסיון יצירה נכשל ב-RLS (גם דרך ה-edge function `crm-tables`, שרץ עם ה-JWT של המשתמש ולא service role).
 
-**שורש הבעיה:** מצאתי במסד הנתונים סשן פעיל של כרמן עבור הצ'אט שלך (`972507677613@c.us`) שנפתח ב-15.4 ולא נסגר עד עכשיו. הקוד ב-`green-api-webhook` עובד כך:
-- אם **קיים סשן פעיל** עבור צ'אט מסוים → **כל הודעה** באותו צ'אט מופנית לכרמן (בלי צורך במילת טריגר).
-- רק אם **אין סשן פעיל** → דורש את המילה "כרמן" כדי להתחיל סשן חדש.
-- סיום סשן רק ע"י הקלדת "סיימנו כרמן" — **אין שום timeout אוטומטי**.
+מצד שני:
+- האינטגרציה עצמה (`tenant_integrations` של פייסבוק) מוגדרת ל-tenant ו-`get-facebook-ad-accounts` משתמשת ב-service role לשליפת הטוקן — כלומר אין מניעה לקמפיינר להשתמש בחיבור הפייסבוק הקיים בארגון, גם אם הוא לא הבעלים שלו. הבדיקה הקדמית בדיאלוג של "האם פייסבוק מחובר?" כבר עוברת לקמפיינר דרך policy הצפייה (`user_is_tenant_member`).
+- הקוד ב-`DynamicTables.tsx` כבר מעביר `assignedClientIds` לכל דיאלוגי היצירה כשמדובר בקמפיינר, וה-`FacebookTableDialog`/`SimpleTableDialog` כבר מסננים בהתאם.
 
-לכן ברגע שפתחת פעם אחת סשן בצ'אט עם עצמך, הוא נשאר פעיל לנצח, וכל הודעה ש"שלחת לעצמך" הפעילה את כרמן.
+לכן התיקון הוא בעיקר ב-RLS, עם תיקון UX קטן בדיאלוג.
 
-**התיקון:**
-1. **לסגור את הסשן הישן עכשיו** (status='ended' לסשן הספציפי הזה).
-2. **להוסיף timeout של חוסר פעילות** — סשנים שלא היה בהם הודעה במשך X דקות (ברירת מחדל: 30 דקות) יסגרו אוטומטית בבדיקה הבאה. הבדיקה תבוצע בתוך `findActiveCarmenSession`: אם הסשן ישן מדי → לסמן כ-`expired` ולהחזיר `null` (כך הוא לא יקבל הודעות, ויידרש מילת טריגר חדשה).
-3. **אופציונלי:** להוסיף לכל תשובה של כרמן רמז קצר ("כתוב 'סיימנו כרמן' לסיום השיחה") כדי שמשתמשים יידעו איך לעצור.
+## תוכנית התיקון
 
----
+### 1. מיגרציה: הוספת RLS policy לקמפיינרים על `crm_tables`
 
-### 2. סשנים פתוחים עם סוכני AI — איפה ואיך
+הוספת policy ALL (INSERT/UPDATE/DELETE/SELECT) ל-`crm_tables` שמתירה לקמפיינר לפעול אך ורק על טבלאות ששויכו ללקוח שמופיע ב-`get_user_client_ids(auth.uid())`, באותו tenant של המשתמש:
 
-**ההמלצה שלי (תואמת למה שהצעת):** להוסיף **לשונית "סוכני AI"** לבורר הפלטפורמות הקיים בצ'אט, ליד WhatsApp / Telegram / ManyChat. זה הכי טבעי — המשתמש כבר רגיל לחשוב על "זה צ'אט" ולעבור בין ערוצים.
+```sql
+CREATE POLICY "Campaigners can manage tables for assigned clients"
+ON public.crm_tables
+FOR ALL
+TO authenticated
+USING (
+  tenant_id = get_user_tenant_id(auth.uid())
+  AND has_role(auth.uid(), 'campaigner'::app_role)
+  AND client_id IS NOT NULL
+  AND client_id = ANY(get_user_client_ids(auth.uid()))
+)
+WITH CHECK (
+  tenant_id = get_user_tenant_id(auth.uid())
+  AND has_role(auth.uid(), 'campaigner'::app_role)
+  AND client_id IS NOT NULL
+  AND client_id = ANY(get_user_client_ids(auth.uid()))
+);
+```
 
-**מקור הנתונים — שני סוגי "סשנים":**
-- **סשני WhatsApp עם כרמן** (`carmen_whatsapp_sessions`) — שיחות כרמן שמגיעות מטלפון.
-- **שיחות AIOS פנימיות** (`ai_conversations`) — שיחות שהמשתמש מנהל עם הסוכן בתוך המערכת.
+הגבלות מובנות:
+- חובה `client_id` — קמפיינר לא יכול ליצור טבלה "כללית לסוכנות" או לטנאנט.
+- ה-`client_id` חייב להיות אחד מהלקוחות המשויכים אליו דרך `client_team`.
+- הטבלה חייבת להיות באותו tenant של הקמפיינר.
+- super_admin/owner/team_manager ממשיכים לעבוד דרך ה-policies הקיימות.
 
-שניהם יוצגו ברשימה אחת מאוחדת תחת "סוכני AI", עם תיוג שמראה את מקור הסשן (WhatsApp / Internal) ושם הסוכן.
+### 2. תיקון UX קטן ב-`FacebookTableDialog.tsx`
 
-**מה אפשר לעשות בכל סשן:**
-- לראות את **היסטוריית ההודעות** המלאה (מתוך `conversation_history` / `messages`).
-- כפתור **השהייה (Pause)** — ישנה את `status` ל-`paused` ויעצור את כרמן מלענות עד להמשך.
-- כפתור **עצירה/סיום (End)** — ישנה את `status` ל-`ended`.
-- כפתור **המשך (Resume)** — חזרה ל-`active`.
-- אינדיקטור של זמן ההודעה האחרונה ושם הצ'אט/הטלפון.
+כאשר `assignedClientIds` מועבר (כלומר המשתמש הוא קמפיינר רגיל) — לחייב בחירת לקוח לפני שמירה (כיום שדה הלקוח אופציונלי, וה-RLS החדש יחסום שמירה ללא `client_id`):
 
----
+- אם `assignedClientIds` מוגדר ו-`clientId` ריק → הצג toast שגיאה "יש לבחור לקוח" ומנע שליחה.
+- שינוי הליבל מ-"שיוך ללקוח (אופציונלי)" ל-"שיוך ללקוח" כאשר חובה.
 
-## פרטים טכניים
+ליישם את אותה הבדיקה גם ב-`SimpleTableDialog.tsx` (וביתר דיאלוגי האינטגרציות שמקבלים `assignedClientIds`: Google Ads, GSC, GA, Facebook E-commerce, Ahrefs, SEO Report) כדי להמנע מ-RLS errors מבלבלים.
 
-### חלק A — תיקון הבאג של כרמן
+### 3. בדיקה שאין צורך בשינוי בצד ה-edge functions
 
-1. **מיגרציה**:
-   - `UPDATE carmen_whatsapp_sessions SET status='ended', ended_at=now() WHERE id='08951205-9681-46df-9e5b-57300ddbb94f';`
-   - הוספת עמודה `paused` לערכי ה-status (אם לא קיים enum, נשאר טקסט חופשי — ה-status היום הוא טקסט).
+- `crm-tables` POST: עובר עם JWT של המשתמש ⇒ ה-policy החדש יאפשר את ה-INSERT.
+- `get-facebook-ad-accounts` ו-`sync-facebook-insights`: כבר משתמשות ב-service role לשליפת הטוקן, אז קמפיינר משתמש בחיבור פייסבוק של הארגון ללא תלות בבעלות עליו.
 
-2. **`supabase/functions/green-api-webhook/index.ts`** — בתוך `findActiveCarmenSession`:
-   - אחרי שליפת הסשן, לבדוק `last_message_at` (או `created_at` אם null).
-   - אם > 30 דקות → לעדכן `status='expired'` ולהחזיר `null`.
-   - להתעלם מסשנים עם `status='paused'` (להתייחס כאילו אין סשן — צריך מילת טריגר חדשה).
+## פירוט טכני (לסיכום)
 
-3. (אופציונלי, מהפרומפט של `runCarmenAI`) — להוסיף הוראה שכרמן תוסיף מדי פעם הזכרה איך לסיים שיחה.
+**קבצים שישתנו:**
+- `supabase/migrations/<new>.sql` — הוספת policy `Campaigners can manage tables for assigned clients` ל-`crm_tables`.
+- `src/components/dynamic-tables/FacebookTableDialog.tsx` — אכיפת בחירת לקוח כשהמשתמש קמפיינר.
+- `src/components/dynamic-tables/SimpleTableDialog.tsx` — אותו תיקון.
+- `src/components/dynamic-tables/GoogleAdsTableDialog.tsx`, `GoogleSearchConsoleTableDialog.tsx`, `GoogleAnalyticsTableDialog.tsx`, `FacebookEcommerceTableDialog.tsx`, `AhrefsTableDialog.tsx`, `SeoReportDialog.tsx` — אותו תיקון UX (חובת לקוח לקמפיינר).
 
-### חלק B — לשונית "סוכני AI" בצ'אט
+**לא משתנה:**
+- חוקי ה-RLS של owners/team_managers/super_admin.
+- Edge functions של פייסבוק/גוגל — כבר מטפלות נכון בגישה לטוקן.
+- מודל ההרשאות לאינטגרציות (`tenant_integrations`).
 
-1. **`src/pages/Chat.tsx`**:
-   - להרחיב את `platformFilter` לכלול `"agents"`.
-   - להוסיף ל-Select את האפשרות "סוכני AI 🤖" עם הספירה.
-   - כשהפילטר הוא `agents`, במקום הרשימה הרגילה — לרנדר רכיב חדש `AgentSessionsPanel`.
+## תוצאה צפויה
 
-2. **רכיב חדש `src/components/chat/AgentSessionsPanel.tsx`**:
-   - שני queries מקבילים:
-     - `carmen_whatsapp_sessions` (status in active/paused) של ה-tenant.
-     - `ai_conversations` של ה-tenant (אופציונלי: רק של המשתמש הנוכחי).
-   - מיזוג לרשימה אחת ממוינת לפי `last_message_at` / `updated_at`.
-   - תצוגה משמאל: רשימת סשנים. מימין: תוכן הסשן הנבחר (היסטוריה + כפתורי פעולה).
-
-3. **רכיב חדש `src/components/chat/AgentSessionView.tsx`**:
-   - מציג את `conversation_history` כבועות (משתמש מימין, סוכן משמאל, RTL).
-   - הדר עם שם הסוכן, מקור (WhatsApp/Internal), טלפון/שולח, סטטוס.
-   - כפתורים: השהה / המשך / סיים.
-   - Realtime subscription ל-`carmen_whatsapp_sessions` ול-`ai_conversations` כדי לראות הודעות חדשות חיים.
-
-4. **הרשאות:** מתוסף לשונית רק למשתמשים עם הרשאת `agents` (כבר קיים ב-`MODULE_PERMISSIONS`).
-
-### קבצים שיושפעו
-
-- `supabase/migrations/<new>.sql` — סגירת הסשן הספציפי (חדש)
-- `supabase/functions/green-api-webhook/index.ts` — לוגיקת timeout + paused (עריכה)
-- `src/pages/Chat.tsx` — הרחבת platformFilter (עריכה)
-- `src/components/chat/AgentSessionsPanel.tsx` — חדש
-- `src/components/chat/AgentSessionView.tsx` — חדש
-
-לא משנה את ה-Agent Hub עצמו — הסשנים יחיו רק בצ'אט כפי שביקשת.
+הילה (וכל קמפיינר אחר) תוכל ליצור טבלת Facebook (וכל טבלת אינטגרציה אחרת) עבור לקוח שמשויך אליה, באמצעות חיבור הפייסבוק הקיים של הארגון, ללא צורך בהרשאות נוספות. ניסיון ליצור טבלה ללא שיוך ללקוח, או ללקוח שלא משויך לקמפיינר, ימשיך להיחסם.
