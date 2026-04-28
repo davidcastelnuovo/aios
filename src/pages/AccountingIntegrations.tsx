@@ -87,37 +87,49 @@ export default function AccountingIntegrations() {
 
   // Fetch clients
   const { data: clients, isLoading: clientsLoading } = useQuery({
-    queryKey: ["accounting-clients", currentTenantId, agencyFilter],
+    queryKey: ["accounting-clients", currentTenantId, agencyFilter, crossTenantAgencyIds],
     queryFn: async () => {
       if (!currentTenantId) return [];
-      
+
       let query = supabase
         .from("clients")
         .select(`
           id, name, contact_name, email, phone, status, retainer, monthly_budget,
           agency_id, updated_at,
           agencies (id, name)
-        `)
-        .eq("tenant_id", currentTenantId);
+        `);
 
       if (agencyFilter && agencyFilter !== "all") {
+        // Specific agency selected: RLS will allow if it's own or shared
         query = query.eq("agency_id", agencyFilter);
+      } else {
+        // Include own-tenant clients + clients in cross-tenant shared agencies
+        const hasShared = crossTenantAgencyIds.length > 0;
+        if (hasShared) {
+          query = query.or(
+            `tenant_id.eq.${currentTenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`
+          );
+        } else {
+          query = query.eq("tenant_id", currentTenantId);
+        }
       }
 
       const { data: clientsData, error } = await query;
       if (error) throw error;
-      
+
       const clientIds = (clientsData || []).map(c => c.id);
-      const { data: financialData } = await supabase
-        .from("client_tenant_financial_data")
-        .select("client_id, retainer, monthly_budget")
-        .eq("tenant_id", currentTenantId)
-        .in("client_id", clientIds);
-      
+      const { data: financialData } = clientIds.length
+        ? await supabase
+            .from("client_tenant_financial_data")
+            .select("client_id, retainer, monthly_budget")
+            .eq("tenant_id", currentTenantId)
+            .in("client_id", clientIds)
+        : { data: [] as any[] };
+
       const financialMap = new Map(
         (financialData || []).map(f => [f.client_id, f])
       );
-      
+
       return (clientsData || []).map(client => ({
         ...client,
         retainer: financialMap.get(client.id)?.retainer ?? client.retainer,
