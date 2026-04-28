@@ -280,7 +280,7 @@ const modulePermissions: Record<string, string> = {
   // ── שיווק ואנליטיקס ─────────────────────────────────────────────────
   "social-media": "social_media",
   "social-gantt": "social_media",
-  reports: "reports",
+  reports: "finance",
   "dynamic-tables": "dynamic_tables",
   "ai-detection": "ai_detection",
   // ── ניהול ארגון ─────────────────────────────────────────────────────
