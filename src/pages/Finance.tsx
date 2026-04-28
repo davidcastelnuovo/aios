@@ -15,7 +15,7 @@ export default function Finance() {
   const { tenantId } = useCurrentTenant();
   const { userAgencyIds } = useUserAgencies();
   const { campaignerId, isCampaigner, isTeamManager, isOwner } = useUserRole();
-  const { data: crossTenantAgencyIds = [] } = useCrossTenantAgencyIds();
+  const { crossTenantAgencyIds = [] } = useCrossTenantAgencyIds();
 
 
   const { data: financeRecords, isLoading } = useQuery({
