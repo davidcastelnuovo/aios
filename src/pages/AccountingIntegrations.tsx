@@ -533,6 +533,7 @@ export default function AccountingIntegrations() {
                       const teamCount = clientTeam.length;
                       const teamCost = clientTeam.reduce((sum, p) => sum + (p.campaigner_payment || 0), 0);
                       const fixedExpenses = clientExpensesMap.get(client.id) || 0;
+                      const financeExpenseItems = clientFinanceExpensesMap.get(client.id) || [];
                       const oneTimeItems = clientOneTimeMap.get(client.id) || [];
                       const oneTimeTotal = oneTimeItems.reduce((s: number, i: any) => s + (i.amount || 0), 0);
 
@@ -571,7 +572,18 @@ export default function AccountingIntegrations() {
                           </TableCell>
                           <TableCell className="text-right">
                             {fixedExpenses > 0 ? (
-                              <span className="text-red-600 font-medium">{formatCurrency(fixedExpenses)}</span>
+                              <div className="space-y-1">
+                                <span className="text-red-600 font-medium">{formatCurrency(fixedExpenses)}</span>
+                                {financeExpenseItems.length > 0 && (
+                                  <div className="text-xs text-muted-foreground">
+                                    {financeExpenseItems.map((expense) => (
+                                      <div key={expense.id}>
+                                        {expense.category || "הוצאה"}: {formatCurrency(Number(expense.amount || 0))}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
                             ) : (
                               <span className="text-muted-foreground">-</span>
                             )}
