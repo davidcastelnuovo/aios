@@ -46,6 +46,7 @@ export default function AccountingIntegrations() {
   const { tenantId } = useCurrentTenant();
   const { currentTenantId } = useTenant();
   const { selectedAgency } = useAgency();
+  const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
   const queryClient = useQueryClient();
   
   const [searchQuery, setSearchQuery] = useState("");
