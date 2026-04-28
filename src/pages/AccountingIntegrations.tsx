@@ -766,6 +766,7 @@ export default function AccountingIntegrations() {
           client={editingClient}
           open={!!editingClient}
           onOpenChange={(open) => !open && setEditingClient(null)}
+          financeExpenseMonth={selectedMonth}
         />
       )}
     </div>
