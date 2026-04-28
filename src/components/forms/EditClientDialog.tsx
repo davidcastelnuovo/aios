@@ -711,34 +711,52 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate }: Ed
             />
 
             {showFinanceFields && (
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                      control={form.control}
+                      name="retainer"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{getFieldLabel('retainer', 'ריטיינר')} (₪)</FormLabel>
+                          <FormControl>
+                            <Input {...field} type="number" />
+                          </FormControl>
+                          <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
                     control={form.control}
-                    name="retainer"
+                    name="monthly_budget"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>{getFieldLabel('retainer', 'ריטיינר')} (₪)</FormLabel>
+                        <FormLabel>{getFieldLabel('monthly_budget', 'תקציב חודשי')} (₪)</FormLabel>
                         <FormControl>
                           <Input {...field} type="number" />
                         </FormControl>
                         <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                        </FormItem>
+                      )}
+                    />
+                </div>
 
-                <FormField
-                  control={form.control}
-                  name="monthly_budget"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{getFieldLabel('monthly_budget', 'תקציב חודשי')} (₪)</FormLabel>
-                      <FormControl>
-                        <Input {...field} type="number" />
-                      </FormControl>
-                      <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                {clientFinanceExpenses.length > 0 && (
+                  <div className="rounded-md border bg-muted/30 p-3 space-y-2">
+                    <FormLabel>הוצאות החודש</FormLabel>
+                    {clientFinanceExpenses.map((expense: any) => (
+                      <div key={expense.id} className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">
+                          {expense.category || "הוצאה"} · {new Date(expense.date).toLocaleDateString("he-IL")}
+                        </span>
+                        <span className="font-medium text-destructive">
+                          ₪{Number(expense.amount || 0).toLocaleString("he-IL")}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
