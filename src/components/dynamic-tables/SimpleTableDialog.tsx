@@ -133,6 +133,10 @@ export function SimpleTableDialog({ open, onOpenChange, assignedClientIds }: Sim
       toast.error('נא למלא את שם הטבלה');
       return;
     }
+    if (assignedClientIds && (!clientId || clientId === 'none')) {
+      toast.error('יש לבחור לקוח');
+      return;
+    }
     createMutation.mutate(tableName);
   };
 
