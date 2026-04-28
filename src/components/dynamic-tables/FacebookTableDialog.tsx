@@ -214,6 +214,10 @@ export function FacebookTableDialog({ open, onOpenChange, assignedClientIds }: F
       toast.error('יש לבחור חשבון מודעות');
       return;
     }
+    if (assignedClientIds && !clientId) {
+      toast.error('יש לבחור לקוח');
+      return;
+    }
     createMutation.mutate();
   };
 
@@ -370,7 +374,7 @@ export function FacebookTableDialog({ open, onOpenChange, assignedClientIds }: F
 
             {agencyId && (
               <div className="space-y-2">
-                <Label>שיוך ללקוח (אופציונלי)</Label>
+                <Label>{assignedClientIds ? 'שיוך ללקוח' : 'שיוך ללקוח (אופציונלי)'}</Label>
                 <Input
                   placeholder="חפש לקוח..."
                   value={clientSearch}

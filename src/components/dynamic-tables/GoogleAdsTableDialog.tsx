@@ -457,6 +457,11 @@ export function GoogleAdsTableDialog({ open, onOpenChange, assignedClientIds }: 
       return;
     }
     
+    if (assignedClientIds && !clientId) {
+      toast.error('יש לבחור לקוח');
+      return;
+    }
+    
     createMutation.mutate();
   };
 

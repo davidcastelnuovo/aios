@@ -133,6 +133,10 @@ export function SimpleTableDialog({ open, onOpenChange, assignedClientIds }: Sim
       toast.error('נא למלא את שם הטבלה');
       return;
     }
+    if (assignedClientIds && (!clientId || clientId === 'none')) {
+      toast.error('יש לבחור לקוח');
+      return;
+    }
     createMutation.mutate(tableName);
   };
 
@@ -192,7 +196,7 @@ export function SimpleTableDialog({ open, onOpenChange, assignedClientIds }: Sim
           </div>
           {agencyId && agencyId !== 'none' && (
             <div className="space-y-2">
-              <Label>שיוך ללקוח (אופציונלי)</Label>
+              <Label>{assignedClientIds ? 'שיוך ללקוח' : 'שיוך ללקוח (אופציונלי)'}</Label>
               <Popover open={clientPopoverOpen} onOpenChange={setClientPopoverOpen}>
                 <PopoverTrigger asChild>
                   <Button
