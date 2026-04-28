@@ -44,7 +44,7 @@ import { ClientUpdatesTab } from "@/components/clients/ClientUpdatesTab";
 import { ClientLinkedFiles } from "@/components/clients/ClientLinkedFiles";
 import { Calendar } from "@/components/ui/calendar";
 import { Card } from "@/components/ui/card";
-import { format } from "date-fns";
+import { format, startOfMonth } from "date-fns";
 import { he } from "date-fns/locale";
 import { useFolderLinksAndAttachments } from "@/hooks/useFolderLinksAndAttachments";
 import { useMeetingScheduler } from "@/hooks/useMeetingScheduler";
@@ -361,6 +361,27 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate }: Ed
       return data;
     },
     enabled: !!client?.id && !!tenantId && open,
+  });
+
+  const { data: clientFinanceExpenses = [] } = useQuery({
+    queryKey: ["client-finance-expenses", client?.id, tenantId],
+    queryFn: async () => {
+      if (!client?.id || !tenantId) return [];
+      const monthStart = format(startOfMonth(new Date()), "yyyy-MM-dd");
+
+      const { data, error } = await supabase
+        .from("finance")
+        .select("id, amount, category, notes, date")
+        .eq("client_id", client.id)
+        .eq("tenant_id", tenantId)
+        .eq("type", "expense")
+        .gte("date", monthStart)
+        .order("date", { ascending: false });
+
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!client?.id && !!tenantId && open && showFinanceFields,
   });
   
   // Update financial fields when financialData is loaded
