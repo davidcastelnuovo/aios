@@ -8,28 +8,36 @@ import { useAgency } from "@/contexts/AgencyContext";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 
 export default function Finance() {
   const { selectedAgency } = useAgency();
   const { tenantId } = useCurrentTenant();
   const { userAgencyIds } = useUserAgencies();
   const { campaignerId, isCampaigner, isTeamManager, isOwner } = useUserRole();
+  const { data: crossTenantAgencyIds = [] } = useCrossTenantAgencyIds();
 
 
   const { data: financeRecords, isLoading } = useQuery({
-    queryKey: ["finance", tenantId],
+    queryKey: ["finance", tenantId, crossTenantAgencyIds],
     queryFn: async () => {
       if (!tenantId) return [];
-      const { data, error } = await supabase
+      let query = supabase
         .from("finance")
         .select(`
           *,
           agencies (name),
           clients (name),
           suppliers (name)
-        `)
-        .eq("tenant_id", tenantId)
-        .order("date", { ascending: false });
+        `);
+
+      if (crossTenantAgencyIds.length > 0) {
+        query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(',')})`);
+      } else {
+        query = query.eq("tenant_id", tenantId);
+      }
+
+      const { data, error } = await query.order("date", { ascending: false });
       if (error) throw error;
       return data;
     },
