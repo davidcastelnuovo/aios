@@ -345,6 +345,7 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate }: Ed
   });
   
   const { canViewFinance } = useUserPermissions();
+  const showFinanceFields = canViewFinance();
   
   // Fetch tenant-specific financial data
   const { data: financialData } = useQuery({
@@ -398,8 +399,6 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate }: Ed
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [financialData?.retainer, financialData?.monthly_budget, client.id]);
-
-  const showFinanceFields = canViewFinance();
 
   const mutation = useMutation({
     mutationFn: async (values: z.infer<typeof formSchema>) => {
