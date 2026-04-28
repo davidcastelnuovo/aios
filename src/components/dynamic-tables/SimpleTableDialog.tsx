@@ -196,7 +196,7 @@ export function SimpleTableDialog({ open, onOpenChange, assignedClientIds }: Sim
           </div>
           {agencyId && agencyId !== 'none' && (
             <div className="space-y-2">
-              <Label>שיוך ללקוח (אופציונלי)</Label>
+              <Label>{assignedClientIds ? 'שיוך ללקוח' : 'שיוך ללקוח (אופציונלי)'}</Label>
               <Popover open={clientPopoverOpen} onOpenChange={setClientPopoverOpen}>
                 <PopoverTrigger asChild>
                   <Button
