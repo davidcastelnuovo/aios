@@ -2455,6 +2455,7 @@ export type Database = {
           colno: number | null
           created_at: string | null
           error_message: string | null
+          error_stack: string | null
           error_type: string | null
           filename: string | null
           has_blank_screen: boolean | null
@@ -2469,6 +2470,7 @@ export type Database = {
           colno?: number | null
           created_at?: string | null
           error_message?: string | null
+          error_stack?: string | null
           error_type?: string | null
           filename?: string | null
           has_blank_screen?: boolean | null
@@ -2483,6 +2485,7 @@ export type Database = {
           colno?: number | null
           created_at?: string | null
           error_message?: string | null
+          error_stack?: string | null
           error_type?: string | null
           filename?: string | null
           has_blank_screen?: boolean | null
