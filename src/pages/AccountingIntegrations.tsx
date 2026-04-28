@@ -67,15 +67,18 @@ export default function AccountingIntegrations() {
 
   const monthOptions = useMemo(() => getMonthOptions(), []);
 
-  // Fetch agencies
+  // Fetch agencies (own + shared via agency_tenant_access)
   const { data: agencies } = useQuery({
-    queryKey: ["agencies", currentTenantId],
+    queryKey: ["agencies", currentTenantId, crossTenantAgencyIds],
     queryFn: async () => {
       if (!currentTenantId) return [];
-      const { data, error } = await supabase
-        .from("agencies")
-        .select("id, name")
-        .eq("tenant_id", currentTenantId);
+      const hasShared = crossTenantAgencyIds.length > 0;
+      const orFilter = hasShared
+        ? `tenant_id.eq.${currentTenantId},id.in.(${crossTenantAgencyIds.join(",")})`
+        : null;
+      let q = supabase.from("agencies").select("id, name");
+      q = orFilter ? q.or(orFilter) : q.eq("tenant_id", currentTenantId);
+      const { data, error } = await q;
       if (error) throw error;
       return data || [];
     },
