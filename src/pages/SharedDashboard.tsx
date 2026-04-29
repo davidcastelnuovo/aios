@@ -720,7 +720,12 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
       ) : platformFilter === 'woocommerce' ? (
         <PublicWooCommerceView sites={wooSites} orders={wooOrders} />
       ) : platformFilter === 'seo' ? (
-        <PublicSeoView tableName={dashboard?.client_name || 'SEO'} reports={ahrefsReports} />
+        <PublicSeoView
+          tableName={dashboard?.client_name || 'SEO'}
+          reports={ahrefsReports}
+          gscData={seoGscAggregated}
+          gaOrganicByMonth={seoGaOrganicByMonth}
+        />
       ) : (
         <>
           {/* Summary Cards - "All" tab: 7 KPI cards like DashboardView */}
