@@ -416,9 +416,9 @@ Deno.serve(async (req) => {
 
       let listMccs: string[] = [];
       try {
-        const listResponse = await fetch('https://googleads.googleapis.com/v23/customers:listAccessibleCustomers', {
+        const listResponse = await adsFetch('https://googleads.googleapis.com/v23/customers:listAccessibleCustomers', {
+          method: 'GET',
           headers: {
-            'Authorization': `Bearer ${accessToken}`,
             'developer-token': DEVELOPER_TOKEN,
           },
         });
