@@ -162,7 +162,7 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
         body: {
           name: tableName,
           slug,
-          category: category || 'Facebook Ecommerce',
+          category: 'Facebook Ecommerce',
           integration_type: 'facebook_ecommerce',
           integration_settings: {
             ad_account_id: selectedAdAccount,
