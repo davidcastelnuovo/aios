@@ -95,7 +95,7 @@ export default function AccountingIntegrations() {
         .from("clients")
         .select(`
           id, name, contact_name, email, phone, status, retainer, monthly_budget,
-          agency_id, updated_at,
+          agency_id, updated_at, is_seo_client, services,
           agencies (id, name)
         `);
 
@@ -282,6 +282,37 @@ export default function AccountingIntegrations() {
     },
   });
 
+  // Helpers to detect SEO clients
+  const isSeoClient = (c: any) =>
+    !!c?.is_seo_client || (Array.isArray(c?.services) && c.services.includes("seo"));
+
+  // Build a synthetic SEO expense for SEO clients that don't already have a
+  // 'SEO' finance row for the selected month. This guarantees that any client
+  // marked as SEO shows the recurring ₪850 line, even if the finance row is
+  // missing or stored under a different tenant.
+  const SEO_AUTO_AMOUNT = 850;
+  const syntheticSeoExpenses = useMemo(() => {
+    if (!clients) return [] as Array<any>;
+    const haveSeoFinance = new Set(
+      (financeExpenses || [])
+        .filter((e: any) => (e.category || "").toUpperCase() === "SEO")
+        .map((e: any) => e.client_id)
+        .filter(Boolean)
+    );
+    return clients
+      .filter((c: any) => isSeoClient(c) && !haveSeoFinance.has(c.id))
+      .map((c: any) => ({
+        id: `auto-seo-${c.id}-${selectedMonth}`,
+        client_id: c.id,
+        agency_id: c.agency_id,
+        amount: SEO_AUTO_AMOUNT,
+        category: "SEO",
+        notes: "הוצאת SEO חודשית (אוטומטי)",
+        date: `${selectedMonth}-01`,
+        _auto: true,
+      }));
+  }, [clients, financeExpenses, selectedMonth]);
+
   // Compute per-client expenses
   const clientExpensesMap = useMemo(() => {
     const map = new Map<string, number>();
@@ -297,8 +328,12 @@ export default function AccountingIntegrations() {
         map.set(expense.client_id, (map.get(expense.client_id) || 0) + Number(expense.amount));
       }
     });
+    // Synthetic SEO ₪850 for SEO clients without a finance row
+    syntheticSeoExpenses.forEach((e) => {
+      map.set(e.client_id, (map.get(e.client_id) || 0) + Number(e.amount));
+    });
     return map;
-  }, [campaignerPayments, financeExpenses]);
+  }, [campaignerPayments, financeExpenses, syntheticSeoExpenses]);
 
   const clientFinanceExpensesMap = useMemo(() => {
     const map = new Map<string, Array<any>>();
@@ -308,8 +343,13 @@ export default function AccountingIntegrations() {
       list.push(expense);
       map.set(expense.client_id, list);
     });
+    syntheticSeoExpenses.forEach((expense) => {
+      const list = map.get(expense.client_id) || [];
+      list.push(expense);
+      map.set(expense.client_id, list);
+    });
     return map;
-  }, [financeExpenses]);
+  }, [financeExpenses, syntheticSeoExpenses]);
 
   // One-time incomes grouped by client
   const clientOneTimeMap = useMemo(() => {
@@ -662,7 +702,7 @@ export default function AccountingIntegrations() {
                     <TableRow className="bg-muted/50 font-bold">
                       <TableCell className="text-right">סה״כ</TableCell>
                       <TableCell />
-                      <TableCell className="text-right">{formatCurrency(totalExpenses)}</TableCell>
+                      <TableCell />
                       <TableCell className="text-right">{formatCurrency(totalRetainer)}</TableCell>
                       <TableCell className="text-right text-red-600">{formatCurrency(totalExpenses)}</TableCell>
                       <TableCell className="text-right text-green-600">{formatCurrency(totalOneTime)}</TableCell>

@@ -389,6 +389,29 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
     },
     enabled: !!client?.id && !!tenantId && open && showFinanceFields,
   });
+
+  // Synthetic SEO ₪850 expense for SEO clients without a finance row in the
+  // selected month. Mirrors the logic in AccountingIntegrations so the dialog
+  // shows the recurring SEO expense even when no finance row exists yet.
+  const displayedFinanceExpenses = useMemo(() => {
+    const monthForLabel = financeExpenseMonth || format(startOfMonth(new Date()), "yyyy-MM");
+    const isSeo = !!client?.is_seo_client || (Array.isArray(client?.services) && client.services.includes("seo"));
+    const hasSeoRow = (clientFinanceExpenses || []).some(
+      (e: any) => (e.category || "").toUpperCase() === "SEO"
+    );
+    if (!isSeo || hasSeoRow) return clientFinanceExpenses;
+    return [
+      ...clientFinanceExpenses,
+      {
+        id: `auto-seo-${client?.id}-${monthForLabel}`,
+        amount: 850,
+        category: "SEO",
+        notes: "הוצאת SEO חודשית (אוטומטי)",
+        date: `${monthForLabel}-01`,
+        _auto: true,
+      },
+    ];
+  }, [clientFinanceExpenses, client?.is_seo_client, client?.services, client?.id, financeExpenseMonth]);
   
   // Update financial fields when financialData is loaded
   // IMPORTANT: depend on stable primitives only — depending on `client` (a new
@@ -747,13 +770,14 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
                     />
                 </div>
 
-                {clientFinanceExpenses.length > 0 && (
+                {displayedFinanceExpenses.length > 0 && (
                   <div className="rounded-md border bg-muted/30 p-3 space-y-2">
                     <FormLabel>הוצאות החודש</FormLabel>
-                    {clientFinanceExpenses.map((expense: any) => (
+                    {displayedFinanceExpenses.map((expense: any) => (
                       <div key={expense.id} className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground">
                           {expense.category || "הוצאה"} · {new Date(expense.date).toLocaleDateString("he-IL")}
+                          {expense._auto && <span className="text-xs mr-1">(אוטומטי)</span>}
                         </span>
                         <span className="font-medium text-destructive">
                           ₪{Number(expense.amount || 0).toLocaleString("he-IL")}
