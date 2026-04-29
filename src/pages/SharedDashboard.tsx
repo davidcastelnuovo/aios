@@ -18,6 +18,7 @@ import { Facebook, FileSpreadsheet, TrendingUp, TrendingDown, Minus, BarChart3, 
 import { PublicSeoView } from "@/components/dynamic-tables/PublicSeoView";
 import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnalyticsDashboard";
 import { PublicWooCommerceView } from "@/components/dynamic-tables/PublicWooCommerceView";
+import { getLeadsFromData } from "@/lib/adsMetrics";
 import {
   LineChart, Line, BarChart, Bar, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts";
@@ -46,10 +47,6 @@ const getSpendFromData = (data: any) => Number(data?.spend) || Number(data?.cost
 const getRevenueFromData = (data: any) =>
   Number(data?.purchase_value) || Number(data?.purchaseRevenue) || Number(data?.conversions_value) || Number(data?.conversion_value) || 0;
 const getPurchasesFromData = (data: any) => Number(data?.purchases) || Number(data?.ecommercePurchases) || Number(data?.transactions) || 0;
-const getLeadsFromData = (data: any) =>
-  Number(data?.leads) || Number(data?.conversions) || Number(data?.website_leads) ||
-  Number(data?.offsite_conversion) || Number(data?.offsite_conversion_fb_pixel_lead) ||
-  Number(data?.leadgen_grouped) || Number(data?.lead) || 0;
 const getSessionsFromData = (data: any) => Number(data?.sessions) || 0;
 const getUsersFromData = (data: any) => Number(data?.users) || 0;
 const getAddToCartFromData = (data: any) => Number(data?.add_to_cart) || Number(data?.addToCarts) || 0;
