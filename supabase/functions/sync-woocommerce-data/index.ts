@@ -123,8 +123,25 @@ serve(async (req) => {
       let customersCount = 0;
 
       try {
-        // ---- Sync Orders ----
-        const orders = await fetchAllPages(site_url, woo_consumer_key, woo_consumer_secret, "orders");
+        // ---- Determine incremental window ----
+        // Use modified_after = last successful sync minus 1h overlap (safety),
+        // fallback to last 30 days if no previous sync.
+        const lastSyncAt: string | null = site.woo_last_sync_at || null;
+        const fallbackDate = new Date();
+        fallbackDate.setDate(fallbackDate.getDate() - 30);
+        const sinceDate = lastSyncAt
+          ? new Date(new Date(lastSyncAt).getTime() - 60 * 60 * 1000)
+          : fallbackDate;
+        // WooCommerce expects ISO8601 without milliseconds, in site timezone agnostic form
+        const modifiedAfter = sinceDate.toISOString().split(".")[0];
+        console.log(`[woo-sync] site ${siteId} — incremental since ${modifiedAfter}`);
+
+        // ---- Sync Orders (incremental by modified_after) ----
+        const orders = await fetchAllPages(site_url, woo_consumer_key, woo_consumer_secret, "orders", {
+          modified_after: modifiedAfter,
+          orderby: "modified",
+          order: "asc",
+        });
         for (const order of orders) {
           const record = {
             tenant_id,
