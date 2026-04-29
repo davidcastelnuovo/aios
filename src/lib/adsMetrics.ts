@@ -13,6 +13,15 @@ export const getFacebookFormLeadsFromData = (data: any) => {
   return 0;
 };
 
+export const getExplicitLeadFieldsFromData = (data: any) =>
+  getFacebookFormLeadsFromData(data) ||
+  Number(data?.leads) ||
+  Number(data?.website_leads) ||
+  Number(data?.offsite_conversion) ||
+  Number(data?.offsite_conversion_fb_pixel_lead) ||
+  Number(data?.lead) ||
+  0;
+
 export const getLeadsFromData = (data: any) =>
   getFacebookFormLeadsFromData(data) ||
   Number(data?.leads) ||
