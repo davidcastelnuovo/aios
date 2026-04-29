@@ -143,7 +143,7 @@ Deno.serve(async (req) => {
     // Calculate date range
     const now = new Date();
     let since: Date;
-    let until = new Date(now);
+    let until = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     
     switch (dateRange) {
       case 'today':
@@ -159,6 +159,7 @@ Deno.serve(async (req) => {
         break;
       case 'last_7_days':
         since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
+        until = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
         break;
       case 'last_14_days':
         since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 14);
