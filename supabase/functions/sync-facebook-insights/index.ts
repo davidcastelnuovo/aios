@@ -16,6 +16,7 @@ interface InsightRecord {
   cpm: number;
   ctr: number;
   leads: number;
+  form_leads: number;
   cost_per_lead: number;
   spend: number;
   purchases: number;
@@ -140,11 +141,8 @@ Deno.serve(async (req) => {
     // Calculate date range
     const now = new Date();
     let since: Date;
-    let until = new Date(now);
-
-    // Always include today as the end date so live campaigns appear in the dashboard.
-    // UPSERT (date + campaign_id) refreshes today's row on each sync as numbers update.
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    let until = new Date(today);
 
     switch (dateRange) {
       case 'today':
@@ -160,7 +158,7 @@ Deno.serve(async (req) => {
         break;
       case 'last_7_days':
         since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
-        until = today;
+        until = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
         break;
       case 'last_14_days':
         since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 14);
@@ -329,7 +327,7 @@ Deno.serve(async (req) => {
       const _objectiveForLeads = String(_campaignStatusForLeads?.objective || '').toUpperCase();
       const _isLeadFormObjective = ['OUTCOME_LEADS', 'LEAD_GENERATION'].includes(_objectiveForLeads);
       const _leadgenGroupedValue = allActions
-        .filter((a: any) => String(a.action_type || '') === 'leadgen_grouped')
+        .filter((a: any) => ['leadgen.other', 'leadgen_grouped', 'onsite_conversion.lead_grouped'].includes(String(a.action_type || '')))
         .reduce((sum: number, a: any) => sum + (parseInt(a.value) || 0), 0);
 
       const leads = _isLeadFormObjective && _leadgenGroupedValue > 0
@@ -441,6 +439,7 @@ Deno.serve(async (req) => {
         cpm: parseFloat(insight.cpm) || 0,
         ctr: parseFloat(insight.ctr) || 0,
         leads,
+        form_leads: _leadgenGroupedValue,
         cost_per_lead: costPerLead,
         spend: parseFloat(insight.spend) || 0,
         purchases,
@@ -457,9 +456,9 @@ Deno.serve(async (req) => {
 
 
     // Make sure fields exist for Facebook Insights table
-    const fieldKeys = ['date', 'campaign_name', 'campaign_id', 'impressions', 'clicks', 'lp_or_form_views', 'cpm', 'ctr', 'leads', 'cost_per_lead', 'spend', 'purchases', 'purchase_value', 'add_to_cart', 'roas', 'campaign_objective', 'campaign_type', 'effective_status', 'configured_status', 'updated_time'];
-    const fieldNames = ['תאריך', 'שם הקמפיין', 'מזהה קמפיין', 'חשיפות', 'קליקים', 'צפיות LP / פתיחות טופס', 'עלות ל-1000 חשיפות', 'אחוז קליקים', 'לידים', 'עלות לליד', 'הוצאה', 'רכישות', 'ערך רכישות', 'הוספות לעגלה', 'ROAS', 'מטרת קמפיין', 'סוג קמפיין', 'סטטוס בפועל', 'סטטוס מוגדר', 'עדכון אחרון בקמפיין'];
-    const fieldTypes = ['date', 'text', 'text', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'text', 'text', 'text', 'text', 'text'];
+    const fieldKeys = ['date', 'campaign_name', 'campaign_id', 'impressions', 'clicks', 'lp_or_form_views', 'cpm', 'ctr', 'leads', 'form_leads', 'cost_per_lead', 'spend', 'purchases', 'purchase_value', 'add_to_cart', 'roas', 'campaign_objective', 'campaign_type', 'effective_status', 'configured_status', 'updated_time'];
+    const fieldNames = ['תאריך', 'שם הקמפיין', 'מזהה קמפיין', 'חשיפות', 'קליקים', 'צפיות LP / פתיחות טופס', 'עלות ל-1000 חשיפות', 'אחוז קליקים', 'לידים', 'לידים מטופס', 'עלות לליד', 'הוצאה', 'רכישות', 'ערך רכישות', 'הוספות לעגלה', 'ROAS', 'מטרת קמפיין', 'סוג קמפיין', 'סטטוס בפועל', 'סטטוס מוגדר', 'עדכון אחרון בקמפיין'];
+    const fieldTypes = ['date', 'text', 'text', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'text', 'text', 'text', 'text', 'text'];
     
     for (let i = 0; i < fieldKeys.length; i++) {
       const { data: existingField } = await supabase
