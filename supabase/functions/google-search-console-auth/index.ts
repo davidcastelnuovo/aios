@@ -146,13 +146,19 @@ serve(async (req) => {
         .eq('user_id', userId)
         .maybeSingle();
 
+      const existingSettings = (existing?.settings as Record<string, unknown> | null) || {};
       const integrationData = {
         is_active: true,
         api_key: tokens.access_token,
         settings: {
-          refresh_token: tokens.refresh_token,
+          ...existingSettings,
+          refresh_token: tokens.refresh_token || existingSettings?.refresh_token,
           expires_at: expiresAt,
           connected_at: new Date().toISOString(),
+          // Clear any stale reconnect flags on successful re-authorization
+          needs_reauth: false,
+          reauth_reason: null,
+          reauth_marked_at: null,
         },
         updated_at: new Date().toISOString(),
       };
