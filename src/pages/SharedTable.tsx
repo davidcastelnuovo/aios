@@ -287,6 +287,10 @@ export default function SharedTable() {
     const hasGsc = gscRecords.length > 0;
     const showTabs = hasGa || hasGsc;
 
+    // Derive monthly NON-PAID GA sessions for the SEO traffic chart — using the
+    // shared helper so the public viewer matches the internal SeoDashboardView 1:1.
+    const gaOrganicByMonth = computeGaOrganicByMonth(gaRecords);
+
     // Aggregate GSC records per keyword (sum clicks/impressions, weighted-average position by impressions).
     const gscAggregated = (() => {
       if (!hasGsc) return [];
