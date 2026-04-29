@@ -410,6 +410,7 @@ async function refreshIntegrationToken(serviceClient: any, integration: any) {
     })
     .eq('id', integration.id);
   return { ...integration, api_key: tokens.access_token, settings: newSettings };
+}
 
 async function fetchAccountsForIntegration(integration: any): Promise<any[]> {
   const accessToken = integration.api_key;
