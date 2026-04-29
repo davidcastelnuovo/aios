@@ -1,29 +1,42 @@
 ## הבעיה
-ה-Google Ads סובל מאותם ליקויים שתיקנתי ב-Google Analytics:
 
-1. **`sync-google-ads-data`** — הריענון של ה-token פשטני: בודק רק `expires_at < now()` *לפני* הקריאה, לא מנסה להתאושש מ-401 בזמן ריצה, ולא מסמן את החיבור כ-`needs_reauth` כשגוגל מחזירה `invalid_grant` (refresh_token שפג / בוטל).
-2. **`google-ads-auth` → `refreshIntegrationToken`** — אותה בעיה: שגיאת רענון רק נרשמת ל-log, החיבור נשאר `is_active=true` והמשתמש לא רואה שצריך לחבר מחדש.
-3. **`GoogleAdsSettings.tsx`** — אין באנר/אינדיקציה שהחיבור פג, אין כפתור "חבר מחדש".
-4. **אין cron אוטומטי** ל-Google Ads (יש `cron-sync-google-ads` כפונקציה אבל צריך לוודא שיש pg_cron מתוזמן).
+נתוני WooCommerce של "לידר" ו-"ארבע על ארבע" **ישנים ולא מעודכנים**:
+- **לידר**: סנכרון אחרון 26.4 — חסרים 3 ימים (27-29.4), לכן אתמול מראה 0 רכישות
+- **ארבע על ארבע**: סנכרון אחרון 19.4 — חסרים 10 ימים, לכן "שבוע אחרון" מראה ~400 ₪ במקום ~4,000 ₪
 
-## התיקון
+**שורש הבעיה**: הפונקציה `cron-sync-woocommerce` קיימת בקוד אבל **לא מתוזמנת ב-pg_cron** — אין סנכרון אוטומטי בכלל. כל סנכרון עד היום היה ידני בלבד.
 
-### 1. `supabase/functions/sync-google-ads-data/index.ts`
-- שיפור `refreshToken`: כשהתשובה מגוגל מכילה `error === 'invalid_grant'` (או כל שגיאה לא-זמנית) — לעדכן את ה-integration עם `is_active=false` ו-`settings.needs_reauth=true` + `last_error`.
-- להוסיף retry: אם קריאת Google Ads API מחזירה 401, להריץ `refreshToken` פעם אחת ולנסות שוב לפני ויתור.
-- להחזיר תגובה ברורה (`{ error: 'needs_reauth' }`) שה-UI יוכל לזהות.
+בנוסף, הפונקציה הנוכחית מסנכרנת **את כל ההזמנות מההתחלה** בכל ריצה (2,000+ הזמנות לכל אתר) — מאוד איטי ומיותר.
 
-### 2. `supabase/functions/google-ads-auth/index.ts`
-- ב-`refreshAccessToken` וב-`refreshIntegrationToken`: על `invalid_grant` לסמן `needs_reauth=true`, `is_active=false` ולשמור `last_error`.
+## מה ייעשה
 
-### 3. `src/pages/GoogleAdsSettings.tsx`
-- להוסיף באנר אדום ברור כשהחיבור במצב `needs_reauth` או `is_active=false`, עם כפתור "חבר מחדש" שמפעיל מחדש את זרימת ה-OAuth (כמו שעשינו ב-GA).
-- לזהות שגיאת `needs_reauth` שחוזרת מהסנכרון ולהציג טוסט מתאים.
+### 1. תזמון cron אוטומטי ל-WooCommerce
+- הוספת job ב-pg_cron שיריץ את `cron-sync-woocommerce` כל שעה
+- זה יבטיח שהנתונים תמיד עדכניים
 
-### 4. תזמון אוטומטי
-- לוודא קיום pg_cron job יומי שמפעיל את `cron-sync-google-ads` (להריץ באותה שעה כמו GA — 06:00 שעון ישראל / 04:00 UTC), אם עדיין לא קיים. אם קיים — לוודא שהוא תקין.
-- לוודא ש-`cron-sync-google-ads` עוברת על כל ה-integrations הפעילים ומריצה `sync-google-ads-data` לכל טבלת Google Ads, וכשהיא מקבלת `needs_reauth` — מסמנת ולא מנסה שוב עד תיקון.
+### 2. שיפור sync-woocommerce-data — סנכרון אינקרמנטלי
+- במקום לשלוף את כל ההזמנות מאז 2022, לשלוף רק הזמנות שהשתנו מאז `woo_last_sync_at`
+- שימוש בפרמטר `modified_after` של WooCommerce API
+- כך כל ריצה תהיה מהירה (שניות במקום דקות)
 
-## תוצאה צפויה
-- כשה-refresh_token של גוגל מתבטל, הסנכרון מפסיק לכשול בשקט והמשתמש רואה באנר "חבר מחדש" בדף ההגדרות.
-- אחרי לחיצה על "חבר מחדש" — OAuth חדש, `needs_reauth=false`, `is_active=true`, והסנכרון חוזר לעבוד אוטומטית כל בוקר.
+### 3. הפעלת סנכרון מיידי
+- ריצת סנכרון חד-פעמית מיד לאחר התיקון כדי לעדכן את הנתונים לימים החסרים
+
+## פרטים טכניים
+
+**pg_cron job** (insert tool):
+```sql
+SELECT cron.schedule(
+  'cron-sync-woocommerce-hourly',
+  '0 * * * *',
+  $$ SELECT net.http_post(...cron-sync-woocommerce...) $$
+);
+```
+
+**sync-woocommerce-data/index.ts** — שינוי עיקרי:
+- הוספת `modified_after` parameter ל-WooCommerce API call עבור orders
+- שימוש ב-`woo_last_sync_at` של האתר כתאריך התחלה
+- fallback ל-30 יום אחרונים אם אין sync קודם
+
+**קבצים שישתנו**:
+- `supabase/functions/sync-woocommerce-data/index.ts` — סנכרון אינקרמנטלי

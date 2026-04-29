@@ -123,8 +123,25 @@ serve(async (req) => {
       let customersCount = 0;
 
       try {
-        // ---- Sync Orders ----
-        const orders = await fetchAllPages(site_url, woo_consumer_key, woo_consumer_secret, "orders");
+        // ---- Determine incremental window ----
+        // Use modified_after = last successful sync minus 1h overlap (safety),
+        // fallback to last 30 days if no previous sync.
+        const lastSyncAt: string | null = site.woo_last_sync_at || null;
+        const fallbackDate = new Date();
+        fallbackDate.setDate(fallbackDate.getDate() - 30);
+        const sinceDate = lastSyncAt
+          ? new Date(new Date(lastSyncAt).getTime() - 60 * 60 * 1000)
+          : fallbackDate;
+        // WooCommerce expects ISO8601 without milliseconds, in site timezone agnostic form
+        const modifiedAfter = sinceDate.toISOString().split(".")[0];
+        console.log(`[woo-sync] site ${siteId} — incremental since ${modifiedAfter}`);
+
+        // ---- Sync Orders (incremental by modified_after) ----
+        const orders = await fetchAllPages(site_url, woo_consumer_key, woo_consumer_secret, "orders", {
+          modified_after: modifiedAfter,
+          orderby: "modified",
+          order: "asc",
+        });
         for (const order of orders) {
           const record = {
             tenant_id,
@@ -163,7 +180,9 @@ serve(async (req) => {
         ordersCount = orders.length;
 
         // ---- Sync Products ----
-        const products = await fetchAllPages(site_url, woo_consumer_key, woo_consumer_secret, "products");
+        const products = await fetchAllPages(site_url, woo_consumer_key, woo_consumer_secret, "products", {
+          modified_after: modifiedAfter,
+        });
         for (const product of products) {
           const record = {
             tenant_id,
@@ -193,7 +212,16 @@ serve(async (req) => {
         productsCount = products.length;
 
         // ---- Sync Customers ----
-        const customers = await fetchAllPages(site_url, woo_consumer_key, woo_consumer_secret, "customers");
+        // Customers: WooCommerce doesn't support modified_after on customers reliably.
+        // Use orderby=registered_date desc and only first few pages on incremental syncs;
+        // for first sync (no lastSyncAt) pull all.
+        const customers = lastSyncAt
+          ? await wooFetch(site_url, woo_consumer_key, woo_consumer_secret, "customers", {
+              per_page: PAGE_SIZE,
+              orderby: "registered_date",
+              order: "desc",
+            })
+          : await fetchAllPages(site_url, woo_consumer_key, woo_consumer_secret, "customers");
         for (const customer of customers) {
           const record = {
             tenant_id,
