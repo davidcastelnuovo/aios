@@ -813,6 +813,28 @@ export default function GoogleAdsSettings() {
 
         {/* Direct API Connection Tab */}
         <TabsContent value="api" className="space-y-6">
+          {needsReauth && (
+            <Alert variant="destructive" className="text-right">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle className="text-right">החיבור ל-Google Ads בוטל או פג תוקף</AlertTitle>
+              <AlertDescription className="text-right space-y-2">
+                <p>הסנכרון האוטומטי הופסק כי גוגל דחתה את ה-refresh token. צריך לחבר מחדש כדי להמשיך.</p>
+                {lastAuthError && (
+                  <p className="text-xs opacity-70">פרטי שגיאה: {lastAuthError}</p>
+                )}
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => connectMutation.mutate()}
+                  disabled={connectMutation.isPending}
+                  className="gap-2"
+                >
+                  {connectMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+                  חבר מחדש
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center justify-between flex-row-reverse">
