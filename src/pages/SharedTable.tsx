@@ -18,6 +18,7 @@ import { PublicGscView } from "@/components/dynamic-tables/PublicGscView";
 import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnalyticsDashboard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { computeGaOrganicByMonth } from "@/components/dynamic-tables/seo/computeGaOrganicByMonth";
+import { getLeadsFromData } from "@/lib/adsMetrics";
 
 // Date filter options — must match the internal DynamicTableView so the
 // shared link presents the same windows as the internal report.
@@ -43,10 +44,6 @@ const getSpendFromData = (d: any) => Number(d?.spend) || Number(d?.cost) || 0;
 const getRevenueFromData = (d: any) =>
   Number(d?.purchase_value) || Number(d?.purchaseRevenue) || Number(d?.conversions_value) || Number(d?.conversion_value) || 0;
 const getPurchasesFromData = (d: any) => Number(d?.purchases) || Number(d?.ecommercePurchases) || Number(d?.transactions) || 0;
-const getLeadsFromData = (d: any) =>
-  Number(d?.leads) || Number(d?.conversions) || Number(d?.website_leads) ||
-  Number(d?.offsite_conversion) || Number(d?.offsite_conversion_fb_pixel_lead) ||
-  Number(d?.leadgen_grouped) || Number(d?.lead) || 0;
 const getSessionsFromData = (d: any) => Number(d?.sessions) || 0;
 const getAddToCartFromData = (d: any) => Number(d?.add_to_cart) || Number(d?.addToCarts) || 0;
 
