@@ -368,12 +368,11 @@ Deno.serve(async (req) => {
     const tryMccCandidates = async (candidates: string[]): Promise<{ data: any; mcc: string } | null> => {
       for (const mcc of candidates) {
         if (!mcc || mcc === customerId) continue;
-        const retryResponse = await fetch(
+        const retryResponse = await adsFetch(
           `https://googleads.googleapis.com/v23/customers/${customerId}/googleAds:searchStream`,
           {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer ${accessToken}`,
               'developer-token': DEVELOPER_TOKEN,
               'login-customer-id': mcc,
               'Content-Type': 'application/json',
