@@ -770,13 +770,14 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
                     />
                 </div>
 
-                {clientFinanceExpenses.length > 0 && (
+                {displayedFinanceExpenses.length > 0 && (
                   <div className="rounded-md border bg-muted/30 p-3 space-y-2">
                     <FormLabel>הוצאות החודש</FormLabel>
-                    {clientFinanceExpenses.map((expense: any) => (
+                    {displayedFinanceExpenses.map((expense: any) => (
                       <div key={expense.id} className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground">
                           {expense.category || "הוצאה"} · {new Date(expense.date).toLocaleDateString("he-IL")}
+                          {expense._auto && <span className="text-xs mr-1">(אוטומטי)</span>}
                         </span>
                         <span className="font-medium text-destructive">
                           ₪{Number(expense.amount || 0).toLocaleString("he-IL")}
