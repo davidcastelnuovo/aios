@@ -107,23 +107,32 @@ export function CategorySyncControl({ category, tables }: Props) {
     queryClient.invalidateQueries({ queryKey: ["dynamic-tables"] });
   };
 
-  const lastSyncLabel = lastSyncAt
-    ? `סנכרון אחרון: לפני ${formatDistanceToNow(lastSyncAt, { locale: he })}`
-    : "לא סונכרן עדיין";
+  let lastSyncLabel: string;
+  let lastSyncTone = "text-muted-foreground";
+  if (syncableTables.length === 0) {
+    lastSyncLabel = "אין דוחות לסנכרון";
+  } else if (neverSyncedCount > 0) {
+    lastSyncLabel = `${neverSyncedCount} דוחות לא סונכרנו מעולם`;
+    lastSyncTone = "text-destructive";
+  } else if (oldestSyncAt) {
+    lastSyncLabel = `הישן ביותר: לפני ${formatDistanceToNow(oldestSyncAt, { locale: he })}`;
+  } else {
+    lastSyncLabel = "לא סונכרן עדיין";
+  }
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <div className={`flex items-center gap-1.5 text-xs ${lastSyncTone}`}>
               <Clock className="h-3.5 w-3.5" />
               <span>{lastSyncLabel}</span>
             </div>
           </TooltipTrigger>
-          {lastSyncAt && (
+          {oldestSyncAt && (
             <TooltipContent>
-              {lastSyncAt.toLocaleString("he-IL")}
+              הדוח הכי ישן בקטגוריה סונכרן ב-{oldestSyncAt.toLocaleString("he-IL")}
             </TooltipContent>
           )}
         </Tooltip>
