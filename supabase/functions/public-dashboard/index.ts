@@ -344,6 +344,8 @@ Deno.serve(async (req) => {
           orders: wooOrders,
         },
         ahrefs_reports: ahrefsReports,
+        seo_ga_records: seoGaRecords,
+        seo_gsc_records: seoGscRecords,
         has_email_restriction: false,
       }),
       {
