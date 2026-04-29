@@ -50,16 +50,22 @@ export function CategorySyncControl({ category, tables }: Props) {
     [tables]
   );
 
-  const lastSyncAt = useMemo(() => {
-    let latest: Date | null = null;
-    for (const t of tables) {
+  // Show the OLDEST sync among syncable tables — reflects the staleness of the
+  // category as a whole. A single freshly-synced table shouldn't make everything look fresh.
+  const { oldestSyncAt, neverSyncedCount } = useMemo(() => {
+    let oldest: Date | null = null;
+    let never = 0;
+    for (const t of syncableTables) {
       const ts = t.integration_settings?.last_sync_at;
-      if (!ts) continue;
+      if (!ts) {
+        never++;
+        continue;
+      }
       const d = new Date(ts);
-      if (!latest || d > latest) latest = d;
+      if (!oldest || d < oldest) oldest = d;
     }
-    return latest;
-  }, [tables]);
+    return { oldestSyncAt: oldest, neverSyncedCount: never };
+  }, [syncableTables]);
 
   const handleSyncAll = async () => {
     if (syncableTables.length === 0) {
