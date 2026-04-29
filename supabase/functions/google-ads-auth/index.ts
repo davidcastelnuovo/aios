@@ -376,18 +376,40 @@ async function refreshIntegrationToken(serviceClient: any, integration: any) {
   const tokens = await tokenResponse.json();
   if (tokens.error) {
     console.error('Token refresh failed for integration', integration.id, tokens.error);
+    const isPermanent = tokens.error === 'invalid_grant' || tokens.error === 'unauthorized_client' || tokens.error === 'invalid_client';
+    if (isPermanent) {
+      await serviceClient
+        .from('tenant_integrations')
+        .update({
+          is_active: false,
+          settings: {
+            ...integration.settings,
+            needs_reauth: true,
+            last_auth_error: `${tokens.error}${tokens.error_description ? ': ' + tokens.error_description : ''}`,
+            last_auth_error_at: new Date().toISOString(),
+          },
+        })
+        .eq('id', integration.id);
+    }
     return integration;
   }
   const expiresAt = new Date(Date.now() + (tokens.expires_in * 1000)).toISOString();
+  const newSettings = (() => {
+    const s = { ...integration.settings, expires_at: expiresAt } as any;
+    delete s.needs_reauth;
+    delete s.last_auth_error;
+    delete s.last_auth_error_at;
+    return s;
+  })();
   await serviceClient
     .from('tenant_integrations')
     .update({
       api_key: tokens.access_token,
-      settings: { ...integration.settings, expires_at: expiresAt },
+      is_active: true,
+      settings: newSettings,
     })
     .eq('id', integration.id);
-  return { ...integration, api_key: tokens.access_token, settings: { ...integration.settings, expires_at: expiresAt } };
-}
+  return { ...integration, api_key: tokens.access_token, settings: newSettings };
 
 async function fetchAccountsForIntegration(integration: any): Promise<any[]> {
   const accessToken = integration.api_key;
