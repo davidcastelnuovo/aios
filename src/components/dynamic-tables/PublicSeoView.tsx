@@ -250,7 +250,7 @@ export function PublicSeoView({ tableName, reports, gscData = [], gaOrganicByMon
         campaignStart={snapshotCampaignStart}
       />
 
-      <SeoTrafficChart trafficHistory={trafficHistory} />
+      <SeoTrafficChart trafficHistory={trafficHistory} gaOrganicByMonth={gaOrganicByMonth} />
 
       <SeoKeywordsTable
         keywords={organicKeywords}
