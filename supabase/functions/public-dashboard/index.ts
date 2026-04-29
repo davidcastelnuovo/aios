@@ -6,7 +6,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-function getDateRange(filter: string): { startDate: string | null; endDate: string | null } {
+function getDateRange(filter: string, integrationType?: string | null): { startDate: string | null; endDate: string | null } {
   const now = new Date();
   // Compute everything in UTC so the range matches WooCommerce admin reports
   // and the woocommerce_orders.date_created column (stored as UTC timestamptz).
@@ -30,7 +30,13 @@ function getDateRange(filter: string): { startDate: string | null; endDate: stri
       endDate = yesterdayStr;
       break;
     case "last_7_days": {
-      // Most recent COMPLETED Sunday → Saturday week (UTC).
+      // Ads platforms match Meta/Google UI: 7 full days ending yesterday.
+      if (["facebook_insights", "facebook_ecommerce", "google_ads"].includes(String(integrationType || ""))) {
+        startDate = new Date(Date.UTC(y, m, d - 7)).toISOString().split("T")[0];
+        endDate = yesterdayStr;
+        break;
+      }
+      // WooCommerce remains most recent COMPLETED Sunday → Saturday week (UTC).
       const dow = yesterday.getUTCDay(); // 0=Sun .. 6=Sat
       const daysSinceSat = (dow + 1) % 7;
       const sat = new Date(Date.UTC(y, m, d - 1 - daysSinceSat));
@@ -125,8 +131,7 @@ Deno.serve(async (req) => {
 
     const allTables = tables || [];
 
-    // Calculate date range
-    const { startDate, endDate } = getDateRange(dateFilter);
+    const wooRange = getDateRange(dateFilter);
 
     // Fetch records for each table WITH PAGINATION (bypass 1000-row default limit)
     const allRecords: any[] = [];
@@ -144,6 +149,7 @@ Deno.serve(async (req) => {
     for (const table of tablesToProcess) {
       const pageSize = 1000;
       const tableRecords: any[] = [];
+      const { startDate, endDate } = getDateRange(dateFilter, table.integration_type);
 
       for (let from = 0; ; from += pageSize) {
         // Filter by table_id only — share_token already authorized this dashboard
@@ -315,8 +321,8 @@ Deno.serve(async (req) => {
           .order("date_created", { ascending: false })
           .limit(2000);
         // Force UTC boundaries to match Woo admin and the dashboard UI.
-        if (startDate) q = q.gte("date_created", startDate + "T00:00:00.000Z");
-        if (endDate) q = q.lte("date_created", endDate + "T23:59:59.999Z");
+        if (wooRange.startDate) q = q.gte("date_created", wooRange.startDate + "T00:00:00.000Z");
+        if (wooRange.endDate) q = q.lte("date_created", wooRange.endDate + "T23:59:59.999Z");
         const { data: orders } = await q;
         wooOrders = orders || [];
       }
