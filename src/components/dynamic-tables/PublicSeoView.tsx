@@ -45,7 +45,7 @@ function normalizeKeyword(kw: any) {
   };
 }
 
-export function PublicSeoView({ tableName, reports, gscData = [], initialLangFilter }: PublicSeoViewProps) {
+export function PublicSeoView({ tableName, reports, gscData = [], gaOrganicByMonth = [], initialLangFilter }: PublicSeoViewProps) {
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const validReports = useMemo(() => filterValidSeoReports(reports), [reports]);
 
