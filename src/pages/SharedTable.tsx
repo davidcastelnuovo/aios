@@ -17,6 +17,7 @@ import { PublicSeoView } from "@/components/dynamic-tables/PublicSeoView";
 import { PublicGscView } from "@/components/dynamic-tables/PublicGscView";
 import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnalyticsDashboard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { computeGaOrganicByMonth } from "@/components/dynamic-tables/seo/computeGaOrganicByMonth";
 
 // Date filter options — must match the internal DynamicTableView so the
 // shared link presents the same windows as the internal report.
@@ -286,6 +287,10 @@ export default function SharedTable() {
     const hasGsc = gscRecords.length > 0;
     const showTabs = hasGa || hasGsc;
 
+    // Derive monthly NON-PAID GA sessions for the SEO traffic chart — using the
+    // shared helper so the public viewer matches the internal SeoDashboardView 1:1.
+    const gaOrganicByMonth = computeGaOrganicByMonth(gaRecords);
+
     // Aggregate GSC records per keyword (sum clicks/impressions, weighted-average position by impressions).
     const gscAggregated = (() => {
       if (!hasGsc) return [];
@@ -348,6 +353,7 @@ export default function SharedTable() {
                   tableName={data.table.name}
                   reports={data.ahrefs_reports || []}
                   gscData={gscAggregated}
+                  gaOrganicByMonth={gaOrganicByMonth}
                   initialLangFilter={(data.table.integration_settings as any)?.linkedGscLangFilter || 'all'}
                 />
               </TabsContent>
@@ -369,6 +375,7 @@ export default function SharedTable() {
               tableName={data.table.name}
               reports={data.ahrefs_reports || []}
               gscData={gscAggregated}
+              gaOrganicByMonth={gaOrganicByMonth}
               initialLangFilter={(data.table.integration_settings as any)?.linkedGscLangFilter || 'all'}
             />
           )}
