@@ -19,6 +19,7 @@ import { useResolvedGscIntegration } from "@/hooks/useResolvedGscIntegration";
 import { AhrefsProjectPicker } from "./AhrefsProjectPicker";
 import { ListChecks } from "lucide-react";
 import { filterValidSeoReports } from "./seo/reportValidity";
+import { computeGaOrganicByMonth } from "./seo/computeGaOrganicByMonth";
 
 interface SeoDashboardViewProps {
   tenantId: string;
