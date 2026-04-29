@@ -18,7 +18,7 @@ import { Facebook, FileSpreadsheet, TrendingUp, TrendingDown, Minus, BarChart3, 
 import { PublicSeoView } from "@/components/dynamic-tables/PublicSeoView";
 import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnalyticsDashboard";
 import { PublicWooCommerceView } from "@/components/dynamic-tables/PublicWooCommerceView";
-import { getLeadsFromData } from "@/lib/adsMetrics";
+import { getExplicitLeadFieldsFromData, getLeadsFromData } from "@/lib/adsMetrics";
 import {
   LineChart, Line, BarChart, Bar, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts";
@@ -319,8 +319,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
         if (ct === 'ecommerce') {
           platforms[source].results += getPurchasesFromData(d);
           platforms[source].revenue += getRevenueFromData(d);
-          const explicitLeads = Number(d.leads) || Number(d.website_leads) || Number(d.leadgen_grouped) || Number(d.lead) || 0;
-          platforms[source].leads += explicitLeads;
+          platforms[source].leads += getExplicitLeadFieldsFromData(d);
         } else {
           const leads = getLeadsFromData(d);
           platforms[source].leads += leads;
@@ -889,20 +888,9 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
                       <TableBody>
                         {facebookCampaignSummary.map((c, i) => {
                           const roas = c.spend > 0 ? c.revenue / c.spend : 0;
-                          const leads = getLeadsFromData(records
+                          const leads = records
                             .filter((r: any) => isFacebookPlatform(r._source || '') && (r.data?.campaign_name === c.name || r.data?.campaign === c.name))
-                            .reduce((acc: any, r: any) => {
-                              const d = r.data || {};
-                              return {
-                                leads: (acc.leads || 0) + (Number(d.leads) || 0),
-                                conversions: (acc.conversions || 0) + (Number(d.conversions) || 0),
-                                website_leads: (acc.website_leads || 0) + (Number(d.website_leads) || 0),
-                                offsite_conversion: (acc.offsite_conversion || 0) + (Number(d.offsite_conversion) || 0),
-                                offsite_conversion_fb_pixel_lead: (acc.offsite_conversion_fb_pixel_lead || 0) + (Number(d.offsite_conversion_fb_pixel_lead) || 0),
-                                leadgen_grouped: (acc.leadgen_grouped || 0) + (Number(d.leadgen_grouped) || 0),
-                                lead: (acc.lead || 0) + (Number(d.lead) || 0),
-                              };
-                            }, {}));
+                            .reduce((sum: number, r: any) => sum + getLeadsFromData(r.data || {}), 0);
                           const cpl = leads > 0 ? c.spend / leads : 0;
 
                           return (
@@ -949,12 +937,9 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
                             </>
                           ) : (() => {
                             const totalLeads = facebookCampaignSummary.reduce((sum, c) => {
-                              return sum + getLeadsFromData(records
+                              return sum + records
                                 .filter((r: any) => isFacebookPlatform(r._source || '') && (r.data?.campaign_name === c.name || r.data?.campaign === c.name))
-                                .reduce((acc: any, r: any) => {
-                                  const d = r.data || {};
-                                  return { leads: (acc.leads || 0) + (Number(d.leads) || 0), conversions: (acc.conversions || 0) + (Number(d.conversions) || 0), website_leads: (acc.website_leads || 0) + (Number(d.website_leads) || 0), offsite_conversion: (acc.offsite_conversion || 0) + (Number(d.offsite_conversion) || 0), offsite_conversion_fb_pixel_lead: (acc.offsite_conversion_fb_pixel_lead || 0) + (Number(d.offsite_conversion_fb_pixel_lead) || 0), leadgen_grouped: (acc.leadgen_grouped || 0) + (Number(d.leadgen_grouped) || 0), lead: (acc.lead || 0) + (Number(d.lead) || 0) };
-                                }, {}));
+                                .reduce((leadSum: number, r: any) => leadSum + getLeadsFromData(r.data || {}), 0);
                             }, 0);
                             const totalCpl = totalLeads > 0 ? totals.spend / totalLeads : 0;
                             return (
