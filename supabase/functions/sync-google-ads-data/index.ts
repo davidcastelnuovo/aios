@@ -327,12 +327,11 @@ Deno.serve(async (req) => {
     // Use manager_id (MCC) as login-customer-id if available, otherwise use customerId
     let loginCustomerId = settings.manager_id || customerId;
 
-    let searchResponse = await fetch(
+    let searchResponse = await adsFetch(
       `https://googleads.googleapis.com/v23/customers/${customerId}/googleAds:searchStream`,
       {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${accessToken}`,
           'developer-token': DEVELOPER_TOKEN,
           'login-customer-id': loginCustomerId,
           'Content-Type': 'application/json',
@@ -344,6 +343,18 @@ Deno.serve(async (req) => {
     let searchData = await searchResponse.json();
     console.log(`[sync-google-ads] table=${table_id} customer=${customerId} login=${loginCustomerId} status=${searchResponse.status} dateRange=${startDate.toISOString().split('T')[0]}..${endDate.toISOString().split('T')[0]}`);
     console.log(`[sync-google-ads] response preview:`, JSON.stringify(searchData).slice(0, 800));
+
+    // If still 401 after a refresh attempt — refresh_token is bad/revoked
+    if (searchResponse.status === 401) {
+      return new Response(JSON.stringify({
+        error: 'needs_reauth',
+        message: 'החיבור ל-Google Ads בוטל או פג תוקף. יש לחבר מחדש.',
+      }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
 
     // Helper: detect Google Ads error in any response shape (object, array, or wrapped)
     const detectGAError = (data: any): any | null => {
