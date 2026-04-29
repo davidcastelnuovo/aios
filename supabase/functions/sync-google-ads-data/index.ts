@@ -163,25 +163,103 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Check if token needs refresh
-    if (integration.settings?.expires_at && new Date(integration.settings.expires_at) < new Date()) {
-      const refreshed = await refreshToken(supabase, integration);
-      if (!refreshed) {
-        return new Response(JSON.stringify({ error: 'Failed to refresh token' }), {
+    // Mutable settings reference for refresh logic
+    let integrationSettings: any = integration.settings || {};
+    let accessToken: string = integration.api_key;
+
+    // Refresh if expired/near expiry, OR forced (after a 401).
+    async function ensureFreshToken(force = false): Promise<{ ok: boolean; needsReauth?: boolean; error?: string }> {
+      const refreshTokenStr = integrationSettings?.refresh_token;
+      if (!refreshTokenStr) return { ok: true }; // nothing to do (legacy connection)
+
+      const expiresAtMs = integrationSettings?.expires_at ? new Date(integrationSettings.expires_at).getTime() : 0;
+      const fiveMinFromNow = Date.now() + 5 * 60 * 1000;
+      const stale = !expiresAtMs || expiresAtMs < fiveMinFromNow;
+      if (!force && !stale) return { ok: true };
+
+      const refreshResp = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: GOOGLE_CLIENT_ID,
+          client_secret: GOOGLE_CLIENT_SECRET,
+          refresh_token: refreshTokenStr,
+          grant_type: 'refresh_token',
+        }),
+      });
+      const refreshData = await refreshResp.json().catch(() => ({}));
+
+      if (!refreshResp.ok || !refreshData.access_token) {
+        const err = refreshData?.error || 'refresh_failed';
+        const errDesc = refreshData?.error_description || '';
+        const isPermanent = err === 'invalid_grant' || err === 'unauthorized_client' || err === 'invalid_client';
+        // Mark needs_reauth on permanent failures so the UI can prompt reconnection
+        await supabaseAdmin
+          .from('tenant_integrations')
+          .update({
+            is_active: isPermanent ? false : integration.is_active,
+            settings: {
+              ...integrationSettings,
+              needs_reauth: isPermanent ? true : (integrationSettings?.needs_reauth || false),
+              last_auth_error: `${err}${errDesc ? ': ' + errDesc : ''}`,
+              last_auth_error_at: new Date().toISOString(),
+            },
+          })
+          .eq('id', integration.id);
+        console.error('[sync-google-ads] token refresh failed:', err, errDesc);
+        return { ok: false, needsReauth: isPermanent, error: errDesc || err };
+      }
+
+      accessToken = refreshData.access_token;
+      const newExpiresAt = new Date(Date.now() + (refreshData.expires_in * 1000)).toISOString();
+      integrationSettings = {
+        ...integrationSettings,
+        expires_at: newExpiresAt,
+      };
+      delete integrationSettings.needs_reauth;
+      delete integrationSettings.last_auth_error;
+      delete integrationSettings.last_auth_error_at;
+
+      await supabaseAdmin
+        .from('tenant_integrations')
+        .update({
+          api_key: accessToken,
+          is_active: true,
+          settings: integrationSettings,
+        })
+        .eq('id', integration.id);
+
+      return { ok: true };
+    }
+
+    // Proactive refresh once before any API call
+    {
+      const r = await ensureFreshToken(false);
+      if (!r.ok) {
+        return new Response(JSON.stringify({
+          error: r.needsReauth ? 'needs_reauth' : 'token_refresh_failed',
+          message: r.needsReauth
+            ? 'החיבור ל-Google Ads בוטל או פג תוקף. יש לחבר מחדש.'
+            : 'נכשל רענון של ה-token מול Google.',
+          details: r.error,
+        }), {
           status: 401,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }
-      // Get updated token
-      const { data: updatedIntegration } = await supabase
-        .from('tenant_integrations')
-        .select('api_key')
-        .eq('id', integration.id)
-        .single();
-      integration.api_key = updatedIntegration?.api_key;
     }
 
-    const accessToken = integration.api_key;
+    // Wrapper: any Google Ads call goes through this so 401 triggers a forced refresh + one retry.
+    const adsFetch = async (url: string, init: RequestInit): Promise<Response> => {
+      const baseHeaders = { ...(init.headers as Record<string, string> || {}) };
+      let res = await fetch(url, { ...init, headers: { ...baseHeaders, 'Authorization': `Bearer ${accessToken}` } });
+      if (res.status === 401) {
+        const r = await ensureFreshToken(true);
+        if (!r.ok) return res; // surface the original 401; outer handler will report needs_reauth
+        res = await fetch(url, { ...init, headers: { ...baseHeaders, 'Authorization': `Bearer ${accessToken}` } });
+      }
+      return res;
+    };
 
     // Calculate date range
     const now = new Date();
@@ -249,12 +327,11 @@ Deno.serve(async (req) => {
     // Use manager_id (MCC) as login-customer-id if available, otherwise use customerId
     let loginCustomerId = settings.manager_id || customerId;
 
-    let searchResponse = await fetch(
+    let searchResponse = await adsFetch(
       `https://googleads.googleapis.com/v23/customers/${customerId}/googleAds:searchStream`,
       {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${accessToken}`,
           'developer-token': DEVELOPER_TOKEN,
           'login-customer-id': loginCustomerId,
           'Content-Type': 'application/json',
@@ -266,6 +343,18 @@ Deno.serve(async (req) => {
     let searchData = await searchResponse.json();
     console.log(`[sync-google-ads] table=${table_id} customer=${customerId} login=${loginCustomerId} status=${searchResponse.status} dateRange=${startDate.toISOString().split('T')[0]}..${endDate.toISOString().split('T')[0]}`);
     console.log(`[sync-google-ads] response preview:`, JSON.stringify(searchData).slice(0, 800));
+
+    // If still 401 after a refresh attempt — refresh_token is bad/revoked
+    if (searchResponse.status === 401) {
+      return new Response(JSON.stringify({
+        error: 'needs_reauth',
+        message: 'החיבור ל-Google Ads בוטל או פג תוקף. יש לחבר מחדש.',
+      }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
 
     // Helper: detect Google Ads error in any response shape (object, array, or wrapped)
     const detectGAError = (data: any): any | null => {
@@ -279,12 +368,11 @@ Deno.serve(async (req) => {
     const tryMccCandidates = async (candidates: string[]): Promise<{ data: any; mcc: string } | null> => {
       for (const mcc of candidates) {
         if (!mcc || mcc === customerId) continue;
-        const retryResponse = await fetch(
+        const retryResponse = await adsFetch(
           `https://googleads.googleapis.com/v23/customers/${customerId}/googleAds:searchStream`,
           {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer ${accessToken}`,
               'developer-token': DEVELOPER_TOKEN,
               'login-customer-id': mcc,
               'Content-Type': 'application/json',
@@ -328,9 +416,9 @@ Deno.serve(async (req) => {
 
       let listMccs: string[] = [];
       try {
-        const listResponse = await fetch('https://googleads.googleapis.com/v23/customers:listAccessibleCustomers', {
+        const listResponse = await adsFetch('https://googleads.googleapis.com/v23/customers:listAccessibleCustomers', {
+          method: 'GET',
           headers: {
-            'Authorization': `Bearer ${accessToken}`,
             'developer-token': DEVELOPER_TOKEN,
           },
         });
@@ -690,42 +778,4 @@ Deno.serve(async (req) => {
   }
 });
 
-async function refreshToken(supabase: any, integration: any): Promise<boolean> {
-  try {
-    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: GOOGLE_CLIENT_ID,
-        client_secret: GOOGLE_CLIENT_SECRET,
-        refresh_token: integration.settings.refresh_token,
-        grant_type: 'refresh_token',
-      }),
-    });
-
-    const tokens = await tokenResponse.json();
-
-    if (tokens.error) {
-      console.error('Token refresh error:', tokens);
-      return false;
-    }
-
-    const expiresAt = new Date(Date.now() + (tokens.expires_in * 1000)).toISOString();
-
-    await supabase
-      .from('tenant_integrations')
-      .update({
-        api_key: tokens.access_token,
-        settings: {
-          ...integration.settings,
-          expires_at: expiresAt,
-        },
-      })
-      .eq('id', integration.id);
-
-    return true;
-  } catch (err) {
-    console.error('Error refreshing token:', err);
-    return false;
-  }
-}
+// (Legacy refreshToken removed — replaced by inline ensureFreshToken with retry + needs_reauth handling.)

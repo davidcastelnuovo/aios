@@ -401,6 +401,8 @@ export default function GoogleAdsSettings() {
   const isViaMakeConnected = googleAdsViaMakeIntegration?.is_active;
   const settings = googleAdsIntegration?.settings as any;
   const viaMakeSettings = googleAdsViaMakeIntegration?.settings as { connection_name?: string } | null;
+  const needsReauth = Boolean(settings?.needs_reauth) || (googleAdsIntegration && googleAdsIntegration.is_active === false && googleAdsIntegration.api_key);
+  const lastAuthError = settings?.last_auth_error as string | undefined;
 
   return (
     <div className="container mx-auto p-6 space-y-6" dir="rtl">
@@ -811,6 +813,28 @@ export default function GoogleAdsSettings() {
 
         {/* Direct API Connection Tab */}
         <TabsContent value="api" className="space-y-6">
+          {needsReauth && (
+            <Alert variant="destructive" className="text-right">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle className="text-right">החיבור ל-Google Ads בוטל או פג תוקף</AlertTitle>
+              <AlertDescription className="text-right space-y-2">
+                <p>הסנכרון האוטומטי הופסק כי גוגל דחתה את ה-refresh token. צריך לחבר מחדש כדי להמשיך.</p>
+                {lastAuthError && (
+                  <p className="text-xs opacity-70">פרטי שגיאה: {lastAuthError}</p>
+                )}
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => connectMutation.mutate()}
+                  disabled={connectMutation.isPending}
+                  className="gap-2"
+                >
+                  {connectMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+                  חבר מחדש
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center justify-between flex-row-reverse">
