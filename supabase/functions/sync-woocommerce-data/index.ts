@@ -180,7 +180,9 @@ serve(async (req) => {
         ordersCount = orders.length;
 
         // ---- Sync Products ----
-        const products = await fetchAllPages(site_url, woo_consumer_key, woo_consumer_secret, "products");
+        const products = await fetchAllPages(site_url, woo_consumer_key, woo_consumer_secret, "products", {
+          modified_after: modifiedAfter,
+        });
         for (const product of products) {
           const record = {
             tenant_id,
