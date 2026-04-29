@@ -56,35 +56,91 @@ serve(async (req) => {
     const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
     const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET');
 
-    // Refresh token if needed
-    if (integrationSettings?.expires_at && new Date(integrationSettings.expires_at) < new Date()) {
-      
+    // Robust token refresh helper.
+    // Refreshes proactively if expires_at missing/near expiry, or on demand (force=true after a 401).
+    async function ensureFreshToken(force = false): Promise<string> {
+      const refreshToken = integrationSettings?.refresh_token;
+      if (!refreshToken) {
+        // Nothing we can do — old connection without a refresh token.
+        return accessToken;
+      }
+
+      const expiresAt = integrationSettings?.expires_at ? new Date(integrationSettings.expires_at).getTime() : 0;
+      const fiveMinFromNow = Date.now() + 5 * 60 * 1000;
+      const stale = !expiresAt || expiresAt < fiveMinFromNow;
+
+      if (!force && !stale) return accessToken;
+
       const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
           client_id: clientId!,
           client_secret: clientSecret!,
-          refresh_token: integrationSettings.refresh_token,
+          refresh_token: refreshToken,
           grant_type: 'refresh_token',
         }),
       });
 
       const refreshData = await refreshResponse.json();
-      
-      if (refreshData.access_token) {
-        accessToken = refreshData.access_token;
-        const newExpiresAt = new Date(Date.now() + (refreshData.expires_in * 1000)).toISOString();
-        
+
+      if (!refreshResponse.ok || !refreshData.access_token) {
+        // Mark as needing reauth so the UI can prompt the user.
         await supabase
           .from('tenant_integrations')
           .update({
-            api_key: accessToken,
-            settings: { ...integrationSettings, expires_at: newExpiresAt },
+            settings: {
+              ...integrationSettings,
+              needs_reauth: true,
+              last_auth_error: refreshData?.error || refreshData?.error_description || 'refresh_failed',
+              last_auth_error_at: new Date().toISOString(),
+            },
           })
           .eq('id', integration.id);
+        throw new Error(
+          'GOOGLE_AUTH_REVOKED: ' + (refreshData?.error_description || refreshData?.error || 'Refresh token rejected by Google. Please reconnect Google Analytics.')
+        );
       }
+
+      accessToken = refreshData.access_token;
+      const newExpiresAt = new Date(Date.now() + (refreshData.expires_in * 1000)).toISOString();
+      integrationSettings.expires_at = newExpiresAt;
+      // Clear reauth flag on success.
+      delete integrationSettings.needs_reauth;
+      delete integrationSettings.last_auth_error;
+      delete integrationSettings.last_auth_error_at;
+
+      await supabase
+        .from('tenant_integrations')
+        .update({
+          api_key: accessToken,
+          settings: integrationSettings,
+        })
+        .eq('id', integration.id);
+
+      return accessToken;
     }
+
+    // Wrap any GA fetch so 401 triggers a refresh and one retry.
+    // Usage: await gaFetch(url, init) — init.headers.Authorization will be (re)set automatically.
+    async function gaFetch(url: string, init: RequestInit): Promise<Response> {
+      await ensureFreshToken(false);
+      let res = await fetch(url, {
+        ...init,
+        headers: { ...(init.headers || {}), Authorization: `Bearer ${accessToken}` },
+      });
+      if (res.status === 401) {
+        await ensureFreshToken(true);
+        res = await fetch(url, {
+          ...init,
+          headers: { ...(init.headers || {}), Authorization: `Bearer ${accessToken}` },
+        });
+      }
+      return res;
+    }
+
+    // Proactively refresh once before any API calls (handles missing expires_at).
+    await ensureFreshToken(false);
 
     // Format property ID (remove 'properties/' prefix if present)
     const propertyId = propertyIdRaw.replace('properties/', '');

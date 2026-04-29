@@ -340,59 +340,83 @@ export default function GoogleAnalyticsSettings() {
               ) : hasAnyDirectConnection ? (
                 <div className="space-y-4">
                   {/* List connected accounts */}
-                   {integrations.map((integ) => {
-                    const s = integ.settings as Record<string, unknown> | null;
-                    const email = (s?.google_email as string) || 'חשבון לא ידוע';
-                    const isOwn = (integ as any)._isOwn;
-                    const sharedByName = (integ as any)._sharedByName;
-                    return (
-                      <div key={integ.id} className="flex items-center justify-between p-3 border rounded-lg bg-muted/30">
-                        <div className="flex items-center gap-3">
-                          <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <p className="font-medium text-sm">{email}</p>
-                              {!isOwn && (
-                                <Badge variant="secondary" className="text-xs">
-                                  שותף {sharedByName ? `ע"י ${sharedByName}` : ''}
-                                </Badge>
-                              )}
-                            </div>
-                            {s?.connected_at && (
-                              <p className="text-xs text-muted-foreground">
-                                חובר: {new Date(s.connected_at as string).toLocaleDateString('he-IL')}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setSharingIntegrationId(integ.id);
-                              setSharingIntegrationName(email);
-                              setSharingOwnerId(integ.user_id);
-                            }}
-                            title={isOwn ? "שתף עם חברי צוות" : "צפה בשיתופים (חיבור משותף בארגון)"}
-                          >
-                            <Share2 className="h-4 w-4 ml-1" />
-                            {isOwn ? "שתף" : "שיתופים"}
-                          </Button>
-                          {isOwn && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => disconnectMutation.mutate(integ.id)}
-                              disabled={disconnectMutation.isPending}
-                            >
-                              נתק
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+                    {integrations.map((integ) => {
+                     const s = integ.settings as Record<string, unknown> | null;
+                     const email = (s?.google_email as string) || 'חשבון לא ידוע';
+                     const isOwn = (integ as any)._isOwn;
+                     const sharedByName = (integ as any)._sharedByName;
+                     const needsReauth = Boolean(s?.needs_reauth);
+                     return (
+                       <div key={integ.id} className={`flex items-center justify-between p-3 border rounded-lg ${needsReauth ? 'bg-destructive/10 border-destructive/40' : 'bg-muted/30'}`}>
+                         <div className="flex items-center gap-3">
+                           {needsReauth ? (
+                             <AlertCircle className="h-5 w-5 text-destructive shrink-0" />
+                           ) : (
+                             <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
+                           )}
+                           <div>
+                             <div className="flex items-center gap-2">
+                               <p className="font-medium text-sm">{email}</p>
+                               {!isOwn && (
+                                 <Badge variant="secondary" className="text-xs">
+                                   שותף {sharedByName ? `ע"י ${sharedByName}` : ''}
+                                 </Badge>
+                               )}
+                               {needsReauth && (
+                                 <Badge variant="destructive" className="text-xs">נדרש חיבור מחדש</Badge>
+                               )}
+                             </div>
+                             {s?.connected_at && (
+                               <p className="text-xs text-muted-foreground">
+                                 חובר: {new Date(s.connected_at as string).toLocaleDateString('he-IL')}
+                               </p>
+                             )}
+                             {needsReauth && (
+                               <p className="text-xs text-destructive mt-1">
+                                 החיבור לגוגל בוטל או פג תוקף. לחץ על "חבר מחדש" כדי לחדש את הגישה.
+                               </p>
+                             )}
+                           </div>
+                         </div>
+                         <div className="flex gap-2">
+                           {needsReauth && isOwn && (
+                             <Button
+                               variant="destructive"
+                               size="sm"
+                               onClick={() => handleConnect(true)}
+                               disabled={isConnecting}
+                             >
+                               {isConnecting ? <Loader2 className="h-4 w-4 ml-1 animate-spin" /> : <ExternalLink className="h-4 w-4 ml-1" />}
+                               חבר מחדש
+                             </Button>
+                           )}
+                           <Button
+                             variant="outline"
+                             size="sm"
+                             onClick={() => {
+                               setSharingIntegrationId(integ.id);
+                               setSharingIntegrationName(email);
+                               setSharingOwnerId(integ.user_id);
+                             }}
+                             title={isOwn ? "שתף עם חברי צוות" : "צפה בשיתופים (חיבור משותף בארגון)"}
+                           >
+                             <Share2 className="h-4 w-4 ml-1" />
+                             {isOwn ? "שתף" : "שיתופים"}
+                           </Button>
+                           {isOwn && (
+                             <Button
+                               variant="outline"
+                               size="sm"
+                               onClick={() => disconnectMutation.mutate(integ.id)}
+                               disabled={disconnectMutation.isPending}
+                             >
+                               נתק
+                             </Button>
+                           )}
+                         </div>
+                       </div>
+                     );
+                   })}
 
                   {/* Add another account */}
                   <Button 

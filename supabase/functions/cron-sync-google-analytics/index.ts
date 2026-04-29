@@ -1,141 +1,127 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const BATCH_SIZE = 8;
-
-Deno.serve(async (req) => {
+serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const supabase = createClient(supabaseUrl, serviceKey);
+
+  const startedAt = new Date().toISOString();
+  const results: any[] = [];
+
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-    const supabase = createClient(supabaseUrl, serviceKey);
-
-    // Parse batch params
-    let body: any = {};
-    try { body = await req.json(); } catch {}
-    const batchOffset: number = body.batch_offset || 0;
-    const tableIds: string[] | null = body.table_ids || null;
-
-    // Get Google Analytics tables
-    let query = supabase
+    // Find all crm_tables that are linked to a google_analytics integration.
+    // We sync per-table because sync-google-analytics-data expects { tableId }.
+    const { data: tables, error: tablesError } = await supabase
       .from('crm_tables')
-      .select('id, name, tenant_id, integration_settings')
-      .eq('integration_type', 'google_analytics')
-      .order('id');
+      .select('id, tenant_id, name, integration_settings, integration_type')
+      .eq('integration_type', 'google_analytics');
 
-    if (tableIds && tableIds.length > 0) {
-      query = query.in('id', tableIds);
-    }
+    if (tablesError) throw tablesError;
 
-    const { data: allTables, error: tablesError } = await query;
-    if (tablesError) {
-      console.error('Error fetching GA tables:', tablesError);
-      throw tablesError;
-    }
+    console.log(`[cron-ga] Found ${tables?.length || 0} GA tables to sync`);
 
-    // Slice for current batch
-    const tables = (allTables || []).slice(batchOffset, batchOffset + BATCH_SIZE);
-    const hasMore = (allTables || []).length > batchOffset + BATCH_SIZE;
-
-    const results = {
-      total: (allTables || []).length,
-      batch_offset: batchOffset,
-      batch_size: tables.length,
-      has_more: hasMore,
-      synced: 0,
-      failed: 0,
-      errors: [] as string[],
-    };
-
-    // Rolling 90-day window ending today (so dashboards/tables can show
-    // up to 90 days without having to re-sync; user actions that pick a
-    // shorter display window won't wipe historical data).
-    const today = new Date();
-    const endDate = today.toISOString().split('T')[0];
-    const start = new Date(today);
+    // Compute 90-day window (per project rule).
+    const endDate = new Date().toISOString().split('T')[0];
+    const start = new Date();
     start.setDate(start.getDate() - 90);
     const startDate = start.toISOString().split('T')[0];
 
-    for (const table of tables) {
+    for (const t of tables || []) {
+      const settings = (t.integration_settings as any) || {};
+      const integrationId = settings.integrationId || settings.integration_id;
+      const propertyId = settings.propertyId || settings.property_id;
+      if (!integrationId || !propertyId) {
+        results.push({ tableId: t.id, status: 'skipped', reason: 'missing integration/property' });
+        continue;
+      }
+
+      // Skip if the linked integration is flagged needs_reauth.
+      const { data: integ } = await supabase
+        .from('tenant_integrations')
+        .select('id, settings, is_active')
+        .eq('id', integrationId)
+        .maybeSingle();
+
+      if (!integ || integ.is_active === false) {
+        results.push({ tableId: t.id, status: 'skipped', reason: 'integration inactive or missing' });
+        continue;
+      }
+      if ((integ.settings as any)?.needs_reauth) {
+        results.push({ tableId: t.id, status: 'skipped', reason: 'needs_reauth' });
+        continue;
+      }
+
       try {
-        const settings = (table.integration_settings || {}) as any;
-        const integrationId = settings?.integrationId || settings?.integration_id;
-        const propertyId = settings?.propertyId || settings?.property_id;
-
-        if (!integrationId || !propertyId) {
-          console.log(`⏭ Skipping table ${table.name} — missing integration/property id`);
-          continue;
-        }
-
         const resp = await fetch(`${supabaseUrl}/functions/v1/sync-google-analytics-data`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${serviceKey}`,
           },
-          body: JSON.stringify({
-            tableId: table.id,
-            startDate,
-            endDate,
-          }),
+          body: JSON.stringify({ tableId: t.id, startDate, endDate }),
         });
 
-        if (!resp.ok) {
-          const txt = await resp.text();
-          console.error(`❌ GA sync failed for ${table.name}: ${txt}`);
-          results.failed++;
-          results.errors.push(`${table.name}: ${txt.slice(0, 200)}`);
-          continue;
-        }
+        const ok = resp.ok;
+        const text = await resp.text();
+        results.push({
+          tableId: t.id,
+          tenantId: t.tenant_id,
+          name: t.name,
+          status: ok ? 'success' : 'failed',
+          httpStatus: resp.status,
+          response: ok ? undefined : text.slice(0, 500),
+        });
 
-        // Update last_sync_at
-        await supabase
-          .from('crm_tables')
-          .update({ last_sync_at: new Date().toISOString() })
-          .eq('id', table.id);
-
-        results.synced++;
-      } catch (tableError: any) {
-        console.error(`❌ Error syncing GA table ${table.name}:`, tableError.message);
-        results.failed++;
-        results.errors.push(`${table.name}: ${tableError.message}`);
+        // Record health.
+        try {
+          await supabase.rpc('record_integration_result', {
+            p_tenant_id: t.tenant_id,
+            p_provider: 'google_analytics',
+            p_success: ok,
+          });
+        } catch (_e) { /* non-fatal */ }
+      } catch (err: any) {
+        results.push({ tableId: t.id, status: 'error', error: String(err?.message || err) });
+        try {
+          await supabase.rpc('record_integration_result', {
+            p_tenant_id: t.tenant_id,
+            p_provider: 'google_analytics',
+            p_success: false,
+          });
+        } catch (_e) { /* non-fatal */ }
       }
     }
 
-    // Auto-invoke next batch if there are more tables
-    if (hasMore && !tableIds) {
-      const nextOffset = batchOffset + BATCH_SIZE;
-      console.log(`🔄 Triggering next GA batch at offset ${nextOffset}...`);
-      fetch(`${supabaseUrl}/functions/v1/cron-sync-google-analytics`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${serviceKey}`,
-        },
-        body: JSON.stringify({ batch_offset: nextOffset }),
-      }).catch(err => console.error('Failed to trigger next GA batch:', err));
-    }
+    const summary = {
+      startedAt,
+      finishedAt: new Date().toISOString(),
+      total: results.length,
+      success: results.filter((r) => r.status === 'success').length,
+      failed: results.filter((r) => r.status === 'failed' || r.status === 'error').length,
+      skipped: results.filter((r) => r.status === 'skipped').length,
+      results,
+    };
+    console.log('[cron-ga] Done:', JSON.stringify(summary));
 
-    return new Response(JSON.stringify({
-      success: true,
-      ...results,
-      window: { startDate, endDate },
-      completed_at: new Date().toISOString(),
-    }), {
+    return new Response(JSON.stringify(summary), {
+      status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error: any) {
-    console.error('❌ GA cron sync error:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    console.error('[cron-ga] Fatal error:', error);
+    return new Response(
+      JSON.stringify({ error: String(error?.message || error), results }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
 });
