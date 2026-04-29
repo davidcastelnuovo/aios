@@ -401,6 +401,8 @@ export default function GoogleAdsSettings() {
   const isViaMakeConnected = googleAdsViaMakeIntegration?.is_active;
   const settings = googleAdsIntegration?.settings as any;
   const viaMakeSettings = googleAdsViaMakeIntegration?.settings as { connection_name?: string } | null;
+  const needsReauth = Boolean(settings?.needs_reauth) || (googleAdsIntegration && googleAdsIntegration.is_active === false && googleAdsIntegration.api_key);
+  const lastAuthError = settings?.last_auth_error as string | undefined;
 
   return (
     <div className="container mx-auto p-6 space-y-6" dir="rtl">
