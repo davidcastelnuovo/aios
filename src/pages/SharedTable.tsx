@@ -17,6 +17,7 @@ import { PublicSeoView } from "@/components/dynamic-tables/PublicSeoView";
 import { PublicGscView } from "@/components/dynamic-tables/PublicGscView";
 import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnalyticsDashboard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { computeGaOrganicByMonth } from "@/components/dynamic-tables/seo/computeGaOrganicByMonth";
 
 // Date filter options — must match the internal DynamicTableView so the
 // shared link presents the same windows as the internal report.
