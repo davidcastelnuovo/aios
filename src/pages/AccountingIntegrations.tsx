@@ -702,7 +702,7 @@ export default function AccountingIntegrations() {
                     <TableRow className="bg-muted/50 font-bold">
                       <TableCell className="text-right">סה״כ</TableCell>
                       <TableCell />
-                      <TableCell className="text-right">{formatCurrency(totalExpenses)}</TableCell>
+                      <TableCell />
                       <TableCell className="text-right">{formatCurrency(totalRetainer)}</TableCell>
                       <TableCell className="text-right text-red-600">{formatCurrency(totalExpenses)}</TableCell>
                       <TableCell className="text-right text-green-600">{formatCurrency(totalOneTime)}</TableCell>
