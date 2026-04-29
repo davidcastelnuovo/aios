@@ -26,6 +26,7 @@ import { SeoDashboardView } from "@/components/dynamic-tables/SeoDashboardView";
 import { SeoDashboardWithGa } from "@/components/dynamic-tables/SeoDashboardWithGa";
 import { SeoReportTabs } from "@/components/dynamic-tables/SeoReportTabs";
 import { WooCommerceDashboard } from "@/components/dynamic-tables/WooCommerceDashboard";
+import { getExplicitLeadFieldsFromData, getLeadsFromData } from "@/lib/adsMetrics";
 import {
   LineChart, Line, BarChart, Bar, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts";
@@ -63,16 +64,6 @@ const getCampaignType = (integrationType?: string | null, integrationSettings?: 
 const getSpendFromData = (data: any) => Number(data?.spend) || Number(data?.cost) || 0;
 const getRevenueFromData = (data: any) =>
   Number(data?.purchase_value) || Number(data?.purchaseRevenue) || Number(data?.conversions_value) || Number(data?.conversion_value) || 0;
-
-const getLeadsFromData = (data: any) =>
-  Number(data?.leads) ||
-  Number(data?.conversions) ||
-  Number(data?.website_leads) ||
-  Number(data?.offsite_conversion) ||
-  Number(data?.offsite_conversion_fb_pixel_lead) ||
-  Number(data?.leadgen_grouped) ||
-  Number(data?.lead) ||
-  0;
 
 const getPurchasesFromData = (data: any) => Number(data?.purchases) || Number(data?.ecommercePurchases) || Number(data?.transactions) || 0;
 const getSessionsFromData = (data: any) => Number(data?.sessions) || 0;
@@ -448,8 +439,7 @@ export default function DashboardView() {
           platforms[source].results += getPurchasesFromData(data);
           platforms[source].revenue += getRevenueFromData(data);
           // Only count explicit lead fields for ecommerce (not conversions which are purchases)
-          const explicitLeads = Number(data.leads) || Number(data.website_leads) || Number(data.leadgen_grouped) || Number(data.lead) || 0;
-          platforms[source].leads += explicitLeads;
+          platforms[source].leads += getExplicitLeadFieldsFromData(data);
         } else {
           const leads = getLeadsFromData(data);
           platforms[source].leads += leads;
@@ -1264,20 +1254,9 @@ export default function DashboardView() {
                           <TableBody>
                             {facebookCampaignSummary.map((c, i) => {
                               const roas = c.spend > 0 ? c.revenue / c.spend : 0;
-                              const leads = getLeadsFromData(allRecords
+                              const leads = allRecords
                                 .filter((r: any) => isFacebookPlatform(r._source || '') && (r.data?.campaign_name === c.name || r.data?.campaign === c.name))
-                                .reduce((acc: any, r: any) => {
-                                  const d = r.data || {};
-                                  return {
-                                    leads: (acc.leads || 0) + (Number(d.leads) || 0),
-                                    conversions: (acc.conversions || 0) + (Number(d.conversions) || 0),
-                                    website_leads: (acc.website_leads || 0) + (Number(d.website_leads) || 0),
-                                    offsite_conversion: (acc.offsite_conversion || 0) + (Number(d.offsite_conversion) || 0),
-                                    offsite_conversion_fb_pixel_lead: (acc.offsite_conversion_fb_pixel_lead || 0) + (Number(d.offsite_conversion_fb_pixel_lead) || 0),
-                                    leadgen_grouped: (acc.leadgen_grouped || 0) + (Number(d.leadgen_grouped) || 0),
-                                    lead: (acc.lead || 0) + (Number(d.lead) || 0),
-                                  };
-                                }, {}));
+                                .reduce((sum: number, r: any) => sum + getLeadsFromData(r.data || {}), 0);
                               const cpl = leads > 0 ? c.spend / leads : 0;
 
                               return (
@@ -1327,12 +1306,9 @@ export default function DashboardView() {
                               )}
                               {!isEcom && (() => {
                                 const totalLeads = facebookCampaignSummary.reduce((sum, c) => {
-                                  return sum + getLeadsFromData(allRecords
+                                  return sum + allRecords
                                     .filter((r: any) => isFacebookPlatform(r._source || '') && (r.data?.campaign_name === c.name || r.data?.campaign === c.name))
-                                    .reduce((acc: any, r: any) => {
-                                      const d = r.data || {};
-                                      return { leads: (acc.leads || 0) + (Number(d.leads) || 0), conversions: (acc.conversions || 0) + (Number(d.conversions) || 0), website_leads: (acc.website_leads || 0) + (Number(d.website_leads) || 0), offsite_conversion: (acc.offsite_conversion || 0) + (Number(d.offsite_conversion) || 0), offsite_conversion_fb_pixel_lead: (acc.offsite_conversion_fb_pixel_lead || 0) + (Number(d.offsite_conversion_fb_pixel_lead) || 0), leadgen_grouped: (acc.leadgen_grouped || 0) + (Number(d.leadgen_grouped) || 0), lead: (acc.lead || 0) + (Number(d.lead) || 0) };
-                                    }, {}));
+                                    .reduce((leadSum: number, r: any) => leadSum + getLeadsFromData(r.data || {}), 0);
                                 }, 0);
                                 const totalCpl = totalLeads > 0 ? totals.spend / totalLeads : 0;
                                 return (

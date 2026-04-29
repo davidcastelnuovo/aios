@@ -58,7 +58,7 @@ function getWeekdayIndexInTimeZone(date: Date, timeZone = APP_TIME_ZONE): number
 }
 
 // Helper to get date range for filtering
-function getDateRange(filter: string, customFrom?: string, customTo?: string): { startDate: string | null; endDate: string | null } {
+function getDateRange(filter: string, customFrom?: string, customTo?: string, integrationType?: string | null): { startDate: string | null; endDate: string | null } {
   const now = new Date();
   const today = getDateStringInTimeZone(now);
   const dayOfWeek = getWeekdayIndexInTimeZone(now);
@@ -87,21 +87,18 @@ function getDateRange(filter: string, customFrom?: string, customTo?: string): {
       endDate = endOfLastWeek;
       break;
     }
-    // NOTE: Relative ranges end YESTERDAY (not today) to match DynamicTableView
-    // and external platforms (Google Ads, Facebook). Today is excluded because
-    // its data is partial/incomplete during the day.
-    // last_7_days = most recent COMPLETED Sunday → Saturday week (matches the
-    // standard in mem://ui/date-range-calculation-standard and public-dashboard).
     case 'last_7_days': {
-      const yesterday = shiftDateString(today, -1);
-      const yDow = getWeekdayIndexInTimeZone(new Date(yesterday + 'T12:00:00Z'));
-      // daysSinceSat: how many days back from yesterday to reach Saturday.
-      // yesterday Sun(0)→1, Mon(1)→2, ..., Sat(6)→0
-      const daysSinceSat = (yDow + 1) % 7;
-      const sat = shiftDateString(yesterday, -daysSinceSat);
-      const sun = shiftDateString(sat, -6);
-      startDate = sun;
-      endDate = sat;
+      const isAds = ['facebook_insights', 'facebook_ecommerce', 'google_ads'].includes(String(integrationType || ''));
+      if (isAds) {
+        startDate = shiftDateString(today, -7);
+        endDate = shiftDateString(today, -1);
+      } else {
+        const yesterday = shiftDateString(today, -1);
+        const yDow = getWeekdayIndexInTimeZone(new Date(yesterday + 'T12:00:00Z'));
+        const sat = shiftDateString(yesterday, -((yDow + 1) % 7));
+        startDate = shiftDateString(sat, -6);
+        endDate = sat;
+      }
       break;
     }
     case 'last_14_days':
@@ -222,7 +219,7 @@ Deno.serve(async (req) => {
       // Fetch table info to determine access and correct tenant_id for filtering
       const { data: tableInfo, error: tableError } = await supabase
         .from('crm_tables')
-        .select('tenant_id, agency_id')
+        .select('tenant_id, agency_id, integration_type')
         .eq('id', table_id)
         .single();
 
@@ -281,7 +278,7 @@ Deno.serve(async (req) => {
         // Apply date range filter on data.date if provided
         let scopedRecords = allRecords;
         if (date_filter && date_filter !== 'all') {
-          const { startDate, endDate } = getDateRange(date_filter, date_from || undefined, date_to || undefined);
+          const { startDate, endDate } = getDateRange(date_filter, date_from || undefined, date_to || undefined, (tableInfo as any).integration_type);
           if (startDate) {
             scopedRecords = scopedRecords.filter((r: any) => {
               const rd = r.data?.date;
@@ -369,7 +366,7 @@ Deno.serve(async (req) => {
       let filteredRecords = records || [];
       
       if (date_filter && date_filter !== 'all') {
-        const { startDate, endDate } = getDateRange(date_filter, date_from || undefined, date_to || undefined);
+        const { startDate, endDate } = getDateRange(date_filter, date_from || undefined, date_to || undefined, (tableInfo as any).integration_type);
         
         if (startDate) {
           filteredRecords = filteredRecords.filter((record: any) => {
