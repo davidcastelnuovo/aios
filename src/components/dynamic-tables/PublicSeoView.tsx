@@ -23,6 +23,8 @@ interface PublicSeoViewProps {
   reports: any[];
   /** Optional GSC data aggregated per keyword — enables enrichment + GSC-only rows. */
   gscData?: PublicGscKeyword[];
+  /** Optional GA monthly non-paid sessions — replaces the Ahrefs traffic chart with real Analytics data. */
+  gaOrganicByMonth?: { month: string; sessions: number }[];
   /** Initial language filter persisted on the SEO crm_table — read-only in public view. */
   initialLangFilter?: "all" | "he" | "en";
 }
@@ -43,7 +45,7 @@ function normalizeKeyword(kw: any) {
   };
 }
 
-export function PublicSeoView({ tableName, reports, gscData = [], initialLangFilter }: PublicSeoViewProps) {
+export function PublicSeoView({ tableName, reports, gscData = [], gaOrganicByMonth = [], initialLangFilter }: PublicSeoViewProps) {
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const validReports = useMemo(() => filterValidSeoReports(reports), [reports]);
 
@@ -248,7 +250,7 @@ export function PublicSeoView({ tableName, reports, gscData = [], initialLangFil
         campaignStart={snapshotCampaignStart}
       />
 
-      <SeoTrafficChart trafficHistory={trafficHistory} />
+      <SeoTrafficChart trafficHistory={trafficHistory} gaOrganicByMonth={gaOrganicByMonth} />
 
       <SeoKeywordsTable
         keywords={organicKeywords}

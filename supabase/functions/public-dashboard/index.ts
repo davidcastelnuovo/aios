@@ -201,6 +201,97 @@ Deno.serve(async (req) => {
       ahrefsReports = reports || [];
     }
 
+    // ---- Linked GA + GSC tables for the SEO tab (mirrors public-table) ----
+    // The SEO tab in the shared dashboard should show GA "Sessions לא-ממומנים"
+    // chart and GSC keyword data, the same way the internal SEO dashboard does.
+    let seoGaRecords: any[] = [];
+    let seoGscRecords: any[] = [];
+    if (dashboard.client_id) {
+      try {
+        // Find the Ahrefs SEO crm_table for this client to read linkedGa/Gsc settings
+        const { data: seoTables } = await supabase
+          .from("crm_tables")
+          .select("id, integration_settings, client_id, tenant_id")
+          .eq("integration_type", "ahrefs")
+          .eq("client_id", dashboard.client_id)
+          .limit(5);
+        const seoTable = (seoTables || [])[0] || null;
+        const seoSettings = (seoTable?.integration_settings as any) || {};
+        const linkedGaTableId = seoSettings.linkedGaTableId || null;
+        const linkedGscTableId = seoSettings.linkedGscTableId || null;
+
+        // Resolve GA table — by linked id, else by client_id
+        let gaTable: any = null;
+        if (linkedGaTableId) {
+          const { data } = await supabase
+            .from("crm_tables")
+            .select("id")
+            .eq("id", linkedGaTableId)
+            .maybeSingle();
+          gaTable = data || null;
+        } else {
+          const { data } = await supabase
+            .from("crm_tables")
+            .select("id")
+            .eq("integration_type", "google_analytics")
+            .eq("client_id", dashboard.client_id)
+            .limit(1);
+          gaTable = data?.[0] || null;
+        }
+
+        // Resolve GSC table — by linked id, else by client_id
+        let gscTable: any = null;
+        if (linkedGscTableId) {
+          const { data } = await supabase
+            .from("crm_tables")
+            .select("id")
+            .eq("id", linkedGscTableId)
+            .maybeSingle();
+          gscTable = data || null;
+        } else {
+          const { data } = await supabase
+            .from("crm_tables")
+            .select("id")
+            .eq("integration_type", "google_search_console")
+            .eq("client_id", dashboard.client_id)
+            .limit(1);
+          gscTable = data?.[0] || null;
+        }
+
+        // Fetch GA records (paginated up to 5000) — used for organic traffic chart
+        if (gaTable?.id) {
+          for (let from = 0; from < 5000; from += 1000) {
+            const { data: page, error } = await supabase
+              .from("crm_records")
+              .select("id, data")
+              .eq("table_id", gaTable.id)
+              .order("created_at", { ascending: false })
+              .range(from, from + 999);
+            if (error || !page || page.length === 0) break;
+            seoGaRecords.push(...page);
+            if (page.length < 1000) break;
+          }
+        }
+
+        // Fetch GSC records (paginated up to 10000) — used for keyword enrichment
+        if (gscTable?.id) {
+          for (let from = 0; from < 10000; from += 1000) {
+            const { data: page, error } = await supabase
+              .from("crm_records")
+              .select("id, data")
+              .eq("table_id", gscTable.id)
+              .order("created_at", { ascending: false })
+              .range(from, from + 999);
+            if (error || !page || page.length === 0) break;
+            seoGscRecords.push(...page);
+            if (page.length < 1000) break;
+          }
+        }
+      } catch (e) {
+        console.error("Error resolving SEO GA/GSC linked data:", e);
+      }
+    }
+
     // ---- WooCommerce: fetch linked sites + orders for this client ----
     let wooSites: any[] = [];
     let wooOrders: any[] = [];
@@ -253,6 +344,8 @@ Deno.serve(async (req) => {
           orders: wooOrders,
         },
         ahrefs_reports: ahrefsReports,
+        seo_ga_records: seoGaRecords,
+        seo_gsc_records: seoGscRecords,
         has_email_restriction: false,
       }),
       {
