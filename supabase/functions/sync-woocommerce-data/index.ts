@@ -212,7 +212,16 @@ serve(async (req) => {
         productsCount = products.length;
 
         // ---- Sync Customers ----
-        const customers = await fetchAllPages(site_url, woo_consumer_key, woo_consumer_secret, "customers");
+        // Customers: WooCommerce doesn't support modified_after on customers reliably.
+        // Use orderby=registered_date desc and only first few pages on incremental syncs;
+        // for first sync (no lastSyncAt) pull all.
+        const customers = lastSyncAt
+          ? await wooFetch(site_url, woo_consumer_key, woo_consumer_secret, "customers", {
+              per_page: PAGE_SIZE,
+              orderby: "registered_date",
+              order: "desc",
+            })
+          : await fetchAllPages(site_url, woo_consumer_key, woo_consumer_secret, "customers");
         for (const customer of customers) {
           const record = {
             tenant_id,
