@@ -155,7 +155,87 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
   const hasWooCommerce = wooSites.length > 0;
   const ahrefsReports = data?.ahrefs_reports || [];
   const hasSeo = ahrefsReports.length > 0;
-  console.log('[SharedDashboard] wooSites:', wooSites.length, 'wooOrders:', wooOrders.length, 'seoReports:', ahrefsReports.length);
+  const seoGaRecords = data?.seo_ga_records || [];
+  const seoGscRecords = data?.seo_gsc_records || [];
+  console.log('[SharedDashboard] wooSites:', wooSites.length, 'wooOrders:', wooOrders.length, 'seoReports:', ahrefsReports.length, 'seoGA:', seoGaRecords.length, 'seoGSC:', seoGscRecords.length);
+
+  // Aggregate GSC records per keyword (sum clicks/impressions, weighted-avg position)
+  const seoGscAggregated = useMemo(() => {
+    if (seoGscRecords.length === 0) return [] as { keyword: string; clicks: number; impressions: number; ctr: number; position: number }[];
+    const acc = new Map<string, { clicks: number; impressions: number; positionWeighted: number }>();
+    for (const rec of seoGscRecords) {
+      const d = (rec as any).data || rec;
+      const kw = String(d.query || d.keyword || "").trim();
+      if (!kw) continue;
+      const clicks = Number(d.clicks) || 0;
+      const impressions = Number(d.impressions) || 0;
+      const position = Number(d.position) || 0;
+      const cur = acc.get(kw) || { clicks: 0, impressions: 0, positionWeighted: 0 };
+      cur.clicks += clicks;
+      cur.impressions += impressions;
+      cur.positionWeighted += position * impressions;
+      acc.set(kw, cur);
+    }
+    return Array.from(acc.entries()).map(([keyword, v]) => ({
+      keyword,
+      clicks: v.clicks,
+      impressions: v.impressions,
+      ctr: v.impressions > 0 ? Math.round((v.clicks / v.impressions) * 10000) / 100 : 0,
+      position: v.impressions > 0 ? Math.round((v.positionWeighted / v.impressions) * 10) / 10 : 0,
+    }));
+  }, [seoGscRecords]);
+
+  // Compute GA monthly non-paid sessions for the SEO traffic chart (mirrors SeoDashboardView).
+  const seoGaOrganicByMonth = useMemo(() => {
+    if (seoGaRecords.length === 0) return [] as { month: string; sessions: number }[];
+    const isPaidChannel = (cg: string) => {
+      const v = cg.toLowerCase();
+      return v.startsWith('paid') || v === 'cross-network' || v === 'display' || v.includes('paid');
+    };
+    const isPaidMedium = (sm: string) => {
+      const v = sm.toLowerCase();
+      return /\b(cpc|ppc|paid|cpm|cpv|paidsearch|display)\b/.test(v);
+    };
+
+    // Prefer monthly_channel records
+    const monthlyChannelRows = seoGaRecords.filter((r: any) => r.data?.report_type === 'monthly_channel');
+    if (monthlyChannelRows.length > 0) {
+      const monthMap = new Map<string, number>();
+      for (const r of monthlyChannelRows) {
+        const cg = String(r.data?.channel_group || '');
+        if (isPaidChannel(cg)) continue;
+        const month = r.data?.month as string;
+        if (!month) continue;
+        monthMap.set(month, (monthMap.get(month) || 0) + (Number(r.data?.sessions) || 0));
+      }
+      if (monthMap.size > 0) {
+        return Array.from(monthMap.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([month, sessions]) => ({ month, sessions }));
+      }
+    }
+
+    // Fallback: daily_source (exclude paid mediums)
+    const dailySourceRows = seoGaRecords.filter((r: any) => r.data?.report_type === 'daily_source');
+    if (dailySourceRows.length > 0) {
+      const monthMap = new Map<string, number>();
+      for (const r of dailySourceRows) {
+        const sm = String(r.data?.source_medium || '');
+        if (isPaidMedium(sm)) continue;
+        const date = r.data?.date;
+        if (!date) continue;
+        const monthKey = String(date).substring(0, 7);
+        monthMap.set(monthKey, (monthMap.get(monthKey) || 0) + (Number(r.data?.sessions) || 0));
+      }
+      if (monthMap.size > 0) {
+        return Array.from(monthMap.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([month, sessions]) => ({ month, sessions }));
+      }
+    }
+
+    // Last fallback: monthly_organic
+    return seoGaRecords
+      .filter((r: any) => r.data?.report_type === 'monthly_organic')
+      .map((r: any) => ({ month: r.data.month as string, sessions: Number(r.data.sessions) || 0 }))
+      .sort((a, b) => a.month.localeCompare(b.month));
+  }, [seoGaRecords]);
 
   // Available platforms
   const availablePlatforms = useMemo(() => {
