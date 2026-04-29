@@ -180,6 +180,10 @@ serve(async (req) => {
           expires_at: expiresAt,
           connected_at: new Date().toISOString(),
           google_email: googleEmail || existingSettings?.google_email || '',
+          // Clear any stale reconnect flags now that the user has re-authorized.
+          needs_reauth: false,
+          reauth_reason: null,
+          reauth_marked_at: null,
         },
         updated_at: new Date().toISOString(),
       };

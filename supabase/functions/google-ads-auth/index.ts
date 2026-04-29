@@ -173,19 +173,25 @@ async function handleOAuthCallback(url: URL) {
     // Check if integration already exists
     const { data: existing } = await supabase
       .from('tenant_integrations')
-      .select('id')
+      .select('id, settings')
       .eq('tenant_id', tenantId)
       .eq('integration_type', 'google_ads')
       .eq('user_id', userId)
       .maybeSingle();
 
+    const existingAdsSettings = (existing?.settings as Record<string, unknown> | null) || {};
     const integrationData = {
       is_active: true,
       api_key: tokens.access_token,
       settings: {
-        refresh_token: tokens.refresh_token,
+        ...existingAdsSettings,
+        refresh_token: tokens.refresh_token || existingAdsSettings?.refresh_token,
         expires_at: expiresAt,
         connected_at: new Date().toISOString(),
+        // Clear any stale reconnect flags on successful re-authorization
+        needs_reauth: false,
+        reauth_reason: null,
+        reauth_marked_at: null,
       },
       updated_at: new Date().toISOString(),
     };
