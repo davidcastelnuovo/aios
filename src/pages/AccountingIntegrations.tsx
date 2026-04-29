@@ -95,7 +95,7 @@ export default function AccountingIntegrations() {
         .from("clients")
         .select(`
           id, name, contact_name, email, phone, status, retainer, monthly_budget,
-          agency_id, updated_at, is_seo_client, services,
+          agency_id, updated_at, is_seo_client, services, monthly_fixed_expense,
           agencies (id, name)
         `);
 
@@ -282,32 +282,31 @@ export default function AccountingIntegrations() {
     },
   });
 
-  // Helpers to detect SEO clients
+  // Helpers to detect SEO clients (kept for legacy display purposes)
   const isSeoClient = (c: any) =>
     !!c?.is_seo_client || (Array.isArray(c?.services) && c.services.includes("seo"));
 
-  // Build a synthetic SEO expense for SEO clients that don't already have a
-  // 'SEO' finance row for the selected month. This guarantees that any client
-  // marked as SEO shows the recurring ₪850 line, even if the finance row is
-  // missing or stored under a different tenant.
-  const SEO_AUTO_AMOUNT = 850;
+  // Build a synthetic "fixed monthly expense" line per client based on the
+  // manually-edited `monthly_fixed_expense` field on the client. This shows
+  // up in the accounting table for every month, unless a finance row with
+  // category 'הוצאה קבועה' already exists for that client+month (override).
   const syntheticSeoExpenses = useMemo(() => {
     if (!clients) return [] as Array<any>;
-    const haveSeoFinance = new Set(
+    const haveFixedFinance = new Set(
       (financeExpenses || [])
-        .filter((e: any) => (e.category || "").toUpperCase() === "SEO")
+        .filter((e: any) => (e.category || "") === "הוצאה קבועה")
         .map((e: any) => e.client_id)
         .filter(Boolean)
     );
     return clients
-      .filter((c: any) => isSeoClient(c) && !haveSeoFinance.has(c.id))
+      .filter((c: any) => Number(c?.monthly_fixed_expense || 0) > 0 && !haveFixedFinance.has(c.id))
       .map((c: any) => ({
-        id: `auto-seo-${c.id}-${selectedMonth}`,
+        id: `auto-fixed-${c.id}-${selectedMonth}`,
         client_id: c.id,
         agency_id: c.agency_id,
-        amount: SEO_AUTO_AMOUNT,
-        category: "SEO",
-        notes: "הוצאת SEO חודשית (אוטומטי)",
+        amount: Number(c.monthly_fixed_expense || 0),
+        category: "הוצאה קבועה",
+        notes: "הוצאה חודשית קבועה (מתוך פרטי הלקוח)",
         date: `${selectedMonth}-01`,
         _auto: true,
       }));

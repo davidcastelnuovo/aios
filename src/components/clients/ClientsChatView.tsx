@@ -1109,6 +1109,7 @@ export function ClientsChatView({
                         </div>
                         <EditableField label=":ריטיינר" value={selectedClient.retainer?.toString() || ""} field="retainer" clientId={selectedClient.id} type="number" />
                         <EditableField label=":תקציב חודשי" value={selectedClient.monthly_budget?.toString() || ""} field="monthly_budget" clientId={selectedClient.id} type="number" />
+                        <EditableField label=":הוצאות חודשיות קבועות" value={(selectedClient as any).monthly_fixed_expense?.toString() || "0"} field="monthly_fixed_expense" clientId={selectedClient.id} type="number" />
                         <EditableField label=":תעשייה" value={selectedClient.industry} field="industry" clientId={selectedClient.id} />
                       </div>
                     </div>

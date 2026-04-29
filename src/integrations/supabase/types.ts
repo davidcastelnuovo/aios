@@ -1928,6 +1928,7 @@ export type Database = {
           manychat_subscriber_id: string | null
           meta_ads_account_id: string | null
           monthly_budget: number | null
+          monthly_fixed_expense: number
           mood_status: Database["public"]["Enums"]["client_mood_status"] | null
           name: string
           notes: string | null
@@ -1965,6 +1966,7 @@ export type Database = {
           manychat_subscriber_id?: string | null
           meta_ads_account_id?: string | null
           monthly_budget?: number | null
+          monthly_fixed_expense?: number
           mood_status?: Database["public"]["Enums"]["client_mood_status"] | null
           name: string
           notes?: string | null
@@ -2002,6 +2004,7 @@ export type Database = {
           manychat_subscriber_id?: string | null
           meta_ads_account_id?: string | null
           monthly_budget?: number | null
+          monthly_fixed_expense?: number
           mood_status?: Database["public"]["Enums"]["client_mood_status"] | null
           name?: string
           notes?: string | null
