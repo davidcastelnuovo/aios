@@ -23,6 +23,8 @@ interface PublicSeoViewProps {
   reports: any[];
   /** Optional GSC data aggregated per keyword — enables enrichment + GSC-only rows. */
   gscData?: PublicGscKeyword[];
+  /** Optional GA monthly non-paid sessions — replaces the Ahrefs traffic chart with real Analytics data. */
+  gaOrganicByMonth?: { month: string; sessions: number }[];
   /** Initial language filter persisted on the SEO crm_table — read-only in public view. */
   initialLangFilter?: "all" | "he" | "en";
 }
