@@ -24,6 +24,7 @@ import { GoogleSearchConsoleTableDialog } from "@/components/dynamic-tables/Goog
 import { AhrefsTableDialog } from "@/components/dynamic-tables/AhrefsTableDialog";
 import { SeoReportDialog } from "@/components/dynamic-tables/SeoReportDialog";
 import { TableCardAlerts } from "@/components/dynamic-tables/TableCardAlerts";
+import { CategorySyncControl } from "@/components/dynamic-tables/CategorySyncControl";
 
 import { CreateDashboardDialog } from "@/components/dynamic-tables/CreateDashboardDialog";
 import { Badge } from "@/components/ui/badge";
@@ -719,6 +720,10 @@ export default function DynamicTables() {
                       </div>
                     );
                   })()}
+                  <CategorySyncControl
+                    category={selectedCategory}
+                    tables={groupedTables[selectedCategory] || []}
+                  />
                 </div>
                 {/* Quick switcher */}
                 <div className="flex flex-wrap gap-1.5">
