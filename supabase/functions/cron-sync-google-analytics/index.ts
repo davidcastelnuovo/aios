@@ -23,8 +23,8 @@ serve(async (req) => {
     // We sync per-table because sync-google-analytics-data expects { tableId }.
     const { data: tables, error: tablesError } = await supabase
       .from('crm_tables')
-      .select('id, tenant_id, name, integration_settings, integration_provider')
-      .eq('integration_provider', 'google_analytics');
+      .select('id, tenant_id, name, integration_settings, integration_type')
+      .eq('integration_type', 'google_analytics');
 
     if (tablesError) throw tablesError;
 
