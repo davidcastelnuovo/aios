@@ -95,7 +95,7 @@ export default function AccountingIntegrations() {
         .from("clients")
         .select(`
           id, name, contact_name, email, phone, status, retainer, monthly_budget,
-          agency_id, updated_at, is_seo_client, services,
+          agency_id, updated_at, is_seo_client, services, monthly_fixed_expense,
           agencies (id, name)
         `);
 
