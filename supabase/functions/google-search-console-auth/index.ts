@@ -140,7 +140,7 @@ serve(async (req) => {
       // Check if integration already exists
       const { data: existing } = await supabase
         .from('tenant_integrations')
-        .select('id')
+        .select('id, settings')
         .eq('tenant_id', tenantId)
         .eq('integration_type', 'google_search_console')
         .eq('user_id', userId)
