@@ -778,42 +778,4 @@ Deno.serve(async (req) => {
   }
 });
 
-async function refreshToken(supabase: any, integration: any): Promise<boolean> {
-  try {
-    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: GOOGLE_CLIENT_ID,
-        client_secret: GOOGLE_CLIENT_SECRET,
-        refresh_token: integration.settings.refresh_token,
-        grant_type: 'refresh_token',
-      }),
-    });
-
-    const tokens = await tokenResponse.json();
-
-    if (tokens.error) {
-      console.error('Token refresh error:', tokens);
-      return false;
-    }
-
-    const expiresAt = new Date(Date.now() + (tokens.expires_in * 1000)).toISOString();
-
-    await supabase
-      .from('tenant_integrations')
-      .update({
-        api_key: tokens.access_token,
-        settings: {
-          ...integration.settings,
-          expires_at: expiresAt,
-        },
-      })
-      .eq('id', integration.id);
-
-    return true;
-  } catch (err) {
-    console.error('Error refreshing token:', err);
-    return false;
-  }
-}
+// (Legacy refreshToken removed — replaced by inline ensureFreshToken with retry + needs_reauth handling.)
