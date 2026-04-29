@@ -1,42 +1,80 @@
-## הבעיה
+## Goal
 
-נתוני WooCommerce של "לידר" ו-"ארבע על ארבע" **ישנים ולא מעודכנים**:
-- **לידר**: סנכרון אחרון 26.4 — חסרים 3 ימים (27-29.4), לכן אתמול מראה 0 רכישות
-- **ארבע על ארבע**: סנכרון אחרון 19.4 — חסרים 10 ימים, לכן "שבוע אחרון" מראה ~400 ₪ במקום ~4,000 ₪
+In the Dynamic Tables page (`/dynamic-tables`), when the user enters a category (Analytics, Facebook Ecommerce, Facebook Insights, Google Ads, SEO), show at the top of that category:
 
-**שורש הבעיה**: הפונקציה `cron-sync-woocommerce` קיימת בקוד אבל **לא מתוזמנת ב-pg_cron** — אין סנכרון אוטומטי בכלל. כל סנכרון עד היום היה ידני בלבד.
+1. **Last sync timestamp** – the most recent `integration_settings.last_sync_at` across all tables in the category (formatted in Hebrew, relative + absolute).
+2. **Manual "Sync all now" button** – triggers a sync for every table in the current category, shows progress, and refreshes the timestamps when done.
 
-בנוסף, הפונקציה הנוכחית מסנכרנת **את כל ההזמנות מההתחלה** בכל ריצה (2,000+ הזמנות לכל אתר) — מאוד איטי ומיותר.
+This does not change the existing automatic daily cron schedules – it only adds a visible status + manual override.
 
-## מה ייעשה
+## Where
 
-### 1. תזמון cron אוטומטי ל-WooCommerce
-- הוספת job ב-pg_cron שיריץ את `cron-sync-woocommerce` כל שעה
-- זה יבטיח שהנתונים תמיד עדכניים
+File: `src/pages/DynamicTables.tsx`, inside the category header block (lines ~694–745, right next to the "חזרה לקטגוריות" button / category title).
 
-### 2. שיפור sync-woocommerce-data — סנכרון אינקרמנטלי
-- במקום לשלוף את כל ההזמנות מאז 2022, לשלוף רק הזמנות שהשתנו מאז `woo_last_sync_at`
-- שימוש בפרמטר `modified_after` של WooCommerce API
-- כך כל ריצה תהיה מהירה (שניות במקום דקות)
+A small new component `CategorySyncControl.tsx` under `src/components/dynamic-tables/` will encapsulate the logic so the page stays readable.
 
-### 3. הפעלת סנכרון מיידי
-- ריצת סנכרון חד-פעמית מיד לאחר התיקון כדי לעדכן את הנתונים לימים החסרים
+## Mapping: category → sync function
 
-## פרטים טכניים
+Use `integration_type` of each table to decide which edge function to invoke per-table. The existing per-table sync functions are already deployed:
 
-**pg_cron job** (insert tool):
-```sql
-SELECT cron.schedule(
-  'cron-sync-woocommerce-hourly',
-  '0 * * * *',
-  $$ SELECT net.http_post(...cron-sync-woocommerce...) $$
-);
+| Category (display) | integration_type values | Edge function to call per table |
+|---|---|---|
+| Analytics | `google_analytics` | `sync-google-analytics-data` |
+| Facebook Ecommerce | `facebook_ecommerce` | `sync-facebook-ecommerce` |
+| Facebook Insights | `facebook_insights` | `sync-facebook-insights` (and `sync-facebook-leads` where relevant – will reuse current single-table sync path already used by existing "sync" buttons) |
+| Google Ads | `google_ads` | `sync-google-ads-data` |
+| SEO | `google_search_console`, `ahrefs` | `sync-google-search-console-data` / `sync-ahrefs-data` based on each table's type |
+
+The manual button iterates over `groupedTables[selectedCategory]` and calls the right function for each table in parallel (with a small concurrency cap of 3 to avoid timeouts).
+
+## UI behavior
+
+Header row gets an extra right-aligned cluster:
+
+```text
+[← חזרה לקטגוריות]  [📊 Analytics (25)]         ... quick switcher ...   סנכרון אחרון: לפני 3 שעות  [🔄 סנכרן עכשיו]
 ```
 
-**sync-woocommerce-data/index.ts** — שינוי עיקרי:
-- הוספת `modified_after` parameter ל-WooCommerce API call עבור orders
-- שימוש ב-`woo_last_sync_at` של האתר כתאריך התחלה
-- fallback ל-30 יום אחרונים אם אין sync קודם
+- **Last sync label**: computed as `max(table.integration_settings?.last_sync_at)` across tables in the category. Shown as `סנכרון אחרון: {formatDistanceToNow}` with a tooltip showing the exact date/time. If none, show `לא סונכרן עדיין`.
+- **Manual sync button**:
+  - Disabled while running; shows spinner + `מסנכרן… (x/y)` counter.
+  - On completion: toast with `סונכרנו N דוחות בהצלחה` (and count of failures if any).
+  - Invalidates the `crm_tables` query so `last_sync_at` refreshes in the cards.
 
-**קבצים שישתנו**:
-- `supabase/functions/sync-woocommerce-data/index.ts` — סנכרון אינקרמנטלי
+## Technical details
+
+1. **New component** `src/components/dynamic-tables/CategorySyncControl.tsx`:
+   - Props: `{ category: string; tables: CRMTable[] }`.
+   - Computes latest `last_sync_at` via `useMemo`.
+   - `handleSyncAll`:
+     ```ts
+     const fn = (t) => {
+       switch (t.integration_type) {
+         case 'google_analytics': return 'sync-google-analytics-data';
+         case 'facebook_ecommerce': return 'sync-facebook-ecommerce';
+         case 'facebook_insights': return 'sync-facebook-insights';
+         case 'google_ads': return 'sync-google-ads-data';
+         case 'google_search_console': return 'sync-google-search-console-data';
+         case 'ahrefs': return 'sync-ahrefs-data';
+         default: return null;
+       }
+     };
+     ```
+   - Calls `supabase.functions.invoke(fn, { body: { tableId: t.id } })` (param name already used by each function – will double-check each one matches its expected body key: some use `tableId`, some `table_id`; the component will send both for safety, matching the patterns already used elsewhere in the codebase).
+   - Concurrency limited with a simple 3-slot pool.
+   - Uses `date-fns` `formatDistanceToNow` with `locale: he`.
+
+2. **DynamicTables.tsx change**: insert `<CategorySyncControl category={selectedCategory} tables={groupedTables[selectedCategory] || []} />` in the header flex row (around line 722, before the quick switcher, or as a second row on narrow screens with `flex-wrap`).
+
+3. **No DB / cron changes** – automatic daily syncs already run:
+   - `daily-ga-sync` (04:00), `daily-google-ads-sync` (04:00)
+   - `cron-sync-facebook-ecommerce-daily` (05:00), `sync-facebook-insights-weekly`, `sync-facebook-leads-every-minute`
+   - SEO (GSC/Ahrefs) currently do not have a cron job. This plan does **not** add one (per user request: just add manual button + last-sync label). If desired later, we can add a daily SEO cron as a follow-up.
+
+4. **Types**: `integration_settings` is already read as `any` in the page; the new component will type it as `{ last_sync_at?: string } | null`.
+
+## Out of scope
+
+- Changing existing per-table "sync" buttons inside `DynamicTableView`.
+- Adding new cron jobs for SEO.
+- Any backend migration.
