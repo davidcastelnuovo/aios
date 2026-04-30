@@ -57,7 +57,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
       toast.success('הדוח נטען בהצלחה מ-Ahrefs');
-      await queryClient.invalidateQueries({ queryKey: ['seo-dashboard-reports', tenantId, clientId] });
+      await queryClient.invalidateQueries({ queryKey: ['seo-dashboard-reports'] });
     } catch (err: any) {
       console.error('fetch-ahrefs-snapshot failed:', err);
       toast.error(err?.message || 'שליפת הדוח נכשלה. ודא שהוגדר דומיין ושיש מפתח Ahrefs.');
@@ -67,7 +67,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
   }, [clientId, tenantId, queryClient]);
   const [gscData, setGscData] = useState<GscKeywordData[]>([]);
   const [gscMultiPeriod, setGscMultiPeriod] = useState<GscMultiPeriodData | null>(null);
-  const { fetchComparisons, comparisonData, resetComparisonData, isLoading: isEnriching } = useAhrefsEnrichment();
+  const { comparisonData, resetComparisonData } = useAhrefsEnrichment();
   const [hasAutoEnriched, setHasAutoEnriched] = useState(false);
   const [cachedComparison, setCachedComparison] = useState<{
     threeMonth: Map<string, any>;
@@ -446,25 +446,28 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
 
 
   const handleManualSync = useCallback(async () => {
-    if (!domain) return;
-    const reportDate = selectedReport?.report_date || new Date().toISOString().split('T')[0];
-    const result = await fetchComparisons(domain, reportDate, 200);
-    
-    // Save to DB as cache
-    if (result && selectedReport?.id) {
-      const cachePayload: Record<string, Record<string, any>> = {
-        threeMonth: {},
-        yearly: {},
-      };
-      result.threeMonth.forEach((v, k) => { cachePayload.threeMonth[k] = v; });
-      result.yearly.forEach((v, k) => { cachePayload.yearly[k] = v; });
-      
-      await supabase
-        .from('ahrefs_reports')
-        .update({ comparison_data: cachePayload } as any)
-        .eq('id', selectedReport.id);
+    const projectId = (selectedReport as any)?.metadata?.ahrefs_project_id;
+    if (!projectId) {
+      toast.info('כדי למשוך ביטויים במעקב צריך לבחור פרויקט מ-Ahrefs');
+      setPickerOpen(true);
+      return;
     }
-  }, [domain, selectedReport, fetchComparisons]);
+    setIsFetchingSnapshot(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('fetch-ahrefs-snapshot', {
+        body: { clientId, domain, projectId },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success(`הדוח סונכרן (${(data as any)?.keywords_count ?? 0} אורגניים, ${(data as any)?.tracked_count ?? 0} במעקב)`);
+      await queryClient.invalidateQueries({ queryKey: ['seo-dashboard-reports'] });
+    } catch (err: any) {
+      console.error('fetch-ahrefs-snapshot failed:', err);
+      toast.error(err?.message || 'סנכרון Ahrefs נכשל');
+    } finally {
+      setIsFetchingSnapshot(false);
+    }
+  }, [clientId, domain, selectedReport, queryClient]);
 
   if (isLoading) {
     return (
@@ -523,11 +526,11 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
             variant="outline"
             size="sm"
             onClick={handleManualSync}
-            disabled={isEnriching}
+            disabled={isFetchingSnapshot}
             className="h-8 text-xs gap-1.5"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${isEnriching ? 'animate-spin' : ''}`} />
-            {isEnriching ? 'מסנכרן...' : 'סנכרון Ahrefs'}
+            <RefreshCw className={`h-3.5 w-3.5 ${isFetchingSnapshot ? 'animate-spin' : ''}`} />
+            {isFetchingSnapshot ? 'מסנכרן...' : 'סנכרון Ahrefs'}
           </Button>
           <Button
             variant="outline"

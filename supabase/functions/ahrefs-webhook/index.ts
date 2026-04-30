@@ -92,16 +92,25 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Check for existing report (deduplication) - only when report_date is set
+      // Check for existing report (deduplication) - only when report_date is set.
+      // Important: the same domain can belong to multiple CRM clients, so client_id
+      // must be part of the lookup whenever it is known.
       let action = "inserted";
       if (report_date) {
-        const { data: existingList } = await supabase
+        let existingQuery = supabase
           .from("ahrefs_reports")
           .select("id, client_id")
           .eq("domain", domain)
           .eq("report_date", report_date)
-          .eq("report_type", report_type)
-          .limit(1);
+          .eq("report_type", report_type);
+
+        if (resolved_client_id) {
+          existingQuery = existingQuery.eq("client_id", resolved_client_id);
+        } else if (tenant_id) {
+          existingQuery = existingQuery.eq("tenant_id", tenant_id);
+        }
+
+        const { data: existingList } = await existingQuery.limit(1);
         const existing = existingList && existingList.length > 0 ? existingList[0] : null;
 
         if (existing) {
