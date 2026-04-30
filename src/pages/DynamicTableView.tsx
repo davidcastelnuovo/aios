@@ -54,6 +54,7 @@ import { SendReportDialog } from "@/components/dynamic-tables/SendReportDialog";
 import { CURRENCY_OPTIONS, getCurrencySymbol, type CurrencyCode } from "@/lib/currency";
 import { LinkTableToClientDialog } from "@/components/dynamic-tables/LinkTableToClientDialog";
 import { getLeadsFromData } from "@/lib/adsMetrics";
+import { ManualROICard } from "@/components/dynamic-tables/ManualROICard";
 
 // Google Ads icon component
 const GoogleAdsIcon = ({ className = "h-4 w-4" }: { className?: string }) => (
