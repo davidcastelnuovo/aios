@@ -1,62 +1,52 @@
-## כרטיס ROI נפרד — מתחת לטבלה הקיימת
+## הבעיה
 
-### העיקרון
-**אפס שינוי בטבלאות הקיימות.** מוסיפים `Card` חדש מתחת לטבלאות הסיכום של קמפייני לידים. הכרטיס קורא את ה-`leadTotals.spend` הקיים (כבר מחושב למעלה) ומאפשר למשתמש להזין ידנית מספרים, ומציג חישובים.
+ב-Tab "ביטויים במעקב" (`tracked_keywords`) בדוח SEO של תבניקול לא מופיעים ביטויים, כי:
 
-### היכן יתווסף הכרטיס
-1. **`src/pages/DynamicTableView.tsx`** — אחרי טבלת "קמפיין לידים" של Facebook (אחרי שורה ~2557) ואחרי טבלת Google Ads כשהיא במצב לידים (לא ecommerce, אחרי שורה ~2819).
-2. טבלאות איקומרס לא נוגעים — להן יש כבר ROAS/הכנסות אמיתיים.
-3. דשבורדי הסוכנות (`AgencyDashboardContent`) — לא בשלב זה. רק בעמוד הטבלה הבודדת. (אם תרצה גם שם, נוסיף בשלב הבא בנפרד.)
+- הסנכרון הידני (Project Picker → `fetch-ahrefs-snapshot`) מושך **רק `organic-keywords`** מ-Site Explorer של Ahrefs.
+- הוא **לא** מושך את הביטויים מה-**Rank Tracker** של אותו פרויקט (זה המקור ל"ביטויים במעקב").
+- שדה `tracked_keywords` נכתב רק כש-Make/Zapier שולחים אותו ידנית ל-`ahrefs-webhook`. אין עבור תבניקול אוטומציה כזו, ולכן השדה נשאר ריק.
 
-### תצוגת הכרטיס
-כרטיס עצמאי עם הכותרת "סיכום ROI ידני":
+ב-frontend: `SeoKeywordsTable.tsx` מציג את לשונית "🎯 ביטויים במעקב" רק כש-`trackedKeywords.length > 0` — ולכן היא לא מופיעה.
 
-```
-┌─ סיכום ROI ידני ─────────────────────────────┐
-│  הוצאה: ₪12,500   |   לידים: 47               │
-│                                                │
-│  סגירות:  [  3  ]    הכנסות: [ ₪15,000 ]      │
-│                                                │
-│  אחוז סגירה: 6.4%   |   עלות לסגירה: ₪4,167   │
-│  רווח: ₪2,500 (ירוק)   |   ROI: 20%           │
-└────────────────────────────────────────────────┘
-```
+## הפתרון
 
-- ההוצאה והלידים נקראים מ-`leadTotals` הקיים (read-only, לתצוגה).
-- שני שדות `<Input type="number">` בלבד — סגירות והכנסות.
-- 4 חישובים מתחת מתעדכנים מיידית כשמקלידים.
-- רווח/ROI חיוביים בירוק, שליליים באדום.
-- אם שני השדות ריקים — הכרטיס מציג "לא הוזנו נתוני סגירות" עם השדות זמינים, ללא חישובים.
+להרחיב את `fetch-ahrefs-snapshot` כך שכשהמשתמש בוחר פרויקט מה-Project Picker (יש לנו `project_id` של Ahrefs), נמשוך גם את ה-Rank Tracker keywords ונכלול אותם תחת `tracked_keywords` ב-payload שעובר ל-`ahrefs-webhook`. ה-webhook כבר יודע לטפל בהם (שורה 213).
 
-### אחסון הנתונים
-ב-`crm_tables.integration_settings.manual_roi`:
-```json
-{
-  "manual_roi": { "closures": 3, "revenue": 15000 }
-}
-```
-- ערך אחד לכל הטבלה (מצרפי לכל הקמפיינים בטווח התאריכים הנבחר). פשוט וברור.
-- שמירה ב-`onBlur` עם debounce 500ms דרך `UPDATE crm_tables SET integration_settings = ...`.
-- אין צורך במיגרציית סכמה — `integration_settings` כבר JSONB קיים.
+### שינויים
 
-### קומפוננטה חדשה
-`src/components/dynamic-tables/ManualROICard.tsx` — קומפוננטה עצמאית שמקבלת:
-- `tableId` (לשמירה)
-- `spend`, `leads` (מהטבלה למעלה, read-only)
-- `currency`
-- `initialClosures`, `initialRevenue` (מ-`integration_settings.manual_roi`)
-- `readOnly` (להפעלה במצב embed/snapshot)
+**1. `src/components/dynamic-tables/AhrefsProjectPicker.tsx`**
+- להעביר גם `projectId: project.project_id` בקריאה ל-`fetch-ahrefs-snapshot`. (כרגע מועברים רק `domain`, `mode`, `protocol`.)
 
-הקריאה ב-`DynamicTableView.tsx` היא 2 שורות JSX בלבד בכל מקום. אין שום שינוי בלוגיקה הקיימת של הטבלאות.
+**2. `supabase/functions/fetch-ahrefs-snapshot/index.ts`**
+- לקבל `projectId` בגוף הבקשה.
+- אם קיים, לקרוא ל-Ahrefs Rank Tracker API:
+  ```
+  GET https://api.ahrefs.com/v3/rank-tracker/overview?project_id={projectId}&country={country}
+  ```
+  או נקודת הקצה הנכונה לקבלת רשימת keywords עם position נוכחי. (אאמת את ה-endpoint המדויק מתיעוד Ahrefs v3 לפני המימוש — Rank Tracker חושף את `keywords-overview` / `metrics-by-position` / `serp-positions-history`.)
+- למפות את התוצאה למבנה הקיים שה-frontend מצפה לו:
+  ```ts
+  { keyword, position, position_prev_month, traffic, traffic_prev_month, volume, kd, cpc, url }
+  ```
+- לכלול את המערך ב-payload:
+  ```ts
+  report_data: { domain, snapshot, organic_keywords, tracked_keywords }
+  ```
+- להחזיר גם `tracked_count` בתשובה כדי לתת פידבק ב-toast.
 
-### במצב snapshot/embed
-הכרטיס מוצג read-only (טקסט בלבד, ללא inputs) כדי שיופיע בצילומי דוחות שנשלחים ללקוח.
+**3. `src/components/dynamic-tables/AhrefsProjectPicker.tsx` (toast)**
+- אחרי הסנכרון להציג: `הדוח של {project_name} נטען בהצלחה (X organic, Y tracked)`.
 
-### קבצים שיושפעו
-- **קובץ חדש:** `src/components/dynamic-tables/ManualROICard.tsx` (~120 שורות)
-- **עריכה מינימלית:** `src/pages/DynamicTableView.tsx` — הוספת 2 קריאות `<ManualROICard ... />` (בלי לגעת בקוד קיים)
+### קבצים מעורבים
 
-### בטיחות
-- אפס שינוי ללוגיקת הספירה/חישוב/סנכרון של הטבלאות.
-- הכרטיס מבודד לחלוטין — אם משהו נשבר בו, הטבלה הראשית ממשיכה לעבוד.
-- אם `integration_settings.manual_roi` לא קיים — ברירת מחדל ריקה, שום קריסה.
+- `supabase/functions/fetch-ahrefs-snapshot/index.ts` — לוגיקה חדשה למשיכת Rank Tracker.
+- `src/components/dynamic-tables/AhrefsProjectPicker.tsx` — העברת `project_id` והודעת toast מורחבת.
+
+### לא משתנה
+
+- `ahrefs-webhook` — כבר תומך ב-`tracked_keywords`.
+- `SeoDashboardView` / `SeoKeywordsTable` — כבר מציגים את הלשונית כשיש נתונים.
+
+## אימות
+
+לאחר הפריסה: סנכרון מחדש של תבניקול דרך Project Picker → לוודא ש-`tracked_count > 0` ב-toast → הלשונית "🎯 ביטויים במעקב" אמורה להופיע בדוח.

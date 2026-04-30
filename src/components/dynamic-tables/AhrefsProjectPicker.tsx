@@ -62,11 +62,16 @@ export function AhrefsProjectPicker({ open, onOpenChange, clientId, onSyncComple
           domain: project.domain,
           mode: project.mode,
           protocol: project.protocol,
+          projectId: project.project_id,
         },
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
-      toast.success(`הדוח של ${project.project_name} נטען בהצלחה`);
+      const organic = (data as any)?.keywords_count ?? 0;
+      const tracked = (data as any)?.tracked_count ?? 0;
+      toast.success(
+        `הדוח של ${project.project_name} נטען בהצלחה (${organic} אורגניים, ${tracked} במעקב)`
+      );
       onSyncComplete?.();
       onOpenChange(false);
     } catch (err: any) {
