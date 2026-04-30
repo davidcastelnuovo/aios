@@ -305,34 +305,49 @@ Deno.serve(async (req) => {
           .filter((a: any) => actionTypes.includes(String(a.action_type || '')))
           .reduce((sum: number, a: any) => sum + (parseFloat(a.value) || 0), 0);
 
-      // Extract lead count — take MAX between aggregate 'lead' and sum of all specific lead types.
-      // This ensures we never miss leads if FB doesn't include a category in the aggregate,
-      // and avoids double-counting when the aggregate already covers them.
-      const aggregateLeadAction = allActions.find((a: any) => a.action_type === 'lead');
-      const aggregateLeadValue = aggregateLeadAction ? (parseInt(aggregateLeadAction.value) || 0) : 0;
+      // Lead counting — objective-aware, matches Facebook Ads Manager "Results" column.
+      // CRITICAL: never sum aggregate `lead` action_type with specific lead types — this
+      // double-counts because FB's `lead` is an aggregate of leadgen + pixel + messaging.
+      const sumByTypes = (types: string[]) =>
+        allActions
+          .filter((a: any) => types.includes(String(a.action_type || '')))
+          .reduce((sum: number, a: any) => sum + (parseInt(a.value) || 0), 0);
 
-      const specificLeadsSum = allActions
-        .filter((a: any) => {
-          const type = String(a.action_type || '');
-          return (
-            leadActionTypes.slice(1).includes(type) ||
-            type.startsWith('offsite_conversion.custom')
-          );
-        })
-        .reduce((sum: number, a: any) => sum + (parseInt(a.value) || 0), 0);
-
-      // For Lead Form campaigns, FB UI "Results" column shows leadgen_grouped only.
-      // Prefer it to avoid over-counting from extra pixel 'lead' events.
       const _campaignStatusForLeads = campaignStatuses[insight.campaign_id];
       const _objectiveForLeads = String(_campaignStatusForLeads?.objective || '').toUpperCase();
       const _isLeadFormObjective = ['OUTCOME_LEADS', 'LEAD_GENERATION'].includes(_objectiveForLeads);
-      const _leadgenGroupedValue = allActions
-        .filter((a: any) => ['leadgen.other', 'leadgen_grouped', 'onsite_conversion.lead_grouped'].includes(String(a.action_type || '')))
+      const _isMessagingObjective = ['OUTCOME_ENGAGEMENT', 'MESSAGES'].includes(_objectiveForLeads);
+
+      const _formLeadsValue = sumByTypes(['leadgen.other', 'leadgen_grouped', 'onsite_conversion.lead_grouped']);
+      const _messagingLeadsValue = sumByTypes([
+        'onsite_conversion.messaging_conversation_started_7d',
+        'messaging_conversation_started_7d',
+      ]);
+      const _pixelLeadsValue = sumByTypes(['offsite_conversion.fb_pixel_lead']);
+      const _customConversionLeadsValue = allActions
+        .filter((a: any) => String(a.action_type || '').startsWith('offsite_conversion.custom'))
         .reduce((sum: number, a: any) => sum + (parseInt(a.value) || 0), 0);
 
-      const leads = _isLeadFormObjective && _leadgenGroupedValue > 0
-        ? _leadgenGroupedValue
-        : Math.max(aggregateLeadValue, specificLeadsSum);
+      let leads: number;
+      if (_isLeadFormObjective) {
+        // Lead-form campaigns: FB shows ONLY form leads in "Results". Pixel/messaging
+        // events on this campaign are not attributed to it as leads.
+        leads = _formLeadsValue;
+      } else if (_isMessagingObjective) {
+        // Messaging campaigns: count conversation starts (matches FB Results column).
+        leads = _messagingLeadsValue;
+      } else {
+        // Other campaigns (Traffic/Awareness/Conversions/etc): take the largest single
+        // attributed signal — never sum, to avoid double counting the same lead across
+        // multiple action_types (FB returns the same conversion under several types).
+        leads = Math.max(
+          _formLeadsValue,
+          _messagingLeadsValue,
+          _pixelLeadsValue,
+          _customConversionLeadsValue,
+        );
+      }
+      const _leadgenGroupedValue = _formLeadsValue;
 
       // Extract landing page views (Facebook action)
       const landingPageViews = allActions
