@@ -54,6 +54,7 @@ import { SendReportDialog } from "@/components/dynamic-tables/SendReportDialog";
 import { CURRENCY_OPTIONS, getCurrencySymbol, type CurrencyCode } from "@/lib/currency";
 import { LinkTableToClientDialog } from "@/components/dynamic-tables/LinkTableToClientDialog";
 import { getLeadsFromData } from "@/lib/adsMetrics";
+import { ManualROICard } from "@/components/dynamic-tables/ManualROICard";
 
 // Google Ads icon component
 const GoogleAdsIcon = ({ className = "h-4 w-4" }: { className?: string }) => (
@@ -2555,6 +2556,19 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                   </div>
                 </Card>
               )}
+
+              {leadCampaigns.length > 0 && table?.id && (
+                <ManualROICard
+                  tableId={table.id}
+                  spend={leadTotals.spend}
+                  leads={leadTotals.leads}
+                  currency={currency}
+                  initialClosures={table?.integration_settings?.manual_roi?.closures ?? null}
+                  initialRevenue={table?.integration_settings?.manual_roi?.revenue ?? null}
+                  integrationSettings={table?.integration_settings}
+                  readOnly={isEmbed}
+                />
+              )}
             </>
           );
         })()
@@ -2818,6 +2832,28 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
           })()}
         </Card>
       )}
+
+      {/* Manual ROI for Google Ads (leads mode only) */}
+      {hasGoogleAds && filteredRecords && filteredRecords.length > 0 && table?.id && table?.integration_settings?.campaign_type !== 'ecommerce' && (() => {
+        const totals = filteredRecords.reduce((acc, record) => {
+          acc.cost += Number(record.data?.cost) || 0;
+          acc.conversions += Number(record.data?.conversions) || Number(record.data?.purchases) || 0;
+          return acc;
+        }, { cost: 0, conversions: 0 });
+        const gaCurrency = getCurrencySymbol(table.integration_settings?.currency);
+        return (
+          <ManualROICard
+            tableId={table.id}
+            spend={totals.cost}
+            leads={Math.round(totals.conversions)}
+            currency={gaCurrency}
+            initialClosures={table?.integration_settings?.manual_roi?.closures ?? null}
+            initialRevenue={table?.integration_settings?.manual_roi?.revenue ?? null}
+            integrationSettings={table?.integration_settings}
+            readOnly={isEmbed}
+          />
+        );
+      })()}
 
       {/* Google Analytics Dashboard */}
       {!summaryOnly && hasGoogleAnalytics && filteredRecords && filteredRecords.length > 0 && (
