@@ -255,6 +255,60 @@ Deno.serve(async (req) => {
       "12_months": snap12m,
     };
 
+    // 4) Tracked (Rank Tracker) keywords — only if a project_id was passed from the picker.
+    // This endpoint is FREE and does not consume API units.
+    let tracked_keywords: any[] = [];
+    if (projectId) {
+      try {
+        const selectFields = [
+          "keyword",
+          "position",
+          "position_prev",
+          "volume",
+          "keyword_difficulty",
+          "cost_per_click",
+          "traffic",
+          "traffic_prev",
+          "url",
+        ].join(",");
+        const trackerUrl =
+          `https://api.ahrefs.com/v3/rank-tracker/overview` +
+          `?project_id=${encodeURIComponent(String(projectId))}` +
+          `&device=desktop` +
+          `&date=${reportDate}` +
+          `&select=${encodeURIComponent(selectFields)}` +
+          `&limit=1000` +
+          `&volume_mode=monthly` +
+          `&output=json`;
+        const trackerRes = await fetch(trackerUrl, {
+          headers: { Authorization: `Bearer ${ahrefsApiKey}`, Accept: "application/json" },
+        });
+        if (trackerRes.ok) {
+          const trackerJson = await trackerRes.json();
+          const overviews = Array.isArray(trackerJson?.overviews) ? trackerJson.overviews : [];
+          tracked_keywords = overviews
+            .filter((k: any) => k && typeof k.keyword === "string" && k.keyword.trim())
+            .map((k: any) => ({
+              keyword: k.keyword,
+              position: k.position ?? null,
+              position_prev_month: k.position_prev ?? null,
+              traffic: k.traffic ?? 0,
+              traffic_prev_month: k.traffic_prev ?? 0,
+              volume: k.volume ?? 0,
+              kd: k.keyword_difficulty ?? null,
+              cpc: k.cost_per_click ?? null,
+              url: k.url ?? "",
+            }));
+          console.log(`Ahrefs Rank Tracker OK: project=${projectId} tracked_count=${tracked_keywords.length}`);
+        } else {
+          const errTxt = await trackerRes.text();
+          console.warn(`Ahrefs Rank Tracker failed: project=${projectId} status=${trackerRes.status} body=${errTxt.slice(0, 200)}`);
+        }
+      } catch (e) {
+        console.warn("Rank Tracker fetch threw:", e instanceof Error ? e.message : String(e));
+      }
+    }
+
     const reportPayload = {
       tenant_id: client.tenant_id,
       client_id: client.id,
@@ -266,6 +320,7 @@ Deno.serve(async (req) => {
         domain,
         snapshot,
         organic_keywords,
+        tracked_keywords,
       },
       comparison_data,
       metadata: {
@@ -273,6 +328,7 @@ Deno.serve(async (req) => {
         triggered_by: user.id,
         used_mode: usedMode,
         used_protocol: usedProtocol,
+        ahrefs_project_id: projectId ?? null,
       },
     };
 
