@@ -67,7 +67,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
   }, [clientId, tenantId, queryClient]);
   const [gscData, setGscData] = useState<GscKeywordData[]>([]);
   const [gscMultiPeriod, setGscMultiPeriod] = useState<GscMultiPeriodData | null>(null);
-  const { fetchComparisons, comparisonData, resetComparisonData, isLoading: isEnriching } = useAhrefsEnrichment();
+  const { comparisonData, resetComparisonData } = useAhrefsEnrichment();
   const [hasAutoEnriched, setHasAutoEnriched] = useState(false);
   const [cachedComparison, setCachedComparison] = useState<{
     threeMonth: Map<string, any>;
@@ -526,11 +526,11 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
             variant="outline"
             size="sm"
             onClick={handleManualSync}
-            disabled={isEnriching}
+            disabled={isFetchingSnapshot}
             className="h-8 text-xs gap-1.5"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${isEnriching ? 'animate-spin' : ''}`} />
-            {isEnriching ? 'מסנכרן...' : 'סנכרון Ahrefs'}
+            <RefreshCw className={`h-3.5 w-3.5 ${isFetchingSnapshot ? 'animate-spin' : ''}`} />
+            {isFetchingSnapshot ? 'מסנכרן...' : 'סנכרון Ahrefs'}
           </Button>
           <Button
             variant="outline"
