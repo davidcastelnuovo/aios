@@ -350,6 +350,7 @@ Deno.serve(async (req) => {
         success: true,
         domain,
         keywords_count: organic_keywords.length,
+        tracked_count: tracked_keywords.length,
         snapshot,
         webhook: webhookJson,
       }),
