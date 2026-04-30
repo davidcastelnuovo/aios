@@ -256,10 +256,39 @@ Deno.serve(async (req) => {
     };
 
     // 4) Tracked (Rank Tracker) keywords — only if a project_id was passed from the picker.
-    // This endpoint is FREE and does not consume API units.
+    // These endpoints are FREE and do not consume API units.
     let tracked_keywords: any[] = [];
+    let trackedSource: string | null = null;
     if (projectId) {
       try {
+        const trackedByKey = new Map<string, any>();
+        const normalizeTracked = (k: any, source: string, device?: string) => ({
+          keyword: String(k.keyword || "").trim(),
+          position: k.position ?? null,
+          position_prev_month: k.position_prev ?? null,
+          traffic: k.traffic ?? 0,
+          traffic_prev_month: k.traffic_prev ?? 0,
+          volume: k.volume ?? 0,
+          kd: k.keyword_difficulty ?? null,
+          cpc: k.cost_per_click ?? null,
+          url: k.url ?? "",
+          country: k.country ?? null,
+          location: k.location ?? null,
+          language: k.language ?? k.language_code ?? null,
+          tags: Array.isArray(k.tags) ? k.tags : [],
+          _source: source,
+          _device: device ?? null,
+        });
+
+        const addTrackedRows = (rows: any[], source: string, device?: string) => {
+          for (const row of rows) {
+            if (!row || typeof row.keyword !== "string" || !row.keyword.trim()) continue;
+            const normalized = normalizeTracked(row, source, device);
+            const key = [normalized.keyword.toLowerCase(), normalized.country, normalized.location, normalized.language].join("|");
+            if (!trackedByKey.has(key)) trackedByKey.set(key, normalized);
+          }
+        };
+
         const selectFields = [
           "keyword",
           "position",
@@ -270,40 +299,75 @@ Deno.serve(async (req) => {
           "traffic",
           "traffic_prev",
           "url",
+          "country",
+          "location",
+          "language",
+          "tags",
         ].join(",");
-        const trackerUrl =
-          `https://api.ahrefs.com/v3/rank-tracker/overview` +
-          `?project_id=${encodeURIComponent(String(projectId))}` +
-          `&device=desktop` +
-          `&date=${reportDate}` +
-          `&select=${encodeURIComponent(selectFields)}` +
-          `&limit=1000` +
-          `&volume_mode=monthly` +
-          `&output=json`;
-        const trackerRes = await fetch(trackerUrl, {
-          headers: { Authorization: `Bearer ${ahrefsApiKey}`, Accept: "application/json" },
-        });
-        if (trackerRes.ok) {
-          const trackerJson = await trackerRes.json();
-          const overviews = Array.isArray(trackerJson?.overviews) ? trackerJson.overviews : [];
-          tracked_keywords = overviews
-            .filter((k: any) => k && typeof k.keyword === "string" && k.keyword.trim())
-            .map((k: any) => ({
-              keyword: k.keyword,
-              position: k.position ?? null,
-              position_prev_month: k.position_prev ?? null,
-              traffic: k.traffic ?? 0,
-              traffic_prev_month: k.traffic_prev ?? 0,
-              volume: k.volume ?? 0,
-              kd: k.keyword_difficulty ?? null,
-              cpc: k.cost_per_click ?? null,
-              url: k.url ?? "",
-            }));
-          console.log(`Ahrefs Rank Tracker OK: project=${projectId} tracked_count=${tracked_keywords.length}`);
-        } else {
-          const errTxt = await trackerRes.text();
-          console.warn(`Ahrefs Rank Tracker failed: project=${projectId} status=${trackerRes.status} body=${errTxt.slice(0, 200)}`);
+
+        const trackerDates: string[] = [];
+        const reportDateObj = new Date(`${reportDate}T00:00:00Z`);
+        for (let i = 0; i <= 14; i++) {
+          const d = new Date(reportDateObj);
+          d.setUTCDate(d.getUTCDate() - i);
+          trackerDates.push(d.toISOString().split("T")[0]);
         }
+
+        for (const trackerDate of trackerDates) {
+          const compared = new Date(`${trackerDate}T00:00:00Z`);
+          compared.setUTCDate(compared.getUTCDate() - 30);
+          const comparedDate = compared.toISOString().split("T")[0];
+
+          for (const device of ["desktop", "mobile"]) {
+            const trackerUrl =
+              `https://api.ahrefs.com/v3/rank-tracker/overview` +
+              `?project_id=${encodeURIComponent(String(projectId))}` +
+              `&device=${device}` +
+              `&date=${trackerDate}` +
+              `&date_compared=${comparedDate}` +
+              `&select=${encodeURIComponent(selectFields)}` +
+              `&limit=1000` +
+              `&volume_mode=monthly` +
+              `&output=json`;
+            const trackerRes = await fetch(trackerUrl, {
+              headers: { Authorization: `Bearer ${ahrefsApiKey}`, Accept: "application/json" },
+            });
+            if (trackerRes.ok) {
+              const trackerJson = await trackerRes.json();
+              const overviews = Array.isArray(trackerJson?.overviews) ? trackerJson.overviews : [];
+              addTrackedRows(overviews, "rank-tracker-overview", device);
+              console.log(`Ahrefs Rank Tracker overview: project=${projectId} date=${trackerDate} device=${device} rows=${overviews.length}`);
+            } else {
+              const errTxt = await trackerRes.text();
+              console.warn(`Ahrefs Rank Tracker overview failed: project=${projectId} date=${trackerDate} device=${device} status=${trackerRes.status} body=${errTxt.slice(0, 200)}`);
+            }
+          }
+
+          if (trackedByKey.size > 0) break;
+        }
+
+        if (trackedByKey.size === 0) {
+          const projectKeywordsUrl =
+            `https://api.ahrefs.com/v3/management/project-keywords` +
+            `?project_id=${encodeURIComponent(String(projectId))}` +
+            `&output=json`;
+          const projectKeywordsRes = await fetch(projectKeywordsUrl, {
+            headers: { Authorization: `Bearer ${ahrefsApiKey}`, Accept: "application/json" },
+          });
+          if (projectKeywordsRes.ok) {
+            const projectKeywordsJson = await projectKeywordsRes.json();
+            const projectKeywords = Array.isArray(projectKeywordsJson?.keywords) ? projectKeywordsJson.keywords : [];
+            addTrackedRows(projectKeywords, "management-project-keywords");
+            console.log(`Ahrefs Project Keywords fallback: project=${projectId} rows=${projectKeywords.length}`);
+          } else {
+            const errTxt = await projectKeywordsRes.text();
+            console.warn(`Ahrefs Project Keywords fallback failed: project=${projectId} status=${projectKeywordsRes.status} body=${errTxt.slice(0, 200)}`);
+          }
+        }
+
+        tracked_keywords = Array.from(trackedByKey.values());
+        trackedSource = tracked_keywords[0]?._source ?? null;
+        console.log(`Ahrefs tracked keywords resolved: project=${projectId} tracked_count=${tracked_keywords.length} source=${trackedSource ?? "none"}`);
       } catch (e) {
         console.warn("Rank Tracker fetch threw:", e instanceof Error ? e.message : String(e));
       }
@@ -329,6 +393,7 @@ Deno.serve(async (req) => {
         used_mode: usedMode,
         used_protocol: usedProtocol,
         ahrefs_project_id: projectId ?? null,
+        tracked_source: trackedSource,
       },
     };
 
@@ -351,6 +416,7 @@ Deno.serve(async (req) => {
         domain,
         keywords_count: organic_keywords.length,
         tracked_count: tracked_keywords.length,
+        tracked_source: trackedSource,
         snapshot,
         webhook: webhookJson,
       }),

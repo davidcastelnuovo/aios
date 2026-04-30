@@ -261,8 +261,6 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywor
   // 4. All keywords with monthly data, sorted by current position (best first)
   const byMonthlyChange = sortByPosition(allKeywords.filter(k => k.position != null && k.position_prev_month != null));
 
-  if (mergedKeywords.length === 0) return null;
-
   const formatNumber = (num: number) => new Intl.NumberFormat('he-IL').format(num);
 
   return (
@@ -303,9 +301,7 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywor
                 English ({formatNumber(langCounts.en)})
               </button>
             </div>
-            {trackedKeywords.length > 0 && (
-              <Badge variant="default" className="text-xs">🎯 {trackedKeywords.length} tracked</Badge>
-            )}
+            <Badge variant={trackedKeywords.length > 0 ? "default" : "outline"} className="text-xs">🎯 {trackedKeywords.length} במעקב</Badge>
             <Badge variant="outline" className="text-xs">{keywords.length} אורגניות</Badge>
             {gscOnlyKeywords.length > 0 && (
               <Badge variant="outline" className="text-xs border-blue-300 text-blue-600">🔍 {gscOnlyKeywords.length} GSC בלבד</Badge>
@@ -314,16 +310,14 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywor
         </CardTitle>
       </CardHeader>
       <CardContent className="p-0">
-        <Tabs defaultValue="top10" className="w-full">
+        <Tabs defaultValue={defaultTab} className="w-full">
           <TabsList dir="rtl" className="w-full justify-start rounded-none border-b bg-transparent h-auto p-0 gap-0">
             <TabsTrigger value="top10" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
               🏆 Top 10 מקודמים ({top10.length})
             </TabsTrigger>
-            {trackedKeywords.length > 0 && (
-              <TabsTrigger value="tracked" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
-                🎯 ביטויים במעקב ({trackedFiltered.length})
-              </TabsTrigger>
-            )}
+            <TabsTrigger value="tracked" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
+              🎯 ביטויים במעקב ({trackedFiltered.length})
+            </TabsTrigger>
             <TabsTrigger value="all" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
               📋 כל הביטויים ({allKeywords.length})
             </TabsTrigger>
@@ -338,19 +332,17 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywor
             </TabsTrigger>
           </TabsList>
 
-          {trackedKeywords.length > 0 && (
-            <TabsContent value="tracked" className="mt-0">
-              <KeywordTable
-                keywords={trackedFiltered}
-                title={`ביטויים במעקב (${trackedFiltered.length})`}
-                icon={<Target className="h-4 w-4 text-primary" />}
-                show3Month={show3Month}
-                showYearly={showYearly}
-                showPrevMonth
-                showGsc={hasGscData}
-              />
-            </TabsContent>
-          )}
+          <TabsContent value="tracked" className="mt-0">
+            <KeywordTable
+              keywords={trackedFiltered}
+              title={`ביטויים במעקב (${trackedFiltered.length})`}
+              icon={<Target className="h-4 w-4 text-primary" />}
+              show3Month={show3Month}
+              showYearly={showYearly}
+              showPrevMonth
+              showGsc={hasGscData}
+            />
+          </TabsContent>
 
           <TabsContent value="top10" className="mt-0">
             <KeywordTable
