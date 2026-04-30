@@ -19,7 +19,6 @@ export const getExplicitLeadFieldsFromData = (data: any) =>
   Number(data?.website_leads) ||
   Number(data?.offsite_conversion) ||
   Number(data?.offsite_conversion_fb_pixel_lead) ||
-  Number(data?.lead) ||
   0;
 
 export const getLeadsFromData = (data: any) =>
@@ -29,5 +28,4 @@ export const getLeadsFromData = (data: any) =>
   Number(data?.website_leads) ||
   Number(data?.offsite_conversion) ||
   Number(data?.offsite_conversion_fb_pixel_lead) ||
-  Number(data?.lead) ||
   0;
