@@ -75,6 +75,8 @@ export function useAhrefsEnrichment() {
   const buildMap = (keywords: AhrefsKeyword[]): Map<string, AhrefsKeyword> => {
     const map = new Map<string, AhrefsKeyword>();
     for (const kw of keywords) {
+      // Ahrefs may return rows with keyword=null (e.g. anonymized/aggregated rows). Skip them.
+      if (!kw || typeof kw.keyword !== 'string' || !kw.keyword.trim()) continue;
       map.set(kw.keyword.toLowerCase().trim(), kw);
     }
     return map;
