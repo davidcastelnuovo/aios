@@ -2556,6 +2556,19 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                   </div>
                 </Card>
               )}
+
+              {leadCampaigns.length > 0 && table?.id && (
+                <ManualROICard
+                  tableId={table.id}
+                  spend={leadTotals.spend}
+                  leads={leadTotals.leads}
+                  currency={currency}
+                  initialClosures={table?.integration_settings?.manual_roi?.closures ?? null}
+                  initialRevenue={table?.integration_settings?.manual_roi?.revenue ?? null}
+                  integrationSettings={table?.integration_settings}
+                  readOnly={isEmbed}
+                />
+              )}
             </>
           );
         })()
