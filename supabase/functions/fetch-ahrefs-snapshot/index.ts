@@ -53,12 +53,14 @@ Deno.serve(async (req) => {
       country = "il",
       mode: hintMode,
       protocol: hintProtocol,
+      projectId,
     } = body as {
       clientId?: string;
       domain?: string;
       country?: string;
       mode?: string;
       protocol?: string;
+      projectId?: string | number;
     };
 
     if (!clientId) {
