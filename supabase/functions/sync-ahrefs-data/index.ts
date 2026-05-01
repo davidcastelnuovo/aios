@@ -77,14 +77,23 @@ serve(async (req) => {
       );
     }
 
+    const { data: tableRow, error: tableError } = await supabase
+      .from('crm_tables')
+      .select('tenant_id, client_id, integration_settings')
+      .eq('id', tableId)
+      .single();
+
+    if (tableError || !tableRow) {
+      return new Response(
+        JSON.stringify({ error: 'CRM table not found' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const settings: any = tableRow.integration_settings || {};
+
     // Fallback: if config or target wasn't provided, load it from the table's integration_settings
     if (!config || !config.target) {
-      const { data: tableRow } = await supabase
-        .from('crm_tables')
-        .select('integration_settings')
-        .eq('id', tableId)
-        .single();
-      const settings: any = tableRow?.integration_settings || {};
       config = {
         target: config?.target || settings.targetDomain || settings.target || settings.domain,
         dataType: (config?.dataType || settings.reportType || settings.dataType || 'site_explorer') as AhrefsConfig['dataType'],
