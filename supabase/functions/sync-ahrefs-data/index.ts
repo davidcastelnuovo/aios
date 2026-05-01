@@ -77,14 +77,23 @@ serve(async (req) => {
       );
     }
 
+    const { data: tableRow, error: tableError } = await supabase
+      .from('crm_tables')
+      .select('tenant_id, client_id, integration_settings')
+      .eq('id', tableId)
+      .single();
+
+    if (tableError || !tableRow) {
+      return new Response(
+        JSON.stringify({ error: 'CRM table not found' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const settings: any = tableRow.integration_settings || {};
+
     // Fallback: if config or target wasn't provided, load it from the table's integration_settings
     if (!config || !config.target) {
-      const { data: tableRow } = await supabase
-        .from('crm_tables')
-        .select('integration_settings')
-        .eq('id', tableId)
-        .single();
-      const settings: any = tableRow?.integration_settings || {};
       config = {
         target: config?.target || settings.targetDomain || settings.target || settings.domain,
         dataType: (config?.dataType || settings.reportType || settings.dataType || 'site_explorer') as AhrefsConfig['dataType'],
@@ -97,6 +106,106 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ error: 'Missing target domain (set targetDomain in integration_settings)' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // SEO report tables are backed by ahrefs_reports. They should refresh from
+    // stored snapshots instead of calling the older Site Explorer endpoints.
+    if (settings.data_source === 'ahrefs_reports') {
+      const clientId = settings.clientId || settings.client_id || tableRow.client_id;
+      if (!clientId) {
+        return new Response(
+          JSON.stringify({ error: 'Missing client ID for Ahrefs reports table' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const { data: reports, error: reportsError } = await supabase
+        .from('ahrefs_reports')
+        .select('*')
+        .eq('tenant_id', tableRow.tenant_id)
+        .eq('client_id', clientId)
+        .order('report_date', { ascending: false });
+
+      if (reportsError) throw reportsError;
+
+      const targetForFilter = String(config.target || '').replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '');
+      const matchedReports = (reports || []).filter((report: any) => {
+        const reportDomain = String(report.domain || '').replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '');
+        return !targetForFilter || reportDomain === targetForFilter;
+      });
+
+      const reportsToUse = matchedReports.length > 0 ? matchedReports : (reports || []);
+      const recordsToInsert: any[] = [];
+
+      for (const report of reportsToUse as any[]) {
+        const rd = report.report_data || {};
+        const snapshot = rd.snapshot || {};
+        const reportDate = report.report_date || report.received_at;
+        const organicKeywords = Array.isArray(rd.organic_keywords) ? rd.organic_keywords : [];
+        const trackedKeywords = Array.isArray(rd.tracked_keywords) ? rd.tracked_keywords : [];
+        const allKeywords = [...organicKeywords, ...trackedKeywords];
+
+        if (allKeywords.length > 0) {
+          for (const kw of allKeywords) {
+            recordsToInsert.push({
+              table_id: tableId,
+              tenant_id: tableRow.tenant_id,
+              data: {
+                keyword: String(kw.keyword || ''),
+                position: kw.position ?? null,
+                position_prev_month: kw.position_prev_month ?? null,
+                position_change: kw.position_prev_month != null && kw.position != null ? kw.position_prev_month - kw.position : null,
+                traffic: kw.traffic ?? 0,
+                traffic_prev_month: kw.traffic_prev_month ?? 0,
+                volume: kw.volume ?? 0,
+                kd: kw.kd ?? null,
+                cpc: kw.cpc ?? null,
+                url: kw.url ?? '',
+                domain: report.domain,
+                dr: snapshot.dr,
+                report_date: reportDate,
+              },
+            });
+          }
+        } else {
+          recordsToInsert.push({
+            table_id: tableId,
+            tenant_id: tableRow.tenant_id,
+            data: {
+              domain: report.domain,
+              dr: snapshot.dr,
+              org_traffic: snapshot.org_traffic,
+              org_keywords_top3: snapshot.org_keywords_top3,
+              org_keywords_top10: snapshot.org_keywords_top10,
+              org_keywords_total: snapshot.org_keywords_total,
+              referring_domains: snapshot.referring_domains,
+              backlinks_live: snapshot.backlinks_live,
+              backlinks_all_time: snapshot.backlinks_all_time,
+              report_date: reportDate,
+            },
+          });
+        }
+      }
+
+      await supabase.from('crm_records').delete().eq('table_id', tableId);
+      for (let i = 0; i < recordsToInsert.length; i += 500) {
+        const { error: insertError } = await supabase.from('crm_records').insert(recordsToInsert.slice(i, i + 500));
+        if (insertError) throw insertError;
+      }
+
+      const syncedAt = new Date().toISOString();
+      await supabase
+        .from('crm_tables')
+        .update({
+          last_sync_at: syncedAt,
+          integration_settings: { ...settings, last_sync_at: syncedAt },
+        })
+        .eq('id', tableId);
+
+      return new Response(
+        JSON.stringify({ success: true, recordsCount: recordsToInsert.length, reportsCount: reportsToUse.length }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -123,26 +232,26 @@ serve(async (req) => {
     switch (config.dataType) {
       case 'organic_traffic':
         // Organic Keywords report (requires date)
-        apiUrl = `https://api.ahrefs.com/v3/site-explorer/organic-keywords?target=${encodeURIComponent(target)}&date=${encodeURIComponent(date)}&country=${config.country || 'il'}&limit=${config.limit || 1000}&select=keyword,volume,keyword_difficulty,cpc,traffic,traffic_percentage,position,url,serp_features`;
+        apiUrl = `https://api.ahrefs.com/v3/site-explorer/organic-keywords?target=${encodeURIComponent(target)}&date=${encodeURIComponent(date)}&country=${config.country || 'il'}&protocol=both&mode=subdomains&output=json&limit=${config.limit || 1000}&select=keyword,volume,keyword_difficulty,cpc,traffic,traffic_percentage,position,url,serp_features`;
         selectFields = ['keyword', 'volume', 'keyword_difficulty', 'cpc', 'traffic', 'traffic_percentage', 'position', 'url', 'serp_features'];
         break;
       
       case 'backlinks':
         // Backlinks report (requires date)
-        apiUrl = `https://api.ahrefs.com/v3/site-explorer/backlinks?target=${encodeURIComponent(target)}&date=${encodeURIComponent(date)}&limit=${config.limit || 1000}&select=url_from,url_to,anchor,domain_rating_source,url_rating_source,traffic,first_seen,last_seen,nofollow,is_dofollow`;
+        apiUrl = `https://api.ahrefs.com/v3/site-explorer/all-backlinks?target=${encodeURIComponent(target)}&date=${encodeURIComponent(date)}&protocol=both&mode=subdomains&output=json&limit=${config.limit || 1000}&select=url_from,url_to,anchor,domain_rating_source,url_rating_source,traffic,first_seen,last_seen,nofollow,is_dofollow`;
         selectFields = ['url_from', 'url_to', 'anchor', 'domain_rating_source', 'url_rating_source', 'traffic', 'first_seen', 'last_seen', 'nofollow', 'is_dofollow'];
         break;
       
       case 'referring_domains':
         // Referring Domains report (requires date)
-        apiUrl = `https://api.ahrefs.com/v3/site-explorer/refdomains?target=${encodeURIComponent(target)}&date=${encodeURIComponent(date)}&limit=${config.limit || 1000}&select=domain,domain_rating,backlinks,first_seen,last_seen,linked_domains`;
+        apiUrl = `https://api.ahrefs.com/v3/site-explorer/refdomains?target=${encodeURIComponent(target)}&date=${encodeURIComponent(date)}&protocol=both&mode=subdomains&output=json&limit=${config.limit || 1000}&select=domain,domain_rating,backlinks,first_seen,last_seen,linked_domains`;
         selectFields = ['domain', 'domain_rating', 'backlinks', 'first_seen', 'last_seen', 'linked_domains'];
         break;
       
       case 'site_explorer':
       default:
         // Domain overview (default) (requires date)
-        apiUrl = `https://api.ahrefs.com/v3/site-explorer/overview?target=${encodeURIComponent(target)}&date=${encodeURIComponent(date)}&select=domain_rating,ahrefs_rank,organic_traffic,organic_keywords,backlinks,referring_domains,organic_value`;
+        apiUrl = `https://api.ahrefs.com/v3/site-explorer/metrics?target=${encodeURIComponent(target)}&date=${encodeURIComponent(date)}&protocol=both&mode=subdomains&output=json&volume_mode=monthly`;
         selectFields = ['domain_rating', 'ahrefs_rank', 'organic_traffic', 'organic_keywords', 'backlinks', 'referring_domains', 'organic_value'];
         break;
     }
@@ -176,7 +285,16 @@ serve(async (req) => {
       records = apiData.refdomains;
     } else if (apiData.metrics) {
       // Single overview response
-      records = [apiData.metrics];
+      const m = apiData.metrics;
+      records = [{
+        domain_rating: m.domain_rating,
+        ahrefs_rank: m.ahrefs_rank,
+        organic_traffic: m.org_traffic ?? m.organic_traffic,
+        organic_keywords: m.org_keywords ?? m.organic_keywords,
+        backlinks: m.backlinks,
+        referring_domains: m.refdomains ?? m.referring_domains,
+        organic_value: m.org_cost ?? m.organic_value,
+      }];
     } else {
       records = [apiData];
     }
