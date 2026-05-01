@@ -1,29 +1,45 @@
 
 ## הבעיה
+בכרטיסיות של הטבלאות הדינמיות (דף `/dynamic-tables`), הטקסט והאייקונים לא מיושרים נכון ל-RTL:
 
-כפתור "סנכרן עכשיו" בקטגוריה שולח לפונקציה `sync-ahrefs-data` רק `{ tableId, table_id }`, אבל הפונקציה דורשת גם אובייקט `config` עם `target` (דומיין) ו-`dataType`. בלי זה, הפונקציה מחזירה שגיאה 400 ("Missing tableId or config.target") — ולכן כל 36 הדוחות נכשלים.
-
-הנתונים הנדרשים כבר קיימים ב-`integration_settings` של כל טבלה (`targetDomain`, `reportType`).
+1. **כותרת הכרטיסייה** (`CardTitle`) - האייקון מופיע משמאל לטקסט אבל בעברית הוא צריך להופיע מימין, וגולש לתוך אזור כפתורי העריכה/מחיקה.
+2. **תיאור הכרטיסייה** ("דוח SEO עבור ggds.co.il" ו-"לחץ לצפייה וניהול") - מיושרים לשמאל במקום לימין.
+3. **שם הטבלה הארוך** - לא נשבר נכון ויוצר overlap עם הכפתורים בצד שני.
 
 ## התיקון
 
-### 1. עדכון `CategorySyncControl.tsx`
-כשהסוג הוא `ahrefs`, לשלוח את הפרמטרים הנדרשים מתוך `integration_settings`:
+**קובץ:** `src/pages/DynamicTables.tsx` (שורות ~758-870)
 
-```ts
-body: {
-  tableId: t.id,
-  table_id: t.id,
-  config: {
-    target: t.integration_settings?.targetDomain,
-    dataType: t.integration_settings?.reportType || 'site_explorer',
-  }
-}
+### שינויים:
+1. הוספת `dir="rtl"` או `text-right` ל-`CardHeader` וה-`CardContent` של הכרטיסייה.
+2. שינוי סדר האייקון והטקסט ב-`CardTitle` כדי שהאייקון יופיע אחרי הטקסט (`flex-row-reverse` או החלפת הסדר), כך שב-RTL האייקון יראה ימינה לטקסט.
+3. הוספת `truncate` או `min-w-0` לטקסט הכותרת כדי למנוע גלישה לכפתורים, והוספת `flex-shrink-0` לכפתורי הפעולה.
+4. ודאי שכל ה-`CardDescription` ופסקאות `CardContent` יורשים יישור ימני.
+
+### לפני:
+```tsx
+<CardTitle className="flex items-center gap-2">
+  <FileSpreadsheet className="h-5 w-5" />
+  {table.name}
+</CardTitle>
 ```
 
-### 2. עדכון `sync-ahrefs-data/index.ts`
-להוסיף fallback: אם לא נשלח `config`, לשלוף את `integration_settings` מהטבלה עצמה בבסיס הנתונים ולבנות ממנו את ה-`config` אוטומטית. כך גם קריאות עתידיות שלא ישלחו config יצליחו.
+### אחרי:
+```tsx
+<CardTitle className="flex items-center gap-2 min-w-0 flex-1">
+  <FileSpreadsheet className="h-5 w-5 flex-shrink-0" />
+  <span className="truncate">{table.name}</span>
+</CardTitle>
+```
 
----
+ובלוק הכפתורים יקבל `flex-shrink-0`.
 
-שני שינויים בלבד, ללא שינויי מסד נתונים.
+### בנוסף:
+- בדיקה שאר הכרטיסיות (קטגוריות בשורות ~661-688) עוברות אותו טיפול אם יש שם בעיה דומה.
+- ודאי ש-`CardDescription` ב-`text-right` (אם לא יורש מ-`dir="rtl"` הגלובלי).
+
+## מה לא נכלל
+- לא נשנה את לוגיקת הסנכרון - היא כבר תוקנה בהודעות קודמות.
+- לא נוגעים בעיצוב הצבעים/גרדיאנט של הכרטיסיות.
+
+האם לאשר את התיקון?
