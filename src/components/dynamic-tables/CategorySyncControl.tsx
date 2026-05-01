@@ -124,10 +124,9 @@ async function syncStoredAhrefsReportTable(t: CategoryTable) {
 
   const syncedAt = new Date().toISOString();
   await supabase.functions.invoke("crm-tables", {
+    method: "PATCH",
     body: {
-      action: "update",
-      tableId: t.id,
-      tenantId: t.tenant_id,
+      table_id: t.id,
       integration_settings: { ...settings, last_sync_at: syncedAt },
     },
   });
