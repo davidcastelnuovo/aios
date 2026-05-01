@@ -232,26 +232,26 @@ serve(async (req) => {
     switch (config.dataType) {
       case 'organic_traffic':
         // Organic Keywords report (requires date)
-        apiUrl = `https://api.ahrefs.com/v3/site-explorer/organic-keywords?target=${encodeURIComponent(target)}&date=${encodeURIComponent(date)}&country=${config.country || 'il'}&limit=${config.limit || 1000}&select=keyword,volume,keyword_difficulty,cpc,traffic,traffic_percentage,position,url,serp_features`;
+        apiUrl = `https://api.ahrefs.com/v3/site-explorer/organic-keywords?target=${encodeURIComponent(target)}&date=${encodeURIComponent(date)}&country=${config.country || 'il'}&protocol=both&mode=subdomains&output=json&limit=${config.limit || 1000}&select=keyword,volume,keyword_difficulty,cpc,traffic,traffic_percentage,position,url,serp_features`;
         selectFields = ['keyword', 'volume', 'keyword_difficulty', 'cpc', 'traffic', 'traffic_percentage', 'position', 'url', 'serp_features'];
         break;
       
       case 'backlinks':
         // Backlinks report (requires date)
-        apiUrl = `https://api.ahrefs.com/v3/site-explorer/backlinks?target=${encodeURIComponent(target)}&date=${encodeURIComponent(date)}&limit=${config.limit || 1000}&select=url_from,url_to,anchor,domain_rating_source,url_rating_source,traffic,first_seen,last_seen,nofollow,is_dofollow`;
+        apiUrl = `https://api.ahrefs.com/v3/site-explorer/all-backlinks?target=${encodeURIComponent(target)}&date=${encodeURIComponent(date)}&protocol=both&mode=subdomains&output=json&limit=${config.limit || 1000}&select=url_from,url_to,anchor,domain_rating_source,url_rating_source,traffic,first_seen,last_seen,nofollow,is_dofollow`;
         selectFields = ['url_from', 'url_to', 'anchor', 'domain_rating_source', 'url_rating_source', 'traffic', 'first_seen', 'last_seen', 'nofollow', 'is_dofollow'];
         break;
       
       case 'referring_domains':
         // Referring Domains report (requires date)
-        apiUrl = `https://api.ahrefs.com/v3/site-explorer/refdomains?target=${encodeURIComponent(target)}&date=${encodeURIComponent(date)}&limit=${config.limit || 1000}&select=domain,domain_rating,backlinks,first_seen,last_seen,linked_domains`;
+        apiUrl = `https://api.ahrefs.com/v3/site-explorer/refdomains?target=${encodeURIComponent(target)}&date=${encodeURIComponent(date)}&protocol=both&mode=subdomains&output=json&limit=${config.limit || 1000}&select=domain,domain_rating,backlinks,first_seen,last_seen,linked_domains`;
         selectFields = ['domain', 'domain_rating', 'backlinks', 'first_seen', 'last_seen', 'linked_domains'];
         break;
       
       case 'site_explorer':
       default:
         // Domain overview (default) (requires date)
-        apiUrl = `https://api.ahrefs.com/v3/site-explorer/overview?target=${encodeURIComponent(target)}&date=${encodeURIComponent(date)}&select=domain_rating,ahrefs_rank,organic_traffic,organic_keywords,backlinks,referring_domains,organic_value`;
+        apiUrl = `https://api.ahrefs.com/v3/site-explorer/metrics?target=${encodeURIComponent(target)}&date=${encodeURIComponent(date)}&protocol=both&mode=subdomains&output=json&volume_mode=monthly`;
         selectFields = ['domain_rating', 'ahrefs_rank', 'organic_traffic', 'organic_keywords', 'backlinks', 'referring_domains', 'organic_value'];
         break;
     }
