@@ -13,6 +13,8 @@ interface CategoryTable {
   name: string;
   integration_type: string | null;
   integration_settings?: any;
+  client_id?: string | null;
+  tenant_id?: string | null;
 }
 
 interface Props {
@@ -38,6 +40,97 @@ async function runWithConcurrency<T>(items: T[], limit: number, worker: (item: T
     }
   });
   await Promise.all(runners);
+}
+
+async function syncStoredAhrefsReportTable(t: CategoryTable) {
+  const settings = t.integration_settings || {};
+  const clientId = settings.clientId || settings.client_id || t.client_id;
+  if (!clientId || !t.tenant_id) throw new Error("Missing SEO report scope");
+
+  const { data: reports, error } = await supabase
+    .from("ahrefs_reports" as any)
+    .select("*")
+    .eq("tenant_id", t.tenant_id)
+    .eq("client_id", clientId)
+    .order("report_date", { ascending: false });
+
+  if (error) throw error;
+  if (!reports || reports.length === 0) throw new Error("לא נמצאו דוחות Ahrefs שמורים");
+
+  const normalizeDomain = (value?: string) =>
+    String(value || "").replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
+  const target = normalizeDomain(settings.targetDomain || settings.target || settings.domain);
+  const reportsToUse = target
+    ? reports.filter((report: any) => normalizeDomain(report.domain) === target)
+    : reports;
+
+  const recordsToInsert: any[] = [];
+  for (const report of (reportsToUse.length > 0 ? reportsToUse : reports) as any[]) {
+    const rd = report.report_data || {};
+    const snapshot = rd.snapshot || {};
+    const reportDate = report.report_date || report.received_at;
+    const allKeywords = [
+      ...(Array.isArray(rd.organic_keywords) ? rd.organic_keywords : []),
+      ...(Array.isArray(rd.tracked_keywords) ? rd.tracked_keywords : []),
+    ];
+
+    if (allKeywords.length > 0) {
+      for (const kw of allKeywords) {
+        recordsToInsert.push({
+          table_id: t.id,
+          tenant_id: t.tenant_id,
+          data: {
+            keyword: String(kw.keyword || ""),
+            position: kw.position ?? null,
+            position_prev_month: kw.position_prev_month ?? null,
+            position_change: kw.position_prev_month != null && kw.position != null ? kw.position_prev_month - kw.position : null,
+            traffic: kw.traffic ?? 0,
+            traffic_prev_month: kw.traffic_prev_month ?? 0,
+            volume: kw.volume ?? 0,
+            kd: kw.kd ?? null,
+            cpc: kw.cpc ?? null,
+            url: kw.url ?? "",
+            domain: report.domain,
+            dr: snapshot.dr,
+            report_date: reportDate,
+          },
+        });
+      }
+    } else {
+      recordsToInsert.push({
+        table_id: t.id,
+        tenant_id: t.tenant_id,
+        data: {
+          domain: report.domain,
+          dr: snapshot.dr,
+          org_traffic: snapshot.org_traffic,
+          org_keywords_top3: snapshot.org_keywords_top3,
+          org_keywords_top10: snapshot.org_keywords_top10,
+          org_keywords_total: snapshot.org_keywords_total,
+          referring_domains: snapshot.referring_domains,
+          backlinks_live: snapshot.backlinks_live,
+          backlinks_all_time: snapshot.backlinks_all_time,
+          report_date: reportDate,
+        },
+      });
+    }
+  }
+
+  await supabase.from("crm_records" as any).delete().eq("table_id", t.id);
+  for (let i = 0; i < recordsToInsert.length; i += 500) {
+    const { error: insertError } = await supabase.from("crm_records" as any).insert(recordsToInsert.slice(i, i + 500));
+    if (insertError) throw insertError;
+  }
+
+  const syncedAt = new Date().toISOString();
+  await supabase.functions.invoke("crm-tables", {
+    body: {
+      action: "update",
+      tableId: t.id,
+      tenantId: t.tenant_id,
+      integration_settings: { ...settings, last_sync_at: syncedAt },
+    },
+  });
 }
 
 export function CategorySyncControl({ category, tables }: Props) {
