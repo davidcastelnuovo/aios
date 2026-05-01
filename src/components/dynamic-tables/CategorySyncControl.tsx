@@ -173,6 +173,12 @@ export function CategorySyncControl({ category, tables }: Props) {
     await runWithConcurrency(syncableTables, 3, async (t) => {
       const fnName = FN_BY_TYPE[t.integration_type as string];
       try {
+        if (t.integration_type === "ahrefs" && t.integration_settings?.data_source === "ahrefs_reports") {
+          await syncStoredAhrefsReportTable(t);
+          success++;
+          return;
+        }
+
         // Build per-integration body. Ahrefs requires a config object with target+dataType.
         const body: Record<string, any> = { tableId: t.id, table_id: t.id };
         if (t.integration_type === "ahrefs") {
