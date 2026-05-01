@@ -109,6 +109,106 @@ serve(async (req) => {
       );
     }
 
+    // SEO report tables are backed by ahrefs_reports. They should refresh from
+    // stored snapshots instead of calling the older Site Explorer endpoints.
+    if (settings.data_source === 'ahrefs_reports') {
+      const clientId = settings.clientId || settings.client_id || tableRow.client_id;
+      if (!clientId) {
+        return new Response(
+          JSON.stringify({ error: 'Missing client ID for Ahrefs reports table' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const { data: reports, error: reportsError } = await supabase
+        .from('ahrefs_reports')
+        .select('*')
+        .eq('tenant_id', tableRow.tenant_id)
+        .eq('client_id', clientId)
+        .order('report_date', { ascending: false });
+
+      if (reportsError) throw reportsError;
+
+      const targetForFilter = String(config.target || '').replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '');
+      const matchedReports = (reports || []).filter((report: any) => {
+        const reportDomain = String(report.domain || '').replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '');
+        return !targetForFilter || reportDomain === targetForFilter;
+      });
+
+      const reportsToUse = matchedReports.length > 0 ? matchedReports : (reports || []);
+      const recordsToInsert: any[] = [];
+
+      for (const report of reportsToUse as any[]) {
+        const rd = report.report_data || {};
+        const snapshot = rd.snapshot || {};
+        const reportDate = report.report_date || report.received_at;
+        const organicKeywords = Array.isArray(rd.organic_keywords) ? rd.organic_keywords : [];
+        const trackedKeywords = Array.isArray(rd.tracked_keywords) ? rd.tracked_keywords : [];
+        const allKeywords = [...organicKeywords, ...trackedKeywords];
+
+        if (allKeywords.length > 0) {
+          for (const kw of allKeywords) {
+            recordsToInsert.push({
+              table_id: tableId,
+              tenant_id: tableRow.tenant_id,
+              data: {
+                keyword: String(kw.keyword || ''),
+                position: kw.position ?? null,
+                position_prev_month: kw.position_prev_month ?? null,
+                position_change: kw.position_prev_month != null && kw.position != null ? kw.position_prev_month - kw.position : null,
+                traffic: kw.traffic ?? 0,
+                traffic_prev_month: kw.traffic_prev_month ?? 0,
+                volume: kw.volume ?? 0,
+                kd: kw.kd ?? null,
+                cpc: kw.cpc ?? null,
+                url: kw.url ?? '',
+                domain: report.domain,
+                dr: snapshot.dr,
+                report_date: reportDate,
+              },
+            });
+          }
+        } else {
+          recordsToInsert.push({
+            table_id: tableId,
+            tenant_id: tableRow.tenant_id,
+            data: {
+              domain: report.domain,
+              dr: snapshot.dr,
+              org_traffic: snapshot.org_traffic,
+              org_keywords_top3: snapshot.org_keywords_top3,
+              org_keywords_top10: snapshot.org_keywords_top10,
+              org_keywords_total: snapshot.org_keywords_total,
+              referring_domains: snapshot.referring_domains,
+              backlinks_live: snapshot.backlinks_live,
+              backlinks_all_time: snapshot.backlinks_all_time,
+              report_date: reportDate,
+            },
+          });
+        }
+      }
+
+      await supabase.from('crm_records').delete().eq('table_id', tableId);
+      for (let i = 0; i < recordsToInsert.length; i += 500) {
+        const { error: insertError } = await supabase.from('crm_records').insert(recordsToInsert.slice(i, i + 500));
+        if (insertError) throw insertError;
+      }
+
+      const syncedAt = new Date().toISOString();
+      await supabase
+        .from('crm_tables')
+        .update({
+          last_sync_at: syncedAt,
+          integration_settings: { ...settings, last_sync_at: syncedAt },
+        })
+        .eq('id', tableId);
+
+      return new Response(
+        JSON.stringify({ success: true, recordsCount: recordsToInsert.length, reportsCount: reportsToUse.length }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const normalizeTarget = (raw: string) => {
       // Accept domain or full URL; send only hostname/domain to Ahrefs
       try {
