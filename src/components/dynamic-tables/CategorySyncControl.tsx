@@ -80,10 +80,18 @@ export function CategorySyncControl({ category, tables }: Props) {
     await runWithConcurrency(syncableTables, 3, async (t) => {
       const fnName = FN_BY_TYPE[t.integration_type as string];
       try {
-        const { error } = await supabase.functions.invoke(fnName, {
-          // send both common param shapes for safety across functions
-          body: { tableId: t.id, table_id: t.id },
-        });
+        // Build per-integration body. Ahrefs requires a config object with target+dataType.
+        const body: Record<string, any> = { tableId: t.id, table_id: t.id };
+        if (t.integration_type === "ahrefs") {
+          const settings = t.integration_settings || {};
+          body.config = {
+            target: settings.targetDomain || settings.target || settings.domain,
+            dataType: settings.reportType || settings.dataType || "site_explorer",
+            country: settings.country,
+            limit: settings.limit,
+          };
+        }
+        const { error } = await supabase.functions.invoke(fnName, { body });
         if (error) throw error;
         success++;
       } catch (e: any) {
