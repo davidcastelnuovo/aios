@@ -833,7 +833,7 @@ export default function DynamicTables() {
                       <TableCardAlerts tableId={table.id} />
                     )}
                   </CardHeader>
-                  <CardContent>
+                  <CardContent dir="rtl" className="text-right">
                     <p className="text-sm text-muted-foreground">
                       {table.integration_type === 'facebook_insights' ? (
                         <>
