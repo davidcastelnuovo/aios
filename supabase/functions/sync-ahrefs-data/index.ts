@@ -285,7 +285,16 @@ serve(async (req) => {
       records = apiData.refdomains;
     } else if (apiData.metrics) {
       // Single overview response
-      records = [apiData.metrics];
+      const m = apiData.metrics;
+      records = [{
+        domain_rating: m.domain_rating,
+        ahrefs_rank: m.ahrefs_rank,
+        organic_traffic: m.org_traffic ?? m.organic_traffic,
+        organic_keywords: m.org_keywords ?? m.organic_keywords,
+        backlinks: m.backlinks,
+        referring_domains: m.refdomains ?? m.referring_domains,
+        organic_value: m.org_cost ?? m.organic_value,
+      }];
     } else {
       records = [apiData];
     }
