@@ -66,11 +66,36 @@ serve(async (req) => {
     }
 
     const body = await req.json();
-    const { tableId, config } = body as { tableId: string; config: AhrefsConfig };
+    let { tableId, config } = body as { tableId: string; config?: AhrefsConfig };
+    // Accept snake_case as well
+    if (!tableId && (body as any).table_id) tableId = (body as any).table_id;
 
-    if (!tableId || !config || !config.target) {
+    if (!tableId) {
       return new Response(
-        JSON.stringify({ error: 'Missing tableId or config.target (domain required)' }),
+        JSON.stringify({ error: 'Missing tableId' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Fallback: if config or target wasn't provided, load it from the table's integration_settings
+    if (!config || !config.target) {
+      const { data: tableRow } = await supabase
+        .from('crm_tables')
+        .select('integration_settings')
+        .eq('id', tableId)
+        .single();
+      const settings: any = tableRow?.integration_settings || {};
+      config = {
+        target: config?.target || settings.targetDomain || settings.target || settings.domain,
+        dataType: (config?.dataType || settings.reportType || settings.dataType || 'site_explorer') as AhrefsConfig['dataType'],
+        country: config?.country || settings.country,
+        limit: config?.limit || settings.limit,
+      };
+    }
+
+    if (!config.target) {
+      return new Response(
+        JSON.stringify({ error: 'Missing target domain (set targetDomain in integration_settings)' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
