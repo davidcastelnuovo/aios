@@ -150,7 +150,30 @@ export default function Finance() {
 
   const totalRetainers = filteredClients?.reduce((sum, client) => sum + Number(client.retainer || 0), 0) || 0;
 
-  const filteredFinanceRecords = accessibleFinanceRecords;
+  // Apply same role/agency filters to supplier payment rows
+  let accessibleSupplierRows = supplierPaymentRows;
+  if (!isOwner) {
+    if (isCampaigner && !isTeamManager) {
+      accessibleSupplierRows = [];
+    } else if (userAgencyIds && userAgencyIds.length > 0) {
+      accessibleSupplierRows = supplierPaymentRows?.filter((r) =>
+        userAgencyIds.includes(r.agency_id)
+      );
+    }
+  }
+  if (selectedAgency && selectedAgency !== "all") {
+    accessibleSupplierRows = accessibleSupplierRows?.filter(
+      (r) => r.agency_id === selectedAgency
+    );
+  }
+
+  const supplierExpenseTotal =
+    accessibleSupplierRows?.reduce((sum, r) => sum + Number(r.amount || 0), 0) || 0;
+
+  const filteredFinanceRecords = [
+    ...(accessibleFinanceRecords || []),
+    ...(accessibleSupplierRows || []),
+  ];
 
   const totalIncome = filteredFinanceRecords?.filter(f => f.type === "income").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
   const totalExpense = filteredFinanceRecords?.filter(f => f.type === "expense").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
@@ -185,7 +208,12 @@ export default function Finance() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">סך הוצאות</p>
-                <p className="text-2xl font-bold text-destructive">₪{(totalExpense + (manualSupplierPayments || 0)).toLocaleString()}</p>
+                <p className="text-2xl font-bold text-destructive">₪{totalExpense.toLocaleString()}</p>
+                {supplierExpenseTotal > 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    כולל ₪{supplierExpenseTotal.toLocaleString()} תשלומי ספקים
+                  </p>
+                )}
               </div>
               <div className="p-3 rounded-lg bg-destructive/10">
                 <TrendingDown className="h-6 w-6 text-destructive" />
@@ -199,12 +227,12 @@ export default function Finance() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">רווח</p>
-                <p className={`text-2xl font-bold ${(totalIncome + totalRetainers) - (totalExpense + (manualSupplierPayments || 0)) >= 0 ? 'text-primary' : 'text-destructive'}`}>
-                  ₪{((totalIncome + totalRetainers) - (totalExpense + (manualSupplierPayments || 0))).toLocaleString()}
+                <p className={`text-2xl font-bold ${(totalIncome + totalRetainers) - totalExpense >= 0 ? 'text-primary' : 'text-destructive'}`}>
+                  ₪{((totalIncome + totalRetainers) - totalExpense).toLocaleString()}
                 </p>
               </div>
-              <div className={`p-3 rounded-lg ${(totalIncome + totalRetainers) - (totalExpense + (manualSupplierPayments || 0)) >= 0 ? 'bg-success/10' : 'bg-destructive/10'}`}>
-                <TrendingUp className={`h-6 w-6 ${(totalIncome + totalRetainers) - (totalExpense + (manualSupplierPayments || 0)) >= 0 ? 'text-success' : 'text-destructive'}`} />
+              <div className={`p-3 rounded-lg ${(totalIncome + totalRetainers) - totalExpense >= 0 ? 'bg-success/10' : 'bg-destructive/10'}`}>
+                <TrendingUp className={`h-6 w-6 ${(totalIncome + totalRetainers) - totalExpense >= 0 ? 'text-success' : 'text-destructive'}`} />
               </div>
             </div>
           </CardContent>
