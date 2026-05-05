@@ -510,6 +510,18 @@ export default function AccountingIntegrations() {
         </div>
       </div>
 
+      <Tabs defaultValue="overview" className="w-full">
+        <TabsList>
+          <TabsTrigger value="overview">סקירה</TabsTrigger>
+          <TabsTrigger value="invoices">קליטת חשבוניות</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="invoices" className="mt-4">
+          <InvoiceIntakeTab />
+        </TabsContent>
+
+        <TabsContent value="overview" className="mt-4 space-y-6">
+
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
