@@ -95,6 +95,7 @@ export default function Clients() {
     selectedCampaigner !== "all" ? 1 : 0,
     selectedMoodStatus !== "all" ? 1 : 0,
     hideInactive ? 1 : 0,
+    statusFilter !== "all" ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
 
   // Fetch agencies (owned + shared) first for client scoping
