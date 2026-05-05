@@ -13,6 +13,11 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { InvoiceIntakeTab } from "@/components/accounting/InvoiceIntakeTab";
+import { Filter } from "lucide-react";
 import { toast } from "sonner";
 import { 
   Users, 
@@ -54,6 +59,13 @@ export default function AccountingIntegrations() {
   const [clientStatusFilter, setClientStatusFilter] = useState<string>("active");
   const [selectedMonth, setSelectedMonth] = useState(() => format(subMonths(new Date(), 1), "yyyy-MM"));
   const [editingClient, setEditingClient] = useState<any | null>(null);
+  const [typeFilter, setTypeFilter] = useState<string[]>(["retainer", "one_time", "client_expense", "supplier_expense"]);
+  const toggleType = (key: string) =>
+    setTypeFilter((prev) => (prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key]));
+  const showRetainer = typeFilter.includes("retainer");
+  const showOneTime = typeFilter.includes("one_time");
+  const showClientExp = typeFilter.includes("client_expense");
+  const showSupplierExp = typeFilter.includes("supplier_expense");
   
   // One-time income dialog
   const [addOneTimeIncomeOpen, setAddOneTimeIncomeOpen] = useState(false);
@@ -477,14 +489,15 @@ export default function AccountingIntegrations() {
 
   const selectedMonthLabel = monthOptions.find(m => m.value === selectedMonth)?.label || selectedMonth;
 
-  // Totals - calculated from table data
-  const totalRetainer = filteredClients.reduce((sum, c) => sum + (c.retainer || 0), 0);
-  const clientExpensesOnly = filteredClients.reduce((sum, c) => sum + (clientExpensesMap.get(c.id) || 0), 0);
-  const totalExpenses = clientExpensesOnly + totalSupplierExpenses;
-  const totalOneTime = filteredClients.reduce((sum, c) => {
+  // Totals - calculated from table data, gated by typeFilter
+  const totalRetainer = showRetainer ? filteredClients.reduce((sum, c) => sum + (c.retainer || 0), 0) : 0;
+  const clientExpensesOnly = showClientExp ? filteredClients.reduce((sum, c) => sum + (clientExpensesMap.get(c.id) || 0), 0) : 0;
+  const supplierTotal = showSupplierExp ? totalSupplierExpenses : 0;
+  const totalExpenses = clientExpensesOnly + supplierTotal;
+  const totalOneTime = showOneTime ? filteredClients.reduce((sum, c) => {
     const items = clientOneTimeMap.get(c.id) || [];
     return sum + items.reduce((s: number, i: any) => s + (i.amount || 0), 0);
-  }, 0);
+  }, 0) : 0;
   const totalIncome = totalRetainer + totalOneTime;
   const profit = totalIncome - totalExpenses;
 
@@ -496,6 +509,18 @@ export default function AccountingIntegrations() {
           <p className="text-muted-foreground mt-2">ניהול פיננסי של לקוחות, ספקים וצוות</p>
         </div>
       </div>
+
+      <Tabs defaultValue="overview" className="w-full">
+        <TabsList>
+          <TabsTrigger value="overview">סקירה</TabsTrigger>
+          <TabsTrigger value="invoices">קליטת חשבוניות</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="invoices" className="mt-4">
+          <InvoiceIntakeTab />
+        </TabsContent>
+
+        <TabsContent value="overview" className="mt-4 space-y-6">
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -582,6 +607,37 @@ export default function AccountingIntegrations() {
                 <SelectItem value="ended">סיימו</SelectItem>
               </SelectContent>
             </Select>
+
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="relative">
+                  <Filter className="h-4 w-4 ml-2" />
+                  סוגי תנועות ({typeFilter.length}/4)
+                  {typeFilter.length < 4 && (
+                    <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-primary" />
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-56" align="end">
+                <div className="space-y-2">
+                  {[
+                    { key: "retainer", label: "הכנסות ריטיינר" },
+                    { key: "one_time", label: "הכנסות חד פעמיות" },
+                    { key: "client_expense", label: "הוצאות לקוחות" },
+                    { key: "supplier_expense", label: "הוצאות ספקים" },
+                  ].map((opt) => (
+                    <label key={opt.key} className="flex items-center gap-2 cursor-pointer text-sm">
+                      <Checkbox
+                        checked={typeFilter.includes(opt.key)}
+                        onCheckedChange={() => toggleType(opt.key)}
+                      />
+                      {opt.label}
+                    </label>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+
             
             <Badge variant="secondary" className="whitespace-nowrap">
               {filteredClients.length} לקוחות
@@ -793,6 +849,7 @@ export default function AccountingIntegrations() {
       </Card>
 
       {/* Suppliers Expenses */}
+      {showSupplierExp && (
       <Card>
         <CardHeader>
           <CardTitle className="text-right flex items-center justify-between">
@@ -838,6 +895,9 @@ export default function AccountingIntegrations() {
           )}
         </CardContent>
       </Card>
+      )}
+        </TabsContent>
+      </Tabs>
 
       {/* Add One-Time Income Dialog */}
       <Dialog open={addOneTimeIncomeOpen} onOpenChange={setAddOneTimeIncomeOpen}>
