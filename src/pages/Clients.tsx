@@ -681,6 +681,23 @@ export default function Clients() {
               </Select>
             </div>
 
+            {/* Status filter */}
+            <div className="space-y-2">
+              <Label>סטטוס לקוח</Label>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">כל הסטטוסים</SelectItem>
+                  <SelectItem value="active">פעיל</SelectItem>
+                  <SelectItem value="onboarding">בקליטה</SelectItem>
+                  <SelectItem value="paused">מושהה</SelectItem>
+                  <SelectItem value="ended">עזב</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Hide inactive toggle */}
             <div className="flex items-center justify-between">
               <Label htmlFor="hide-inactive-dialog" className="cursor-pointer">
@@ -702,6 +719,7 @@ export default function Clients() {
                   setSelectedCampaigner("all");
                   setSelectedMoodStatus("all");
                   setHideInactive(false);
+                  setStatusFilter("all");
                 }}
               >
                 נקה את כל הפילטרים
