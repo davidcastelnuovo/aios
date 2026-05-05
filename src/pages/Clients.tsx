@@ -448,9 +448,13 @@ export default function Clients() {
       )
     : moodFilteredClients;
 
-  const visibleClients = hideInactive 
+  const hideInactiveFiltered = hideInactive 
     ? searchedClients?.filter(client => client.status === "active" || client.status === "onboarding")
     : searchedClients;
+
+  const visibleClients = statusFilter !== "all"
+    ? hideInactiveFiltered?.filter(client => client.status === statusFilter)
+    : hideInactiveFiltered;
 
   const handleExportToExcel = () => {
     if (!visibleClients || visibleClients.length === 0) {
