@@ -398,31 +398,59 @@ export default function AccountingIntegrations() {
 
 
   // Filter clients
+  // Helper: was the client active during the selected month?
+  // True if end_date is null/empty or end_date >= start of selected month,
+  // and start_date is null/empty or start_date <= end of selected month.
+  const monthRange = useMemo(() => {
+    const monthStart = new Date(`${selectedMonth}-01T00:00:00`);
+    const monthEnd = addMonths(monthStart, 1);
+    return { monthStart, monthEnd };
+  }, [selectedMonth]);
+
+  const wasActiveInMonth = (client: any) => {
+    const { monthStart, monthEnd } = monthRange;
+    if (client.start_date) {
+      const sd = new Date(client.start_date);
+      if (sd >= monthEnd) return false;
+    }
+    if (client.end_date) {
+      const ed = new Date(client.end_date);
+      if (ed < monthStart) return false;
+    }
+    return true;
+  };
+
+  // Filter clients
   const filteredClients = useMemo(() => {
     if (!clients) return [];
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    
+
     return clients.filter(client => {
-      const matchesSearch = 
+      const matchesSearch =
         client.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         client.contact_name?.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesAgency = agencyFilter === "all" || client.agency_id === agencyFilter;
-      
+
+      const isCurrentlyActive = client.status === "active" || client.status === "onboarding";
+      // Was active during the selected month even if currently paused/ended
+      const activeInPeriod = !isCurrentlyActive && wasActiveInMonth(client);
+
       let matchesStatus = true;
       if (clientStatusFilter === "active_relevant") {
-        const isActiveOrOnboarding = client.status === "active" || client.status === "onboarding";
         const isPausedRecently = client.status === "paused" && client.updated_at && new Date(client.updated_at) >= thirtyDaysAgo;
-        matchesStatus = isActiveOrOnboarding || !!isPausedRecently;
+        matchesStatus = isCurrentlyActive || !!isPausedRecently || activeInPeriod;
       } else if (clientStatusFilter === "active_onboarding") {
-        matchesStatus = client.status === "active" || client.status === "onboarding";
+        matchesStatus = isCurrentlyActive || activeInPeriod;
+      } else if (clientStatusFilter === "active") {
+        matchesStatus = client.status === "active" || activeInPeriod;
       } else if (clientStatusFilter !== "all") {
         matchesStatus = client.status === clientStatusFilter;
       }
-      
+
       return matchesSearch && matchesAgency && matchesStatus;
     });
-  }, [clients, searchQuery, agencyFilter, clientStatusFilter]);
+  }, [clients, searchQuery, agencyFilter, clientStatusFilter, monthRange]);
 
   const formatCurrency = (amount: number | null) => {
     if (amount === null || amount === undefined) return "-";
