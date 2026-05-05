@@ -75,6 +75,7 @@ export default function Clients() {
   const [viewMode, setViewMode] = useState<"grid" | "table" | "chat">("chat");
   const [editingClient, setEditingClient] = useState<any>(null);
   const [hideInactive, setHideInactive] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCampaigner, setSelectedCampaigner] = useState<string>("all");
   const [selectedMoodStatus, setSelectedMoodStatus] = useState<string>("all");
@@ -94,6 +95,7 @@ export default function Clients() {
     selectedCampaigner !== "all" ? 1 : 0,
     selectedMoodStatus !== "all" ? 1 : 0,
     hideInactive ? 1 : 0,
+    statusFilter !== "all" ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
 
   // Fetch agencies (owned + shared) first for client scoping
@@ -446,9 +448,13 @@ export default function Clients() {
       )
     : moodFilteredClients;
 
-  const visibleClients = hideInactive 
+  const hideInactiveFiltered = hideInactive 
     ? searchedClients?.filter(client => client.status === "active" || client.status === "onboarding")
     : searchedClients;
+
+  const visibleClients = statusFilter !== "all"
+    ? hideInactiveFiltered?.filter(client => client.status === statusFilter)
+    : hideInactiveFiltered;
 
   const handleExportToExcel = () => {
     if (!visibleClients || visibleClients.length === 0) {
@@ -675,6 +681,23 @@ export default function Clients() {
               </Select>
             </div>
 
+            {/* Status filter */}
+            <div className="space-y-2">
+              <Label>סטטוס לקוח</Label>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">כל הסטטוסים</SelectItem>
+                  <SelectItem value="active">פעיל</SelectItem>
+                  <SelectItem value="onboarding">בקליטה</SelectItem>
+                  <SelectItem value="paused">מושהה</SelectItem>
+                  <SelectItem value="ended">עזב</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Hide inactive toggle */}
             <div className="flex items-center justify-between">
               <Label htmlFor="hide-inactive-dialog" className="cursor-pointer">
@@ -696,6 +719,7 @@ export default function Clients() {
                   setSelectedCampaigner("all");
                   setSelectedMoodStatus("all");
                   setHideInactive(false);
+                  setStatusFilter("all");
                 }}
               >
                 נקה את כל הפילטרים
