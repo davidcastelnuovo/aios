@@ -607,6 +607,37 @@ export default function AccountingIntegrations() {
                 <SelectItem value="ended">סיימו</SelectItem>
               </SelectContent>
             </Select>
+
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="relative">
+                  <Filter className="h-4 w-4 ml-2" />
+                  סוגי תנועות ({typeFilter.length}/4)
+                  {typeFilter.length < 4 && (
+                    <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-primary" />
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-56" align="end">
+                <div className="space-y-2">
+                  {[
+                    { key: "retainer", label: "הכנסות ריטיינר" },
+                    { key: "one_time", label: "הכנסות חד פעמיות" },
+                    { key: "client_expense", label: "הוצאות לקוחות" },
+                    { key: "supplier_expense", label: "הוצאות ספקים" },
+                  ].map((opt) => (
+                    <label key={opt.key} className="flex items-center gap-2 cursor-pointer text-sm">
+                      <Checkbox
+                        checked={typeFilter.includes(opt.key)}
+                        onCheckedChange={() => toggleType(opt.key)}
+                      />
+                      {opt.label}
+                    </label>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+
             
             <Badge variant="secondary" className="whitespace-nowrap">
               {filteredClients.length} לקוחות
