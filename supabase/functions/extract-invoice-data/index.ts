@@ -1,116 +1,158 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-serve(async (req) => {
+const TOOL = {
+  type: "function",
+  function: {
+    name: "extract_invoice",
+    description: "Extract invoice fields from the document image/PDF.",
+    parameters: {
+      type: "object",
+      properties: {
+        vendor_name: { type: "string", description: "Supplier / business name issuing the invoice" },
+        invoice_number: { type: "string" },
+        invoice_date: { type: "string", description: "ISO date YYYY-MM-DD" },
+        total_amount: { type: "number", description: "Total amount including VAT" },
+        vat_amount: { type: "number", description: "VAT amount only" },
+        currency: { type: "string", description: "ILS, USD, EUR..." },
+        description: { type: "string", description: "Short description of what was purchased" },
+        suggested_category: { type: "string", description: "Hebrew expense category" },
+      },
+      required: ["vendor_name", "total_amount"],
+      additionalProperties: false,
+    },
+  },
+};
+
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { file_base64, file_type } = await req.json();
-    
-    if (!file_base64) {
-      return new Response(JSON.stringify({ error: "No file provided" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    const { invoice_id } = await req.json();
+    if (!invoice_id) throw new Error("invoice_id required");
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const lovableKey = Deno.env.get("LOVABLE_API_KEY");
+    if (!lovableKey) throw new Error("LOVABLE_API_KEY not configured");
 
-    const mediaType = file_type || "image/jpeg";
-    
-    const messages: any[] = [
-      {
-        role: "system",
-        content: "You are an invoice data extraction assistant. Extract the invoice name/description and total amount from the provided invoice image. Always use the extract_invoice_data tool to return the results."
-      },
-      {
-        role: "user",
-        content: [
-          {
-            type: "image_url",
-            image_url: {
-              url: `data:${mediaType};base64,${file_base64}`
-            }
-          },
-          {
-            type: "text",
-            text: "Extract the invoice name/title and total amount from this invoice. The invoice may be in Hebrew or English."
-          }
-        ]
-      }
-    ];
+    const admin = createClient(supabaseUrl, serviceKey);
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const { data: row, error: rowErr } = await admin
+      .from("invoice_uploads")
+      .select("id, file_path, mime_type, tenant_id")
+      .eq("id", invoice_id)
+      .single();
+    if (rowErr || !row) throw new Error("invoice not found");
+
+    // Download file
+    const { data: file, error: dlErr } = await admin.storage
+      .from("invoices")
+      .download(row.file_path);
+    if (dlErr || !file) throw new Error("download failed: " + dlErr?.message);
+
+    const buf = new Uint8Array(await file.arrayBuffer());
+    let binary = "";
+    for (let i = 0; i < buf.length; i++) binary += String.fromCharCode(buf[i]);
+    const b64 = btoa(binary);
+    const mime = row.mime_type || file.type || "image/jpeg";
+    const dataUrl = `data:${mime};base64,${b64}`;
+
+    const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${lovableKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages,
-        tools: [
+        model: "google/gemini-2.5-pro",
+        messages: [
           {
-            type: "function",
-            function: {
-              name: "extract_invoice_data",
-              description: "Extract invoice name and amount from the invoice",
-              parameters: {
-                type: "object",
-                properties: {
-                  invoice_name: { type: "string", description: "The name/title/description of the invoice" },
-                  invoice_amount: { type: "number", description: "The total amount of the invoice" }
-                },
-                required: ["invoice_name", "invoice_amount"],
-                additionalProperties: false
-              }
-            }
-          }
+            role: "system",
+            content:
+              "You extract structured data from Israeli/Hebrew invoices and receipts. Always call the tool extract_invoice with the data you find. Use ILS as default currency unless otherwise specified.",
+          },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "Extract the invoice fields from this document." },
+              { type: "image_url", image_url: { url: dataUrl } },
+            ],
+          },
         ],
-        tool_choice: { type: "function", function: { name: "extract_invoice_data" } }
+        tools: [TOOL],
+        tool_choice: { type: "function", function: { name: "extract_invoice" } },
       }),
     });
 
-    if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limit exceeded, please try again later." }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "Payment required." }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const t = await response.text();
-      console.error("AI gateway error:", response.status, t);
-      return new Response(JSON.stringify({ error: "AI extraction failed" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const data = await response.json();
-    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
-    
-    if (toolCall?.function?.arguments) {
-      const extracted = JSON.parse(toolCall.function.arguments);
-      return new Response(JSON.stringify(extracted), {
+    if (!aiResp.ok) {
+      const text = await aiResp.text();
+      console.error("AI error", aiResp.status, text);
+      await admin
+        .from("invoice_uploads")
+        .update({ status: "failed", error_message: `AI ${aiResp.status}` })
+        .eq("id", invoice_id);
+      const status = aiResp.status === 429 || aiResp.status === 402 ? aiResp.status : 500;
+      return new Response(JSON.stringify({ error: text }), {
+        status,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    return new Response(JSON.stringify({ error: "Could not extract data from invoice" }), {
-      status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    const aiData = await aiResp.json();
+    const call = aiData.choices?.[0]?.message?.tool_calls?.[0];
+    let extracted: any = {};
+    if (call?.function?.arguments) {
+      try { extracted = JSON.parse(call.function.arguments); } catch { extracted = {}; }
+    }
+
+    const update: any = {
+      status: "processed",
+      raw_extraction: extracted,
+      vendor_name: extracted.vendor_name ?? null,
+      invoice_number: extracted.invoice_number ?? null,
+      invoice_date: extracted.invoice_date ?? null,
+      total_amount: extracted.total_amount ?? null,
+      vat_amount: extracted.vat_amount ?? null,
+      currency: extracted.currency ?? "ILS",
+      description: extracted.description ?? extracted.suggested_category ?? null,
+      error_message: null,
+    };
+
+    // Try to auto-link a supplier by fuzzy name match
+    if (extracted.vendor_name) {
+      const { data: matchedSupplier } = await admin
+        .from("suppliers")
+        .select("id, name")
+        .eq("tenant_id", row.tenant_id);
+      if (matchedSupplier?.length) {
+        const lower = extracted.vendor_name.toLowerCase();
+        const hit = matchedSupplier.find(
+          (s: any) =>
+            s.name && (s.name.toLowerCase().includes(lower) || lower.includes(s.name.toLowerCase()))
+        );
+        if (hit) update.supplier_id = hit.id;
+      }
+    }
+
+    const { error: updErr } = await admin
+      .from("invoice_uploads")
+      .update(update)
+      .eq("id", invoice_id);
+    if (updErr) throw updErr;
+
+    return new Response(JSON.stringify({ success: true, extracted }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (e) {
-    console.error("extract-invoice-data error:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+  } catch (e: any) {
+    console.error(e);
+    return new Response(JSON.stringify({ error: e?.message || "unknown" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
