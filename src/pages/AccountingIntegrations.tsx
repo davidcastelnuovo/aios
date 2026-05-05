@@ -849,6 +849,7 @@ export default function AccountingIntegrations() {
       </Card>
 
       {/* Suppliers Expenses */}
+      {showSupplierExp && (
       <Card>
         <CardHeader>
           <CardTitle className="text-right flex items-center justify-between">
@@ -894,6 +895,7 @@ export default function AccountingIntegrations() {
           )}
         </CardContent>
       </Card>
+      )}
         </TabsContent>
       </Tabs>
 
