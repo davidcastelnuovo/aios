@@ -67,30 +67,46 @@ export default function Finance() {
   });
 
 
-  // משיכת תשלומים ידניים מספקים
-  const { data: manualSupplierPayments } = useQuery({
-    queryKey: ["manual-supplier-payments", tenantId, selectedAgency],
+  // משיכת תשלומים ידניים מספקים — כשורות בטבלה
+  const { data: supplierPaymentRows } = useQuery({
+    queryKey: ["supplier-payment-rows", tenantId],
     queryFn: async () => {
-      if (!tenantId) return 0;
+      if (!tenantId) return [];
       const { data, error } = await supabase
         .from("suppliers")
-        .select("payment_1, payment_2, payment_3, agency_id_1, agency_id_2, agency_id_3")
+        .select(`
+          id, name,
+          payment_1, payment_2, payment_3,
+          agency_id_1, agency_id_2, agency_id_3,
+          agency_1:agencies!suppliers_agency_id_1_fkey(name),
+          agency_2:agencies!suppliers_agency_id_2_fkey(name),
+          agency_3:agencies!suppliers_agency_id_3_fkey(name)
+        `)
         .eq("tenant_id", tenantId);
-      
+
       if (error) throw error;
-      
-      let total = 0;
-      data?.forEach(supplier => {
-        if (selectedAgency === "all") {
-          total += Number(supplier.payment_1 || 0) + Number(supplier.payment_2 || 0) + Number(supplier.payment_3 || 0);
-        } else {
-          if (supplier.agency_id_1 === selectedAgency) total += Number(supplier.payment_1 || 0);
-          if (supplier.agency_id_2 === selectedAgency) total += Number(supplier.payment_2 || 0);
-          if (supplier.agency_id_3 === selectedAgency) total += Number(supplier.payment_3 || 0);
-        }
+
+      const rows: any[] = [];
+      data?.forEach((s: any) => {
+        [1, 2, 3].forEach((i) => {
+          const amount = Number(s[`payment_${i}`] || 0);
+          if (amount > 0) {
+            rows.push({
+              id: `supplier-${s.id}-${i}`,
+              date: new Date().toISOString(),
+              type: "expense",
+              amount,
+              category: "תשלום ספק",
+              agency_id: s[`agency_id_${i}`],
+              agencies: s[`agency_${i}`],
+              suppliers: { name: s.name },
+              clients: null,
+              isSupplierPayment: true,
+            });
+          }
+        });
       });
-      
-      return total;
+      return rows;
     },
     enabled: !!tenantId,
   });
@@ -134,7 +150,30 @@ export default function Finance() {
 
   const totalRetainers = filteredClients?.reduce((sum, client) => sum + Number(client.retainer || 0), 0) || 0;
 
-  const filteredFinanceRecords = accessibleFinanceRecords;
+  // Apply same role/agency filters to supplier payment rows
+  let accessibleSupplierRows = supplierPaymentRows;
+  if (!isOwner) {
+    if (isCampaigner && !isTeamManager) {
+      accessibleSupplierRows = [];
+    } else if (userAgencyIds && userAgencyIds.length > 0) {
+      accessibleSupplierRows = supplierPaymentRows?.filter((r) =>
+        userAgencyIds.includes(r.agency_id)
+      );
+    }
+  }
+  if (selectedAgency && selectedAgency !== "all") {
+    accessibleSupplierRows = accessibleSupplierRows?.filter(
+      (r) => r.agency_id === selectedAgency
+    );
+  }
+
+  const supplierExpenseTotal =
+    accessibleSupplierRows?.reduce((sum, r) => sum + Number(r.amount || 0), 0) || 0;
+
+  const filteredFinanceRecords = [
+    ...(accessibleFinanceRecords || []),
+    ...(accessibleSupplierRows || []),
+  ];
 
   const totalIncome = filteredFinanceRecords?.filter(f => f.type === "income").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
   const totalExpense = filteredFinanceRecords?.filter(f => f.type === "expense").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
@@ -169,7 +208,12 @@ export default function Finance() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">סך הוצאות</p>
-                <p className="text-2xl font-bold text-destructive">₪{(totalExpense + (manualSupplierPayments || 0)).toLocaleString()}</p>
+                <p className="text-2xl font-bold text-destructive">₪{totalExpense.toLocaleString()}</p>
+                {supplierExpenseTotal > 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    כולל ₪{supplierExpenseTotal.toLocaleString()} תשלומי ספקים
+                  </p>
+                )}
               </div>
               <div className="p-3 rounded-lg bg-destructive/10">
                 <TrendingDown className="h-6 w-6 text-destructive" />
@@ -183,12 +227,12 @@ export default function Finance() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">רווח</p>
-                <p className={`text-2xl font-bold ${(totalIncome + totalRetainers) - (totalExpense + (manualSupplierPayments || 0)) >= 0 ? 'text-primary' : 'text-destructive'}`}>
-                  ₪{((totalIncome + totalRetainers) - (totalExpense + (manualSupplierPayments || 0))).toLocaleString()}
+                <p className={`text-2xl font-bold ${(totalIncome + totalRetainers) - totalExpense >= 0 ? 'text-primary' : 'text-destructive'}`}>
+                  ₪{((totalIncome + totalRetainers) - totalExpense).toLocaleString()}
                 </p>
               </div>
-              <div className={`p-3 rounded-lg ${(totalIncome + totalRetainers) - (totalExpense + (manualSupplierPayments || 0)) >= 0 ? 'bg-success/10' : 'bg-destructive/10'}`}>
-                <TrendingUp className={`h-6 w-6 ${(totalIncome + totalRetainers) - (totalExpense + (manualSupplierPayments || 0)) >= 0 ? 'text-success' : 'text-destructive'}`} />
+              <div className={`p-3 rounded-lg ${(totalIncome + totalRetainers) - totalExpense >= 0 ? 'bg-success/10' : 'bg-destructive/10'}`}>
+                <TrendingUp className={`h-6 w-6 ${(totalIncome + totalRetainers) - totalExpense >= 0 ? 'text-success' : 'text-destructive'}`} />
               </div>
             </div>
           </CardContent>
