@@ -489,14 +489,15 @@ export default function AccountingIntegrations() {
 
   const selectedMonthLabel = monthOptions.find(m => m.value === selectedMonth)?.label || selectedMonth;
 
-  // Totals - calculated from table data
-  const totalRetainer = filteredClients.reduce((sum, c) => sum + (c.retainer || 0), 0);
-  const clientExpensesOnly = filteredClients.reduce((sum, c) => sum + (clientExpensesMap.get(c.id) || 0), 0);
-  const totalExpenses = clientExpensesOnly + totalSupplierExpenses;
-  const totalOneTime = filteredClients.reduce((sum, c) => {
+  // Totals - calculated from table data, gated by typeFilter
+  const totalRetainer = showRetainer ? filteredClients.reduce((sum, c) => sum + (c.retainer || 0), 0) : 0;
+  const clientExpensesOnly = showClientExp ? filteredClients.reduce((sum, c) => sum + (clientExpensesMap.get(c.id) || 0), 0) : 0;
+  const supplierTotal = showSupplierExp ? totalSupplierExpenses : 0;
+  const totalExpenses = clientExpensesOnly + supplierTotal;
+  const totalOneTime = showOneTime ? filteredClients.reduce((sum, c) => {
     const items = clientOneTimeMap.get(c.id) || [];
     return sum + items.reduce((s: number, i: any) => s + (i.amount || 0), 0);
-  }, 0);
+  }, 0) : 0;
   const totalIncome = totalRetainer + totalOneTime;
   const profit = totalIncome - totalExpenses;
 
