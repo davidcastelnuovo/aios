@@ -863,6 +863,8 @@ export default function AccountingIntegrations() {
           )}
         </CardContent>
       </Card>
+        </TabsContent>
+      </Tabs>
 
       {/* Add One-Time Income Dialog */}
       <Dialog open={addOneTimeIncomeOpen} onOpenChange={setAddOneTimeIncomeOpen}>
