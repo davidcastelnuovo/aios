@@ -450,7 +450,8 @@ export default function AccountingIntegrations() {
 
   // Totals - calculated from table data
   const totalRetainer = filteredClients.reduce((sum, c) => sum + (c.retainer || 0), 0);
-  const totalExpenses = filteredClients.reduce((sum, c) => sum + (clientExpensesMap.get(c.id) || 0), 0);
+  const clientExpensesOnly = filteredClients.reduce((sum, c) => sum + (clientExpensesMap.get(c.id) || 0), 0);
+  const totalExpenses = clientExpensesOnly + totalSupplierExpenses;
   const totalOneTime = filteredClients.reduce((sum, c) => {
     const items = clientOneTimeMap.get(c.id) || [];
     return sum + items.reduce((s: number, i: any) => s + (i.amount || 0), 0);
