@@ -367,6 +367,35 @@ export default function AccountingIntegrations() {
     return map;
   }, [oneTimeIncomes]);
 
+  // Build supplier expense rows (each non-zero payment slot becomes a row)
+  const supplierExpenseRows = useMemo(() => {
+    if (!suppliers) return [] as Array<any>;
+    const rows: any[] = [];
+    suppliers.forEach((s: any) => {
+      [1, 2, 3].forEach((i) => {
+        const amount = Number(s[`payment_${i}`] || 0);
+        if (amount <= 0) return;
+        const agency = s[`agency_${i}`];
+        const agencyId = s[`agency_id_${i}`];
+        if (agencyFilter && agencyFilter !== "all" && agencyId !== agencyFilter) return;
+        rows.push({
+          id: `${s.id}-${i}`,
+          supplier_name: s.name,
+          agency_name: agency?.name || "ללא סוכנות",
+          agency_id: agencyId,
+          amount,
+        });
+      });
+    });
+    return rows;
+  }, [suppliers, agencyFilter]);
+
+  const totalSupplierExpenses = useMemo(
+    () => supplierExpenseRows.reduce((sum, r) => sum + Number(r.amount || 0), 0),
+    [supplierExpenseRows]
+  );
+
+
   // Filter clients
   const filteredClients = useMemo(() => {
     if (!clients) return [];
