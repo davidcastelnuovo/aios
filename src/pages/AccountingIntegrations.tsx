@@ -59,6 +59,13 @@ export default function AccountingIntegrations() {
   const [clientStatusFilter, setClientStatusFilter] = useState<string>("active");
   const [selectedMonth, setSelectedMonth] = useState(() => format(subMonths(new Date(), 1), "yyyy-MM"));
   const [editingClient, setEditingClient] = useState<any | null>(null);
+  const [typeFilter, setTypeFilter] = useState<string[]>(["retainer", "one_time", "client_expense", "supplier_expense"]);
+  const toggleType = (key: string) =>
+    setTypeFilter((prev) => (prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key]));
+  const showRetainer = typeFilter.includes("retainer");
+  const showOneTime = typeFilter.includes("one_time");
+  const showClientExp = typeFilter.includes("client_expense");
+  const showSupplierExp = typeFilter.includes("supplier_expense");
   
   // One-time income dialog
   const [addOneTimeIncomeOpen, setAddOneTimeIncomeOpen] = useState(false);
