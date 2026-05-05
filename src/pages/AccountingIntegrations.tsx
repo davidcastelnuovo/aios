@@ -181,7 +181,13 @@ export default function AccountingIntegrations() {
       if (!currentTenantId) return [];
       const { data, error } = await supabase
         .from("suppliers")
-        .select("id, name, payment_1, payment_2, payment_3, agency_id_1, agency_id_2, agency_id_3, related_campaigner_id")
+        .select(`
+          id, name, payment_1, payment_2, payment_3,
+          agency_id_1, agency_id_2, agency_id_3, related_campaigner_id,
+          agency_1:agencies!suppliers_agency_id_1_fkey(id, name),
+          agency_2:agencies!suppliers_agency_id_2_fkey(id, name),
+          agency_3:agencies!suppliers_agency_id_3_fkey(id, name)
+        `)
         .eq("tenant_id", currentTenantId);
       if (error) throw error;
       return data || [];
