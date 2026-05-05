@@ -649,14 +649,21 @@ export default function AccountingIntegrations() {
                       return (
                         <TableRow key={client.id}>
                           <TableCell className="font-medium text-right">
-                            <Button
-                              variant="link"
-                              className="p-0 h-auto font-medium text-foreground hover:underline"
-                              onClick={() => setEditingClient(client)}
-                            >
-                              {client.name}
-                              <Pencil className="h-3 w-3 mr-1 opacity-50" />
-                            </Button>
+                            <div className="flex items-center justify-end gap-2 flex-wrap">
+                              <Button
+                                variant="link"
+                                className="p-0 h-auto font-medium text-foreground hover:underline"
+                                onClick={() => setEditingClient(client)}
+                              >
+                                {client.name}
+                                <Pencil className="h-3 w-3 mr-1 opacity-50" />
+                              </Button>
+                              {(client.status === "paused" || client.status === "ended") && (client as any).end_date && (
+                                <Badge variant="secondary" className="text-[10px]">
+                                  היה פעיל עד {format(new Date((client as any).end_date), "dd/MM/yyyy")}
+                                </Badge>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="text-right">{(client.agencies as any)?.name || "-"}</TableCell>
                           <TableCell className="text-right">
