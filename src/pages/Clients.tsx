@@ -75,6 +75,7 @@ export default function Clients() {
   const [viewMode, setViewMode] = useState<"grid" | "table" | "chat">("chat");
   const [editingClient, setEditingClient] = useState<any>(null);
   const [hideInactive, setHideInactive] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCampaigner, setSelectedCampaigner] = useState<string>("all");
   const [selectedMoodStatus, setSelectedMoodStatus] = useState<string>("all");
