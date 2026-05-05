@@ -488,6 +488,11 @@ export default function AccountingIntegrations() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600">{formatCurrency(totalExpenses)}</div>
+            {totalSupplierExpenses > 0 && (
+              <p className="text-xs text-muted-foreground mt-1">
+                כולל {formatCurrency(totalSupplierExpenses)} תשלומי ספקים
+              </p>
+            )}
           </CardContent>
         </Card>
 
