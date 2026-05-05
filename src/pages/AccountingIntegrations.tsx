@@ -502,7 +502,7 @@ export default function AccountingIntegrations() {
   const profit = totalIncome - totalExpenses;
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto p-6 space-y-6" dir="rtl">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">הנהלת חשבונות</h1>
@@ -510,7 +510,7 @@ export default function AccountingIntegrations() {
         </div>
       </div>
 
-      <Tabs defaultValue="overview" className="w-full">
+      <Tabs defaultValue="overview" className="w-full" dir="rtl">
         <TabsList>
           <TabsTrigger value="overview">סקירה</TabsTrigger>
           <TabsTrigger value="invoices">קליטת חשבוניות</TabsTrigger>
