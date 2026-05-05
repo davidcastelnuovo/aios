@@ -67,30 +67,46 @@ export default function Finance() {
   });
 
 
-  // משיכת תשלומים ידניים מספקים
-  const { data: manualSupplierPayments } = useQuery({
-    queryKey: ["manual-supplier-payments", tenantId, selectedAgency],
+  // משיכת תשלומים ידניים מספקים — כשורות בטבלה
+  const { data: supplierPaymentRows } = useQuery({
+    queryKey: ["supplier-payment-rows", tenantId],
     queryFn: async () => {
-      if (!tenantId) return 0;
+      if (!tenantId) return [];
       const { data, error } = await supabase
         .from("suppliers")
-        .select("payment_1, payment_2, payment_3, agency_id_1, agency_id_2, agency_id_3")
+        .select(`
+          id, name,
+          payment_1, payment_2, payment_3,
+          agency_id_1, agency_id_2, agency_id_3,
+          agency_1:agencies!suppliers_agency_id_1_fkey(name),
+          agency_2:agencies!suppliers_agency_id_2_fkey(name),
+          agency_3:agencies!suppliers_agency_id_3_fkey(name)
+        `)
         .eq("tenant_id", tenantId);
-      
+
       if (error) throw error;
-      
-      let total = 0;
-      data?.forEach(supplier => {
-        if (selectedAgency === "all") {
-          total += Number(supplier.payment_1 || 0) + Number(supplier.payment_2 || 0) + Number(supplier.payment_3 || 0);
-        } else {
-          if (supplier.agency_id_1 === selectedAgency) total += Number(supplier.payment_1 || 0);
-          if (supplier.agency_id_2 === selectedAgency) total += Number(supplier.payment_2 || 0);
-          if (supplier.agency_id_3 === selectedAgency) total += Number(supplier.payment_3 || 0);
-        }
+
+      const rows: any[] = [];
+      data?.forEach((s: any) => {
+        [1, 2, 3].forEach((i) => {
+          const amount = Number(s[`payment_${i}`] || 0);
+          if (amount > 0) {
+            rows.push({
+              id: `supplier-${s.id}-${i}`,
+              date: new Date().toISOString(),
+              type: "expense",
+              amount,
+              category: "תשלום ספק",
+              agency_id: s[`agency_id_${i}`],
+              agencies: s[`agency_${i}`],
+              suppliers: { name: s.name },
+              clients: null,
+              isSupplierPayment: true,
+            });
+          }
+        });
       });
-      
-      return total;
+      return rows;
     },
     enabled: !!tenantId,
   });
