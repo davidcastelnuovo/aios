@@ -3387,6 +3387,114 @@ export type Database = {
           },
         ]
       }
+      invoice_uploads: {
+        Row: {
+          agency_id: string | null
+          client_id: string | null
+          created_at: string
+          currency: string | null
+          description: string | null
+          error_message: string | null
+          file_path: string
+          finance_id: string | null
+          id: string
+          invoice_date: string | null
+          invoice_number: string | null
+          mime_type: string | null
+          raw_extraction: Json | null
+          status: string
+          supplier_id: string | null
+          tenant_id: string
+          total_amount: number | null
+          updated_at: string
+          uploaded_by: string | null
+          vat_amount: number | null
+          vendor_name: string | null
+        }
+        Insert: {
+          agency_id?: string | null
+          client_id?: string | null
+          created_at?: string
+          currency?: string | null
+          description?: string | null
+          error_message?: string | null
+          file_path: string
+          finance_id?: string | null
+          id?: string
+          invoice_date?: string | null
+          invoice_number?: string | null
+          mime_type?: string | null
+          raw_extraction?: Json | null
+          status?: string
+          supplier_id?: string | null
+          tenant_id: string
+          total_amount?: number | null
+          updated_at?: string
+          uploaded_by?: string | null
+          vat_amount?: number | null
+          vendor_name?: string | null
+        }
+        Update: {
+          agency_id?: string | null
+          client_id?: string | null
+          created_at?: string
+          currency?: string | null
+          description?: string | null
+          error_message?: string | null
+          file_path?: string
+          finance_id?: string | null
+          id?: string
+          invoice_date?: string | null
+          invoice_number?: string | null
+          mime_type?: string | null
+          raw_extraction?: Json | null
+          status?: string
+          supplier_id?: string | null
+          tenant_id?: string
+          total_amount?: number | null
+          updated_at?: string
+          uploaded_by?: string | null
+          vat_amount?: number | null
+          vendor_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_uploads_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_uploads_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_uploads_finance_id_fkey"
+            columns: ["finance_id"]
+            isOneToOne: false
+            referencedRelation: "finance"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_uploads_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_uploads_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       job_queue: {
         Row: {
           attempts: number
