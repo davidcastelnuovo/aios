@@ -756,6 +756,53 @@ export default function AccountingIntegrations() {
         </CardContent>
       </Card>
 
+      {/* Suppliers Expenses */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-right flex items-center justify-between">
+            <span>הוצאות ספקים</span>
+            <span className="text-sm font-normal text-muted-foreground">
+              סה״כ: <span className="text-red-600 font-bold">{formatCurrency(totalSupplierExpenses)}</span>
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {supplierExpenseRows.length === 0 ? (
+            <p className="text-center text-muted-foreground py-6">אין הוצאות ספקים להצגה</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-right">שם ספק</TableHead>
+                    <TableHead className="text-right">סוכנות</TableHead>
+                    <TableHead className="text-right">תשלום חודשי</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {supplierExpenseRows.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell className="text-right font-medium">{row.supplier_name}</TableCell>
+                      <TableCell className="text-right">{row.agency_name}</TableCell>
+                      <TableCell className="text-right text-red-600 font-medium">
+                        {formatCurrency(row.amount)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow className="bg-muted/50 font-bold">
+                    <TableCell className="text-right">סה״כ</TableCell>
+                    <TableCell />
+                    <TableCell className="text-right text-red-600">
+                      {formatCurrency(totalSupplierExpenses)}
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Add One-Time Income Dialog */}
       <Dialog open={addOneTimeIncomeOpen} onOpenChange={setAddOneTimeIncomeOpen}>
         <DialogContent dir="rtl">
