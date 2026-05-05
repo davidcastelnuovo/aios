@@ -181,7 +181,13 @@ export default function AccountingIntegrations() {
       if (!currentTenantId) return [];
       const { data, error } = await supabase
         .from("suppliers")
-        .select("id, name, payment_1, payment_2, payment_3, agency_id_1, agency_id_2, agency_id_3, related_campaigner_id")
+        .select(`
+          id, name, payment_1, payment_2, payment_3,
+          agency_id_1, agency_id_2, agency_id_3, related_campaigner_id,
+          agency_1:agencies!suppliers_agency_id_1_fkey(id, name),
+          agency_2:agencies!suppliers_agency_id_2_fkey(id, name),
+          agency_3:agencies!suppliers_agency_id_3_fkey(id, name)
+        `)
         .eq("tenant_id", currentTenantId);
       if (error) throw error;
       return data || [];
@@ -361,6 +367,35 @@ export default function AccountingIntegrations() {
     return map;
   }, [oneTimeIncomes]);
 
+  // Build supplier expense rows (each non-zero payment slot becomes a row)
+  const supplierExpenseRows = useMemo(() => {
+    if (!suppliers) return [] as Array<any>;
+    const rows: any[] = [];
+    suppliers.forEach((s: any) => {
+      [1, 2, 3].forEach((i) => {
+        const amount = Number(s[`payment_${i}`] || 0);
+        if (amount <= 0) return;
+        const agency = s[`agency_${i}`];
+        const agencyId = s[`agency_id_${i}`];
+        if (agencyFilter && agencyFilter !== "all" && agencyId !== agencyFilter) return;
+        rows.push({
+          id: `${s.id}-${i}`,
+          supplier_name: s.name,
+          agency_name: agency?.name || "ללא סוכנות",
+          agency_id: agencyId,
+          amount,
+        });
+      });
+    });
+    return rows;
+  }, [suppliers, agencyFilter]);
+
+  const totalSupplierExpenses = useMemo(
+    () => supplierExpenseRows.reduce((sum, r) => sum + Number(r.amount || 0), 0),
+    [supplierExpenseRows]
+  );
+
+
   // Filter clients
   const filteredClients = useMemo(() => {
     if (!clients) return [];
@@ -415,7 +450,8 @@ export default function AccountingIntegrations() {
 
   // Totals - calculated from table data
   const totalRetainer = filteredClients.reduce((sum, c) => sum + (c.retainer || 0), 0);
-  const totalExpenses = filteredClients.reduce((sum, c) => sum + (clientExpensesMap.get(c.id) || 0), 0);
+  const clientExpensesOnly = filteredClients.reduce((sum, c) => sum + (clientExpensesMap.get(c.id) || 0), 0);
+  const totalExpenses = clientExpensesOnly + totalSupplierExpenses;
   const totalOneTime = filteredClients.reduce((sum, c) => {
     const items = clientOneTimeMap.get(c.id) || [];
     return sum + items.reduce((s: number, i: any) => s + (i.amount || 0), 0);
@@ -452,6 +488,11 @@ export default function AccountingIntegrations() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600">{formatCurrency(totalExpenses)}</div>
+            {totalSupplierExpenses > 0 && (
+              <p className="text-xs text-muted-foreground mt-1">
+                כולל {formatCurrency(totalSupplierExpenses)} תשלומי ספקים
+              </p>
+            )}
           </CardContent>
         </Card>
 
@@ -708,6 +749,53 @@ export default function AccountingIntegrations() {
                       <TableCell />
                     </TableRow>
                   )}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Suppliers Expenses */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-right flex items-center justify-between">
+            <span>הוצאות ספקים</span>
+            <span className="text-sm font-normal text-muted-foreground">
+              סה״כ: <span className="text-red-600 font-bold">{formatCurrency(totalSupplierExpenses)}</span>
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {supplierExpenseRows.length === 0 ? (
+            <p className="text-center text-muted-foreground py-6">אין הוצאות ספקים להצגה</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-right">שם ספק</TableHead>
+                    <TableHead className="text-right">סוכנות</TableHead>
+                    <TableHead className="text-right">תשלום חודשי</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {supplierExpenseRows.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell className="text-right font-medium">{row.supplier_name}</TableCell>
+                      <TableCell className="text-right">{row.agency_name}</TableCell>
+                      <TableCell className="text-right text-red-600 font-medium">
+                        {formatCurrency(row.amount)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow className="bg-muted/50 font-bold">
+                    <TableCell className="text-right">סה״כ</TableCell>
+                    <TableCell />
+                    <TableCell className="text-right text-red-600">
+                      {formatCurrency(totalSupplierExpenses)}
+                    </TableCell>
+                  </TableRow>
                 </TableBody>
               </Table>
             </div>
