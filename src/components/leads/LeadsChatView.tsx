@@ -580,7 +580,7 @@ export function LeadsChatView({
 
             {/* Detail tabs content */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
-              <TabsList className="mx-4 mt-3 grid grid-cols-4 w-auto max-w-xl h-9 bg-muted/50 mr-4 ml-auto">
+              <TabsList className="mx-4 mt-3 grid grid-cols-7 w-auto max-w-3xl h-9 bg-muted/50 mr-4 ml-auto">
                 <TabsTrigger value="details" className="text-xs gap-1.5">
                   <FileText className="h-3.5 w-3.5" />
                   פרטי ליד
@@ -588,6 +588,45 @@ export function LeadsChatView({
                 <TabsTrigger value="updates" className="text-xs gap-1.5">
                   <MessageSquare className="h-3.5 w-3.5" />
                   עדכונים
+                </TabsTrigger>
+                <TabsTrigger
+                  value="proposals"
+                  className="text-xs gap-1.5"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setEditingLead(selectedLead);
+                    setEditInitialTab("proposals");
+                    setEditDialogOpen(true);
+                  }}
+                >
+                  <DollarSign className="h-3.5 w-3.5" />
+                  הצעות מחיר
+                </TabsTrigger>
+                <TabsTrigger
+                  value="files"
+                  className="text-xs gap-1.5"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setEditingLead(selectedLead);
+                    setEditInitialTab("files");
+                    setEditDialogOpen(true);
+                  }}
+                >
+                  <Paperclip className="h-3.5 w-3.5" />
+                  קבצים
+                </TabsTrigger>
+                <TabsTrigger
+                  value="meeting"
+                  className="text-xs gap-1.5"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setEditingLead(selectedLead);
+                    setEditInitialTab("meeting");
+                    setEditDialogOpen(true);
+                  }}
+                >
+                  <Users className="h-3.5 w-3.5" />
+                  קביעת פגישה
                 </TabsTrigger>
                 <TabsTrigger value="calls" className="text-xs gap-1.5">
                   <Phone className="h-3.5 w-3.5" />
