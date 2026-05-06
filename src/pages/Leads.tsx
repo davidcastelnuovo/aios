@@ -2957,13 +2957,71 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
 
       if (error) throw error;
     },
+    onMutate: async ({ leadId, newStatus }) => {
+      await queryClient.cancelQueries({ queryKey: ["leads-table"] });
+      await queryClient.cancelQueries({ queryKey: ["leads-kanban"] });
+
+      const previousTableEntries = queryClient.getQueriesData({ queryKey: ["leads-table"] });
+      const previousKanbanEntries = queryClient.getQueriesData({ queryKey: ["leads-kanban"] });
+
+      // Optimistically update table caches (flat array)
+      queryClient.setQueriesData({ queryKey: ["leads-table"] }, (old: any) => {
+        if (!old || !Array.isArray(old)) return old;
+        return old.map((lead: any) =>
+          lead.id === leadId ? { ...lead, status: newStatus } : lead
+        );
+      });
+
+      // Optimistically MOVE lead between stages in kanban caches
+      queryClient.setQueriesData({ queryKey: ["leads-kanban"] }, (old: any) => {
+        if (!old || typeof old !== "object") return old;
+        const updated: any = { ...old };
+        let movedLead: any = null;
+        for (const stageKey in updated) {
+          if (updated[stageKey]?.leads && Array.isArray(updated[stageKey].leads)) {
+            const idx = updated[stageKey].leads.findIndex((l: any) => l.id === leadId);
+            if (idx !== -1) {
+              movedLead = { ...updated[stageKey].leads[idx], status: newStatus };
+              updated[stageKey] = {
+                ...updated[stageKey],
+                leads: [
+                  ...updated[stageKey].leads.slice(0, idx),
+                  ...updated[stageKey].leads.slice(idx + 1),
+                ],
+                totalCount: Math.max(0, (updated[stageKey].totalCount || 1) - 1),
+              };
+              break;
+            }
+          }
+        }
+        if (movedLead) {
+          if (updated[newStatus]?.leads) {
+            updated[newStatus] = {
+              ...updated[newStatus],
+              leads: [movedLead, ...updated[newStatus].leads],
+              totalCount: (updated[newStatus].totalCount || 0) + 1,
+            };
+          } else {
+            updated[newStatus] = { leads: [movedLead], totalCount: 1 };
+          }
+        }
+        return updated;
+      });
+
+      return { previousTableEntries, previousKanbanEntries };
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["leads"] });
       toast({
         title: "סטטוס ליד עודכן בהצלחה",
       });
     },
-    onError: (error: any) => {
+    onError: (error: any, _vars, context: any) => {
+      context?.previousTableEntries?.forEach(([key, data]: any) => {
+        queryClient.setQueryData(key, data);
+      });
+      context?.previousKanbanEntries?.forEach(([key, data]: any) => {
+        queryClient.setQueryData(key, data);
+      });
       toast({
         title: "שגיאה בעדכון סטטוס",
         description: error.message,
