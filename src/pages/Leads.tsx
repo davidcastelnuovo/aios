@@ -1416,6 +1416,8 @@ export default function Leads() {
         startDate?.toISOString(),
         endDate?.toISOString(),
         PIPELINE_STAGES.map(s => s.id).join(','),
+        isViewingAs,
+        viewAsSalesPersonId,
       ];
       
       const tableQueryKey = [
@@ -1431,6 +1433,8 @@ export default function Leads() {
         filterFollowUpToday,
         startDate?.toISOString(),
         endDate?.toISOString(),
+        isViewingAs,
+        viewAsSalesPersonId,
       ];
       
       // Cancel any outgoing refetches for both views
@@ -1552,7 +1556,12 @@ export default function Leads() {
         title: "סטטוס ליד עודכן בהצלחה",
       });
     },
-    // No onSettled invalidation - optimistic updates handle the UI
+    onSettled: () => {
+      // Ensure all views (kanban, table, chat) reconcile with backend
+      queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-table"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-count"] });
+    },
   });
 
   const updateLeadResponseStatus = useMutation({
@@ -1631,7 +1640,6 @@ export default function Leads() {
       });
     },
     onSuccess: () => {
-      // No invalidation - optimistic update already handled the UI
       toast({
         title: "סטטוס תגובה עודכן בהצלחה",
       });
@@ -1645,6 +1653,12 @@ export default function Leads() {
         description: error.message,
         variant: "destructive",
       });
+    },
+    onSettled: () => {
+      // Reconcile all views with backend
+      queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-table"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-count"] });
     },
   });
 
