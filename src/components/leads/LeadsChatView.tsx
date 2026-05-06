@@ -768,6 +768,20 @@ export function LeadsChatView({
                 <TabsContent value="updates" className="mt-0">
                   <LeadUpdatesTab leadId={selectedLead.id} leadName={selectedLead.contact_name || selectedLead.company_name || "ליד"} />
                 </TabsContent>
+
+                {(activeTab === "proposals" || activeTab === "files" || activeTab === "meeting") && (
+                  <TabsContent value={activeTab} forceMount className="mt-0" dir="rtl">
+                    <EditLeadDialog
+                      key={`${selectedLead.id}-${activeTab}`}
+                      lead={selectedLead}
+                      open={true}
+                      onOpenChange={() => {}}
+                      hideTrigger
+                      inline
+                      initialTab={activeTab}
+                    />
+                  </TabsContent>
+                )}
               </ScrollArea>
 
               {activeTab === "calls" && (
