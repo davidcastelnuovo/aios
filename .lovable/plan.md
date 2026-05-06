@@ -1,41 +1,50 @@
-## Problem
 
-In the Leads "chat" view, changing the pipeline stage or response status from the toolbar Selects has no visible effect. The data also feels disconnected between chat / kanban / table views.
+## המטרה
+לייבא מחדש את 309 הלידים מהקובץ `דוח לידים - פ.ד. פסגות` כך ש:
+- `תאריך` (עמודה A, ISO) ייכנס נכון ל-`created_at`
+- `שם מלא` → `contact_name`, `מייל` → `email`, `טלפון` → `phone`
+- `תשובות` → `notes`
+- `טופס` → `campaign_name` (מקור ההגעה ברמת הטופס)
+- `status` (נשלחה הצעה / אין מענה / טעות / לא אקטואלי / לא רלוונטי / נסגר / מתחזה וכו') → **תגיות (chat_tags)**, לא סטטוס פייפליין
+- כל הלידים יהיו ב-pipeline status `new` (חדש)
 
-## Root Cause
+## שלבים
 
-In `src/pages/Leads.tsx`:
+### 1. ניקוי הייבוא הקודם
+מחיקה של 278 הלידים שנוצרו ב-06/05/2026 בין 06:29:36 ל-06:30 ב-tenant `ac7f9a3e-a042-4a64-afea-53e21a544d3d`:
+- מחיקת רשומות תלויות (lead_updates, chat_contact_tags) של אותם לידים
+- מחיקת הלידים עצמם
+- מחיקת רשומת ה-`import_history` הקודמת
 
-1. The actual React Query key for kanban data (line 860) includes `isViewingAs` and `viewAsSalesPersonId` at the end:
-   ```
-   ["leads-kanban", tenantId, selectedAgency, searchQuery, filterSalesPersonIds,
-    filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(),
-    endDate?.toISOString(), PIPELINE_STAGES.map(s => s.id).join(','),
-    isViewingAs, viewAsSalesPersonId]
-   ```
+### 2. תיקון בעיות במנוע הייבוא (`import-leads-from-sheets`)
+כדי שהייבוא הבא יעבוד נכון:
+- **תמיכה בתאריך ISO עם שעה**: ה-`parseDate` היום מחזיר רק `YYYY-MM-DD` ומאבד את החלק של השעה, אבל הוא בעצם עובד על ISO. לוודא שמתבצע parse נקי של `2025-07-13T08:29:16.000Z` ושמירה על שעה+תאריך מקוריים ב-`created_at`.
+- **מיפוי כותרות עם רווחים מובילים/אחוריים**: לעשות `trim` על שמות העמודות לפני lookup ב-`fieldMap` (כך `"תאריך "` עם רווח אחרי יזוהה).
+- **תמיכה ב-`tags` מעמודה אחת**: להוסיף בקוד ה-edge function תמיכה במיפוי `tags` (היום הוא מטפל רק ב-`response_status`/`status`). הערכים ייווצרו כ-`chat_tags` חדשים (אם לא קיימים) וישוייכו ללידים דרך `chat_contact_tags`.
+- **לא להמיר אוטומטית את עמודת status לפייפליין**: כשהמיפוי הוא `tags` הסטטוס לא נוגע ב-`leads.status` (יישאר `new`).
 
-2. But the optimistic-update key inside `updateLeadStatus.onMutate` (line 1407) is **missing the last two segments**, so `queryClient.setQueryData(kanbanQueryKey, ...)` writes to a key that doesn't exist. The chat view, which reads from `kanbanStageData → leads → secureFilteredLeads → filteredLeads → selectedLead`, never sees the change.
+### 3. ייבוא מחדש מה-CSV
+שימוש ב-Dialog "ייבוא לידים מקובץ" (`ImportLeadsWithMapping`) שתומך ב-CSV ובמיפוי מלא + יצירת תגיות אוטומטית. המיפוי שייקבע אוטומטית/ידנית:
 
-3. `updateLeadResponseStatus` doesn't touch React Query cache at all — only local `accumulatedLeads`/`stageLeadsData` state, which the chat view doesn't consume. And neither mutation calls `invalidateQueries` on success, so no refetch ever happens for the chat view.
+| עמודה בקובץ | שדה במערכת |
+|---|---|
+| תאריך | תאריך יצירה (`created_at`) |
+| מייל | אימייל (`email`) |
+| שם מלא | שם איש קשר (`contact_name`) |
+| טלפון | טלפון (`phone`) |
+| תשובות | הערות (`notes`) |
+| טופס | שם קמפיין (`campaign_name`) |
+| status | תגיות (`tags`) |
 
-4. `LeadsChatView` reads `selectedLead` from the `leads` prop. Because the cache never updates, the Select keeps showing the old value and the toolbar appears unresponsive.
+ערכי ה-`status` הייחודיים (נשלחה הצעה, אין מענה, טעות, לא אקטואלי, לא רלוונטי, נסגר, מתחזה...) יזוהו כתגיות חדשות, ייווצרו ב-`chat_tags` עם צבעים מהפלטה, ויחוברו לכל ליד דרך `chat_contact_tags`.
 
-## Fix
+### 4. ולידציה אחרי הייבוא
+לבדוק:
+- כמה לידים נכנסו (אמורים להיות ~309 פחות כפולי-טלפון)
+- שכל הלידים ב-`status = 'new'`
+- שטווח התאריכים של `created_at` הוא יולי 2025 → מאי 2026 (מהקובץ) ולא היום
+- שהתגיות נוצרו ומשויכות
 
-Single file: `src/pages/Leads.tsx`.
-
-### 1. `updateLeadStatus` mutation
-- Update `kanbanQueryKey` inside `onMutate` to match the real query key exactly (append `isViewingAs`, `viewAsSalesPersonId`). Same for `tableQueryKey` (the table query key on line 1014 also includes these two).
-- Add an `onSettled` that invalidates `["leads-kanban"]`, `["leads-table"]`, and `["leads-count"]` so every view (kanban, table, chat) ends up consistent with the DB.
-
-### 2. `updateLeadResponseStatus` mutation
-- Mirror the same approach: do an optimistic `setQueryData` against the correct kanban + table keys (include `isViewingAs`, `viewAsSalesPersonId`), so the chat view's `selectedLead.response_status` flips instantly.
-- Add `onSettled` invalidation for the same three query keys.
-- Keep existing automation trigger logic untouched.
-
-### 3. Confirm there is one shared dialog
-`LeadsChatView` already renders a single `EditLeadDialog` instance gated by `editingLead`/`editDialogOpen`, opened from the Pencil button and from the Proposals / Files / Meeting tabs via `initialTab`. No additional dialog instances exist, so once the cache fix above lands, all entry points (toolbar Selects, tab triggers, edit dialog) will read and write the same lead and stay in sync across kanban, table and chat views.
-
-## Out of Scope
-
-No schema changes, no new components, no UI restyle. Only the two mutations in `Leads.tsx` are touched.
+## הערות טכניות
+- הקובץ נמצא בנתיב `user-uploads://`. נצטרך להעלות אותו דרך ה-UI (כפתור "ייבוא מקובץ" → CSV) — זה הזרימה היחידה שמטפלת בקבצים מקומיים. כחלופה, אפשר להעתיק לתיקיית `public/` ולקרוא — אבל הזרימה הנקייה היא דרך ה-Dialog.
+- לאחר אישור, אבצע: (א) את התיקונים בקוד ה-edge function וב-frontend mapper, (ב) מחיקת הלידים הישנים. לאחר מכן תוכל ללחוץ "ייבוא לידים מקובץ" ולגרור את ה-CSV.
