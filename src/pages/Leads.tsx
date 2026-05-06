@@ -1556,7 +1556,12 @@ export default function Leads() {
         title: "סטטוס ליד עודכן בהצלחה",
       });
     },
-    // No onSettled invalidation - optimistic updates handle the UI
+    onSettled: () => {
+      // Ensure all views (kanban, table, chat) reconcile with backend
+      queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-table"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-count"] });
+    },
   });
 
   const updateLeadResponseStatus = useMutation({
