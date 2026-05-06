@@ -1403,69 +1403,55 @@ export default function Leads() {
       }
     },
     onMutate: async ({ leadId, newStatus }) => {
-      // Build query keys for both Kanban and Table views
-      const kanbanQueryKey = [
-        "leads-kanban",
-        tenantId,
-        selectedAgency,
-        searchQuery,
-        filterSalesPersonIds,
-        filterResponseStatus,
-        filterTagIds,
-        filterFollowUpToday,
-        startDate?.toISOString(),
-        endDate?.toISOString(),
-        PIPELINE_STAGES.map(s => s.id).join(','),
-        isViewingAs,
-        viewAsSalesPersonId,
-      ];
-      
-      const tableQueryKey = [
-        "leads-table",
-        tenantId,
-        selectedAgency,
-        effectivePage,
-        searchQuery,
-        filterSalesPersonIds,
-        filterStage,
-        filterResponseStatus,
-        filterTagIds,
-        filterFollowUpToday,
-        startDate?.toISOString(),
-        endDate?.toISOString(),
-        isViewingAs,
-        viewAsSalesPersonId,
-      ];
-      
-      // Cancel any outgoing refetches for both views
-      await queryClient.cancelQueries({ queryKey: kanbanQueryKey });
-      await queryClient.cancelQueries({ queryKey: tableQueryKey });
+      // Use partial-key matching so we hit the actual cached queries regardless
+      // of the exact key shape (avoids subtle mismatches on key segments).
+      await queryClient.cancelQueries({ queryKey: ["leads-kanban"] });
+      await queryClient.cancelQueries({ queryKey: ["leads-table"] });
 
-      // Snapshot the previous values
-      const previousKanban = queryClient.getQueryData(kanbanQueryKey);
-      const previousTable = queryClient.getQueryData(tableQueryKey);
+      // Snapshot previous values for rollback
+      const previousKanbanEntries = queryClient.getQueriesData({ queryKey: ["leads-kanban"] });
+      const previousTableEntries = queryClient.getQueriesData({ queryKey: ["leads-table"] });
 
-      // Optimistically update Kanban data (nested structure: { [stageKey]: { leads: [...], totalCount } })
-      queryClient.setQueryData(kanbanQueryKey, (old: any) => {
-        if (!old) return old;
-        const updated = { ...old };
+      // Optimistically update ALL Kanban caches: actually MOVE the lead between stages
+      queryClient.setQueriesData({ queryKey: ["leads-kanban"] }, (old: any) => {
+        if (!old || typeof old !== "object") return old;
+        const updated: any = { ...old };
+        let movedLead: any = null;
         for (const stageKey in updated) {
           if (updated[stageKey]?.leads && Array.isArray(updated[stageKey].leads)) {
-            updated[stageKey] = {
-              ...updated[stageKey],
-              leads: updated[stageKey].leads.map((lead: any) =>
-                lead.id === leadId ? { ...lead, status: newStatus } : lead
-              ),
+            const idx = updated[stageKey].leads.findIndex((l: any) => l.id === leadId);
+            if (idx !== -1) {
+              movedLead = { ...updated[stageKey].leads[idx], status: newStatus };
+              updated[stageKey] = {
+                ...updated[stageKey],
+                leads: [
+                  ...updated[stageKey].leads.slice(0, idx),
+                  ...updated[stageKey].leads.slice(idx + 1),
+                ],
+                totalCount: Math.max(0, (updated[stageKey].totalCount || 1) - 1),
+              };
+              break;
+            }
+          }
+        }
+        if (movedLead) {
+          if (updated[newStatus]?.leads) {
+            updated[newStatus] = {
+              ...updated[newStatus],
+              leads: [movedLead, ...updated[newStatus].leads],
+              totalCount: (updated[newStatus].totalCount || 0) + 1,
             };
+          } else {
+            updated[newStatus] = { leads: [movedLead], totalCount: 1 };
           }
         }
         return updated;
       });
 
-      // Optimistically update Table data (flat array)
-      queryClient.setQueryData(tableQueryKey, (old: any) => {
-        if (!old) return old;
-        return old.map((lead: any) => 
+      // Optimistically update ALL Table caches (flat array)
+      queryClient.setQueriesData({ queryKey: ["leads-table"] }, (old: any) => {
+        if (!old || !Array.isArray(old)) return old;
+        return old.map((lead: any) =>
           lead.id === leadId ? { ...lead, status: newStatus } : lead
         );
       });
