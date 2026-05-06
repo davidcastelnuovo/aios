@@ -1314,6 +1314,26 @@ const updateMutation = useMutation({
             </form>
           </Form>
         </Tabs>
+  );
+
+  if (inline) {
+    return body;
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      {!hideTrigger && (
+        <DialogTrigger asChild onClick={(e) => e.stopPropagation()}>
+          <Button variant="outline" size="icon" className="h-8 w-8">
+            <Pencil className="h-4 w-4" />
+          </Button>
+        </DialogTrigger>
+      )}
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" dir="rtl">
+        <DialogHeader>
+          <DialogTitle>ערוך ליד</DialogTitle>
+        </DialogHeader>
+        {body}
       </DialogContent>
     </Dialog>
   );
