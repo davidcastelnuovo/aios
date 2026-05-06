@@ -959,55 +959,10 @@ export default function Leads() {
     placeholderData: (previousData) => previousData,
   });
 
-  // When kanban data refetches, update accumulated leads with fresh data from DB
-  // This handles cases where follow_up_date or other fields were updated on accumulated leads
-  useEffect(() => {
-    if (!kanbanStageData || Object.keys(accumulatedLeads).length === 0) return;
-    
-    // Collect all accumulated lead IDs
-    const accLeadIds: string[] = [];
-    for (const stageLeads of Object.values(accumulatedLeads)) {
-      for (const lead of stageLeads) {
-        accLeadIds.push(lead.id);
-      }
-    }
-    
-    if (accLeadIds.length === 0) return;
-    
-    // Re-fetch accumulated leads to get fresh data
-    const refreshAccumulatedLeads = async () => {
-      const { data: freshLeads } = await supabase
-        .from("leads")
-        .select("*, agencies(name), sales_people(full_name)")
-        .in("id", accLeadIds);
-      
-      if (!freshLeads) return;
-      
-      const freshMap: Record<string, any> = {};
-      for (const lead of freshLeads) {
-        freshMap[lead.id] = lead;
-      }
-      
-      setAccumulatedLeads(prev => {
-        const updated: Record<string, any[]> = {};
-        let changed = false;
-        for (const [stageKey, stageLeads] of Object.entries(prev)) {
-          updated[stageKey] = stageLeads.map((lead: any) => {
-            const fresh = freshMap[lead.id];
-            if (fresh && (fresh.follow_up_date !== lead.follow_up_date || fresh.status !== lead.status || fresh.response_status !== lead.response_status)) {
-              changed = true;
-              return { ...lead, ...fresh };
-            }
-            return lead;
-          });
-        }
-        return changed ? updated : prev;
-      });
-    };
-    
-    refreshAccumulatedLeads();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kanbanStageData]);
+  // NOTE: Previously this effect re-fetched all accumulated leads whenever
+  // kanbanStageData changed, causing extra network round-trips on every drag.
+  // Optimistic updates in the mutations now keep accumulatedLeads in sync,
+  // so the effect was removed to prevent the visible "page reload" flicker.
   
   // Table view: use regular paginated query
   const { data: tableLeads, isLoading: isTableLoading, refetch: refetchTable, isFetching: isTableFetching } = useQuery({
