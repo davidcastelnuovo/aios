@@ -595,11 +595,6 @@ export function ImportLeadsWithMapping() {
       return;
     }
 
-    if (!defaultAgencyId) {
-      toast({ title: "שגיאה", description: "יש לבחור סוכנות ברירת מחדל", variant: "destructive" });
-      return;
-    }
-
     if (missingRequiredFields.length > 0) {
       toast({ 
         title: "שגיאה", 
@@ -725,7 +720,7 @@ export function ImportLeadsWithMapping() {
       const mapped = rawData.map((row, rowIdx) => {
         const lead: any = {
           tenant_id: tenantId,
-          agency_id: defaultAgencyId,
+          agency_id: defaultAgencyId && defaultAgencyId !== "none" ? defaultAgencyId : null,
         };
 
         if (defaultSalesPersonId && defaultSalesPersonId !== "none") {
@@ -1145,12 +1140,13 @@ export function ImportLeadsWithMapping() {
 
       <div className="grid grid-cols-2 gap-4 mb-4">
         <div className="space-y-2">
-          <Label>סוכנות ברירת מחדל *</Label>
+          <Label>סוכנות ברירת מחדל (אופציונלי)</Label>
           <Select value={defaultAgencyId} onValueChange={setDefaultAgencyId}>
             <SelectTrigger>
-              <SelectValue placeholder="בחר סוכנות" />
+              <SelectValue placeholder="ללא סוכנות (תחת הארגון בלבד)" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="none">ללא סוכנות (תחת הארגון בלבד)</SelectItem>
               {agencies.map(agency => (
                 <SelectItem key={agency.id} value={agency.id}>
                   {agency.name}
@@ -1164,10 +1160,10 @@ export function ImportLeadsWithMapping() {
           <Select 
             value={defaultSalesPersonId} 
             onValueChange={setDefaultSalesPersonId}
-            disabled={!defaultAgencyId}
+            disabled={!defaultAgencyId || defaultAgencyId === "none"}
           >
             <SelectTrigger>
-              <SelectValue placeholder={defaultAgencyId ? "בחר איש מכירות" : "בחר סוכנות קודם"} />
+              <SelectValue placeholder={defaultAgencyId && defaultAgencyId !== "none" ? "בחר איש מכירות" : "בחר סוכנות קודם"} />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="none">ללא</SelectItem>
@@ -1228,10 +1224,6 @@ export function ImportLeadsWithMapping() {
         <p className="text-sm text-destructive">* חובה למפות: {missingRequiredFields.map(f => f.label).join(', ')}</p>
       )}
 
-      {!defaultAgencyId && (
-        <p className="text-sm text-amber-600">⚠️ יש לבחור סוכנות ברירת מחדל כדי להמשיך</p>
-      )}
-
       <div className="flex justify-between pt-4 border-t mt-4 sticky bottom-0 bg-background pb-1">
         <Button variant="outline" onClick={resetState}>
           <ArrowRight className="h-4 w-4 ml-2" />
@@ -1239,7 +1231,7 @@ export function ImportLeadsWithMapping() {
         </Button>
         <Button 
           onClick={handleProceedToPreview} 
-          disabled={missingRequiredFields.length > 0 || !defaultAgencyId}
+          disabled={missingRequiredFields.length > 0}
         >
           המשך לתצוגה מקדימה
           <ArrowLeft className="h-4 w-4 mr-2" />
@@ -1253,7 +1245,9 @@ export function ImportLeadsWithMapping() {
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <Badge variant="secondary">{rawData.length} שורות לייבוא</Badge>
         <Badge variant="outline">
-          סוכנות: {agencies.find(a => a.id === defaultAgencyId)?.name}
+          {defaultAgencyId && defaultAgencyId !== "none"
+            ? `סוכנות: ${agencies.find(a => a.id === defaultAgencyId)?.name}`
+            : "ללא סוכנות (תחת הארגון בלבד)"}
         </Badge>
         {updateColumnsCount > 0 && (
           <Badge variant="default" className="bg-blue-600">
