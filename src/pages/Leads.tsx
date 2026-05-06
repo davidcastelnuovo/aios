@@ -1352,7 +1352,7 @@ export default function Leads() {
     }
   }, [leads]);
 
-  const updateLeadStatus = useMutation<void, Error, { leadId: string; newStatus: string }, { previousKanban: unknown; previousTable: unknown; kanbanQueryKey: unknown[]; tableQueryKey: unknown[]; leadId: string }>({
+  const updateLeadStatus = useMutation<void, Error, { leadId: string; newStatus: string }, { previousKanbanEntries: [readonly unknown[], unknown][]; previousTableEntries: [readonly unknown[], unknown][]; leadId: string }>({
     mutationFn: async ({ leadId, newStatus }) => {
       // Get lead data before update to know old status
       const { data: leadBefore } = await supabase
