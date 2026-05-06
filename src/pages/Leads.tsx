@@ -959,55 +959,10 @@ export default function Leads() {
     placeholderData: (previousData) => previousData,
   });
 
-  // When kanban data refetches, update accumulated leads with fresh data from DB
-  // This handles cases where follow_up_date or other fields were updated on accumulated leads
-  useEffect(() => {
-    if (!kanbanStageData || Object.keys(accumulatedLeads).length === 0) return;
-    
-    // Collect all accumulated lead IDs
-    const accLeadIds: string[] = [];
-    for (const stageLeads of Object.values(accumulatedLeads)) {
-      for (const lead of stageLeads) {
-        accLeadIds.push(lead.id);
-      }
-    }
-    
-    if (accLeadIds.length === 0) return;
-    
-    // Re-fetch accumulated leads to get fresh data
-    const refreshAccumulatedLeads = async () => {
-      const { data: freshLeads } = await supabase
-        .from("leads")
-        .select("*, agencies(name), sales_people(full_name)")
-        .in("id", accLeadIds);
-      
-      if (!freshLeads) return;
-      
-      const freshMap: Record<string, any> = {};
-      for (const lead of freshLeads) {
-        freshMap[lead.id] = lead;
-      }
-      
-      setAccumulatedLeads(prev => {
-        const updated: Record<string, any[]> = {};
-        let changed = false;
-        for (const [stageKey, stageLeads] of Object.entries(prev)) {
-          updated[stageKey] = stageLeads.map((lead: any) => {
-            const fresh = freshMap[lead.id];
-            if (fresh && (fresh.follow_up_date !== lead.follow_up_date || fresh.status !== lead.status || fresh.response_status !== lead.response_status)) {
-              changed = true;
-              return { ...lead, ...fresh };
-            }
-            return lead;
-          });
-        }
-        return changed ? updated : prev;
-      });
-    };
-    
-    refreshAccumulatedLeads();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kanbanStageData]);
+  // NOTE: Previously this effect re-fetched all accumulated leads whenever
+  // kanbanStageData changed, causing extra network round-trips on every drag.
+  // Optimistic updates in the mutations now keep accumulatedLeads in sync,
+  // so the effect was removed to prevent the visible "page reload" flicker.
   
   // Table view: use regular paginated query
   const { data: tableLeads, isLoading: isTableLoading, refetch: refetchTable, isFetching: isTableFetching } = useQuery({
@@ -1352,7 +1307,7 @@ export default function Leads() {
     }
   }, [leads]);
 
-  const updateLeadStatus = useMutation<void, Error, { leadId: string; newStatus: string }, { previousKanban: unknown; previousTable: unknown; kanbanQueryKey: unknown[]; tableQueryKey: unknown[]; leadId: string }>({
+  const updateLeadStatus = useMutation<void, Error, { leadId: string; newStatus: string }, { previousKanbanEntries: [readonly unknown[], unknown][]; previousTableEntries: [readonly unknown[], unknown][]; leadId: string }>({
     mutationFn: async ({ leadId, newStatus }) => {
       // Get lead data before update to know old status
       const { data: leadBefore } = await supabase
@@ -1403,69 +1358,55 @@ export default function Leads() {
       }
     },
     onMutate: async ({ leadId, newStatus }) => {
-      // Build query keys for both Kanban and Table views
-      const kanbanQueryKey = [
-        "leads-kanban",
-        tenantId,
-        selectedAgency,
-        searchQuery,
-        filterSalesPersonIds,
-        filterResponseStatus,
-        filterTagIds,
-        filterFollowUpToday,
-        startDate?.toISOString(),
-        endDate?.toISOString(),
-        PIPELINE_STAGES.map(s => s.id).join(','),
-        isViewingAs,
-        viewAsSalesPersonId,
-      ];
-      
-      const tableQueryKey = [
-        "leads-table",
-        tenantId,
-        selectedAgency,
-        effectivePage,
-        searchQuery,
-        filterSalesPersonIds,
-        filterStage,
-        filterResponseStatus,
-        filterTagIds,
-        filterFollowUpToday,
-        startDate?.toISOString(),
-        endDate?.toISOString(),
-        isViewingAs,
-        viewAsSalesPersonId,
-      ];
-      
-      // Cancel any outgoing refetches for both views
-      await queryClient.cancelQueries({ queryKey: kanbanQueryKey });
-      await queryClient.cancelQueries({ queryKey: tableQueryKey });
+      // Use partial-key matching so we hit the actual cached queries regardless
+      // of the exact key shape (avoids subtle mismatches on key segments).
+      await queryClient.cancelQueries({ queryKey: ["leads-kanban"] });
+      await queryClient.cancelQueries({ queryKey: ["leads-table"] });
 
-      // Snapshot the previous values
-      const previousKanban = queryClient.getQueryData(kanbanQueryKey);
-      const previousTable = queryClient.getQueryData(tableQueryKey);
+      // Snapshot previous values for rollback
+      const previousKanbanEntries = queryClient.getQueriesData({ queryKey: ["leads-kanban"] });
+      const previousTableEntries = queryClient.getQueriesData({ queryKey: ["leads-table"] });
 
-      // Optimistically update Kanban data (nested structure: { [stageKey]: { leads: [...], totalCount } })
-      queryClient.setQueryData(kanbanQueryKey, (old: any) => {
-        if (!old) return old;
-        const updated = { ...old };
+      // Optimistically update ALL Kanban caches: actually MOVE the lead between stages
+      queryClient.setQueriesData({ queryKey: ["leads-kanban"] }, (old: any) => {
+        if (!old || typeof old !== "object") return old;
+        const updated: any = { ...old };
+        let movedLead: any = null;
         for (const stageKey in updated) {
           if (updated[stageKey]?.leads && Array.isArray(updated[stageKey].leads)) {
-            updated[stageKey] = {
-              ...updated[stageKey],
-              leads: updated[stageKey].leads.map((lead: any) =>
-                lead.id === leadId ? { ...lead, status: newStatus } : lead
-              ),
+            const idx = updated[stageKey].leads.findIndex((l: any) => l.id === leadId);
+            if (idx !== -1) {
+              movedLead = { ...updated[stageKey].leads[idx], status: newStatus };
+              updated[stageKey] = {
+                ...updated[stageKey],
+                leads: [
+                  ...updated[stageKey].leads.slice(0, idx),
+                  ...updated[stageKey].leads.slice(idx + 1),
+                ],
+                totalCount: Math.max(0, (updated[stageKey].totalCount || 1) - 1),
+              };
+              break;
+            }
+          }
+        }
+        if (movedLead) {
+          if (updated[newStatus]?.leads) {
+            updated[newStatus] = {
+              ...updated[newStatus],
+              leads: [movedLead, ...updated[newStatus].leads],
+              totalCount: (updated[newStatus].totalCount || 0) + 1,
             };
+          } else {
+            updated[newStatus] = { leads: [movedLead], totalCount: 1 };
           }
         }
         return updated;
       });
 
-      // Optimistically update Table data (flat array)
-      queryClient.setQueryData(tableQueryKey, (old: any) => {
-        if (!old) return old;
-        return old.map((lead: any) => 
+      // Optimistically update ALL Table caches (flat array)
+      queryClient.setQueriesData({ queryKey: ["leads-table"] }, (old: any) => {
+        if (!old || !Array.isArray(old)) return old;
+        return old.map((lead: any) =>
           lead.id === leadId ? { ...lead, status: newStatus } : lead
         );
       });
@@ -1520,16 +1461,16 @@ export default function Leads() {
       });
 
       // Return context with the snapshots for rollback
-      return { previousKanban, previousTable, kanbanQueryKey, tableQueryKey, leadId };
+      return { previousKanbanEntries, previousTableEntries, leadId };
     },
     onError: (error: any, variables, context) => {
-      // Rollback to the previous values if error
-      if (context?.previousKanban && context?.kanbanQueryKey) {
-        queryClient.setQueryData(context.kanbanQueryKey, context.previousKanban);
-      }
-      if (context?.previousTable && context?.tableQueryKey) {
-        queryClient.setQueryData(context.tableQueryKey, context.previousTable);
-      }
+      // Rollback all snapshots if error
+      context?.previousKanbanEntries?.forEach(([key, data]: any) => {
+        queryClient.setQueryData(key, data);
+      });
+      context?.previousTableEntries?.forEach(([key, data]: any) => {
+        queryClient.setQueryData(key, data);
+      });
       // Clear the optimistic status on error so lead goes back to original position
       setOptimisticStatusByLeadId(prev => {
         const next = { ...prev };
@@ -1545,22 +1486,23 @@ export default function Leads() {
         variant: "destructive",
       });
     },
-    onSuccess: (_data, variables) => {
-      // Clear the optimistic status after successful backend update
+    onSuccess: () => {
+      toast({
+        title: "סטטוס ליד עודכן בהצלחה",
+      });
+    },
+    onSettled: (_data, error, variables) => {
+      // Clear the optimistic status only after settle so there's no flicker
+      // between cache reconciliation and optimistic state cleanup.
       setOptimisticStatusByLeadId(prev => {
         const next = { ...prev };
         delete next[variables.leadId];
         return next;
       });
-      toast({
-        title: "סטטוס ליד עודכן בהצלחה",
-      });
-    },
-    onSettled: () => {
-      // Ensure all views (kanban, table, chat) reconcile with backend
-      queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
-      queryClient.invalidateQueries({ queryKey: ["leads-table"] });
-      queryClient.invalidateQueries({ queryKey: ["leads-count"] });
+      // NOTE: We intentionally do NOT invalidate queries here. The DB update
+      // succeeded, the cache was already updated optimistically in onMutate,
+      // and refetching causes a visible "reload" of the kanban after every drag.
+      // Errors trigger an invalidate inside onError as a safety net.
     },
   });
 
