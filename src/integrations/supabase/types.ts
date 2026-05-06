@@ -3783,7 +3783,7 @@ export type Database = {
           attachments: Json
           campaign_name: string | null
           closing_date: string | null
-          company_name: string
+          company_name: string | null
           contact_name: string | null
           created_at: string
           email: string | null
@@ -3828,7 +3828,7 @@ export type Database = {
           attachments?: Json
           campaign_name?: string | null
           closing_date?: string | null
-          company_name: string
+          company_name?: string | null
           contact_name?: string | null
           created_at?: string
           email?: string | null
@@ -3873,7 +3873,7 @@ export type Database = {
           attachments?: Json
           campaign_name?: string | null
           closing_date?: string | null
-          company_name?: string
+          company_name?: string | null
           contact_name?: string | null
           created_at?: string
           email?: string | null
@@ -8172,7 +8172,7 @@ export type Database = {
           attachments: Json
           campaign_name: string | null
           closing_date: string | null
-          company_name: string
+          company_name: string | null
           contact_name: string | null
           created_at: string
           email: string | null
