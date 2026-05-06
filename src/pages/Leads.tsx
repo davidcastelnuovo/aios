@@ -1640,7 +1640,6 @@ export default function Leads() {
       });
     },
     onSuccess: () => {
-      // No invalidation - optimistic update already handled the UI
       toast({
         title: "סטטוס תגובה עודכן בהצלחה",
       });
@@ -1654,6 +1653,12 @@ export default function Leads() {
         description: error.message,
         variant: "destructive",
       });
+    },
+    onSettled: () => {
+      // Reconcile all views with backend
+      queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-table"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-count"] });
     },
   });
 
