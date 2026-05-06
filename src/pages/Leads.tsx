@@ -670,7 +670,17 @@ export default function Leads() {
 
   const queryClient = useQueryClient();
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<"kanban" | "table" | "chat">("chat");
+  const [viewMode, setViewModeState] = useState<"kanban" | "table" | "chat">(() => {
+    if (typeof window === "undefined") return "kanban";
+    const saved = window.localStorage.getItem("leads-view-mode");
+    return saved === "kanban" || saved === "table" || saved === "chat" ? saved : "kanban";
+  });
+  const setViewMode = (mode: "kanban" | "table" | "chat") => {
+    setViewModeState(mode);
+    try {
+      window.localStorage.setItem("leads-view-mode", mode);
+    } catch {}
+  };
   const [openTables, setOpenTables] = useState<Record<string, boolean>>({});
   const [selectedMobileStage, setSelectedMobileStage] = useState<string>("");
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
