@@ -524,6 +524,7 @@ export function LeadsChatView({
                   onClick={(e) => {
                     e.stopPropagation();
                     setEditingLead(selectedLead);
+                    setEditInitialTab("details");
                     setEditDialogOpen(true);
                   }}
                 >
@@ -539,6 +540,7 @@ export function LeadsChatView({
                       if (!o) setEditingLead(null);
                     }}
                     hideTrigger
+                    initialTab={editInitialTab}
                   />
                 )}
 
