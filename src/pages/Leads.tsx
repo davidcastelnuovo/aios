@@ -1416,6 +1416,8 @@ export default function Leads() {
         startDate?.toISOString(),
         endDate?.toISOString(),
         PIPELINE_STAGES.map(s => s.id).join(','),
+        isViewingAs,
+        viewAsSalesPersonId,
       ];
       
       const tableQueryKey = [
@@ -1431,6 +1433,8 @@ export default function Leads() {
         filterFollowUpToday,
         startDate?.toISOString(),
         endDate?.toISOString(),
+        isViewingAs,
+        viewAsSalesPersonId,
       ];
       
       // Cancel any outgoing refetches for both views
