@@ -1506,16 +1506,16 @@ export default function Leads() {
       });
 
       // Return context with the snapshots for rollback
-      return { previousKanban, previousTable, kanbanQueryKey, tableQueryKey, leadId };
+      return { previousKanbanEntries, previousTableEntries, leadId };
     },
     onError: (error: any, variables, context) => {
-      // Rollback to the previous values if error
-      if (context?.previousKanban && context?.kanbanQueryKey) {
-        queryClient.setQueryData(context.kanbanQueryKey, context.previousKanban);
-      }
-      if (context?.previousTable && context?.tableQueryKey) {
-        queryClient.setQueryData(context.tableQueryKey, context.previousTable);
-      }
+      // Rollback all snapshots if error
+      context?.previousKanbanEntries?.forEach(([key, data]: any) => {
+        queryClient.setQueryData(key, data);
+      });
+      context?.previousTableEntries?.forEach(([key, data]: any) => {
+        queryClient.setQueryData(key, data);
+      });
       // Clear the optimistic status on error so lead goes back to original position
       setOptimisticStatusByLeadId(prev => {
         const next = { ...prev };
