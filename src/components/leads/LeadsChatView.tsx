@@ -62,6 +62,7 @@ export function LeadsChatView({
   const [listSearch, setListSearch] = useState("");
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<any>(null);
+  const [editInitialTab, setEditInitialTab] = useState<string>("details");
   const [activeTab, setActiveTab] = useState("details");
   const [manageStagesOpen, setManageStagesOpen] = useState(false);
   const [manageStatusesOpen, setManageStatusesOpen] = useState(false);
