@@ -204,7 +204,7 @@ Deno.serve(async (req) => {
 
     // Fetch data from Google Sheets
     const sheetRange = range || 'Sheet1!A:Z'
-    const sheetsUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(sheetRange)}?key=${googleApiKey}`
+      const sheetsUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetRange}?key=${googleApiKey}`
     
     
     const sheetsResponse = await fetch(sheetsUrl)
@@ -246,7 +246,7 @@ Deno.serve(async (req) => {
     if (fieldMap && typeof fieldMap === 'object') {
       // fieldMap: { "שם העמודה": "system_field" }
       headers.forEach((header: string, index: number) => {
-        const systemField = fieldMap[header]
+        const systemField = fieldMap[header] || fieldMap[header.trim()]
         if (systemField) {
           headerMapping[index] = systemField
         }
@@ -370,8 +370,8 @@ Deno.serve(async (req) => {
             if (!isNaN(num) && num > 0) leadData[field] = num
             break
           case 'created_at':
-            const createdDate = parseDate(strValue)
-            if (createdDate) leadData.created_at = createdDate + 'T00:00:00Z'
+            const createdAt = parseCreatedAt(strValue)
+            if (createdAt) leadData.created_at = createdAt
             break
           case 'proposal_date':
             const propDate = parseDate(strValue)
