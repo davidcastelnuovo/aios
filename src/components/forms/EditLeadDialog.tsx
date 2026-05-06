@@ -69,14 +69,19 @@ interface EditLeadDialogProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   hideTrigger?: boolean;
+  initialTab?: string;
 }
 
-export function EditLeadDialog({ lead: initialLead, open: controlledOpen, onOpenChange, hideTrigger = false }: EditLeadDialogProps) {
+export function EditLeadDialog({ lead: initialLead, open: controlledOpen, onOpenChange, hideTrigger = false, initialTab = "details" }: EditLeadDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = onOpenChange !== undefined ? onOpenChange : setInternalOpen;
-  const [activeTab, setActiveTab] = useState("details");
+  const [activeTab, setActiveTab] = useState(initialTab);
+
+  useEffect(() => {
+    if (open) setActiveTab(initialTab);
+  }, [open, initialTab]);
   const [responseSelectOpen, setResponseSelectOpen] = useState(false);
   const [stageSelectOpen, setStageSelectOpen] = useState(false);
 
