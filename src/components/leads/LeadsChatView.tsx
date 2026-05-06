@@ -589,42 +589,15 @@ export function LeadsChatView({
                   <MessageSquare className="h-3.5 w-3.5" />
                   עדכונים
                 </TabsTrigger>
-                <TabsTrigger
-                  value="proposals"
-                  className="text-xs gap-1.5"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setEditingLead(selectedLead);
-                    setEditInitialTab("proposals");
-                    setEditDialogOpen(true);
-                  }}
-                >
+                <TabsTrigger value="proposals" className="text-xs gap-1.5">
                   <DollarSign className="h-3.5 w-3.5" />
                   הצעות מחיר
                 </TabsTrigger>
-                <TabsTrigger
-                  value="files"
-                  className="text-xs gap-1.5"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setEditingLead(selectedLead);
-                    setEditInitialTab("files");
-                    setEditDialogOpen(true);
-                  }}
-                >
+                <TabsTrigger value="files" className="text-xs gap-1.5">
                   <Paperclip className="h-3.5 w-3.5" />
                   קבצים
                 </TabsTrigger>
-                <TabsTrigger
-                  value="meeting"
-                  className="text-xs gap-1.5"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setEditingLead(selectedLead);
-                    setEditInitialTab("meeting");
-                    setEditDialogOpen(true);
-                  }}
-                >
+                <TabsTrigger value="meeting" className="text-xs gap-1.5">
                   <Users className="h-3.5 w-3.5" />
                   קביעת פגישה
                 </TabsTrigger>
@@ -795,6 +768,20 @@ export function LeadsChatView({
                 <TabsContent value="updates" className="mt-0">
                   <LeadUpdatesTab leadId={selectedLead.id} leadName={selectedLead.contact_name || selectedLead.company_name || "ליד"} />
                 </TabsContent>
+
+                {(activeTab === "proposals" || activeTab === "files" || activeTab === "meeting") && (
+                  <TabsContent value={activeTab} forceMount className="mt-0" dir="rtl">
+                    <EditLeadDialog
+                      key={`${selectedLead.id}-${activeTab}`}
+                      lead={selectedLead}
+                      open={true}
+                      onOpenChange={() => {}}
+                      hideTrigger
+                      inline
+                      initialTab={activeTab}
+                    />
+                  </TabsContent>
+                )}
               </ScrollArea>
 
               {activeTab === "calls" && (

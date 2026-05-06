@@ -70,9 +70,10 @@ interface EditLeadDialogProps {
   onOpenChange?: (open: boolean) => void;
   hideTrigger?: boolean;
   initialTab?: string;
+  inline?: boolean;
 }
 
-export function EditLeadDialog({ lead: initialLead, open: controlledOpen, onOpenChange, hideTrigger = false, initialTab = "details" }: EditLeadDialogProps) {
+export function EditLeadDialog({ lead: initialLead, open: controlledOpen, onOpenChange, hideTrigger = false, initialTab = "details", inline = false }: EditLeadDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
@@ -463,22 +464,9 @@ const updateMutation = useMutation({
   const timeSlots = meetingScheduler.getAvailableTimeSlots();
   const endTimeSlots = meetingScheduler.getAvailableEndTimeSlots();
 
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      {!hideTrigger && (
-        <DialogTrigger asChild onClick={(e) => e.stopPropagation()}>
-          <Button variant="outline" size="icon" className="h-8 w-8">
-            <Pencil className="h-4 w-4" />
-          </Button>
-        </DialogTrigger>
-      )}
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" dir="rtl">
-        <DialogHeader>
-          <DialogTitle>ערוך ליד</DialogTitle>
-        </DialogHeader>
-        
+  const body = (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5 h-auto gap-1 bg-muted/50 p-1 rounded-lg shadow-sm">
+          <TabsList className={cn("grid w-full grid-cols-2 sm:grid-cols-5 h-auto gap-1 bg-muted/50 p-1 rounded-lg shadow-sm", inline && "hidden")}>
             <TabsTrigger 
               value="details" 
               className="flex items-center gap-1 sm:gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-xs sm:text-sm py-2"
@@ -1326,6 +1314,26 @@ const updateMutation = useMutation({
             </form>
           </Form>
         </Tabs>
+  );
+
+  if (inline) {
+    return body;
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      {!hideTrigger && (
+        <DialogTrigger asChild onClick={(e) => e.stopPropagation()}>
+          <Button variant="outline" size="icon" className="h-8 w-8">
+            <Pencil className="h-4 w-4" />
+          </Button>
+        </DialogTrigger>
+      )}
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" dir="rtl">
+        <DialogHeader>
+          <DialogTitle>ערוך ליד</DialogTitle>
+        </DialogHeader>
+        {body}
       </DialogContent>
     </Dialog>
   );
