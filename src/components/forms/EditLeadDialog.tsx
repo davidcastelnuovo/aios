@@ -70,9 +70,10 @@ interface EditLeadDialogProps {
   onOpenChange?: (open: boolean) => void;
   hideTrigger?: boolean;
   initialTab?: string;
+  inline?: boolean;
 }
 
-export function EditLeadDialog({ lead: initialLead, open: controlledOpen, onOpenChange, hideTrigger = false, initialTab = "details" }: EditLeadDialogProps) {
+export function EditLeadDialog({ lead: initialLead, open: controlledOpen, onOpenChange, hideTrigger = false, initialTab = "details", inline = false }: EditLeadDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
