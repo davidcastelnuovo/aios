@@ -1545,22 +1545,23 @@ export default function Leads() {
         variant: "destructive",
       });
     },
-    onSuccess: (_data, variables) => {
-      // Clear the optimistic status after successful backend update
+    onSuccess: () => {
+      toast({
+        title: "סטטוס ליד עודכן בהצלחה",
+      });
+    },
+    onSettled: (_data, error, variables) => {
+      // Clear the optimistic status only after settle so there's no flicker
+      // between cache reconciliation and optimistic state cleanup.
       setOptimisticStatusByLeadId(prev => {
         const next = { ...prev };
         delete next[variables.leadId];
         return next;
       });
-      toast({
-        title: "סטטוס ליד עודכן בהצלחה",
-      });
-    },
-    onSettled: () => {
-      // Ensure all views (kanban, table, chat) reconcile with backend
-      queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
-      queryClient.invalidateQueries({ queryKey: ["leads-table"] });
-      queryClient.invalidateQueries({ queryKey: ["leads-count"] });
+      // NOTE: We intentionally do NOT invalidate queries here. The DB update
+      // succeeded, the cache was already updated optimistically in onMutate,
+      // and refetching causes a visible "reload" of the kanban after every drag.
+      // Errors trigger an invalidate inside onError as a safety net.
     },
   });
 
