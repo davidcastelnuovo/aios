@@ -27,6 +27,23 @@ const sourceMappings: Record<string, string> = {
 
 // Status mappings will be loaded dynamically from lead_statuses table
 
+const hebrewMonths: Record<string, number> = {
+  'ינואר': 1,
+  'פברואר': 2,
+  'מרץ': 3,
+  'אפריל': 4,
+  'מאי': 5,
+  'יוני': 6,
+  'יולי': 7,
+  'אוגוסט': 8,
+  'ספטמבר': 9,
+  'אוקטובר': 10,
+  'נובמבר': 11,
+  'דצמבר': 12,
+}
+
+const pad2 = (value: number) => String(value).padStart(2, '0')
+
 const parseDate = (val: string): string | null => {
   if (!val) return null;
   
@@ -49,7 +66,7 @@ const parseDate = (val: string): string | null => {
     if (isValidYear(year) && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
       const d = new Date(year, month - 1, day);
       if (!isNaN(d.getTime()) && d.getFullYear() === year) {
-        return d.toISOString().split('T')[0];
+        return `${year}-${pad2(month)}-${pad2(day)}`;
       }
     }
   }
@@ -64,7 +81,7 @@ const parseDate = (val: string): string | null => {
     if (isValidYear(year) && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
       const d = new Date(year, month - 1, day);
       if (!isNaN(d.getTime()) && d.getFullYear() === year) {
-        return d.toISOString().split('T')[0];
+        return `${year}-${pad2(month)}-${pad2(day)}`;
       }
     }
   }
@@ -79,13 +96,41 @@ const parseDate = (val: string): string | null => {
     if (isValidYear(year) && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
       const d = new Date(year, month - 1, day);
       if (!isNaN(d.getTime())) {
-        return d.toISOString().split('T')[0];
+        return `${year}-${pad2(month)}-${pad2(day)}`;
+      }
+    }
+  }
+  
+  // Try Hebrew month format, e.g. "מאי 3, 2026"
+  const hebrewMonthMatch = strVal.match(/^([א-ת]+)\s+(\d{1,2}),\s*(\d{4})$/)
+  if (hebrewMonthMatch) {
+    const month = hebrewMonths[hebrewMonthMatch[1]]
+    const day = parseInt(hebrewMonthMatch[2], 10)
+    const year = parseInt(hebrewMonthMatch[3], 10)
+    if (month && isValidYear(year) && day >= 1 && day <= 31) {
+      const d = new Date(Date.UTC(year, month - 1, day))
+      if (!isNaN(d.getTime()) && d.getUTCFullYear() === year) {
+        return `${year}-${pad2(month)}-${pad2(day)}`;
       }
     }
   }
   
   // Don't use generic Date() parsing - it produces weird results
   return null;
+}
+
+const parseCreatedAt = (val: string): string | null => {
+  if (!val) return null
+  const strVal = String(val).trim()
+  if (!strVal) return null
+
+  if (/^\d{4}-\d{2}-\d{2}T/.test(strVal)) {
+    const parsed = new Date(strVal)
+    if (!isNaN(parsed.getTime())) return parsed.toISOString()
+  }
+
+  const dateOnly = parseDate(strVal)
+  return dateOnly ? `${dateOnly}T00:00:00Z` : null
 }
 
 Deno.serve(async (req) => {
