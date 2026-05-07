@@ -942,9 +942,17 @@ export function GoogleAnalyticsDashboard({
                 <p className="text-xl font-bold text-blue-700 dark:text-blue-400">{formatNumber(trafficBreakdown.paidConversions)}</p>
               </div>
             </div>
+            {trafficBreakdown.otherConversions > 0 && (
+              <p className="text-xs text-muted-foreground mt-3 text-right">
+                ℹ️ {formatNumber(trafficBreakdown.otherConversions)} המרות נוספות מסווגות תחת ערוצים אחרים (Direct, Referral, Email, Unassigned וכו') ואינן נכללות באורגני/ממומן.
+              </p>
+            )}
           </CardContent>
         </Card>
       )}
+
+      {/* keep existing code */}
+      {false && (
 
       {/* Total Phone Calls */}
       {phoneCallEvents.length > 0 && (
