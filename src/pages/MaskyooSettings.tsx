@@ -158,20 +158,27 @@ export default function MaskyooSettings() {
           {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <Save className="h-4 w-4 ml-2" />}
           שמור הגדרות
         </Button>
-        <Button onClick={() => syncCdrMutation.mutate()} disabled={syncCdrMutation.isPending || !settings} variant="outline" size="lg">
-          {syncCdrMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <RefreshCw className="h-4 w-4 ml-2" />}
-          סנכרן היסטוריית שיחות (7 ימים)
-        </Button>
       </div>
+
+      <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-800">
+        <CardContent className="p-4">
+          <h4 className="font-semibold mb-2">⚠️ חשוב: עובדים רק עם Webhook</h4>
+          <p className="text-sm text-muted-foreground mb-2">
+            מסקיו חוסמים גישת API לפי IP, ול-Supabase Edge Functions אין IP קבוע.
+            לכן <strong>לא ניתן למשוך היסטוריה</strong> ממסקיו - חובה להגדיר את ה-Webhook למעלה,
+            ומסקיו ישלחו אלינו כל שיחה בזמן אמת.
+          </p>
+        </CardContent>
+      </Card>
 
       <Card className="border-blue-200 bg-blue-50/50 dark:bg-blue-950/20 dark:border-blue-800">
         <CardContent className="p-4">
           <h4 className="font-semibold mb-2">📞 איך זה עובד?</h4>
           <ul className="text-sm text-muted-foreground space-y-1.5 list-disc list-inside">
-            <li>Click2Call: המערכת תחייג קודם למספר שלך, ואז תחבר ללקוח דרך Maskyoo</li>
-            <li>היסטוריית שיחות: סנכרון מ-Maskyoo CDR ושיוך אוטומטי לפי טלפון</li>
-            <li>Webhook: עדכוני סטטוס בזמן אמת. הגדר את ה-URL במערכת Maskyoo</li>
-            <li>הקלטות: זמינות בכרטיסיית "היסטוריית שיחות" של ליד/לקוח</li>
+            <li><strong>Webhook (חובה):</strong> מסקיו שולחים אלינו כל שיחה בזמן אמת לכתובת למעלה</li>
+            <li>שיוך אוטומטי לליד/לקוח לפי 9 ספרות אחרונות של מספר הטלפון</li>
+            <li>היסטוריית שיחות זמינה בכרטיסיית "היסטוריית שיחות" של ליד/לקוח</li>
+            <li>הקלטות נטענות לפי דרישה דרך Maskyoo API (אם זמינות)</li>
           </ul>
         </CardContent>
       </Card>
