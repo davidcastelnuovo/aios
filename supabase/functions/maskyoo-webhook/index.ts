@@ -84,10 +84,16 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ ok: true, ignored: true }), { status: 200, headers: corsHeaders });
     }
 
-    // Maskyoo template: cli=caller, destination/maskyoo=called number
+    // Maskyoo template:
+    //   cli           = caller (the person who called in)
+    //   maskyoo       = the Maskyoo DID that was dialled (this is what we want!)
+    //   destination   = the real number Maskyoo forwarded the call to (our staff)
+    //   name          = the label configured for this DID inside Maskyoo
     const callerPhone = normalizePhone(params.cdr_ani || params.from || params.cli_unformatted || params.cli);
-    const calleePhone = normalizePhone(params.cdr_ddi || params.to || params.destination_unformatted || params.destination || params.maskyoo);
-    const targetPhone = callerPhone || calleePhone;
+    const maskyooDid = normalizePhone(params.maskyoo_unformatted || params.maskyoo || params.cdr_ddi || params.to);
+    const forwardedTo = normalizePhone(params.destination_unformatted || params.destination);
+    const calleePhone = maskyooDid; // the DID is what we register as a "Maskyoo number"
+    const targetPhone = callerPhone; // who to attribute the call to (lead/client)
 
     let lead_id: string | null = null, client_id: string | null = null;
     if (targetPhone) {
@@ -124,14 +130,14 @@ Deno.serve(async (req) => {
 
       // Try to capture the human-friendly name configured for this DID inside Maskyoo.
       const maskyooName: string | null =
-        params.did_name || params.cdr_did_name || params.cdr_ddi_name ||
+        params.name || params.did_name || params.cdr_did_name ||
         params.destination_name || params.ddi_name || params.line_name || null;
 
       if (!knownNumber) {
         await supabase.from("maskyoo_numbers").insert({
           tenant_id,
           phone_last9: calleeLast9,
-          display_number: params.cdr_ddi || params.destination || params.maskyoo || calleePhone,
+          display_number: params.maskyoo || params.maskyoo_unformatted || calleePhone,
           label: maskyooName,
           category: "general",
         });
@@ -173,12 +179,12 @@ Deno.serve(async (req) => {
     const payload: any = {
       tenant_id, provider: "maskyoo", provider_call_id: uniqueid,
       caller_user_id: tenantUser.user_id,
-      from_number: params.cdr_ani || params.cli || params.cli_unformatted || null,
-      to_number: params.cdr_ddi || params.destination || params.maskyoo || null,
+      from_number: params.cli || params.cli_unformatted || params.cdr_ani || null,
+      to_number: params.maskyoo || params.maskyoo_unformatted || params.cdr_ddi || null,
       duration: params.call_duration || params.duration ? parseInt(params.call_duration || params.duration) : null,
       status,
       recording_url: recording,
-      notes: noteParts.join(" | "),
+      notes: noteParts.join(" | ") + (forwardedTo ? ` | forwarded_to=${forwardedTo}` : ""),
       lead_id, client_id,
     };
 
