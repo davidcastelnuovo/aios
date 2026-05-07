@@ -186,6 +186,18 @@ verify_jwt = false
 [functions.sync-woocommerce-data]
 verify_jwt = true
 
+[functions.make-maskyoo-call]
+verify_jwt = true
+
+[functions.sync-maskyoo-cdr]
+verify_jwt = true
+
+[functions.get-maskyoo-recording]
+verify_jwt = true
+
+[functions.maskyoo-webhook]
+verify_jwt = false
+
 [functions.cron-sync-woocommerce]
 verify_jwt = false
 
