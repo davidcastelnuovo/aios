@@ -4055,6 +4055,48 @@ export type Database = {
           },
         ]
       }
+      maskyoo_settings: {
+        Row: {
+          api_token: string
+          base_url: string
+          click2call_service: string
+          created_at: string
+          default_user_phone: string | null
+          id: string
+          is_active: boolean
+          last_cdr_sync_at: string | null
+          tenant_id: string
+          updated_at: string
+          webhook_secret: string | null
+        }
+        Insert: {
+          api_token: string
+          base_url: string
+          click2call_service?: string
+          created_at?: string
+          default_user_phone?: string | null
+          id?: string
+          is_active?: boolean
+          last_cdr_sync_at?: string | null
+          tenant_id: string
+          updated_at?: string
+          webhook_secret?: string | null
+        }
+        Update: {
+          api_token?: string
+          base_url?: string
+          click2call_service?: string
+          created_at?: string
+          default_user_phone?: string | null
+          id?: string
+          is_active?: boolean
+          last_cdr_sync_at?: string | null
+          tenant_id?: string
+          updated_at?: string
+          webhook_secret?: string | null
+        }
+        Relationships: []
+      }
       menu_items: {
         Row: {
           badge: string | null
