@@ -421,11 +421,25 @@ export default function DynamicTables() {
   const handleSaveEdit = () => {
     if (!editingTable || !editName.trim()) return;
     const isFacebook = editingTable.integration_type === 'facebook_insights' || editingTable.integration_type === 'facebook_ecommerce';
-    const updatedSettings = isFacebook && editAdAccountId ? {
-      ...editingTable.integration_settings,
-      ad_account_id: editAdAccountId,
-      ad_account_name: editAdAccounts.find(a => a.id === editAdAccountId)?.name || editingTable.integration_settings?.ad_account_name || '',
-    } : undefined;
+
+    const trimmedMaskyoo = editMaskyooNumber.trim();
+    const prevMaskyoo = editingTable.integration_settings?.maskyoo_number || "";
+    const maskyooChanged = trimmedMaskyoo !== prevMaskyoo;
+
+    let updatedSettings: any = undefined;
+    if (isFacebook && editAdAccountId) {
+      updatedSettings = {
+        ...editingTable.integration_settings,
+        ad_account_id: editAdAccountId,
+        ad_account_name: editAdAccounts.find(a => a.id === editAdAccountId)?.name || editingTable.integration_settings?.ad_account_name || '',
+      };
+    }
+    if (maskyooChanged) {
+      updatedSettings = {
+        ...(updatedSettings || editingTable.integration_settings || {}),
+        maskyoo_number: trimmedMaskyoo || null,
+      };
+    }
 
     // If it's an Ahrefs/SEO table and client changed, sync domain
     const isAhrefs = editingTable.integration_type === 'ahrefs';
