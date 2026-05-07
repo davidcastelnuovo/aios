@@ -27,8 +27,11 @@ interface CallStats {
 
 /**
  * KPI card showing INCOMING + UNIQUE phone activity for Maskyoo lines
- * (e.g. organic & paid) over the last N days. Data is queried live from the
- * Maskyoo CDR API (per-number) so it does not depend on local call_logs sync.
+ * (e.g. organic & paid) over the last N days.
+ *
+ * Reads from local `call_logs` table (synced from Maskyoo via webhook +
+ * sync-maskyoo-cdr). We do NOT call Maskyoo's API live from the browser
+ * because Maskyoo enforces an IP whitelist that blocks Supabase Edge Functions.
  *
  * Outgoing calls are intentionally excluded — this card is meant for marketing
  * reports where only inbound demand matters.
@@ -77,20 +80,29 @@ function NumberRow({ tenantId, cfg, days }: {
     : "text-emerald-600";
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["maskyoo-cdr-kpi", tenantId, cfg.last9, days],
+    queryKey: ["maskyoo-call-logs-kpi", tenantId, cfg.last9, days],
     enabled: !!tenantId && cfg.last9.length === 9,
     staleTime: 5 * 60_000,
     queryFn: async (): Promise<CallStats> => {
-      const { data, error } = await supabase.functions.invoke("query-maskyoo-calls", {
-        body: { tenant_id: tenantId, number: cfg.number, days },
-      });
+      const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+      const { data, error } = await supabase
+        .from("call_logs")
+        .select("from_number, to_number, status, duration, created_at")
+        .eq("tenant_id", tenantId)
+        .eq("provider", "maskyoo")
+        .gte("created_at", since)
+        .ilike("to_number", `%${cfg.last9}`)
+        .limit(5000);
       if (error) throw error;
-      if ((data as any)?.error) throw new Error((data as any).error);
-      return {
-        incomingCount: Number((data as any)?.incomingCount ?? 0),
-        uniqueCount: Number((data as any)?.uniqueCount ?? 0),
-        answeredCount: Number((data as any)?.answeredCount ?? 0),
-      };
+      const rows = (data || []) as Array<{ from_number: string | null; status: string | null; duration: number | null }>;
+      const uniq = new Set<string>();
+      let answered = 0;
+      for (const r of rows) {
+        const last9 = (r.from_number || "").replace(/\D/g, "").slice(-9);
+        if (last9) uniq.add(last9);
+        if ((r.status || "").toLowerCase() === "completed" || Number(r.duration || 0) > 0) answered++;
+      }
+      return { incomingCount: rows.length, uniqueCount: uniq.size, answeredCount: answered };
     },
   });
 
