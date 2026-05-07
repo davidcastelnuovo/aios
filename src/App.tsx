@@ -87,6 +87,7 @@ const SharedDashboard = lazy(() => import("./pages/SharedDashboard"));
 const SharedTable = lazy(() => import("./pages/SharedTable"));
 const AiDetection = lazy(() => import("./pages/AiDetection"));
 const TelephonySettings = lazy(() => import("./pages/TelephonySettings"));
+const MaskyooSettings = lazy(() => import("./pages/MaskyooSettings"));
 const TelegramSettings = lazy(() => import("./pages/TelegramSettings"));
 const GithubAgent = lazy(() => import("./pages/GithubAgent"));
 const SocialDashboard = lazy(() => import("./pages/SocialDashboard"));
@@ -221,6 +222,7 @@ const App = () => (
                   <Route path="/t/:tenantSlug/ai-detection" element={<ProtectedRoute><AppLayout><AiDetection /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/github-agent" element={<ProtectedRoute><AppLayout><GithubAgent /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/telephony-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><TelephonySettings /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/maskyoo-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><MaskyooSettings /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/wordpress-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><WordPressSettings /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/landing-page-submissions" element={<ProtectedRoute><AppLayout><LandingPageSubmissions /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/unified-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><UnifiedSettings /></AppLayout></ProtectedRoute>} />

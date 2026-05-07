@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Phone, PhoneOff, Mic, MicOff, Loader2 } from "lucide-react";
+import { Phone, PhoneOff, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 
 interface CallDialogProps {
   open: boolean;
@@ -35,6 +37,9 @@ export function CallDialog({ open, onOpenChange, phoneNumber, contactName, leadI
   const [isLoading, setIsLoading] = useState(false);
   const [notes, setNotes] = useState("");
   const [callLogId, setCallLogId] = useState<string | null>(null);
+  const [provider, setProvider] = useState<"paycall" | "maskyoo">(
+    () => (localStorage.getItem("telephony_provider") as "paycall" | "maskyoo") || "paycall"
+  );
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -71,8 +76,10 @@ export function CallDialog({ open, onOpenChange, phoneNumber, contactName, leadI
   const handleCall = async () => {
     if (!tenantId) return;
     setIsLoading(true);
+    localStorage.setItem("telephony_provider", provider);
     try {
-      const { data, error } = await supabase.functions.invoke("make-paycall-call", {
+      const fnName = provider === "maskyoo" ? "make-maskyoo-call" : "make-paycall-call";
+      const { data, error } = await supabase.functions.invoke(fnName, {
         body: {
           to_number: phoneNumber,
           lead_id: leadId || null,
@@ -83,9 +90,11 @@ export function CallDialog({ open, onOpenChange, phoneNumber, contactName, leadI
 
       if (error) throw error;
 
-      if (data?.error === "Paycall not configured") {
+      if (data?.error === "Paycall not configured" || data?.error === "Maskyoo not configured") {
         toast.error("מרכזיה לא מוגדרת", {
-          description: "יש להגדיר את אינטגרציית Paycall בהגדרות הטלפוניה",
+          description: provider === "maskyoo"
+            ? "יש להגדיר את אינטגרציית Maskyoo בהגדרות"
+            : "יש להגדיר את אינטגרציית Paycall בהגדרות הטלפוניה",
         });
         setCallStatus("failed");
       } else {
@@ -152,6 +161,22 @@ export function CallDialog({ open, onOpenChange, phoneNumber, contactName, leadI
               className="w-full"
               rows={3}
             />
+          )}
+
+          {/* Provider selector - only when idle */}
+          {(callStatus === "idle" || callStatus === "failed") && (
+            <div className="w-full space-y-2">
+              <Label className="text-xs text-muted-foreground">ספק מרכזיה</Label>
+              <Select value={provider} onValueChange={(v) => setProvider(v as "paycall" | "maskyoo")}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="paycall">Paycall</SelectItem>
+                  <SelectItem value="maskyoo">Maskyoo (מסקיו)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           )}
 
           {/* Action buttons */}
