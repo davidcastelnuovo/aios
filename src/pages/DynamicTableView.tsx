@@ -2857,13 +2857,8 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
         );
       })()}
 
-      {/* Maskyoo incoming-calls KPI (configured per report).
-          Aggregates organic (SEO/GA/GSC/Ahrefs) and paid (Google Ads) numbers
-          across sibling reports for the same client, so the dashboard always
-          shows both lines side-by-side regardless of which report is open. */}
-      {table?.tenant_id && (hasGoogleAnalytics || hasGoogleSearchConsole || hasAhrefs || hasGoogleAds) && (
-        <MaskyooSiblingCard table={table} />
-      )}
+      {/* Maskyoo card is rendered inside SeoDashboardView (between KPI cubes and keywords),
+          so we don't render it again here to avoid duplication. */}
 
       {/* Google Analytics Dashboard */}
       {!summaryOnly && hasGoogleAnalytics && filteredRecords && filteredRecords.length > 0 && (
