@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { SeoSnapshotCards } from "./seo/SeoSnapshotCards";
-import { SeoTrafficChart } from "./seo/SeoTrafficChart";
+import { MaskyooSiblingCard } from "./MaskyooSiblingCard";
 import { SeoKeywordsTable } from "./seo/SeoKeywordsTable";
 import { GscIntegration, type GscKeywordData, type GscMultiPeriodData } from "./seo/GscIntegration";
 import { useAhrefsEnrichment, type AhrefsKeyword } from "@/hooks/useAhrefsEnrichment";
