@@ -25,6 +25,12 @@ Deno.serve(async (req) => {
     const params: Record<string, any> = {};
     url.searchParams.forEach((v, k) => { params[k] = v; });
 
+    const logRequest = (stage: string) => {
+      const safeParams = { ...params };
+      if (safeParams.secret) safeParams.secret = "[redacted]";
+      console.info("maskyoo-webhook trace", JSON.stringify({ stage, method: req.method, path: url.pathname, params: safeParams }));
+    };
+
     // Maskyoo bug: their template appends ?event=hangup after our URL that already
     // ends with ?tenant_id=..., producing tenant_id=UUID?event=hangup. Split it back.
     if (typeof params.tenant_id === "string" && params.tenant_id.includes("?")) {
@@ -51,6 +57,8 @@ Deno.serve(async (req) => {
         }
       } catch {}
     }
+
+    logRequest("received");
 
     const tenant_id = params.tenant_id;
     const secret = params.secret;
