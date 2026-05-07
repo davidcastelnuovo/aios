@@ -72,18 +72,6 @@ export default function MaskyooSettings() {
     onError: (e: any) => toast.error("שגיאה בשמירה", { description: e.message }),
   });
 
-  const syncCdrMutation = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke("sync-maskyoo-cdr", {
-        body: { tenant_id: tenantId, days: 7 },
-      });
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: (d: any) => toast.success(`סונכרנו ${d?.total ?? 0} שיחות (חדשות: ${d?.inserted ?? 0})`),
-    onError: (e: any) => toast.error("סנכרון נכשל", { description: e.message }),
-  });
-
   const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
   const webhookUrl = `https://${projectId}.supabase.co/functions/v1/maskyoo-webhook?tenant_id=${tenantId}${webhookSecret ? `&secret=${webhookSecret}` : ""}`;
 
