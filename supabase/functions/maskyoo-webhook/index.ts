@@ -102,6 +102,36 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Auto-register / lookup the Maskyoo called number (DID).
+    // Allows the user to map numbers to clients/categories and to ignore some.
+    if (calleePhone) {
+      const calleeLast9 = calleePhone.slice(-9);
+      const { data: knownNumber } = await supabase
+        .from("maskyoo_numbers")
+        .select("id, client_id, is_ignored")
+        .eq("tenant_id", tenant_id)
+        .eq("phone_last9", calleeLast9)
+        .maybeSingle();
+
+      if (knownNumber?.is_ignored) {
+        console.info("maskyoo-webhook: ignored number", { calleeLast9 });
+        return new Response(JSON.stringify({ ok: true, ignored: true, reason: "number_ignored" }), { status: 200, headers: corsHeaders });
+      }
+
+      if (knownNumber?.client_id && !client_id) {
+        client_id = knownNumber.client_id;
+      }
+
+      if (!knownNumber) {
+        await supabase.from("maskyoo_numbers").insert({
+          tenant_id,
+          phone_last9: calleeLast9,
+          display_number: params.cdr_ddi || params.destination || params.maskyoo || calleePhone,
+          category: "general",
+        });
+      }
+    }
+
     const { data: tenantUser } = await supabase
       .from("tenant_users")
       .select("user_id")
