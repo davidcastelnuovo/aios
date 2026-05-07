@@ -546,6 +546,21 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
           <Camera className={`h-3 w-3 ${isCapturing ? "animate-spin" : ""}`} />
           צלם מחדש
         </Button>
+        {(() => {
+          const adUrl = getAdAccountUrl(table);
+          if (!adUrl) return null;
+          return (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1 text-xs"
+              onClick={() => window.open(adUrl, "_blank", "noopener,noreferrer")}
+            >
+              <ExternalLink className="h-3 w-3" />
+              פתח חשבון מודעות
+            </Button>
+          );
+        })()}
         <Button
           variant="ghost"
           size="sm"
