@@ -4055,6 +4055,53 @@ export type Database = {
           },
         ]
       }
+      maskyoo_numbers: {
+        Row: {
+          category: string | null
+          client_id: string | null
+          created_at: string
+          display_number: string
+          id: string
+          is_ignored: boolean
+          label: string | null
+          phone_last9: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          client_id?: string | null
+          created_at?: string
+          display_number: string
+          id?: string
+          is_ignored?: boolean
+          label?: string | null
+          phone_last9: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          client_id?: string | null
+          created_at?: string
+          display_number?: string
+          id?: string
+          is_ignored?: boolean
+          label?: string | null
+          phone_last9?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "maskyoo_numbers_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       maskyoo_settings: {
         Row: {
           api_token: string
