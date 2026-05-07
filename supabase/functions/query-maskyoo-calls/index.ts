@@ -61,9 +61,13 @@ Deno.serve(async (req) => {
     // happens client-side on last-9 digits because cdr_ddi may have country code).
     const sql = `SELECT start_call, call_duration, cdr_ani, cdr_ddi, call_status FROM webserviceview WHERE start_call >= DATE_SUB(NOW(), INTERVAL ${Number(days)} DAY) ORDER BY start_call DESC LIMIT 5000`;
 
-    const baseUrl = String(settings.base_url || "").replace(/\/$/, "");
+    // Normalize base url: strip any query string, trailing slash, and trailing /api
+    let rawBase = String(settings.base_url || "").trim();
+    rawBase = rawBase.split("?")[0].replace(/\/+$/, "").replace(/\/api$/i, "");
     const params = new URLSearchParams({ service: "cdr_query", sql, format: "json" });
-    const res = await fetch(`${baseUrl}/api/?${params.toString()}`, {
+    const url = `${rawBase}/api/?${params.toString()}`;
+    console.log("Maskyoo CDR fetch:", url);
+    const res = await fetch(url, {
       headers: { Authorization: `Bearer ${settings.api_token}` },
     });
     const body = await res.text();
