@@ -1,19 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PhoneIncoming, PhoneOutgoing, Phone } from "lucide-react";
-import { subDays } from "date-fns";
+import { PhoneIncoming, Phone, Users } from "lucide-react";
 
 interface MaskyooNumberConfig {
   label: string;
   number: string;
-  /** Tailwind accent for badges/icons. e.g. "emerald" | "blue" */
   accent?: "emerald" | "blue" | "purple";
 }
 
 interface MaskyooCallsCardProps {
   tenantId: string;
-  /** Backward-compat: single number (treated as a single section). */
+  /** Backward-compat single number. */
   maskyooNumber?: string;
   /** New: multiple labeled numbers (organic / paid / etc.). */
   numbers?: MaskyooNumberConfig[];
@@ -21,14 +19,19 @@ interface MaskyooCallsCardProps {
   days?: number;
 }
 
+interface CallStats {
+  incomingCount: number;
+  uniqueCount: number;
+  answeredCount: number;
+}
+
 /**
- * KPI card showing call activity for one or more Maskyoo phone numbers
- * (e.g. organic & paid lines) over the last N days. Used inside SEO /
- * Google report dashboards so a client can see how many phone leads the
- * report period generated, broken down per line.
+ * KPI card showing INCOMING + UNIQUE phone activity for Maskyoo lines
+ * (e.g. organic & paid) over the last N days. Data is queried live from the
+ * Maskyoo CDR API (per-number) so it does not depend on local call_logs sync.
  *
- * Matching is done by the last 9 digits of each number, consistent with
- * the project-wide phone normalization policy.
+ * Outgoing calls are intentionally excluded — this card is meant for marketing
+ * reports where only inbound demand matters.
  */
 export function MaskyooCallsCard({ tenantId, maskyooNumber, numbers, days = 30 }: MaskyooCallsCardProps) {
   const resolved: MaskyooNumberConfig[] = (numbers && numbers.length > 0)
@@ -38,43 +41,6 @@ export function MaskyooCallsCard({ tenantId, maskyooNumber, numbers, days = 30 }
   const validNumbers = resolved
     .map((n) => ({ ...n, last9: (n.number || "").replace(/\D/g, "").slice(-9) }))
     .filter((n) => n.last9.length === 9);
-
-  const allLast9 = validNumbers.map((n) => n.last9).sort().join(",");
-  const since = subDays(new Date(), days).toISOString();
-
-  const { data, isLoading } = useQuery({
-    queryKey: ["maskyoo-calls-kpi", tenantId, allLast9, days],
-    enabled: !!tenantId && validNumbers.length > 0,
-    staleTime: 60_000,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("call_logs")
-        .select("id, from_number, to_number, status, duration, created_at")
-        .eq("tenant_id", tenantId)
-        .gte("created_at", since)
-        .limit(5000);
-      if (error) throw error;
-
-      const byLast9: Record<string, { incoming: number; outgoing: number; answered: number }> = {};
-      for (const n of validNumbers) {
-        const incoming = (data || []).filter((c) =>
-          (c.to_number || "").replace(/\D/g, "").endsWith(n.last9)
-        );
-        const outgoing = (data || []).filter((c) =>
-          (c.from_number || "").replace(/\D/g, "").endsWith(n.last9)
-        );
-        const answered = incoming.filter(
-          (c) => (c.status || "").toLowerCase() === "answered" || (c.duration || 0) > 0
-        );
-        byLast9[n.last9] = {
-          incoming: incoming.length,
-          outgoing: outgoing.length,
-          answered: answered.length,
-        };
-      }
-      return byLast9;
-    },
-  });
 
   if (validNumbers.length === 0) return null;
 
@@ -87,45 +53,73 @@ export function MaskyooCallsCard({ tenantId, maskyooNumber, numbers, days = 30 }
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {validNumbers.map((n) => {
-          const stats = data?.[n.last9];
-          const accent = n.accent || "emerald";
-          const accentText =
-            accent === "blue" ? "text-blue-700 dark:text-blue-200"
-            : accent === "purple" ? "text-purple-700 dark:text-purple-200"
-            : "text-emerald-700 dark:text-emerald-200";
-          const iconColor =
-            accent === "blue" ? "text-blue-600"
-            : accent === "purple" ? "text-purple-600"
-            : "text-emerald-600";
-          return (
-            <div key={n.last9} className="space-y-2">
-              <div className={`text-xs font-semibold ${accentText}`}>{n.label}</div>
-              <div className="grid grid-cols-3 gap-3">
-                <Stat
-                  icon={<PhoneIncoming className={`h-4 w-4 ${iconColor}`} />}
-                  label="נכנסות"
-                  value={isLoading ? "…" : String(stats?.incoming ?? 0)}
-                />
-                <Stat
-                  icon={<Phone className={`h-4 w-4 ${iconColor}`} />}
-                  label="נענו"
-                  value={isLoading ? "…" : String(stats?.answered ?? 0)}
-                />
-                <Stat
-                  icon={<PhoneOutgoing className={`h-4 w-4 ${iconColor}`} />}
-                  label="יוצאות"
-                  value={isLoading ? "…" : String(stats?.outgoing ?? 0)}
-                />
-              </div>
-              <p className="text-xs text-muted-foreground" dir="ltr">
-                {n.number}
-              </p>
-            </div>
-          );
-        })}
+        {validNumbers.map((n) => (
+          <NumberRow key={n.label + n.last9} tenantId={tenantId} cfg={n} days={days} />
+        ))}
       </CardContent>
     </Card>
+  );
+}
+
+function NumberRow({ tenantId, cfg, days }: {
+  tenantId: string;
+  cfg: MaskyooNumberConfig & { last9: string };
+  days: number;
+}) {
+  const accent = cfg.accent || "emerald";
+  const accentText =
+    accent === "blue" ? "text-blue-700 dark:text-blue-200"
+    : accent === "purple" ? "text-purple-700 dark:text-purple-200"
+    : "text-emerald-700 dark:text-emerald-200";
+  const iconColor =
+    accent === "blue" ? "text-blue-600"
+    : accent === "purple" ? "text-purple-600"
+    : "text-emerald-600";
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["maskyoo-cdr-kpi", tenantId, cfg.last9, days],
+    enabled: !!tenantId && cfg.last9.length === 9,
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<CallStats> => {
+      const { data, error } = await supabase.functions.invoke("query-maskyoo-calls", {
+        body: { tenant_id: tenantId, number: cfg.number, days },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      return {
+        incomingCount: Number((data as any)?.incomingCount ?? 0),
+        uniqueCount: Number((data as any)?.uniqueCount ?? 0),
+        answeredCount: Number((data as any)?.answeredCount ?? 0),
+      };
+    },
+  });
+
+  return (
+    <div className="space-y-2">
+      <div className={`text-xs font-semibold ${accentText}`}>{cfg.label}</div>
+      {error ? (
+        <div className="text-xs text-destructive">שגיאה בטעינת נתוני מסקיו</div>
+      ) : (
+        <div className="grid grid-cols-3 gap-3">
+          <Stat
+            icon={<PhoneIncoming className={`h-4 w-4 ${iconColor}`} />}
+            label="נכנסות"
+            value={isLoading ? "…" : String(data?.incomingCount ?? 0)}
+          />
+          <Stat
+            icon={<Users className={`h-4 w-4 ${iconColor}`} />}
+            label="ייחודיות"
+            value={isLoading ? "…" : String(data?.uniqueCount ?? 0)}
+          />
+          <Stat
+            icon={<Phone className={`h-4 w-4 ${iconColor}`} />}
+            label="נענו"
+            value={isLoading ? "…" : String(data?.answeredCount ?? 0)}
+          />
+        </div>
+      )}
+      <p className="text-xs text-muted-foreground" dir="ltr">{cfg.number}</p>
+    </div>
   );
 }
 

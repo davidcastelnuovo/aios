@@ -192,6 +192,9 @@ verify_jwt = true
 [functions.sync-maskyoo-cdr]
 verify_jwt = true
 
+[functions.query-maskyoo-calls]
+verify_jwt = true
+
 [functions.get-maskyoo-recording]
 verify_jwt = true
 
