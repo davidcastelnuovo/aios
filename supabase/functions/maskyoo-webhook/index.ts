@@ -53,7 +53,11 @@ Deno.serve(async (req) => {
           fd.forEach((v, k) => { if (typeof v === "string") params[k] = v; });
         } else {
           const text = await req.text();
-          if (text.startsWith("{")) Object.assign(params, JSON.parse(text));
+          if (text.trim().startsWith("{")) Object.assign(params, JSON.parse(text));
+          else if (text.includes("=")) {
+            const bodyParams = new URLSearchParams(text);
+            bodyParams.forEach((v, k) => { params[k] = v; });
+          }
         }
       } catch {}
     }
