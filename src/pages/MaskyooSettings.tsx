@@ -12,6 +12,7 @@ import { Phone, Settings, Save, Loader2, ArrowRight, RefreshCw, Copy } from "luc
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
+import { MaskyooNumbersManager } from "@/components/maskyoo/MaskyooNumbersManager";
 
 export default function MaskyooSettings() {
   const { tenantId } = useCurrentTenant();
