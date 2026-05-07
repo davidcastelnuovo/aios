@@ -279,6 +279,21 @@ export default function Integrations() {
     enabled: !!currentTenantId,
   });
 
+  // Check Maskyoo settings
+  const { data: maskyooIntegration } = useQuery({
+    queryKey: ['maskyoo-settings', currentTenantId],
+    queryFn: async () => {
+      if (!currentTenantId) return null;
+      const { data } = await supabase
+        .from('maskyoo_settings' as any)
+        .select('*')
+        .eq('tenant_id', currentTenantId)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!currentTenantId,
+  });
+
   // Check Telegram bot state
   const { data: telegramBotState } = useQuery({
     queryKey: ['telegram-bot-state', currentTenantId],
