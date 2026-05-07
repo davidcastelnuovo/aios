@@ -102,6 +102,18 @@ Deno.serve(async (req) => {
       }
     }
 
+    const { data: tenantUser } = await supabase
+      .from("tenant_users")
+      .select("user_id")
+      .eq("tenant_id", tenant_id)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (!tenantUser?.user_id) {
+      console.error("maskyoo-webhook save blocked: no tenant user", { tenant_id });
+      return new Response(JSON.stringify({ error: "No tenant user found", tenant_id }), { status: 422, headers: corsHeaders });
+    }
+
     const rawStatus = (params.call_status || params.status || "").toString().toUpperCase();
     const status = rawStatus.includes("ANSWER") && !rawStatus.includes("NO") ? "completed"
       : rawStatus.includes("NO ANSWER") || rawStatus === "NOANSWER" ? "no-answer"
@@ -121,16 +133,23 @@ Deno.serve(async (req) => {
 
     const payload: any = {
       tenant_id, provider: "maskyoo", provider_call_id: uniqueid,
+      caller_user_id: tenantUser.user_id,
       from_number: params.cdr_ani || params.cli || params.cli_unformatted || null,
       to_number: params.cdr_ddi || params.destination || params.maskyoo || null,
       duration: params.call_duration || params.duration ? parseInt(params.call_duration || params.duration) : null,
       status,
+      recording_url: recording,
       notes: noteParts.join(" | "),
       lead_id, client_id,
     };
 
-    if (existing) await supabase.from("call_logs").update(payload).eq("id", existing.id);
-    else await supabase.from("call_logs").insert(payload);
+    const { error: saveError } = existing
+      ? await supabase.from("call_logs").update(payload).eq("id", existing.id)
+      : await supabase.from("call_logs").insert(payload);
+    if (saveError) {
+      console.error("maskyoo-webhook save error:", saveError);
+      return new Response(JSON.stringify({ error: "Failed to save call log", details: saveError.message }), { status: 500, headers: corsHeaders });
+    }
 
     return new Response(JSON.stringify({ ok: true }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
