@@ -2856,15 +2856,13 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
         );
       })()}
 
-      {/* Maskyoo incoming-calls KPI (configured per report) */}
-      {table?.tenant_id && table?.integration_settings?.maskyoo_number &&
-        (hasGoogleAnalytics || hasGoogleSearchConsole || hasAhrefs || hasGoogleAds) && (
-          <MaskyooCallsCard
-            tenantId={table.tenant_id}
-            maskyooNumber={String(table.integration_settings.maskyoo_number)}
-            days={30}
-          />
-        )}
+      {/* Maskyoo incoming-calls KPI (configured per report).
+          Aggregates organic (SEO/GA/GSC/Ahrefs) and paid (Google Ads) numbers
+          across sibling reports for the same client, so the dashboard always
+          shows both lines side-by-side regardless of which report is open. */}
+      {table?.tenant_id && (hasGoogleAnalytics || hasGoogleSearchConsole || hasAhrefs || hasGoogleAds) && (
+        <MaskyooSiblingCard table={table} />
+      )}
 
       {/* Google Analytics Dashboard */}
       {!summaryOnly && hasGoogleAnalytics && filteredRecords && filteredRecords.length > 0 && (
