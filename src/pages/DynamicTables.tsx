@@ -1250,13 +1250,19 @@ export default function DynamicTables() {
               </div>
             )}
 
-            {/* Maskyoo phone number — show incoming-call KPI inside the report */}
+            {/* Maskyoo phone number — show incoming-call KPI inside the report.
+                For Google Ads = paid line. For Ahrefs/GA/GSC = organic line. */}
             {(editingTable?.integration_type === 'ahrefs'
               || editingTable?.integration_type === 'google_analytics'
               || editingTable?.integration_type === 'google_search_console'
               || editingTable?.integration_type === 'google_ads') && (
               <div className="space-y-2">
-                <Label>מספר מסקיו לדוח (אופציונלי)</Label>
+                <Label>
+                  {editingTable?.integration_type === 'google_ads'
+                    ? 'מספר מסקיו ממומן (Google Ads)'
+                    : 'מספר מסקיו אורגני (SEO)'}
+                  {' '}(אופציונלי)
+                </Label>
                 <Input
                   value={editMaskyooNumber}
                   onChange={(e) => setEditMaskyooNumber(e.target.value)}
@@ -1264,7 +1270,7 @@ export default function DynamicTables() {
                   dir="ltr"
                 />
                 <p className="text-xs text-muted-foreground">
-                  אם יוגדר, יוצג בדוח כרטיס KPI עם מספר השיחות הנכנסות למספר זה ב-30 הימים האחרונים.
+                  הדשבורד של הלקוח יציג כרטיס KPI עם השיחות לשני הקווים (אורגני + ממומן) ב-30 הימים האחרונים, על בסיס המספרים שהוגדרו בדוחות השונים של אותו לקוח.
                 </p>
               </div>
             )}
