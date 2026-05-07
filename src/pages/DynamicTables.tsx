@@ -110,6 +110,7 @@ export default function DynamicTables() {
   const [showCreateDashboardDialog, setShowCreateDashboardDialog] = useState(false);
   const [mainTab, setMainTab] = useState<string>("tables");
   const [editAdAccountId, setEditAdAccountId] = useState<string>("");
+  const [editMaskyooNumber, setEditMaskyooNumber] = useState<string>("");
   const [clientSearch, setClientSearch] = useState<string>("");
 
   // For campaigners: fetch their assigned client IDs
@@ -409,6 +410,7 @@ export default function DynamicTables() {
     setEditAgencyId(table.agency_id || "");
     setEditClientId(table.client_id || "");
     setEditAdAccountId(table.integration_settings?.ad_account_id || "");
+    setEditMaskyooNumber(table.integration_settings?.maskyoo_number || "");
   };
 
   const handleDelete = (table: CrmTable, e: React.MouseEvent) => {
@@ -419,11 +421,25 @@ export default function DynamicTables() {
   const handleSaveEdit = () => {
     if (!editingTable || !editName.trim()) return;
     const isFacebook = editingTable.integration_type === 'facebook_insights' || editingTable.integration_type === 'facebook_ecommerce';
-    const updatedSettings = isFacebook && editAdAccountId ? {
-      ...editingTable.integration_settings,
-      ad_account_id: editAdAccountId,
-      ad_account_name: editAdAccounts.find(a => a.id === editAdAccountId)?.name || editingTable.integration_settings?.ad_account_name || '',
-    } : undefined;
+
+    const trimmedMaskyoo = editMaskyooNumber.trim();
+    const prevMaskyoo = editingTable.integration_settings?.maskyoo_number || "";
+    const maskyooChanged = trimmedMaskyoo !== prevMaskyoo;
+
+    let updatedSettings: any = undefined;
+    if (isFacebook && editAdAccountId) {
+      updatedSettings = {
+        ...editingTable.integration_settings,
+        ad_account_id: editAdAccountId,
+        ad_account_name: editAdAccounts.find(a => a.id === editAdAccountId)?.name || editingTable.integration_settings?.ad_account_name || '',
+      };
+    }
+    if (maskyooChanged) {
+      updatedSettings = {
+        ...(updatedSettings || editingTable.integration_settings || {}),
+        maskyoo_number: trimmedMaskyoo || null,
+      };
+    }
 
     // If it's an Ahrefs/SEO table and client changed, sync domain
     const isAhrefs = editingTable.integration_type === 'ahrefs';
@@ -1231,6 +1247,25 @@ export default function DynamicTables() {
                     ⚠️ הדוח לא מחובר לחשבון מודעות — בחר חשבון כדי להתחיל לקבל נתונים
                   </p>
                 )}
+              </div>
+            )}
+
+            {/* Maskyoo phone number — show incoming-call KPI inside the report */}
+            {(editingTable?.integration_type === 'ahrefs'
+              || editingTable?.integration_type === 'google_analytics'
+              || editingTable?.integration_type === 'google_search_console'
+              || editingTable?.integration_type === 'google_ads') && (
+              <div className="space-y-2">
+                <Label>מספר מסקיו לדוח (אופציונלי)</Label>
+                <Input
+                  value={editMaskyooNumber}
+                  onChange={(e) => setEditMaskyooNumber(e.target.value)}
+                  placeholder="לדוגמה: 03-1234567"
+                  dir="ltr"
+                />
+                <p className="text-xs text-muted-foreground">
+                  אם יוגדר, יוצג בדוח כרטיס KPI עם מספר השיחות הנכנסות למספר זה ב-30 הימים האחרונים.
+                </p>
               </div>
             )}
           </div>
