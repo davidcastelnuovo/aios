@@ -603,8 +603,8 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
         gaOrganicSessionsPrev={gaOrganicPrevMonth}
       />
 
-      {/* Traffic History Chart */}
-      <SeoTrafficChart trafficHistory={trafficHistory} gaOrganicByMonth={gaOrganicByMonth} />
+      {/* Traffic History Chart — Ahrefs only (GA chart removed per request; organic KPI card already shows GA sessions) */}
+      <SeoTrafficChart trafficHistory={trafficHistory} />
 
       {/* Google Search Console Integration — enriches keyword rows silently, no raw table shown here */}
       <GscIntegration
