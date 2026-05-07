@@ -543,7 +543,20 @@ export function GoogleAnalyticsDashboard({
           }, 0);
       organicConversions = cgConvSum('organic search');
       paidConversions = cgConvSum('paid search') + cgConvSum('paid social') + cgConvSum('display');
+      // Other conversions (Unassigned, Direct, Referral, Email, SMS, Cross-network, etc.)
+      var otherConversions = channelGroupRecords
+        .filter(r => {
+          const cg = String(r.data.channel_group || '').toLowerCase();
+          return !cg.includes('organic search') && !cg.includes('paid search') && !cg.includes('paid social') && !cg.includes('display');
+        })
+        .reduce((sum, r) => {
+          const ke = Number(r.data.key_events) || 0;
+          const cv = Number(r.data.conversions) || 0;
+          const pu = Number(r.data.purchases) || 0;
+          return sum + (ke || cv || pu);
+        }, 0);
     } else {
+      var otherConversions = 0;
       // Fallback: classify from trafficSources (daily_source based)
       organicSessions = trafficSources.filter(s => classifyTraffic(s.name) === 'organic').reduce((sum, s) => sum + s.sessions, 0);
       paidSessions = trafficSources.filter(s => classifyTraffic(s.name) === 'paid').reduce((sum, s) => sum + s.sessions, 0);
@@ -554,7 +567,7 @@ export function GoogleAnalyticsDashboard({
       paidConversions = trafficSources.filter(s => classifyTraffic(s.name) === 'paid').reduce((sum, s) => sum + s.conversions, 0);
     }
 
-    const trafficBreakdown = { organicSessions, paidSessions, otherSessions, organicUsers, paidUsers, organicConversions, paidConversions };
+    const trafficBreakdown = { organicSessions, paidSessions, otherSessions, organicUsers, paidUsers, organicConversions, paidConversions, otherConversions };
 
     // Phone call events - always use date-filtered event_total records for accurate per-period counts
     const dateFilteredEventRecords = records.filter(r => {
@@ -929,9 +942,16 @@ export function GoogleAnalyticsDashboard({
                 <p className="text-xl font-bold text-blue-700 dark:text-blue-400">{formatNumber(trafficBreakdown.paidConversions)}</p>
               </div>
             </div>
+            {trafficBreakdown.otherConversions > 0 && (
+              <p className="text-xs text-muted-foreground mt-3 text-right">
+                ℹ️ {formatNumber(trafficBreakdown.otherConversions)} המרות נוספות מסווגות תחת ערוצים אחרים (Direct, Referral, Email, Unassigned וכו') ואינן נכללות באורגני/ממומן.
+              </p>
+            )}
           </CardContent>
         </Card>
       )}
+
+
 
       {/* Total Phone Calls */}
       {phoneCallEvents.length > 0 && (
