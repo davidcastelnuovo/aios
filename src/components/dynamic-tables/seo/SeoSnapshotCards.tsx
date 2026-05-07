@@ -35,6 +35,7 @@ function getVal(obj: Record<string, any>, ...keys: string[]): number | undefined
 export function SeoSnapshotCards({ snapshot, prevMonth, campaignStart, gaOrganicSessions, gaOrganicSessionsPrev }: SeoSnapshotCardsProps) {
   const metrics = [
     { keys: ['domain_rating', 'dr'], label: 'דירוג דומיין (DR)', icon: '🏆', isOrganic: false },
+    { keys: ['org_traffic'], label: 'תנועה אורגנית', icon: '📈', isOrganic: true },
     
     { keys: ['org_keywords_top3'], label: 'מילות מפתח (Top 3)', icon: '🥇', isOrganic: false },
     { keys: ['org_keywords_top10'], label: 'מילות מפתח (Top 10)', icon: '🔟', isOrganic: false },
