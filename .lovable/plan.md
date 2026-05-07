@@ -1,39 +1,31 @@
-## הבעיה האמיתית
+## הבעיה
 
-הפונקציה `query-maskyoo-calls` עובדת תקין מבחינת קוד ו-URL. הבעיה היא בצד של מסקיו:
+מסקיו **כן שולחים** את הוובהוק (4 קריאות נראו ב-edge logs), אבל:
+
+1. **הם שולחים GET ולא POST** — והפונקציה הקיימת תומכת בשניהם, אז זו לא הבעיה האמיתית.
+2. **ה-tenant_id מקולקל ב-URL**: הם מצרפים `?event=hangup` בסוף ה-URL שלנו, אבל ה-URL שלנו כבר מסתיים ב-`?tenant_id=...`. התוצאה: `tenant_id=2dcdaac6-...?event=hangup` (כלומר ה-`?` השני מתפרש כחלק מערך ה-tenant_id).
+3. **הקריאות מחזירות 404** — כי ה-`tenant_id` המקולקל לא נמצא ב-DB.
+
+## מה לתקן ב-`supabase/functions/maskyoo-webhook/index.ts`
+
+1. **תיקון ה-tenant_id המקולקל**: אם `params.tenant_id` מכיל `?`, לפצל אותו ולהוציא את ה-UUID האמיתי + להוסיף את שאר הפרמטרים (`event=hangup` וכו').
+2. **תמיכה ב-Maskyoo Template fields**: למפות את השמות שמסקיו שולחים בפועל:
+   - `cli` / `cli_unformatted` → caller (from)
+   - `destination` / `maskyoo` → called (to)
+   - `uuid` → unique id
+   - `status=ANSWER/NO ANSWER/BUSY` → status
+   - `duration` → duration
+   - `recording` → recording URL (לשמור ב-notes)
+3. **לוודא שהפונקציה נפרסת מחדש** (היא כבר deployed עם `verify_jwt = false`).
+
+## מה אתה צריך לעשות אצל מסקיו
+
+זה ייתקן את הבאג גם אם תשאיר את ה-URL כמו שהוא, אבל **עדיף** שתשנה אצלם את ה-URL כך שלא יוסיפו `?event=hangup`. אם הם דורשים את הפרמטר הזה, תגיד להם להחליף ב-URL את ה-`?` הראשון ל-`&`. כלומר תן להם את ה-URL הזה בלבד:
 
 ```
-The ip address is not legal for this web service 245.231.76.90
+https://jnzguisakdtcollxmgzd.supabase.co/functions/v1/maskyoo-webhook?tenant_id=2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019
 ```
 
-ה-API של מסקיו עובד עם **IP whitelist** קשיח, וכתובות ה-IP של Supabase Edge Functions לא קבועות ולא נכללות ברשימה. לכן קריאה חיה (live) מה-Edge Function למסקיו תמיד תיכשל — לא קשור ל-base_url, לא לטוקן, ולא לפורמט.
+## אחרי הפריסה
 
-יש שתי דרכים אפשריות לפתור:
-
-### אפשרות א' (מומלצת) — להציג מתוך הסנכרון הקיים
-כבר קיימת בפרויקט פונקציה `sync-maskyoo-cdr` שמושכת CDR ושומרת ב-`call_logs` (provider='maskyoo'). אם הסנכרון רץ באופן קבוע (cron / webhook `maskyoo-webhook` בזמן אמת), נחליף את הכרטיס שיקרא מ-`call_logs` במקום מ-API חי. זה גם מהיר וגם לא תלוי ב-whitelist.
-
-הבעיה הקטנה: כרגע ל-tenant הזה אין שום רשומה ב-`call_logs` עם provider='maskyoo'. צריך לוודא שהסנכרון רץ (להפעיל ידנית פעם ראשונה, ולהגדיר cron).
-
-### אפשרות ב' — להוסיף את ה-IP של Supabase ל-whitelist במסקיו
-לא ריאלי — IP ה-Edge Functions משתנה.
-
----
-
-## תוכנית מוצעת
-
-1. **לעדכן `MaskyooCallsCard.tsx`** כך שיקרא ישירות מ-`call_logs` (לא מהפונקציה):
-   - `select` מ-`call_logs` עם `provider='maskyoo'`, `tenant_id`, ו-`to_number ilike %last9%` עבור כל מספר.
-   - חישוב: incoming = כל הרשומות שתואמות ה-DDI; unique = `distinct from_number`; answered = `status='completed'`.
-   - חלון: `created_at >= now() - days`.
-2. **למחוק את ה-Edge Function `query-maskyoo-calls`** (לא נחוצה יותר).
-3. **לוודא סנכרון יזום אחד** — לקרוא ל-`sync-maskyoo-cdr` פעם אחת ידנית עבור ה-tenant כדי לאכלס היסטוריה (אם זה יעבוד מה-Edge — נראה — אם גם הוא נופל על IP, נצטרך לקרוא לזה מאצלך, מה-WhatsApp/השרת שלך, או להסתמך רק על ה-`maskyoo-webhook` בזמן אמת).
-4. **טריגר רענון**: כשהמשתמש מרענן את דוח ה-SEO, הקריאה הקיימת ל-`refetch` של React Query תמשוך מחדש מ-`call_logs` (מהיר, ללא חשש כשלון).
-
-## פרטים טכניים
-
-- שינוי קובץ: `src/components/dynamic-tables/MaskyooCallsCard.tsx` — להחליף את ה-`supabase.functions.invoke("query-maskyoo-calls")` ב-query ישיר ל-`call_logs`.
-- מחיקה: `supabase/functions/query-maskyoo-calls/` והערך התואם ב-`supabase/config.toml`.
-- אופציונלי: כפתור "סנכרן עכשיו" בכרטיס שיקרא ל-`sync-maskyoo-cdr` (ייתכן שגם זה ייכשל מאותה סיבה — נבדוק לאחר הפעלה).
-
-האם לאשר את התוכנית? (אם כן, אבצע מיד; אם תעדיף שננסה גישה אחרת — תגיד.)
+נריץ שיחת טסט נוספת ונבדוק שהיא נכנסת ל-`call_logs` עם status 200.
