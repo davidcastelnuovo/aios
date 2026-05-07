@@ -121,63 +121,80 @@ function KeywordTable({ keywords, title, icon, show3Month, showYearly, showPrevM
   showPrevMonth?: boolean;
   showGsc?: boolean;
 }) {
-  if (keywords.length === 0) {
-    return (
-      <div dir="rtl" className="px-3 py-8 text-center text-sm text-muted-foreground">
-        אין ביטויים להצגה בפילטר הנוכחי
-      </div>
-    );
-  }
+  const [search, setSearch] = useState("");
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return keywords;
+    return keywords.filter((kw) => String(kw.keyword || "").toLowerCase().includes(q));
+  }, [keywords, search]);
 
   return (
     <div dir="rtl">
-      <div className="flex items-center justify-between px-3 py-2 bg-muted/30 border-b">
+      <div className="flex items-center justify-between gap-3 px-3 py-2 bg-muted/30 border-b flex-wrap">
         <div className="flex items-center gap-2 text-sm font-medium">
           {icon}
           {title}
         </div>
-        <Badge variant="outline" className="text-xs">{keywords.length} ביטויים</Badge>
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="חיפוש ביטוי..."
+            className="h-8 w-48 rounded-md border border-input bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+          />
+          <Badge variant="outline" className="text-xs">
+            {filtered.length}
+            {search.trim() ? ` / ${keywords.length}` : ""} ביטויים
+          </Badge>
+        </div>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b bg-muted/50">
-              <th className="text-right p-3 font-medium">ביטוי</th>
-              <th className="text-center p-3 font-medium">מיקום</th>
-              {showPrevMonth && (
-                <th className="text-center p-3 font-medium">שינוי חודשי</th>
-              )}
-              {show3Month && (
-                <th className="text-center p-3 font-medium">שינוי 3 חודשים</th>
-              )}
-              {showYearly && (
-                <th className="text-center p-3 font-medium">שינוי שנתי</th>
-              )}
-              {showGsc && (
-                <>
-                  <th className="text-center p-3 font-medium text-xs">
-                    <div className="flex items-center justify-center gap-1"><MousePointerClick className="h-3 w-3" />קליקים</div>
-                  </th>
-                  <th className="text-center p-3 font-medium text-xs">
-                    <div className="flex items-center justify-center gap-1"><Eye className="h-3 w-3" />חשיפות</div>
-                  </th>
-                  <th className="text-center p-3 font-medium text-xs">CTR</th>
-                </>
-              )}
-              <th className="text-center p-3 font-medium">תנועה</th>
-              <th className="text-center p-3 font-medium">נפח חיפוש</th>
-              <th className="text-center p-3 font-medium">KD</th>
-              <th className="text-center p-3 font-medium">CPC</th>
-              <th className="text-right p-3 font-medium">URL</th>
-            </tr>
-          </thead>
-          <tbody>
-            {keywords.map((kw, idx) => (
-              <KeywordRow key={idx} kw={kw} show3Month={show3Month} showYearly={showYearly} showPrevMonth={showPrevMonth} showGsc={showGsc} />
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {filtered.length === 0 ? (
+        <div className="px-3 py-8 text-center text-sm text-muted-foreground">
+          {search.trim() ? "לא נמצאו ביטויים מתאימים לחיפוש" : "אין ביטויים להצגה בפילטר הנוכחי"}
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-muted/50">
+                <th className="text-right p-3 font-medium">ביטוי</th>
+                <th className="text-center p-3 font-medium">מיקום</th>
+                {showPrevMonth && (
+                  <th className="text-center p-3 font-medium">שינוי חודשי</th>
+                )}
+                {show3Month && (
+                  <th className="text-center p-3 font-medium">שינוי 3 חודשים</th>
+                )}
+                {showYearly && (
+                  <th className="text-center p-3 font-medium">שינוי שנתי</th>
+                )}
+                {showGsc && (
+                  <>
+                    <th className="text-center p-3 font-medium text-xs">
+                      <div className="flex items-center justify-center gap-1"><MousePointerClick className="h-3 w-3" />קליקים</div>
+                    </th>
+                    <th className="text-center p-3 font-medium text-xs">
+                      <div className="flex items-center justify-center gap-1"><Eye className="h-3 w-3" />חשיפות</div>
+                    </th>
+                    <th className="text-center p-3 font-medium text-xs">CTR</th>
+                  </>
+                )}
+                <th className="text-center p-3 font-medium">תנועה</th>
+                <th className="text-center p-3 font-medium">נפח חיפוש</th>
+                <th className="text-center p-3 font-medium">KD</th>
+                <th className="text-center p-3 font-medium">CPC</th>
+                <th className="text-right p-3 font-medium">URL</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((kw, idx) => (
+                <KeywordRow key={idx} kw={kw} show3Month={show3Month} showYearly={showYearly} showPrevMonth={showPrevMonth} showGsc={showGsc} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
