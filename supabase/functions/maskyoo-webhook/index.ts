@@ -25,6 +25,19 @@ Deno.serve(async (req) => {
     const params: Record<string, any> = {};
     url.searchParams.forEach((v, k) => { params[k] = v; });
 
+    // Maskyoo bug: their template appends ?event=hangup after our URL that already
+    // ends with ?tenant_id=..., producing tenant_id=UUID?event=hangup. Split it back.
+    if (typeof params.tenant_id === "string" && params.tenant_id.includes("?")) {
+      const [realTenant, extra] = params.tenant_id.split("?", 2);
+      params.tenant_id = realTenant;
+      if (extra) {
+        for (const pair of extra.split("&")) {
+          const [k, v] = pair.split("=");
+          if (k && !(k in params)) params[k] = decodeURIComponent(v || "");
+        }
+      }
+    }
+
     if (req.method === "POST") {
       const ct = req.headers.get("content-type") || "";
       try {
@@ -48,20 +61,21 @@ Deno.serve(async (req) => {
     const { data: settings } = await supabase
       .from("maskyoo_settings").select("*").eq("tenant_id", tenant_id).maybeSingle();
     if (!settings) {
-      return new Response(JSON.stringify({ error: "Tenant not configured" }), { status: 404, headers: corsHeaders });
+      return new Response(JSON.stringify({ error: "Tenant not configured", tenant_id }), { status: 404, headers: corsHeaders });
     }
     if (settings.webhook_secret && settings.webhook_secret !== secret) {
       return new Response(JSON.stringify({ error: "Invalid secret" }), { status: 403, headers: corsHeaders });
     }
 
-    const uniqueid = params.cdr_uniqueid || params.call_uuid || params.uniqueid;
+    const uniqueid = params.cdr_uniqueid || params.call_uuid || params.uniqueid || params.uuid;
     if (!uniqueid) {
       return new Response(JSON.stringify({ ok: true, ignored: true }), { status: 200, headers: corsHeaders });
     }
 
-    const callerPhone = normalizePhone(params.cdr_ani || params.from);
-    const calleePhone = normalizePhone(params.cdr_ddi || params.to);
-    const targetPhone = calleePhone || callerPhone;
+    // Maskyoo template: cli=caller, destination/maskyoo=called number
+    const callerPhone = normalizePhone(params.cdr_ani || params.from || params.cli_unformatted || params.cli);
+    const calleePhone = normalizePhone(params.cdr_ddi || params.to || params.destination_unformatted || params.destination || params.maskyoo);
+    const targetPhone = callerPhone || calleePhone;
 
     let lead_id: string | null = null, client_id: string | null = null;
     if (targetPhone) {
@@ -77,8 +91,8 @@ Deno.serve(async (req) => {
     }
 
     const rawStatus = (params.call_status || params.status || "").toString().toUpperCase();
-    const status = rawStatus.includes("ANSWERED") ? "completed"
-      : rawStatus.includes("NO ANSWER") ? "no-answer"
+    const status = rawStatus.includes("ANSWER") && !rawStatus.includes("NO") ? "completed"
+      : rawStatus.includes("NO ANSWER") || rawStatus === "NOANSWER" ? "no-answer"
       : rawStatus.includes("BUSY") ? "busy"
       : rawStatus.includes("RINGING") ? "ringing"
       : rawStatus.includes("FAILED") ? "failed" : "completed";
@@ -88,13 +102,18 @@ Deno.serve(async (req) => {
       .eq("tenant_id", tenant_id).eq("provider", "maskyoo")
       .eq("provider_call_id", uniqueid).maybeSingle();
 
+    const recording = params.recording || params.recording_url || null;
+    const noteParts = [`Maskyoo [${rawStatus}]`];
+    if (params.event) noteParts.push(`event=${params.event}`);
+    if (recording) noteParts.push(`recording=${recording}`);
+
     const payload: any = {
       tenant_id, provider: "maskyoo", provider_call_id: uniqueid,
-      from_number: params.cdr_ani || null,
-      to_number: params.cdr_ddi || null,
-      duration: params.call_duration ? parseInt(params.call_duration) : null,
+      from_number: params.cdr_ani || params.cli || params.cli_unformatted || null,
+      to_number: params.cdr_ddi || params.destination || params.maskyoo || null,
+      duration: params.call_duration || params.duration ? parseInt(params.call_duration || params.duration) : null,
       status,
-      notes: `Maskyoo webhook [${rawStatus}]`,
+      notes: noteParts.join(" | "),
       lead_id, client_id,
     };
 
