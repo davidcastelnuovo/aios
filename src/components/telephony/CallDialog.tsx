@@ -163,6 +163,22 @@ export function CallDialog({ open, onOpenChange, phoneNumber, contactName, leadI
             />
           )}
 
+          {/* Provider selector - only when idle */}
+          {(callStatus === "idle" || callStatus === "failed") && (
+            <div className="w-full space-y-2">
+              <Label className="text-xs text-muted-foreground">ספק מרכזיה</Label>
+              <Select value={provider} onValueChange={(v) => setProvider(v as "paycall" | "maskyoo")}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="paycall">Paycall</SelectItem>
+                  <SelectItem value="maskyoo">Maskyoo (מסקיו)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           {/* Action buttons */}
           <div className="flex items-center gap-4">
             {callStatus === "idle" || callStatus === "failed" ? (
