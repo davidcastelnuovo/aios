@@ -12,6 +12,7 @@ import { Phone, Settings, Save, Loader2, ArrowRight, RefreshCw, Copy } from "luc
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
+import { MaskyooNumbersManager } from "@/components/maskyoo/MaskyooNumbersManager";
 
 export default function MaskyooSettings() {
   const { tenantId } = useCurrentTenant();
@@ -159,6 +160,8 @@ export default function MaskyooSettings() {
           שמור הגדרות
         </Button>
       </div>
+
+      {tenantId && <MaskyooNumbersManager tenantId={tenantId} />}
 
       <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-800">
         <CardContent className="p-4">
