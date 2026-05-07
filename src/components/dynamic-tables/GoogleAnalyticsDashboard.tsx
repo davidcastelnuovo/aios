@@ -567,7 +567,7 @@ export function GoogleAnalyticsDashboard({
       paidConversions = trafficSources.filter(s => classifyTraffic(s.name) === 'paid').reduce((sum, s) => sum + s.conversions, 0);
     }
 
-    const trafficBreakdown = { organicSessions, paidSessions, otherSessions, organicUsers, paidUsers, organicConversions, paidConversions };
+    const trafficBreakdown = { organicSessions, paidSessions, otherSessions, organicUsers, paidUsers, organicConversions, paidConversions, otherConversions };
 
     // Phone call events - always use date-filtered event_total records for accurate per-period counts
     const dateFilteredEventRecords = records.filter(r => {
