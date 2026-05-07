@@ -603,8 +603,16 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
         gaOrganicSessionsPrev={gaOrganicPrevMonth}
       />
 
-      {/* Traffic History Chart — Ahrefs only (GA chart removed per request; organic KPI card already shows GA sessions) */}
-      <SeoTrafficChart trafficHistory={trafficHistory} />
+      {/* Maskyoo calls (replaces removed Ahrefs traffic chart per request) */}
+      <MaskyooSiblingCard
+        table={{
+          id: selectedReport?.id || "",
+          tenant_id: tenantId,
+          client_id: clientId,
+          integration_type: "ahrefs",
+          integration_settings: {},
+        }}
+      />
 
       {/* Google Search Console Integration — enriches keyword rows silently, no raw table shown here */}
       <GscIntegration
