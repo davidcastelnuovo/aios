@@ -161,6 +161,8 @@ export default function MaskyooSettings() {
         </Button>
       </div>
 
+      {tenantId && <MaskyooNumbersManager tenantId={tenantId} />}
+
       <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-800">
         <CardContent className="p-4">
           <h4 className="font-semibold mb-2">⚠️ חשוב: עובדים רק עם Webhook</h4>
