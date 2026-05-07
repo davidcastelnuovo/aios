@@ -84,10 +84,16 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ ok: true, ignored: true }), { status: 200, headers: corsHeaders });
     }
 
-    // Maskyoo template: cli=caller, destination/maskyoo=called number
+    // Maskyoo template:
+    //   cli           = caller (the person who called in)
+    //   maskyoo       = the Maskyoo DID that was dialled (this is what we want!)
+    //   destination   = the real number Maskyoo forwarded the call to (our staff)
+    //   name          = the label configured for this DID inside Maskyoo
     const callerPhone = normalizePhone(params.cdr_ani || params.from || params.cli_unformatted || params.cli);
-    const calleePhone = normalizePhone(params.cdr_ddi || params.to || params.destination_unformatted || params.destination || params.maskyoo);
-    const targetPhone = callerPhone || calleePhone;
+    const maskyooDid = normalizePhone(params.maskyoo_unformatted || params.maskyoo || params.cdr_ddi || params.to);
+    const forwardedTo = normalizePhone(params.destination_unformatted || params.destination);
+    const calleePhone = maskyooDid; // the DID is what we register as a "Maskyoo number"
+    const targetPhone = callerPhone; // who to attribute the call to (lead/client)
 
     let lead_id: string | null = null, client_id: string | null = null;
     if (targetPhone) {
