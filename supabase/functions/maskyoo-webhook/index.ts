@@ -108,7 +108,7 @@ Deno.serve(async (req) => {
       const calleeLast9 = calleePhone.slice(-9);
       const { data: knownNumber } = await supabase
         .from("maskyoo_numbers")
-        .select("id, client_id, is_ignored")
+        .select("id, client_id, is_ignored, label")
         .eq("tenant_id", tenant_id)
         .eq("phone_last9", calleeLast9)
         .maybeSingle();
@@ -122,13 +122,22 @@ Deno.serve(async (req) => {
         client_id = knownNumber.client_id;
       }
 
+      // Try to capture the human-friendly name configured for this DID inside Maskyoo.
+      const maskyooName: string | null =
+        params.did_name || params.cdr_did_name || params.cdr_ddi_name ||
+        params.destination_name || params.ddi_name || params.line_name || null;
+
       if (!knownNumber) {
         await supabase.from("maskyoo_numbers").insert({
           tenant_id,
           phone_last9: calleeLast9,
           display_number: params.cdr_ddi || params.destination || params.maskyoo || calleePhone,
+          label: maskyooName,
           category: "general",
         });
+      } else if (maskyooName && !knownNumber.label) {
+        // Backfill the Maskyoo display name once we receive it.
+        await supabase.from("maskyoo_numbers").update({ label: maskyooName }).eq("id", knownNumber.id);
       }
     }
 
