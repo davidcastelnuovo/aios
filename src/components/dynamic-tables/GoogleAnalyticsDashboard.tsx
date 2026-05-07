@@ -951,7 +951,6 @@ export function GoogleAnalyticsDashboard({
         </Card>
       )}
 
-      )}
 
 
       {/* Total Phone Calls */}
