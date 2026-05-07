@@ -539,6 +539,20 @@ export default function Integrations() {
       gradient: "bg-gradient-to-r from-teal-600 to-cyan-700",
     },
     {
+      icon: <Phone className="h-6 w-6" />,
+      title: "Maskyoo (מסקיו)",
+      description: "מרכזיה ישראלית - שיחות יוצאות, היסטוריית CDR, הקלטות ו-Webhooks בזמן אמת",
+      features: [
+        "Click2Call ישירות מכרטיס לקוח/ליד",
+        "סנכרון היסטוריית שיחות (CDR)",
+        "האזנה להקלטות שיחות",
+        "Webhook לעדכוני סטטוס בזמן אמת",
+      ],
+      isConnected: !!maskyooIntegration,
+      route: "maskyoo-settings",
+      gradient: "bg-gradient-to-r from-emerald-600 to-teal-700",
+    },
+    {
       icon: <Send className="h-6 w-6" />,
       title: "Telegram",
       description: "חיבור בוט טלגרם לשליחה וקבלה של הודעות",
