@@ -951,8 +951,8 @@ export function GoogleAnalyticsDashboard({
         </Card>
       )}
 
-      {/* keep existing code */}
-      {false && (
+      )}
+
 
       {/* Total Phone Calls */}
       {phoneCallEvents.length > 0 && (
