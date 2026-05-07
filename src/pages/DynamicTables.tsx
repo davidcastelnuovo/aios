@@ -410,6 +410,7 @@ export default function DynamicTables() {
     setEditAgencyId(table.agency_id || "");
     setEditClientId(table.client_id || "");
     setEditAdAccountId(table.integration_settings?.ad_account_id || "");
+    setEditMaskyooNumber(table.integration_settings?.maskyoo_number || "");
   };
 
   const handleDelete = (table: CrmTable, e: React.MouseEvent) => {
