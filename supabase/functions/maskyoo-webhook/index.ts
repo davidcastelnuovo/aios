@@ -108,7 +108,7 @@ Deno.serve(async (req) => {
       const calleeLast9 = calleePhone.slice(-9);
       const { data: knownNumber } = await supabase
         .from("maskyoo_numbers")
-        .select("id, client_id, is_ignored")
+        .select("id, client_id, is_ignored, label")
         .eq("tenant_id", tenant_id)
         .eq("phone_last9", calleeLast9)
         .maybeSingle();
