@@ -179,12 +179,12 @@ Deno.serve(async (req) => {
     const payload: any = {
       tenant_id, provider: "maskyoo", provider_call_id: uniqueid,
       caller_user_id: tenantUser.user_id,
-      from_number: params.cdr_ani || params.cli || params.cli_unformatted || null,
-      to_number: params.cdr_ddi || params.destination || params.maskyoo || null,
+      from_number: params.cli || params.cli_unformatted || params.cdr_ani || null,
+      to_number: params.maskyoo || params.maskyoo_unformatted || params.cdr_ddi || null,
       duration: params.call_duration || params.duration ? parseInt(params.call_duration || params.duration) : null,
       status,
       recording_url: recording,
-      notes: noteParts.join(" | "),
+      notes: noteParts.join(" | ") + (forwardedTo ? ` | forwarded_to=${forwardedTo}` : ""),
       lead_id, client_id,
     };
 
