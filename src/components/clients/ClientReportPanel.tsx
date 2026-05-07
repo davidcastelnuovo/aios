@@ -53,6 +53,24 @@ function getSyncFunction(integrationType: string | null): string | null {
   }
 }
 
+function getAdAccountUrl(table: any): string | null {
+  const settings = table?.integration_settings || {};
+  const rawId = settings.ad_account_id;
+  if (!rawId) return null;
+  const type = table?.integration_type;
+  if (type === "facebook_insights" || type === "facebook_ecommerce") {
+    const id = String(rawId).replace(/^act_/, "");
+    if (!id) return null;
+    return `https://business.facebook.com/adsmanager/manage/campaigns?act=${id}`;
+  }
+  if (type === "google_ads") {
+    const id = String(rawId).replace(/-/g, "");
+    if (!id) return null;
+    return `https://ads.google.com/aw/overview?__e=${id}`;
+  }
+  return null;
+}
+
 function generateReadableToken(tableName: string): string {
   const hebrewMap: Record<string, string> = {
     'א': 'a', 'ב': 'b', 'ג': 'g', 'ד': 'd', 'ה': 'h', 'ו': 'v', 'ז': 'z',
@@ -528,6 +546,21 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
           <Camera className={`h-3 w-3 ${isCapturing ? "animate-spin" : ""}`} />
           צלם מחדש
         </Button>
+        {(() => {
+          const adUrl = getAdAccountUrl(table);
+          if (!adUrl) return null;
+          return (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1 text-xs"
+              onClick={() => window.open(adUrl, "_blank", "noopener,noreferrer")}
+            >
+              <ExternalLink className="h-3 w-3" />
+              פתח חשבון מודעות
+            </Button>
+          );
+        })()}
         <Button
           variant="ghost"
           size="sm"
