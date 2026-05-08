@@ -40,7 +40,7 @@ serve(async (req) => {
     }
 
     try {
-      const { tenantId, userId } = await req.json();
+      const { tenantId, userId, origin } = await req.json();
       
       if (!tenantId || !userId) {
         return new Response(
@@ -54,7 +54,7 @@ serve(async (req) => {
         'https://www.googleapis.com/auth/webmasters.readonly',
       ].join(' ');
 
-      const state = btoa(JSON.stringify({ tenantId, userId }));
+      const state = btoa(JSON.stringify({ tenantId, userId, origin: origin || null }));
 
       const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
       authUrl.searchParams.set('client_id', clientId);
@@ -99,8 +99,20 @@ serve(async (req) => {
       return tenant?.slug || 'app';
     }
 
+    let stateOrigin: string | null = null;
+    let stateTenantId: string | null = null;
+    if (state) {
+      try {
+        const parsed = JSON.parse(atob(state));
+        stateOrigin = parsed.origin || null;
+        stateTenantId = parsed.tenantId || null;
+      } catch { /* noop */ }
+    }
+    const APP_BASE = stateOrigin || Deno.env.get('APP_URL') || 'https://after-lead.com';
+
     if (error) {
-      const redirectUrl = `${Deno.env.get('APP_URL') || 'https://lovable.dev'}/integrations?error=${error}`;
+      const slug = stateTenantId ? await getTenantSlug(stateTenantId) : 'app';
+      const redirectUrl = `${APP_BASE}/t/${slug}/integrations?error=${error}`;
       return new Response(null, {
         status: 302,
         headers: { Location: redirectUrl }
@@ -187,14 +199,15 @@ serve(async (req) => {
         throw saveError;
       }
 
-      const redirectUrl = `${Deno.env.get('APP_URL') || 'https://lovable.dev'}/t/${tenantSlug}/integrations?google_search_console=connected`;
+      const redirectUrl = `${APP_BASE}/t/${tenantSlug}/integrations?google_search_console=connected`;
       return new Response(null, {
         status: 302,
         headers: { Location: redirectUrl }
       });
     } catch (error) {
       console.error('OAuth callback error:', error);
-      const redirectUrl = `${Deno.env.get('APP_URL') || 'https://lovable.dev'}/integrations?error=auth_failed`;
+      const slug = stateTenantId ? await getTenantSlug(stateTenantId) : 'app';
+      const redirectUrl = `${APP_BASE}/t/${slug}/integrations?error=auth_failed`;
       return new Response(null, {
         status: 302,
         headers: { Location: redirectUrl }
