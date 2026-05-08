@@ -4975,6 +4975,54 @@ export type Database = {
           },
         ]
       }
+      seo_call_snapshots: {
+        Row: {
+          category: string
+          client_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          incoming_count: number
+          is_manual: boolean
+          note: string | null
+          period_end: string
+          period_start: string
+          synced_at: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          incoming_count?: number
+          is_manual?: boolean
+          note?: string | null
+          period_end: string
+          period_start: string
+          synced_at?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          incoming_count?: number
+          is_manual?: boolean
+          note?: string | null
+          period_end?: string
+          period_start?: string
+          synced_at?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       seo_monthly_updates: {
         Row: {
           client_id: string
