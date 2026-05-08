@@ -197,8 +197,15 @@ export function PublicGscView({ records }: PublicGscViewProps) {
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto" dir="rtl">
+            <table className="w-full text-sm table-fixed" dir="rtl">
+              <colgroup>
+                <col />
+                <col className="w-24" />
+                <col className="w-24" />
+                <col className="w-24" />
+                <col className="w-24" />
+              </colgroup>
               <thead>
                 <tr className="border-b bg-muted/50">
                   <th className="text-right p-3 font-medium">ביטוי</th>
@@ -219,7 +226,7 @@ export function PublicGscView({ records }: PublicGscViewProps) {
               <tbody>
                 {sortedQueries.map((row) => (
                   <tr key={row.query} className="border-b last:border-0 hover:bg-muted/30">
-                    <td className="p-3 text-right font-medium">{row.query}</td>
+                    <td className="p-3 text-right font-medium truncate">{row.query}</td>
                     <td className="p-3 text-center">
                       <Badge
                         variant={row.position <= 3 ? "default" : row.position <= 10 ? "secondary" : "outline"}
@@ -228,9 +235,9 @@ export function PublicGscView({ records }: PublicGscViewProps) {
                         {row.position.toFixed(1)}
                       </Badge>
                     </td>
-                    <td className="p-3 text-center">{formatNumber(row.clicks)}</td>
-                    <td className="p-3 text-center">{formatNumber(row.impressions)}</td>
-                    <td className="p-3 text-center">{(row.ctr * 100).toFixed(2)}%</td>
+                    <td className="p-3 text-center tabular-nums">{formatNumber(row.clicks)}</td>
+                    <td className="p-3 text-center tabular-nums">{formatNumber(row.impressions)}</td>
+                    <td className="p-3 text-center tabular-nums">{(row.ctr * 100).toFixed(2)}%</td>
                   </tr>
                 ))}
               </tbody>
