@@ -207,7 +207,7 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
     }
   }, [shareLink, dashboard.id, dashboard.name, tenantId, queryClient]);
 
-  const shareUrl = shareLink ? `https://after-lead.lovable.app/shared/dashboard/${shareLink}` : null;
+  const shareUrl = shareLink ? `https://after-lead.com/shared/dashboard/${shareLink}` : null;
 
   // Mount snapshot once we have the share token
   useEffect(() => {
@@ -382,7 +382,7 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
       let effectiveShareUrl = shareUrl;
       if (!effectiveShareUrl) {
         const token = await ensureShareToken();
-        if (token) effectiveShareUrl = `https://after-lead.lovable.app/shared/dashboard/${token}`;
+        if (token) effectiveShareUrl = `https://after-lead.com/shared/dashboard/${token}`;
       }
 
       if (sendWhatsApp) {
