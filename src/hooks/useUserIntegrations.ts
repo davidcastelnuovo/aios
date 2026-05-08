@@ -38,7 +38,9 @@ export function useUserIntegrations(
 
       // Tenant-scoped integrations: visible to all members of the tenant
       // (e.g. Google Analytics is shared across the organization)
-      const TENANT_SCOPED_TYPES = new Set(['google_analytics']);
+      // All Google integrations are now tenant-scoped: any member of the tenant
+      // who has access to reports/dashboards can see the data — no per-user privacy.
+      const TENANT_SCOPED_TYPES = new Set(['google_analytics', 'google_search_console', 'google_ads']);
       const isTenantScoped = TENANT_SCOPED_TYPES.has(integrationType);
 
       // 1. Fetch user's own integrations (or all tenant integrations for tenant-scoped types)
