@@ -126,6 +126,7 @@ export default function DashboardView() {
   const [dateFilter, setDateFilter] = useState('last_7_days');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all');
+  const didSetSeoDefaultRef = useRef(false);
 
   // Fetch dashboard
   const { data: dashboard, isLoading: dashboardLoading } = useQuery({
