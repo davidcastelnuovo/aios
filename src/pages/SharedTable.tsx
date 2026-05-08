@@ -350,7 +350,10 @@ export default function SharedTable() {
                 )}
               </TabsList>
 
-              <TabsContent value="seo">
+              <TabsContent value="seo" className="space-y-4">
+                {hasMaskyoo && (
+                  <PublicMaskyooCallsCard snapshots={maskyooSnapshots} periodLabel={periodLabel} />
+                )}
                 <PublicSeoView
                   tableName={data.table.name}
                   reports={data.ahrefs_reports || []}
@@ -373,14 +376,20 @@ export default function SharedTable() {
               )}
             </Tabs>
           ) : (
-            <PublicSeoView
-              tableName={data.table.name}
-              reports={data.ahrefs_reports || []}
-              gscData={gscAggregated}
-              gaOrganicByMonth={gaOrganicByMonth}
-              initialLangFilter={(data.table.integration_settings as any)?.linkedGscLangFilter || 'all'}
-            />
+            <div className="space-y-4">
+              {hasMaskyoo && (
+                <PublicMaskyooCallsCard snapshots={maskyooSnapshots} periodLabel={periodLabel} />
+              )}
+              <PublicSeoView
+                tableName={data.table.name}
+                reports={data.ahrefs_reports || []}
+                gscData={gscAggregated}
+                gaOrganicByMonth={gaOrganicByMonth}
+                initialLangFilter={(data.table.integration_settings as any)?.linkedGscLangFilter || 'all'}
+              />
+            </div>
           )}
+
         </div>
       </div>
     );
