@@ -44,7 +44,7 @@ export default function GoogleSearchConsoleSettings() {
       }
 
       const response = await supabase.functions.invoke('google-search-console-auth?action=authorize', {
-        body: { tenantId: currentTenantId, userId },
+        body: { tenantId: currentTenantId, userId, origin: window.location.origin },
         headers: { Authorization: `Bearer ${session.session.access_token}` },
         method: 'POST',
       });

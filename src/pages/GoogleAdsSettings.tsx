@@ -329,6 +329,7 @@ export default function GoogleAdsSettings() {
           tenant_id: currentTenant?.id,
           user_id: user?.id,
           redirect_uri: redirectUri,
+          origin: window.location.origin,
         },
       });
 

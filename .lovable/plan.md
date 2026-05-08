@@ -1,86 +1,58 @@
-## המטרה
+# תיקון חזרה מאינטגרציות + עמוד 404
 
-להפוך את אזור "שיחות מסקיו" בדוח SEO לפשוט וידידותי: **שתי קוביות בלבד** — אורגני וממומן — שמראות רק את כמות השיחות הנכנסות. ללא "ייחודיות" וללא "נענו". המספר נקבע ע"י **סנכרון ידני בלבד** לטווח תאריכים שאני בוחר, ולא משתנה אוטומטית כשנכנסות שיחות חדשות. אפשר לערוך ידנית גם ללקוחות שאין להם מספר מסקיו מחובר.
+## הבעיה
 
-## עיצוב חדש (UI)
+1. **עמוד 404** מציג כפתור "חזרה לדשבורד" — צריך להוביל לעמוד הבית (`/t/:slug/home`) ולא לדשבורד.
+2. **לאחר חיבור אינטגרציה** (Google Ads / Analytics / Search Console / וכו') המשתמש מועבר ל-404. הסיבה: ה-Edge Function של ה-OAuth callback בונה את ה-redirect הסופי מתוך `Deno.env.get('APP_URL')` (או fallback ל-`https://lovable.dev`), ולא מתוך הדומיין שממנו המשתמש התחיל את החיבור. כתוצאה מכך הוא נופל לדומיין הלא נכון (preview / published / custom domain) → הנתיב לא קיים שם → 404.
 
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│ 📞 שיחות מסקיו                          [📅 1.4 – 30.4 ▾] [🔄] │
-├─────────────────────────────────────────────────────────────────┤
-│   ┌───────────────────┐    ┌───────────────────┐                 │
-│   │ אורגני      ✏️ ⓘ │    │ ממומן       ✏️ ⓘ │                 │
-│   │      127          │    │       54          │                 │
-│   │ שיחות נכנסות      │    │ שיחות נכנסות      │                 │
-│   │ סונכרן 8.5 · ידני │    │ סונכרן 8.5        │                 │
-│   └───────────────────┘    └───────────────────┘                 │
-└─────────────────────────────────────────────────────────────────┘
+## הפתרון
+
+### 1. עמוד 404 (`src/pages/NotFound.tsx`)
+- שינוי הכפתור מ-"חזרה לדשבורד" → "חזרה לעמוד הבית".
+- ה-href יבנה דרך `buildPath("home")` במקום `buildPath("dashboard")`.
+- אם ה-tenant לא מוכן עדיין, fallback ל-`/` (לא ל-`/auth`), כדי ש-Home Router הראשי יבחר את היעד הנכון.
+
+### 2. החזרת אורח מקור ה-OAuth ב-`state`
+כדי שלא יקרה שוב 404 אחרי OAuth, נעביר את ה-origin של הדומיין הנוכחי כחלק מ-`state`, וב-callback נשתמש בו במקום `APP_URL`.
+
+**Frontend** (איפה שמריצים `getAuthUrl`/קוראים לפונקציה):
+- `src/pages/GoogleAdsSettings.tsx`
+- `src/pages/GoogleAnalyticsSettings.tsx`
+- `src/pages/GoogleSearchConsoleSettings.tsx`
+- `src/pages/GmailSettings.tsx`
+- `src/pages/FacebookSettings.tsx` (כבר מעביר `redirectUri` מלא, רק לוודא שהיעד הוא `integrations` ולא דף ספציפי)
+
+נעביר בכל קריאה גם `origin: window.location.origin` (ולפעמים גם `return_to: window.location.pathname` כדי לחזור לעמוד ההגדרות הספציפי).
+
+**Edge Functions שצריכות עדכון** — אריזה של `origin` ב-state וקריאתו ב-callback:
+- `supabase/functions/google-ads-auth/index.ts`
+- `supabase/functions/google-analytics-auth/index.ts`
+- `supabase/functions/google-search-console-auth/index.ts`
+- `supabase/functions/gmail-auth/index.ts`
+- `supabase/functions/google-calendar-auth/index.ts`
+
+לוגיקת ה-redirect ב-callback תהפוך ל:
 ```
+const base = stateOrigin || Deno.env.get('APP_URL') || 'https://after-lead.com';
+const redirectUrl = `${base}/t/${tenantSlug}/integrations?<provider>=connected`;
+```
+ובמסלול השגיאה — אותו דבר, רק עם `?error=...`.
 
-- **קובייה אורגנית** — גוון ירוק רך (emerald-50)
-- **קובייה ממומן** — גוון כחול רך (blue-50)
-- כל קובייה: ספרה גדולה במרכז, כותרת קטגוריה למעלה, כיתוב "שיחות נכנסות", שורת footer עם תאריך סנכרון אחרון + תווית "ידני" אם נערך ידנית, ועיפרון לעריכה.
-- כפתור **🔄 סנכרון** למעלה — מושך מ-`call_logs` (provider='maskyoo') את כמות השיחות שנכנסו למספרים המשויכים ללקוח לטווח שנבחר. כל פעם שמלחצים — הקוביות מתעדכנות ל-snapshot החדש.
-- **בורר תאריכים** למעלה — preset של "30 ימים אחרונים" כברירת מחדל, עם אפשרות לבחור טווח אחר.
-- **עריכה ידנית** (✏️) פותחת דיאלוג קצר: ספרה אחת בלבד + הערה. שומר כ-snapshot ידני (לא יידרס בסנכרון אוטומטי הבא אלא אם המשתמש יסנכרן שוב).
+`facebook-auth` כבר מעביר `frontend_n` מהפרונט ולכן ימשיך לעבוד אחרי שנוודא שה-`redirectUri` בפרונט מצביע על `/t/:slug/integrations` (היום מצביע ל-`/t/:slug/facebook-callback` — נחליף ל-`integrations` כדי להיות עקביים, או נשאיר כפי שהוא אם דף ה-callback הזה תקין; נבחן בזמן ביצוע).
 
-## מודל נתונים — טבלה חדשה `seo_call_snapshots`
+### 3. ניקוי טכני קטן
+- בכל ה-redirect ב-callbacks להחליף את ה-fallback `'https://lovable.dev'` ל-`'https://after-lead.com'` (הדומיין האמיתי של האפליקציה).
 
-מחליפה את `maskyoo_manual_overrides` כמקור-אמת לקוביות בדוח. הטבלה הקיימת תישאר לא בשימוש (ללא DROP) למקרה שצריך לחזור.
+## קבצים שיתעדכנו
+- `src/pages/NotFound.tsx`
+- `src/pages/GoogleAdsSettings.tsx`, `GoogleAnalyticsSettings.tsx`, `GoogleSearchConsoleSettings.tsx`, `GmailSettings.tsx`, `FacebookSettings.tsx`
+- `supabase/functions/google-ads-auth/index.ts`
+- `supabase/functions/google-analytics-auth/index.ts`
+- `supabase/functions/google-search-console-auth/index.ts`
+- `supabase/functions/gmail-auth/index.ts`
+- `supabase/functions/google-calendar-auth/index.ts`
 
-עמודות:
-- `id` (uuid pk)
-- `tenant_id` (uuid, FK)
-- `client_id` (uuid)
-- `category` (text: `'organic' | 'paid'`)
-- `period_start` (date), `period_end` (date)
-- `incoming_count` (int)
-- `is_manual` (bool) — `true` אם נערך ידנית; `false` אם נמשך מסנכרון
-- `note` (text nullable)
-- `synced_at` (timestamptz)
-- `created_by` (uuid nullable), `created_at`, `updated_at`
-
-UNIQUE: `(tenant_id, client_id, category, period_start, period_end)` — אבל בפועל יישמרו רק רשומות לטווח שהמשתמש סנכרן בו לאחרונה. בכל סנכרון/עריכה → UPSERT.
-
-**RLS**:
-- SELECT/INSERT/UPDATE/DELETE: משתמשים מאותו tenant + שיתופים cross-tenant דרך `agency_tenant_access` (כמו שאר טבלאות הדוח).
-- Public share: שליפה דרך edge function שכבר טוען את הדוח (`get-share-...`) — יוסיף את ה-snapshots לתשובה.
-
-## לוגיקת סנכרון
-
-בלחיצה על 🔄:
-1. שלוף את כל `maskyoo_numbers` של ה-client (לא ignored), קטגוריות `organic` ו-`paid`.
-2. עבור כל קטגוריה: שלוף `call_logs` בטווח הנבחר (provider='maskyoo'), סנן בצד הלקוח לפי 9 ספרות אחרונות של `to_number` (כפי שתוקן זה עתה).
-3. ספור את `rows.length` לכל קטגוריה.
-4. UPSERT `seo_call_snapshots` עם `is_manual=false`, `synced_at=now()`.
-5. invalidate query → הקוביות מציגות את הספירה החדשה.
-
-אם לקטגוריה מסוימת אין מספרים מחוברים — הסנכרון ידלג עליה ולא ידרוס snapshot ידני קיים. הקובייה תציג את ה-snapshot הידני (אם קיים) או 0 + tooltip "ערוך ידנית".
-
-## עריכה ידנית
-
-בלחיצה על ✏️ (לכל קובייה בנפרד) → דיאלוג עם:
-- שדה מספר אחד: "שיחות נכנסות"
-- הערה (אופציונלי)
-- כפתור שמירה: UPSERT עם `is_manual=true`, `synced_at=now()`.
-
-## שיתוף ציבורי
-
-- ה-edge function שמגיש את הדוח השיתופי (זה שכבר מחזיר prefetched data) יוסיף שדה `callSnapshots: { organic, paid, period_start, period_end, synced_at, is_manual }`.
-- `MaskyooCallsCard` יקבל prop חדש `prefetchedSnapshots` ויעבור למצב read-only ללא כפתורים.
-
-## קבצים שמושפעים
-
-- **חדש**: מיגרציה ליצירת `seo_call_snapshots` + RLS
-- **חדש**: `SeoCallsSyncDialog.tsx` (בורר טווח + טריגר סנכרון), או inline popover קטן
-- **חדש**: `SeoCallsManualEditDialog.tsx` (החלפה ל-`MaskyooManualEditDialog`)
-- **שכתוב**: `MaskyooCallsCard.tsx` — UI חדש: 2 קוביות בלבד, ללא unique/answered, רק incoming
-- **עדכון**: `MaskyooSiblingCard.tsx` — תמיד יציג את הקארד גם אם אין מספרים מחוברים (כל עוד יש `clientId`); empty-state לקישור לאיפיון מספרים יוסר או יהפוך לכיתוב קטן
-- **עדכון**: edge function של ה-share view להחזיר snapshots (אם רלוונטי)
-- **לא משתנה**: `/maskyoo-settings` — נשאר כפי שהוא
-
-## נקודות שלא משתנות
-
-- אין שינוי ב-`call_logs` או ב-webhook של מסקיו.
-- `maskyoo_numbers` נשאר מקור-אמת לשיוך מספרים ללקוחות.
-- שורת ה-Search Console / הניתוח מתחת — לא מושפעים.
+## מה לא ישתנה
+- אין שינוי בהגדרות OAuth ב-Google Cloud / Facebook (ה-`redirect_uri` הקבוע אל ה-Edge Function נשאר זהה).
+- אין שינוי בלוגיקת השמירה של ה-tokens.
+- אין שינוי ב-RLS / DB.

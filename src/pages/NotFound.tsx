@@ -12,12 +12,12 @@ const NotFound = () => {
     console.error("404 Error: User attempted to access non-existent route:", location.pathname);
   }, [location.pathname]);
 
-  // Try to determine best redirect path
-  const getDashboardPath = () => {
+  // Always send the user back to the Home (modules) page, not the dashboard.
+  const getHomePath = () => {
     if (isReady) {
-      return buildPath("dashboard");
+      return buildPath("home");
     }
-    return "/auth";
+    return "/";
   };
 
   return (
@@ -30,9 +30,9 @@ const NotFound = () => {
         </p>
         <div className="pt-4">
           <Button asChild size="lg">
-            <a href={getDashboardPath()}>
+            <a href={getHomePath()}>
               <Home className="ml-2 h-4 w-4" />
-              חזרה לדשבורד
+              חזרה לעמוד הבית
             </a>
           </Button>
         </div>
