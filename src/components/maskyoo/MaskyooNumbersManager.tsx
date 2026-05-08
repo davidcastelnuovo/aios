@@ -236,3 +236,67 @@ export function MaskyooNumbersManager({ tenantId }: { tenantId: string }) {
     </Card>
   );
 }
+
+import { useState } from "react";
+
+function ClientCombobox({
+  clients,
+  value,
+  onChange,
+}: {
+  clients: ClientOption[];
+  value: string | null;
+  onChange: (v: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = clients.find((c) => c.id === value);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          className="h-8 min-w-[180px] justify-between font-normal"
+        >
+          <span className="truncate">{selected?.name || "— ללא שיוך —"}</span>
+          <ChevronsUpDown className="ms-2 h-3.5 w-3.5 opacity-50 shrink-0" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[260px] p-0" align="start">
+        <Command
+          filter={(val, search) => (val.includes(search.toLowerCase()) ? 1 : 0)}
+        >
+          <CommandInput placeholder="חפש לקוח..." />
+          <CommandList>
+            <CommandEmpty>לא נמצאו לקוחות</CommandEmpty>
+            <CommandGroup>
+              <CommandItem
+                value="ללא שיוך"
+                onSelect={() => {
+                  onChange(null);
+                  setOpen(false);
+                }}
+              >
+                <Check className={cn("me-2 h-4 w-4", !value ? "opacity-100" : "opacity-0")} />
+                — ללא שיוך —
+              </CommandItem>
+              {clients.map((c) => (
+                <CommandItem
+                  key={c.id}
+                  value={`${c.name} ${c.id}`}
+                  onSelect={() => {
+                    onChange(c.id);
+                    setOpen(false);
+                  }}
+                >
+                  <Check className={cn("me-2 h-4 w-4", value === c.id ? "opacity-100" : "opacity-0")} />
+                  <span className="truncate">{c.name}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
