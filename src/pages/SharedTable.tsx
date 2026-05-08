@@ -281,8 +281,12 @@ export default function SharedTable() {
   if (integrationType === "ahrefs") {
     const gaRecords = data.ga_records || [];
     const gscRecords = data.gsc_records || [];
+    const maskyooSnapshots = data.maskyoo_snapshots || [];
+    const maskyooPeriod = data.maskyoo_period || null;
+    const periodLabel = maskyooPeriod ? `${maskyooPeriod.start} – ${maskyooPeriod.end}` : undefined;
     const hasGa = gaRecords.length > 0;
     const hasGsc = gscRecords.length > 0;
+    const hasMaskyoo = maskyooSnapshots.length > 0;
     const showTabs = hasGa || hasGsc;
 
     // Derive monthly NON-PAID GA sessions for the SEO traffic chart — using the
