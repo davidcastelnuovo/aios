@@ -4055,6 +4055,48 @@ export type Database = {
           },
         ]
       }
+      maskyoo_manual_overrides: {
+        Row: {
+          answered_count: number | null
+          created_at: string
+          created_by: string | null
+          id: string
+          incoming_count: number | null
+          maskyoo_last9: string
+          note: string | null
+          period_days: number
+          tenant_id: string
+          unique_count: number | null
+          updated_at: string
+        }
+        Insert: {
+          answered_count?: number | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          incoming_count?: number | null
+          maskyoo_last9: string
+          note?: string | null
+          period_days?: number
+          tenant_id: string
+          unique_count?: number | null
+          updated_at?: string
+        }
+        Update: {
+          answered_count?: number | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          incoming_count?: number | null
+          maskyoo_last9?: string
+          note?: string | null
+          period_days?: number
+          tenant_id?: string
+          unique_count?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       maskyoo_numbers: {
         Row: {
           category: string | null
