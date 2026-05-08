@@ -197,21 +197,11 @@ export function MaskyooNumbersManager({ tenantId }: { tenantId: string }) {
                         </Select>
                       </TableCell>
                       <TableCell>
-                        <Select
-                          value={row.client_id || "__none"}
-                          onValueChange={(v) => updateMutation.mutate({
-                            id: row.id,
-                            patch: { client_id: v === "__none" ? null : v },
-                          })}
-                        >
-                          <SelectTrigger className="h-8 min-w-[180px]"><SelectValue placeholder="בחר לקוח" /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none">— ללא שיוך —</SelectItem>
-                            {(clients || []).map((c) => (
-                              <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <ClientCombobox
+                          clients={clients || []}
+                          value={row.client_id}
+                          onChange={(v) => updateMutation.mutate({ id: row.id, patch: { client_id: v } })}
+                        />
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge variant={count > 0 ? "default" : "secondary"}>{count}</Badge>
