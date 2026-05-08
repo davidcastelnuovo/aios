@@ -201,7 +201,7 @@ Deno.serve(async (req) => {
       const { data: reports } = await supabase
         .from("ahrefs_reports")
         .select("id, domain, report_date, report_type, report_data, comparison_data, received_at")
-        .eq("client_id", seoTargetClientId || dashboard.client_id)
+        .eq("client_id", dashboard.client_id)
         .order("report_date", { ascending: false })
         .limit(50);
       ahrefsReports = reports || [];
