@@ -212,6 +212,7 @@ Deno.serve(async (req) => {
     // chart and GSC keyword data, the same way the internal SEO dashboard does.
     let seoGaRecords: any[] = [];
     let seoGscRecords: any[] = [];
+    let seoLinkedGscSiteUrl: string | null = null;
     if (dashboard.client_id) {
       try {
         // Find the Ahrefs SEO crm_table for this client to read linkedGa/Gsc settings
@@ -225,6 +226,32 @@ Deno.serve(async (req) => {
         const seoSettings = (seoTable?.integration_settings as any) || {};
         const linkedGaTableId = seoSettings.linkedGaTableId || null;
         const linkedGscTableId = seoSettings.linkedGscTableId || null;
+        seoLinkedGscSiteUrl = seoSettings.linkedGscSiteUrl || null;
+
+        // Build accessible tenant ids (home + agency-shared)
+        const accessibleTenantIds = new Set<string>();
+        accessibleTenantIds.add(dashboard.tenant_id);
+        try {
+          const { data: clientRow } = await supabase
+            .from("clients")
+            .select("tenant_id, agency_id")
+            .eq("id", dashboard.client_id)
+            .maybeSingle();
+          if (clientRow?.tenant_id) accessibleTenantIds.add(clientRow.tenant_id);
+          if (clientRow?.agency_id) {
+            const { data: accessRows } = await supabase
+              .from("agency_tenant_access")
+              .select("accessing_tenant_id, source_tenant_id")
+              .eq("agency_id", clientRow.agency_id);
+            for (const r of accessRows || []) {
+              if (r.accessing_tenant_id) accessibleTenantIds.add(r.accessing_tenant_id);
+              if (r.source_tenant_id) accessibleTenantIds.add(r.source_tenant_id);
+            }
+          }
+        } catch (e) {
+          console.error("Error resolving accessible tenants for GSC:", e);
+        }
+        const tenantIdList = Array.from(accessibleTenantIds);
 
         // Resolve GA table — by linked id, else by client_id
         let gaTable: any = null;
@@ -258,6 +285,7 @@ Deno.serve(async (req) => {
           const { data } = await supabase
             .from("crm_tables")
             .select("id")
+            .in("tenant_id", tenantIdList)
             .eq("integration_type", "google_search_console")
             .eq("client_id", dashboard.client_id)
             .limit(1);
@@ -291,6 +319,98 @@ Deno.serve(async (req) => {
             if (error || !page || page.length === 0) break;
             seoGscRecords.push(...page);
             if (page.length < 1000) break;
+          }
+        }
+
+        // FALLBACK: live fetch from GSC API if no stored records and we have a saved site URL
+        if (seoGscRecords.length === 0 && seoLinkedGscSiteUrl) {
+          try {
+            const { data: integrations } = await supabase
+              .from("tenant_integrations")
+              .select("id, api_key, settings")
+              .eq("integration_type", "google_search_console")
+              .eq("is_active", true)
+              .in("tenant_id", tenantIdList)
+              .order("updated_at", { ascending: false })
+              .limit(5);
+
+            const googleClientId = Deno.env.get("GOOGLE_CLIENT_ID") || "";
+            const googleClientSecret = Deno.env.get("GOOGLE_CLIENT_SECRET") || "";
+
+            for (const integration of integrations || []) {
+              try {
+                let accessToken = integration.api_key as string;
+                const intSettings: any = integration.settings || {};
+                if (intSettings.expires_at && new Date(intSettings.expires_at) < new Date() && intSettings.refresh_token) {
+                  const refreshResponse = await fetch("https://oauth2.googleapis.com/token", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    body: new URLSearchParams({
+                      client_id: googleClientId,
+                      client_secret: googleClientSecret,
+                      refresh_token: intSettings.refresh_token,
+                      grant_type: "refresh_token",
+                    }),
+                  });
+                  const refreshData = await refreshResponse.json();
+                  if (refreshData.access_token) {
+                    accessToken = refreshData.access_token;
+                    const newExpiresAt = new Date(Date.now() + (refreshData.expires_in * 1000)).toISOString();
+                    await supabase
+                      .from("tenant_integrations")
+                      .update({ api_key: accessToken, settings: { ...intSettings, expires_at: newExpiresAt } })
+                      .eq("id", integration.id);
+                  }
+                }
+
+                const end = new Date().toISOString().split("T")[0];
+                const start = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+                const encodedSiteUrl = encodeURIComponent(seoLinkedGscSiteUrl);
+                const gscApiUrl = `https://www.googleapis.com/webmasters/v3/sites/${encodedSiteUrl}/searchAnalytics/query`;
+
+                const collected: any[] = [];
+                for (let page = 0; page < 5; page++) {
+                  const resp = await fetch(gscApiUrl, {
+                    method: "POST",
+                    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      startDate: start,
+                      endDate: end,
+                      dimensions: ["query"],
+                      rowLimit: 1000,
+                      startRow: page * 1000,
+                      dataState: "final",
+                    }),
+                  });
+                  if (!resp.ok) {
+                    const errBody = await resp.text();
+                    console.error("GSC API error for site", seoLinkedGscSiteUrl, resp.status, errBody);
+                    break;
+                  }
+                  const json = await resp.json();
+                  const pageRows = Array.isArray(json.rows) ? json.rows : [];
+                  collected.push(...pageRows);
+                  if (pageRows.length < 1000) break;
+                }
+
+                if (collected.length > 0) {
+                  seoGscRecords = collected.map((row: any) => ({
+                    data: {
+                      query: row.keys?.[0] || "",
+                      clicks: row.clicks || 0,
+                      impressions: row.impressions || 0,
+                      ctr: row.ctr ? Math.round(row.ctr * 10000) / 100 : 0,
+                      position: row.position ? Math.round(row.position * 10) / 10 : 0,
+                    },
+                  }));
+                  break;
+                }
+              } catch (innerErr) {
+                console.error("Error using GSC integration", integration.id, innerErr);
+              }
+            }
+          } catch (e) {
+            console.error("Error fetching GSC live fallback:", e);
           }
         }
       } catch (e) {
