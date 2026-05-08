@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { FileSpreadsheet, Facebook, TrendingUp, TrendingDown, Minus, Globe, Search, BarChart3 } from "lucide-react";
 import { PublicSeoView } from "@/components/dynamic-tables/PublicSeoView";
+import { PublicMaskyooCallsCard } from "@/components/dynamic-tables/PublicMaskyooCallsCard";
 import { PublicGscView } from "@/components/dynamic-tables/PublicGscView";
 import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnalyticsDashboard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -280,8 +281,12 @@ export default function SharedTable() {
   if (integrationType === "ahrefs") {
     const gaRecords = data.ga_records || [];
     const gscRecords = data.gsc_records || [];
+    const maskyooSnapshots = data.maskyoo_snapshots || [];
+    const maskyooPeriod = data.maskyoo_period || null;
+    const periodLabel = maskyooPeriod ? `${maskyooPeriod.start} – ${maskyooPeriod.end}` : undefined;
     const hasGa = gaRecords.length > 0;
     const hasGsc = gscRecords.length > 0;
+    const hasMaskyoo = maskyooSnapshots.length > 0;
     const showTabs = hasGa || hasGsc;
 
     // Derive monthly NON-PAID GA sessions for the SEO traffic chart — using the
@@ -345,7 +350,10 @@ export default function SharedTable() {
                 )}
               </TabsList>
 
-              <TabsContent value="seo">
+              <TabsContent value="seo" className="space-y-4">
+                {hasMaskyoo && (
+                  <PublicMaskyooCallsCard snapshots={maskyooSnapshots} periodLabel={periodLabel} />
+                )}
                 <PublicSeoView
                   tableName={data.table.name}
                   reports={data.ahrefs_reports || []}
@@ -368,14 +376,20 @@ export default function SharedTable() {
               )}
             </Tabs>
           ) : (
-            <PublicSeoView
-              tableName={data.table.name}
-              reports={data.ahrefs_reports || []}
-              gscData={gscAggregated}
-              gaOrganicByMonth={gaOrganicByMonth}
-              initialLangFilter={(data.table.integration_settings as any)?.linkedGscLangFilter || 'all'}
-            />
+            <div className="space-y-4">
+              {hasMaskyoo && (
+                <PublicMaskyooCallsCard snapshots={maskyooSnapshots} periodLabel={periodLabel} />
+              )}
+              <PublicSeoView
+                tableName={data.table.name}
+                reports={data.ahrefs_reports || []}
+                gscData={gscAggregated}
+                gaOrganicByMonth={gaOrganicByMonth}
+                initialLangFilter={(data.table.integration_settings as any)?.linkedGscLangFilter || 'all'}
+              />
+            </div>
           )}
+
         </div>
       </div>
     );

@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Select,
@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/select";
 import { Facebook, FileSpreadsheet, TrendingUp, TrendingDown, Minus, BarChart3, RefreshCw, ShoppingCart, Search } from "lucide-react";
 import { PublicSeoView } from "@/components/dynamic-tables/PublicSeoView";
+import { PublicGscView } from "@/components/dynamic-tables/PublicGscView";
+import { PublicMaskyooCallsCard } from "@/components/dynamic-tables/PublicMaskyooCallsCard";
 import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnalyticsDashboard";
 import { PublicWooCommerceView } from "@/components/dynamic-tables/PublicWooCommerceView";
 import { getExplicitLeadFieldsFromData, getLeadsFromData } from "@/lib/adsMetrics";
@@ -154,6 +156,12 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
   const hasSeo = ahrefsReports.length > 0;
   const seoGaRecords = data?.seo_ga_records || [];
   const seoGscRecords = data?.seo_gsc_records || [];
+  const maskyooSnapshots = data?.maskyoo_snapshots || [];
+  const maskyooPeriod = data?.maskyoo_period || null;
+  const maskyooPeriodLabel = maskyooPeriod ? `${maskyooPeriod.start} – ${maskyooPeriod.end}` : undefined;
+  const hasSeoMaskyoo = maskyooSnapshots.length > 0;
+  const hasSeoGsc = seoGscRecords.length > 0;
+  const hasSeoGa = seoGaRecords.length > 0;
   console.log('[SharedDashboard] wooSites:', wooSites.length, 'wooOrders:', wooOrders.length, 'seoReports:', ahrefsReports.length, 'seoGA:', seoGaRecords.length, 'seoGSC:', seoGscRecords.length);
 
   // Aggregate GSC records per keyword (sum clicks/impressions, weighted-avg position)
@@ -716,12 +724,61 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
       ) : platformFilter === 'woocommerce' ? (
         <PublicWooCommerceView sites={wooSites} orders={wooOrders} />
       ) : platformFilter === 'seo' ? (
-        <PublicSeoView
-          tableName={dashboard?.client_name || 'SEO'}
-          reports={ahrefsReports}
-          gscData={seoGscAggregated}
-          gaOrganicByMonth={seoGaOrganicByMonth}
-        />
+        (hasSeoGa || hasSeoGsc) ? (
+          <Tabs defaultValue="seo" className="w-full">
+            <TabsList className="w-full justify-start gap-1">
+              <TabsTrigger value="seo" className="gap-1.5">
+                <TrendingUp className="h-4 w-4" />
+                SEO
+              </TabsTrigger>
+              {hasSeoGsc && (
+                <TabsTrigger value="gsc" className="gap-1.5">
+                  <Search className="h-4 w-4" />
+                  Search Console
+                </TabsTrigger>
+              )}
+              {hasSeoGa && (
+                <TabsTrigger value="ga" className="gap-1.5">
+                  <BarChart3 className="h-4 w-4" />
+                  Analytics
+                </TabsTrigger>
+              )}
+            </TabsList>
+            <TabsContent value="seo" className="space-y-4">
+              {hasSeoMaskyoo && (
+                <PublicMaskyooCallsCard snapshots={maskyooSnapshots} periodLabel={maskyooPeriodLabel} />
+              )}
+              <PublicSeoView
+                tableName={dashboard?.client_name || 'SEO'}
+                reports={ahrefsReports}
+                gscData={seoGscAggregated}
+                gaOrganicByMonth={seoGaOrganicByMonth}
+              />
+            </TabsContent>
+            {hasSeoGsc && (
+              <TabsContent value="gsc">
+                <PublicGscView records={seoGscRecords} />
+              </TabsContent>
+            )}
+            {hasSeoGa && (
+              <TabsContent value="ga">
+                <GoogleAnalyticsDashboard records={seoGaRecords} />
+              </TabsContent>
+            )}
+          </Tabs>
+        ) : (
+          <div className="space-y-4">
+            {hasSeoMaskyoo && (
+              <PublicMaskyooCallsCard snapshots={maskyooSnapshots} periodLabel={maskyooPeriodLabel} />
+            )}
+            <PublicSeoView
+              tableName={dashboard?.client_name || 'SEO'}
+              reports={ahrefsReports}
+              gscData={seoGscAggregated}
+              gaOrganicByMonth={seoGaOrganicByMonth}
+            />
+          </div>
+        )
       ) : (
         <>
           {/* Summary Cards - "All" tab: 7 KPI cards like DashboardView */}
