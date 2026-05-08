@@ -6,7 +6,7 @@ import { Globe, FileText, Calendar } from "lucide-react";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { SeoSnapshotCards } from "./seo/SeoSnapshotCards";
-import { SeoTrafficChart } from "./seo/SeoTrafficChart";
+
 import { SeoKeywordsTable } from "./seo/SeoKeywordsTable";
 import { filterValidSeoReports } from "./seo/reportValidity";
 
@@ -249,8 +249,6 @@ export function PublicSeoView({ tableName, reports, gscData = [], gaOrganicByMon
         prevMonth={snapshotPrevMonth}
         campaignStart={snapshotCampaignStart}
       />
-
-      <SeoTrafficChart trafficHistory={trafficHistory} />
 
       <SeoKeywordsTable
         keywords={organicKeywords}
