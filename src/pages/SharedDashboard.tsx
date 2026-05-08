@@ -779,6 +779,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
             />
           </div>
         )
+      ) : (
         <>
           {/* Summary Cards - "All" tab: 7 KPI cards like DashboardView */}
           {platformFilter === 'all' && (
