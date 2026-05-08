@@ -51,7 +51,7 @@ import { ShareTableDialog } from "@/components/dynamic-tables/ShareTableDialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { MakeScenarioSettings } from "@/components/dynamic-tables/MakeScenarioSettings";
 import { SendReportDialog } from "@/components/dynamic-tables/SendReportDialog";
-import { MaskyooCallsCard } from "@/components/dynamic-tables/MaskyooCallsCard";
+
 import { MaskyooSiblingCard } from "@/components/dynamic-tables/MaskyooSiblingCard";
 import { CURRENCY_OPTIONS, getCurrencySymbol, type CurrencyCode } from "@/lib/currency";
 import { LinkTableToClientDialog } from "@/components/dynamic-tables/LinkTableToClientDialog";
