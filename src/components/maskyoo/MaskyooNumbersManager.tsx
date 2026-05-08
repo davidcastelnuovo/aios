@@ -40,16 +40,43 @@ export function MaskyooNumbersManager({ tenantId }: { tenantId: string }) {
   });
 
   const { data: clients } = useQuery({
-    queryKey: ["clients-min", tenantId],
+    queryKey: ["clients-min-cross-tenant", tenantId],
     enabled: !!tenantId,
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Owned agencies
+      const { data: owned } = await supabase
+        .from("agencies")
+        .select("id")
+        .eq("tenant_id", tenantId);
+      // Shared agencies via agency_tenant_access (e.g., DMM)
+      const { data: shared } = await supabase
+        .from("agency_tenant_access")
+        .select("agency_id")
+        .eq("accessing_tenant_id", tenantId);
+      const agencyIds = Array.from(
+        new Set([
+          ...((owned || []).map((a: any) => a.id)),
+          ...((shared || []).map((s: any) => s.agency_id)),
+        ])
+      ).filter(Boolean);
+
+      let query = supabase
         .from("clients")
         .select("id, name")
-        .eq("tenant_id", tenantId)
-        .order("name");
+        .in("status", ["active", "onboarding"]);
+
+      if (agencyIds.length > 0) {
+        query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${agencyIds.join(",")})`);
+      } else {
+        query = query.eq("tenant_id", tenantId);
+      }
+
+      const { data, error } = await query.order("name");
       if (error) throw error;
-      return (data || []) as ClientOption[];
+      // Dedupe by id
+      const map = new Map<string, ClientOption>();
+      (data || []).forEach((c: any) => map.set(c.id, { id: c.id, name: c.name }));
+      return Array.from(map.values());
     },
   });
 
