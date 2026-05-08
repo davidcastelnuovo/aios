@@ -724,13 +724,61 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
       ) : platformFilter === 'woocommerce' ? (
         <PublicWooCommerceView sites={wooSites} orders={wooOrders} />
       ) : platformFilter === 'seo' ? (
-        <PublicSeoView
-          tableName={dashboard?.client_name || 'SEO'}
-          reports={ahrefsReports}
-          gscData={seoGscAggregated}
-          gaOrganicByMonth={seoGaOrganicByMonth}
-        />
-      ) : (
+        (hasSeoGa || hasSeoGsc) ? (
+          <Tabs defaultValue="seo" className="w-full">
+            <TabsList className="w-full justify-start gap-1">
+              <TabsTrigger value="seo" className="gap-1.5">
+                <TrendingUp className="h-4 w-4" />
+                SEO
+              </TabsTrigger>
+              {hasSeoGsc && (
+                <TabsTrigger value="gsc" className="gap-1.5">
+                  <Search className="h-4 w-4" />
+                  Search Console
+                </TabsTrigger>
+              )}
+              {hasSeoGa && (
+                <TabsTrigger value="ga" className="gap-1.5">
+                  <BarChart3 className="h-4 w-4" />
+                  Analytics
+                </TabsTrigger>
+              )}
+            </TabsList>
+            <TabsContent value="seo" className="space-y-4">
+              {hasSeoMaskyoo && (
+                <PublicMaskyooCallsCard snapshots={maskyooSnapshots} periodLabel={maskyooPeriodLabel} />
+              )}
+              <PublicSeoView
+                tableName={dashboard?.client_name || 'SEO'}
+                reports={ahrefsReports}
+                gscData={seoGscAggregated}
+                gaOrganicByMonth={seoGaOrganicByMonth}
+              />
+            </TabsContent>
+            {hasSeoGsc && (
+              <TabsContent value="gsc">
+                <PublicGscView records={seoGscRecords} />
+              </TabsContent>
+            )}
+            {hasSeoGa && (
+              <TabsContent value="ga">
+                <GoogleAnalyticsDashboard records={seoGaRecords} />
+              </TabsContent>
+            )}
+          </Tabs>
+        ) : (
+          <div className="space-y-4">
+            {hasSeoMaskyoo && (
+              <PublicMaskyooCallsCard snapshots={maskyooSnapshots} periodLabel={maskyooPeriodLabel} />
+            )}
+            <PublicSeoView
+              tableName={dashboard?.client_name || 'SEO'}
+              reports={ahrefsReports}
+              gscData={seoGscAggregated}
+              gaOrganicByMonth={seoGaOrganicByMonth}
+            />
+          </div>
+        )
         <>
           {/* Summary Cards - "All" tab: 7 KPI cards like DashboardView */}
           {platformFilter === 'all' && (
