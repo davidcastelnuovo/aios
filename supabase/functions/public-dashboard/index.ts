@@ -328,6 +328,29 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ---- Maskyoo call snapshots — previous calendar month ----
+    let maskyooSnapshots: any[] = [];
+    let maskyooPeriod: { start: string; end: string } | null = null;
+    if (dashboard.client_id) {
+      try {
+        const now = new Date();
+        const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+        const prevMonthStart = new Date(prevMonthEnd.getFullYear(), prevMonthEnd.getMonth(), 1);
+        const fmt = (d: Date) => d.toISOString().slice(0, 10);
+        maskyooPeriod = { start: fmt(prevMonthStart), end: fmt(prevMonthEnd) };
+        const { data: snaps } = await supabase
+          .from("seo_call_snapshots")
+          .select("category, incoming_count, is_manual")
+          .eq("tenant_id", dashboard.tenant_id)
+          .eq("client_id", dashboard.client_id)
+          .eq("period_start", maskyooPeriod.start)
+          .eq("period_end", maskyooPeriod.end);
+        maskyooSnapshots = snaps || [];
+      } catch (e) {
+        console.error("Error fetching maskyoo snapshots:", e);
+      }
+    }
+
     return new Response(
       JSON.stringify({
         dashboard: {
@@ -352,8 +375,11 @@ Deno.serve(async (req) => {
         ahrefs_reports: ahrefsReports,
         seo_ga_records: seoGaRecords,
         seo_gsc_records: seoGscRecords,
+        maskyoo_snapshots: maskyooSnapshots,
+        maskyoo_period: maskyooPeriod,
         has_email_restriction: false,
       }),
+
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
