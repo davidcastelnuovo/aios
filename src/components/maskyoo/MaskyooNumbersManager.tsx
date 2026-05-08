@@ -5,9 +5,12 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ListChecks, Loader2, Trash2, Phone } from "lucide-react";
+import { ListChecks, Loader2, Trash2, Phone, Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 interface NumberRow {
@@ -194,21 +197,11 @@ export function MaskyooNumbersManager({ tenantId }: { tenantId: string }) {
                         </Select>
                       </TableCell>
                       <TableCell>
-                        <Select
-                          value={row.client_id || "__none"}
-                          onValueChange={(v) => updateMutation.mutate({
-                            id: row.id,
-                            patch: { client_id: v === "__none" ? null : v },
-                          })}
-                        >
-                          <SelectTrigger className="h-8 min-w-[180px]"><SelectValue placeholder="בחר לקוח" /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none">— ללא שיוך —</SelectItem>
-                            {(clients || []).map((c) => (
-                              <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <ClientCombobox
+                          clients={clients || []}
+                          value={row.client_id}
+                          onChange={(v) => updateMutation.mutate({ id: row.id, patch: { client_id: v } })}
+                        />
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge variant={count > 0 ? "default" : "secondary"}>{count}</Badge>
@@ -241,5 +234,69 @@ export function MaskyooNumbersManager({ tenantId }: { tenantId: string }) {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+import { useState } from "react";
+
+function ClientCombobox({
+  clients,
+  value,
+  onChange,
+}: {
+  clients: ClientOption[];
+  value: string | null;
+  onChange: (v: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = clients.find((c) => c.id === value);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          className="h-8 min-w-[180px] justify-between font-normal"
+        >
+          <span className="truncate">{selected?.name || "— ללא שיוך —"}</span>
+          <ChevronsUpDown className="ms-2 h-3.5 w-3.5 opacity-50 shrink-0" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[260px] p-0" align="start">
+        <Command
+          filter={(val, search) => (val.includes(search.toLowerCase()) ? 1 : 0)}
+        >
+          <CommandInput placeholder="חפש לקוח..." />
+          <CommandList>
+            <CommandEmpty>לא נמצאו לקוחות</CommandEmpty>
+            <CommandGroup>
+              <CommandItem
+                value="ללא שיוך"
+                onSelect={() => {
+                  onChange(null);
+                  setOpen(false);
+                }}
+              >
+                <Check className={cn("me-2 h-4 w-4", !value ? "opacity-100" : "opacity-0")} />
+                — ללא שיוך —
+              </CommandItem>
+              {clients.map((c) => (
+                <CommandItem
+                  key={c.id}
+                  value={`${c.name} ${c.id}`}
+                  onSelect={() => {
+                    onChange(c.id);
+                    setOpen(false);
+                  }}
+                >
+                  <Check className={cn("me-2 h-4 w-4", value === c.id ? "opacity-100" : "opacity-0")} />
+                  <span className="truncate">{c.name}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }
