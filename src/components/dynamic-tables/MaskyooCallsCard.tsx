@@ -135,10 +135,11 @@ function NumberRow({ tenantId, cfg, days, prefetched, readOnly }: {
         .eq("tenant_id", tenantId)
         .eq("provider", "maskyoo")
         .gte("created_at", since)
-        .ilike("to_number", `%${cfg.last9}`)
         .limit(5000);
       if (error) throw error;
-      const rows = (data || []) as Array<{ from_number: string | null; status: string | null; duration: number | null }>;
+      const all = (data || []) as Array<{ from_number: string | null; to_number: string | null; status: string | null; duration: number | null }>;
+      // Filter client-side by last 9 digits of to_number (call_logs stores formatted numbers like "077-8050632")
+      const rows = all.filter((r) => (r.to_number || "").replace(/\D/g, "").slice(-9) === cfg.last9);
       const uniq = new Set<string>();
       let answered = 0;
       for (const r of rows) {
