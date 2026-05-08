@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -126,6 +126,7 @@ export default function DashboardView() {
   const [dateFilter, setDateFilter] = useState('last_7_days');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all');
+  const didSetSeoDefaultRef = useRef(false);
 
   // Fetch dashboard
   const { data: dashboard, isLoading: dashboardLoading } = useQuery({
@@ -241,7 +242,16 @@ export default function DashboardView() {
     enabled: !!dashboard?.client_id && !!currentTenantId,
   });
 
-  // Check if client has a linked WooCommerce site
+  // SEO clients default to "last 30 days" (monthly SEO reports)
+  useEffect(() => {
+    if (didSetSeoDefaultRef.current) return;
+    if (hasSeoReports) {
+      setDateFilter('last_30_days');
+      didSetSeoDefaultRef.current = true;
+    }
+  }, [hasSeoReports]);
+
+
   const { data: hasWooCommerce = false } = useQuery({
     queryKey: ['has-woocommerce', dashboard?.client_id, currentTenantId],
     queryFn: async () => {
