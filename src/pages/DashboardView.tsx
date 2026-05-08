@@ -242,7 +242,16 @@ export default function DashboardView() {
     enabled: !!dashboard?.client_id && !!currentTenantId,
   });
 
-  // Check if client has a linked WooCommerce site
+  // SEO clients default to "last 30 days" (monthly SEO reports)
+  useEffect(() => {
+    if (didSetSeoDefaultRef.current) return;
+    if (hasSeoReports) {
+      setDateFilter('last_30_days');
+      didSetSeoDefaultRef.current = true;
+    }
+  }, [hasSeoReports]);
+
+
   const { data: hasWooCommerce = false } = useQuery({
     queryKey: ['has-woocommerce', dashboard?.client_id, currentTenantId],
     queryFn: async () => {
