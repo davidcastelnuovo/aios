@@ -56,9 +56,10 @@ export function MaskyooCallsCard({ tenantId, clientId, numbers, readOnly = false
   const { toast } = useToast();
 
   // Date range state — default last 30 days
-  const [range, setRange] = useState<DateRange>({
-    from: subDays(new Date(), 29),
-    to: new Date(),
+  // Date range state — default: previous calendar month (1st → last day)
+  const [range, setRange] = useState<DateRange>(() => {
+    const prev = subMonths(new Date(), 1);
+    return { from: startOfMonth(prev), to: endOfMonth(prev) };
   });
   const [calendarOpen, setCalendarOpen] = useState(false);
 
