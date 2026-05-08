@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { format, subDays, startOfDay, endOfDay } from "date-fns";
+import { format, startOfDay, endOfDay, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { he } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -56,9 +56,10 @@ export function MaskyooCallsCard({ tenantId, clientId, numbers, readOnly = false
   const { toast } = useToast();
 
   // Date range state — default last 30 days
-  const [range, setRange] = useState<DateRange>({
-    from: subDays(new Date(), 29),
-    to: new Date(),
+  // Date range state — default: previous calendar month (1st → last day)
+  const [range, setRange] = useState<DateRange>(() => {
+    const prev = subMonths(new Date(), 1);
+    return { from: startOfMonth(prev), to: endOfMonth(prev) };
   });
   const [calendarOpen, setCalendarOpen] = useState(false);
 
