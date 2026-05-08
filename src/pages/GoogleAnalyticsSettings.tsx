@@ -72,7 +72,7 @@ export default function GoogleAnalyticsSettings() {
       }
 
       const response = await supabase.functions.invoke('google-analytics-auth?action=authorize', {
-        body: { tenantId: currentTenantId, userId, addNew },
+        body: { tenantId: currentTenantId, userId, addNew, origin: window.location.origin },
         headers: { Authorization: `Bearer ${session.session.access_token}` },
         method: 'POST',
       });
