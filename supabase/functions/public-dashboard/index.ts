@@ -465,8 +465,8 @@ Deno.serve(async (req) => {
         const { data: snaps } = await supabase
           .from("seo_call_snapshots")
           .select("category, incoming_count, is_manual")
-          .eq("tenant_id", dashboard.tenant_id)
-          .eq("client_id", dashboard.client_id)
+          .in("tenant_id", seoTenantIdList.length > 0 ? seoTenantIdList : [dashboard.tenant_id])
+          .eq("client_id", seoTargetClientId || dashboard.client_id)
           .eq("period_start", maskyooPeriod.start)
           .eq("period_end", maskyooPeriod.end);
         maskyooSnapshots = snaps || [];
