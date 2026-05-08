@@ -156,6 +156,12 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
   const hasSeo = ahrefsReports.length > 0;
   const seoGaRecords = data?.seo_ga_records || [];
   const seoGscRecords = data?.seo_gsc_records || [];
+  const maskyooSnapshots = data?.maskyoo_snapshots || [];
+  const maskyooPeriod = data?.maskyoo_period || null;
+  const maskyooPeriodLabel = maskyooPeriod ? `${maskyooPeriod.start} – ${maskyooPeriod.end}` : undefined;
+  const hasSeoMaskyoo = maskyooSnapshots.length > 0;
+  const hasSeoGsc = seoGscRecords.length > 0;
+  const hasSeoGa = seoGaRecords.length > 0;
   console.log('[SharedDashboard] wooSites:', wooSites.length, 'wooOrders:', wooOrders.length, 'seoReports:', ahrefsReports.length, 'seoGA:', seoGaRecords.length, 'seoGSC:', seoGscRecords.length);
 
   // Aggregate GSC records per keyword (sum clicks/impressions, weighted-avg position)
