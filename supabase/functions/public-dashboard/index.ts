@@ -213,6 +213,8 @@ Deno.serve(async (req) => {
     let seoGaRecords: any[] = [];
     let seoGscRecords: any[] = [];
     let seoLinkedGscSiteUrl: string | null = null;
+    let seoTargetClientId: string | null = dashboard.client_id || null;
+    let seoTenantIdList: string[] = dashboard.tenant_id ? [dashboard.tenant_id] : [];
     if (dashboard.client_id) {
       try {
         // Find the Ahrefs SEO crm_table for this client to read linkedGa/Gsc settings
@@ -227,6 +229,7 @@ Deno.serve(async (req) => {
         const linkedGaTableId = seoSettings.linkedGaTableId || null;
         const linkedGscTableId = seoSettings.linkedGscTableId || null;
         seoLinkedGscSiteUrl = seoSettings.linkedGscSiteUrl || null;
+        seoTargetClientId = seoSettings.clientId || seoSettings.client_id || dashboard.client_id || null;
 
         // Build accessible tenant ids (home + agency-shared)
         const accessibleTenantIds = new Set<string>();
@@ -235,7 +238,7 @@ Deno.serve(async (req) => {
           const { data: clientRow } = await supabase
             .from("clients")
             .select("tenant_id, agency_id")
-            .eq("id", dashboard.client_id)
+            .eq("id", seoTargetClientId || dashboard.client_id)
             .maybeSingle();
           if (clientRow?.tenant_id) accessibleTenantIds.add(clientRow.tenant_id);
           if (clientRow?.agency_id) {
@@ -252,6 +255,7 @@ Deno.serve(async (req) => {
           console.error("Error resolving accessible tenants for GSC:", e);
         }
         const tenantIdList = Array.from(accessibleTenantIds);
+        seoTenantIdList = tenantIdList;
 
         // Resolve GA table — by linked id, else by client_id
         let gaTable: any = null;
