@@ -403,6 +403,29 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Maskyoo call snapshots — previous calendar month (default report window)
+      let maskyooSnapshots: any[] = [];
+      let maskyooPeriod: { start: string; end: string } | null = null;
+      if (targetClientId) {
+        try {
+          const now = new Date();
+          const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+          const prevMonthStart = new Date(prevMonthEnd.getFullYear(), prevMonthEnd.getMonth(), 1);
+          const fmt = (d: Date) => d.toISOString().slice(0, 10);
+          maskyooPeriod = { start: fmt(prevMonthStart), end: fmt(prevMonthEnd) };
+          const { data: snaps } = await supabase
+            .from("seo_call_snapshots")
+            .select("category, incoming_count, is_manual")
+            .in("tenant_id", tenantIdList)
+            .eq("client_id", targetClientId)
+            .eq("period_start", maskyooPeriod.start)
+            .eq("period_end", maskyooPeriod.end);
+          maskyooSnapshots = snaps || [];
+        } catch (e) {
+          console.error("Error fetching maskyoo snapshots:", e);
+        }
+      }
+
       return new Response(
         JSON.stringify({
           table: {
@@ -419,10 +442,13 @@ Deno.serve(async (req) => {
           ga_records: gaRecords,
           gsc_table: gscTable ? { id: gscTable.id, name: gscTable.name, integration_settings: gscTable.integration_settings } : null,
           gsc_records: gscRecords,
+          maskyoo_snapshots: maskyooSnapshots,
+          maskyoo_period: maskyooPeriod,
           has_email_restriction: false,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+
     }
 
     // Calculate date range — mirror of internal DynamicTableView logic
