@@ -278,7 +278,8 @@ export function CampaignerMeetingTab({ campaigner, tenantId }: CampaignerMeeting
                 <CalendarIcon className="ml-2 h-4 w-4" />
                 {(() => {
                   const totalInvitees = (includeCampaignerEmail && campaigner.email ? 1 : 0) + selectedTeamMembers.length;
-                  return totalInvitees > 0 ? `קבע פגישה ושלח זימון ל-${totalInvitees} משתתפים` : "קבע פגישה";
+                  const base = totalInvitees > 0 ? `קבע פגישה ושלח זימון ל-${totalInvitees} משתתפים` : "קבע פגישה";
+                  return hasConflict ? `${base} (למרות חפיפה)` : base;
                 })()}
               </>
             )}
