@@ -65,6 +65,9 @@ export function CampaignerMeetingTab({ campaigner, tenantId }: CampaignerMeeting
 
   const timeSlots = meetingScheduler.getAvailableTimeSlots();
   const endTimeSlots = meetingScheduler.getAvailableEndTimeSlots();
+  const startConflict = !!meetingScheduler.meetingTime && timeSlots.some(s => s.time === meetingScheduler.meetingTime && !s.available);
+  const endConflict = !!meetingScheduler.meetingEndTime && endTimeSlots.some(s => s.time === meetingScheduler.meetingEndTime && !s.available);
+  const hasConflict = startConflict || endConflict;
 
   const handleScheduleMeeting = async () => {
     const additionalEmails = [
