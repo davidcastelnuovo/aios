@@ -497,6 +497,9 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
   // Get available time slots from the meeting scheduler hook
   const timeSlots = meetingScheduler.getAvailableTimeSlots();
   const endTimeSlots = meetingScheduler.getAvailableEndTimeSlots();
+  const startConflict = !!meetingScheduler.meetingTime && timeSlots.some(s => s.time === meetingScheduler.meetingTime && !s.available);
+  const endConflict = !!meetingScheduler.meetingEndTime && endTimeSlots.some(s => s.time === meetingScheduler.meetingEndTime && !s.available);
+  const meetingHasConflict = startConflict || endConflict;
 
   // Wrapper for scheduling meeting with client details
   const handleScheduleMeeting = async () => {
