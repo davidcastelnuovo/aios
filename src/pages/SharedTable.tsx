@@ -183,15 +183,14 @@ export default function SharedTable() {
     if (forceEcommerceOnly) {
       leads = 0;
     }
-    // Combined mode: keep both leads and ecommerce metrics
 
     const roas = spend > 0 ? revenue / spend : 0;
     const cpl = leads > 0 ? spend / leads : 0;
-    const hasEcommerce = forceEcommerceOnly || isCombinedMode;
-    const hasLeads = forceLeadsOnly || isCombinedMode;
+    const hasEcommerce = forceEcommerceOnly;
+    const hasLeads = forceLeadsOnly;
 
     return { spend, impressions, clicks, leads, sessions, purchases, revenue, addToCart, roas, cpl, hasEcommerce, hasLeads };
-  }, [filteredRecords, integrationType, isIntegrationTable, forceLeadsOnly, forceEcommerceOnly, isCombinedMode, isGoogleAds]);
+  }, [filteredRecords, integrationType, isIntegrationTable, forceLeadsOnly, forceEcommerceOnly, isGoogleAds]);
 
   // Campaign-level aggregation for Facebook / Google Ads
   const campaignSummary = useMemo(() => {
