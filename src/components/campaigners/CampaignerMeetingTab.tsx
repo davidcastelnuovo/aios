@@ -127,10 +127,9 @@ export function CampaignerMeetingTab({ campaigner, tenantId }: CampaignerMeeting
                     <SelectItem
                       key={time}
                       value={time}
-                      disabled={!available}
-                      className={!available ? "text-muted-foreground line-through" : ""}
+                      className={!available ? "text-amber-600 font-medium" : ""}
                     >
-                      {time} {!available && "(תפוס)"}
+                      {time} {!available && "⚠️ (תפוס ביומן)"}
                     </SelectItem>
                   ))
                 )}
