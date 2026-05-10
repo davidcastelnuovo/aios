@@ -241,7 +241,7 @@ export default function SharedTable() {
       return { ecommerce: [], leads: allCampaigns, all: allCampaigns };
     }
     return { ecommerce: ecommerceCampaigns, leads: leadCampaigns, all: allCampaigns };
-  }, [filteredRecords, integrationType, forceLeadsOnly, forceEcommerceOnly, isGoogleAds]);
+  }, [filteredRecords, integrationType, forceLeadsOnly, forceEcommerceOnly, isCombinedMode, isGoogleAds]);
 
   // Generic table columns from fields or data keys
   const genericColumns = useMemo(() => {
