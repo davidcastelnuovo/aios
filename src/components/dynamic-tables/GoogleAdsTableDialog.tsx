@@ -553,8 +553,8 @@ export function GoogleAdsTableDialog({ open, onOpenChange, assignedClientIds }: 
             <Label>סוג קמפיין</Label>
             <RadioGroup 
               value={campaignType} 
-              onValueChange={(v) => setCampaignType(v as "leads" | "ecommerce")}
-              className="grid grid-cols-2 gap-2"
+              onValueChange={(v) => setCampaignType(v as "leads" | "ecommerce" | "combined")}
+              className="grid grid-cols-3 gap-2"
             >
               <div className={`flex items-center space-x-2 space-x-reverse border rounded-lg p-3 cursor-pointer hover:bg-muted/50 ${campaignType === 'leads' ? 'border-primary bg-primary/5' : ''}`}>
                 <RadioGroupItem value="leads" id="leads-type" />
@@ -569,6 +569,14 @@ export function GoogleAdsTableDialog({ open, onOpenChange, assignedClientIds }: 
                 <Label htmlFor="ecommerce-type" className="cursor-pointer flex-1">
                   <div className="font-medium">איקומרס</div>
                   <div className="text-xs text-muted-foreground">רכישות, הכנסות, ROAS</div>
+                </Label>
+              </div>
+
+              <div className={`flex items-center space-x-2 space-x-reverse border rounded-lg p-3 cursor-pointer hover:bg-muted/50 ${campaignType === 'combined' ? 'border-primary bg-primary/5' : ''}`}>
+                <RadioGroupItem value="combined" id="combined-type" />
+                <Label htmlFor="combined-type" className="cursor-pointer flex-1">
+                  <div className="font-medium">משולב</div>
+                  <div className="text-xs text-muted-foreground">לידים + איקומרס</div>
                 </Label>
               </div>
             </RadioGroup>
