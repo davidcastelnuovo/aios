@@ -169,16 +169,15 @@ export function ClientMeetingTab({ client, tenantId }: ClientMeetingTabProps) {
                 ) : meetingScheduler.isLoadingCalendar ? (
                   <SelectItem value="loading-end" disabled>טוען יומן...</SelectItem>
                 ) : endTimeSlots.length === 0 ? (
-                  <SelectItem value="none-end" disabled>אין שעות סיום זמינות</SelectItem>
+                  <SelectItem value="none-end" disabled>אין אפשרויות סיום ליום זה</SelectItem>
                 ) : (
                   endTimeSlots.map(({ time, available }) => (
                     <SelectItem
                       key={`end-${time}`}
                       value={time}
-                      disabled={!available}
-                      className={!available ? "text-muted-foreground line-through" : ""}
+                      className={!available ? "text-amber-600 font-medium" : ""}
                     >
-                      {time} {!available && "(תפוס)"}
+                      {time} {!available && "⚠️ (תפוס ביומן)"}
                     </SelectItem>
                   ))
                 )}
