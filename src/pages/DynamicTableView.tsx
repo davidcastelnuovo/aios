@@ -2834,6 +2834,12 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                           <td className="p-2 text-center text-purple-600">{gaCurrency}{totals.conversions_value.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
                           <td className="p-2 text-center text-blue-600">{totalRoas.toLocaleString('he-IL', { maximumFractionDigits: 2 })}x</td>
                         </>
+                      ) : isCombined ? (
+                        <>
+                          <td className="p-2 text-center text-blue-600">{gaCurrency}{(totals.conversions > 0 ? totals.cost / totals.conversions : 0).toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
+                          <td className="p-2 text-center text-purple-600">{gaCurrency}{totals.conversions_value.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
+                          <td className="p-2 text-center text-blue-600">{totalRoas.toLocaleString('he-IL', { maximumFractionDigits: 2 })}x</td>
+                        </>
                       ) : (
                         <td className="p-2 text-center text-blue-600">{gaCurrency}{(totals.conversions > 0 ? totals.cost / totals.conversions : 0).toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
                       )}
