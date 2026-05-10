@@ -1200,10 +1200,9 @@ const updateMutation = useMutation({
                                 <SelectItem
                                   key={time}
                                   value={time}
-                                  disabled={!available}
-                                  className={cn(!available && "text-muted-foreground line-through")}
+                                  className={cn(!available && "text-amber-600 font-medium")}
                                 >
-                                  {time} {!available && "(תפוס)"}
+                                  {time} {!available && "⚠️ (תפוס ביומן)"}
                                 </SelectItem>
                               ))
                             )}
@@ -1223,22 +1222,27 @@ const updateMutation = useMutation({
                             ) : meetingScheduler.isLoadingCalendar ? (
                               <div className="p-2 text-center text-sm text-muted-foreground">טוען יומן...</div>
                             ) : endTimeSlots.length === 0 ? (
-                              <div className="p-2 text-center text-sm text-muted-foreground">אין שעות סיום זמינות</div>
+                              <div className="p-2 text-center text-sm text-muted-foreground">אין אפשרויות סיום ליום זה</div>
                             ) : (
                               endTimeSlots.map(({ time, available }) => (
                                 <SelectItem
                                   key={`end-${time}`}
                                   value={time}
-                                  disabled={!available}
-                                  className={cn(!available && "text-muted-foreground line-through")}
+                                  className={cn(!available && "text-amber-600 font-medium")}
                                 >
-                                  {time} {!available && "(תפוס)"}
+                                  {time} {!available && "⚠️ (תפוס ביומן)"}
                                 </SelectItem>
                               ))
                             )}
                           </SelectContent>
                         </Select>
                       </div>
+
+                      {meetingHasConflict && (
+                        <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700 rounded-lg p-3 text-sm text-amber-800 dark:text-amber-200">
+                          ⚠️ יש לך כבר אירוע ביומן בשעה הזו — הזימון ייקבע במקביל.
+                        </div>
+                      )}
 
                       <div className="space-y-2">
                         <label className="text-sm font-medium">נושא הפגישה</label>
