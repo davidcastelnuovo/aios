@@ -126,14 +126,15 @@ export default function SharedTable() {
   // Deterministic table mode based on integration type + campaign_type setting
   const tableCampaignType = String((data?.table?.integration_settings as any)?.campaign_type || '').toLowerCase();
   const isGoogleAds = integrationType === 'google_ads';
-  const tableMode: 'leads' | 'ecommerce' =
+  const tableMode: 'leads' | 'ecommerce' | 'combined' =
     integrationType === 'facebook_ecommerce' ? 'ecommerce' :
     integrationType === 'facebook_insights' ? 'leads' :
     integrationType === 'google_ads'
-      ? (tableCampaignType === 'ecommerce' ? 'ecommerce' : 'leads')
-      : (tableCampaignType === 'ecommerce' ? 'ecommerce' : 'leads');
+      ? (tableCampaignType === 'ecommerce' ? 'ecommerce' : tableCampaignType === 'combined' ? 'combined' : 'leads')
+      : (tableCampaignType === 'ecommerce' ? 'ecommerce' : tableCampaignType === 'combined' ? 'combined' : 'leads');
   const forceLeadsOnly = tableMode === 'leads';
   const forceEcommerceOnly = tableMode === 'ecommerce';
+  const isCombinedMode = tableMode === 'combined';
 
   // Records to feed into KPI/aggregation logic. We intentionally do NOT
   // pre-filter by report_type here so the public shared view stays
@@ -161,7 +162,7 @@ export default function SharedTable() {
         spend += getSpendFromData(d);
         impressions += Number(d.impressions) || 0;
         clicks += Number(d.clicks) || 0;
-        // For Google Ads leads tables, never count conversions_value as revenue
+        // For Google Ads leads-only tables, never count conversions_value as revenue
         if (!(forceLeadsOnly && isGoogleAds)) {
           purchases += getPurchasesFromData(d);
           revenue += getRevenueFromData(d);
@@ -183,14 +184,15 @@ export default function SharedTable() {
     if (forceEcommerceOnly) {
       leads = 0;
     }
+    // Combined mode: keep both leads and ecommerce metrics
 
     const roas = spend > 0 ? revenue / spend : 0;
     const cpl = leads > 0 ? spend / leads : 0;
-    const hasEcommerce = forceEcommerceOnly;
-    const hasLeads = forceLeadsOnly;
+    const hasEcommerce = forceEcommerceOnly || isCombinedMode;
+    const hasLeads = forceLeadsOnly || isCombinedMode;
 
     return { spend, impressions, clicks, leads, sessions, purchases, revenue, addToCart, roas, cpl, hasEcommerce, hasLeads };
-  }, [filteredRecords, integrationType, isIntegrationTable, forceLeadsOnly, forceEcommerceOnly, isGoogleAds]);
+  }, [filteredRecords, integrationType, isIntegrationTable, forceLeadsOnly, forceEcommerceOnly, isCombinedMode, isGoogleAds]);
 
   // Campaign-level aggregation for Facebook / Google Ads
   const campaignSummary = useMemo(() => {
@@ -220,6 +222,9 @@ export default function SharedTable() {
     if (forceEcommerceOnly) {
       return { ecommerce: allCampaigns, leads: [], all: allCampaigns };
     }
+    if (isCombinedMode) {
+      return { ecommerce: allCampaigns, leads: allCampaigns, all: allCampaigns };
+    }
     return { ecommerce: [], leads: allCampaigns, all: allCampaigns };
 
     // Legacy auto-classify (disabled)
@@ -236,7 +241,7 @@ export default function SharedTable() {
       return { ecommerce: [], leads: allCampaigns, all: allCampaigns };
     }
     return { ecommerce: ecommerceCampaigns, leads: leadCampaigns, all: allCampaigns };
-  }, [filteredRecords, integrationType, forceLeadsOnly, forceEcommerceOnly, isGoogleAds]);
+  }, [filteredRecords, integrationType, forceLeadsOnly, forceEcommerceOnly, isCombinedMode, isGoogleAds]);
 
   // Generic table columns from fields or data keys
   const genericColumns = useMemo(() => {
