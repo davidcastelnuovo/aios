@@ -86,6 +86,9 @@ export function ClientMeetingTab({ client, tenantId }: ClientMeetingTabProps) {
 
   const timeSlots = meetingScheduler.getAvailableTimeSlots();
   const endTimeSlots = meetingScheduler.getAvailableEndTimeSlots();
+  const startConflict = !!meetingScheduler.meetingTime && timeSlots.some(s => s.time === meetingScheduler.meetingTime && !s.available);
+  const endConflict = !!meetingScheduler.meetingEndTime && endTimeSlots.some(s => s.time === meetingScheduler.meetingEndTime && !s.available);
+  const hasConflict = startConflict || endConflict;
 
   const handleScheduleMeeting = async () => {
     await meetingScheduler.scheduleMeeting({
@@ -144,10 +147,9 @@ export function ClientMeetingTab({ client, tenantId }: ClientMeetingTabProps) {
                     <SelectItem
                       key={time}
                       value={time}
-                      disabled={!available}
-                      className={!available ? "text-muted-foreground line-through" : ""}
+                      className={!available ? "text-amber-600 font-medium" : ""}
                     >
-                      {time} {!available && "(תפוס)"}
+                      {time} {!available && "⚠️ (תפוס ביומן)"}
                     </SelectItem>
                   ))
                 )}
@@ -167,22 +169,27 @@ export function ClientMeetingTab({ client, tenantId }: ClientMeetingTabProps) {
                 ) : meetingScheduler.isLoadingCalendar ? (
                   <SelectItem value="loading-end" disabled>טוען יומן...</SelectItem>
                 ) : endTimeSlots.length === 0 ? (
-                  <SelectItem value="none-end" disabled>אין שעות סיום זמינות</SelectItem>
+                  <SelectItem value="none-end" disabled>אין אפשרויות סיום ליום זה</SelectItem>
                 ) : (
                   endTimeSlots.map(({ time, available }) => (
                     <SelectItem
                       key={`end-${time}`}
                       value={time}
-                      disabled={!available}
-                      className={!available ? "text-muted-foreground line-through" : ""}
+                      className={!available ? "text-amber-600 font-medium" : ""}
                     >
-                      {time} {!available && "(תפוס)"}
+                      {time} {!available && "⚠️ (תפוס ביומן)"}
                     </SelectItem>
                   ))
                 )}
               </SelectContent>
             </Select>
           </div>
+
+          {hasConflict && (
+            <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700 rounded-lg p-3 text-sm text-amber-800 dark:text-amber-200">
+              ⚠️ יש לך כבר אירוע ביומן בשעה הזו — הזימון ייקבע במקביל.
+            </div>
+          )}
 
           <div className="space-y-2">
             <label className="text-sm font-medium">נושא הפגישה</label>
@@ -309,7 +316,8 @@ export function ClientMeetingTab({ client, tenantId }: ClientMeetingTabProps) {
                 <CalendarIcon className="ml-2 h-4 w-4" />
                 {(() => {
                   const totalInvitees = selectedMeetingEmails.length + selectedTeamMembers.length;
-                  return totalInvitees > 0 ? `קבע פגישה ושלח זימון ל-${totalInvitees} משתתפים` : "קבע פגישה";
+                  const base = totalInvitees > 0 ? `קבע פגישה ושלח זימון ל-${totalInvitees} משתתפים` : "קבע פגישה";
+                  return hasConflict ? `${base} (למרות חפיפה)` : base;
                 })()}
               </>
             )}

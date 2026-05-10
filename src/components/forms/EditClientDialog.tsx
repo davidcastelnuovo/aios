@@ -497,6 +497,9 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
   // Get available time slots from the meeting scheduler hook
   const timeSlots = meetingScheduler.getAvailableTimeSlots();
   const endTimeSlots = meetingScheduler.getAvailableEndTimeSlots();
+  const startConflict = !!meetingScheduler.meetingTime && timeSlots.some(s => s.time === meetingScheduler.meetingTime && !s.available);
+  const endConflict = !!meetingScheduler.meetingEndTime && endTimeSlots.some(s => s.time === meetingScheduler.meetingEndTime && !s.available);
+  const meetingHasConflict = startConflict || endConflict;
 
   // Wrapper for scheduling meeting with client details
   const handleScheduleMeeting = async () => {
@@ -1117,10 +1120,9 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
                             <SelectItem
                               key={time}
                               value={time}
-                              disabled={!available}
-                              className={!available ? "text-muted-foreground line-through" : ""}
+                              className={!available ? "text-amber-600 font-medium" : ""}
                             >
-                              {time} {!available && "(תפוס)"}
+                              {time} {!available && "⚠️ (תפוס ביומן)"}
                             </SelectItem>
                           ))
                         )}
@@ -1140,22 +1142,27 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
                         ) : meetingScheduler.isLoadingCalendar ? (
                           <SelectItem value="loading-end" disabled>טוען יומן...</SelectItem>
                         ) : endTimeSlots.length === 0 ? (
-                          <SelectItem value="none-end" disabled>אין שעות סיום זמינות</SelectItem>
+                          <SelectItem value="none-end" disabled>אין אפשרויות סיום ליום זה</SelectItem>
                         ) : (
                           endTimeSlots.map(({ time, available }) => (
                             <SelectItem
                               key={`end-${time}`}
                               value={time}
-                              disabled={!available}
-                              className={!available ? "text-muted-foreground line-through" : ""}
+                              className={!available ? "text-amber-600 font-medium" : ""}
                             >
-                              {time} {!available && "(תפוס)"}
+                              {time} {!available && "⚠️ (תפוס ביומן)"}
                             </SelectItem>
                           ))
                         )}
                       </SelectContent>
                     </Select>
                   </div>
+
+                  {meetingHasConflict && (
+                    <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700 rounded-lg p-3 text-sm text-amber-800 dark:text-amber-200">
+                      ⚠️ יש לך כבר אירוע ביומן בשעה הזו — הזימון ייקבע במקביל.
+                    </div>
+                  )}
 
                   <div className="space-y-2">
                     <label className="text-sm font-medium">נושא הפגישה</label>
