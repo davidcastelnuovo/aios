@@ -86,6 +86,9 @@ export function ClientMeetingTab({ client, tenantId }: ClientMeetingTabProps) {
 
   const timeSlots = meetingScheduler.getAvailableTimeSlots();
   const endTimeSlots = meetingScheduler.getAvailableEndTimeSlots();
+  const startConflict = !!meetingScheduler.meetingTime && timeSlots.some(s => s.time === meetingScheduler.meetingTime && !s.available);
+  const endConflict = !!meetingScheduler.meetingEndTime && endTimeSlots.some(s => s.time === meetingScheduler.meetingEndTime && !s.available);
+  const hasConflict = startConflict || endConflict;
 
   const handleScheduleMeeting = async () => {
     await meetingScheduler.scheduleMeeting({
