@@ -126,15 +126,14 @@ export default function SharedTable() {
   // Deterministic table mode based on integration type + campaign_type setting
   const tableCampaignType = String((data?.table?.integration_settings as any)?.campaign_type || '').toLowerCase();
   const isGoogleAds = integrationType === 'google_ads';
-  const tableMode: 'leads' | 'ecommerce' | 'combined' =
+  const tableMode: 'leads' | 'ecommerce' =
     integrationType === 'facebook_ecommerce' ? 'ecommerce' :
     integrationType === 'facebook_insights' ? 'leads' :
     integrationType === 'google_ads'
-      ? (tableCampaignType === 'ecommerce' ? 'ecommerce' : tableCampaignType === 'combined' ? 'combined' : 'leads')
-      : (tableCampaignType === 'ecommerce' ? 'ecommerce' : tableCampaignType === 'combined' ? 'combined' : 'leads');
+      ? (tableCampaignType === 'ecommerce' ? 'ecommerce' : 'leads')
+      : (tableCampaignType === 'ecommerce' ? 'ecommerce' : 'leads');
   const forceLeadsOnly = tableMode === 'leads';
   const forceEcommerceOnly = tableMode === 'ecommerce';
-  const isCombinedMode = tableMode === 'combined';
 
   // Records to feed into KPI/aggregation logic. We intentionally do NOT
   // pre-filter by report_type here so the public shared view stays
