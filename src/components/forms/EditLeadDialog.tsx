@@ -463,6 +463,9 @@ const updateMutation = useMutation({
   // Get available time slots from the meeting scheduler hook
   const timeSlots = meetingScheduler.getAvailableTimeSlots();
   const endTimeSlots = meetingScheduler.getAvailableEndTimeSlots();
+  const startConflict = !!meetingScheduler.meetingTime && timeSlots.some(s => s.time === meetingScheduler.meetingTime && !s.available);
+  const endConflict = !!meetingScheduler.meetingEndTime && endTimeSlots.some(s => s.time === meetingScheduler.meetingEndTime && !s.available);
+  const meetingHasConflict = startConflict || endConflict;
 
   const body = (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
