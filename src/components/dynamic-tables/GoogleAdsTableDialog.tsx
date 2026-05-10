@@ -86,7 +86,7 @@ export function GoogleAdsTableDialog({ open, onOpenChange, assignedClientIds }: 
   const [dataSource, setDataSource] = useState<"make_api" | "direct_api" | "webhook">("make_api");
   const [selectedMakeConnection, setSelectedMakeConnection] = useState("");
   const [customerIdInput, setCustomerIdInput] = useState("");
-  const [campaignType, setCampaignType] = useState<"leads" | "ecommerce">("leads");
+  const [campaignType, setCampaignType] = useState<"leads" | "ecommerce" | "combined">("leads");
 
   // Fetch agencies (including cross-tenant shared agencies)
   const { data: agencies = [] } = useQuery({
