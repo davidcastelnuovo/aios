@@ -316,7 +316,8 @@ export function ClientMeetingTab({ client, tenantId }: ClientMeetingTabProps) {
                 <CalendarIcon className="ml-2 h-4 w-4" />
                 {(() => {
                   const totalInvitees = selectedMeetingEmails.length + selectedTeamMembers.length;
-                  return totalInvitees > 0 ? `קבע פגישה ושלח זימון ל-${totalInvitees} משתתפים` : "קבע פגישה";
+                  const base = totalInvitees > 0 ? `קבע פגישה ושלח זימון ל-${totalInvitees} משתתפים` : "קבע פגישה";
+                  return hasConflict ? `${base} (למרות חפיפה)` : base;
                 })()}
               </>
             )}
