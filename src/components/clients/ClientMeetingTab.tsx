@@ -185,6 +185,12 @@ export function ClientMeetingTab({ client, tenantId }: ClientMeetingTabProps) {
             </Select>
           </div>
 
+          {hasConflict && (
+            <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700 rounded-lg p-3 text-sm text-amber-800 dark:text-amber-200">
+              ⚠️ יש לך כבר אירוע ביומן בשעה הזו — הזימון ייקבע במקביל.
+            </div>
+          )}
+
           <div className="space-y-2">
             <label className="text-sm font-medium">נושא הפגישה</label>
             <Input
