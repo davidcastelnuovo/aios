@@ -222,6 +222,9 @@ export default function SharedTable() {
     if (forceEcommerceOnly) {
       return { ecommerce: allCampaigns, leads: [], all: allCampaigns };
     }
+    if (isCombinedMode) {
+      return { ecommerce: allCampaigns, leads: allCampaigns, all: allCampaigns };
+    }
     return { ecommerce: [], leads: allCampaigns, all: allCampaigns };
 
     // Legacy auto-classify (disabled)
