@@ -2676,7 +2676,6 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
         <Card className="mb-4 overflow-hidden">
           {(() => {
             const isEcommerce = table?.integration_settings?.campaign_type === 'ecommerce';
-            const isCombined = table?.integration_settings?.campaign_type === 'combined';
             
             const campaignGroups = filteredRecords.reduce((acc, record) => {
               const campaignName = String(record.data?.campaign_name || 'ללא קמפיין');
