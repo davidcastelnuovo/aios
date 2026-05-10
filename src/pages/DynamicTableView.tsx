@@ -2749,6 +2749,12 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                           <th className="p-2 text-center font-medium">ערך המרות</th>
                           <th className="p-2 text-center font-medium">ROAS</th>
                         </>
+                      ) : isCombined ? (
+                        <>
+                          <th className="p-2 text-center font-medium">עלות להמרה</th>
+                          <th className="p-2 text-center font-medium">ערך המרות</th>
+                          <th className="p-2 text-center font-medium">ROAS</th>
+                        </>
                       ) : (
                         <th className="p-2 text-center font-medium">עלות להמרה</th>
                       )}
