@@ -2676,7 +2676,6 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
         <Card className="mb-4 overflow-hidden">
           {(() => {
             const isEcommerce = table?.integration_settings?.campaign_type === 'ecommerce';
-            const isCombined = table?.integration_settings?.campaign_type === 'combined';
             
             const campaignGroups = filteredRecords.reduce((acc, record) => {
               const campaignName = String(record.data?.campaign_name || 'ללא קמפיין');
@@ -2749,12 +2748,6 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                           <th className="p-2 text-center font-medium">ערך המרות</th>
                           <th className="p-2 text-center font-medium">ROAS</th>
                         </>
-                      ) : isCombined ? (
-                        <>
-                          <th className="p-2 text-center font-medium">עלות להמרה</th>
-                          <th className="p-2 text-center font-medium">ערך המרות</th>
-                          <th className="p-2 text-center font-medium">ROAS</th>
-                        </>
                       ) : (
                         <th className="p-2 text-center font-medium">עלות להמרה</th>
                       )}
@@ -2798,12 +2791,6 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                               <td className="p-2 text-center text-purple-600 font-medium">{gaCurrency}{data.conversions_value.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
                               <td className="p-2 text-center text-blue-600 font-medium">{roas.toLocaleString('he-IL', { maximumFractionDigits: 2 })}x</td>
                             </>
-                          ) : isCombined ? (
-                            <>
-                              <td className="p-2 text-center text-blue-600 font-medium">{gaCurrency}{costPerConversion.toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
-                              <td className="p-2 text-center text-purple-600 font-medium">{gaCurrency}{data.conversions_value.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
-                              <td className="p-2 text-center text-blue-600 font-medium">{roas.toLocaleString('he-IL', { maximumFractionDigits: 2 })}x</td>
-                            </>
                           ) : (
                             <td className="p-2 text-center text-blue-600 font-medium">{gaCurrency}{costPerConversion.toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
                           )}
@@ -2831,12 +2818,6 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                       <td className="p-2 text-center">{gaCurrency}{totals.cost.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
                       {isEcommerce ? (
                         <>
-                          <td className="p-2 text-center text-purple-600">{gaCurrency}{totals.conversions_value.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
-                          <td className="p-2 text-center text-blue-600">{totalRoas.toLocaleString('he-IL', { maximumFractionDigits: 2 })}x</td>
-                        </>
-                      ) : isCombined ? (
-                        <>
-                          <td className="p-2 text-center text-blue-600">{gaCurrency}{(totals.conversions > 0 ? totals.cost / totals.conversions : 0).toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
                           <td className="p-2 text-center text-purple-600">{gaCurrency}{totals.conversions_value.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
                           <td className="p-2 text-center text-blue-600">{totalRoas.toLocaleString('he-IL', { maximumFractionDigits: 2 })}x</td>
                         </>
