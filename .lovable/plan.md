@@ -1,49 +1,57 @@
-## Problem
+## הבעיה
 
-The "סנכרן עכשיו (34)" button on the SEO category in Dynamic Tables (`CategorySyncControl`) does **not** actually fetch fresh data from Ahrefs. For SEO reports (tables of type `ahrefs` with `data_source = "ahrefs_reports"`) it only re-reads what's already in the `ahrefs_reports` table and rebuilds `crm_records`. That's why a sync done earlier this month did not refresh the per-domain Ahrefs data — only 24karat (which was synced manually today via `fetch-ahrefs-snapshot`) ended up updated.
+ההתראות "חשבון פייסבוק עצר" מבוססות היום על היוריסטיקה של "0 ש״ח ב-2 הימים האחרונים" — וזה מייצר הצפה של false-positives:
+- קמפיינים שכבויים במכוון (PAUSED) מתויגים כ"עצרו".
+- פוסטים מקודמים ב-Instagram שלא רצים יומיומית מקבלים התראה.
+- בסנכרון של 08:00 בבוקר פייסבוק עוד לא דיווחה על הוצאות אתמול/היום.
 
-The same is true of the per-card "סנכרן Ahrefs" button in `DynamicTableView` for `data_source = "ahrefs_reports"`.
+## הפתרון: לעבור ממדידת הוצאה לאותות הסטטוס הרשמיים של פייסבוק
 
-The function that actually pulls fresh Ahrefs data and persists it through `ahrefs-webhook` already exists: `fetch-ahrefs-snapshot` (takes `{ clientId, domain, country }`).
+פייסבוק כבר מספקת את המידע הזה ב-Graph API — אין צורך בוובהוקים נפרדים, פשוט קוראים את שדות הסטטוס הקיימים בכל סנכרון.
 
-## Fix
+### 1. סינון לרמת קמפיינים פעילים בלבד
 
-Make the bulk SEO sync (and per-card sync) actually call Ahrefs for each table, then rebuild `crm_records` from the freshly stored `ahrefs_reports`.
+בלוגיקת ה-anomaly ב-`cron-sync-facebook-insights/index.ts`:
+- להתעלם מקמפיינים שה-`effective_status` שלהם הוא: `PAUSED`, `CAMPAIGN_PAUSED`, `ADSET_PAUSED`, `ARCHIVED`, `DELETED`, `IN_PROCESS`.
+- להתחשב רק בקמפיינים שהיו פעילים (`ACTIVE`) או שיש להם בעיה אמיתית.
 
-### 1. `src/components/dynamic-tables/CategorySyncControl.tsx`
+### 2. להחליף את היוריסטיקה של "0 הוצאה" בהתראות סטטוס רשמיות
 
-In `syncStoredAhrefsReportTable(t)`, before reading `ahrefs_reports`:
+במקום לחשב recent vs prior spend, להריץ שתי בדיקות מ-FB Graph API שכבר מוחזרות:
 
-- Resolve `clientId` and `domain` from `t.integration_settings` (`targetDomain || target || domain`, falling back to the client's website if missing — same logic `fetch-ahrefs-snapshot` already supports server-side, so passing only `clientId` is acceptable when domain is unknown).
-- `await supabase.functions.invoke('fetch-ahrefs-snapshot', { body: { clientId, domain, country: settings.country || 'il' } })`.
-- If the call fails, surface the error so the table is counted as failed (don't silently fall back to stale rebuild). Concurrency is already capped at 3 so this won't hammer the API too hard, but we should drop concurrency to **2** for SEO to stay polite to Ahrefs.
-- After success, continue with the existing logic that pulls `ahrefs_reports` and rewrites `crm_records`.
+**ברמת חשבון** (כבר נטען היום בשורה 205, נשמר ב-`accountStatus`):
+- `account_status != active` → "🚨 בעיית חשבון מודעות" עם `disable_reason`. (הקוד הזה כבר קיים בשורות 450-511, פשוט לוודא שהוא רץ).
 
-Also: invalidate `['ahrefs-reports']` and `['seo-dashboard-reports']` query keys at the end of `handleSyncAll` so the SEO dashboards refresh.
+**ברמת קמפיין** (להוסיף — נטען היום בשורה 187 אבל לא נבדק):
+- `effective_status === 'PENDING_BILLING_INFO'` → "💳 חסרים פרטי חיוב"
+- `effective_status === 'DISAPPROVED'` → "❌ קמפיין נדחה ע״י פייסבוק"
+- `effective_status === 'WITH_ISSUES'` → "⚠️ בעיה בקמפיין" + פנייה ל-`/{campaign_id}?fields=issues_info` לקבלת תיאור הבעיה
+- `effective_status === 'PENDING_REVIEW'` למעלה מ-24 שעות → "⏳ קמפיין תקוע בבדיקה"
 
-### 2. `src/pages/DynamicTableView.tsx` — `syncAhrefsMutation`
+זה כן מהווה "התראה רשמית מפייסבוק" — אין webhook ייעודי לבעיות חיוב, אבל השדות `effective_status` + `account_status` + `disable_reason` + `issues_info` הם אותם הסיגנלים שפייסבוק עצמה מציגה ב-Ads Manager.
 
-In the `if (settings.data_source === 'ahrefs_reports')` branch (around line 1011), before the `from('ahrefs_reports').select(...)` call:
+### 3. שמירה על היוריסטיקה של "ירידה בהוצאה" — בצורה רכה
 
-- Fetch a fresh snapshot via `fetch-ahrefs-snapshot` with `{ clientId, domain: settings.targetDomain || settings.target || settings.domain, country: settings.country || 'il' }`.
-- If it errors, throw — the toast will report it. (Behavior parity with bulk.)
-- Then proceed with the existing rebuild from `ahrefs_reports`.
+לקמפיינים שעדיין ב-`ACTIVE` אבל לא הוציאו כסף בימים האחרונים (למרות שהוציאו קודם), לא ליצור משימה חדשה כל יום. במקום זה:
+- חלון מתוקן: `recent` = ימים `-3..-1` (שלמים בלבד), `prior` = ימים `-10..-4`.
+- ליצור משימה אחת ברמת **חשבון** (לא לכל קמפיין): "📉 ירידה חדה בהוצאה — X קמפיינים פעילים בחשבון Y הפסיקו להוציא".
+- דה-דופ של 7 ימים על חשבון שלם, לא 24 שעות לפי שם קמפיין.
 
-This way both the per-card button and the bulk button do the same thing: fresh API fetch → rebuild crm_records.
+### 4. ניקוי המשימות הפתוחות מהבוקר
 
-### 3. UX touch
+לסגור אוטומטית את 37 המשימות הפתוחות מ-08:41-08:46 (`task_mode='anomaly_alert'`, `created_at` של היום) — אחרי הריצה הבאה של הסנכרון המתוקן הן ייפתחו מחדש רק עבור החשבונות שבאמת בבעיה.
 
-Update the bulk button label while running for SEO from `מסנכרן… (done/total)` to `מסנכרן Ahrefs… (done/total)` so the user understands it now hits the API (slower than before).
+## מה מקבלים בסוף
 
-### Out of scope
+- אם יש בעיית אשראי / חשבון מושבת → התראה אחת ברורה ברמת חשבון, עם הסיבה הרשמית מפייסבוק.
+- אם קמפיין נדחה / חסר אישור / חסרים פרטי חיוב → התראה ספציפית עם הקמפיין.
+- ירידה בהוצאה של קמפיין פעיל → התראה אחת מאוחדת לחשבון, פעם בשבוע, לא 37 משימות בבוקר.
+- פוסטים מקודמים שכבויים / קמפיינים ב-PAUSED → אין התראה כלל.
 
-- No DB / RLS changes.
-- No changes to `ahrefs-webhook` or `fetch-ahrefs-snapshot`.
-- Other categories (Facebook, Google Ads, GA, GSC) keep current behavior.
+## פרטים טכניים
 
-## Verification
-
-1. Open `/t/marketingcaptain/dynamic-tables`, switch to the SEO category, click `סנכרן עכשיו (34)`.
-2. Watch the progress counter increment to 34/34.
-3. Query `ahrefs_reports` for a sample of domains (e.g. `imaga.co.il`, `tavnicol.co.il`) and confirm a row with `received_at = today` exists.
-4. Open one of those clients' SEO dashboard and confirm the new report is auto-selected (latest `received_at`).
+קובץ יחיד לעריכה: `supabase/functions/cron-sync-facebook-insights/index.ts`
+- לוגיקת ה-anomaly נמצאת בשורות 513-590.
+- הסטטוסים של הקמפיין כבר נטענים ב-`campaignStatuses` (שורה 191) — צריך רק להוסיף לוופים חדשים שעוברים עליהם.
+- שאילתה נוספת ל-`/{campaign_id}?fields=issues_info` רק עבור קמפיינים ב-`WITH_ISSUES` (כדי לא להעמיס על rate limit).
+- שאילתת ה-DELETE לסגירת המשימות הישנות תרוץ פעם אחת כ-SQL migration.
