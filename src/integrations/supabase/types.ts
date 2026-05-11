@@ -8645,6 +8645,8 @@ export type Database = {
         | "whatsapp_message_received"
         | "carmen_whatsapp_session"
         | "telegram_message_received"
+        | "account_stopped_spending"
+        | "ad_account_billing_issue"
       chat_provider: "manychat" | "green_api" | "internal"
       client_mood_status:
         | "happy"
@@ -8883,6 +8885,8 @@ export const Constants = {
         "whatsapp_message_received",
         "carmen_whatsapp_session",
         "telegram_message_received",
+        "account_stopped_spending",
+        "ad_account_billing_issue",
       ],
       chat_provider: ["manychat", "green_api", "internal"],
       client_mood_status: [
