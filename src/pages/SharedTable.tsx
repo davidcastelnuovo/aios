@@ -351,9 +351,7 @@ export default function SharedTable() {
               </TabsList>
 
               <TabsContent value="seo" className="space-y-4">
-                {hasMaskyoo && (
-                  <PublicMaskyooCallsCard snapshots={maskyooSnapshots} periodLabel={periodLabel} />
-                )}
+                <PublicMaskyooCallsCard snapshots={maskyooSnapshots} periodLabel={periodLabel} />
                 <PublicSeoView
                   tableName={data.table.name}
                   reports={data.ahrefs_reports || []}
@@ -378,9 +376,7 @@ export default function SharedTable() {
             </Tabs>
           ) : (
             <div className="space-y-4">
-              {hasMaskyoo && (
-                <PublicMaskyooCallsCard snapshots={maskyooSnapshots} periodLabel={periodLabel} />
-              )}
+              <PublicMaskyooCallsCard snapshots={maskyooSnapshots} periodLabel={periodLabel} />
               <PublicSeoView
                 tableName={data.table.name}
                 reports={data.ahrefs_reports || []}

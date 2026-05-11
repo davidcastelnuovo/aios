@@ -1,24 +1,27 @@
-## תיקון עמודות שינוי דירוגים בקישור שיתוף Dashboard
+## הצגת כרטיסיית "שיחות מסקיו" בקישור שיתוף — דו"ח SEO ודאשבורד
 
-הקישור הציבורי של ה-Dashboard מציג את `PublicSeoView` ללא נתוני ההשוואה ההיסטוריים מ-GSC, ולכן עמודות "שינוי חודשי / 3 חודשים / שנתי" לא מופיעות — בדיוק כמו הבאג שתוקן בקישור שיתוף של דוח SEO.
+### בדיקה שעשיתי
+סרקתי את הקוד ואת מסד הנתונים — הוויירינג של כרטיסיית `PublicMaskyooCallsCard` כבר קיים גם ב-`SharedTable` (קישור דו"ח SEO) וגם ב-`SharedDashboard` (קישור דאשבורד), והפונקציות `public-table` ו-`public-dashboard` כבר מחזירות `maskyoo_snapshots` + `maskyoo_period`. ראיתי גם שיש לך snapshots תקינים בטבלה `seo_call_snapshots` עבור החודש הקודם (1.4–30.4) ללקוחות הרלוונטיים (כולל `bb8725a9...` שאתה צופה בו עכשיו).
 
-הפתרון: שכפול אותה לוגיקה (`gsc_multi_period`) מ-`public-table` אל `public-dashboard`, והעברתה ל-`PublicSeoView`.
+הסיבה הסבירה ביותר שאתה לא רואה את הכרטיסייה בקישור הלייב היא ש**שינויי ה-Frontend עוד לא פורסמו** (Publish→Update). פונקציות ה-edge נפרסות אוטומטית, אבל `SharedTable.tsx` ו-`SharedDashboard.tsx` לא יתעדכנו בלייב עד שתלחץ Publish.
 
-### שינויים
+### התוכנית
 
-**1. `supabase/functions/public-dashboard/index.ts`** (Edge Function — נפרס אוטומטית)
-- אחרי הבלוק הקיים של GSC, להוסיף בלוק זהה לזה שב-`public-table` (שורות 429-533):
-  - לקחת את `seoLinkedGscSiteUrl` (כבר קיים) או `gscTable.integration_settings.siteUrl` כ-`effectiveGscSiteUrl`.
-  - לשלוף `tenant_integrations` של GSC, לרענן access token דרך `GOOGLE_CLIENT_ID/SECRET` במידת הצורך.
-  - להריץ במקביל `fetchPeriod` עבור prevMonth (58→30 ימים), threeMonth (118→90), yearly (393→365).
-  - להחזיר `gsc_multi_period: { prevMonth, threeMonth, yearly }` בתוך ה-response JSON.
+**שלב 1 — וידוא תצוגה מסביב לכרטיסייה (Frontend)**
+- אין שינוי קוד נדרש. הכרטיסייה כבר ממוקמת:
+  - `src/pages/SharedTable.tsx` — מעל `<PublicSeoView ... />` בטאב SEO ובמצב ללא טאבים (שורות 354, 381).
+  - `src/pages/SharedDashboard.tsx` — מעל בלוקי SEO (שורות 749, 773).
+- התנאי `hasMaskyoo = snapshots.length > 0`. כיוון שיש snapshots ל-`bb8725a9` הכרטיסייה אמורה להופיע ברגע שהקוד החדש בלייב.
 
-**2. `src/pages/SharedDashboard.tsx`** (Frontend — דורש Publish→Update)
-- לקרוא `const gscMultiPeriod = data?.gsc_multi_period || null;` באזור של `seoGscRecords`.
-- להוסיף `gscMultiPeriod={gscMultiPeriod}` לשני המקומות שמרנדרים `<PublicSeoView ... />` (שורות ~751 ו-~774).
+**שלב 2 — הקשחה קטנה (Frontend, אופציונלי)**
+כדי שהמשתף יראה תמיד את הכרטיסייה ברגע שיש מספר/snapshot — להוריד את התנאי `hasMaskyoo` ולהציג תמיד את הכרטיסייה (היא יודעת להציג 0 בכל קוביה כשאין נתון). זה גם מסביר למקבל הקישור שיש מודול שיחות בכלל. אם תאשר — אוריד את התנאי ב-2 המקומות בכל אחד מהקבצים.
+
+**שלב 3 — Publish**
+לחיצה על **Publish → Update** כדי שהקישורים הציבוריים יעלו עם הקוד שכולל את הכרטיסייה.
 
 ### בדיקה
-- לפתוח את קישור ה-Dashboard המשותף ולוודא שעמודות "שינוי חודשי / 3 חודשים / שנתי" מופיעות עם חיצים ירוק/אדום, בדיוק כמו בדוח ה-SEO המשותף.
+1. לפתוח את קישור שיתוף דו"ח SEO של רינת (`bb8725a9`) — לוודא שמופיעה כרטיסיית "שיחות מסקיו" עם 3 שיחות אורגני, 0 ממומן, וטווח 2026-04-01 – 2026-04-30.
+2. לפתוח את קישור הדאשבורד המקושר לאותו לקוח — לוודא אותה כרטיסייה.
 
-### הערה למשתמש
-שינוי ה-Frontend ב-`SharedDashboard.tsx` ידרוש לחיצה על **Publish → Update** כדי להופיע בקישור הלייב. שינוי ה-Edge Function נפרס מיד אוטומטית.
+### שאלה למאשר
+האם לבצע גם את שלב 2 (הצגה קבועה של הכרטיסייה גם כשאין snapshots — עם 0)? אם לא — שלב 1 כבר מספיק, ורק צריך Publish.
