@@ -777,6 +777,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
               tableName={dashboard?.client_name || 'SEO'}
               reports={ahrefsReports}
               gscData={seoGscAggregated}
+              gscMultiPeriod={gscMultiPeriod}
               gaOrganicByMonth={seoGaOrganicByMonth}
             />
           </div>
