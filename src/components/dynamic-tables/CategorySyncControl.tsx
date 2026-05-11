@@ -267,7 +267,7 @@ export function CategorySyncControl({ category, tables }: Props) {
       >
         <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? "animate-spin" : ""}`} />
         {isSyncing
-          ? `מסנכרן… (${progress.done}/${progress.total})`
+          ? `${category === "seo" ? "מסנכרן Ahrefs…" : "מסנכרן…"} (${progress.done}/${progress.total})`
           : `סנכרן עכשיו${syncableTables.length ? ` (${syncableTables.length})` : ""}`}
       </Button>
     </div>
