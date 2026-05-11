@@ -25,12 +25,11 @@ export default function GoogleSearchConsoleSettings() {
   const [sharingIntegrationName, setSharingIntegrationName] = useState("");
   const [sharingOwnerId, setSharingOwnerId] = useState<string | null>(null);
 
-  // Get user's own + shared integrations
+  // Get all GSC integrations visible to the user (own + others in tenant)
   const { data: integrations = [], isLoading } = useUserIntegrations(currentTenantId, 'google_search_console');
-  const integration = integrations.length > 0 ? integrations[0] : null;
 
   // Connect to Google Search Console
-  const handleConnect = async () => {
+  const handleConnect = async (addNew = false) => {
     if (!currentTenantId || !userId) {
       toast.error("נא להתחבר למערכת");
       return;
@@ -44,7 +43,7 @@ export default function GoogleSearchConsoleSettings() {
       }
 
       const response = await supabase.functions.invoke('google-search-console-auth?action=authorize', {
-        body: { tenantId: currentTenantId, userId, origin: window.location.origin },
+        body: { tenantId: currentTenantId, userId, addNew, origin: window.location.origin },
         headers: { Authorization: `Bearer ${session.session.access_token}` },
         method: 'POST',
       });
@@ -63,18 +62,16 @@ export default function GoogleSearchConsoleSettings() {
 
   // Disconnect integration
   const disconnectMutation = useMutation({
-    mutationFn: async () => {
-      if (!integration?.id) throw new Error("No integration to disconnect");
-      
+    mutationFn: async (integrationId: string) => {
       const { error } = await supabase
         .from('tenant_integrations')
         .update({ is_active: false })
-        .eq('id', integration.id);
+        .eq('id', integrationId);
       
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['google-search-console-integration'] });
+      queryClient.invalidateQueries({ queryKey: ['user-integrations'] });
       toast.success("החיבור ל-Google Search Console נותק");
     },
     onError: (error) => {
