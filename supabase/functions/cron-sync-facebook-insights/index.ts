@@ -93,6 +93,7 @@ Deno.serve(async (req) => {
         const settings = table.integration_settings || {};
         const adAccountId = settings.ad_account_id;
         const dateRange = settings.date_range || 'last_30_days';
+        const previousAccountStatus: string | null = settings.account_status || null;
 
         if (!adAccountId) {
           continue;
