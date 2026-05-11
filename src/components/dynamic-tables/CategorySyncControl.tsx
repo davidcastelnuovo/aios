@@ -47,6 +47,18 @@ async function syncStoredAhrefsReportTable(t: CategoryTable) {
   const clientId = settings.clientId || settings.client_id || t.client_id;
   if (!clientId || !t.tenant_id) throw new Error("Missing SEO report scope");
 
+  // Step 1: Fetch fresh Ahrefs snapshot from API (persists into ahrefs_reports via webhook)
+  const domain = settings.targetDomain || settings.target || settings.domain;
+  const { error: fetchError } = await supabase.functions.invoke("fetch-ahrefs-snapshot", {
+    body: {
+      clientId,
+      domain,
+      country: settings.country || "il",
+    },
+  });
+  if (fetchError) throw fetchError;
+
+  // Step 2: Read freshly stored reports and rebuild crm_records
   const { data: reports, error } = await supabase
     .from("ahrefs_reports" as any)
     .select("*")
