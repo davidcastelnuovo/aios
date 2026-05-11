@@ -746,7 +746,6 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
               )}
             </TabsList>
             <TabsContent value="seo" className="space-y-4">
-              <PublicMaskyooCallsCard snapshots={maskyooSnapshots} periodLabel={maskyooPeriodLabel} />
               <PublicSeoView
                 tableName={dashboard?.client_name || 'SEO'}
                 reports={ahrefsReports}
@@ -754,6 +753,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
                 gscMultiPeriod={gscMultiPeriod}
                 gaOrganicByMonth={seoGaOrganicByMonth}
               />
+              <PublicMaskyooCallsCard snapshots={maskyooSnapshots} periodLabel={maskyooPeriodLabel} />
             </TabsContent>
             {hasSeoGsc && (
               <TabsContent value="gsc">
@@ -768,7 +768,6 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
           </Tabs>
         ) : (
           <div className="space-y-4">
-            <PublicMaskyooCallsCard snapshots={maskyooSnapshots} periodLabel={maskyooPeriodLabel} />
             <PublicSeoView
               tableName={dashboard?.client_name || 'SEO'}
               reports={ahrefsReports}
@@ -776,6 +775,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
               gscMultiPeriod={gscMultiPeriod}
               gaOrganicByMonth={seoGaOrganicByMonth}
             />
+            <PublicMaskyooCallsCard snapshots={maskyooSnapshots} periodLabel={maskyooPeriodLabel} />
           </div>
         )
       ) : (
