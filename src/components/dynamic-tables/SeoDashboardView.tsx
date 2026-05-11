@@ -593,6 +593,14 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
                           ? format(new Date(r.report_date), 'dd MMMM yyyy', { locale: he })
                           : format(new Date(r.received_at), 'dd MMMM yyyy', { locale: he })
                         }
+                        {r.received_at && (
+                          <span className="text-[10px] text-muted-foreground">
+                            (סונכרן {format(new Date(r.received_at), 'dd/MM')})
+                          </span>
+                        )}
+                        {latestReport?.id === r.id && (
+                          <Badge variant="secondary" className="text-[10px] px-1 py-0">אחרון</Badge>
+                        )}
                       </div>
                     </SelectItem>
                   ))}
