@@ -156,6 +156,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
   const hasSeo = ahrefsReports.length > 0;
   const seoGaRecords = data?.seo_ga_records || [];
   const seoGscRecords = data?.seo_gsc_records || [];
+  const gscMultiPeriod = data?.gsc_multi_period || null;
   const maskyooSnapshots = data?.maskyoo_snapshots || [];
   const maskyooPeriod = data?.maskyoo_period || null;
   const maskyooPeriodLabel = maskyooPeriod ? `${maskyooPeriod.start} – ${maskyooPeriod.end}` : undefined;
@@ -752,6 +753,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
                 tableName={dashboard?.client_name || 'SEO'}
                 reports={ahrefsReports}
                 gscData={seoGscAggregated}
+                gscMultiPeriod={gscMultiPeriod}
                 gaOrganicByMonth={seoGaOrganicByMonth}
               />
             </TabsContent>
@@ -775,6 +777,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
               tableName={dashboard?.client_name || 'SEO'}
               reports={ahrefsReports}
               gscData={seoGscAggregated}
+              gscMultiPeriod={gscMultiPeriod}
               gaOrganicByMonth={seoGaOrganicByMonth}
             />
           </div>
