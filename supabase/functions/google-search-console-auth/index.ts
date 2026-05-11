@@ -245,10 +245,10 @@ serve(async (req) => {
 
       let accessToken = integration.api_key;
       const settings = integration.settings as any;
+      const ownerEmail = settings?.google_email || null;
 
-      // Check if token needs refresh
-      if (settings?.expires_at && new Date(settings.expires_at) < new Date()) {
-        
+      const refreshAccessToken = async (): Promise<{ ok: boolean; reason?: string }> => {
+        if (!settings?.refresh_token) return { ok: false, reason: 'missing_refresh_token' };
         const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -259,13 +259,10 @@ serve(async (req) => {
             grant_type: 'refresh_token',
           }),
         });
-
-        const refreshData = await refreshResponse.json();
-        
+        const refreshData = await refreshResponse.json().catch(() => ({}));
         if (refreshData.access_token) {
           accessToken = refreshData.access_token;
           const newExpiresAt = new Date(Date.now() + (refreshData.expires_in * 1000)).toISOString();
-          
           await supabase
             .from('tenant_integrations')
             .update({
@@ -273,20 +270,64 @@ serve(async (req) => {
               settings: { ...settings, expires_at: newExpiresAt },
             })
             .eq('id', integrationId);
+          return { ok: true };
+        }
+        return { ok: false, reason: refreshData.error || 'refresh_failed' };
+      };
+
+      // Proactive refresh if expired
+      if (settings?.expires_at && new Date(settings.expires_at) < new Date()) {
+        await refreshAccessToken();
+      }
+
+      const fetchSites = () =>
+        fetch('https://www.googleapis.com/webmasters/v3/sites', {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+
+      let sitesResponse = await fetchSites();
+      let sitesData: any = await sitesResponse.json().catch(() => ({}));
+
+      // If credentials invalid, try one forced refresh and retry once.
+      const looksUnauthorized =
+        sitesResponse.status === 401 ||
+        sitesData?.error?.code === 401 ||
+        /invalid.*credential|invalid_grant|unauthorized/i.test(sitesData?.error?.message || '');
+
+      if (looksUnauthorized) {
+        const refreshResult = await refreshAccessToken();
+        if (refreshResult.ok) {
+          sitesResponse = await fetchSites();
+          sitesData = await sitesResponse.json().catch(() => ({}));
+        } else {
+          return new Response(
+            JSON.stringify({
+              sites: [],
+              needs_reconnect: true,
+              owner_email: ownerEmail,
+              reason: refreshResult.reason || 'token_revoked',
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
         }
       }
 
-      // Fetch Search Console sites
-      const sitesResponse = await fetch(
-        'https://www.googleapis.com/webmasters/v3/sites',
-        {
-          headers: { Authorization: `Bearer ${accessToken}` },
+      if (sitesData?.error) {
+        // Still failing after refresh -> reconnect required.
+        const stillUnauthorized =
+          sitesData.error.code === 401 ||
+          /invalid.*credential|invalid_grant|unauthorized/i.test(sitesData.error.message || '');
+        if (stillUnauthorized) {
+          return new Response(
+            JSON.stringify({
+              sites: [],
+              needs_reconnect: true,
+              owner_email: ownerEmail,
+              reason: 'token_revoked',
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
         }
-      );
-
-      const sitesData = await sitesResponse.json();
-
-      if (sitesData.error) {
         throw new Error(sitesData.error.message);
       }
 
@@ -295,8 +336,19 @@ serve(async (req) => {
         permissionLevel: site.permissionLevel,
       }));
 
+      // Cache the fresh list back into settings.available_sites so the UI can
+      // fall back to it even if a future call fails.
+      try {
+        await supabase
+          .from('tenant_integrations')
+          .update({
+            settings: { ...settings, available_sites: sites },
+          })
+          .eq('id', integrationId);
+      } catch (_e) { /* non-fatal */ }
+
       return new Response(
-        JSON.stringify({ sites }),
+        JSON.stringify({ sites, owner_email: ownerEmail }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
   } catch (error: any) {
