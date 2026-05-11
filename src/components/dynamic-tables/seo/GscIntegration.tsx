@@ -429,6 +429,19 @@ export function GscIntegration({
         result[key] = rows as GscKeywordData[];
       });
 
+      // If any of the parallel calls reported needs_reconnect, mark the
+      // integration as broken so the selection memo falls back.
+      const anyNeedsReconnect = responses.some((r: any) => r?.data?.needs_reconnect);
+      if (anyNeedsReconnect && gscIntegration?.id && !isFallbackIntegration) {
+        const id = gscIntegration.id;
+        setBrokenIntegrationIds((prev) => {
+          if (prev.has(id)) return prev;
+          const next = new Set(prev);
+          next.add(id);
+          return next;
+        });
+      }
+
       onMultiPeriodLoaded?.(result);
       return result;
     },
