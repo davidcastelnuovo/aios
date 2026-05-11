@@ -169,11 +169,15 @@ export function GscIntegration({
       } as any;
     };
 
-    if (!gscIntegrations.length) {
+    const usableIntegrations = gscIntegrations.filter(
+      (i: any) => !brokenIntegrationIds.has(i.id)
+    );
+
+    if (!usableIntegrations.length) {
       return buildFallback();
     }
 
-    const withGoodMapping = gscIntegrations.find((i: any) => {
+    const withGoodMapping = usableIntegrations.find((i: any) => {
       const mapped = (i.settings as any)?.client_sites?.[clientId];
       if (!mapped) return false;
       const sites = (i.settings as any)?.available_sites || [];
@@ -187,8 +191,8 @@ export function GscIntegration({
     // org-wide fallback so GSC data still loads automatically (same behavior
     // as the public shared link). Fall back to the first personal integration
     // only if no org fallback is available.
-    return buildFallback() || gscIntegrations[0];
-  }, [gscIntegrations, clientId, resolvedFallback]);
+    return buildFallback() || usableIntegrations[0];
+  }, [gscIntegrations, clientId, resolvedFallback, brokenIntegrationIds]);
 
   const isFallbackIntegration = !!(gscIntegration as any)?._isFallback;
 
