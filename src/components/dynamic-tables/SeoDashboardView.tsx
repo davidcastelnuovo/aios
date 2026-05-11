@@ -113,6 +113,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
         .from('ahrefs_reports')
         .select('*')
         .eq('client_id', clientId)
+        .order('received_at', { ascending: false })
         .order('report_date', { ascending: false });
       if (reportTenants.length === 1) q = q.eq('tenant_id', reportTenants[0]);
       else if (reportTenants.length > 1) q = q.in('tenant_id', reportTenants);
