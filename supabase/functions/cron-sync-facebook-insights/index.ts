@@ -531,6 +531,9 @@ Deno.serve(async (req) => {
           };
 
           for (const campaign of Object.values(campaignStatuses)) {
+            // Only alert if the user actually wants this campaign running.
+            // Skip campaigns the user paused/archived themselves.
+            if (campaign.configured_status !== 'ACTIVE') continue;
             const status = campaign.effective_status;
             if (ignoredStatuses.has(status)) continue;
             if (buckets[status]) buckets[status].campaigns.push(campaign);
