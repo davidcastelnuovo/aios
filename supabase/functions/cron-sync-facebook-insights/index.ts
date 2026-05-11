@@ -595,6 +595,9 @@ Deno.serve(async (req) => {
                     },
                   }),
                 }).catch(() => {});
+
+                // Direct WhatsApp fallback (in case no automation is configured)
+                await notifyCampaignerWA(`🚨 ${taskTitle}\nהוצאה ב-2 ימים אחרונים: 0\nהוצאה ב-7 ימים קודמים: ${agg.prior.toFixed(2)}\nלקוח: ${table.name}`);
               }
             }
           }
