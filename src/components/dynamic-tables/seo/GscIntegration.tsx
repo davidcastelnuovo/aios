@@ -236,6 +236,29 @@ export function GscIntegration({
     staleTime: 5 * 60 * 1000,
   });
 
+  // When the chosen personal/shared integration reports needs_reconnect AND
+  // there's an org-wide fallback available, mark this integration as broken
+  // so the selection memo above re-runs and switches to the fallback —
+  // suppressing the per-client reconnect banner unnecessarily.
+  useEffect(() => {
+    const id = gscIntegration?.id;
+    if (!id || isFallbackIntegration) return;
+    if (!sitesResult?.needsReconnect) return;
+    if (!resolvedFallback?.integrationId) return; // no fallback → keep banner
+    if (brokenIntegrationIds.has(id)) return;
+    setBrokenIntegrationIds((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  }, [
+    sitesResult?.needsReconnect,
+    gscIntegration?.id,
+    isFallbackIntegration,
+    resolvedFallback?.integrationId,
+    brokenIntegrationIds,
+  ]);
+
   const cachedSites: GscSite[] = useMemo(
     () => (Array.isArray(settings?.available_sites) ? (settings.available_sites as GscSite[]) : []),
     [settings]
