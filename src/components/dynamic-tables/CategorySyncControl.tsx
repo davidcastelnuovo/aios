@@ -181,7 +181,7 @@ export function CategorySyncControl({ category, tables }: Props) {
     let success = 0;
     let failed = 0;
 
-    await runWithConcurrency(syncableTables, 3, async (t) => {
+    await runWithConcurrency(syncableTables, 2, async (t) => {
       const fnName = FN_BY_TYPE[t.integration_type as string];
       try {
         if (t.integration_type === "ahrefs" && t.integration_settings?.data_source === "ahrefs_reports") {
@@ -223,6 +223,8 @@ export function CategorySyncControl({ category, tables }: Props) {
     // Refresh tables list so last_sync_at updates
     queryClient.invalidateQueries({ queryKey: ["crm-tables"] });
     queryClient.invalidateQueries({ queryKey: ["dynamic-tables"] });
+    queryClient.invalidateQueries({ queryKey: ["ahrefs-reports"] });
+    queryClient.invalidateQueries({ queryKey: ["seo-dashboard-reports"] });
   };
 
   let lastSyncLabel: string;
