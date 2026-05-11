@@ -189,13 +189,15 @@ export function GscIntegration({
   const settings = (gscIntegration?.settings as any) || {};
 
   const {
-    data: availableSites = [],
+    data: sitesResult,
     isLoading: isLoadingSites,
     refetch: refetchSites,
   } = useQuery({
     queryKey: ["gsc-sites", gscIntegration?.id],
     queryFn: async () => {
-      if (!gscIntegration?.id) return [] as GscSite[];
+      if (!gscIntegration?.id) {
+        return { sites: [] as GscSite[], needsReconnect: false, ownerEmail: null as string | null };
+      }
 
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
@@ -205,12 +207,38 @@ export function GscIntegration({
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
 
-      if (response.error) throw response.error;
-      return Array.isArray(response.data?.sites) ? (response.data.sites as GscSite[]) : [];
+      if (response.error) {
+        // Treat as needs_reconnect so UI can fall back to cached sites.
+        return {
+          sites: [] as GscSite[],
+          needsReconnect: true,
+          ownerEmail: (settings?.google_email as string) || null,
+        };
+      }
+      const data: any = response.data || {};
+      return {
+        sites: Array.isArray(data.sites) ? (data.sites as GscSite[]) : [],
+        needsReconnect: !!data.needs_reconnect,
+        ownerEmail: data.owner_email || (settings?.google_email as string) || null,
+      };
     },
     enabled: !!gscIntegration?.id && !isFallbackIntegration,
     staleTime: 5 * 60 * 1000,
   });
+
+  const cachedSites: GscSite[] = useMemo(
+    () => (Array.isArray(settings?.available_sites) ? (settings.available_sites as GscSite[]) : []),
+    [settings]
+  );
+
+  const liveSites = sitesResult?.sites || [];
+  const needsReconnect = !!sitesResult?.needsReconnect;
+  const reconnectOwnerEmail = sitesResult?.ownerEmail || (settings?.google_email as string) || null;
+
+  // Fall back to cached sites when the live call returned nothing (auth issue
+  // or transient failure) so the user can still pick a property.
+  const availableSites: GscSite[] =
+    liveSites.length > 0 ? liveSites : cachedSites;
 
   // STRICT per-client isolation: do NOT fall back to global settings.site_url/siteUrl
   // (those caused selections to leak across clients).
