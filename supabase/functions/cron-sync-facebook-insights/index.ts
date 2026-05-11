@@ -439,28 +439,12 @@ Deno.serve(async (req) => {
         results.synced++;
 
         // Helper: notify David (the operator) via WhatsApp (Green API).
-        // Currently Carmen sends WA alerts ONLY to David, not to per-tenant campaigners.
-        const notifyCampaignerWA = async (message: string) => {
-          try {
-            const DAVID_PHONE = '972507677613';
-            const DAVID_GREEN_API_TENANT = '2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019';
-            const DAVID_GREEN_API_USER = 'bcd21d1c-3b39-4a7c-9dbf-4c89679110b9';
-            await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-green-api-message`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-              },
-              body: JSON.stringify({
-                phoneNumber: DAVID_PHONE,
-                message,
-                tenantId: DAVID_GREEN_API_TENANT,
-                senderUserId: DAVID_GREEN_API_USER,
-              }),
-            });
-          } catch (waErr: any) {
-            console.error(`[wa-notify] ${table.name}:`, waErr?.message);
-          }
+        // ⛔ KILL SWITCH — disabled per operator request (2026-05-11).
+        // The cron was sending repeated WhatsApp alerts for inactive accounts
+        // without proper deduplication. Re-enable only after fixing the
+        // transition-detection logic so it fires once per status change.
+        const notifyCampaignerWA = async (_message: string) => {
+          return; // disabled
         };
 
         // === Account-level billing/disable alert ===
