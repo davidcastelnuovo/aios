@@ -54,8 +54,10 @@ serve(async (req) => {
     // Refresh token if needed
     let accessToken = integration.api_key;
     const settings = integration.settings as any;
+    const ownerEmail = settings?.google_email || null;
 
-    if (settings?.expires_at && new Date(settings.expires_at) < new Date()) {
+    const refreshAccessToken = async (): Promise<{ ok: boolean; reason?: string }> => {
+      if (!settings?.refresh_token) return { ok: false, reason: 'missing_refresh_token' };
       const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -66,8 +68,7 @@ serve(async (req) => {
           grant_type: 'refresh_token',
         }),
       });
-
-      const refreshData = await refreshResponse.json();
+      const refreshData = await refreshResponse.json().catch(() => ({}));
       if (refreshData.access_token) {
         accessToken = refreshData.access_token;
         const newExpiresAt = new Date(Date.now() + (refreshData.expires_in * 1000)).toISOString();
@@ -78,7 +79,13 @@ serve(async (req) => {
             settings: { ...settings, expires_at: newExpiresAt },
           })
           .eq('id', integration.id);
+        return { ok: true };
       }
+      return { ok: false, reason: refreshData.error || 'refresh_failed' };
+    };
+
+    if (settings?.expires_at && new Date(settings.expires_at) < new Date()) {
+      await refreshAccessToken();
     }
 
     // Default date range: last 28 days
@@ -112,7 +119,7 @@ serve(async (req) => {
 
     for (let page = 0; page < maxPages; page++) {
       const pagedBody = { ...requestBody, rowLimit: pageSize, startRow: page * pageSize };
-      const gscResponse = await fetch(gscApiUrl, {
+      const doFetch = () => fetch(gscApiUrl, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -121,10 +128,54 @@ serve(async (req) => {
         body: JSON.stringify(pagedBody),
       });
 
-      const gscData = await gscResponse.json();
+      let gscResponse = await doFetch();
+      let gscData = await gscResponse.json().catch(() => ({}));
+
+      // Retry once after refresh on 401/invalid credentials.
+      const looksUnauthorized =
+        gscResponse.status === 401 ||
+        gscData?.error?.code === 401 ||
+        /invalid.*credential|invalid_grant|unauthorized/i.test(gscData?.error?.message || '');
+
+      if (looksUnauthorized) {
+        const refreshResult = await refreshAccessToken();
+        if (refreshResult.ok) {
+          gscResponse = await doFetch();
+          gscData = await gscResponse.json().catch(() => ({}));
+        } else {
+          return new Response(
+            JSON.stringify({
+              rows: [],
+              totalRows: 0,
+              needs_reconnect: true,
+              owner_email: ownerEmail,
+              reason: refreshResult.reason || 'token_revoked',
+              siteUrl,
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
 
       if (!gscResponse.ok) {
         console.error('GSC API error:', gscData);
+        const stillUnauthorized =
+          gscResponse.status === 401 ||
+          gscData?.error?.code === 401 ||
+          /invalid.*credential|invalid_grant|unauthorized/i.test(gscData?.error?.message || '');
+        if (stillUnauthorized) {
+          return new Response(
+            JSON.stringify({
+              rows: [],
+              totalRows: 0,
+              needs_reconnect: true,
+              owner_email: ownerEmail,
+              reason: 'token_revoked',
+              siteUrl,
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
         const isPermissionDenied = gscResponse.status === 403;
         return new Response(
           JSON.stringify({
