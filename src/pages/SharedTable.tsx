@@ -385,6 +385,7 @@ export default function SharedTable() {
                 tableName={data.table.name}
                 reports={data.ahrefs_reports || []}
                 gscData={gscAggregated}
+                gscMultiPeriod={data.gsc_multi_period || null}
                 gaOrganicByMonth={gaOrganicByMonth}
                 initialLangFilter={(data.table.integration_settings as any)?.linkedGscLangFilter || 'all'}
               />
