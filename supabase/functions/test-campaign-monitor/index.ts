@@ -103,10 +103,10 @@ serve(async (req) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SERVICE_KEY}` },
         body: JSON.stringify({
-          phone: DAVID_PHONE,
+          phoneNumber: DAVID_PHONE,
           message,
-          tenant_id: DAVID_GREEN_API_TENANT,
-          user_id: DAVID_GREEN_API_USER,
+          tenantId: DAVID_GREEN_API_TENANT,
+          senderUserId: DAVID_GREEN_API_USER,
         }),
       });
       waSend = { status: sendRes.status, body: await sendRes.json().catch(() => ({})) };
