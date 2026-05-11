@@ -130,6 +130,12 @@ export function GscIntegration({
   const queryClient = useQueryClient();
   const [selectedSite, setSelectedSite] = useState<string>("");
   const [sitePopoverOpen, setSitePopoverOpen] = useState(false);
+  // Tracks personal/shared integration IDs whose OAuth token is broken
+  // (get_sites returned needs_reconnect). When such an ID is "blocked",
+  // the selection logic below skips it so we can fall through to the
+  // org-wide service-side fallback instead of showing a reconnect banner
+  // on a single client when other clients work fine via the fallback.
+  const [brokenIntegrationIds, setBrokenIntegrationIds] = useState<Set<string>>(new Set());
   const [internalDateRange, setInternalDateRange] = useState<GscDateRange>('28d');
   const effectiveDateRange: GscDateRange = dateRange ?? internalDateRange;
 
@@ -163,11 +169,15 @@ export function GscIntegration({
       } as any;
     };
 
-    if (!gscIntegrations.length) {
+    const usableIntegrations = gscIntegrations.filter(
+      (i: any) => !brokenIntegrationIds.has(i.id)
+    );
+
+    if (!usableIntegrations.length) {
       return buildFallback();
     }
 
-    const withGoodMapping = gscIntegrations.find((i: any) => {
+    const withGoodMapping = usableIntegrations.find((i: any) => {
       const mapped = (i.settings as any)?.client_sites?.[clientId];
       if (!mapped) return false;
       const sites = (i.settings as any)?.available_sites || [];
@@ -181,8 +191,8 @@ export function GscIntegration({
     // org-wide fallback so GSC data still loads automatically (same behavior
     // as the public shared link). Fall back to the first personal integration
     // only if no org fallback is available.
-    return buildFallback() || gscIntegrations[0];
-  }, [gscIntegrations, clientId, resolvedFallback]);
+    return buildFallback() || usableIntegrations[0];
+  }, [gscIntegrations, clientId, resolvedFallback, brokenIntegrationIds]);
 
   const isFallbackIntegration = !!(gscIntegration as any)?._isFallback;
 
@@ -225,6 +235,29 @@ export function GscIntegration({
     enabled: !!gscIntegration?.id && !isFallbackIntegration,
     staleTime: 5 * 60 * 1000,
   });
+
+  // When the chosen personal/shared integration reports needs_reconnect AND
+  // there's an org-wide fallback available, mark this integration as broken
+  // so the selection memo above re-runs and switches to the fallback —
+  // suppressing the per-client reconnect banner unnecessarily.
+  useEffect(() => {
+    const id = gscIntegration?.id;
+    if (!id || isFallbackIntegration) return;
+    if (!sitesResult?.needsReconnect) return;
+    if (!resolvedFallback?.integrationId) return; // no fallback → keep banner
+    if (brokenIntegrationIds.has(id)) return;
+    setBrokenIntegrationIds((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  }, [
+    sitesResult?.needsReconnect,
+    gscIntegration?.id,
+    isFallbackIntegration,
+    resolvedFallback?.integrationId,
+    brokenIntegrationIds,
+  ]);
 
   const cachedSites: GscSite[] = useMemo(
     () => (Array.isArray(settings?.available_sites) ? (settings.available_sites as GscSite[]) : []),
