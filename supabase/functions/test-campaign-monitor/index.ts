@@ -72,6 +72,46 @@ serve(async (req) => {
       }))
       .filter((t) => t.account_status && t.account_status !== 'active');
 
+    // Optional: send WhatsApp summary to David
+    const DAVID_PHONE = '972507677613';
+    const DAVID_GREEN_API_TENANT = '2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019';
+    const DAVID_GREEN_API_USER = 'bcd21d1c-3b39-4a7c-9dbf-4c89679110b9';
+    let waSend: any = null;
+    if (body?.notify === true) {
+      const lines: string[] = [];
+      lines.push('🧪 *בדיקת ניטור קמפיינים*');
+      lines.push('');
+      lines.push(`📊 פייסבוק: ${fb.invocations} הרצות | Google Ads: ${ga.invocations} הרצות`);
+      lines.push(`🚨 בעיות חיוב פעילות: ${billingIssues.length}`);
+      lines.push(`⚠️ אנומליות בשעה האחרונה: ${anomalies?.length || 0}`);
+      if (billingIssues.length) {
+        lines.push('');
+        lines.push('*בעיות חיוב:*');
+        for (const b of billingIssues.slice(0, 10)) {
+          lines.push(`• ${b.table_name} — ${b.ad_account_id} (${b.account_status}${b.disable_reason ? ` / ${b.disable_reason}` : ''})`);
+        }
+      }
+      if ((anomalies?.length || 0) > 0) {
+        lines.push('');
+        lines.push('*אנומליות אחרונות:*');
+        for (const a of (anomalies || []).slice(0, 10)) {
+          lines.push(`• ${a.title}`);
+        }
+      }
+      const message = lines.join('\n');
+      const sendRes = await fetch(`${SUPABASE_URL}/functions/v1/send-green-api-message`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SERVICE_KEY}` },
+        body: JSON.stringify({
+          phoneNumber: DAVID_PHONE,
+          message,
+          tenantId: DAVID_GREEN_API_TENANT,
+          senderUserId: DAVID_GREEN_API_USER,
+        }),
+      });
+      waSend = { status: sendRes.status, body: await sendRes.json().catch(() => ({})) };
+    }
+
     const report = {
       started_at: startedAt.toISOString(),
       finished_at: new Date().toISOString(),
@@ -89,6 +129,7 @@ serve(async (req) => {
       },
       anomalies: anomalies || [],
       billing_issues: billingIssues,
+      whatsapp_send: waSend,
     };
 
     return new Response(JSON.stringify(report, null, 2), {
