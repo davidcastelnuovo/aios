@@ -627,7 +627,27 @@ export function GscIntegration({
         </div>
       </CardHeader>
 
-      {!isLoadingSites && availableSites.length === 0 && (
+      {needsReconnect && (
+        <CardContent className="px-4 pb-3 pt-0">
+          <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-2 flex items-center justify-between gap-2">
+            <p className="text-xs text-amber-800 dark:text-amber-200">
+              {`החיבור ל-Google${reconnectOwnerEmail ? ` של ${reconnectOwnerEmail}` : ""} פג תוקף — יש להתחבר מחדש`}
+              {cachedSites.length > 0 ? " (בינתיים מוצגים נכסים אחרונים מהמטמון)" : ""}
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              onClick={() => connectMutation.mutate()}
+              disabled={connectMutation.isPending}
+            >
+              חבר מחדש
+            </Button>
+          </div>
+        </CardContent>
+      )}
+
+      {!needsReconnect && !isLoadingSites && availableSites.length === 0 && (
         <CardContent className="px-4 pb-3 pt-0">
           <p className="text-xs text-muted-foreground text-center">
             החיבור קיים אבל לא נטענו נכסים מ-Search Console. נסה רענון או חיבור מחדש.
