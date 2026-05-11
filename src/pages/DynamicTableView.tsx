@@ -1007,12 +1007,23 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
 
       const settings = table.integration_settings || {};
 
-      // If data_source is ahrefs_reports, pull from DB instead of API
+      // If data_source is ahrefs_reports, fetch fresh from Ahrefs API then rebuild from DB
       if (settings.data_source === 'ahrefs_reports') {
         const clientId = (settings.clientId || settings.client_id || table.client_id) as string;
         if (!clientId) throw new Error('Missing client ID for SEO report');
 
-        // Pull ALL reports for this client (all months)
+        // Step 1: pull a fresh snapshot from Ahrefs (persists into ahrefs_reports via webhook)
+        const targetDomainForFetch = settings.targetDomain || settings.target || settings.domain;
+        const { error: fetchError } = await supabase.functions.invoke('fetch-ahrefs-snapshot', {
+          body: {
+            clientId,
+            domain: targetDomainForFetch,
+            country: settings.country || 'il',
+          },
+        });
+        if (fetchError) throw fetchError;
+
+        // Step 2: pull ALL reports for this client (all months) and rebuild
         const { data: reports, error } = await supabase
           .from('ahrefs_reports')
           .select('*')
