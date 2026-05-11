@@ -1186,6 +1186,8 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
       queryClient.invalidateQueries({ queryKey: ['crm-fields', table?.id] });
       queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      queryClient.invalidateQueries({ queryKey: ['seo-dashboard-reports'] });
+      queryClient.invalidateQueries({ queryKey: ['ahrefs-reports'] });
       toast.success(`נתוני SEO סונכרנו בהצלחה (${data?.recordsCount || 0} שורות)`);
     },
     onError: (error: any) => {
