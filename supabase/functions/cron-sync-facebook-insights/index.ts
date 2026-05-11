@@ -531,6 +531,9 @@ Deno.serve(async (req) => {
           };
 
           for (const campaign of Object.values(campaignStatuses)) {
+            // Only alert if the user actually wants this campaign running.
+            // Skip campaigns the user paused/archived themselves.
+            if (campaign.configured_status !== 'ACTIVE') continue;
             const status = campaign.effective_status;
             if (ignoredStatuses.has(status)) continue;
             if (buckets[status]) buckets[status].campaigns.push(campaign);
@@ -611,7 +614,7 @@ Deno.serve(async (req) => {
 
           const activeCampaignIds = new Set(
             Object.values(campaignStatuses)
-              .filter((c) => c.effective_status === 'ACTIVE')
+              .filter((c) => c.configured_status === 'ACTIVE' && c.effective_status === 'ACTIVE')
               .map((c) => c.id)
           );
 
