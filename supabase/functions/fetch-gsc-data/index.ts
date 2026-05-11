@@ -54,8 +54,10 @@ serve(async (req) => {
     // Refresh token if needed
     let accessToken = integration.api_key;
     const settings = integration.settings as any;
+    const ownerEmail = settings?.google_email || null;
 
-    if (settings?.expires_at && new Date(settings.expires_at) < new Date()) {
+    const refreshAccessToken = async (): Promise<{ ok: boolean; reason?: string }> => {
+      if (!settings?.refresh_token) return { ok: false, reason: 'missing_refresh_token' };
       const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -66,8 +68,7 @@ serve(async (req) => {
           grant_type: 'refresh_token',
         }),
       });
-
-      const refreshData = await refreshResponse.json();
+      const refreshData = await refreshResponse.json().catch(() => ({}));
       if (refreshData.access_token) {
         accessToken = refreshData.access_token;
         const newExpiresAt = new Date(Date.now() + (refreshData.expires_in * 1000)).toISOString();
@@ -78,7 +79,13 @@ serve(async (req) => {
             settings: { ...settings, expires_at: newExpiresAt },
           })
           .eq('id', integration.id);
+        return { ok: true };
       }
+      return { ok: false, reason: refreshData.error || 'refresh_failed' };
+    };
+
+    if (settings?.expires_at && new Date(settings.expires_at) < new Date()) {
+      await refreshAccessToken();
     }
 
     // Default date range: last 28 days
