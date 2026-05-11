@@ -142,13 +142,27 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
     expectedDomain: firstReportDomain,
   });
 
-  // Selected report (default to latest)
+  // Selected report (default to the most-recently-synced valid report)
+  const latestReport = useMemo(() => {
+    if (validReports.length === 0) return null;
+    return [...validReports].sort((a: any, b: any) => {
+      const aT = new Date(a.received_at || a.report_date || 0).getTime();
+      const bT = new Date(b.received_at || b.report_date || 0).getTime();
+      return bT - aT;
+    })[0];
+  }, [validReports]);
+
   const selectedReport = useMemo(() => {
     if (selectedReportId) {
-      return validReports.find(r => r.id === selectedReportId) || validReports[0];
+      return validReports.find(r => r.id === selectedReportId) || latestReport;
     }
-    return validReports[0];
-  }, [validReports, selectedReportId]);
+    return latestReport;
+  }, [validReports, selectedReportId, latestReport]);
+
+  // Reset manual selection when client changes so a freshly-synced client always lands on the newest report.
+  useEffect(() => {
+    setSelectedReportId(null);
+  }, [clientId]);
 
   const reportData = selectedReport?.report_data as any;
 
