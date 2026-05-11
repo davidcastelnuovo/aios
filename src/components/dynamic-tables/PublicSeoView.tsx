@@ -291,8 +291,8 @@ export function PublicSeoView({ tableName, reports, gscData = [], gscMultiPeriod
         trackedKeywords={trackedKeywords}
         gscOnlyKeywords={gscOnlyKeywords}
         hasGscData={gscData.length > 0}
-        show3Month={comparison.threeMonth.size > 0}
-        showYearly={comparison.yearly.size > 0}
+        show3Month={comparison.threeMonth.size > 0 || gscThreeMonthMap.size > 0}
+        showYearly={comparison.yearly.size > 0 || gscYearlyMap.size > 0}
         initialLangFilter={initialLangFilter}
       />
 
