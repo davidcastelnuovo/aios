@@ -510,82 +510,160 @@ Deno.serve(async (req) => {
           console.error(`[billing-alert] ${table.name}:`, billingErr?.message);
         }
 
-        // === Zero-spend anomaly: account stopped spending ===
-        // For each campaign that spent in the prior 7 days but has spend=0 in the last 2 days → alert.
+        // === Campaign-level status alerts (official Facebook signals) ===
+        // Use effective_status (DISAPPROVED / PENDING_BILLING_INFO / WITH_ISSUES /
+        // PENDING_REVIEW) instead of spend heuristics. PAUSED/ARCHIVED ignored.
         try {
           const todayMs = Date.now();
           const dayMs = 24 * 60 * 60 * 1000;
-          const last2Cutoff = new Date(todayMs - 2 * dayMs).toISOString().split('T')[0];
-          const prior7Cutoff = new Date(todayMs - 9 * dayMs).toISOString().split('T')[0];
+          const sevenDaysAgo = new Date(todayMs - 7 * dayMs).toISOString();
 
-          const perCampaign: Record<string, { name: string; recent: number; prior: number }> = {};
-          for (const ins of insights) {
-            const c = perCampaign[ins.campaign_id] ||= { name: ins.campaign_name, recent: 0, prior: 0 };
-            if (ins.date >= last2Cutoff) c.recent += ins.spend;
-            else if (ins.date >= prior7Cutoff) c.prior += ins.spend;
+          const ignoredStatuses = new Set([
+            'PAUSED', 'CAMPAIGN_PAUSED', 'ADSET_PAUSED',
+            'ARCHIVED', 'DELETED', 'IN_PROCESS',
+          ]);
+
+          const statusAlerts: Array<{ status: string; emoji: string; label: string; campaigns: CampaignStatus[] }> = [];
+          const buckets: Record<string, { emoji: string; label: string; campaigns: CampaignStatus[] }> = {
+            DISAPPROVED: { emoji: '❌', label: 'קמפיין נדחה ע״י פייסבוק', campaigns: [] },
+            PENDING_BILLING_INFO: { emoji: '💳', label: 'חסרים פרטי חיוב', campaigns: [] },
+            WITH_ISSUES: { emoji: '⚠️', label: 'בעיה בקמפיין', campaigns: [] },
+          };
+
+          for (const campaign of Object.values(campaignStatuses)) {
+            const status = campaign.effective_status;
+            if (ignoredStatuses.has(status)) continue;
+            if (buckets[status]) buckets[status].campaigns.push(campaign);
           }
 
-          for (const [cid, agg] of Object.entries(perCampaign)) {
-            if (agg.recent === 0 && agg.prior > 5) {
-              // Carmen task (idempotent: skip if open task exists in last 24h with same title)
-              const taskTitle = `🚨 חשבון פייסבוק עצר: ${agg.name}`;
+          for (const [status, bucket] of Object.entries(buckets)) {
+            if (bucket.campaigns.length === 0) continue;
+            statusAlerts.push({ status, ...bucket });
+          }
+
+          // Find Carmen agent once
+          const { data: agent } = await supabase
+            .from('ai_agents')
+            .select('id')
+            .eq('tenant_id', table.tenant_id)
+            .eq('active', true)
+            .limit(1)
+            .maybeSingle();
+
+          for (const alert of statusAlerts) {
+            for (const campaign of alert.campaigns) {
+              const taskTitle = `${alert.emoji} ${alert.label}: ${campaign.name}`;
+              // Dedup: skip if same title open within last 7 days
               const { data: existing } = await supabase
                 .from('agent_tasks')
                 .select('id')
                 .eq('tenant_id', table.tenant_id)
                 .eq('title', taskTitle)
-                .gte('created_at', new Date(todayMs - dayMs).toISOString())
+                .gte('created_at', sevenDaysAgo)
                 .limit(1);
+              if (existing && existing.length > 0) continue;
 
-              if (!existing || existing.length === 0) {
-                // Find any active Carmen agent for the tenant
-                const { data: agent } = await supabase
-                  .from('ai_agents')
-                  .select('id')
-                  .eq('tenant_id', table.tenant_id)
-                  .eq('active', true)
-                  .limit(1)
-                  .maybeSingle();
+              let extraInfo = '';
+              if (alert.status === 'WITH_ISSUES') {
+                try {
+                  const issuesRes = await fetch(
+                    `https://graph.facebook.com/v21.0/${campaign.id}?fields=issues_info&access_token=${accessToken}`
+                  );
+                  const issuesData = await issuesRes.json();
+                  if (Array.isArray(issuesData?.issues_info) && issuesData.issues_info.length > 0) {
+                    extraInfo = '\n\nפרטי הבעיה: ' +
+                      issuesData.issues_info
+                        .map((i: any) => i.error_summary || i.error_message || i.level)
+                        .filter(Boolean)
+                        .join(' | ');
+                  }
+                } catch { /* ignore */ }
+              }
 
-                if (agent) {
-                  await supabase.from('agent_tasks').insert({
-                    tenant_id: table.tenant_id,
-                    agent_id: agent.id,
-                    title: taskTitle,
-                    description: `הקמפיין "${agg.name}" (${cid}) לא הוציא כסף ב-2 הימים האחרונים, למרות שהוציא ${agg.prior.toFixed(2)} ב-7 הימים הקודמים. ייתכן שהחשבון עצר/נחסם. בדקי ועדכני את הצוות.`,
-                    status: 'open',
-                    priority: 1,
-                    task_mode: 'anomaly_alert',
-                  });
-                }
+              if (agent) {
+                await supabase.from('agent_tasks').insert({
+                  tenant_id: table.tenant_id,
+                  agent_id: agent.id,
+                  title: taskTitle,
+                  description: `הקמפיין "${campaign.name}" (${campaign.id}) בחשבון "${table.name}" במצב: ${alert.label} (${alert.status}).${extraInfo}\n\nזהו אות סטטוס רשמי מפייסבוק. בדקי ועדכני את הצוות.`,
+                  status: 'open',
+                  priority: 1,
+                  task_mode: 'anomaly_alert',
+                });
+              }
+            }
+          }
+        } catch (statusErr: any) {
+          console.error(`[campaign-status-alert] ${table.name}:`, statusErr?.message);
+        }
 
-                // Trigger automation
-                const supabaseUrl2 = Deno.env.get('SUPABASE_URL')!;
-                const supabaseKey2 = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-                await fetch(`${supabaseUrl2}/functions/v1/trigger-automation`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey2}` },
-                  body: JSON.stringify({
-                    trigger_type: 'account_stopped_spending',
-                    tenant_id: table.tenant_id,
-                    data: {
-                      provider: 'facebook',
-                      campaign_name: agg.name,
-                      campaign_id: cid,
-                      table_name: table.name,
-                      recent_spend: agg.recent,
-                      prior_spend: agg.prior,
-                    },
-                  }),
-                }).catch(() => {});
+        // === Soft spend-drop alert (account-level, weekly dedup) ===
+        // Only ACTIVE campaigns; only fully-closed days (-3..-1 vs -10..-4).
+        try {
+          const todayMs = Date.now();
+          const dayMs = 24 * 60 * 60 * 1000;
+          const fmt = (d: Date) => d.toISOString().split('T')[0];
+          const recentStart = fmt(new Date(todayMs - 3 * dayMs));
+          const recentEnd = fmt(new Date(todayMs - 1 * dayMs));
+          const priorStart = fmt(new Date(todayMs - 10 * dayMs));
+          const priorEnd = fmt(new Date(todayMs - 4 * dayMs));
+          const sevenDaysAgo = new Date(todayMs - 7 * dayMs).toISOString();
 
-                // Direct WhatsApp fallback (in case no automation is configured)
-                await notifyCampaignerWA(`🚨 ${taskTitle}\nהוצאה ב-2 ימים אחרונים: 0\nהוצאה ב-7 ימים קודמים: ${agg.prior.toFixed(2)}\nלקוח: ${table.name}`);
+          const activeCampaignIds = new Set(
+            Object.values(campaignStatuses)
+              .filter((c) => c.effective_status === 'ACTIVE')
+              .map((c) => c.id)
+          );
+
+          const perCampaign: Record<string, { name: string; recent: number; prior: number }> = {};
+          for (const ins of insights) {
+            if (!activeCampaignIds.has(ins.campaign_id)) continue;
+            const c = perCampaign[ins.campaign_id] ||= { name: ins.campaign_name, recent: 0, prior: 0 };
+            if (ins.date >= recentStart && ins.date <= recentEnd) c.recent += ins.spend;
+            else if (ins.date >= priorStart && ins.date <= priorEnd) c.prior += ins.spend;
+          }
+
+          const stoppedCampaigns = Object.entries(perCampaign)
+            .filter(([, agg]) => agg.recent === 0 && agg.prior > 5)
+            .map(([cid, agg]) => ({ cid, ...agg }));
+
+          if (stoppedCampaigns.length > 0) {
+            const taskTitle = `📉 ירידה חדה בהוצאה — חשבון ${table.name}`;
+            const { data: existing } = await supabase
+              .from('agent_tasks')
+              .select('id')
+              .eq('tenant_id', table.tenant_id)
+              .eq('title', taskTitle)
+              .gte('created_at', sevenDaysAgo)
+              .limit(1);
+
+            if (!existing || existing.length === 0) {
+              const { data: agent } = await supabase
+                .from('ai_agents')
+                .select('id')
+                .eq('tenant_id', table.tenant_id)
+                .eq('active', true)
+                .limit(1)
+                .maybeSingle();
+
+              if (agent) {
+                const list = stoppedCampaigns
+                  .map((c) => `• ${c.name} (הוציא ${c.prior.toFixed(2)} בשבוע הקודם)`)
+                  .join('\n');
+                await supabase.from('agent_tasks').insert({
+                  tenant_id: table.tenant_id,
+                  agent_id: agent.id,
+                  title: taskTitle,
+                  description: `${stoppedCampaigns.length} קמפיינים פעילים בחשבון "${table.name}" הפסיקו להוציא בימים האחרונים (3 ימים שלמים מול 7 ימים קודמים):\n\n${list}\n\nכדאי לבדוק שהתקציב והאשראי תקינים.`,
+                  status: 'open',
+                  priority: 2,
+                  task_mode: 'anomaly_alert',
+                });
               }
             }
           }
         } catch (zeroErr: any) {
-          console.error(`[zero-spend] ${table.name}:`, zeroErr.message);
+          console.error(`[spend-drop] ${table.name}:`, zeroErr?.message);
         }
 
         // === Check report_alerts and trigger automations ===
