@@ -614,7 +614,7 @@ Deno.serve(async (req) => {
 
           const activeCampaignIds = new Set(
             Object.values(campaignStatuses)
-              .filter((c) => c.effective_status === 'ACTIVE')
+              .filter((c) => c.configured_status === 'ACTIVE' && c.effective_status === 'ACTIVE')
               .map((c) => c.id)
           );
 
