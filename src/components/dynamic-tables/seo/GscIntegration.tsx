@@ -362,6 +362,17 @@ export function GscIntegration({
       });
 
       if (response.error) throw response.error;
+      // Token revoked → mark integration as broken so the selection memo
+      // falls back to the org-wide service-side integration if available.
+      if (response.data?.needs_reconnect && gscIntegration?.id && !isFallbackIntegration) {
+        const id = gscIntegration.id;
+        setBrokenIntegrationIds((prev) => {
+          if (prev.has(id)) return prev;
+          const next = new Set(prev);
+          next.add(id);
+          return next;
+        });
+      }
       const rows = Array.isArray(response.data?.rows) ? response.data.rows : [];
       onDataLoaded?.(rows);
       return rows as GscKeywordData[];
