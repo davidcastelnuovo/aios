@@ -746,9 +746,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
               )}
             </TabsList>
             <TabsContent value="seo" className="space-y-4">
-              {hasSeoMaskyoo && (
-                <PublicMaskyooCallsCard snapshots={maskyooSnapshots} periodLabel={maskyooPeriodLabel} />
-              )}
+              <PublicMaskyooCallsCard snapshots={maskyooSnapshots} periodLabel={maskyooPeriodLabel} />
               <PublicSeoView
                 tableName={dashboard?.client_name || 'SEO'}
                 reports={ahrefsReports}
@@ -770,9 +768,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
           </Tabs>
         ) : (
           <div className="space-y-4">
-            {hasSeoMaskyoo && (
-              <PublicMaskyooCallsCard snapshots={maskyooSnapshots} periodLabel={maskyooPeriodLabel} />
-            )}
+            <PublicMaskyooCallsCard snapshots={maskyooSnapshots} periodLabel={maskyooPeriodLabel} />
             <PublicSeoView
               tableName={dashboard?.client_name || 'SEO'}
               reports={ahrefsReports}
