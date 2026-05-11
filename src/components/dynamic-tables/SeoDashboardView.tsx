@@ -113,6 +113,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
         .from('ahrefs_reports')
         .select('*')
         .eq('client_id', clientId)
+        .order('received_at', { ascending: false })
         .order('report_date', { ascending: false });
       if (reportTenants.length === 1) q = q.eq('tenant_id', reportTenants[0]);
       else if (reportTenants.length > 1) q = q.in('tenant_id', reportTenants);
@@ -141,13 +142,27 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
     expectedDomain: firstReportDomain,
   });
 
-  // Selected report (default to latest)
+  // Selected report (default to the most-recently-synced valid report)
+  const latestReport = useMemo(() => {
+    if (validReports.length === 0) return null;
+    return [...validReports].sort((a: any, b: any) => {
+      const aT = new Date(a.received_at || a.report_date || 0).getTime();
+      const bT = new Date(b.received_at || b.report_date || 0).getTime();
+      return bT - aT;
+    })[0];
+  }, [validReports]);
+
   const selectedReport = useMemo(() => {
     if (selectedReportId) {
-      return validReports.find(r => r.id === selectedReportId) || validReports[0];
+      return validReports.find(r => r.id === selectedReportId) || latestReport;
     }
-    return validReports[0];
-  }, [validReports, selectedReportId]);
+    return latestReport;
+  }, [validReports, selectedReportId, latestReport]);
+
+  // Reset manual selection when client changes so a freshly-synced client always lands on the newest report.
+  useEffect(() => {
+    setSelectedReportId(null);
+  }, [clientId]);
 
   const reportData = selectedReport?.report_data as any;
 
@@ -578,6 +593,14 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
                           ? format(new Date(r.report_date), 'dd MMMM yyyy', { locale: he })
                           : format(new Date(r.received_at), 'dd MMMM yyyy', { locale: he })
                         }
+                        {r.received_at && (
+                          <span className="text-[10px] text-muted-foreground">
+                            (סונכרן {format(new Date(r.received_at), 'dd/MM')})
+                          </span>
+                        )}
+                        {latestReport?.id === r.id && (
+                          <Badge variant="secondary" className="text-[10px] px-1 py-0">אחרון</Badge>
+                        )}
                       </div>
                     </SelectItem>
                   ))}
