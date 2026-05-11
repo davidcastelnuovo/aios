@@ -129,6 +129,7 @@ serve(async (req) => {
       },
       anomalies: anomalies || [],
       billing_issues: billingIssues,
+      whatsapp_send: waSend,
     };
 
     return new Response(JSON.stringify(report, null, 2), {
