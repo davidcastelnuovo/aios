@@ -47,6 +47,18 @@ async function syncStoredAhrefsReportTable(t: CategoryTable) {
   const clientId = settings.clientId || settings.client_id || t.client_id;
   if (!clientId || !t.tenant_id) throw new Error("Missing SEO report scope");
 
+  // Step 1: Fetch fresh Ahrefs snapshot from API (persists into ahrefs_reports via webhook)
+  const domain = settings.targetDomain || settings.target || settings.domain;
+  const { error: fetchError } = await supabase.functions.invoke("fetch-ahrefs-snapshot", {
+    body: {
+      clientId,
+      domain,
+      country: settings.country || "il",
+    },
+  });
+  if (fetchError) throw fetchError;
+
+  // Step 2: Read freshly stored reports and rebuild crm_records
   const { data: reports, error } = await supabase
     .from("ahrefs_reports" as any)
     .select("*")
@@ -169,7 +181,7 @@ export function CategorySyncControl({ category, tables }: Props) {
     let success = 0;
     let failed = 0;
 
-    await runWithConcurrency(syncableTables, 3, async (t) => {
+    await runWithConcurrency(syncableTables, 2, async (t) => {
       const fnName = FN_BY_TYPE[t.integration_type as string];
       try {
         if (t.integration_type === "ahrefs" && t.integration_settings?.data_source === "ahrefs_reports") {
@@ -211,6 +223,8 @@ export function CategorySyncControl({ category, tables }: Props) {
     // Refresh tables list so last_sync_at updates
     queryClient.invalidateQueries({ queryKey: ["crm-tables"] });
     queryClient.invalidateQueries({ queryKey: ["dynamic-tables"] });
+    queryClient.invalidateQueries({ queryKey: ["ahrefs-reports"] });
+    queryClient.invalidateQueries({ queryKey: ["seo-dashboard-reports"] });
   };
 
   let lastSyncLabel: string;
@@ -253,7 +267,7 @@ export function CategorySyncControl({ category, tables }: Props) {
       >
         <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? "animate-spin" : ""}`} />
         {isSyncing
-          ? `מסנכרן… (${progress.done}/${progress.total})`
+          ? `${category === "seo" ? "מסנכרן Ahrefs…" : "מסנכרן…"} (${progress.done}/${progress.total})`
           : `סנכרן עכשיו${syncableTables.length ? ` (${syncableTables.length})` : ""}`}
       </Button>
     </div>
