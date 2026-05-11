@@ -40,7 +40,7 @@ serve(async (req) => {
     }
 
     try {
-      const { tenantId, userId, origin } = await req.json();
+      const { tenantId, userId, addNew, origin } = await req.json();
       
       if (!tenantId || !userId) {
         return new Response(
@@ -49,12 +49,13 @@ serve(async (req) => {
         );
       }
 
-      // Google Search Console scopes
+      // Google Search Console scopes (+ userinfo.email so we can identify the Google account)
       const scopes = [
         'https://www.googleapis.com/auth/webmasters.readonly',
+        'https://www.googleapis.com/auth/userinfo.email',
       ].join(' ');
 
-      const state = btoa(JSON.stringify({ tenantId, userId, origin: origin || null }));
+      const state = btoa(JSON.stringify({ tenantId, userId, addNew: !!addNew, origin: origin || null }));
 
       const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
       authUrl.searchParams.set('client_id', clientId);
@@ -63,6 +64,9 @@ serve(async (req) => {
       authUrl.searchParams.set('scope', scopes);
       authUrl.searchParams.set('access_type', 'offline');
       authUrl.searchParams.set('prompt', 'consent');
+      if (addNew) {
+        authUrl.searchParams.set('login_hint', '');
+      }
       authUrl.searchParams.set('state', state);
 
 
