@@ -426,6 +426,112 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Multi-period GSC keyword aggregates for SEO change columns
+      // (שינוי חודשי / 3 חודשים / שנתי). Mirrors GscIntegration's
+      // useQuery("gsc-multi-period") so the public viewer matches the
+      // internal SeoDashboardView exactly.
+      let gscMultiPeriod: { prevMonth: any[]; threeMonth: any[]; yearly: any[] } | null = null;
+      const effectiveGscSiteUrl = linkedGscSiteUrl || (gscTable?.integration_settings as any)?.siteUrl || null;
+      if (effectiveGscSiteUrl) {
+        try {
+          const { data: integrations } = await supabase
+            .from("tenant_integrations")
+            .select("id, api_key, settings")
+            .eq("integration_type", "google_search_console")
+            .eq("is_active", true)
+            .in("tenant_id", tenantIdList)
+            .order("updated_at", { ascending: false })
+            .limit(5);
+
+          const googleClientId = Deno.env.get("GOOGLE_CLIENT_ID") || "";
+          const googleClientSecret = Deno.env.get("GOOGLE_CLIENT_SECRET") || "";
+
+          // Pick the first integration we can mint a fresh access token for.
+          let accessToken: string | null = null;
+          for (const integration of integrations || []) {
+            try {
+              let tok = integration.api_key as string;
+              const intSettings: any = integration.settings || {};
+              if (intSettings.expires_at && new Date(intSettings.expires_at) < new Date() && intSettings.refresh_token) {
+                const refreshResponse = await fetch("https://oauth2.googleapis.com/token", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                  body: new URLSearchParams({
+                    client_id: googleClientId,
+                    client_secret: googleClientSecret,
+                    refresh_token: intSettings.refresh_token,
+                    grant_type: "refresh_token",
+                  }),
+                });
+                const refreshData = await refreshResponse.json();
+                if (refreshData.access_token) {
+                  tok = refreshData.access_token;
+                  const newExpiresAt = new Date(Date.now() + (refreshData.expires_in * 1000)).toISOString();
+                  await supabase
+                    .from("tenant_integrations")
+                    .update({ api_key: tok, settings: { ...intSettings, expires_at: newExpiresAt } })
+                    .eq("id", integration.id);
+                }
+              }
+              if (tok) { accessToken = tok; break; }
+            } catch (e) {
+              console.error("Error preparing GSC token for multi-period:", e);
+            }
+          }
+
+          if (accessToken) {
+            const dateMinus = (days: number) => {
+              const d = new Date();
+              d.setDate(d.getDate() - days);
+              return d.toISOString().split("T")[0];
+            };
+            const periods = {
+              prevMonth: { startOffset: 58, endOffset: 30 },
+              threeMonth: { startOffset: 118, endOffset: 90 },
+              yearly: { startOffset: 393, endOffset: 365 },
+            } as const;
+            const encodedSiteUrl = encodeURIComponent(effectiveGscSiteUrl);
+            const gscApiUrl = `https://www.googleapis.com/webmasters/v3/sites/${encodedSiteUrl}/searchAnalytics/query`;
+
+            const fetchPeriod = async (startOffset: number, endOffset: number) => {
+              const resp = await fetch(gscApiUrl, {
+                method: "POST",
+                headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  startDate: dateMinus(startOffset),
+                  endDate: dateMinus(endOffset),
+                  dimensions: ["query"],
+                  rowLimit: 1000,
+                  dataState: "final",
+                }),
+              });
+              if (!resp.ok) {
+                console.error("GSC multi-period error", resp.status, await resp.text());
+                return [] as any[];
+              }
+              const json = await resp.json();
+              const rows = Array.isArray(json.rows) ? json.rows : [];
+              return rows.map((row: any) => ({
+                keyword: row.keys?.[0] || "",
+                clicks: row.clicks || 0,
+                impressions: row.impressions || 0,
+                ctr: row.ctr ? Math.round(row.ctr * 10000) / 100 : 0,
+                position: row.position ? Math.round(row.position * 10) / 10 : 0,
+              }));
+            };
+
+            const [pm, tm, yr] = await Promise.all([
+              fetchPeriod(periods.prevMonth.startOffset, periods.prevMonth.endOffset),
+              fetchPeriod(periods.threeMonth.startOffset, periods.threeMonth.endOffset),
+              fetchPeriod(periods.yearly.startOffset, periods.yearly.endOffset),
+            ]);
+            gscMultiPeriod = { prevMonth: pm, threeMonth: tm, yearly: yr };
+          }
+        } catch (e) {
+          console.error("Error fetching GSC multi-period:", e);
+        }
+      }
+
       return new Response(
         JSON.stringify({
           table: {
@@ -442,6 +548,7 @@ Deno.serve(async (req) => {
           ga_records: gaRecords,
           gsc_table: gscTable ? { id: gscTable.id, name: gscTable.name, integration_settings: gscTable.integration_settings } : null,
           gsc_records: gscRecords,
+          gsc_multi_period: gscMultiPeriod,
           maskyoo_snapshots: maskyooSnapshots,
           maskyoo_period: maskyooPeriod,
           has_email_restriction: false,

@@ -23,6 +23,12 @@ interface PublicSeoViewProps {
   reports: any[];
   /** Optional GSC data aggregated per keyword — enables enrichment + GSC-only rows. */
   gscData?: PublicGscKeyword[];
+  /** Optional GSC keyword aggregates per historical period — enables monthly/3M/yearly change columns. */
+  gscMultiPeriod?: {
+    prevMonth: PublicGscKeyword[];
+    threeMonth: PublicGscKeyword[];
+    yearly: PublicGscKeyword[];
+  } | null;
   /** Optional GA monthly non-paid sessions — replaces the Ahrefs traffic chart with real Analytics data. */
   gaOrganicByMonth?: { month: string; sessions: number }[];
   /** Initial language filter persisted on the SEO crm_table — read-only in public view. */
@@ -45,7 +51,7 @@ function normalizeKeyword(kw: any) {
   };
 }
 
-export function PublicSeoView({ tableName, reports, gscData = [], gaOrganicByMonth = [], initialLangFilter }: PublicSeoViewProps) {
+export function PublicSeoView({ tableName, reports, gscData = [], gscMultiPeriod = null, gaOrganicByMonth = [], initialLangFilter }: PublicSeoViewProps) {
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const validReports = useMemo(() => filterValidSeoReports(reports), [reports]);
 
@@ -103,6 +109,20 @@ export function PublicSeoView({ tableName, reports, gscData = [], gaOrganicByMon
     return m;
   }, [gscData]);
 
+  // Historical GSC period maps — fallback for monthly / 3-month / yearly position changes
+  // when Ahrefs comparison_data isn't cached on the report.
+  const buildPeriodMap = (rows?: PublicGscKeyword[]) => {
+    const m = new Map<string, PublicGscKeyword>();
+    for (const g of rows || []) {
+      const name = String(g.keyword || "").toLowerCase().trim();
+      if (name) m.set(name, g);
+    }
+    return m;
+  };
+  const gscPrevMonthMap = useMemo(() => buildPeriodMap(gscMultiPeriod?.prevMonth), [gscMultiPeriod]);
+  const gscThreeMonthMap = useMemo(() => buildPeriodMap(gscMultiPeriod?.threeMonth), [gscMultiPeriod]);
+  const gscYearlyMap = useMemo(() => buildPeriodMap(gscMultiPeriod?.yearly), [gscMultiPeriod]);
+
   function enrich(kw: any) {
     const n = normalizeKeyword(kw);
     const lower = String(n.keyword).toLowerCase().trim();
@@ -112,6 +132,22 @@ export function PublicSeoView({ tableName, reports, gscData = [], gaOrganicByMon
 
     let prevPos = n.position_prev_month ?? prevMonthMap.get(lower) ?? null;
     if (prevPos == null && api3?.best_position_prev != null) prevPos = api3.best_position_prev;
+    if (prevPos == null) {
+      const gscPrev = gscPrevMonthMap.get(lower)?.position;
+      if (gscPrev != null) prevPos = gscPrev;
+    }
+
+    let pos3m: number | null = api3?.best_position_prev ?? null;
+    if (pos3m == null) {
+      const gsc3 = gscThreeMonthMap.get(lower)?.position;
+      if (gsc3 != null) pos3m = gsc3;
+    }
+
+    let posYear: number | null = apiY?.best_position_prev ?? null;
+    if (posYear == null) {
+      const gscY = gscYearlyMap.get(lower)?.position;
+      if (gscY != null) posYear = gscY;
+    }
 
     if (n.volume == null && (api3 || apiY)?.volume != null) n.volume = (api3 || apiY).volume;
     if (n.kd == null && (api3 || apiY)?.keyword_difficulty != null) n.kd = (api3 || apiY).keyword_difficulty;
@@ -120,8 +156,8 @@ export function PublicSeoView({ tableName, reports, gscData = [], gaOrganicByMon
     return {
       ...n,
       position_prev_month: prevPos,
-      position_3month: api3?.best_position_prev ?? null,
-      position_yearly: apiY?.best_position_prev ?? null,
+      position_3month: pos3m,
+      position_yearly: posYear,
       gsc_clicks: gscRow?.clicks ?? null,
       gsc_impressions: gscRow?.impressions ?? null,
       gsc_ctr: gscRow?.ctr ?? null,
@@ -255,8 +291,8 @@ export function PublicSeoView({ tableName, reports, gscData = [], gaOrganicByMon
         trackedKeywords={trackedKeywords}
         gscOnlyKeywords={gscOnlyKeywords}
         hasGscData={gscData.length > 0}
-        show3Month={comparison.threeMonth.size > 0}
-        showYearly={comparison.yearly.size > 0}
+        show3Month={comparison.threeMonth.size > 0 || gscThreeMonthMap.size > 0}
+        showYearly={comparison.yearly.size > 0 || gscYearlyMap.size > 0}
         initialLangFilter={initialLangFilter}
       />
 
