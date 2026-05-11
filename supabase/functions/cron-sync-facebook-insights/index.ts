@@ -438,27 +438,26 @@ Deno.serve(async (req) => {
 
         results.synced++;
 
-        // Helper: notify primary campaigner via WhatsApp (Green API)
+        // Helper: notify David (the operator) via WhatsApp (Green API).
+        // Currently Carmen sends WA alerts ONLY to David, not to per-tenant campaigners.
         const notifyCampaignerWA = async (message: string) => {
           try {
-            const { data: campaigner } = await supabase
-              .from('campaigners')
-              .select('full_name, phone')
-              .eq('tenant_id', table.tenant_id)
-              .eq('active', true)
-              .not('phone', 'is', null)
-              .limit(1)
-              .maybeSingle();
-            if (campaigner?.phone) {
-              await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-green-api-message`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-                },
-                body: JSON.stringify({ phone: campaigner.phone, message, tenantId: table.tenant_id }),
-              });
-            }
+            const DAVID_PHONE = '972507677613';
+            const DAVID_GREEN_API_TENANT = '2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019';
+            const DAVID_GREEN_API_USER = 'bcd21d1c-3b39-4a7c-9dbf-4c89679110b9';
+            await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-green-api-message`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+              },
+              body: JSON.stringify({
+                phoneNumber: DAVID_PHONE,
+                message,
+                tenantId: DAVID_GREEN_API_TENANT,
+                senderUserId: DAVID_GREEN_API_USER,
+              }),
+            });
           } catch (waErr: any) {
             console.error(`[wa-notify] ${table.name}:`, waErr?.message);
           }
