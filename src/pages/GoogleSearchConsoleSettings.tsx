@@ -25,12 +25,11 @@ export default function GoogleSearchConsoleSettings() {
   const [sharingIntegrationName, setSharingIntegrationName] = useState("");
   const [sharingOwnerId, setSharingOwnerId] = useState<string | null>(null);
 
-  // Get user's own + shared integrations
+  // Get all GSC integrations visible to the user (own + others in tenant)
   const { data: integrations = [], isLoading } = useUserIntegrations(currentTenantId, 'google_search_console');
-  const integration = integrations.length > 0 ? integrations[0] : null;
 
   // Connect to Google Search Console
-  const handleConnect = async () => {
+  const handleConnect = async (addNew = false) => {
     if (!currentTenantId || !userId) {
       toast.error("נא להתחבר למערכת");
       return;
@@ -44,7 +43,7 @@ export default function GoogleSearchConsoleSettings() {
       }
 
       const response = await supabase.functions.invoke('google-search-console-auth?action=authorize', {
-        body: { tenantId: currentTenantId, userId, origin: window.location.origin },
+        body: { tenantId: currentTenantId, userId, addNew, origin: window.location.origin },
         headers: { Authorization: `Bearer ${session.session.access_token}` },
         method: 'POST',
       });
@@ -63,18 +62,16 @@ export default function GoogleSearchConsoleSettings() {
 
   // Disconnect integration
   const disconnectMutation = useMutation({
-    mutationFn: async () => {
-      if (!integration?.id) throw new Error("No integration to disconnect");
-      
+    mutationFn: async (integrationId: string) => {
       const { error } = await supabase
         .from('tenant_integrations')
         .update({ is_active: false })
-        .eq('id', integration.id);
+        .eq('id', integrationId);
       
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['google-search-console-integration'] });
+      queryClient.invalidateQueries({ queryKey: ['user-integrations'] });
       toast.success("החיבור ל-Google Search Console נותק");
     },
     onError: (error) => {
@@ -83,7 +80,7 @@ export default function GoogleSearchConsoleSettings() {
     },
   });
 
-  const settings = integration?.settings as any;
+  const hasAnyConnection = integrations.length > 0;
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -106,13 +103,13 @@ export default function GoogleSearchConsoleSettings() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>סטטוס חיבור</CardTitle>
+              <CardTitle>חיבורים פעילים</CardTitle>
               <CardDescription>
-                חבר את חשבון Google Search Console שלך לסנכרון נתונים
+                כל חבר בארגון יכול לחבר את חשבון Google Search Console שלו. הנתונים זמינים לכל מי שיש לו גישה ללקוח.
               </CardDescription>
             </div>
-            <Badge variant={integration ? "default" : "secondary"} className={integration ? "bg-green-500" : ""}>
-              {integration ? "מחובר" : "לא מחובר"}
+            <Badge variant={hasAnyConnection ? "default" : "secondary"} className={hasAnyConnection ? "bg-green-500" : ""}>
+              {hasAnyConnection ? `${integrations.length} מחובר` : "לא מחובר"}
             </Badge>
           </div>
         </CardHeader>
@@ -121,58 +118,88 @@ export default function GoogleSearchConsoleSettings() {
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
-          ) : integration ? (
-            <div className="space-y-4">
-              <Alert className="bg-green-50 border-green-200">
-                <CheckCircle2 className="h-4 w-4 text-green-600" />
-                <AlertDescription className="text-green-800">
-                  <div className="flex items-center gap-2">
-                    Google Search Console מחובר בהצלחה
-                    {!(integration as any)._isOwn && (
-                      <Badge variant="secondary" className="text-xs">
-                        שותף {(integration as any)._sharedByName ? `ע"י ${(integration as any)._sharedByName}` : ''}
-                      </Badge>
-                    )}
-                  </div>
-                  {settings?.connected_at && (
-                    <span className="block text-sm mt-1">
-                      חובר בתאריך: {new Date(settings.connected_at).toLocaleDateString('he-IL')}
-                    </span>
-                  )}
-                </AlertDescription>
-              </Alert>
+          ) : hasAnyConnection ? (
+            <div className="space-y-3">
+              {integrations.map((integration: any) => {
+                const settings = integration?.settings as any;
+                const isOwn = !!integration._isOwn;
+                const label = settings?.google_email || 'חשבון Google';
+                return (
+                  <Alert key={integration.id} className="bg-green-50 border-green-200">
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    <AlertDescription className="text-green-800">
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{label}</span>
+                            {isOwn ? (
+                              <Badge variant="secondary" className="text-xs">שלך</Badge>
+                            ) : (
+                              <Badge variant="secondary" className="text-xs">
+                                שותף {integration._sharedByName ? `ע"י ${integration._sharedByName}` : ''}
+                              </Badge>
+                            )}
+                          </div>
+                          {settings?.connected_at && (
+                            <span className="text-xs text-green-700/80">
+                              חובר בתאריך: {new Date(settings.connected_at).toLocaleDateString('he-IL')}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          {isOwn && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setSharingIntegrationId(integration.id);
+                                  setSharingIntegrationName(settings?.google_email || 'GSC');
+                                  setSharingOwnerId(integration.user_id);
+                                }}
+                              >
+                                <Share2 className="h-4 w-4 ml-2" />
+                                שתף
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleConnect(false)}
+                                disabled={isConnecting}
+                              >
+                                <RefreshCw className={`h-4 w-4 ml-2 ${isConnecting ? 'animate-spin' : ''}`} />
+                                חיבור מחדש
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => disconnectMutation.mutate(integration.id)}
+                                disabled={disconnectMutation.isPending}
+                              >
+                                נתק
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </AlertDescription>
+                  </Alert>
+                );
+              })}
 
-              <div className="flex gap-3">
-                {(integration as any)._isOwn && (
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setSharingIntegrationId(integration.id);
-                      setSharingIntegrationName(settings?.google_email || 'GSC');
-                      setSharingOwnerId(integration.user_id);
-                    }}
-                  >
-                    <Share2 className="h-4 w-4 ml-2" />
-                    שתף חיבור
-                  </Button>
-                )}
-                <Button 
-                  variant="outline" 
-                  onClick={handleConnect}
+              <div className="pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => handleConnect(true)}
                   disabled={isConnecting}
                 >
-                  <RefreshCw className={`h-4 w-4 ml-2 ${isConnecting ? 'animate-spin' : ''}`} />
-                  חיבור מחדש
+                  {isConnecting ? (
+                    <Loader2 className="h-4 w-4 ml-2 animate-spin" />
+                  ) : (
+                    <ExternalLink className="h-4 w-4 ml-2" />
+                  )}
+                  הוסף חשבון Google נוסף
                 </Button>
-                {(integration as any)._isOwn && (
-                  <Button 
-                    variant="destructive"
-                    onClick={() => disconnectMutation.mutate()}
-                    disabled={disconnectMutation.isPending}
-                  >
-                    נתק חיבור
-                  </Button>
-                )}
               </div>
             </div>
           ) : (
@@ -184,8 +211,8 @@ export default function GoogleSearchConsoleSettings() {
                 </AlertDescription>
               </Alert>
 
-              <Button 
-                onClick={handleConnect} 
+              <Button
+                onClick={() => handleConnect(false)}
                 disabled={isConnecting}
                 className="bg-blue-500 hover:bg-blue-600"
               >

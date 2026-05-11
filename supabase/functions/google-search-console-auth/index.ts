@@ -40,7 +40,7 @@ serve(async (req) => {
     }
 
     try {
-      const { tenantId, userId, origin } = await req.json();
+      const { tenantId, userId, addNew, origin } = await req.json();
       
       if (!tenantId || !userId) {
         return new Response(
@@ -49,12 +49,13 @@ serve(async (req) => {
         );
       }
 
-      // Google Search Console scopes
+      // Google Search Console scopes (+ userinfo.email so we can identify the Google account)
       const scopes = [
         'https://www.googleapis.com/auth/webmasters.readonly',
+        'https://www.googleapis.com/auth/userinfo.email',
       ].join(' ');
 
-      const state = btoa(JSON.stringify({ tenantId, userId, origin: origin || null }));
+      const state = btoa(JSON.stringify({ tenantId, userId, addNew: !!addNew, origin: origin || null }));
 
       const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
       authUrl.searchParams.set('client_id', clientId);
@@ -63,6 +64,9 @@ serve(async (req) => {
       authUrl.searchParams.set('scope', scopes);
       authUrl.searchParams.set('access_type', 'offline');
       authUrl.searchParams.set('prompt', 'consent');
+      if (addNew) {
+        authUrl.searchParams.set('login_hint', '');
+      }
       authUrl.searchParams.set('state', state);
 
 
@@ -149,24 +153,46 @@ serve(async (req) => {
 
       const expiresAt = new Date(Date.now() + (tokens.expires_in * 1000)).toISOString();
 
-      // Check if integration already exists
-      const { data: existing } = await supabase
-        .from('tenant_integrations')
-        .select('id, settings')
-        .eq('tenant_id', tenantId)
-        .eq('integration_type', 'google_search_console')
-        .eq('user_id', userId)
-        .maybeSingle();
+      // Fetch the Google email to identify which Google account was authorized
+      let googleEmail = '';
+      try {
+        const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+          headers: { Authorization: `Bearer ${tokens.access_token}` },
+        });
+        const userInfo = await userInfoResponse.json();
+        googleEmail = userInfo.email || '';
+      } catch (e) {
+        console.error('Failed to fetch Google user info:', e);
+      }
 
-      const existingSettings = (existing?.settings as Record<string, unknown> | null) || {};
+      // Find an existing GSC integration in this tenant: prefer same google_email,
+      // then same user_id; otherwise insert a new row (multi-account, multi-user).
+      const { data: allGsc, error: allGscError } = await supabase
+        .from('tenant_integrations')
+        .select('id, user_id, settings')
+        .eq('tenant_id', tenantId)
+        .eq('integration_type', 'google_search_console');
+
+      if (allGscError) {
+        throw allGscError;
+      }
+
+      const existingForEmail = googleEmail
+        ? allGsc?.find((row: any) => (row.settings as any)?.google_email === googleEmail) || null
+        : null;
+      const existingForUser = allGsc?.find((row: any) => row.user_id === userId) || null;
+      const existingIntegration = existingForEmail || existingForUser;
+      const existingSettings = (existingIntegration?.settings as Record<string, unknown> | null) || null;
+
       const integrationData = {
         is_active: true,
         api_key: tokens.access_token,
         settings: {
-          ...existingSettings,
-          refresh_token: tokens.refresh_token || existingSettings?.refresh_token,
+          ...(existingSettings || {}),
+          refresh_token: tokens.refresh_token || (existingSettings as any)?.refresh_token,
           expires_at: expiresAt,
           connected_at: new Date().toISOString(),
+          google_email: googleEmail || (existingSettings as any)?.google_email || '',
           // Clear any stale reconnect flags on successful re-authorization
           needs_reauth: false,
           reauth_reason: null,
@@ -176,11 +202,11 @@ serve(async (req) => {
       };
 
       let saveError;
-      if (existing) {
+      if (existingIntegration) {
         const { error } = await supabase
           .from('tenant_integrations')
           .update(integrationData)
-          .eq('id', existing.id);
+          .eq('id', existingIntegration.id);
         saveError = error;
       } else {
         const { error } = await supabase
