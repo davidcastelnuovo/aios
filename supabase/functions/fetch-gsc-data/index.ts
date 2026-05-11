@@ -119,7 +119,7 @@ serve(async (req) => {
 
     for (let page = 0; page < maxPages; page++) {
       const pagedBody = { ...requestBody, rowLimit: pageSize, startRow: page * pageSize };
-      const gscResponse = await fetch(gscApiUrl, {
+      const doFetch = () => fetch(gscApiUrl, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -128,10 +128,54 @@ serve(async (req) => {
         body: JSON.stringify(pagedBody),
       });
 
-      const gscData = await gscResponse.json();
+      let gscResponse = await doFetch();
+      let gscData = await gscResponse.json().catch(() => ({}));
+
+      // Retry once after refresh on 401/invalid credentials.
+      const looksUnauthorized =
+        gscResponse.status === 401 ||
+        gscData?.error?.code === 401 ||
+        /invalid.*credential|invalid_grant|unauthorized/i.test(gscData?.error?.message || '');
+
+      if (looksUnauthorized) {
+        const refreshResult = await refreshAccessToken();
+        if (refreshResult.ok) {
+          gscResponse = await doFetch();
+          gscData = await gscResponse.json().catch(() => ({}));
+        } else {
+          return new Response(
+            JSON.stringify({
+              rows: [],
+              totalRows: 0,
+              needs_reconnect: true,
+              owner_email: ownerEmail,
+              reason: refreshResult.reason || 'token_revoked',
+              siteUrl,
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
 
       if (!gscResponse.ok) {
         console.error('GSC API error:', gscData);
+        const stillUnauthorized =
+          gscResponse.status === 401 ||
+          gscData?.error?.code === 401 ||
+          /invalid.*credential|invalid_grant|unauthorized/i.test(gscData?.error?.message || '');
+        if (stillUnauthorized) {
+          return new Response(
+            JSON.stringify({
+              rows: [],
+              totalRows: 0,
+              needs_reconnect: true,
+              owner_email: ownerEmail,
+              reason: 'token_revoked',
+              siteUrl,
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
         const isPermissionDenied = gscResponse.status === 403;
         return new Response(
           JSON.stringify({
