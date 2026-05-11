@@ -438,6 +438,95 @@ Deno.serve(async (req) => {
 
         results.synced++;
 
+        // Helper: notify primary campaigner via WhatsApp (Green API)
+        const notifyCampaignerWA = async (message: string) => {
+          try {
+            const { data: campaigner } = await supabase
+              .from('campaigners')
+              .select('full_name, phone')
+              .eq('tenant_id', table.tenant_id)
+              .eq('active', true)
+              .not('phone', 'is', null)
+              .limit(1)
+              .maybeSingle();
+            if (campaigner?.phone) {
+              await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-green-api-message`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+                },
+                body: JSON.stringify({ phone: campaigner.phone, message, tenantId: table.tenant_id }),
+              });
+            }
+          } catch (waErr: any) {
+            console.error(`[wa-notify] ${table.name}:`, waErr?.message);
+          }
+        };
+
+        // === Account-level billing/disable alert ===
+        // Trigger when account_status transitions into a problematic state.
+        try {
+          const problemStatuses = ['disabled', 'unsettled', 'pending_settlement', 'pending_risk_review', 'closed'];
+          if (problemStatuses.includes(accountStatus) && accountStatus !== previousAccountStatus) {
+            const statusLabels: Record<string, string> = {
+              disabled: 'חשבון מושבת',
+              unsettled: 'בעיית חיוב (חוב לא משולם)',
+              pending_settlement: 'ממתין להסדר תשלום',
+              pending_risk_review: 'בבדיקת סיכון',
+              closed: 'חשבון סגור',
+            };
+            const statusLabel = statusLabels[accountStatus] || accountStatus;
+            const taskTitle = `🚨 בעיית חיוב/חשבון מודעות — ${table.name}`;
+            const taskDescription = `חשבון המודעות של "${table.name}" (${adAccountId}) נכנס למצב: ${statusLabel}.\nסיבה: ${accountDisableReason || 'לא צוינה'}.\nיש לבדוק את אמצעי התשלום בפייסבוק ולעדכן את הלקוח.`;
+
+            const { data: agent } = await supabase
+              .from('ai_agents')
+              .select('id')
+              .eq('tenant_id', table.tenant_id)
+              .eq('active', true)
+              .limit(1)
+              .maybeSingle();
+
+            if (agent) {
+              await supabase.from('agent_tasks').insert({
+                tenant_id: table.tenant_id,
+                agent_id: agent.id,
+                title: taskTitle,
+                description: taskDescription,
+                status: 'open',
+                priority: 1,
+                task_mode: 'anomaly_alert',
+              });
+            }
+
+            await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/trigger-automation`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+              },
+              body: JSON.stringify({
+                trigger_type: 'ad_account_billing_issue',
+                tenant_id: table.tenant_id,
+                data: {
+                  provider: 'facebook',
+                  table_name: table.name,
+                  ad_account_id: adAccountId,
+                  account_status: accountStatus,
+                  disable_reason: accountDisableReason,
+                  status_label: statusLabel,
+                },
+              }),
+            }).catch(() => {});
+
+            // Direct WhatsApp fallback so the alert always reaches the team
+            await notifyCampaignerWA(`🚨 ${taskTitle}\n${statusLabel}${accountDisableReason ? ` — ${accountDisableReason}` : ''}\nחשבון: ${adAccountId}`);
+          }
+        } catch (billingErr: any) {
+          console.error(`[billing-alert] ${table.name}:`, billingErr?.message);
+        }
+
         // === Zero-spend anomaly: account stopped spending ===
         // For each campaign that spent in the prior 7 days but has spend=0 in the last 2 days → alert.
         try {
