@@ -602,6 +602,7 @@ Deno.serve(async (req) => {
         ahrefs_reports: ahrefsReports,
         seo_ga_records: seoGaRecords,
         seo_gsc_records: seoGscRecords,
+        gsc_multi_period: gscMultiPeriod,
         maskyoo_snapshots: maskyooSnapshots,
         maskyoo_period: maskyooPeriod,
         has_email_restriction: false,
