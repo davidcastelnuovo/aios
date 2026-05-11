@@ -130,6 +130,12 @@ export function GscIntegration({
   const queryClient = useQueryClient();
   const [selectedSite, setSelectedSite] = useState<string>("");
   const [sitePopoverOpen, setSitePopoverOpen] = useState(false);
+  // Tracks personal/shared integration IDs whose OAuth token is broken
+  // (get_sites returned needs_reconnect). When such an ID is "blocked",
+  // the selection logic below skips it so we can fall through to the
+  // org-wide service-side fallback instead of showing a reconnect banner
+  // on a single client when other clients work fine via the fallback.
+  const [brokenIntegrationIds, setBrokenIntegrationIds] = useState<Set<string>>(new Set());
   const [internalDateRange, setInternalDateRange] = useState<GscDateRange>('28d');
   const effectiveDateRange: GscDateRange = dateRange ?? internalDateRange;
 
