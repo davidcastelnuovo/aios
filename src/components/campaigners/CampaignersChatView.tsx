@@ -46,14 +46,16 @@ export function CampaignersChatView() {
   const [editOpen, setEditOpen] = useState(false);
 
   const { data: agenciesList } = useQuery({
-    queryKey: ["agencies-for-campaigners", tenantId],
+    queryKey: ["agencies-for-campaigners", tenantId, crossTenantAgencyIds.join(",")],
     queryFn: async () => {
       if (!tenantId) return [];
-      const { data, error } = await supabase
-        .from("agencies")
-        .select("id, name")
-        .eq("tenant_id", tenantId)
-        .order("name");
+      let query = supabase.from("agencies").select("id, name").order("name");
+      if (crossTenantAgencyIds.length > 0) {
+        query = query.or(`tenant_id.eq.${tenantId},id.in.(${crossTenantAgencyIds.join(",")})`);
+      } else {
+        query = query.eq("tenant_id", tenantId);
+      }
+      const { data, error } = await query;
       if (error) throw error;
       return data || [];
     },
