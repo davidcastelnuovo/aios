@@ -67,7 +67,9 @@ export default function Clients() {
   const { selectedAgency } = useAgency();
   const { userAgencyIds } = useUserAgencies();
   const { canViewFinance } = useUserPermissions();
-  const { campaignerId, isCampaigner, isTeamManager, isOwner, isSuperAdmin } = useUserRole();
+  const { campaignerId, isCampaigner, isSeo, isTeamManager, isOwner, isSuperAdmin } = useUserRole();
+  // Restricted viewer: campaigner OR seo (no team_manager / owner / super_admin)
+  const isRestrictedClientViewer = (isCampaigner || isSeo) && !isTeamManager && !isOwner && !isSuperAdmin;
   // Deep-link support: ?clientId=xxx&tab=updates (from DMMDashboard navigation)
   const [searchParams] = useSearchParams();
   const deepLinkClientId = searchParams.get("clientId") ?? undefined;
@@ -230,7 +232,7 @@ export default function Clients() {
       if (error) throw error;
       return data;
     },
-    enabled: (!(isCampaigner && !isTeamManager && !isOwner) || !!campaignerId) && !!tenantId && !!agencies,
+    enabled: (!isRestrictedClientViewer || !!campaignerId) && !!tenantId && !!agencies,
   });
 
   // 🔒 SECURITY GUARD: Filter clients by current tenant and accessible agencies
@@ -290,7 +292,7 @@ export default function Clients() {
         .eq("campaigner_id", campaignerId);
       return data?.map(ct => ct.client_id) || [];
     },
-    enabled: !!campaignerId && isCampaigner && !isTeamManager && !isOwner,
+    enabled: !!campaignerId && isRestrictedClientViewer,
   });
 
   const updateStatusMutation = useMutation({
@@ -404,12 +406,12 @@ export default function Clients() {
   
   let accessibleClients = clients;
 
-  if (!isOwner) {
-    if (isCampaigner && !isTeamManager && Array.isArray(campaignerClientIds) && campaignerClientIds.length > 0) {
-      // Pure campaigners see only their assigned clients
-      accessibleClients = clients?.filter(client => 
-        campaignerClientIds.includes(client.id)
-      );
+  if (!isOwner && !isSuperAdmin) {
+    if (isRestrictedClientViewer) {
+      // Pure campaigners / SEO see only their assigned clients
+      // If campaignerId not yet loaded or no assignments, return empty (don't leak all clients)
+      const ids = Array.isArray(campaignerClientIds) ? campaignerClientIds : [];
+      accessibleClients = clients?.filter(client => ids.includes(client.id));
     } else if (isTeamManager && userAgencyIds && userAgencyIds.length > 0) {
       // Team managers see all clients in their agencies
       accessibleClients = clients?.filter(client => 
