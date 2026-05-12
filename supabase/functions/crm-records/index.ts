@@ -230,22 +230,10 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Check access: user's tenant matches table's tenant OR table's agency is shared with user's tenant
-      let hasAccess = tableInfo.tenant_id === tenantId;
-      
-      if (!hasAccess && tableInfo.agency_id) {
-        // Check if this agency is shared with the user's tenant
-        const { data: sharedAccess } = await supabase
-          .from('agency_tenant_access')
-          .select('id')
-          .eq('agency_id', tableInfo.agency_id)
-          .eq('accessing_tenant_id', tenantId)
-          .limit(1);
-        
-        hasAccess = !!(sharedAccess && sharedAccess.length > 0);
-      }
+      const { data: hasAccess, error: accessError } = await supabase
+        .rpc('user_can_access_crm_table', { _user_id: user.id, _table_id: table_id });
 
-      if (!hasAccess) {
+      if (accessError || !hasAccess) {
         console.error('Access denied: user tenant', tenantId, 'cannot access table from tenant', tableInfo.tenant_id);
         return new Response(JSON.stringify({ error: 'Access denied' }), {
           status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }

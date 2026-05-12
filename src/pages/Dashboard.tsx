@@ -15,7 +15,8 @@ export default function Dashboard() {
   const { selectedAgency } = useAgency();
   const { tenantId } = useCurrentTenant();
   const { userAgencyIds } = useUserAgencies();
-  const { isOwner } = useUserRole();
+  const { isOwner, isTeamManager, isSuperAdmin, isCampaigner, isSeo, campaignerId } = useUserRole();
+  const isRestrictedClientViewer = (isCampaigner || isSeo) && !isOwner && !isTeamManager && !isSuperAdmin;
   const { t } = useTerminology();
   const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
   const [selectedClient, setSelectedClient] = useState<string>("all");
@@ -154,6 +155,20 @@ export default function Dashboard() {
     enabled: !!tenantId,
   });
 
+  const { data: assignedClientIds = [] } = useQuery({
+    queryKey: ["dashboard-assigned-client-ids", campaignerId],
+    queryFn: async () => {
+      if (!campaignerId) return [];
+      const { data, error } = await supabase
+        .from("client_team")
+        .select("client_id")
+        .eq("campaigner_id", campaignerId);
+      if (error) throw error;
+      return data?.map((ct) => ct.client_id).filter(Boolean) || [];
+    },
+    enabled: !!campaignerId && isRestrictedClientViewer,
+  });
+
   const { data: suppliers } = useQuery({
     queryKey: ["suppliers", tenantId],
     queryFn: async () => {
@@ -170,7 +185,7 @@ export default function Dashboard() {
   });
 
   const { data: stats } = useQuery({
-    queryKey: ["dashboard-stats", tenantId, selectedAgency, selectedClient, selectedSupplier],
+    queryKey: ["dashboard-stats", tenantId, selectedAgency, selectedClient, selectedSupplier, isRestrictedClientViewer, assignedClientIds.join(",")],
     queryFn: async () => {
       if (!tenantId) return null;
       let agencyQuery = supabase.from("agencies").select("*", { count: "exact", head: true }).eq("tenant_id", tenantId);
@@ -220,6 +235,19 @@ export default function Dashboard() {
       if (selectedClient !== "all") {
         taskQuery = taskQuery.eq("client_id", selectedClient);
         activeClientsQuery = activeClientsQuery.eq("id", selectedClient);
+      } else if (isRestrictedClientViewer) {
+        if (assignedClientIds.length > 0) {
+          clientQuery = clientQuery.in("id", assignedClientIds);
+          taskQuery = taskQuery.in("client_id", assignedClientIds);
+          activeClientsQuery = activeClientsQuery.in("id", assignedClientIds);
+          leadsQuery = leadsQuery.eq("id", "00000000-0000-0000-0000-000000000000");
+        } else {
+          const emptyId = "00000000-0000-0000-0000-000000000000";
+          clientQuery = clientQuery.eq("id", emptyId);
+          taskQuery = taskQuery.eq("client_id", emptyId);
+          activeClientsQuery = activeClientsQuery.eq("id", emptyId);
+          leadsQuery = leadsQuery.eq("id", emptyId);
+        }
       }
 
       if (selectedSupplier !== "all" && clientTeamData) {
@@ -256,6 +284,12 @@ export default function Dashboard() {
       
       if (selectedClient !== "all") {
         financeQuery = financeQuery.eq("client_id", selectedClient);
+      } else if (isRestrictedClientViewer) {
+        if (assignedClientIds.length > 0) {
+          financeQuery = financeQuery.in("client_id", assignedClientIds);
+        } else {
+          financeQuery = financeQuery.eq("client_id", "00000000-0000-0000-0000-000000000000");
+        }
       } else if (selectedSupplier !== "all") {
         // אם מסננים לפי ספק, ההכנסות מסוננות לפי לקוחות הקמפיינר וההוצאות לפי supplier_id
         if (clientTeamData && clientTeamData.length > 0) {
@@ -393,9 +427,11 @@ export default function Dashboard() {
   ];
 
   // First filter by user's accessible agencies
-  const accessibleClients = !isOwner && userAgencyIds && userAgencyIds.length > 0
-    ? clients?.filter(c => userAgencyIds.includes(c.agency_id))
-    : clients;
+  const accessibleClients = isRestrictedClientViewer
+    ? clients?.filter(c => assignedClientIds.includes(c.id))
+    : !isOwner && userAgencyIds && userAgencyIds.length > 0
+      ? clients?.filter(c => userAgencyIds.includes(c.agency_id))
+      : clients;
 
   // Then filter by selected agency
   const filteredClients = selectedAgency === "all" 

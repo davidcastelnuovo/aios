@@ -86,7 +86,8 @@ export default function DynamicTables() {
   const queryClient = useQueryClient();
   const { selectedAgency } = useAgency();
   const { tenantId } = useCurrentTenant();
-  const { isCampaigner, isOwner, isTeamManager, isSuperAdmin, campaignerId } = useUserRole();
+  const { isCampaigner, isSeo, isOwner, isTeamManager, isSuperAdmin, campaignerId } = useUserRole();
+  const isRestrictedClientViewer = (isCampaigner || isSeo) && !isOwner && !isTeamManager && !isSuperAdmin;
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showFacebookDialog, setShowFacebookDialog] = useState(false);
   const [showFacebookEcommerceDialog, setShowFacebookEcommerceDialog] = useState(false);
@@ -125,7 +126,7 @@ export default function DynamicTables() {
       if (error) throw error;
       return data?.map(ct => ct.client_id) || [];
     },
-    enabled: !!campaignerId && isCampaigner,
+    enabled: !!campaignerId && isRestrictedClientViewer,
   });
 
   const canManageTables = isOwner || isTeamManager || isSuperAdmin || isCampaigner;
@@ -205,11 +206,11 @@ export default function DynamicTables() {
   const editFilteredClients = useMemo(() => {
     if (!editAgencyId) return [];
     let filtered = clients.filter(c => c.agency_id === editAgencyId);
-    if (isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin && assignedClientIds) {
+    if (isRestrictedClientViewer && assignedClientIds) {
       filtered = filtered.filter(c => assignedClientIds.includes(c.id));
     }
     return filtered;
-  }, [clients, editAgencyId, isCampaigner, isOwner, isTeamManager, isSuperAdmin, assignedClientIds]);
+  }, [clients, editAgencyId, isRestrictedClientViewer, assignedClientIds]);
 
   const { data: tables, isLoading } = useQuery({
     queryKey: ['crm-tables', tenantId],
@@ -250,7 +251,7 @@ export default function DynamicTables() {
     let result = tables;
 
     // Campaigners can only see tables linked to their assigned clients
-    if (isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin && assignedClientIds) {
+    if (isRestrictedClientViewer && assignedClientIds) {
       result = result.filter(table => 
         table.client_id && assignedClientIds.includes(table.client_id)
       );
@@ -277,7 +278,7 @@ export default function DynamicTables() {
     }
 
     return result;
-  }, [tables, selectedAgency, isCampaigner, isOwner, isTeamManager, isSuperAdmin, assignedClientIds, clientSearch, clients]);
+  }, [tables, selectedAgency, isRestrictedClientViewer, assignedClientIds, clientSearch, clients]);
 
   // Delete dashboard mutation
   const deleteDashboardMutation = useMutation({
@@ -932,7 +933,7 @@ export default function DynamicTables() {
                     }
                   }
                   // Campaigners can only see dashboards linked to their assigned clients
-                  if (isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin && assignedClientIds) {
+                  if (isRestrictedClientViewer && assignedClientIds) {
                     return dashboard.client_id && assignedClientIds.includes(dashboard.client_id);
                   }
                   return true;
@@ -1025,31 +1026,31 @@ export default function DynamicTables() {
       <SimpleTableDialog
         open={showCreateDialog}
         onOpenChange={setShowCreateDialog}
-        assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
+        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
       />
 
       <FacebookTableDialog
         open={showFacebookDialog}
         onOpenChange={setShowFacebookDialog}
-        assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
+        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
       />
 
       <GoogleAdsTableDialog
         open={showGoogleAdsDialog}
         onOpenChange={setShowGoogleAdsDialog}
-        assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
+        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
       />
 
       <GoogleAnalyticsTableDialog
         open={showGADialog}
         onOpenChange={setShowGADialog}
-        assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
+        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
       />
 
       <GoogleSearchConsoleTableDialog
         open={showGSCDialog}
         onOpenChange={setShowGSCDialog}
-        assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
+        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
       />
 
       {/* Edit Dashboard Name Dialog */}
@@ -1313,25 +1314,25 @@ export default function DynamicTables() {
       <AhrefsTableDialog 
         open={showAhrefsDialog} 
         onOpenChange={setShowAhrefsDialog}
-        assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
+        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
       />
 
       <FacebookEcommerceTableDialog
         open={showFacebookEcommerceDialog}
         onOpenChange={setShowFacebookEcommerceDialog}
-        assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
+        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
       />
 
       <CreateDashboardDialog
         open={showCreateDashboardDialog}
         onOpenChange={setShowCreateDashboardDialog}
-        assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
+        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
       />
 
       <SeoReportDialog
         open={showSeoReportDialog}
         onOpenChange={setShowSeoReportDialog}
-        assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
+        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
       />
     </div>
   );
