@@ -15,7 +15,8 @@ export default function Dashboard() {
   const { selectedAgency } = useAgency();
   const { tenantId } = useCurrentTenant();
   const { userAgencyIds } = useUserAgencies();
-  const { isOwner } = useUserRole();
+  const { isOwner, isTeamManager, isSuperAdmin, isCampaigner, isSeo, campaignerId } = useUserRole();
+  const isRestrictedClientViewer = (isCampaigner || isSeo) && !isOwner && !isTeamManager && !isSuperAdmin;
   const { t } = useTerminology();
   const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
   const [selectedClient, setSelectedClient] = useState<string>("all");
@@ -154,6 +155,20 @@ export default function Dashboard() {
     enabled: !!tenantId,
   });
 
+  const { data: assignedClientIds = [] } = useQuery({
+    queryKey: ["dashboard-assigned-client-ids", campaignerId],
+    queryFn: async () => {
+      if (!campaignerId) return [];
+      const { data, error } = await supabase
+        .from("client_team")
+        .select("client_id")
+        .eq("campaigner_id", campaignerId);
+      if (error) throw error;
+      return data?.map((ct) => ct.client_id).filter(Boolean) || [];
+    },
+    enabled: !!campaignerId && isRestrictedClientViewer,
+  });
+
   const { data: suppliers } = useQuery({
     queryKey: ["suppliers", tenantId],
     queryFn: async () => {
@@ -170,7 +185,7 @@ export default function Dashboard() {
   });
 
   const { data: stats } = useQuery({
-    queryKey: ["dashboard-stats", tenantId, selectedAgency, selectedClient, selectedSupplier],
+    queryKey: ["dashboard-stats", tenantId, selectedAgency, selectedClient, selectedSupplier, isRestrictedClientViewer, assignedClientIds.join(",")],
     queryFn: async () => {
       if (!tenantId) return null;
       let agencyQuery = supabase.from("agencies").select("*", { count: "exact", head: true }).eq("tenant_id", tenantId);
