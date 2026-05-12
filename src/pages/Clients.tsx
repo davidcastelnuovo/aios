@@ -406,12 +406,12 @@ export default function Clients() {
   
   let accessibleClients = clients;
 
-  if (!isOwner) {
-    if (isCampaigner && !isTeamManager && Array.isArray(campaignerClientIds) && campaignerClientIds.length > 0) {
-      // Pure campaigners see only their assigned clients
-      accessibleClients = clients?.filter(client => 
-        campaignerClientIds.includes(client.id)
-      );
+  if (!isOwner && !isSuperAdmin) {
+    if (isRestrictedClientViewer) {
+      // Pure campaigners / SEO see only their assigned clients
+      // If campaignerId not yet loaded or no assignments, return empty (don't leak all clients)
+      const ids = Array.isArray(campaignerClientIds) ? campaignerClientIds : [];
+      accessibleClients = clients?.filter(client => ids.includes(client.id));
     } else if (isTeamManager && userAgencyIds && userAgencyIds.length > 0) {
       // Team managers see all clients in their agencies
       accessibleClients = clients?.filter(client => 
