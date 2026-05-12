@@ -8553,6 +8553,14 @@ export type Database = {
               whatsapp_avatar_url: string
             }[]
           }
+      user_can_access_client: {
+        Args: { _client_id: string; _user_id: string }
+        Returns: boolean
+      }
+      user_can_access_crm_table: {
+        Args: { _table_id: string; _user_id: string }
+        Returns: boolean
+      }
       user_can_view_campaigner: {
         Args: { _campaigner_id: string; _user_id: string }
         Returns: boolean
@@ -8583,6 +8591,10 @@ export type Database = {
       }
       user_has_integration_permission: {
         Args: { p_integration_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      user_is_restricted_client_viewer: {
+        Args: { _user_id: string }
         Returns: boolean
       }
       user_is_tenant_member: {
