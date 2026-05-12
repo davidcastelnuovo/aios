@@ -292,7 +292,7 @@ export default function Clients() {
         .eq("campaigner_id", campaignerId);
       return data?.map(ct => ct.client_id) || [];
     },
-    enabled: !!campaignerId && isCampaigner && !isTeamManager && !isOwner,
+    enabled: !!campaignerId && isRestrictedClientViewer,
   });
 
   const updateStatusMutation = useMutation({
