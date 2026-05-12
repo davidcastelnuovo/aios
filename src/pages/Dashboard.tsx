@@ -427,9 +427,11 @@ export default function Dashboard() {
   ];
 
   // First filter by user's accessible agencies
-  const accessibleClients = !isOwner && userAgencyIds && userAgencyIds.length > 0
-    ? clients?.filter(c => userAgencyIds.includes(c.agency_id))
-    : clients;
+  const accessibleClients = isRestrictedClientViewer
+    ? clients?.filter(c => assignedClientIds.includes(c.id))
+    : !isOwner && userAgencyIds && userAgencyIds.length > 0
+      ? clients?.filter(c => userAgencyIds.includes(c.agency_id))
+      : clients;
 
   // Then filter by selected agency
   const filteredClients = selectedAgency === "all" 
