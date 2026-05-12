@@ -933,7 +933,7 @@ export default function DynamicTables() {
                     }
                   }
                   // Campaigners can only see dashboards linked to their assigned clients
-                  if (isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin && assignedClientIds) {
+                  if (isRestrictedClientViewer && assignedClientIds) {
                     return dashboard.client_id && assignedClientIds.includes(dashboard.client_id);
                   }
                   return true;
@@ -1026,19 +1026,19 @@ export default function DynamicTables() {
       <SimpleTableDialog
         open={showCreateDialog}
         onOpenChange={setShowCreateDialog}
-        assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
+        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
       />
 
       <FacebookTableDialog
         open={showFacebookDialog}
         onOpenChange={setShowFacebookDialog}
-        assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
+        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
       />
 
       <GoogleAdsTableDialog
         open={showGoogleAdsDialog}
         onOpenChange={setShowGoogleAdsDialog}
-        assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
+        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
       />
 
       <GoogleAnalyticsTableDialog
