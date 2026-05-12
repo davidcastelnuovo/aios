@@ -232,7 +232,7 @@ export default function Clients() {
       if (error) throw error;
       return data;
     },
-    enabled: (!(isCampaigner && !isTeamManager && !isOwner) || !!campaignerId) && !!tenantId && !!agencies,
+    enabled: (!isRestrictedClientViewer || !!campaignerId) && !!tenantId && !!agencies,
   });
 
   // 🔒 SECURITY GUARD: Filter clients by current tenant and accessible agencies
