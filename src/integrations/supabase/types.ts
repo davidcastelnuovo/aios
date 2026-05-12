@@ -8204,6 +8204,10 @@ export type Database = {
         Args: { target_user_id: string }
         Returns: boolean
       }
+      can_view_cross_tenant_campaigner: {
+        Args: { _campaigner_id: string; _user_id?: string }
+        Returns: boolean
+      }
       check_circuit_breaker: {
         Args: { p_provider: string; p_tenant_id: string }
         Returns: boolean
