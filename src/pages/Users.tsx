@@ -284,7 +284,7 @@ export default function Users() {
   });
 
   const { data: users, isLoading } = useQuery({
-    queryKey: ["users-with-roles", tenantId],
+    queryKey: ["users-with-roles", tenantId, crossTenantAgencyIds.join(",")],
     queryFn: async () => {
       if (!tenantId) return [];
 
@@ -295,10 +295,32 @@ export default function Users() {
         .eq("tenant_id", tenantId);
 
       if (tenantUsersError) throw tenantUsersError;
-      
-      const tenantUserIds = tenantUsers?.map(tu => tu.user_id) || [];
-      
-      if (tenantUserIds.length === 0) return [];
+
+      const tenantUserIds = new Set((tenantUsers || []).map(tu => tu.user_id));
+
+      // Add cross-tenant users: profiles linked (campaigner/sales_person) to shared agencies
+      if (crossTenantAgencyIds.length > 0) {
+        const [{ data: crossCampaigners }, { data: crossSales }] = await Promise.all([
+          supabase.from("campaigner_agencies").select("campaigner_id").in("agency_id", crossTenantAgencyIds),
+          supabase.from("sales_person_agencies").select("sales_person_id").in("agency_id", crossTenantAgencyIds),
+        ]);
+        const campaignerIds = (crossCampaigners || []).map((r: any) => r.campaigner_id);
+        const salesIds = (crossSales || []).map((r: any) => r.sales_person_id);
+
+        const orParts: string[] = [];
+        if (campaignerIds.length > 0) orParts.push(`campaigner_id.in.(${campaignerIds.join(",")})`);
+        if (salesIds.length > 0) orParts.push(`sales_person_id.in.(${salesIds.join(",")})`);
+        if (orParts.length > 0) {
+          const { data: crossProfiles } = await supabase
+            .from("profiles")
+            .select("id")
+            .or(orParts.join(","));
+          (crossProfiles || []).forEach((p: any) => tenantUserIds.add(p.id));
+        }
+      }
+
+      const tenantUserIdsArr = Array.from(tenantUserIds);
+      if (tenantUserIdsArr.length === 0) return [];
 
       const { data: profiles, error: profilesError } = await supabase
         .from("profiles")
@@ -312,7 +334,7 @@ export default function Users() {
           campaigners!profiles_campaigner_id_fkey(full_name), 
           sales_people!profiles_sales_person_id_fkey(full_name)
         `)
-        .in("id", tenantUserIds);
+        .in("id", tenantUserIdsArr);
 
       if (profilesError) throw profilesError;
 
