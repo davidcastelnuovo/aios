@@ -132,6 +132,7 @@ export default function Users() {
   const [resetPasswordUserId, setResetPasswordUserId] = useState<string | null>(null);
   const [resetPasswordUserEmail, setResetPasswordUserEmail] = useState<string>("");
   const { tenantId } = useCurrentTenant();
+  const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
 
   const { data: agencies } = useQuery({
     queryKey: ["agencies-for-invite", tenantId, currentUserId],
