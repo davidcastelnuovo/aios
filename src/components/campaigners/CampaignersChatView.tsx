@@ -36,6 +36,7 @@ function getInitials(name: string) {
 
 export function CampaignersChatView() {
   const { tenantId } = useCurrentTenant();
+  const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
   const { selectedAgency } = useAgency();
   const { canViewFinance } = useUserPermissions();
   const queryClient = useQueryClient();
