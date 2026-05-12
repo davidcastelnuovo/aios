@@ -36,8 +36,10 @@ export function useUserRole() {
     refetchOnWindowFocus: false,
   });
 
-  // Lazy-load campaigner_id only when user has campaigner role
+  // Lazy-load campaigner_id when user has campaigner OR seo role
+  // (SEO users are also linked via profiles.campaigner_id -> client_team)
   const isCampaignerRole = roles?.includes("campaigner") || false;
+  const isSeoRole = roles?.includes("seo") || false;
   const { data: campaignerId } = useQuery({
     queryKey: ["user-campaigner-id", session?.user?.id],
     queryFn: async () => {
@@ -49,7 +51,7 @@ export function useUserRole() {
         .maybeSingle();
       return data?.campaigner_id || null;
     },
-    enabled: !!session?.user?.id && isCampaignerRole,
+    enabled: !!session?.user?.id && (isCampaignerRole || isSeoRole),
     staleTime: 1000 * 60 * 5,
     refetchOnWindowFocus: false,
   });
