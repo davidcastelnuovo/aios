@@ -47,7 +47,7 @@ export default function Campaigners() {
             clients(id, name, status, agency_id)
           )
         `)
-        .eq("tenant_id", tenantId)
+        // tenant_id filtering enforced by RLS (own tenant + cross-tenant via shared agencies)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
