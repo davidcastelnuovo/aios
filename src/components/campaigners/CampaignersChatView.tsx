@@ -13,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Megaphone, Phone, Mail, Briefcase, Search, Users, ListChecks, Calendar as CalendarIcon, Building2, Pencil, Check, X, ChevronDown } from "lucide-react";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { EditCampaignerDialog } from "@/components/forms/EditCampaignerDialog";
@@ -35,6 +36,7 @@ function getInitials(name: string) {
 
 export function CampaignersChatView() {
   const { tenantId } = useCurrentTenant();
+  const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
   const { selectedAgency } = useAgency();
   const { canViewFinance } = useUserPermissions();
   const queryClient = useQueryClient();
@@ -44,14 +46,16 @@ export function CampaignersChatView() {
   const [editOpen, setEditOpen] = useState(false);
 
   const { data: agenciesList } = useQuery({
-    queryKey: ["agencies-for-campaigners", tenantId],
+    queryKey: ["agencies-for-campaigners", tenantId, crossTenantAgencyIds.join(",")],
     queryFn: async () => {
       if (!tenantId) return [];
-      const { data, error } = await supabase
-        .from("agencies")
-        .select("id, name")
-        .eq("tenant_id", tenantId)
-        .order("name");
+      let query = supabase.from("agencies").select("id, name").order("name");
+      if (crossTenantAgencyIds.length > 0) {
+        query = query.or(`tenant_id.eq.${tenantId},id.in.(${crossTenantAgencyIds.join(",")})`);
+      } else {
+        query = query.eq("tenant_id", tenantId);
+      }
+      const { data, error } = await query;
       if (error) throw error;
       return data || [];
     },
@@ -113,10 +117,21 @@ export function CampaignersChatView() {
 
 
   const { data: campaigners, isLoading } = useQuery({
-    queryKey: ["campaigners", tenantId],
+    queryKey: ["campaigners", tenantId, crossTenantAgencyIds.join(",")],
     queryFn: async () => {
       if (!tenantId) return [];
-      const { data, error } = await supabase
+
+      // Fetch campaigner IDs linked to cross-tenant shared agencies
+      let crossTenantCampaignerIds: string[] = [];
+      if (crossTenantAgencyIds.length > 0) {
+        const { data: caRows } = await supabase
+          .from("campaigner_agencies")
+          .select("campaigner_id")
+          .in("agency_id", crossTenantAgencyIds);
+        crossTenantCampaignerIds = Array.from(new Set((caRows || []).map((r: any) => r.campaigner_id)));
+      }
+
+      let query = supabase
         .from("campaigners")
         .select(`
           *,
@@ -129,8 +144,15 @@ export function CampaignersChatView() {
             clients(id, name, status, agency_id)
           )
         `)
-        // tenant_id filtering enforced by RLS (own tenant + cross-tenant via shared agencies)
         .order("full_name", { ascending: true });
+
+      if (crossTenantCampaignerIds.length > 0) {
+        query = query.or(`tenant_id.eq.${tenantId},id.in.(${crossTenantCampaignerIds.join(",")})`);
+      } else {
+        query = query.eq("tenant_id", tenantId);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
 
       return (data || []).map((c: any) => ({
