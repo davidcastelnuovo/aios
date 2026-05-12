@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { AddTenantForm } from "@/components/forms/AddTenantForm";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { useTerminology } from "@/hooks/useTerminology";
 import { useViewAs } from "@/contexts/ViewAsContext";
 import { useTenantPath } from "@/hooks/useTenantPath";
