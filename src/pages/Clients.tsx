@@ -67,7 +67,9 @@ export default function Clients() {
   const { selectedAgency } = useAgency();
   const { userAgencyIds } = useUserAgencies();
   const { canViewFinance } = useUserPermissions();
-  const { campaignerId, isCampaigner, isTeamManager, isOwner, isSuperAdmin } = useUserRole();
+  const { campaignerId, isCampaigner, isSeo, isTeamManager, isOwner, isSuperAdmin } = useUserRole();
+  // Restricted viewer: campaigner OR seo (no team_manager / owner / super_admin)
+  const isRestrictedClientViewer = (isCampaigner || isSeo) && !isTeamManager && !isOwner && !isSuperAdmin;
   // Deep-link support: ?clientId=xxx&tab=updates (from DMMDashboard navigation)
   const [searchParams] = useSearchParams();
   const deepLinkClientId = searchParams.get("clientId") ?? undefined;
