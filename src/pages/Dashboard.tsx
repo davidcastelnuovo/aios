@@ -235,6 +235,19 @@ export default function Dashboard() {
       if (selectedClient !== "all") {
         taskQuery = taskQuery.eq("client_id", selectedClient);
         activeClientsQuery = activeClientsQuery.eq("id", selectedClient);
+      } else if (isRestrictedClientViewer) {
+        if (assignedClientIds.length > 0) {
+          clientQuery = clientQuery.in("id", assignedClientIds);
+          taskQuery = taskQuery.in("client_id", assignedClientIds);
+          activeClientsQuery = activeClientsQuery.in("id", assignedClientIds);
+          leadsQuery = leadsQuery.in("client_id", assignedClientIds);
+        } else {
+          const emptyId = "00000000-0000-0000-0000-000000000000";
+          clientQuery = clientQuery.eq("id", emptyId);
+          taskQuery = taskQuery.eq("client_id", emptyId);
+          activeClientsQuery = activeClientsQuery.eq("id", emptyId);
+          leadsQuery = leadsQuery.eq("client_id", emptyId);
+        }
       }
 
       if (selectedSupplier !== "all" && clientTeamData) {
@@ -271,6 +284,12 @@ export default function Dashboard() {
       
       if (selectedClient !== "all") {
         financeQuery = financeQuery.eq("client_id", selectedClient);
+      } else if (isRestrictedClientViewer) {
+        if (assignedClientIds.length > 0) {
+          financeQuery = financeQuery.in("client_id", assignedClientIds);
+        } else {
+          financeQuery = financeQuery.eq("client_id", "00000000-0000-0000-0000-000000000000");
+        }
       } else if (selectedSupplier !== "all") {
         // אם מסננים לפי ספק, ההכנסות מסוננות לפי לקוחות הקמפיינר וההוצאות לפי supplier_id
         if (clientTeamData && clientTeamData.length > 0) {
