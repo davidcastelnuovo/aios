@@ -1320,19 +1320,19 @@ export default function DynamicTables() {
       <FacebookEcommerceTableDialog
         open={showFacebookEcommerceDialog}
         onOpenChange={setShowFacebookEcommerceDialog}
-        assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
+        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
       />
 
       <CreateDashboardDialog
         open={showCreateDashboardDialog}
         onOpenChange={setShowCreateDashboardDialog}
-        assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
+        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
       />
 
       <SeoReportDialog
         open={showSeoReportDialog}
         onOpenChange={setShowSeoReportDialog}
-        assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
+        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
       />
     </div>
   );
