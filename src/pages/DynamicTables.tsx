@@ -1044,13 +1044,13 @@ export default function DynamicTables() {
       <GoogleAnalyticsTableDialog
         open={showGADialog}
         onOpenChange={setShowGADialog}
-        assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
+        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
       />
 
       <GoogleSearchConsoleTableDialog
         open={showGSCDialog}
         onOpenChange={setShowGSCDialog}
-        assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
+        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
       />
 
       {/* Edit Dashboard Name Dialog */}
@@ -1314,7 +1314,7 @@ export default function DynamicTables() {
       <AhrefsTableDialog 
         open={showAhrefsDialog} 
         onOpenChange={setShowAhrefsDialog}
-        assignedClientIds={isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin ? assignedClientIds : undefined}
+        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
       />
 
       <FacebookEcommerceTableDialog
