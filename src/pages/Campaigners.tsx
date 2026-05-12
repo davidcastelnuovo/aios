@@ -26,13 +26,25 @@ export default function Campaigners() {
   const { canViewFinance } = useUserPermissions();
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
+  const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
   const { selectedAgency } = useAgency();
 
   const { data: campaigners, isLoading } = useQuery({
-    queryKey: ["campaigners", tenantId, "grid"],
+    queryKey: ["campaigners", tenantId, "grid", crossTenantAgencyIds.join(",")],
     queryFn: async () => {
       if (!tenantId) return [];
-      const { data, error } = await supabase
+
+      // Fetch campaigner IDs linked to cross-tenant shared agencies
+      let crossTenantCampaignerIds: string[] = [];
+      if (crossTenantAgencyIds.length > 0) {
+        const { data: caRows } = await supabase
+          .from("campaigner_agencies")
+          .select("campaigner_id")
+          .in("agency_id", crossTenantAgencyIds);
+        crossTenantCampaignerIds = Array.from(new Set((caRows || []).map((r: any) => r.campaigner_id)));
+      }
+
+      let query = supabase
         .from("campaigners")
         .select(`
           *,
@@ -48,9 +60,15 @@ export default function Campaigners() {
             clients(id, name, status, agency_id)
           )
         `)
-        // tenant_id filtering enforced by RLS (own tenant + cross-tenant via shared agencies)
         .order("created_at", { ascending: false });
 
+      if (crossTenantCampaignerIds.length > 0) {
+        query = query.or(`tenant_id.eq.${tenantId},id.in.(${crossTenantCampaignerIds.join(",")})`);
+      } else {
+        query = query.eq("tenant_id", tenantId);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
 
       return data?.map(campaigner => ({
