@@ -240,13 +240,13 @@ export default function Dashboard() {
           clientQuery = clientQuery.in("id", assignedClientIds);
           taskQuery = taskQuery.in("client_id", assignedClientIds);
           activeClientsQuery = activeClientsQuery.in("id", assignedClientIds);
-          leadsQuery = (leadsQuery as any).in("client_id", assignedClientIds);
+          leadsQuery = leadsQuery.eq("id", "00000000-0000-0000-0000-000000000000");
         } else {
           const emptyId = "00000000-0000-0000-0000-000000000000";
           clientQuery = clientQuery.eq("id", emptyId);
           taskQuery = taskQuery.eq("client_id", emptyId);
           activeClientsQuery = activeClientsQuery.eq("id", emptyId);
-          leadsQuery = (leadsQuery as any).eq("client_id", emptyId);
+          leadsQuery = leadsQuery.eq("id", emptyId);
         }
       }
 
