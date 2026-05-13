@@ -29,6 +29,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { TimeSlotPicker } from "./TimeSlotPicker";
 import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
+import { NotesWithAttachments, type TaskAttachment } from "./NotesWithAttachments";
 
 interface Task {
   id: string;
@@ -74,6 +75,7 @@ export function TaskDetailDialog({
   const [dueTime, setDueTime] = useState<string | null>(null);
   const [durationMinutes, setDurationMinutes] = useState(30);
   const [newUpdate, setNewUpdate] = useState("");
+  const [attachments, setAttachments] = useState<TaskAttachment[]>([]);
   const [selectedCollaborator, setSelectedCollaborator] = useState("");
   
   // Search states for comboboxes
@@ -122,6 +124,7 @@ export function TaskDetailDialog({
         setDueTime(t.due_time ? (t.due_time as string).substring(0, 5) : null);
         setDurationMinutes((t as any).duration_minutes || 30);
         setAssignedCampaignerId(t.campaigner_id || "");
+        setAttachments(Array.isArray((t as any).attachments) ? (t as any).attachments : []);
         setClientSearch("");
         setCampaignerSearch("");
         setLeadSearch("");
@@ -265,6 +268,7 @@ export function TaskDetailDialog({
           client_id: clientId || null,
           lead_id: leadId || null,
           campaigner_id: assignedCampaignerId || null,
+          attachments: attachments as any,
         })
         .eq("id", task!.id);
       if (error) throw error;
@@ -553,11 +557,12 @@ export function TaskDetailDialog({
 
               <div className="space-y-2">
                 <Label>הערות</Label>
-                <Textarea
+                <NotesWithAttachments
                   value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="הערות נוספות..."
-                  rows={3}
+                  onChange={setNotes}
+                  attachments={attachments}
+                  onAttachmentsChange={setAttachments}
+                  taskId={task?.id}
                 />
               </div>
 
