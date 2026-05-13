@@ -79,24 +79,40 @@ export function WeeklyTaskBoard() {
   const { state: sidebarState } = useSidebar();
   const { t } = useTerminology();
 
-  // Fetch campaigners for quick filter
+  // Fetch clients for inline selector
+  const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
+
+  // Fetch campaigners for quick filter (include cross-tenant via shared agencies)
   const { data: campaignersList = [] } = useQuery({
-    queryKey: ["campaigners-for-task-filter", tenantId],
+    queryKey: ["campaigners-for-task-filter", tenantId, crossTenantAgencyIds.join(",")],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let crossTenantCampaignerIds: string[] = [];
+      if (crossTenantAgencyIds.length > 0) {
+        const { data: caRows } = await supabase
+          .from("campaigner_agencies")
+          .select("campaigner_id")
+          .in("agency_id", crossTenantAgencyIds);
+        crossTenantCampaignerIds = Array.from(new Set((caRows || []).map((r: any) => r.campaigner_id)));
+      }
+
+      let query = supabase
         .from("campaigners")
         .select("id, full_name")
-        .eq("tenant_id", tenantId!)
         .eq("active", true)
         .order("full_name");
+
+      if (crossTenantCampaignerIds.length > 0) {
+        query = query.or(`tenant_id.eq.${tenantId},id.in.(${crossTenantCampaignerIds.join(",")})`);
+      } else {
+        query = query.eq("tenant_id", tenantId!);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return data;
     },
     enabled: !!tenantId,
   });
-
-  // Fetch clients for inline selector
-  const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
   const { selectedAgency } = useAgency();
 
   const { data: clientsList = [] } = useQuery({
