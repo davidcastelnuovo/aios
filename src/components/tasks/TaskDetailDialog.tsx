@@ -557,11 +557,12 @@ export function TaskDetailDialog({
 
               <div className="space-y-2">
                 <Label>הערות</Label>
-                <Textarea
+                <NotesWithAttachments
                   value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="הערות נוספות..."
-                  rows={3}
+                  onChange={setNotes}
+                  attachments={attachments}
+                  onAttachmentsChange={setAttachments}
+                  taskId={task?.id}
                 />
               </div>
 
