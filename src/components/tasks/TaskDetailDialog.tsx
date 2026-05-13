@@ -75,6 +75,7 @@ export function TaskDetailDialog({
   const [dueTime, setDueTime] = useState<string | null>(null);
   const [durationMinutes, setDurationMinutes] = useState(30);
   const [newUpdate, setNewUpdate] = useState("");
+  const [attachments, setAttachments] = useState<TaskAttachment[]>([]);
   const [selectedCollaborator, setSelectedCollaborator] = useState("");
   
   // Search states for comboboxes
