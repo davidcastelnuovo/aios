@@ -12,6 +12,7 @@ import { he } from "date-fns/locale";
 import { toast } from "sonner";
 import AddTaskForm from "@/components/forms/AddTaskForm";
 import EditTaskDialog from "@/components/forms/EditTaskDialog";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 interface CampaignerTasksTabProps {
   campaignerId: string;
