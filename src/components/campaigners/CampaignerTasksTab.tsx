@@ -12,6 +12,7 @@ import { he } from "date-fns/locale";
 import { toast } from "sonner";
 import AddTaskForm from "@/components/forms/AddTaskForm";
 import EditTaskDialog from "@/components/forms/EditTaskDialog";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 interface CampaignerTasksTabProps {
   campaignerId: string;
@@ -24,9 +25,10 @@ export function CampaignerTasksTab({ campaignerId, campaignerName }: CampaignerT
   const [dateFilter, setDateFilter] = useState<DateFilter>("month");
   const [editingTask, setEditingTask] = useState<any>(null);
   const queryClient = useQueryClient();
+  const { tenantId } = useCurrentTenant();
 
   const { data: tasks, isLoading } = useQuery({
-    queryKey: ["campaigner-tasks", campaignerId, dateFilter],
+    queryKey: ["campaigner-tasks", tenantId, campaignerId, dateFilter],
     queryFn: async () => {
       let query = supabase
         .from("tasks")
@@ -38,6 +40,7 @@ export function CampaignerTasksTab({ campaignerId, campaignerName }: CampaignerT
           leads (company_name)
         `)
         .eq("campaigner_id", campaignerId)
+        .eq("tenant_id", tenantId!)
         .order("due_date", { ascending: false });
 
       if (dateFilter === "week") {
@@ -54,7 +57,7 @@ export function CampaignerTasksTab({ campaignerId, campaignerName }: CampaignerT
       if (error) throw error;
       return data;
     },
-    enabled: !!campaignerId,
+    enabled: !!campaignerId && !!tenantId,
   });
 
   const updateStatusMutation = useMutation({
