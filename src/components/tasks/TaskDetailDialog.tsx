@@ -124,6 +124,7 @@ export function TaskDetailDialog({
         setDueTime(t.due_time ? (t.due_time as string).substring(0, 5) : null);
         setDurationMinutes((t as any).duration_minutes || 30);
         setAssignedCampaignerId(t.campaigner_id || "");
+        setAttachments(Array.isArray((t as any).attachments) ? (t as any).attachments : []);
         setClientSearch("");
         setCampaignerSearch("");
         setLeadSearch("");
