@@ -268,6 +268,7 @@ export function TaskDetailDialog({
           client_id: clientId || null,
           lead_id: leadId || null,
           campaigner_id: assignedCampaignerId || null,
+          attachments: attachments as any,
         })
         .eq("id", task!.id);
       if (error) throw error;
