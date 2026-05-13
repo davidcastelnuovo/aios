@@ -6202,6 +6202,7 @@ export type Database = {
         Row: {
           agency_id: string
           assigned_agent: string | null
+          attachments: Json
           campaigner_id: string | null
           client_id: string | null
           created_at: string
@@ -6227,6 +6228,7 @@ export type Database = {
         Insert: {
           agency_id: string
           assigned_agent?: string | null
+          attachments?: Json
           campaigner_id?: string | null
           client_id?: string | null
           created_at?: string
@@ -6252,6 +6254,7 @@ export type Database = {
         Update: {
           agency_id?: string
           assigned_agent?: string | null
+          attachments?: Json
           campaigner_id?: string | null
           client_id?: string | null
           created_at?: string
