@@ -301,8 +301,9 @@ export function ClientsChatView({
 
   const updateClientField = async (clientId: string, field: string, value: any) => {
     try {
-      const { error } = await supabase.from("clients").update({ [field]: value }).eq("id", clientId);
+      const { error, data } = await supabase.from("clients").update({ [field]: value }).eq("id", clientId).select();
       if (error) throw error;
+      if (!data || data.length === 0) throw new Error("Update blocked by permissions");
       toast.success("עודכן בהצלחה");
       queryClient.invalidateQueries({ queryKey: ["clients"] });
     } catch {
@@ -318,7 +319,7 @@ export function ClientsChatView({
     const [editValue, setEditValue] = useState(value || "");
 
     const handleSave = () => {
-      const finalValue = type === "number" ? (editValue ? Number(editValue) : null) : (editValue || null);
+      const finalValue = type === "number" ? (editValue === "" ? 0 : Number(editValue)) : (editValue || null);
       updateClientField(clientId, field, finalValue);
       setEditing(false);
     };

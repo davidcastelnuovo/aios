@@ -1,48 +1,60 @@
 ## הבעיה
 
-ב-`CampaignerTasksTab.tsx` (טאב משימות בעמוד הקמפיינרים) השאילתה מסננת רק לפי `campaigner_id` בלי שום סינון לפי הארגון הנוכחי:
+בכרטיס הלקוח (Marina Divers), כשמנקים את השדה **"הוצאות חודשיות קבועות"** ולוחצים שמירה — השמירה נכשלת בשקט (לא נשמרת).
+
+### שורש הבעיה
+
+ב-`src/components/clients/ClientsChatView.tsx` הרכיב `EditableField` ממיר שדה מספרי ריק ל-`null`:
 
 ```ts
-supabase.from("tasks").select(...).eq("campaigner_id", campaignerId)
+const finalValue = type === "number" ? (editValue ? Number(editValue) : null) : ...
 ```
 
-מכיוון שקמפיינרים יכולים להיות משותפים בין ארגונים (cross-tenant via `campaigner_agencies`), כל המשימות שלהם בכל הארגונים זולגות לתצוגה — גם משימות של DMM-LTD, MarketingCaptain וכו' מופיעות תחת ה-tab של הקמפיינר ב-DMM.
+אבל בעמודה `clients.monthly_fixed_expense` קיימת מגבלה:
+- `is_nullable: NO`
+- `default: 0`
 
-## התיקון
+כלומר Postgres דוחה `UPDATE ... SET monthly_fixed_expense = NULL` → המחיקה לא נשמרת.
+(הצגנו זאת מול ה-DB: שאר הפרמטרים — RLS, הרשאות, טריגרים — תקינים.)
 
-ב-`src/components/campaigners/CampaignerTasksTab.tsx`:
+## הפתרון
 
-1. למשוך את `tenantId` הנוכחי מ-`useCurrentTenant()`.
-2. להוסיף סינון `tenant_id` לשאילתה כך שיוצגו רק:
-   - משימות שה-`tenant_id` שלהן = הארגון הנוכחי, **או**
-   - משימות שה-`client_id` שלהן שייך ללקוח בארגון הנוכחי (במקרים נדירים שה-tenant_id לא מוגדר על המשימה אבל הלקוח כן בארגון).
-3. להוסיף `tenantId` ל-queryKey כדי שהקאש יתרענן בעת החלפת ארגון.
+עבור שדות מספריים ב-`EditableField` — כשהמשתמש מוחק את הערך, נשמור **`0`** במקום `null`. זה תואם גם להתנהגות התצוגה היום שמראה "₪0" כברירת מחדל.
 
-הגישה הפשוטה והבטוחה: `.eq("tenant_id", tenantId)` — תואם ל-RLS הקיים ולעקרון ה-Core memory ש-RLS SELECT צריך להתאים בדיוק לסינון בצד הלקוח.
+### שינוי ממוקד
+
+קובץ: `src/components/clients/ClientsChatView.tsx` (פונקציית `handleSave` בתוך `EditableField`, סביב שורה 320-324):
 
 ```ts
-const { tenantId } = useCurrentTenant();
+// לפני
+const finalValue = type === "number"
+  ? (editValue ? Number(editValue) : null)
+  : (editValue || null);
 
-let query = supabase
-  .from("tasks")
-  .select(`...`)
-  .eq("campaigner_id", campaignerId)
-  .eq("tenant_id", tenantId)         // ← חדש
-  .order("due_date", { ascending: false });
+// אחרי
+const finalValue = type === "number"
+  ? (editValue === "" ? 0 : Number(editValue))
+  : (editValue || null);
 ```
 
-ועדכון:
+זה משפיע על שלושת השדות המספריים בכרטיס (ריטיינר, תקציב חודשי, הוצאות חודשיות קבועות) — כולם מקבלים `0` במקום `null` כשנמחקים, מה שנשמר תקין ב-DB.
+
+### בנוסף (שיפור איכות)
+
+`updateClientField` כיום קורא ל-`.update(...)` בלי `.select()`, כך שכשל RLS לא מחזיר שגיאה אלא 0 שורות. נוסיף `.select()` כדי שגם בעתיד שגיאות לא יסתתרו:
+
 ```ts
-queryKey: ["campaigner-tasks", tenantId, campaignerId, dateFilter],
-enabled: !!campaignerId && !!tenantId,
+const { error, data } = await supabase
+  .from("clients")
+  .update({ [field]: value })
+  .eq("id", clientId)
+  .select();
+if (error) throw error;
+if (!data || data.length === 0) throw new Error("Update blocked by permissions");
 ```
 
-## מה לא משתנה
+## בדיקה לאחר היישום
 
-- אין שינוי ב-RLS / migrations.
-- אין שינוי בלוגיקת ההרשאות שתוקנה בהודעות הקודמות (Clients, Tasks, Dashboard, DynamicTables).
-- שום קומפוננטה אחרת לא משתנה.
-
-## קובץ שמשתנה
-
-- `src/components/campaigners/CampaignerTasksTab.tsx` בלבד.
+1. פתיחת כרטיס Marina Divers → ניקוי "הוצאות חודשיות קבועות" → שמירה.
+2. לוודא ש-toast הצלחה מופיע והערך מוצג כ-`₪0`.
+3. רענון הדף — הערך נשאר `0`.
