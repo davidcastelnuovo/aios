@@ -364,14 +364,15 @@ export function TaskDetailDialog({
           <DialogTitle>פרטי משימה</DialogTitle>
         </DialogHeader>
 
-        <Tabs defaultValue="details" className="flex-1 overflow-hidden flex flex-col">
+        <Tabs defaultValue="details" className="flex-1 min-h-0 overflow-hidden flex flex-col">
           <TabsList className="grid grid-cols-3">
             <TabsTrigger value="details">פרטים</TabsTrigger>
             <TabsTrigger value="team">צוות</TabsTrigger>
             <TabsTrigger value="updates">עדכונים</TabsTrigger>
           </TabsList>
 
-          <ScrollArea className="flex-1 mt-4">
+          <ScrollArea className="flex-1 min-h-0 h-full mt-4 pr-2">
+
             {/* Details Tab */}
             <TabsContent value="details" className="space-y-4 px-1">
               <div className="space-y-2">
