@@ -106,7 +106,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
         ? [tenantId]
         : [];
 
-  const { data: reports = [], isLoading } = useQuery({
+  const { data: reports = [], isLoading, error: reportsError } = useQuery({
     queryKey: ['seo-dashboard-reports', reportTenants.slice().sort().join(','), clientId],
     queryFn: async () => {
       let q = supabase
@@ -118,7 +118,10 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
       if (reportTenants.length === 1) q = q.eq('tenant_id', reportTenants[0]);
       else if (reportTenants.length > 1) q = q.in('tenant_id', reportTenants);
       const { data, error } = await q;
-      if (error) throw error;
+      if (error) {
+        console.error('[SeoDashboardView] ahrefs_reports fetch failed:', error, { clientId, reportTenants });
+        throw error;
+      }
       return data || [];
     },
     enabled: !!clientId,
