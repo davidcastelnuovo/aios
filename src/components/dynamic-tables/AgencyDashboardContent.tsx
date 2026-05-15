@@ -307,23 +307,47 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
   const [mainTab, setMainTab] = useState<'performance' | 'crm'>('performance');
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all');
   const { tenantId } = useCurrentTenant();
+  const { isCampaigner, isOwner, isTeamManager, isSuperAdmin, campaignerId } = useUserRole();
+  const isRestrictedCampaigner = isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin;
   const [commModal, setCommModal] = useState<{ clientId: string; clientName: string } | null>(null);
   const [seoModal, setSeoModal] = useState<{ clientId: string; clientName: string } | null>(null);
   const [editingClient, setEditingClient] = useState<any>(null);
 
+  // For campaigners: fetch their assigned client IDs (visibility restricted to these clients only)
+  const { data: assignedClientIds } = useQuery({
+    queryKey: ['campaigner-assigned-client-ids', campaignerId],
+    queryFn: async () => {
+      if (!campaignerId) return [];
+      const { data, error } = await supabase
+        .from('client_team')
+        .select('client_id')
+        .eq('campaigner_id', campaignerId);
+      if (error) throw error;
+      return data?.map((ct: any) => ct.client_id) || [];
+    },
+    enabled: !!campaignerId && isRestrictedCampaigner,
+  });
+
   // Fetch clients for this agency — base query (id + name only, safe without migration)
   const { data: clients = [], isLoading: clientsLoading } = useQuery({
-    queryKey: ['clients-agency', agencyId],
+    queryKey: ['clients-agency', agencyId, isRestrictedCampaigner ? assignedClientIds : null],
     queryFn: async () => {
-      const { data, error } = await supabase
+      if (isRestrictedCampaigner) {
+        if (!assignedClientIds || assignedClientIds.length === 0) return [];
+      }
+      let query = supabase
         .from('clients')
         .select('id, name')
         .eq('agency_id', agencyId)
         .eq('status', 'active');
+      if (isRestrictedCampaigner && assignedClientIds) {
+        query = query.in('id', assignedClientIds);
+      }
+      const { data, error } = await query;
       if (error) throw error;
       return data || [];
     },
-    enabled: !!agencyId,
+    enabled: !!agencyId && (!isRestrictedCampaigner || !!assignedClientIds),
   });
 
   const clientIds = clients.map((c: any) => c.id);
@@ -331,21 +355,28 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
   // CRM: fetch extended client fields (tier, services, mood_status) — only when CRM tab active
   // These columns may not exist yet if migration hasn't run; errors are silently ignored.
   const { data: crmClientFields = [] } = useQuery({
-    queryKey: ['clients-crm-fields', agencyId],
+    queryKey: ['clients-crm-fields', agencyId, isRestrictedCampaigner ? assignedClientIds : null],
     queryFn: async () => {
       try {
-        const { data, error } = await supabase
+        if (isRestrictedCampaigner) {
+          if (!assignedClientIds || assignedClientIds.length === 0) return [];
+        }
+        let query = supabase
           .from('clients')
           .select('id, tier, services, mood_status')
           .eq('agency_id', agencyId)
           .eq('status', 'active');
+        if (isRestrictedCampaigner && assignedClientIds) {
+          query = query.in('id', assignedClientIds);
+        }
+        const { data, error } = await query;
         if (error) return []; // columns may not exist yet — return empty gracefully
         return data || [];
       } catch {
         return [];
       }
     },
-    enabled: !!agencyId && mainTab === 'crm',
+    enabled: !!agencyId && mainTab === 'crm' && (!isRestrictedCampaigner || !!assignedClientIds),
     staleTime: 60_000,
   });
 
