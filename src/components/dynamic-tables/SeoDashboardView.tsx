@@ -500,6 +500,18 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
     );
   }
 
+  if (reportsError) {
+    return (
+      <Card className="p-8 text-center" dir="rtl">
+        <FileText className="h-12 w-12 mx-auto text-destructive mb-3" />
+        <h3 className="font-semibold text-lg mb-1">שגיאה בטעינת דוחות SEO</h3>
+        <p className="text-muted-foreground text-sm mb-2">לא ניתן לטעון את הדוחות. ייתכן שיש בעיית הרשאה או חיבור.</p>
+        <p className="text-xs text-muted-foreground mb-4">{(reportsError as any)?.message || String(reportsError)}</p>
+        <Button onClick={() => queryClient.invalidateQueries({ queryKey: ['seo-dashboard-reports'] })}>נסה שוב</Button>
+      </Card>
+    );
+  }
+
   if (validReports.length === 0) {
     return (
       <>
