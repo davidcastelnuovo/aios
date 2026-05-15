@@ -998,12 +998,23 @@ export default function DashboardView() {
                 דשבורד סוכנות
               </Badge>
             )}
+            {isOrganizationDashboard && (
+              <Badge variant="secondary" className="flex items-center gap-1">
+                <Building2 className="h-3 w-3" />
+                דשבורד ארגון
+              </Badge>
+            )}
           </div>
           <div className="flex items-center gap-2 mt-2 text-muted-foreground">
             {isAgencyDashboard ? (
               <>
                 <Building2 className="h-4 w-4" />
                 <span>{(dashboard as any).agencies?.name}</span>
+              </>
+            ) : isOrganizationDashboard ? (
+              <>
+                <Building2 className="h-4 w-4" />
+                <span>{orgAgencies.length} סוכנויות</span>
               </>
             ) : (
               <>
@@ -1020,10 +1031,22 @@ export default function DashboardView() {
         </div>
         
         <div className="flex items-center gap-3">
-          {!isAgencyDashboard && currentTenantId && (
+          {isOrganizationDashboard && (
+            <Select value={selectedOrgAgencyId} onValueChange={setSelectedOrgAgencyId}>
+              <SelectTrigger className="w-[220px]">
+                <SelectValue placeholder="בחר סוכנות" />
+              </SelectTrigger>
+              <SelectContent>
+                {orgAgencies.map((a: any) => (
+                  <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {!isAgencyLikeDashboard && currentTenantId && (
             <ShareDashboardDialog dashboardId={dashboardId!} dashboardName={dashboard.name} tenantId={currentTenantId} />
           )}
-          {!isAgencyDashboard && (
+          {!isAgencyLikeDashboard && (
             <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isRefreshing}>
               <RefreshCw className={`ml-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
               רענן נתונים
@@ -1042,14 +1065,26 @@ export default function DashboardView() {
         </div>
       </div>
 
-      {/* Agency Dashboard Content */}
+      {/* Agency / Organization Dashboard Content */}
       {isAgencyDashboard ? (
         <AgencyDashboardContent
           agencyId={dashboard.agency_id!}
           agencyName={(dashboard as any).agencies?.name || ''}
           dateFilter={dateFilter}
         />
-      ) : (
+      ) : isOrganizationDashboard ? (
+        selectedOrgAgencyId ? (
+          <AgencyDashboardContent
+            key={selectedOrgAgencyId}
+            agencyId={selectedOrgAgencyId}
+            agencyName={orgAgencies.find((a: any) => a.id === selectedOrgAgencyId)?.name || ''}
+            dateFilter={dateFilter}
+          />
+        ) : (
+          <Card className="p-8 text-center text-muted-foreground">
+            לא נמצאו סוכנויות בארגון
+          </Card>
+        )
         <>
           {/* Platform Tabs */}
           {availablePlatforms.length > 0 && (
