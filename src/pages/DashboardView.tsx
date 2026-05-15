@@ -145,6 +145,38 @@ export default function DashboardView() {
   });
 
   const isAgencyDashboard = (dashboard as any)?.dashboard_type === 'agency';
+  const isOrganizationDashboard = (dashboard as any)?.dashboard_type === 'organization';
+  const isAgencyLikeDashboard = isAgencyDashboard || isOrganizationDashboard;
+
+  // For organization dashboards: load all agencies (own + shared cross-tenant)
+  const { data: orgAgencies = [] } = useQuery({
+    queryKey: ['org-dashboard-agencies', currentTenantId, isOrganizationDashboard],
+    queryFn: async () => {
+      if (!currentTenantId) return [];
+      const { data: shared } = await supabase
+        .from('agency_tenant_access')
+        .select('agency_id')
+        .eq('accessing_tenant_id', currentTenantId);
+      const sharedIds = (shared || []).map((r: any) => r.agency_id);
+      let query = supabase.from('agencies').select('id, name').order('name');
+      if (sharedIds.length > 0) {
+        query = query.or(`tenant_id.eq.${currentTenantId},id.in.(${sharedIds.join(',')})`);
+      } else {
+        query = query.eq('tenant_id', currentTenantId);
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentTenantId && isOrganizationDashboard,
+  });
+
+  const [selectedOrgAgencyId, setSelectedOrgAgencyId] = useState<string>("");
+  useEffect(() => {
+    if (isOrganizationDashboard && !selectedOrgAgencyId && orgAgencies.length > 0) {
+      setSelectedOrgAgencyId(orgAgencies[0].id);
+    }
+  }, [isOrganizationDashboard, orgAgencies, selectedOrgAgencyId]);
 
   // Fetch tables for the client
   const { data: tables = [], isLoading: tablesLoading } = useQuery({
@@ -966,12 +998,23 @@ export default function DashboardView() {
                 דשבורד סוכנות
               </Badge>
             )}
+            {isOrganizationDashboard && (
+              <Badge variant="secondary" className="flex items-center gap-1">
+                <Building2 className="h-3 w-3" />
+                דשבורד ארגון
+              </Badge>
+            )}
           </div>
           <div className="flex items-center gap-2 mt-2 text-muted-foreground">
             {isAgencyDashboard ? (
               <>
                 <Building2 className="h-4 w-4" />
                 <span>{(dashboard as any).agencies?.name}</span>
+              </>
+            ) : isOrganizationDashboard ? (
+              <>
+                <Building2 className="h-4 w-4" />
+                <span>{orgAgencies.length} סוכנויות</span>
               </>
             ) : (
               <>
@@ -988,10 +1031,22 @@ export default function DashboardView() {
         </div>
         
         <div className="flex items-center gap-3">
-          {!isAgencyDashboard && currentTenantId && (
+          {isOrganizationDashboard && (
+            <Select value={selectedOrgAgencyId} onValueChange={setSelectedOrgAgencyId}>
+              <SelectTrigger className="w-[220px]">
+                <SelectValue placeholder="בחר סוכנות" />
+              </SelectTrigger>
+              <SelectContent>
+                {orgAgencies.map((a: any) => (
+                  <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {!isAgencyLikeDashboard && currentTenantId && (
             <ShareDashboardDialog dashboardId={dashboardId!} dashboardName={dashboard.name} tenantId={currentTenantId} />
           )}
-          {!isAgencyDashboard && (
+          {!isAgencyLikeDashboard && (
             <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isRefreshing}>
               <RefreshCw className={`ml-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
               רענן נתונים
@@ -1010,13 +1065,26 @@ export default function DashboardView() {
         </div>
       </div>
 
-      {/* Agency Dashboard Content */}
+      {/* Agency / Organization Dashboard Content */}
       {isAgencyDashboard ? (
         <AgencyDashboardContent
           agencyId={dashboard.agency_id!}
           agencyName={(dashboard as any).agencies?.name || ''}
           dateFilter={dateFilter}
         />
+      ) : isOrganizationDashboard ? (
+        selectedOrgAgencyId ? (
+          <AgencyDashboardContent
+            key={selectedOrgAgencyId}
+            agencyId={selectedOrgAgencyId}
+            agencyName={orgAgencies.find((a: any) => a.id === selectedOrgAgencyId)?.name || ''}
+            dateFilter={dateFilter}
+          />
+        ) : (
+          <Card className="p-8 text-center text-muted-foreground">
+            לא נמצאו סוכנויות בארגון
+          </Card>
+        )
       ) : (
         <>
           {/* Platform Tabs */}

@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/command";
 import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { ChevronsUpDown, Check, Facebook, ShoppingCart, FileSpreadsheet, Building2, User } from "lucide-react";
+import { ChevronsUpDown, Check, Facebook, ShoppingCart, FileSpreadsheet, Building2, User, Network } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
@@ -55,7 +55,7 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
   const { tenantId } = useCurrentTenant();
   const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
   
-  const [dashboardType, setDashboardType] = useState<'client' | 'agency'>('client');
+  const [dashboardType, setDashboardType] = useState<'client' | 'agency' | 'organization'>('client');
   const [name, setName] = useState("");
   const [agencyId, setAgencyId] = useState<string>("");
   const [clientId, setClientId] = useState<string>("");
@@ -136,8 +136,13 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
 
   const createDashboardMutation = useMutation({
     mutationFn: async () => {
-      if (!tenantId || !name.trim() || !agencyId) {
+      if (!tenantId || !name.trim()) {
         throw new Error('Missing required fields');
+      }
+
+      // Organization type does not require an agency, others do
+      if (dashboardType !== 'organization' && !agencyId) {
+        throw new Error('Missing agency selection');
       }
 
       // For client type, clientId is required
@@ -150,7 +155,7 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
         .insert({
           tenant_id: tenantId,
           name: name.trim(),
-          agency_id: agencyId,
+          agency_id: dashboardType === 'organization' ? null : agencyId,
           client_id: dashboardType === 'client' ? clientId : null,
           dashboard_type: dashboardType,
           settings: {},
@@ -186,9 +191,10 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
     setClientId(""); // Reset client when agency changes
   };
 
-  const handleDashboardTypeChange = (value: 'client' | 'agency') => {
+  const handleDashboardTypeChange = (value: 'client' | 'agency' | 'organization') => {
     setDashboardType(value);
     setClientId(""); // Reset client when type changes
+    if (value === 'organization') setAgencyId("");
   };
 
   const getIntegrationIcon = (type: string | null) => {
@@ -208,9 +214,16 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
     }
   };
 
-  const isValid = dashboardType === 'client' 
+  const orgClientsCount = useMemo(() => {
+    if (dashboardType !== 'organization') return 0;
+    return allClients.length;
+  }, [allClients, dashboardType]);
+
+  const isValid = dashboardType === 'client'
     ? name.trim() && clientId && agencyId
-    : name.trim() && agencyId;
+    : dashboardType === 'agency'
+      ? name.trim() && agencyId
+      : name.trim();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -228,8 +241,8 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
             <Label>סוג דשבורד</Label>
             <RadioGroup 
               value={dashboardType} 
-              onValueChange={(v) => handleDashboardTypeChange(v as 'client' | 'agency')}
-              className="flex gap-4"
+              onValueChange={(v) => handleDashboardTypeChange(v as 'client' | 'agency' | 'organization')}
+              className="flex flex-wrap gap-4"
             >
               <div className="flex items-center space-x-2 space-x-reverse">
                 <RadioGroupItem value="client" id="type-client" />
@@ -245,11 +258,20 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
                   דשבורד סוכנות
                 </Label>
               </div>
+              <div className="flex items-center space-x-2 space-x-reverse">
+                <RadioGroupItem value="organization" id="type-organization" />
+                <Label htmlFor="type-organization" className="flex items-center gap-2 cursor-pointer">
+                  <Network className="h-4 w-4" />
+                  דשבורד ארגון
+                </Label>
+              </div>
             </RadioGroup>
             <p className="text-xs text-muted-foreground">
               {dashboardType === 'client' 
                 ? 'מציג נתונים מאוחדים של לקוח אחד'
-                : 'מציג טבלה מסכמת של כל הלקוחות בסוכנות'}
+                : dashboardType === 'agency'
+                  ? 'מציג טבלה מסכמת של כל הלקוחות בסוכנות'
+                  : 'מאחד את כל הסוכנויות של הארגון, עם בורר סוכנות בתוך הדשבורד'}
             </p>
           </div>
 
@@ -262,26 +284,30 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
               onChange={(e) => setName(e.target.value)}
               placeholder={dashboardType === 'client' 
                 ? "לדוגמה: דשבורד ארבע על ארבע" 
-                : "לדוגמה: סיכום סוכנות MC"}
+                : dashboardType === 'agency'
+                  ? "לדוגמה: סיכום סוכנות MC"
+                  : "לדוגמה: דשבורד ארגון DMM"}
             />
           </div>
 
-          {/* Agency Select */}
-          <div className="space-y-2">
-            <Label>סוכנות</Label>
-            <Select value={agencyId} onValueChange={handleAgencyChange}>
-              <SelectTrigger>
-                <SelectValue placeholder="בחר סוכנות" />
-              </SelectTrigger>
-              <SelectContent>
-                {agencies.map((agency) => (
-                  <SelectItem key={agency.id} value={agency.id}>
-                    {agency.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* Agency Select - hidden for organization type */}
+          {dashboardType !== 'organization' && (
+            <div className="space-y-2">
+              <Label>סוכנות</Label>
+              <Select value={agencyId} onValueChange={handleAgencyChange}>
+                <SelectTrigger>
+                  <SelectValue placeholder="בחר סוכנות" />
+                </SelectTrigger>
+                <SelectContent>
+                  {agencies.map((agency) => (
+                    <SelectItem key={agency.id} value={agency.id}>
+                      {agency.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* Client Select - only for client type */}
           {dashboardType === 'client' && agencyId && (
@@ -367,6 +393,19 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
               </div>
               <p className="mt-1 text-blue-600 dark:text-blue-400">
                 {agencyClientsCount} לקוחות בסוכנות זו יוצגו בדשבורד
+              </p>
+            </div>
+          )}
+
+          {/* Preview for organization type */}
+          {dashboardType === 'organization' && (
+            <div className="text-sm bg-purple-50 dark:bg-purple-950 p-3 rounded-lg border border-purple-200 dark:border-purple-800">
+              <div className="flex items-center gap-2 text-purple-700 dark:text-purple-300">
+                <Network className="h-4 w-4" />
+                <span className="font-medium">דשבורד מאחד</span>
+              </div>
+              <p className="mt-1 text-purple-600 dark:text-purple-400">
+                {agencies.length} סוכנויות, {orgClientsCount} לקוחות סה"כ. תוכל לבחור סוכנות בתוך הדשבורד.
               </p>
             </div>
           )}
