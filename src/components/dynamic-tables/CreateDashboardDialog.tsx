@@ -38,6 +38,7 @@ import { ChevronsUpDown, Check, Facebook, ShoppingCart, FileSpreadsheet, Buildin
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 
