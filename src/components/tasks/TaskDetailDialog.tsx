@@ -658,7 +658,7 @@ export function TaskDetailDialog({
 
 
             {/* Team Tab */}
-            <TabsContent value="team" className="space-y-4 px-1">
+            <TabsContent value="team" className="h-full overflow-y-auto pr-2 space-y-4 px-1 mt-0">
               <div className="space-y-2">
                 <Label>הוסף איש צוות למשימה</Label>
                 <div className="flex gap-2">
