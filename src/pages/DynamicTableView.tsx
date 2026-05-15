@@ -1501,11 +1501,31 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     },
   });
 
-  if (tablesLoading || tablesFetching) {
+  if (tablesLoading) {
     return (
       <div className="container mx-auto py-8 px-4">
         <Skeleton className="h-8 w-48 mb-4" />
         <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+
+  if (tablesError) {
+    return (
+      <div className="container mx-auto py-8 px-4">
+        <Card className="p-12 text-center">
+          <h2 className="text-2xl font-bold mb-2">שגיאה בטעינת הטבלאות</h2>
+          <p className="text-muted-foreground mb-2">לא ניתן לטעון את רשימת הטבלאות מהשרת. ייתכן שתפוג ההתחברות — נסה להתנתק ולהתחבר מחדש.</p>
+          <p className="text-xs text-muted-foreground mb-4">{(tablesError as any)?.message || String(tablesError)}</p>
+          <div className="flex gap-2 justify-center">
+            <Button onClick={() => queryClient.invalidateQueries({ queryKey: ['crm-tables'] })}>
+              נסה שוב
+            </Button>
+            <Button variant="outline" onClick={() => navigate(buildPath('/dynamic-tables'))}>
+              חזור לטבלאות
+            </Button>
+          </div>
+        </Card>
       </div>
     );
   }
@@ -1515,7 +1535,9 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       <div className="container mx-auto py-8 px-4">
         <Card className="p-12 text-center">
           <h2 className="text-2xl font-bold mb-2">טבלה לא נמצאה</h2>
-          <p className="text-muted-foreground mb-4">הטבלה שחיפשת לא קיימת במערכת</p>
+          <p className="text-muted-foreground mb-4">
+            הטבלה שחיפשת לא קיימת במערכת או שאין לך הרשאה לצפות בה.
+          </p>
           <Button onClick={() => navigate(buildPath('/dynamic-tables'))}>
             <ArrowRight className="ml-2 h-4 w-4" />
             חזור לטבלאות
