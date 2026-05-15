@@ -53,6 +53,7 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
   const { buildPath } = useTenantPath();
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
+  const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
   
   const [dashboardType, setDashboardType] = useState<'client' | 'agency'>('client');
   const [name, setName] = useState("");
@@ -60,29 +61,36 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
   const [clientId, setClientId] = useState<string>("");
   const [clientPopoverOpen, setClientPopoverOpen] = useState(false);
 
-  // Fetch agencies
+  // Fetch agencies (own tenant + cross-tenant shared agencies)
   const { data: agencies = [] } = useQuery({
-    queryKey: ['agencies', tenantId],
+    queryKey: ['agencies-with-shared', tenantId, crossTenantAgencyIds],
     queryFn: async () => {
       if (!tenantId) return [];
-      const { data, error } = await supabase
-        .from('agencies')
-        .select('id, name')
-        .eq('tenant_id', tenantId);
+      let query = supabase.from('agencies').select('id, name, tenant_id');
+      if (crossTenantAgencyIds.length > 0) {
+        query = query.or(`tenant_id.eq.${tenantId},id.in.(${crossTenantAgencyIds.join(',')})`);
+      } else {
+        query = query.eq('tenant_id', tenantId);
+      }
+      const { data, error } = await query;
       if (error) throw error;
       return data || [];
     },
     enabled: !!tenantId,
   });
 
-  // Fetch clients filtered by agency
+  // Fetch clients (own tenant + cross-tenant via shared agencies)
   const { data: allClients = [] } = useQuery({
-    queryKey: ['clients-all', tenantId],
+    queryKey: ['clients-all-with-shared', tenantId, crossTenantAgencyIds],
     queryFn: async () => {
       if (!tenantId) return [];
-      const { data, error } = await supabase
-        .from('clients')
-        .select('id, name, agency_id');
+      let query = supabase.from('clients').select('id, name, agency_id, tenant_id');
+      if (crossTenantAgencyIds.length > 0) {
+        query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(',')})`);
+      } else {
+        query = query.eq('tenant_id', tenantId);
+      }
+      const { data, error } = await query;
       if (error) throw error;
       return data || [];
     },
