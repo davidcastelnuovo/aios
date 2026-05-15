@@ -678,7 +678,7 @@ export function WeeklyTaskBoard() {
     },
     onMutate: async ({ taskId, campaignerId }) => {
       await queryClient.cancelQueries({ queryKey: ["tasks"] });
-      const campaignerName = campaigners?.find((c) => c.id === campaignerId)?.full_name ?? null;
+      const campaignerName = campaignersList?.find((c) => c.id === campaignerId)?.full_name ?? null;
       queryClient.setQueriesData<any[]>({ queryKey: ["tasks"] }, (old) => {
         if (!Array.isArray(old)) return old;
         return old.map((t) =>
