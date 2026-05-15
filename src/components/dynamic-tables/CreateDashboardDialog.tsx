@@ -136,8 +136,13 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
 
   const createDashboardMutation = useMutation({
     mutationFn: async () => {
-      if (!tenantId || !name.trim() || !agencyId) {
+      if (!tenantId || !name.trim()) {
         throw new Error('Missing required fields');
+      }
+
+      // Organization type does not require an agency, others do
+      if (dashboardType !== 'organization' && !agencyId) {
+        throw new Error('Missing agency selection');
       }
 
       // For client type, clientId is required
@@ -150,7 +155,7 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
         .insert({
           tenant_id: tenantId,
           name: name.trim(),
-          agency_id: agencyId,
+          agency_id: dashboardType === 'organization' ? null : agencyId,
           client_id: dashboardType === 'client' ? clientId : null,
           dashboard_type: dashboardType,
           settings: {},
@@ -186,9 +191,10 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
     setClientId(""); // Reset client when agency changes
   };
 
-  const handleDashboardTypeChange = (value: 'client' | 'agency') => {
+  const handleDashboardTypeChange = (value: 'client' | 'agency' | 'organization') => {
     setDashboardType(value);
     setClientId(""); // Reset client when type changes
+    if (value === 'organization') setAgencyId("");
   };
 
   const getIntegrationIcon = (type: string | null) => {
@@ -208,9 +214,16 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
     }
   };
 
-  const isValid = dashboardType === 'client' 
+  const orgClientsCount = useMemo(() => {
+    if (dashboardType !== 'organization') return 0;
+    return allClients.length;
+  }, [allClients, dashboardType]);
+
+  const isValid = dashboardType === 'client'
     ? name.trim() && clientId && agencyId
-    : name.trim() && agencyId;
+    : dashboardType === 'agency'
+      ? name.trim() && agencyId
+      : name.trim();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
