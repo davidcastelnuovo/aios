@@ -218,13 +218,16 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     }
   };
 
-  const { data: tables, isLoading: tablesLoading, isFetching: tablesFetching } = useQuery({
+  const { data: tables, isLoading: tablesLoading, isFetching: tablesFetching, error: tablesError } = useQuery({
     queryKey: ['crm-tables'],
     queryFn: async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
       const response = await supabase.functions.invoke('crm-tables', { method: 'GET' });
-      if (response.error) throw response.error;
+      if (response.error) {
+        console.error('[DynamicTableView] crm-tables fetch failed:', response.error);
+        throw response.error;
+      }
       return Array.isArray(response.data) ? response.data as CrmTable[] : [];
     },
     refetchOnMount: 'always',
