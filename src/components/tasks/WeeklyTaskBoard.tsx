@@ -645,11 +645,24 @@ export function WeeklyTaskBoard() {
         .eq("id", taskId);
       if (error) throw error;
     },
+    onMutate: async ({ taskId, clientId }) => {
+      await queryClient.cancelQueries({ queryKey: ["tasks"] });
+      const clientName = clientsList?.find((c) => c.id === clientId)?.name ?? null;
+      queryClient.setQueriesData<any[]>({ queryKey: ["tasks"] }, (old) => {
+        if (!Array.isArray(old)) return old;
+        return old.map((t) =>
+          t?.id === taskId
+            ? { ...t, client_id: clientId, clients: clientName ? { name: clientName } : null }
+            : t,
+        );
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       toast.success("הלקוח עודכן");
     },
     onError: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
       toast.error("שגיאה בעדכון הלקוח");
     },
   });
@@ -663,11 +676,24 @@ export function WeeklyTaskBoard() {
         .eq("id", taskId);
       if (error) throw error;
     },
+    onMutate: async ({ taskId, campaignerId }) => {
+      await queryClient.cancelQueries({ queryKey: ["tasks"] });
+      const campaignerName = campaigners?.find((c) => c.id === campaignerId)?.full_name ?? null;
+      queryClient.setQueriesData<any[]>({ queryKey: ["tasks"] }, (old) => {
+        if (!Array.isArray(old)) return old;
+        return old.map((t) =>
+          t?.id === taskId
+            ? { ...t, campaigner_id: campaignerId, campaigners: campaignerName ? { full_name: campaignerName } : null }
+            : t,
+        );
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       toast.success("הקמפיינר עודכן");
     },
     onError: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
       toast.error("שגיאה בעדכון הקמפיינר");
     },
   });
