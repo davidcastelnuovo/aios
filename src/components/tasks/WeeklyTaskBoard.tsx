@@ -1353,7 +1353,7 @@ export function WeeklyTaskBoard() {
         <div className="hidden md:flex md:flex-col flex-1 relative min-h-0 overflow-x-auto overflow-y-auto overscroll-contain">
           <div className="flex gap-2 pb-4 min-h-0 w-fit">
             {/* Task Backlog Panel - Sticky on desktop, first in DOM for RTL (appears on right) */}
-            <div className="sticky left-0 top-0 z-20 shrink-0 self-start">
+            <div className="sticky right-0 top-0 z-20 shrink-0 self-start bg-background">
               <TaskBacklogPanel
                 tasks={backlogTasks}
                 onToggleComplete={(taskId, completed) =>
