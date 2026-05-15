@@ -49,7 +49,8 @@ serve(async (req) => {
 
       const tokens = await tokenResponse.json();
 
-      if (!tokens.access_token || !tokens.refresh_token) {
+      if (!tokens.access_token) {
+        console.error('Token exchange failed:', tokens);
         throw new Error('Failed to get tokens from Google');
       }
 
@@ -59,6 +60,21 @@ serve(async (req) => {
 
       if (!userId) {
         throw new Error('No user ID in state');
+      }
+
+      // If Google didn't return a refresh_token (re-auth without prompt=consent),
+      // keep the previously stored one so we don't lose offline access.
+      let refreshTokenToStore: string | null = tokens.refresh_token || null;
+      if (!refreshTokenToStore) {
+        const { data: existing } = await supabaseClient
+          .from('calendar_tokens')
+          .select('refresh_token')
+          .eq('user_id', userId)
+          .maybeSingle();
+        refreshTokenToStore = existing?.refresh_token || null;
+      }
+      if (!refreshTokenToStore) {
+        throw new Error('No refresh token available. Please disconnect and reconnect granting offline access.');
       }
 
       // Fetch the Google user's email
@@ -84,10 +100,13 @@ serve(async (req) => {
         .upsert({
           user_id: userId,
           access_token: tokens.access_token,
-          refresh_token: tokens.refresh_token,
+          refresh_token: refreshTokenToStore,
           expires_at: expiresAt.toISOString(),
           updated_at: new Date().toISOString(),
           google_email: googleEmail,
+          needs_reconnect: false,
+          sync_status: 'connected',
+          sync_error: null,
         });
 
       if (dbError) {
@@ -95,6 +114,20 @@ serve(async (req) => {
         throw dbError;
       }
 
+      // Start (or refresh) the Google push notifications channel so changes
+      // made in Google Calendar flow back into the app automatically.
+      try {
+        await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/google-calendar-watch`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''}`,
+          },
+          body: JSON.stringify({ user_id: userId }),
+        });
+      } catch (e) {
+        console.warn('Failed to start calendar watch on connect (non-fatal):', e);
+      }
 
       // Redirect back to the app - return HTML that closes the popup
       return new Response(`
@@ -214,15 +247,28 @@ serve(async (req) => {
       }
       
       
-      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({
+      // Only force consent on the very first connect (so Google issues a refresh_token).
+      // For reconnects we already have a refresh_token, so we skip prompt=consent to
+      // avoid Google rotating/invalidating the existing offline grant unnecessarily.
+      const { data: existingToken } = await supabaseClient
+        .from('calendar_tokens')
+        .select('refresh_token')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      const hasExistingRefresh = !!existingToken?.refresh_token;
+
+      const authParams: Record<string, string> = {
         client_id: clientId,
         redirect_uri: redirectUri,
         response_type: 'code',
         scope: 'https://www.googleapis.com/auth/calendar',
         access_type: 'offline',
-        prompt: 'consent',
-        state: user.id, // Pass user ID in state for callback
-      })}`;
+        include_granted_scopes: 'true',
+        state: user.id,
+      };
+      if (!hasExistingRefresh) authParams.prompt = 'consent';
+
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams(authParams)}`;
 
 
       return new Response(JSON.stringify({ authUrl }), {
