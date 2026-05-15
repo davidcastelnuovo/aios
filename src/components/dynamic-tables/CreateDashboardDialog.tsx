@@ -396,6 +396,19 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
               </p>
             </div>
           )}
+
+          {/* Preview for organization type */}
+          {dashboardType === 'organization' && (
+            <div className="text-sm bg-purple-50 dark:bg-purple-950 p-3 rounded-lg border border-purple-200 dark:border-purple-800">
+              <div className="flex items-center gap-2 text-purple-700 dark:text-purple-300">
+                <Network className="h-4 w-4" />
+                <span className="font-medium">דשבורד מאחד</span>
+              </div>
+              <p className="mt-1 text-purple-600 dark:text-purple-400">
+                {agencies.length} סוכנויות, {orgClientsCount} לקוחות סה"כ. תוכל לבחור סוכנות בתוך הדשבורד.
+              </p>
+            </div>
+          )}
         </div>
 
         <DialogFooter>
