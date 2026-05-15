@@ -1085,6 +1085,7 @@ export default function DashboardView() {
             לא נמצאו סוכנויות בארגון
           </Card>
         )
+      ) : (
         <>
           {/* Platform Tabs */}
           {availablePlatforms.length > 0 && (
