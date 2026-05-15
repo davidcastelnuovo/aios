@@ -735,7 +735,7 @@ export function TaskDetailDialog({
             </TabsContent>
 
             {/* Updates Tab */}
-            <TabsContent value="updates" className="space-y-4 px-1">
+            <TabsContent value="updates" className="h-full overflow-y-auto pr-2 space-y-4 px-1 mt-0">
               <div className="space-y-2">
                 <Label>הוסף עדכון</Label>
                 <div className="flex gap-2">
@@ -811,10 +811,10 @@ export function TaskDetailDialog({
                 })}
               </div>
             </TabsContent>
-          </ScrollArea>
+          </div>
         </Tabs>
 
-        <div className="flex justify-between pt-4 border-t mt-4">
+        <div className="flex justify-between pt-4 border-t mt-4 shrink-0">
           <div className="flex gap-2">
             <Button
               variant="destructive"
@@ -845,6 +845,7 @@ export function TaskDetailDialog({
             <Save className="h-4 w-4 ml-2" />
             שמור שינויים
           </Button>
+        </div>
         </div>
       </DialogContent>
     </Dialog>
