@@ -241,8 +241,8 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
             <Label>סוג דשבורד</Label>
             <RadioGroup 
               value={dashboardType} 
-              onValueChange={(v) => handleDashboardTypeChange(v as 'client' | 'agency')}
-              className="flex gap-4"
+              onValueChange={(v) => handleDashboardTypeChange(v as 'client' | 'agency' | 'organization')}
+              className="flex flex-wrap gap-4"
             >
               <div className="flex items-center space-x-2 space-x-reverse">
                 <RadioGroupItem value="client" id="type-client" />
@@ -258,11 +258,20 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
                   דשבורד סוכנות
                 </Label>
               </div>
+              <div className="flex items-center space-x-2 space-x-reverse">
+                <RadioGroupItem value="organization" id="type-organization" />
+                <Label htmlFor="type-organization" className="flex items-center gap-2 cursor-pointer">
+                  <Network className="h-4 w-4" />
+                  דשבורד ארגון
+                </Label>
+              </div>
             </RadioGroup>
             <p className="text-xs text-muted-foreground">
               {dashboardType === 'client' 
                 ? 'מציג נתונים מאוחדים של לקוח אחד'
-                : 'מציג טבלה מסכמת של כל הלקוחות בסוכנות'}
+                : dashboardType === 'agency'
+                  ? 'מציג טבלה מסכמת של כל הלקוחות בסוכנות'
+                  : 'מאחד את כל הסוכנויות של הארגון, עם בורר סוכנות בתוך הדשבורד'}
             </p>
           </div>
 
@@ -275,26 +284,30 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
               onChange={(e) => setName(e.target.value)}
               placeholder={dashboardType === 'client' 
                 ? "לדוגמה: דשבורד ארבע על ארבע" 
-                : "לדוגמה: סיכום סוכנות MC"}
+                : dashboardType === 'agency'
+                  ? "לדוגמה: סיכום סוכנות MC"
+                  : "לדוגמה: דשבורד ארגון DMM"}
             />
           </div>
 
-          {/* Agency Select */}
-          <div className="space-y-2">
-            <Label>סוכנות</Label>
-            <Select value={agencyId} onValueChange={handleAgencyChange}>
-              <SelectTrigger>
-                <SelectValue placeholder="בחר סוכנות" />
-              </SelectTrigger>
-              <SelectContent>
-                {agencies.map((agency) => (
-                  <SelectItem key={agency.id} value={agency.id}>
-                    {agency.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* Agency Select - hidden for organization type */}
+          {dashboardType !== 'organization' && (
+            <div className="space-y-2">
+              <Label>סוכנות</Label>
+              <Select value={agencyId} onValueChange={handleAgencyChange}>
+                <SelectTrigger>
+                  <SelectValue placeholder="בחר סוכנות" />
+                </SelectTrigger>
+                <SelectContent>
+                  {agencies.map((agency) => (
+                    <SelectItem key={agency.id} value={agency.id}>
+                      {agency.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* Client Select - only for client type */}
           {dashboardType === 'client' && agencyId && (
