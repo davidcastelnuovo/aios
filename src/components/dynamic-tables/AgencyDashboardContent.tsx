@@ -136,7 +136,7 @@ function LeadsTable({ records, totals }: { records: CampaignRecord[]; totals: Ca
   const getCPL = (spend: number, leads: number) => leads > 0 ? spend / leads : 0;
   
   return (
-    <Table>
+    <Table dir="rtl">
       <TableHeader>
         <TableRow>
           <TableHead className="text-right">קמפיין</TableHead>
@@ -176,7 +176,7 @@ function EcommerceTable({ records, totals }: { records: CampaignRecord[]; totals
   const getRoas = (revenue: number, spend: number) => spend > 0 ? revenue / spend : 0;
   
   return (
-    <Table>
+    <Table dir="rtl">
       <TableHeader>
         <TableRow>
           <TableHead className="text-right">קמפיין</TableHead>
@@ -228,7 +228,7 @@ function EcommerceTable({ records, totals }: { records: CampaignRecord[]; totals
 // Analytics Table Component
 function AnalyticsTable({ records, totals }: { records: CampaignRecord[]; totals: CampaignRecord }) {
   return (
-    <Table>
+    <Table dir="rtl">
       <TableHeader>
         <TableRow>
           <TableHead className="text-right">מקור / ערוץ</TableHead>
@@ -814,7 +814,7 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
             {/* CRM Table */}
             <Card>
               <CardContent className="p-0">
-                <Table>
+                <Table dir="rtl">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="text-right w-8">סטטוס</TableHead>
