@@ -1,30 +1,23 @@
-## מטרה
-לוודא שקמפיינרים שנכנסים לדשבורד סוכנות (או דשבורד ארגון) רואים רק את הלקוחות שמשויכים אליהם דרך `client_team`, בעוד בעלים/מנהלים/super_admin ממשיכים לראות את כל לקוחות הסוכנות.
+## הבעיה
+בתצוגה השבועית של מודול המשימות, גלילה אופקית (ימינה/שמאלה לימים נוספים) לא עובדת כשהסמן נמצא מעל משבצות הזמן עצמן — רק כשהסמן מעל הכותרות/אזור עליון.
 
-## ממצאים
-- `src/components/dynamic-tables/AgencyDashboardContent.tsx` שולף את הלקוחות עם `.from('clients').eq('agency_id', agencyId).eq('status', 'active')` בשתי קוורי (שורות 314 ו-332) — **אין שום סינון לפי קמפיינר**.
-- שאר הקוורי בקובץ (communication_logs, מטריקות, וכו׳) מסתמכות על `clientIds` שמחושב מהלקוחות שנשלפו, אז ברגע שמסננים את הרשימה הראשית — כל השאר מסתנן אוטומטית.
-- התבנית הנכונה כבר קיימת ב-`src/pages/DynamicTables.tsx` (שורות 117–130): שימוש ב-`useUserRole` כדי לזהות `isCampaigner` + `campaignerId`, ושאילתה ל-`client_team` עבור `client_id` המשויכים.
-- `useUserRole` כבר טוען `campaignerId` באופן עצל כשהתפקיד הוא קמפיינר.
+## ממצא
+ב-`src/components/tasks/DayColumn.tsx` (שורה 291), אזור משבצות הזמן הוא:
+```tsx
+<div ref={scrollContainerRef} className="flex-1 overflow-y-auto overscroll-contain">
+```
+- `overflow-y-auto` הופך אותו לסקרולר אנכי משלו.
+- `overscroll-contain` (shorthand לשני הצירים) חוסם כל overscroll — כך גם wheel אופקי "נכלא" בקונטיינר במקום להגיע להורה ב-`WeeklyTaskBoard.tsx` (שורה 1353) שהוא `overflow-x-auto`.
 
-## שינויים בקוד
-**קובץ יחיד:** `src/components/dynamic-tables/AgencyDashboardContent.tsx`
+תוצאה: deltaY גולל אנכית בתוך היום, deltaX לא מועבר לסקרולר ההורה.
 
-1. ייבוא `useUserRole` בראש הקובץ.
-2. בתוך `AgencyDashboardContent`:
-   - לשלוף `{ isCampaigner, isOwner, isTeamManager, isSuperAdmin, campaignerId } = useUserRole()`.
-   - להגדיר `isRestrictedCampaigner = isCampaigner && !isOwner && !isTeamManager && !isSuperAdmin`.
-   - להוסיף `useQuery` חדש `assignedClientIds` שטוען מ-`client_team` את ה-`client_id` של אותו `campaignerId`, מופעל רק כש-`isRestrictedCampaigner === true`.
-3. לעדכן את שתי שאילתות ה-`clients`:
-   - להוסיף ל-`queryKey` את `assignedClientIds` (כדי שתשתנה כשהרשימה נטענת).
-   - להוסיף `enabled: !!agencyId && (!isRestrictedCampaigner || !!assignedClientIds)` כדי לא לרוץ לפני שהרשימה זמינה.
-   - בתוך הקוורי, אם `isRestrictedCampaigner`: אם הרשימה ריקה — `return []`; אחרת להוסיף `.in('id', assignedClientIds)` לפני ה-await.
+## תיקון
+**קובץ אחד:** `src/components/tasks/DayColumn.tsx` שורה 291.
 
-## התנהגות צפויה
-- **Owner / Team Manager / Super Admin** — ממשיכים לראות את כל לקוחות הסוכנות (ללא שינוי).
-- **Campaigner** — רואה רק את הלקוחות שהוא משויך אליהם דרך `client_team`. אם אין שיוכים, הטבלאות (CRM ו-Performance) יציגו רשימה ריקה.
-- **Sales person / SEO** — לא משתנה (ההגבלה היא ספציפית ל-`isCampaigner`).
+1. להחליף `overscroll-contain` ב-`overscroll-y-contain` — שומר על מניעת overscroll אנכי (לא מטלטל את העמוד), אבל מאפשר ל-wheel האופקי לעלות להורה.
+2. כתגבור (ליתר ביטחון על trackpads ב-Chrome): להוסיף `onWheel` handler על אותו div שמזהה כש-`Math.abs(deltaX) > Math.abs(deltaY)`, מוצא את האב הקרוב עם `overflow-x: auto` (closest scrollable ancestor או דרך data-attribute שנוסיף ל-`hidden md:flex` div ב-WeeklyTaskBoard) ומריץ `parent.scrollLeft += e.deltaX`, ואז `e.preventDefault()`.
 
 ## מה לא משתנה
-- אין שינויי DB / RLS — RLS על `clients` כבר מאפשר לקמפיינר לקרוא, וההגבלה היא רק UI כדי שלא יראה לקוחות שלא משויכים אליו.
-- אין שינוי ב-`DashboardView` או ב-`CreateDashboardDialog`.
+- אין שינוי במבנה הקומפוננטות, ב-DnD, או בלוגיקת המשימות.
+- התנהגות הגלילה האנכית בתוך כל יום נשמרת.
+- אין שינוי בנתונים/RLS/בקאנד.
