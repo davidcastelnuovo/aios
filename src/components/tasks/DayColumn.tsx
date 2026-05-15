@@ -288,7 +288,25 @@ export function DayColumn({
       </div>
 
       {/* Time Slots */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto overscroll-contain">
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 overflow-y-auto overscroll-y-contain"
+        onWheel={(e) => {
+          if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+            let el: HTMLElement | null = e.currentTarget.parentElement;
+            while (el) {
+              const style = window.getComputedStyle(el);
+              const ox = style.overflowX;
+              if ((ox === 'auto' || ox === 'scroll') && el.scrollWidth > el.clientWidth) {
+                el.scrollLeft += e.deltaX;
+                e.preventDefault();
+                break;
+              }
+              el = el.parentElement;
+            }
+          }
+        }}
+      >
         {TIME_SLOTS.map((time) => (
           <TimeSlotDroppable
             key={time}
