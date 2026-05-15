@@ -55,7 +55,7 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
   const { tenantId } = useCurrentTenant();
   const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
   
-  const [dashboardType, setDashboardType] = useState<'client' | 'agency'>('client');
+  const [dashboardType, setDashboardType] = useState<'client' | 'agency' | 'organization'>('client');
   const [name, setName] = useState("");
   const [agencyId, setAgencyId] = useState<string>("");
   const [clientId, setClientId] = useState<string>("");
