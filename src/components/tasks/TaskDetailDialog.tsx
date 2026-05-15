@@ -359,22 +359,23 @@ export function TaskDetailDialog({
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent dir="rtl" className="max-w-2xl max-h-[90vh] flex flex-col">
+      <DialogContent dir="rtl" className="max-w-2xl h-[90vh] flex flex-col gap-0 !block">
+        <div className="flex flex-col h-full">
         <DialogHeader>
           <DialogTitle>פרטי משימה</DialogTitle>
         </DialogHeader>
 
-        <Tabs defaultValue="details" className="flex-1 min-h-0 overflow-hidden flex flex-col">
-          <TabsList className="grid grid-cols-3">
+        <Tabs defaultValue="details" className="flex-1 min-h-0 overflow-hidden flex flex-col mt-4">
+          <TabsList className="grid grid-cols-3 shrink-0">
             <TabsTrigger value="details">פרטים</TabsTrigger>
             <TabsTrigger value="team">צוות</TabsTrigger>
             <TabsTrigger value="updates">עדכונים</TabsTrigger>
           </TabsList>
 
-          <ScrollArea className="flex-1 min-h-0 h-full mt-4 pr-2">
+          <div className="flex-1 min-h-0 mt-4">
 
             {/* Details Tab */}
-            <TabsContent value="details" className="space-y-4 px-1">
+            <TabsContent value="details" className="h-full overflow-y-auto pr-2 space-y-4 px-1 mt-0">
               <div className="space-y-2">
                 <Label>כותרת</Label>
                 <Input
@@ -657,7 +658,7 @@ export function TaskDetailDialog({
 
 
             {/* Team Tab */}
-            <TabsContent value="team" className="space-y-4 px-1">
+            <TabsContent value="team" className="h-full overflow-y-auto pr-2 space-y-4 px-1 mt-0">
               <div className="space-y-2">
                 <Label>הוסף איש צוות למשימה</Label>
                 <div className="flex gap-2">
@@ -734,7 +735,7 @@ export function TaskDetailDialog({
             </TabsContent>
 
             {/* Updates Tab */}
-            <TabsContent value="updates" className="space-y-4 px-1">
+            <TabsContent value="updates" className="h-full overflow-y-auto pr-2 space-y-4 px-1 mt-0">
               <div className="space-y-2">
                 <Label>הוסף עדכון</Label>
                 <div className="flex gap-2">
@@ -810,10 +811,10 @@ export function TaskDetailDialog({
                 })}
               </div>
             </TabsContent>
-          </ScrollArea>
+          </div>
         </Tabs>
 
-        <div className="flex justify-between pt-4 border-t mt-4">
+        <div className="flex justify-between pt-4 border-t mt-4 shrink-0">
           <div className="flex gap-2">
             <Button
               variant="destructive"
@@ -844,6 +845,7 @@ export function TaskDetailDialog({
             <Save className="h-4 w-4 ml-2" />
             שמור שינויים
           </Button>
+        </div>
         </div>
       </DialogContent>
     </Dialog>
