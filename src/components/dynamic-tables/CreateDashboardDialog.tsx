@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/command";
 import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { ChevronsUpDown, Check, Facebook, ShoppingCart, FileSpreadsheet, Building2, User } from "lucide-react";
+import { ChevronsUpDown, Check, Facebook, ShoppingCart, FileSpreadsheet, Building2, User, Network } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
