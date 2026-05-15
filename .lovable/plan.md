@@ -1,48 +1,68 @@
-## Problem
-ב-`TaskDetailDialog` הגלילה הפנימית לא עובדת — כשהתוכן ארוך (במיוחד טאב "עדכונים"), הוא נחתך מבלי שמופיע scrollbar בתוך הדיאלוג.
 
-## Root cause
-המבנה הנוכחי (`src/components/tasks/TaskDetailDialog.tsx` שורות 362–814):
+# בעיית צפייה בדוחות SEO — פליקס (owner של dmm)
 
-```
-DialogContent  (max-h-[90vh] flex flex-col)
-  DialogHeader
-  Tabs         (flex-1 min-h-0 overflow-hidden flex flex-col)
-    TabsList
-    ScrollArea (flex-1 min-h-0 h-full)
-      TabsContent (details / team / updates)
-  Footer (מחוץ ל-Tabs)
-```
+## ממצאי בדיקה
 
-שתי בעיות:
-1. **`ScrollArea` עוטף את כל ה-`TabsContent`** — Radix Tabs מסתיר את ה-tabs שאינם פעילים עם `hidden`, אבל ה-Viewport של ScrollArea מקבל גובה רק מ-`h-full` שתלוי ב-flex parent. בפועל ה-Viewport של Radix ScrollArea משתמש ב-`display:table` שלא משתף פעולה היטב עם `flex-1 min-h-0` כשהתוכן הוא Radix `TabsContent` (שמתנהג כ-block ריק עד שהוא active).
-2. ה-Footer הוא **sibling של `Tabs`** בתוך `DialogContent`, אבל `DialogContent` הוא `grid gap-4` כברירת מחדל (מ-`ui/dialog.tsx`); ה-`flex flex-col` שמוסף ב-className לא תמיד מנצח את ה-`grid` בגלל סדר ה-tw-merge עם המחלקות הארוכות, וכך ה-`flex-1` של `Tabs` לא מקבל גובה צפוי.
+בדקתי את הצד הבאקאנד לעומק עבור פליקס (`dmm4business@gmail.com`, user_id `953a18d4-…495858`) — **אין שום בעיית הרשאות במסד הנתונים**:
 
-## Fix
+| בדיקה | תוצאה |
+|---|---|
+| `user_roles` | `owner` של tenant `dmm` ✅ |
+| `tenant_users` | משויך ל-`dmm` ✅ |
+| `user_active_tenant` | `dmm` ✅ |
+| `get_user_tenant_id(felix)` | `6ad8f321-…` (dmm) ✅ |
+| `has_role(felix,'owner')` | `true` ✅ |
+| `is_super_admin(felix)` | `false` (מצופה) |
+| `user_is_restricted_client_viewer(felix)` | `false` ✅ |
+| `user_can_access_crm_table(felix, SEO table)` | `true` ✅ |
+| `user_can_access_client(felix, client)` | `true` ✅ |
+| RLS על `crm_tables` / `ahrefs_reports` / `clients` | מאפשר ✅ |
+| נתונים בפועל | קיימים 2 דוחות Ahrefs ב-`dmm` ל-`tavnicol.co.il` |
 
-קובץ יחיד: `src/components/tasks/TaskDetailDialog.tsx`
+המסקנה: **לא חסרה הרשאה**. הדוחות אמורים להיטען. המסך הריק שפליקס רואה אינו נובע מ-RLS.
 
-1. **לחזק את ה-DialogContent** כך שיהיה ודאי flex-column עם גובה מוגבל:
-   ```
-   <DialogContent dir="rtl" className="max-w-2xl h-[90vh] !grid-cols-1 grid-rows-[auto,1fr,auto] gap-0 p-6">
-   ```
-   או — פשוט יותר — להישאר ב-grid הדיפולטי ולהפוך את `Tabs` לתא שגדל: להגדיר `DialogContent` עם `h-[85vh] flex flex-col` ולהסיר את ה-`gap-4` ע"י `gap-0` כדי שלא יהיו רווחים שמכווצים.
+## גורם אפשרי בצד פרונט
 
-2. **להעביר את ה-ScrollArea פנימה** — לתת לכל `TabsContent` להיות עצמו ה-scroll container, במקום ScrollArea אחד עוטף:
-   ```
-   <Tabs ... className="flex-1 min-h-0 flex flex-col">
-     <TabsList ... />
-     <TabsContent value="details"
-       className="flex-1 min-h-0 mt-4 overflow-y-auto pr-2 space-y-4">
-       ...
-     </TabsContent>
-     <TabsContent value="team"   className="flex-1 min-h-0 mt-4 overflow-y-auto pr-2 space-y-4">...</TabsContent>
-     <TabsContent value="updates" className="flex-1 min-h-0 mt-4 overflow-y-auto pr-2 space-y-4">...</TabsContent>
-   </Tabs>
-   ```
-   זה מסיר את התלות ב-Radix ScrollArea ב-context הזה (שגורם לבעיות גובה בתוך flex), ומשתמש ב-overflow מקורי של הדפדפן — שעובד היטב ב-RTL ובדיאלוג.
+הדף `DynamicTableView` תלוי בשרשרת:
+1. `useCurrentTenant()` → `tenantId`
+2. `useQuery('crm-tables')` → קריאה ל-edge function `crm-tables` עם JWT
+3. שיוך `tables.find(t => t.slug === slug)` → `table`
+4. אם `!table` עדיין מחזיר skeletons (אין הודעת "לא נמצא")
 
-3. **שמירה על ה-Footer** מחוץ ל-Tabs כפי שהוא, כך שיישאר תמיד נראה בתחתית.
+נקודות כשל אפשריות שיגרמו ל"מסך ריק" אצל פליקס דווקא:
+- ה-edge function `crm-tables` נכשל בסשן שלו (למשל JWT פג תוקף, או שגיאת רשת) — הקוד פשוט מציג skeletons לנצח.
+- `useCurrentTenant()` מחזיר `tenantId=null` (race condition עם resolve של tenant מה-URL `/t/dmm`) ואז `enabled=false` על הקריאות.
+- Cache ישן ב-localStorage/queryClient של דפדפן פליקס ספציפית.
 
-## Verification
-לאחר השינוי — לפתוח משימה עם הרבה עדכונים בטאב "עדכונים" ולוודא שמופיע scrollbar בתוך הדיאלוג ושכפתורי "מחק / שמור שינויים" נשארים תמיד גלויים בתחתית.
+## תוכנית
+
+### שלב 1 — איסוף סימן ברור מסשן פליקס
+לבקש מפליקס:
+1. לפתוח DevTools → Console + Network ולעלות לכתובת `/t/dmm/table/seo-tavnicol-co-il-1776855136192`.
+2. לשלוח צילום של:
+   - שגיאות באדום בקונסול
+   - הסטטוס וגוף התשובה של הקריאה ל-`functions/v1/crm-tables`
+   - הסטטוס של קריאה ל-`ahrefs_reports` ב-Network (אם קיימת)
+3. לרענן עם **Hard Reload** (Ctrl+Shift+R) ועם פרופיל גלישה בסתר — לשלול cache.
+
+### שלב 2 — קשיחות פרונט (להיעשות בעת המעבר ל-build)
+ב-`src/pages/DynamicTableView.tsx`:
+- כש-`tablesLoading=false` ו-`!table` → להציג הודעה ברורה: *"הטבלה לא נמצאה או שאין לך הרשאה לצפות בה"* + כפתור חזרה. כיום פשוט נשארים skeletons → בעיני המשתמש "מסך ריק".
+- להוסיף `console.error` עם פירוט במקרה ש-`useQuery('crm-tables')` נכשל (כיום השגיאה נבלעת בשקט).
+
+ב-`src/components/dynamic-tables/SeoDashboardView.tsx`:
+- כשהקריאה ל-`ahrefs_reports` מחזירה ריק (`reports.length === 0`) להציג כרטיס "אין דוחות זמינים — לחץ לסנכרון Ahrefs" במקום סקלטונים.
+
+ב-`src/contexts/TenantContext.tsx`:
+- אם `tenantSlug` מה-URL לא נפתר תוך X שניות, להציג הודעת שגיאה במקום להישאר במצב טעינה.
+
+### שלב 3 — ניקוי תיאורטי בסשן של פליקס
+אם ההודעות יזוהו כ-stale auth/cache — לבקש Sign out + Sign in לרענן את ה-JWT ואת ה-cache של React Query.
+
+## הערה טכנית
+
+הבדיקה הראתה שאין אף `tenant_integrations` מסוג Google/Ahrefs ב-tenant `dmm`. זה לא מסביר את המסך הריק (כי דוחות Ahrefs נשמרים ב-`ahrefs_reports` ולא דורשים integration row), אך כדאי לעלות אותו במקביל אם פליקס מצפה ל-GSC/GA — אלה מחייבים חיבור OAuth ייעודי.
+
+---
+
+מאחר שלא נמצא ב-DB שום חוסר-הרשאה, הצעד הראשון ההכרחי הוא לאסוף את שגיאות הדפדפן/Network של פליקס. לאחר מכן אטפל בהקשחת הפרונט לפי הממצאים. אשמח לאישור להתקדם, או — אם יש לך כבר צילום מסך של הקונסול שלו — לצרף אותו ואקפוץ ישר לתיקון.
