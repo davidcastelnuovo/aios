@@ -42,6 +42,18 @@ verify_jwt = false
 [functions.google-calendar-auth]
 verify_jwt = false
 
+[functions.google-calendar-webhook]
+verify_jwt = false
+
+[functions.google-calendar-sync]
+verify_jwt = false
+
+[functions.google-calendar-watch]
+verify_jwt = false
+
+[functions.cron-renew-calendar-watches]
+verify_jwt = false
+
 [functions.add-calendar-event]
 verify_jwt = true
 

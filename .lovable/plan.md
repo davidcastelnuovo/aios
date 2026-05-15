@@ -1,23 +1,63 @@
-## הבעיה
-בתצוגה השבועית של מודול המשימות, גלילה אופקית (ימינה/שמאלה לימים נוספים) לא עובדת כשהסמן נמצא מעל משבצות הזמן עצמן — רק כשהסמן מעל הכותרות/אזור עליון.
+אחזיר את הסנכרון הדו־כיווני בלי לבנות כפול על הקיים.
 
-## ממצא
-ב-`src/components/tasks/DayColumn.tsx` (שורה 291), אזור משבצות הזמן הוא:
-```tsx
-<div ref={scrollContainerRef} className="flex-1 overflow-y-auto overscroll-contain">
-```
-- `overflow-y-auto` הופך אותו לסקרולר אנכי משלו.
-- `overscroll-contain` (shorthand לשני הצירים) חוסם כל overscroll — כך גם wheel אופקי "נכלא" בקונטיינר במקום להגיע להורה ב-`WeeklyTaskBoard.tsx` (שורה 1353) שהוא `overflow-x-auto`.
+מה שמצאתי:
+- כבר יש חיבור Google Calendar ישיר עם `calendar_tokens`, יצירה/עדכון/מחיקה של אירועים מהמערכת ליומן.
+- כבר יש `google_calendar_event_id` על משימות, ולכן הצד של מערכת → Google קיים.
+- לא מצאתי כרגע מנגנון פעיל של Google Push/Webhook, `syncToken`, `channelId`, `resourceId` או חידוש ערוץ — כלומר הצד Google → מערכת כנראה הוסר/לא פעיל.
+- יש גם בעיית יציבות אפשרית: ה-OAuth מבקש תמיד `prompt=consent`, וזה יכול לגרום לרוטציה/איבוד refresh token במקרים מסוימים. אתקן כך שחיבור מחדש לא ימחק token תקין אם Google לא מחזיר refresh token חדש.
 
-תוצאה: deltaY גולל אנכית בתוך היום, deltaX לא מועבר לסקרולר ההורה.
+תוכנית מימוש:
 
-## תיקון
-**קובץ אחד:** `src/components/tasks/DayColumn.tsx` שורה 291.
+1. להרחיב את שכבת הנתונים הקיימת, לא להחליף אותה
+- להוסיף עמודות ל-`calendar_tokens` עבור:
+  - `watch_channel_id`
+  - `watch_resource_id`
+  - `watch_expires_at`
+  - `next_sync_token`
+  - `last_sync_at`
+  - `sync_status` / `sync_error`
+- לשמור את זה באותה טבלת חיבור קיימת כדי לא ליצור חיבור יומן כפול.
 
-1. להחליף `overscroll-contain` ב-`overscroll-y-contain` — שומר על מניעת overscroll אנכי (לא מטלטל את העמוד), אבל מאפשר ל-wheel האופקי לעלות להורה.
-2. כתגבור (ליתר ביטחון על trackpads ב-Chrome): להוסיף `onWheel` handler על אותו div שמזהה כש-`Math.abs(deltaX) > Math.abs(deltaY)`, מוצא את האב הקרוב עם `overflow-x: auto` (closest scrollable ancestor או דרך data-attribute שנוסיף ל-`hidden md:flex` div ב-WeeklyTaskBoard) ומריץ `parent.scrollLeft += e.deltaX`, ואז `e.preventDefault()`.
+2. להוסיף פונקציית backend לקבלת התראות מ-Google Calendar
+- ליצור פונקציה למשל `google-calendar-webhook`.
+- היא תקבל את ה-push notification מגוגל.
+- לפי `channelId/resourceId` היא תזהה למי שייך היומן.
+- היא לא תסמוך על payload מגוגל, אלא תשתמש ב-Calendar API כדי למשוך שינויים בפועל.
 
-## מה לא משתנה
-- אין שינוי במבנה הקומפוננטות, ב-DnD, או בלוגיקת המשימות.
-- התנהגות הגלילה האנכית בתוך כל יום נשמרת.
-- אין שינוי בנתונים/RLS/בקאנד.
+3. להחזיר סנכרון Google → מערכת
+- למשוך שינויים עם `events.list` ו-`syncToken` כשקיים.
+- אם אירוע קשור למשימה לפי `google_calendar_event_id`:
+  - שינוי שעה/תאריך בגוגל יעדכן `due_date`, `due_time`, ו-`duration_minutes` במשימה.
+  - מחיקת אירוע בגוגל תנתק/תנקה את התזמון של המשימה או תסמן אותה בהתאם ללוגיקה קיימת, בלי למחוק משימה בטעות.
+- אם ה-syncToken פג (`410 Gone`), לבצע full sync לטווח בטוח ולהוציא `nextSyncToken` חדש.
+
+4. להקים/לחדש Google Watch אוטומטית
+- אחרי חיבור היומן וגם בעת חידוש, לקרוא ל-Google Calendar `events.watch` על `primary`.
+- לשמור `channelId`, `resourceId`, ו-expiration.
+- לא לדרוש מהמשתמש להתחבר מחדש כל 7 ימים.
+
+5. להוסיף Cron חידוש אוטומטי
+- Scheduled function תרוץ פעם ביום/כל כמה שעות.
+- תמצא חיבורי יומן שה-watch שלהם עומד לפוג.
+- תחדש אותם לפני התפוגה.
+- אם access token פג — תרענן אותו דרך refresh token הקיים.
+- אם refresh token באמת בוטל/לא תקף — רק אז תסמן `needs_reconnect` ותציג למשתמש שצריך לחבר מחדש.
+
+6. לתקן את ניתוקי היומן החוזרים
+- לשנות את OAuth כך שלא תמיד מכריחים `prompt=consent` בכל init רגיל.
+- בשמירת tokens: אם Google לא מחזיר `refresh_token` חדש, לשמר את ה-refresh token הקיים במקום לדרוס/להיכשל.
+- להוסיף הודעות שגיאה מדויקות יותר כדי להבדיל בין:
+  - watch שפג וצריך חידוש אוטומטי
+  - access token שפג ונרענן לבד
+  - refresh token שבוטל באמת ודורש חיבור מחדש
+
+7. עדכון UI מינימלי
+- ברכיב/הגדרות היומן להציג סטטוס סנכרון ברור: מחובר, סנכרון פעיל, צריך חיבור מחדש.
+- בלוח המשימות לרענן queries אחרי webhook sync כדי שהשינוי מגוגל יופיע גם כאן.
+
+בדיקות שאבצע:
+- יצירת משימה במערכת יוצרת אירוע בגוגל כרגיל.
+- שינוי שעה/יום בגוגל מעדכן את המשימה במערכת.
+- מחיקת אירוע בגוגל לא משאירה כפילות בלוח.
+- חידוש watch עובד בלי התערבות משתמש.
+- refresh token נשמר ולא מתנתק כל כמה ימים אלא אם Google ביטלה אותו בפועל.

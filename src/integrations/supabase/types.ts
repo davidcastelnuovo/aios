@@ -1060,9 +1060,17 @@ export type Database = {
           expires_at: string
           google_email: string | null
           id: string
+          last_sync_at: string | null
+          needs_reconnect: boolean
+          next_sync_token: string | null
           refresh_token: string
+          sync_error: string | null
+          sync_status: string | null
           updated_at: string | null
           user_id: string
+          watch_channel_id: string | null
+          watch_expires_at: string | null
+          watch_resource_id: string | null
         }
         Insert: {
           access_token: string
@@ -1070,9 +1078,17 @@ export type Database = {
           expires_at: string
           google_email?: string | null
           id?: string
+          last_sync_at?: string | null
+          needs_reconnect?: boolean
+          next_sync_token?: string | null
           refresh_token: string
+          sync_error?: string | null
+          sync_status?: string | null
           updated_at?: string | null
           user_id: string
+          watch_channel_id?: string | null
+          watch_expires_at?: string | null
+          watch_resource_id?: string | null
         }
         Update: {
           access_token?: string
@@ -1080,9 +1096,17 @@ export type Database = {
           expires_at?: string
           google_email?: string | null
           id?: string
+          last_sync_at?: string | null
+          needs_reconnect?: boolean
+          next_sync_token?: string | null
           refresh_token?: string
+          sync_error?: string | null
+          sync_status?: string | null
           updated_at?: string | null
           user_id?: string
+          watch_channel_id?: string | null
+          watch_expires_at?: string | null
+          watch_resource_id?: string | null
         }
         Relationships: []
       }
