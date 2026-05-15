@@ -145,6 +145,38 @@ export default function DashboardView() {
   });
 
   const isAgencyDashboard = (dashboard as any)?.dashboard_type === 'agency';
+  const isOrganizationDashboard = (dashboard as any)?.dashboard_type === 'organization';
+  const isAgencyLikeDashboard = isAgencyDashboard || isOrganizationDashboard;
+
+  // For organization dashboards: load all agencies (own + shared cross-tenant)
+  const { data: orgAgencies = [] } = useQuery({
+    queryKey: ['org-dashboard-agencies', currentTenantId, isOrganizationDashboard],
+    queryFn: async () => {
+      if (!currentTenantId) return [];
+      const { data: shared } = await supabase
+        .from('agency_tenant_access')
+        .select('agency_id')
+        .eq('accessing_tenant_id', currentTenantId);
+      const sharedIds = (shared || []).map((r: any) => r.agency_id);
+      let query = supabase.from('agencies').select('id, name').order('name');
+      if (sharedIds.length > 0) {
+        query = query.or(`tenant_id.eq.${currentTenantId},id.in.(${sharedIds.join(',')})`);
+      } else {
+        query = query.eq('tenant_id', currentTenantId);
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentTenantId && isOrganizationDashboard,
+  });
+
+  const [selectedOrgAgencyId, setSelectedOrgAgencyId] = useState<string>("");
+  useEffect(() => {
+    if (isOrganizationDashboard && !selectedOrgAgencyId && orgAgencies.length > 0) {
+      setSelectedOrgAgencyId(orgAgencies[0].id);
+    }
+  }, [isOrganizationDashboard, orgAgencies, selectedOrgAgencyId]);
 
   // Fetch tables for the client
   const { data: tables = [], isLoading: tablesLoading } = useQuery({
