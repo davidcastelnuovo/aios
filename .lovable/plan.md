@@ -1,60 +1,48 @@
-## הבעיה
+## Problem
+ב-`TaskDetailDialog` הגלילה הפנימית לא עובדת — כשהתוכן ארוך (במיוחד טאב "עדכונים"), הוא נחתך מבלי שמופיע scrollbar בתוך הדיאלוג.
 
-בכרטיס הלקוח (Marina Divers), כשמנקים את השדה **"הוצאות חודשיות קבועות"** ולוחצים שמירה — השמירה נכשלת בשקט (לא נשמרת).
+## Root cause
+המבנה הנוכחי (`src/components/tasks/TaskDetailDialog.tsx` שורות 362–814):
 
-### שורש הבעיה
-
-ב-`src/components/clients/ClientsChatView.tsx` הרכיב `EditableField` ממיר שדה מספרי ריק ל-`null`:
-
-```ts
-const finalValue = type === "number" ? (editValue ? Number(editValue) : null) : ...
+```
+DialogContent  (max-h-[90vh] flex flex-col)
+  DialogHeader
+  Tabs         (flex-1 min-h-0 overflow-hidden flex flex-col)
+    TabsList
+    ScrollArea (flex-1 min-h-0 h-full)
+      TabsContent (details / team / updates)
+  Footer (מחוץ ל-Tabs)
 ```
 
-אבל בעמודה `clients.monthly_fixed_expense` קיימת מגבלה:
-- `is_nullable: NO`
-- `default: 0`
+שתי בעיות:
+1. **`ScrollArea` עוטף את כל ה-`TabsContent`** — Radix Tabs מסתיר את ה-tabs שאינם פעילים עם `hidden`, אבל ה-Viewport של ScrollArea מקבל גובה רק מ-`h-full` שתלוי ב-flex parent. בפועל ה-Viewport של Radix ScrollArea משתמש ב-`display:table` שלא משתף פעולה היטב עם `flex-1 min-h-0` כשהתוכן הוא Radix `TabsContent` (שמתנהג כ-block ריק עד שהוא active).
+2. ה-Footer הוא **sibling של `Tabs`** בתוך `DialogContent`, אבל `DialogContent` הוא `grid gap-4` כברירת מחדל (מ-`ui/dialog.tsx`); ה-`flex flex-col` שמוסף ב-className לא תמיד מנצח את ה-`grid` בגלל סדר ה-tw-merge עם המחלקות הארוכות, וכך ה-`flex-1` של `Tabs` לא מקבל גובה צפוי.
 
-כלומר Postgres דוחה `UPDATE ... SET monthly_fixed_expense = NULL` → המחיקה לא נשמרת.
-(הצגנו זאת מול ה-DB: שאר הפרמטרים — RLS, הרשאות, טריגרים — תקינים.)
+## Fix
 
-## הפתרון
+קובץ יחיד: `src/components/tasks/TaskDetailDialog.tsx`
 
-עבור שדות מספריים ב-`EditableField` — כשהמשתמש מוחק את הערך, נשמור **`0`** במקום `null`. זה תואם גם להתנהגות התצוגה היום שמראה "₪0" כברירת מחדל.
+1. **לחזק את ה-DialogContent** כך שיהיה ודאי flex-column עם גובה מוגבל:
+   ```
+   <DialogContent dir="rtl" className="max-w-2xl h-[90vh] !grid-cols-1 grid-rows-[auto,1fr,auto] gap-0 p-6">
+   ```
+   או — פשוט יותר — להישאר ב-grid הדיפולטי ולהפוך את `Tabs` לתא שגדל: להגדיר `DialogContent` עם `h-[85vh] flex flex-col` ולהסיר את ה-`gap-4` ע"י `gap-0` כדי שלא יהיו רווחים שמכווצים.
 
-### שינוי ממוקד
+2. **להעביר את ה-ScrollArea פנימה** — לתת לכל `TabsContent` להיות עצמו ה-scroll container, במקום ScrollArea אחד עוטף:
+   ```
+   <Tabs ... className="flex-1 min-h-0 flex flex-col">
+     <TabsList ... />
+     <TabsContent value="details"
+       className="flex-1 min-h-0 mt-4 overflow-y-auto pr-2 space-y-4">
+       ...
+     </TabsContent>
+     <TabsContent value="team"   className="flex-1 min-h-0 mt-4 overflow-y-auto pr-2 space-y-4">...</TabsContent>
+     <TabsContent value="updates" className="flex-1 min-h-0 mt-4 overflow-y-auto pr-2 space-y-4">...</TabsContent>
+   </Tabs>
+   ```
+   זה מסיר את התלות ב-Radix ScrollArea ב-context הזה (שגורם לבעיות גובה בתוך flex), ומשתמש ב-overflow מקורי של הדפדפן — שעובד היטב ב-RTL ובדיאלוג.
 
-קובץ: `src/components/clients/ClientsChatView.tsx` (פונקציית `handleSave` בתוך `EditableField`, סביב שורה 320-324):
+3. **שמירה על ה-Footer** מחוץ ל-Tabs כפי שהוא, כך שיישאר תמיד נראה בתחתית.
 
-```ts
-// לפני
-const finalValue = type === "number"
-  ? (editValue ? Number(editValue) : null)
-  : (editValue || null);
-
-// אחרי
-const finalValue = type === "number"
-  ? (editValue === "" ? 0 : Number(editValue))
-  : (editValue || null);
-```
-
-זה משפיע על שלושת השדות המספריים בכרטיס (ריטיינר, תקציב חודשי, הוצאות חודשיות קבועות) — כולם מקבלים `0` במקום `null` כשנמחקים, מה שנשמר תקין ב-DB.
-
-### בנוסף (שיפור איכות)
-
-`updateClientField` כיום קורא ל-`.update(...)` בלי `.select()`, כך שכשל RLS לא מחזיר שגיאה אלא 0 שורות. נוסיף `.select()` כדי שגם בעתיד שגיאות לא יסתתרו:
-
-```ts
-const { error, data } = await supabase
-  .from("clients")
-  .update({ [field]: value })
-  .eq("id", clientId)
-  .select();
-if (error) throw error;
-if (!data || data.length === 0) throw new Error("Update blocked by permissions");
-```
-
-## בדיקה לאחר היישום
-
-1. פתיחת כרטיס Marina Divers → ניקוי "הוצאות חודשיות קבועות" → שמירה.
-2. לוודא ש-toast הצלחה מופיע והערך מוצג כ-`₪0`.
-3. רענון הדף — הערך נשאר `0`.
+## Verification
+לאחר השינוי — לפתוח משימה עם הרבה עדכונים בטאב "עדכונים" ולוודא שמופיע scrollbar בתוך הדיאלוג ושכפתורי "מחק / שמור שינויים" נשארים תמיד גלויים בתחתית.
