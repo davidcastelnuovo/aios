@@ -274,7 +274,6 @@ export default function SummarizeRecordingDialog({
 
   const handleTranscribeFromStorage = handleTranscribe;
 
-  };
 
   const onTranscribeClick = () => {
     if (recording?.file_path) {
