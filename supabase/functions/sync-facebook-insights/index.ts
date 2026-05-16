@@ -404,6 +404,7 @@ Deno.serve(async (req) => {
       const isEcommerceObjective = ['OUTCOME_SALES', 'PRODUCT_CATALOG_SALES', 'SALES'].includes(objective);
       const isLeadObjective = ['OUTCOME_LEADS', 'LEAD_GENERATION'].includes(objective);
       const isMessagingObjective = ['OUTCOME_ENGAGEMENT', 'MESSAGES'].includes(objective);
+      const isTrafficObjective = ['OUTCOME_TRAFFIC', 'LINK_CLICKS', 'TRAFFIC'].includes(objective);
 
       // Messaging / WhatsApp conversation starts count as leads for Engagement campaigns
       const messagingActionTypes = [
@@ -427,23 +428,24 @@ Deno.serve(async (req) => {
         Array.from(actionTypeSet).some((type) => type.startsWith('offsite_conversion.custom'));
 
       // PRIORITY: Campaign objective is the source of truth.
-      // If FB says it's a lead campaign (OUTCOME_LEADS / LEAD_GENERATION), it's a lead
-      // campaign — even with incidental purchase/add_to_cart pixel events from the website.
-      // Messaging/Engagement campaigns with WhatsApp/Messenger conversions also count as leads.
-      const campaignType: 'lead' | 'ecommerce' | 'other' =
-        isLeadObjective
-          ? 'lead'
-          : isMessagingObjective && hasMessagingSignal
+      // Traffic campaigns (OUTCOME_TRAFFIC / LINK_CLICKS) get their own type — they should
+      // NOT be displayed as lead campaigns with "0 leads", since their goal is clicks/visits.
+      const campaignType: 'lead' | 'ecommerce' | 'traffic' | 'other' =
+        isTrafficObjective
+          ? 'traffic'
+          : isLeadObjective
             ? 'lead'
-            : isEcommerceObjective
-              ? 'ecommerce'
-              : hasStrongEcommerceSignal && !(hasLeadSignal && purchases === 0 && purchaseValue === 0)
+            : isMessagingObjective && hasMessagingSignal
+              ? 'lead'
+              : isEcommerceObjective
                 ? 'ecommerce'
-                : hasLeadSignal
-                  ? 'lead'
-                  : addToCart > 0 || addToCartActionTypePriority.some((type) => actionTypeSet.has(type))
-                    ? 'ecommerce'
-                    : 'other';
+                : hasStrongEcommerceSignal && !(hasLeadSignal && purchases === 0 && purchaseValue === 0)
+                  ? 'ecommerce'
+                  : hasLeadSignal
+                    ? 'lead'
+                    : addToCart > 0 || addToCartActionTypePriority.some((type) => actionTypeSet.has(type))
+                      ? 'ecommerce'
+                      : 'other';
 
       return {
         date: insight.date_start, // Use date_start as the single date field
