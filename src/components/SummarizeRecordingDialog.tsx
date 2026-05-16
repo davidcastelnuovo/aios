@@ -28,87 +28,6 @@ const FOCUS_OPTIONS = [
   { key: "key_quotes", label: "ציטוטים מרכזיים" },
 ];
 
-// ── Audio chunking utilities ──────────────────────────────────
-
-function float32ToWav(samples: Float32Array, sampleRate: number): Blob {
-  const buffer = new ArrayBuffer(44 + samples.length * 2);
-  const view = new DataView(buffer);
-  const writeStr = (offset: number, str: string) => {
-    for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
-  };
-  writeStr(0, 'RIFF');
-  view.setUint32(4, 36 + samples.length * 2, true);
-  writeStr(8, 'WAVE');
-  writeStr(12, 'fmt ');
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, 1, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * 2, true);
-  view.setUint16(32, 2, true);
-  view.setUint16(34, 16, true);
-  writeStr(36, 'data');
-  view.setUint32(40, samples.length * 2, true);
-  for (let i = 0; i < samples.length; i++) {
-    const s = Math.max(-1, Math.min(1, samples[i]));
-    view.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
-  }
-  return new Blob([buffer], { type: 'audio/wav' });
-}
-
-async function transcribeChunked(
-  audioBlob: Blob,
-  onProgress: (current: number, total: number) => void,
-): Promise<string> {
-  const SAMPLE_RATE = 16000;
-  const CHUNK_DURATION_SEC = 8 * 60;
-
-  const arrayBuffer = await audioBlob.arrayBuffer();
-  const audioCtx = new AudioContext({ sampleRate: SAMPLE_RATE });
-  const decoded = await audioCtx.decodeAudioData(arrayBuffer);
-  await audioCtx.close();
-
-  const mono = decoded.getChannelData(0);
-  const chunkSamples = SAMPLE_RATE * CHUNK_DURATION_SEC;
-  const totalChunks = Math.ceil(mono.length / chunkSamples);
-
-  const { data: sessionData } = await supabase.auth.getSession();
-  const accessToken = sessionData?.session?.access_token;
-  if (!accessToken) throw new Error('לא מחובר – נא להתחבר מחדש');
-
-  const transcriptions: string[] = [];
-
-  for (let i = 0; i < totalChunks; i++) {
-    onProgress(i + 1, totalChunks);
-    const start = i * chunkSamples;
-    const end = Math.min(start + chunkSamples, mono.length);
-    const chunk = mono.slice(start, end);
-    const wavBlob = float32ToWav(chunk, SAMPLE_RATE);
-
-    const formData = new FormData();
-    formData.append('audio', wavBlob, `chunk_${i}.wav`);
-
-    const resp = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-voice`,
-      {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${accessToken}` },
-        body: formData,
-      },
-    );
-
-    if (!resp.ok) {
-      const errText = await resp.text();
-      throw new Error(`שגיאה בתמלול חלק ${i + 1}: ${errText}`);
-    }
-
-    const result = await resp.json();
-    if (result.text) transcriptions.push(result.text);
-  }
-
-  return transcriptions.join(' ');
-}
-
 // ── Component ─────────────────────────────────────────────────
 
 export default function SummarizeRecordingDialog({
@@ -286,49 +205,7 @@ export default function SummarizeRecordingDialog({
 
   const hasAudioSource = !!(recording?.file_path || recording?.recording_url || recording?.download_url);
 
-  // ── Download + chunk helper ──────────────────────────────────
-  const attemptDownloadAndChunk = async (recordingId: string) => {
-    toast({ title: "הקובץ גדול – מתחיל תמלול מחולק..." });
-    const { data: dlData, error: dlError } = await supabase.functions.invoke("transcribe-recording", {
-      body: { recording_id: recordingId, mode: 'download' },
-    });
-    if (dlError) throw dlError;
-    if (dlData?.error) throw new Error(dlData.message || dlData.error);
-
-    let audioBlob: Blob | null = null;
-
-    if (dlData?.audio_base64) {
-      const binary = atob(dlData.audio_base64);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      audioBlob = new Blob([bytes], { type: dlData.content_type || 'audio/mp4' });
-    } else if (dlData?.audio_url) {
-      const audioResp = await fetch(dlData.audio_url);
-      if (!audioResp.ok) throw new Error('Failed to download prepared audio for chunking');
-      audioBlob = await audioResp.blob();
-    }
-
-    if (!audioBlob) throw new Error('Failed to download audio');
-
-    const fullText = await transcribeChunked(audioBlob, (current, total) => {
-      setTranscribeProgress({ current, total });
-    });
-
-    // Save transcript to DB so status updates to 'completed'
-    await supabase
-      .from('zoom_recordings')
-      .update({ transcription: fullText, transcription_status: 'completed', transcription_error: null } as any)
-      .eq('id', recordingId);
-
-    setTranscript(fullText);
-    setFailedError(null);
-    queryClient.invalidateQueries({ queryKey: ['recordings'] });
-    toast({ title: "התמלול הושלם בהצלחה!" });
-    setIsTranscribing(false);
-  };
-
-  // ── Transcribe handler (supports large files + background polling) ─────────────
-
+  // ── Transcribe handler ─────────────
   const handleTranscribe = async () => {
     if (!recording?.id) return;
     setIsTranscribing(true);
@@ -343,19 +220,13 @@ export default function SummarizeRecordingDialog({
 
       if (error) {
         const errMsg = typeof error === 'object' && error.message ? error.message : String(error);
-        // Network timeout / "Failed to fetch" / non-2xx (server timeout) → try download+chunking
+        // On network/timeout failures, fall back to polling — Gemini may still be running in the background
         const isTimeoutLike = errMsg.includes('Failed to fetch') || errMsg.includes('network') || errMsg.includes('timeout') || errMsg.includes('AbortError') || errMsg.includes('non-2xx');
         if (isTimeoutLike) {
-          try {
-            await attemptDownloadAndChunk(recording.id);
-            return;
-          } catch (chunkErr: any) {
-            // If chunking also fails, fall back to polling
-            setIsPolling(true);
-            startPolling(recording.id);
-            toast({ title: "התמלול רץ ברקע", description: "ניתן להמשיך לעבוד, התוצאה תופיע כשתהיה מוכנה" });
-            return;
-          }
+          setIsPolling(true);
+          startPolling(recording.id);
+          toast({ title: "התמלול רץ ברקע", description: "ניתן להמשיך לעבוד, התוצאה תופיע כשתהיה מוכנה" });
+          return;
         }
         throw new Error(errMsg);
       }
@@ -370,56 +241,18 @@ export default function SummarizeRecordingDialog({
         return;
       }
 
-      if (data?.error && data.error !== 'file_too_large') {
+      if (data?.error) {
         throw new Error(typeof data.message === 'string' ? data.message : data.error);
       }
 
       if (data?.text) {
         setTranscript(data.text);
-        const fallbackNote = data.used_fallback
-          ? ` (שימוש בהקלטת ${data.fallback_recording_type || 'audio'} חלופית)`
-          : "";
         queryClient.invalidateQueries({ queryKey: ['recordings'] });
-        toast({ title: "התמלול הושלם בהצלחה!" + fallbackNote });
+        toast({ title: "התמלול הושלם בהצלחה!" });
         setIsTranscribing(false);
         return;
       }
-
-      // Large file: server returned audio_url for client-side chunking (needs_chunking flag)
-      if (data?.needs_chunking && data?.audio_url) {
-        toast({ title: "הקובץ גדול – מתחיל תמלול מחולק..." });
-        try {
-          const audioResp = await fetch(data.audio_url);
-          if (!audioResp.ok) throw new Error('Failed to download prepared audio for chunking');
-          const audioBlob = await audioResp.blob();
-          const fullText = await transcribeChunked(audioBlob, (current, total) => {
-            setTranscribeProgress({ current, total });
-          });
-          await supabase
-            .from('zoom_recordings')
-            .update({ transcription: fullText, transcription_status: 'completed', transcription_error: null } as any)
-            .eq('id', recording.id);
-          setTranscript(fullText);
-          setFailedError(null);
-          queryClient.invalidateQueries({ queryKey: ['recordings'] });
-          toast({ title: "התמלול הושלם בהצלחה!" });
-          setIsTranscribing(false);
-          return;
-        } catch (chunkErr: any) {
-          setFailedError(chunkErr.message || "שגיאה בתמלול מחולק");
-          toast({ title: "שגיאה בתמלול מחולק", description: chunkErr.message, variant: "destructive" });
-          setIsTranscribing(false);
-          return;
-        }
-      }
-
-      if (data?.error === 'file_too_large') {
-        // Fallback: try download+chunk mode
-        await attemptDownloadAndChunk(recording.id);
-        return;
-      }
     } catch (err: any) {
-      // Final fallback — check if maybe it's a timeout
       const errMsg = err.message || '';
       if (errMsg.includes('Failed to fetch') || errMsg.includes('network') || errMsg.includes('timeout')) {
         setIsPolling(true);
@@ -439,57 +272,8 @@ export default function SummarizeRecordingDialog({
     }
   };
 
-  const handleTranscribeFromStorage = async () => {
-    if (!recording?.file_path) return handleTranscribe();
+  const handleTranscribeFromStorage = handleTranscribe;
 
-    setIsTranscribing(true);
-    setTranscribeProgress(null);
-
-    try {
-      const { data: fileData, error: dlError } = await supabase.storage
-        .from('recordings')
-        .download(recording.file_path);
-
-      if (dlError || !fileData) throw new Error('Failed to download: ' + (dlError?.message || 'unknown'));
-
-      const fileSizeMB = fileData.size / (1024 * 1024);
-
-      if (fileSizeMB <= 25) {
-        return handleTranscribe();
-      }
-
-      toast({ title: "הקובץ גדול – מתחיל תמלול מחולק...", description: `${fileSizeMB.toFixed(0)}MB` });
-
-      const fullText = await transcribeChunked(fileData, (current, total) => {
-        setTranscribeProgress({ current, total });
-      });
-
-      // Save transcript to DB
-      const { error: updateErr } = await supabase
-        .from('zoom_recordings')
-        .update({ transcription: fullText, transcription_status: 'completed', transcription_error: null } as any)
-        .eq('id', recording.id);
-
-      if (updateErr) {
-        console.error("Failed to save transcription to DB:", updateErr);
-        toast({ title: "אזהרה: התמלול הושלם אך לא נשמר בבסיס הנתונים", variant: "destructive" });
-      }
-
-      setTranscript(fullText);
-      setFailedError(null);
-      queryClient.invalidateQueries({ queryKey: ['recordings'] });
-      toast({ title: "התמלול הושלם בהצלחה!" });
-    } catch (err: any) {
-      toast({
-        title: "שגיאה בתמלול",
-        description: err.message || "נסה שוב או הדבק תמלול ידנית",
-        variant: "destructive",
-      });
-    } finally {
-      setIsTranscribing(false);
-      setTranscribeProgress(null);
-    }
-  };
 
   const onTranscribeClick = () => {
     if (recording?.file_path) {

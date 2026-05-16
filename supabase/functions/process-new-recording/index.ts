@@ -181,13 +181,6 @@ Deno.serve(async (req) => {
           const transcribeResult = await transcribeResponse.json();
           // transcribe-recording returns { text: ... } on success
           transcription = transcribeResult.text || transcribeResult.transcription || null;
-          
-          // If file was too large and needs chunking, log it
-          if (transcribeResult.needs_chunking) {
-            console.log(`Recording needs chunking (${transcribeResult.size_mb}MB). Skipping auto-transcription.`);
-            transcription = null;
-          }
-          
           console.log(`Transcription completed: ${transcription?.length || 0} chars`);
         } else {
           console.error('Transcription failed:', await transcribeResponse.text());
