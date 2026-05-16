@@ -148,29 +148,31 @@ export function AddClientForm() {
       if (!tenantId) {
         throw new Error("לא נמצא tenant_id למשתמש");
       }
-      const { data: newClient, error } = await supabase.from("clients").insert({
-        name: values.name,
-        contact_name: values.contact_name || null,
-        agency_id: values.agency_id,
-        tenant_id: tenantId,
-        phone: values.phone || null,
-        email: values.email || null,
-        folder_link: values.folder_link || null,
-        retainer: values.retainer ? parseFloat(values.retainer) : null,
-        monthly_budget: values.monthly_budget ? parseFloat(values.monthly_budget) : null,
-        website: values.website || null,
-        notes: values.notes || null,
-        is_seo_client: values.is_seo_client,
-        services: values.services || [],
-        meta_ads_account_id: values.meta_ads_account_id || null,
-        google_ads_account_id: values.google_ads_account_id || null,
-      }).select("id").single();
+      // Use RPC so campaigners can also add clients: it bypasses the SELECT-after-INSERT
+      // RLS issue and auto-assigns the creator to client_team when they're a campaigner.
+      const { data: newClientId, error } = await supabase.rpc("create_client_with_assignment", {
+        p_tenant_id: tenantId,
+        p_agency_id: values.agency_id,
+        p_name: values.name,
+        p_contact_name: values.contact_name || null,
+        p_phone: values.phone || null,
+        p_email: values.email || null,
+        p_folder_link: values.folder_link || null,
+        p_retainer: values.retainer ? parseFloat(values.retainer) : null,
+        p_monthly_budget: values.monthly_budget ? parseFloat(values.monthly_budget) : null,
+        p_website: values.website || null,
+        p_notes: values.notes || null,
+        p_is_seo_client: values.is_seo_client,
+        p_services: values.services || [],
+        p_meta_ads_account_id: values.meta_ads_account_id || null,
+        p_google_ads_account_id: values.google_ads_account_id || null,
+      });
       if (error) throw error;
 
       // Save additional contacts
-      if (additionalContacts.length > 0 && newClient) {
+      if (additionalContacts.length > 0 && newClientId) {
         const contactsToInsert = additionalContacts.map(c => ({
-          client_id: newClient.id,
+          client_id: newClientId as string,
           tenant_id: tenantId,
           contact_name: c.contact_name,
           phone: c.phone || null,
