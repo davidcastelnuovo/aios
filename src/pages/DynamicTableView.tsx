@@ -2430,13 +2430,13 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                 purchases: 0,
                 purchase_value: 0,
                 add_to_cart: 0,
-                campaign_type: 'other' as 'lead' | 'ecommerce' | 'other',
+                campaign_type: 'other' as 'lead' | 'ecommerce' | 'traffic' | 'other',
               };
             }
 
             const rowType = String(record.data?.campaign_type || '').toLowerCase();
-            if (rowType === 'ecommerce' || rowType === 'lead') {
-              acc[campaignName].campaign_type = rowType as 'lead' | 'ecommerce';
+            if (rowType === 'ecommerce' || rowType === 'lead' || rowType === 'traffic') {
+              acc[campaignName].campaign_type = rowType as 'lead' | 'ecommerce' | 'traffic';
             }
 
             acc[campaignName].impressions += Number(record.data?.impressions) || 0;
@@ -2457,7 +2457,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
             purchases: number;
             purchase_value: number;
             add_to_cart: number;
-            campaign_type: 'lead' | 'ecommerce' | 'other';
+            campaign_type: 'lead' | 'ecommerce' | 'traffic' | 'other';
           }>);
 
           const entries = Object.entries(campaignGroups);
@@ -2465,23 +2465,27 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
           // (even if Facebook reports stray purchase events from a tracking pixel)
           const tableCampaignType = String(table?.integration_settings?.campaign_type || '').toLowerCase();
           const forceLeadsOnly = tableCampaignType === 'leads' || tableCampaignType === 'lead';
+          const trafficCampaigns = entries.filter(([, data]) => data.campaign_type === 'traffic');
           const ecommerceCampaigns = forceLeadsOnly ? [] : entries.filter(([, data]) =>
-            (data.campaign_type === 'ecommerce' ||
-            data.purchases > 0 ||
-            data.purchase_value > 0) &&
-            // If campaign has leads but no purchases/revenue, it's a lead campaign
-            // even if it has add_to_cart events
-            !(data.leads > 0 && data.purchases === 0 && data.purchase_value === 0)
+            data.campaign_type !== 'traffic' && (
+              (data.campaign_type === 'ecommerce' ||
+              data.purchases > 0 ||
+              data.purchase_value > 0) &&
+              // If campaign has leads but no purchases/revenue, it's a lead campaign
+              // even if it has add_to_cart events
+              !(data.leads > 0 && data.purchases === 0 && data.purchase_value === 0)
+            )
           );
-          // Campaigns with only add_to_cart but also leads → lead campaigns
-          const leadCampaigns = forceLeadsOnly ? entries : entries.filter(([, data]) =>
+          // Lead campaigns: exclude traffic + ecommerce
+          const leadCampaigns = (forceLeadsOnly ? entries : entries.filter(([, data]) =>
+            data.campaign_type !== 'traffic' &&
             !(
               (data.campaign_type === 'ecommerce' ||
               data.purchases > 0 ||
               data.purchase_value > 0) &&
               !(data.leads > 0 && data.purchases === 0 && data.purchase_value === 0)
             )
-          );
+          )).filter(([, data]) => data.campaign_type !== 'traffic');
 
           const currency = getCurrencySymbol(table.integration_settings?.currency);
 
