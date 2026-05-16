@@ -2503,7 +2503,11 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
 
           return (
             <>
-              {ecommerceCampaigns.length > 0 && (
+              {ecommerceCampaigns.length > 0 && (() => {
+                // Dynamic columns: hide ROAS / purchase_value / add_to_cart when the
+                // account doesn't track them (e.g. sales page without cart, no pixel value).
+                const showValueCols = ecommerceTotals.purchase_value > 0 || ecommerceTotals.add_to_cart > 0;
+                return (
                 <Card className="mb-4 overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm" dir="rtl">
@@ -2513,25 +2517,28 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                           <th className="p-2 text-center font-medium">חשיפות</th>
                           <th className="p-2 text-center font-medium">קליקים</th>
                           <th className="p-2 text-center font-medium">הוצאה</th>
-                          <th className="p-2 text-center font-medium">הוספות לעגלה</th>
+                          {showValueCols && <th className="p-2 text-center font-medium">הוספות לעגלה</th>}
                           <th className="p-2 text-center font-medium">רכישות</th>
-                          <th className="p-2 text-center font-medium">ערך רכישות</th>
-                          <th className="p-2 text-center font-medium">ROAS</th>
+                          {showValueCols && <th className="p-2 text-center font-medium">ערך רכישות</th>}
+                          {!showValueCols && <th className="p-2 text-center font-medium">עלות לרכישה</th>}
+                          {showValueCols && <th className="p-2 text-center font-medium">ROAS</th>}
                         </tr>
                       </thead>
                       <tbody>
                         {ecommerceCampaigns.map(([campaignName, data]) => {
                           const roas = data.spend > 0 ? data.purchase_value / data.spend : 0;
+                          const costPerPurchase = data.purchases > 0 ? data.spend / data.purchases : 0;
                           return (
                             <tr key={`ecom-${campaignName}`} className="border-b hover:bg-muted/30">
                               <td className="p-2 text-right font-medium">{campaignName}</td>
                               <td className="p-2 text-center">{data.impressions.toLocaleString('he-IL')}</td>
                               <td className="p-2 text-center">{data.clicks.toLocaleString('he-IL')}</td>
                               <td className="p-2 text-center">{currency}{data.spend.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
-                              <td className="p-2 text-center text-orange-600">{data.add_to_cart.toLocaleString('he-IL')}</td>
+                              {showValueCols && <td className="p-2 text-center text-orange-600">{data.add_to_cart.toLocaleString('he-IL')}</td>}
                               <td className="p-2 text-center text-green-600 font-medium">{data.purchases.toLocaleString('he-IL')}</td>
-                              <td className="p-2 text-center text-green-600">{currency}{data.purchase_value.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
-                              <td className="p-2 text-center text-blue-600 font-medium">{roas.toLocaleString('he-IL', { maximumFractionDigits: 1 })}x</td>
+                              {showValueCols && <td className="p-2 text-center text-green-600">{currency}{data.purchase_value.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>}
+                              {!showValueCols && <td className="p-2 text-center text-blue-600 font-medium">{currency}{costPerPurchase.toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>}
+                              {showValueCols && <td className="p-2 text-center text-blue-600 font-medium">{roas.toLocaleString('he-IL', { maximumFractionDigits: 1 })}x</td>}
                             </tr>
                           );
                         })}
@@ -2542,16 +2549,18 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                           <td className="p-2 text-center">{ecommerceTotals.impressions.toLocaleString('he-IL')}</td>
                           <td className="p-2 text-center">{ecommerceTotals.clicks.toLocaleString('he-IL')}</td>
                           <td className="p-2 text-center">{currency}{ecommerceTotals.spend.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
-                          <td className="p-2 text-center text-orange-600">{ecommerceTotals.add_to_cart.toLocaleString('he-IL')}</td>
+                          {showValueCols && <td className="p-2 text-center text-orange-600">{ecommerceTotals.add_to_cart.toLocaleString('he-IL')}</td>}
                           <td className="p-2 text-center text-green-600">{ecommerceTotals.purchases.toLocaleString('he-IL')}</td>
-                          <td className="p-2 text-center text-green-600">{currency}{ecommerceTotals.purchase_value.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
-                          <td className="p-2 text-center text-blue-600">{(ecommerceTotals.spend > 0 ? ecommerceTotals.purchase_value / ecommerceTotals.spend : 0).toLocaleString('he-IL', { maximumFractionDigits: 1 })}x</td>
+                          {showValueCols && <td className="p-2 text-center text-green-600">{currency}{ecommerceTotals.purchase_value.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>}
+                          {!showValueCols && <td className="p-2 text-center text-blue-600">{currency}{(ecommerceTotals.purchases > 0 ? ecommerceTotals.spend / ecommerceTotals.purchases : 0).toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>}
+                          {showValueCols && <td className="p-2 text-center text-blue-600">{(ecommerceTotals.spend > 0 ? ecommerceTotals.purchase_value / ecommerceTotals.spend : 0).toLocaleString('he-IL', { maximumFractionDigits: 1 })}x</td>}
                         </tr>
                       </tfoot>
                     </table>
                   </div>
                 </Card>
-              )}
+                );
+              })()}
 
               {leadCampaigns.length > 0 && (
                 <Card className="mb-4 overflow-hidden">

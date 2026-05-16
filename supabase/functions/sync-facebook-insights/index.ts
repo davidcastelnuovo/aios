@@ -232,12 +232,13 @@ Deno.serve(async (req) => {
       accountDisableReason = accountData.disable_reason || null;
     }
 
-    // Fetch insights from Facebook with time_increment=1 for daily breakdown
-    // action_attribution_windows + use_unified_attribution_setting expose messaging
-    // conversion events (WhatsApp / Messenger Click-to-Chat) that otherwise don't
-    // appear in the default `actions` response.
-    const attributionWindows = encodeURIComponent(JSON.stringify(['7d_click', '1d_view']));
-    const insightsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/insights?level=campaign&fields=campaign_id,campaign_name,impressions,clicks,cpm,ctr,actions,action_values,conversions,cost_per_action_type,cost_per_conversion,spend&time_range={"since":"${sinceStr}","until":"${untilStr}"}&time_increment=1&action_attribution_windows=${attributionWindows}&use_unified_attribution_setting=true&limit=500&access_token=${accessToken}`;
+    // Fetch insights from Facebook with time_increment=1 for daily breakdown.
+    // IMPORTANT: We rely ONLY on use_unified_attribution_setting=true to match the
+    // numbers shown in Ads Manager UI. We must NOT pass action_attribution_windows,
+    // because doing so makes Facebook return `value` as the SUM across the requested
+    // windows (e.g. 7d_click + 1d_view), which double/triple counts the same user
+    // and inflates purchases/leads by 2x-3x vs. what Ads Manager displays.
+    const insightsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/insights?level=campaign&fields=campaign_id,campaign_name,impressions,clicks,cpm,ctr,actions,action_values,conversions,cost_per_action_type,cost_per_conversion,spend&time_range={"since":"${sinceStr}","until":"${untilStr}"}&time_increment=1&use_unified_attribution_setting=true&limit=500&access_token=${accessToken}`;
     
     const response = await fetch(insightsUrl);
     const data = await response.json();
