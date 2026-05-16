@@ -8290,6 +8290,26 @@ export type Database = {
         }
         Returns: number
       }
+      create_client_with_assignment: {
+        Args: {
+          p_agency_id: string
+          p_contact_name?: string
+          p_email?: string
+          p_folder_link?: string
+          p_google_ads_account_id?: string
+          p_is_seo_client?: boolean
+          p_meta_ads_account_id?: string
+          p_monthly_budget?: number
+          p_name: string
+          p_notes?: string
+          p_phone?: string
+          p_retainer?: number
+          p_services?: string[]
+          p_tenant_id: string
+          p_website?: string
+        }
+        Returns: string
+      }
       enqueue_job: {
         Args: {
           p_job_type: string
