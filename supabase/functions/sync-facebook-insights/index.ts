@@ -24,7 +24,7 @@ interface InsightRecord {
   add_to_cart: number;
   roas: number;
   campaign_objective: string | null;
-  campaign_type: 'lead' | 'ecommerce' | 'other';
+  campaign_type: 'lead' | 'ecommerce' | 'traffic' | 'other';
   effective_status?: string;
   configured_status?: string;
   updated_time?: string | null;
