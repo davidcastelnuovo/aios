@@ -17,6 +17,12 @@ interface ManualROICardProps {
    * Full integration_settings object (so we don't overwrite other keys on save).
    */
   integrationSettings?: Record<string, any> | null;
+  /**
+   * Optional custom save function. When provided (e.g. shared-link viewers
+   * who don't have a Supabase session), it's called instead of the default
+   * direct Supabase update.
+   */
+  saveFn?: (manual_roi: { closures: number | null; revenue: number | null }) => Promise<void>;
 }
 
 export function ManualROICard({
