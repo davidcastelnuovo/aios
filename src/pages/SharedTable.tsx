@@ -20,6 +20,8 @@ import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnal
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { computeGaOrganicByMonth } from "@/components/dynamic-tables/seo/computeGaOrganicByMonth";
 import { getLeadsFromData } from "@/lib/adsMetrics";
+import { ManualROICard } from "@/components/dynamic-tables/ManualROICard";
+import { useQueryClient } from "@tanstack/react-query";
 
 // Date filter options — must match the internal DynamicTableView so the
 // shared link presents the same windows as the internal report.
