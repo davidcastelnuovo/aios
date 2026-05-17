@@ -6,13 +6,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { FileSpreadsheet, Facebook, TrendingUp, TrendingDown, Minus, Globe, Search, BarChart3 } from "lucide-react";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { format } from "date-fns";
+import { he } from "date-fns/locale";
+import { cn } from "@/lib/utils";
+import { FileSpreadsheet, Facebook, TrendingUp, TrendingDown, Minus, Globe, Search, BarChart3, CalendarIcon, ChevronDown } from "lucide-react";
 import { PublicSeoView } from "@/components/dynamic-tables/PublicSeoView";
 import { PublicMaskyooCallsCard } from "@/components/dynamic-tables/PublicMaskyooCallsCard";
 import { PublicGscView } from "@/components/dynamic-tables/PublicGscView";
@@ -101,12 +108,19 @@ const getIntegrationIcon = (type: string | null) => {
 export default function SharedTable() {
   const { shareToken } = useParams();
   const [dateFilter, setDateFilter] = useState('last_7_days');
+  const [customStart, setCustomStart] = useState<Date | undefined>();
+  const [customEnd, setCustomEnd] = useState<Date | undefined>();
+  const [isCustomOpen, setIsCustomOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['shared-table', shareToken, dateFilter],
+    queryKey: ['shared-table', shareToken, dateFilter, customStart?.toISOString(), customEnd?.toISOString()],
     queryFn: async () => {
       const params = new URLSearchParams({ token: shareToken!, date_filter: dateFilter });
+      if (dateFilter === 'custom' && customStart && customEnd) {
+        params.set('custom_start', format(customStart, 'yyyy-MM-dd'));
+        params.set('custom_end', format(customEnd, 'yyyy-MM-dd'));
+      }
       const baseUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/public-table`;
       const res = await fetch(`${baseUrl}?${params.toString()}`, {
         method: 'GET',
@@ -115,7 +129,7 @@ export default function SharedTable() {
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
-    enabled: !!shareToken,
+    enabled: !!shareToken && (dateFilter !== 'custom' || (!!customStart && !!customEnd)),
     retry: false,
   });
 
@@ -413,16 +427,82 @@ export default function SharedTable() {
             {getIntegrationIcon(integrationType)}
             <h1 className="text-xl md:text-2xl font-bold">{data.table.name}</h1>
           </div>
-          <Select value={dateFilter} onValueChange={setDateFilter}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="bg-background z-[100]">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="gap-2 min-w-[180px] justify-between">
+                <CalendarIcon className="h-4 w-4" />
+                <span>
+                  {dateFilter === 'custom' && customStart && customEnd
+                    ? `${format(customStart, 'dd/MM/yy', { locale: he })} - ${format(customEnd, 'dd/MM/yy', { locale: he })}`
+                    : DATE_FILTERS.find(f => f.value === dateFilter)?.label || 'בחר טווח'}
+                </span>
+                <ChevronDown className="h-4 w-4 opacity-50" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56 bg-background z-[100]">
               {DATE_FILTERS.map(f => (
-                <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+                <DropdownMenuItem
+                  key={f.value}
+                  onClick={() => setDateFilter(f.value)}
+                  className={cn("cursor-pointer", dateFilter === f.value && "bg-accent font-medium")}
+                >
+                  {f.label}
+                </DropdownMenuItem>
               ))}
-            </SelectContent>
-          </Select>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild onSelect={(e) => e.preventDefault()}>
+                <Popover open={isCustomOpen} onOpenChange={setIsCustomOpen}>
+                  <PopoverTrigger asChild>
+                    <button className="w-full text-right px-2 py-1.5 text-sm hover:bg-accent rounded-sm cursor-pointer">
+                      טווח מותאם אישית...
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0 z-[100] bg-background" align="start" side="bottom">
+                    <div className="p-3 space-y-3">
+                      <div className="flex gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs">מתאריך</Label>
+                          <Calendar
+                            mode="single"
+                            selected={customStart}
+                            onSelect={setCustomStart}
+                            disabled={(date) => date > new Date() || (!!customEnd && date > customEnd)}
+                            initialFocus
+                            className={cn("p-3 pointer-events-auto")}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">עד תאריך</Label>
+                          <Calendar
+                            mode="single"
+                            selected={customEnd}
+                            onSelect={setCustomEnd}
+                            disabled={(date) => date > new Date() || (!!customStart && date < customStart)}
+                            className={cn("p-3 pointer-events-auto")}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button variant="outline" size="sm" onClick={() => setIsCustomOpen(false)}>
+                          ביטול
+                        </Button>
+                        <Button
+                          size="sm"
+                          disabled={!customStart || !customEnd}
+                          onClick={() => {
+                            setDateFilter('custom');
+                            setIsCustomOpen(false);
+                          }}
+                        >
+                          החל
+                        </Button>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {/* Summary Cards for integration tables */}
