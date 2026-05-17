@@ -329,11 +329,17 @@ Deno.serve(async (req) => {
         .filter((a: any) => String(a.action_type || '').startsWith('offsite_conversion.custom'))
         .reduce((sum: number, a: any) => sum + (parseInt(a.value) || 0), 0);
 
+      // FB's aggregate `lead` action_type is the deduplicated total across all lead
+      // sources (form + pixel + custom). Use it when available — matches Ads Manager.
+      const _aggregateLeadValue = sumByTypes(['lead']);
+
       let leads: number;
       if (_isLeadFormObjective) {
-        // Lead-form campaigns: FB shows ONLY form leads in "Results". Pixel/messaging
-        // events on this campaign are not attributed to it as leads.
-        leads = _formLeadsValue;
+        // Lead-form campaigns can collect BOTH form leads and website (pixel/custom)
+        // leads on the same landing page. FB's "Results" column shows the sum.
+        // Prefer the aggregate `lead` (already deduplicated by FB); fallback to sum.
+        const _summed = _formLeadsValue + _pixelLeadsValue + _customConversionLeadsValue;
+        leads = Math.max(_aggregateLeadValue, _summed, _formLeadsValue);
       } else if (_isMessagingObjective) {
         // Messaging campaigns: count conversation starts (matches FB Results column).
         leads = _messagingLeadsValue;
@@ -342,6 +348,7 @@ Deno.serve(async (req) => {
         // attributed signal — never sum, to avoid double counting the same lead across
         // multiple action_types (FB returns the same conversion under several types).
         leads = Math.max(
+          _aggregateLeadValue,
           _formLeadsValue,
           _messagingLeadsValue,
           _pixelLeadsValue,
