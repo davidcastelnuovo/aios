@@ -348,6 +348,7 @@ Deno.serve(async (req) => {
         // attributed signal — never sum, to avoid double counting the same lead across
         // multiple action_types (FB returns the same conversion under several types).
         leads = Math.max(
+          _aggregateLeadValue,
           _formLeadsValue,
           _messagingLeadsValue,
           _pixelLeadsValue,
