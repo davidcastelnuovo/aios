@@ -20,6 +20,8 @@ import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnal
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { computeGaOrganicByMonth } from "@/components/dynamic-tables/seo/computeGaOrganicByMonth";
 import { getLeadsFromData } from "@/lib/adsMetrics";
+import { ManualROICard } from "@/components/dynamic-tables/ManualROICard";
+import { useQueryClient } from "@tanstack/react-query";
 
 // Date filter options — must match the internal DynamicTableView so the
 // shared link presents the same windows as the internal report.
@@ -99,6 +101,7 @@ const getIntegrationIcon = (type: string | null) => {
 export default function SharedTable() {
   const { shareToken } = useParams();
   const [dateFilter, setDateFilter] = useState('last_7_days');
+  const queryClient = useQueryClient();
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['shared-table', shareToken, dateFilter],
@@ -631,7 +634,36 @@ export default function SharedTable() {
           </Card>
         )}
 
-        {/* Analytics table: daily breakdown */}
+        {/* Manual ROI summary — viewers can fill in closures & revenue */}
+        {isAdsPlatform(integrationType || '') && summary && (summary.hasLeads || campaignSummary.leads.length > 0) && (
+          <ManualROICard
+            tableId={data.table.id}
+            spend={campaignSummary.leads.reduce((s: number, c: any) => s + c.spend, 0) || summary.spend}
+            leads={campaignSummary.leads.reduce((s: number, c: any) => s + c.leads, 0) || summary.leads}
+            currency={(() => {
+              const code = ((data?.table?.integration_settings as any)?.currency || 'ILS').toUpperCase();
+              return code === 'USD' ? '$' : code === 'EUR' ? '€' : '₪';
+            })()}
+            initialClosures={(data.table.integration_settings as any)?.manual_roi?.closures ?? null}
+            initialRevenue={(data.table.integration_settings as any)?.manual_roi?.revenue ?? null}
+            integrationSettings={data.table.integration_settings as any}
+            saveFn={async (manual_roi) => {
+              const baseUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/public-table`;
+              const res = await fetch(baseUrl, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+                },
+                body: JSON.stringify({ token: shareToken, manual_roi }),
+              });
+              if (!res.ok) throw new Error(await res.text());
+              await queryClient.invalidateQueries({ queryKey: ['shared-table', shareToken] });
+            }}
+          />
+        )}
+
+
         {isAnalyticsPlatform(integrationType || '') && filteredRecords.length > 0 && (
           <Card>
             <CardHeader>

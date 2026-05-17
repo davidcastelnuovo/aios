@@ -99,6 +99,77 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // POST: allow viewers of a share link to update manual_roi (closures/revenue)
+  // on the shared table. Auth is the share token itself (must be active + allow_edit).
+  if (req.method === "POST") {
+    try {
+      const body = await req.json().catch(() => ({}));
+      const shareToken = body?.token as string | undefined;
+      const manualRoi = body?.manual_roi as { closures?: number | null; revenue?: number | null } | undefined;
+      if (!shareToken || !manualRoi) {
+        return new Response(JSON.stringify({ error: "Missing token or manual_roi" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const supabase = createClient(supabaseUrl, serviceKey);
+
+      const { data: share } = await supabase
+        .from("table_shares")
+        .select("table_id, is_active")
+        .eq("share_token", shareToken)
+        .eq("is_active", true)
+        .single();
+
+      if (!share?.table_id) {
+        return new Response(JSON.stringify({ error: "Invalid or inactive share link" }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: tbl } = await supabase
+        .from("crm_tables")
+        .select("integration_settings")
+        .eq("id", share.table_id)
+        .single();
+
+      const baseSettings = (tbl?.integration_settings as any) || {};
+      const newSettings = {
+        ...baseSettings,
+        manual_roi: {
+          closures: manualRoi.closures == null ? null : Number(manualRoi.closures) || 0,
+          revenue: manualRoi.revenue == null ? null : Number(manualRoi.revenue) || 0,
+        },
+      };
+
+      const { error: updateError } = await supabase
+        .from("crm_tables")
+        .update({ integration_settings: newSettings })
+        .eq("id", share.table_id);
+
+      if (updateError) {
+        return new Response(JSON.stringify({ error: updateError.message }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    } catch (err) {
+      console.error("Error in public-table POST:", err);
+      return new Response(JSON.stringify({ error: "Internal server error" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+  }
+
   try {
     const url = new URL(req.url);
     const shareToken = url.searchParams.get("token");

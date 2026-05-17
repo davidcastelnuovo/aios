@@ -17,6 +17,12 @@ interface ManualROICardProps {
    * Full integration_settings object (so we don't overwrite other keys on save).
    */
   integrationSettings?: Record<string, any> | null;
+  /**
+   * Optional custom save function. When provided (e.g. shared-link viewers
+   * who don't have a Supabase session), it's called instead of the default
+   * direct Supabase update.
+   */
+  saveFn?: (manual_roi: { closures: number | null; revenue: number | null }) => Promise<void>;
 }
 
 export function ManualROICard({
@@ -28,6 +34,7 @@ export function ManualROICard({
   initialRevenue,
   readOnly = false,
   integrationSettings,
+  saveFn,
 }: ManualROICardProps) {
   const [closures, setClosures] = useState<string>(
     initialClosures != null ? String(initialClosures) : ""
@@ -54,22 +61,28 @@ export function ManualROICard({
   const roi = spend > 0 ? (profit / spend) * 100 : 0;
 
   const save = async (newClosures: string, newRevenue: string) => {
-    if (readOnly || !tableId) return;
+    if (readOnly) return;
     setSaving(true);
     try {
-      const baseSettings = integrationSettings || {};
-      const newSettings = {
-        ...baseSettings,
-        manual_roi: {
-          closures: newClosures === "" ? null : parseFloat(newClosures) || 0,
-          revenue: newRevenue === "" ? null : parseFloat(newRevenue) || 0,
-        },
+      const payload = {
+        closures: newClosures === "" ? null : parseFloat(newClosures) || 0,
+        revenue: newRevenue === "" ? null : parseFloat(newRevenue) || 0,
       };
-      const { error } = await supabase
-        .from("crm_tables")
-        .update({ integration_settings: newSettings })
-        .eq("id", tableId);
-      if (error) throw error;
+      if (saveFn) {
+        await saveFn(payload);
+      } else {
+        if (!tableId) return;
+        const baseSettings = integrationSettings || {};
+        const newSettings = {
+          ...baseSettings,
+          manual_roi: payload,
+        };
+        const { error } = await supabase
+          .from("crm_tables")
+          .update({ integration_settings: newSettings })
+          .eq("id", tableId);
+        if (error) throw error;
+      }
     } catch (e: any) {
       toast.error("שגיאה בשמירת נתוני ROI: " + (e?.message || ""));
     } finally {
