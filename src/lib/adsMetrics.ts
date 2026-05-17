@@ -22,8 +22,8 @@ export const getExplicitLeadFieldsFromData = (data: any) =>
   0;
 
 export const getLeadsFromData = (data: any) =>
-  getFacebookFormLeadsFromData(data) ||
   Number(data?.leads) ||
+  getFacebookFormLeadsFromData(data) ||
   Number(data?.conversions) ||
   Number(data?.website_leads) ||
   Number(data?.offsite_conversion) ||

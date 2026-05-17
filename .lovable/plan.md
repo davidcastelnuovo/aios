@@ -1,49 +1,52 @@
+## הבעיה
 
-## הבעיה: ניפוח של ×3 ברכישות מול Facebook Ads Manager
+ב־30 הימים האחרונים בקמפיין של אדמה חיה (לידים בדף נחיתה):
+- **Facebook Ads Manager**: 233 לידים
+- **המערכת שלנו (UI)**: 193 לידים
+- **ה־DB שלנו**: 235 לידים (תואם ל־FB ✓)
 
-איימי רואה ב־Ads Manager (לפי הצילום שצירפת):
-- 7 ימים אחרונים (9.5–15.5): **9 Website purchases**, **₪108.18** עלות לרכישה, **₪973.58** הוצאה.
+הסנכרון תקין. הבעיה היא בתצוגה.
 
-אצלנו ב־DB לאותם 7 ימים נשמרו רכישות: `9+0+12+3+3+0+0 = 27` — בדיוק פי 3 מהמספר האמיתי.
+## שורש הבאג
 
-### השורש בבאג
-
-ב־`supabase/functions/sync-facebook-insights/index.ts`, שורות 236–240:
+`src/lib/adsMetrics.ts` — הפונקציה `getLeadsFromData` שמשמשת בכל ה־UI (DynamicTableView, DashboardView, SharedTable, SharedDashboard) מעדיפה את הערך מ־`form_leads` *לפני* השדה `leads`:
 
 ```ts
-const attributionWindows = encodeURIComponent(JSON.stringify(['7d_click', '1d_view']));
-const insightsUrl = `...&action_attribution_windows=${attributionWindows}&use_unified_attribution_setting=true...`;
+export const getLeadsFromData = (data: any) =>
+  getFacebookFormLeadsFromData(data) ||   // ← קודם form_leads (188)
+  Number(data?.leads) ||                   // ← רק כ־fallback (235)
+  ...
 ```
 
-הצירוף הזה גורם לפייסבוק להחזיר את `value` של כל פעולה כסכום של שני חלונות ה־attribution — מה שמכפיל רכישות (וגם לידים) פי 2 או 3 לעומת ה־Ads Manager UI שמראה את ה־unified בלבד.
+בדף נחיתה של אדמה חיה, פייסבוק מחזיר גם `leadgen_grouped` (טופס לידים) וגם `offsite_conversion.fb_pixel_lead` (לידים מהאתר). הסנכרון כבר אוסף נכון את שניהם לתוך השדה `leads` (לפי לוגיקת `_isLeadFormObjective` ב־`sync-facebook-insights/index.ts` שורות 337–342), אבל ה־UI דורס את זה ומציג רק את ה־form leads.
 
 ## התיקון
 
-### `supabase/functions/sync-facebook-insights/index.ts`
+ב־`src/lib/adsMetrics.ts`:
 
-1. **להסיר את `action_attribution_windows` מה־URL לחלוטין**, ולהשאיר `use_unified_attribution_setting=true` בלבד.
-   זה גורם לפייסבוק להחזיר את הערכים בדיוק לפי הגדרת ה־unified attribution של החשבון — אותם מספרים שמופיעים ב־UI של Ads Manager.
+```ts
+export const getLeadsFromData = (data: any) =>
+  Number(data?.leads) ||                   // ← השדה האוטוריטטיבי שהאדג'-פאנקשן חישב
+  getFacebookFormLeadsFromData(data) ||
+  Number(data?.conversions) ||
+  Number(data?.website_leads) ||
+  Number(data?.offsite_conversion) ||
+  Number(data?.offsite_conversion_fb_pixel_lead) ||
+  0;
+```
 
-2. **שמירה על קוד הספירה הקיים** (`getActionCount`, `pickFirstAvailable` עם `omni_purchase` כראשון). הוא נכון; הבעיה הייתה רק בערך שמגיע מ־FB.
+זהו שינוי של שורה אחת — להזיז את `Number(data?.leads)` לראש שרשרת ה־fallback.
 
-3. **לוג קצר** שמדפיס לכל קמפיין: `purchases (from omni_purchase / fb_pixel_purchase / purchase)` כדי שנדע מאיזה action_type נספרו — לעזרה בדיבוג עתידי.
+`getExplicitLeadFieldsFromData` נשארת כמו שהיא (משמשת בלוח מחוונים לפילוח לפי פלטפורמה — שם לא רוצים את האגרגט).
 
-### תצוגה בטבלת איקומרס (התיקון מהבקשה הקודמת נשמר)
+## מה זה משנה
 
-ב־`src/pages/DynamicTableView.tsx`, עבור טבלת ה־ecommerce — אם בכל הנתונים `purchase_value === 0` ו־`add_to_cart === 0`:
-- העמודות יהיו: קמפיין | חשיפות | קליקים | הוצאה | **רכישות** | **עלות לרכישה** (`spend/purchases`).
-- ללא ROAS, ללא ערך רכישות, ללא הוספות לעגלה.
+- אדמה חיה (30 יום): UI יציג **235** במקום 193 → תואם ל־FB.
+- לקוחות אחרים שיש להם רק `form_leads` ולא `leads` (קמפיין טופס בלבד) — לא ישתנו, כי `Number(data?.leads)` יהיה 0 ויפול ל־`getFacebookFormLeadsFromData`.
+- לקוחות עם רק `leads` (כל הקמפיינים הלא־טפסיים) — לא ישתנו, כבר עבדו דרך ה־fallback.
 
-לקוחות שיש להם ערך רכישה או add_to_cart > 0 — ימשיכו לראות את הטבלה המלאה עם ROAS, בדיוק כמו היום.
+## איפה צריך לשנות
 
-## מה לעשות אחרי הדפלוי
+קובץ אחד בלבד: `src/lib/adsMetrics.ts` — שורה 24–32.
 
-1. דפלוי של `sync-facebook-insights`.
-2. ללחוץ "סנכרן Facebook" בדף של איימי — זה ירוץ מחדש על כל הטווח וידרוס את הרשומות הקיימות עם הערכים הנכונים.
-3. הטבלה תציג: **9 רכישות, ₪108 עלות לרכישה, ₪974 הוצאה** — בדיוק כמו ב־Ads Manager.
-
-## למה זה לא ישבר ללקוחות אחרים
-
-- הסרת `action_attribution_windows` רק *תקרב* את המספרים שלנו ל־UI של פייסבוק. כל לקוח שמסתכל היום על המספרים שלנו מקבל מספר מנופח ×2/×3 ביחס למה שהוא רואה ב־Ads Manager — התיקון יישר את כולם.
-- שינוי תצוגת טבלת איקומרס הוא דינמי לפי הנתונים (`purchase_value === 0 && add_to_cart === 0`) ולא משפיע על לקוחות שיש להם ערכי רכישה.
-- אין שינוי בסכמת ה־DB.
+לא נדרש re-sync — הנתונים ב־DB כבר נכונים.
