@@ -427,16 +427,82 @@ export default function SharedTable() {
             {getIntegrationIcon(integrationType)}
             <h1 className="text-xl md:text-2xl font-bold">{data.table.name}</h1>
           </div>
-          <Select value={dateFilter} onValueChange={setDateFilter}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="bg-background z-[100]">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="gap-2 min-w-[180px] justify-between">
+                <CalendarIcon className="h-4 w-4" />
+                <span>
+                  {dateFilter === 'custom' && customStart && customEnd
+                    ? `${format(customStart, 'dd/MM/yy', { locale: he })} - ${format(customEnd, 'dd/MM/yy', { locale: he })}`
+                    : DATE_FILTERS.find(f => f.value === dateFilter)?.label || 'בחר טווח'}
+                </span>
+                <ChevronDown className="h-4 w-4 opacity-50" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56 bg-background z-[100]">
               {DATE_FILTERS.map(f => (
-                <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+                <DropdownMenuItem
+                  key={f.value}
+                  onClick={() => setDateFilter(f.value)}
+                  className={cn("cursor-pointer", dateFilter === f.value && "bg-accent font-medium")}
+                >
+                  {f.label}
+                </DropdownMenuItem>
               ))}
-            </SelectContent>
-          </Select>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild onSelect={(e) => e.preventDefault()}>
+                <Popover open={isCustomOpen} onOpenChange={setIsCustomOpen}>
+                  <PopoverTrigger asChild>
+                    <button className="w-full text-right px-2 py-1.5 text-sm hover:bg-accent rounded-sm cursor-pointer">
+                      טווח מותאם אישית...
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0 z-[100] bg-background" align="start" side="bottom">
+                    <div className="p-3 space-y-3">
+                      <div className="flex gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs">מתאריך</Label>
+                          <Calendar
+                            mode="single"
+                            selected={customStart}
+                            onSelect={setCustomStart}
+                            disabled={(date) => date > new Date() || (!!customEnd && date > customEnd)}
+                            initialFocus
+                            className={cn("p-3 pointer-events-auto")}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">עד תאריך</Label>
+                          <Calendar
+                            mode="single"
+                            selected={customEnd}
+                            onSelect={setCustomEnd}
+                            disabled={(date) => date > new Date() || (!!customStart && date < customStart)}
+                            className={cn("p-3 pointer-events-auto")}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button variant="outline" size="sm" onClick={() => setIsCustomOpen(false)}>
+                          ביטול
+                        </Button>
+                        <Button
+                          size="sm"
+                          disabled={!customStart || !customEnd}
+                          onClick={() => {
+                            setDateFilter('custom');
+                            setIsCustomOpen(false);
+                          }}
+                        >
+                          החל
+                        </Button>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {/* Summary Cards for integration tables */}
