@@ -101,6 +101,7 @@ const getIntegrationIcon = (type: string | null) => {
 export default function SharedTable() {
   const { shareToken } = useParams();
   const [dateFilter, setDateFilter] = useState('last_7_days');
+  const queryClient = useQueryClient();
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['shared-table', shareToken, dateFilter],
