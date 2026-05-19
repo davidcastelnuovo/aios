@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
     const {
-      clientId, leadId, message, phoneNumber, tenantId: providedTenantId,
+      clientId, leadId, groupId, message, phoneNumber, tenantId: providedTenantId,
       senderUserId, integrationId
     } = body;
 
@@ -77,8 +77,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Resolve tenant
+    // Resolve tenant + group chat id
     let tenantId: string | undefined = providedTenantId;
+    let groupChatId: string | undefined;
     if (!tenantId && clientId) {
       const { data } = await supabase.from('clients').select('tenant_id').eq('id', clientId).single();
       tenantId = data?.tenant_id;
@@ -86,12 +87,26 @@ Deno.serve(async (req) => {
       const { data } = await supabase.from('leads').select('tenant_id').eq('id', leadId).single();
       tenantId = data?.tenant_id;
     }
+    if (groupId) {
+      const { data: group } = await supabase
+        .from('whatsapp_groups')
+        .select('tenant_id, group_chat_id')
+        .eq('id', groupId)
+        .single();
+      if (!tenantId) tenantId = group?.tenant_id;
+      groupChatId = group?.group_chat_id;
+    }
     if (!tenantId) {
       const { data } = await supabase.from('user_active_tenant').select('tenant_id').eq('user_id', userId).single();
       tenantId = data?.tenant_id;
     }
     if (!tenantId) {
       return new Response(JSON.stringify({ error: 'Tenant not found' }), {
+        status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+    if (groupId && !groupChatId) {
+      return new Response(JSON.stringify({ error: 'Group chat id not found' }), {
         status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
@@ -119,13 +134,16 @@ Deno.serve(async (req) => {
     const instanceId = settings.instance_id;
     const apiKey = integ.api_key;
     const cc = (settings.country_code || settings.default_country_code || '972').toString();
-    const phone = toGatewayPhone(String(phoneNumber || ''), /^\d{1,3}$/.test(cc) ? cc : '972');
+    // For groups, send chat id as-is (e.g. "1234567890-9876543210@g.us"); otherwise normalize phone.
+    const to = groupChatId
+      ? groupChatId
+      : toGatewayPhone(String(phoneNumber || ''), /^\d{1,3}$/.test(cc) ? cc : '972');
 
     const url = `${BASE_URL}/api/v1/instances/${instanceId}/send/text`;
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'X-Api-Key': apiKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to: phone, body: message }),
+      body: JSON.stringify({ to, body: message }),
     });
 
     const respText = await res.text();
@@ -140,6 +158,7 @@ Deno.serve(async (req) => {
     const { error: insertError } = await supabase.from('chat_messages').insert({
       client_id: clientId || null,
       lead_id: leadId || null,
+      group_id: groupId || null,
       tenant_id: tenantId,
       connection_user_id: integ.user_id || userId,
       message_text: message,
@@ -148,7 +167,7 @@ Deno.serve(async (req) => {
       provider: 'manus_wa',
       sent_by_user_id: userId,
       raw_provider_data: respData,
-      sender_phone: phone,
+      sender_phone: groupChatId ? null : to,
     });
     if (insertError) console.error('Failed to save message:', insertError);
 
