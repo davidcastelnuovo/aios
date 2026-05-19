@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
     const {
-      clientId, leadId, message, phoneNumber, tenantId: providedTenantId,
+      clientId, leadId, groupId, message, phoneNumber, tenantId: providedTenantId,
       senderUserId, integrationId
     } = body;
 
@@ -77,8 +77,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Resolve tenant
+    // Resolve tenant + group chat id
     let tenantId: string | undefined = providedTenantId;
+    let groupChatId: string | undefined;
     if (!tenantId && clientId) {
       const { data } = await supabase.from('clients').select('tenant_id').eq('id', clientId).single();
       tenantId = data?.tenant_id;
@@ -86,12 +87,26 @@ Deno.serve(async (req) => {
       const { data } = await supabase.from('leads').select('tenant_id').eq('id', leadId).single();
       tenantId = data?.tenant_id;
     }
+    if (groupId) {
+      const { data: group } = await supabase
+        .from('whatsapp_groups')
+        .select('tenant_id, group_chat_id')
+        .eq('id', groupId)
+        .single();
+      if (!tenantId) tenantId = group?.tenant_id;
+      groupChatId = group?.group_chat_id;
+    }
     if (!tenantId) {
       const { data } = await supabase.from('user_active_tenant').select('tenant_id').eq('user_id', userId).single();
       tenantId = data?.tenant_id;
     }
     if (!tenantId) {
       return new Response(JSON.stringify({ error: 'Tenant not found' }), {
+        status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+    if (groupId && !groupChatId) {
+      return new Response(JSON.stringify({ error: 'Group chat id not found' }), {
         status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
