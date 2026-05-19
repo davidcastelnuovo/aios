@@ -297,6 +297,7 @@ const modulePermissions: Record<string, string> = {
   "chat-integrations": "chat_integrations",
   "manychat-settings": "manychat_settings",
   "green-api-settings": "green_api_settings",
+  "manus-wa-settings": "manus_wa_settings",
   "accounting-integrations": "accounting_integrations",
   // ── הגדרות מערכת ────────────────────────────────────────────────────
   branding: "branding",
