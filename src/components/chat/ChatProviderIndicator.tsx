@@ -2,7 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { MessageSquare, Phone, Send } from "lucide-react";
 
 interface ChatProviderIndicatorProps {
-  provider: "manychat" | "green_api" | "internal" | "telegram" | null;
+  provider: "manychat" | "green_api" | "internal" | "telegram" | "manus_wa" | null;
   size?: "sm" | "md";
 }
 
