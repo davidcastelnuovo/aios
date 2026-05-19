@@ -2610,13 +2610,14 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
     chatId = `972${last9}@c.us`
   }
   
-  // Find Green API integration - use specified ID or fall back to first active
+  // Find Green API / Manus WA integration - use specified ID or fall back to first active
   let idInstance: string
   let apiTokenInstance: string
   let integration: any = null
+  let providerType: 'green_api' | 'manus_wa' = 'green_api'
   
   if (green_api_mode === "external" && external_instance_id && external_api_token) {
-    // External mode: use manually provided credentials
+    // External mode: use manually provided credentials (Green API only)
     idInstance = external_instance_id
     apiTokenInstance = external_api_token
   } else {
@@ -2624,21 +2625,22 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
     if (integration_id) {
       const { data: specificIntegration, error } = await supabase
         .from('tenant_integrations')
-        .select('id, api_key, settings, user_id')
+        .select('id, api_key, settings, user_id, integration_type, instance_id')
         .eq('id', integration_id)
         .eq('is_active', true)
         .maybeSingle()
       
       if (!error && specificIntegration) {
         integration = specificIntegration
+        if (specificIntegration.integration_type === 'manus_wa') providerType = 'manus_wa'
       }
     }
     
-    // Fallback to first active integration
+    // Fallback to first active Green API integration
     if (!integration) {
       const { data: fallbackIntegration, error: integrationError } = await supabase
         .from('tenant_integrations')
-        .select('id, api_key, settings, user_id')
+        .select('id, api_key, settings, user_id, integration_type, instance_id')
         .eq('tenant_id', tenantId)
         .eq('integration_type', 'green_api')
         .eq('is_active', true)
@@ -2646,17 +2648,24 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
         .maybeSingle()
       
       if (integrationError || !fallbackIntegration) {
-        throw new Error('לא נמצא חיבור Green API פעיל')
+        throw new Error('לא נמצא חיבור WhatsApp פעיל')
       }
       integration = fallbackIntegration
     }
     
-    // Support both naming conventions
-    idInstance = integration.settings?.idInstance || integration.settings?.instance_id || integration.instance_id
-    apiTokenInstance = integration.settings?.apiTokenInstance || integration.api_key
-    
-    if (!idInstance || !apiTokenInstance) {
-      throw new Error('הגדרות Green API חסרות')
+    if (providerType === 'manus_wa') {
+      idInstance = integration.settings?.instance_id || integration.instance_id
+      apiTokenInstance = integration.api_key
+      if (!idInstance || !apiTokenInstance) {
+        throw new Error('הגדרות Manus WhatsApp חסרות')
+      }
+    } else {
+      // Support both naming conventions
+      idInstance = integration.settings?.idInstance || integration.settings?.instance_id || integration.instance_id
+      apiTokenInstance = integration.settings?.apiTokenInstance || integration.api_key
+      if (!idInstance || !apiTokenInstance) {
+        throw new Error('הגדרות Green API חסרות')
+      }
     }
   }
   
