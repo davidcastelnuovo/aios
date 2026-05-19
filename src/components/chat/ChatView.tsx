@@ -136,25 +136,45 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
   // Fetch active chat provider - use currentTenant for unknown contacts
   const tenantIdForProvider = contactType === "unknown" ? currentTenant?.id : contact?.tenant_id;
   
-  const { data: chatIntegration } = useQuery({
-    queryKey: ["chat-integration", tenantIdForProvider],
+  const { data: chatIntegrations } = useQuery({
+    queryKey: ["chat-integrations", tenantIdForProvider],
     queryFn: async () => {
-      if (!tenantIdForProvider) return null;
+      if (!tenantIdForProvider) return [];
       const { data, error } = await supabase
         .from("tenant_integrations")
-        .select("integration_type, user_id")
+        .select("id, integration_type, user_id")
         .eq("tenant_id", tenantIdForProvider)
         .eq("is_active", true)
-        .in("integration_type", ["manychat", "green_api"])
-        .single();
-      if (error) return null;
-      return data;
+        .in("integration_type", ["manychat", "green_api", "manus_wa"]);
+      if (error) return [];
+      return data || [];
     },
     enabled: !!tenantIdForProvider,
   });
 
-  const activeProvider = chatIntegration?.integration_type as "manychat" | "green_api" | null;
+  // Persist provider selection per tenant
+  const providerStorageKey = tenantIdForProvider ? `chat_provider_${tenantIdForProvider}` : null;
+  const storedProvider = (typeof window !== 'undefined' && providerStorageKey)
+    ? (localStorage.getItem(providerStorageKey) as "manychat" | "green_api" | "manus_wa" | null)
+    : null;
+  const availableProviders = (chatIntegrations || []).map(i => i.integration_type) as Array<"manychat" | "green_api" | "manus_wa">;
+  // Prefer stored, fall back to first available; if contact has a known provider, prefer that.
+  const preferredProvider = (contact?.active_chat_provider && availableProviders.includes(contact.active_chat_provider as any))
+    ? contact.active_chat_provider as any
+    : (storedProvider && availableProviders.includes(storedProvider) ? storedProvider : availableProviders[0] || null);
+
+  const [selectedProvider, setSelectedProvider] = useState<"manychat" | "green_api" | "manus_wa" | null>(null);
+  const activeProvider = (selectedProvider && availableProviders.includes(selectedProvider))
+    ? selectedProvider
+    : preferredProvider;
+  const chatIntegration = (chatIntegrations || []).find(i => i.integration_type === activeProvider) || null;
   const connectionUserId = chatIntegration?.user_id;
+
+  const switchProvider = (p: "manychat" | "green_api" | "manus_wa") => {
+    setSelectedProvider(p);
+    if (providerStorageKey) localStorage.setItem(providerStorageKey, p);
+  };
+
 
 
   // Mark messages as read mutation + remove "unread" tag
