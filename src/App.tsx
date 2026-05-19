@@ -56,6 +56,7 @@ const Chat = lazy(() => import("./pages/Chat"));
 const ManyChatSettings = lazy(() => import("./pages/ManyChatSettings"));
 const ChatIntegrations = lazy(() => import("./pages/ChatIntegrations"));
 const GreenAPISettings = lazy(() => import("./pages/GreenAPISettings"));
+const ManusWhatsAppSettings = lazy(() => import("./pages/ManusWhatsAppSettings"));
 const FacebookSettings = lazy(() => import("./pages/FacebookSettings"));
 const FacebookCallback = lazy(() => import("./pages/FacebookCallback"));
 const GoogleAdsSettings = lazy(() => import("./pages/GoogleAdsSettings"));
@@ -194,6 +195,7 @@ const App = () => (
                   <Route path="/t/:tenantSlug/chat-integrations" element={<ProtectedRoute requiredPermission="chat_integrations"><AppLayout><ChatIntegrations /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/manychat-settings" element={<ProtectedRoute requiredPermission="manychat_settings"><AppLayout><ManyChatSettings /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/green-api-settings" element={<ProtectedRoute requiredPermission="green_api_settings"><AppLayout><GreenAPISettings /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/manus-wa-settings" element={<ProtectedRoute requiredPermission="manus_wa_settings"><AppLayout><ManusWhatsAppSettings /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/telegram-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><TelegramSettings /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/integrations" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><Integrations /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/integrations/facebook" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><FacebookSettings /></AppLayout></ProtectedRoute>} />
