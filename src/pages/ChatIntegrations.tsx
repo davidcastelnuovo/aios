@@ -183,6 +183,20 @@ export default function ChatIntegrations() {
         return;
       }
 
+      // For Manus WA: user-specific connection
+      if (providerId === 'manus_wa') {
+        if (!userId) throw new Error('User not authenticated');
+        const integration = manusWaIntegration;
+        if (!integration) throw new Error('אין חיבור Manus WhatsApp. יש להגדיר חיבור תחילה.');
+        const { error } = await supabase
+          .from('tenant_integrations')
+          .update({ is_active: isActive })
+          .eq('id', integration.id)
+          .eq('user_id', userId);
+        if (error) throw error;
+        return;
+      }
+
       // For ManyChat: organization-level
       if (isActive) {
         // Deactivate all other organization-level providers
