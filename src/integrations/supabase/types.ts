@@ -8714,7 +8714,7 @@ export type Database = {
         | "telegram_message_received"
         | "account_stopped_spending"
         | "ad_account_billing_issue"
-      chat_provider: "manychat" | "green_api" | "internal"
+      chat_provider: "manychat" | "green_api" | "internal" | "manus_wa"
       client_mood_status:
         | "happy"
         | "wavering"
@@ -8955,7 +8955,7 @@ export const Constants = {
         "account_stopped_spending",
         "ad_account_billing_issue",
       ],
-      chat_provider: ["manychat", "green_api", "internal"],
+      chat_provider: ["manychat", "green_api", "internal", "manus_wa"],
       client_mood_status: [
         "happy",
         "wavering",

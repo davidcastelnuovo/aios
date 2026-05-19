@@ -1,0 +1,1 @@
+ALTER TYPE chat_provider ADD VALUE IF NOT EXISTS 'manus_wa';

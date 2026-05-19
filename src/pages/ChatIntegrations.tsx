@@ -69,6 +69,24 @@ export default function ChatIntegrations() {
     enabled: !!tenantId && !!userId,
   });
 
+  // Fetch Manus WhatsApp integration (user-specific)
+  const { data: manusWaIntegration } = useQuery({
+    queryKey: ['integration-manus-wa', tenantId, userId],
+    queryFn: async () => {
+      if (!userId) return null;
+      const { data, error } = await supabase
+        .from('tenant_integrations')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('user_id', userId)
+        .eq('integration_type', 'manus_wa')
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!tenantId && !!userId,
+  });
+
   // Fetch Green API integrations the user has permission to use (from other users)
   const { data: permittedGreenApiIntegrations = [] } = useQuery({
     queryKey: ['permitted-green-api-integrations', tenantId, userId],
@@ -161,6 +179,20 @@ export default function ChatIntegrations() {
           .eq('id', integration.id)
           .eq('user_id', userId);
 
+        if (error) throw error;
+        return;
+      }
+
+      // For Manus WA: user-specific connection
+      if (providerId === 'manus_wa') {
+        if (!userId) throw new Error('User not authenticated');
+        const integration = manusWaIntegration;
+        if (!integration) throw new Error('אין חיבור Manus WhatsApp. יש להגדיר חיבור תחילה.');
+        const { error } = await supabase
+          .from('tenant_integrations')
+          .update({ is_active: isActive })
+          .eq('id', integration.id)
+          .eq('user_id', userId);
         if (error) throw error;
         return;
       }
@@ -264,6 +296,23 @@ export default function ChatIntegrations() {
       status: greenApiIntegration?.is_active ? 'active' : 'inactive',
       hasApiKey: !!greenApiIntegration?.api_key,
       settingsPath: '/green-api-settings',
+      badge: 'חדש',
+    },
+    {
+      id: 'manus_wa',
+      name: 'Manus WhatsApp',
+      description: 'חיבור WhatsApp דרך ה-Gateway של Manus. לכל משתמש instance עצמאי.',
+      icon: Webhook,
+      color: 'from-emerald-500 to-teal-600',
+      features: [
+        'שליחת טקסט / תמונות / קבצים',
+        'קבלת הודעות נכנסות ו-ACKs',
+        'Webhook מאובטח בסוד פרטי',
+      ],
+      integration: manusWaIntegration,
+      status: manusWaIntegration?.is_active ? 'active' : 'inactive',
+      hasApiKey: !!manusWaIntegration?.api_key,
+      settingsPath: '/manus-wa-settings',
       badge: 'חדש',
     },
   ];

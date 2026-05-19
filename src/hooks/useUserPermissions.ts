@@ -51,6 +51,7 @@ export type ModulePermission =
   | "chat_integrations"
   | "manychat_settings"
   | "green_api_settings"
+  | "manus_wa_settings"
   | "accounting_integrations"
   // ── הגדרות מערכת ──────────────────────────────────────────────────────
   | "branding"
@@ -125,6 +126,7 @@ export function useUserPermissions() {
       "branding",
       "manychat_settings",
       "green_api_settings",
+      "manus_wa_settings",
       "chat_integrations",
       "accounting_integrations",
       "ai_support",

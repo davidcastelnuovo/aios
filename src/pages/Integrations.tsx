@@ -79,6 +79,23 @@ export default function Integrations() {
     enabled: !!currentTenantId,
   });
 
+  // Check Manus WhatsApp integration status
+  const { data: manusWaIntegration } = useQuery({
+    queryKey: ['manus-wa-integration', currentTenantId],
+    queryFn: async () => {
+      if (!currentTenantId) return null;
+      const { data } = await supabase
+        .from('tenant_integrations')
+        .select('*')
+        .eq('tenant_id', currentTenantId)
+        .eq('integration_type', 'manus_wa')
+        .eq('is_active', true)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!currentTenantId,
+  });
+
   // Check Facebook integration status
   const { data: facebookIntegration } = useQuery({
     queryKey: ['facebook-integration', currentTenantId],
@@ -403,6 +420,19 @@ export default function Integrations() {
       isConnected: !!greenApiIntegration,
       route: "green-api-settings",
       gradient: "bg-gradient-to-r from-green-600 to-green-800",
+    },
+    {
+      icon: <Webhook className="h-6 w-6" />,
+      title: "Manus WhatsApp Gateway",
+      description: "חיבור WhatsApp דרך ה-Gateway של Manus",
+      features: [
+        "שליחת טקסט, תמונות וקבצים",
+        "Webhook מאומת בסוד פרטי",
+        "מספר חיבורים (instances) לכל ארגון",
+      ],
+      isConnected: !!manusWaIntegration,
+      route: "manus-wa-settings",
+      gradient: "bg-gradient-to-r from-emerald-600 to-teal-700",
     },
     {
       icon: <MessageCircle className="h-6 w-6" />,
