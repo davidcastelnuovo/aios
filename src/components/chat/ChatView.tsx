@@ -605,7 +605,9 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
       }
 
       if (activeProvider !== 'green_api') {
-        toast.error("שליחת קבצים נתמכת רק ב-Green API");
+        toast.error(activeProvider === 'manus_wa'
+          ? "שליחת קבצים ב-Manus WhatsApp עדיין לא נתמכת. עברו ל-Green API לשליחת קבצים."
+          : "שליחת קבצים נתמכת רק ב-Green API");
         return;
       }
 
