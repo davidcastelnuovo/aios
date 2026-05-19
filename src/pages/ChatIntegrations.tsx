@@ -299,6 +299,8 @@ export default function ChatIntegrations() {
       status: manusWaIntegration?.is_active ? 'active' : 'inactive',
       hasApiKey: !!manusWaIntegration?.api_key,
       settingsPath: '/manus-wa-settings',
+      badge: 'חדש',
+    },
   ];
 
   return (
