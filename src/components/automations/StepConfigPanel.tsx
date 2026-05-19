@@ -1000,16 +1000,16 @@ function GreenAPIActionConfig({
   const [cursorPos, setCursorPos] = useState<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Fetch Green API integrations
+  // Fetch WhatsApp integrations (Green API + Manus WA)
   const { data: greenApiIntegrations, isLoading } = useQuery({
-    queryKey: ["green-api-integrations-for-flow", tenantId],
+    queryKey: ["wa-integrations-for-flow", tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
       const { data, error } = await supabase
         .from("tenant_integrations")
         .select("id, integration_type, settings, is_active, user_id")
         .eq("tenant_id", tenantId)
-        .eq("integration_type", "green_api")
+        .in("integration_type", ["green_api", "manus_wa"])
         .eq("is_active", true);
       if (error) throw error;
       return data || [];
@@ -1072,10 +1072,11 @@ function GreenAPIActionConfig({
               <SelectContent>
                 {greenApiIntegrations.map((integration) => {
                   const settings = integration.settings as Record<string, any> | null;
-                  const name = settings?.instance_name || settings?.connection_name || "Green API";
+                  const providerLabel = integration.integration_type === 'manus_wa' ? 'Manus WA' : 'Green API';
+                  const name = settings?.instance_name || settings?.connection_name || providerLabel;
                   return (
                     <SelectItem key={integration.id} value={integration.id}>
-                      {name}
+                      {name} · {providerLabel}
                     </SelectItem>
                   );
                 })}

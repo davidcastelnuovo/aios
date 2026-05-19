@@ -2610,13 +2610,14 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
     chatId = `972${last9}@c.us`
   }
   
-  // Find Green API integration - use specified ID or fall back to first active
+  // Find Green API / Manus WA integration - use specified ID or fall back to first active
   let idInstance: string
   let apiTokenInstance: string
   let integration: any = null
+  let providerType: 'green_api' | 'manus_wa' = 'green_api'
   
   if (green_api_mode === "external" && external_instance_id && external_api_token) {
-    // External mode: use manually provided credentials
+    // External mode: use manually provided credentials (Green API only)
     idInstance = external_instance_id
     apiTokenInstance = external_api_token
   } else {
@@ -2624,21 +2625,22 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
     if (integration_id) {
       const { data: specificIntegration, error } = await supabase
         .from('tenant_integrations')
-        .select('id, api_key, settings, user_id')
+        .select('id, api_key, settings, user_id, integration_type, instance_id')
         .eq('id', integration_id)
         .eq('is_active', true)
         .maybeSingle()
       
       if (!error && specificIntegration) {
         integration = specificIntegration
+        if (specificIntegration.integration_type === 'manus_wa') providerType = 'manus_wa'
       }
     }
     
-    // Fallback to first active integration
+    // Fallback to first active Green API integration
     if (!integration) {
       const { data: fallbackIntegration, error: integrationError } = await supabase
         .from('tenant_integrations')
-        .select('id, api_key, settings, user_id')
+        .select('id, api_key, settings, user_id, integration_type, instance_id')
         .eq('tenant_id', tenantId)
         .eq('integration_type', 'green_api')
         .eq('is_active', true)
@@ -2646,17 +2648,24 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
         .maybeSingle()
       
       if (integrationError || !fallbackIntegration) {
-        throw new Error('לא נמצא חיבור Green API פעיל')
+        throw new Error('לא נמצא חיבור WhatsApp פעיל')
       }
       integration = fallbackIntegration
     }
     
-    // Support both naming conventions
-    idInstance = integration.settings?.idInstance || integration.settings?.instance_id || integration.instance_id
-    apiTokenInstance = integration.settings?.apiTokenInstance || integration.api_key
-    
-    if (!idInstance || !apiTokenInstance) {
-      throw new Error('הגדרות Green API חסרות')
+    if (providerType === 'manus_wa') {
+      idInstance = integration.settings?.instance_id || integration.instance_id
+      apiTokenInstance = integration.api_key
+      if (!idInstance || !apiTokenInstance) {
+        throw new Error('הגדרות Manus WhatsApp חסרות')
+      }
+    } else {
+      // Support both naming conventions
+      idInstance = integration.settings?.idInstance || integration.settings?.instance_id || integration.instance_id
+      apiTokenInstance = integration.settings?.apiTokenInstance || integration.api_key
+      if (!idInstance || !apiTokenInstance) {
+        throw new Error('הגדרות Green API חסרות')
+      }
     }
   }
   
@@ -2675,52 +2684,67 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
     message = `${message}\n\n${resolvedLink}`
   }
   
-  // Send message via Green API
-  const greenApiUrl = `https://api.green-api.com/waInstance${idInstance}/sendMessage/${apiTokenInstance}`
-  
-  const sendResponse = await fetch(greenApiUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chatId,
-      message,
-      linkPreview: config.media_type === 'link',
-    }),
-  })
-  
-  const sendResult = await sendResponse.json()
-  
-  if (!sendResponse.ok) {
-    throw new Error(`שגיאה בשליחת הודעה: ${JSON.stringify(sendResult)}`)
-  }
-
-  // Handle media URL if configured
+  // Send message via Green API OR Manus WhatsApp
+  let sendResult: any
   let mediaResult = null
   const mediaType = config.media_type
   const mediaUrl = config.media_url
 
-  if (mediaUrl && mediaType === 'file') {
-    // Send file/video via sendFileByUrl
-    const resolvedMediaUrl = replaceTemplateVariables(mediaUrl, {
-      ...data,
-      ...contactRecord,
-    }, tenantSlug)
+  if (providerType === 'manus_wa') {
+    if (chatId.includes('@g.us')) {
+      throw new Error('Manus WhatsApp לא תומך בשליחה לקבוצות')
+    }
+    const toDigits = chatId.replace(/[^0-9]/g, '')
+    const manusBase = 'https://whatsappgw-pzpyrrww.manus.space'
+    const sendResponse = await fetch(`${manusBase}/api/v1/instances/${idInstance}/send/text`, {
+      method: 'POST',
+      headers: { 'X-Api-Key': apiTokenInstance, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: toDigits, body: message }),
+    })
+    sendResult = await sendResponse.json().catch(() => ({}))
+    if (!sendResponse.ok || sendResult?.success === false) {
+      throw new Error(`שגיאה בשליחת הודעה (Manus): ${JSON.stringify(sendResult)}`)
+    }
 
-    const fileName = config.media_filename || resolvedMediaUrl.split('/').pop()?.split('?')[0] || 'file'
-    const fileApiUrl = `https://api.green-api.com/waInstance${idInstance}/sendFileByUrl/${apiTokenInstance}`
-
-    const fileResponse = await fetch(fileApiUrl, {
+    if (mediaUrl && (mediaType === 'file' || mediaType === 'image')) {
+      const resolvedMediaUrl = replaceTemplateVariables(mediaUrl, { ...data, ...contactRecord }, tenantSlug)
+      const isImage = mediaType === 'image'
+      const endpoint = isImage ? 'send/image' : 'send/file'
+      const payload: Record<string, unknown> = { to: toDigits, caption: message }
+      if (isImage) payload.imageUrl = resolvedMediaUrl
+      else { payload.fileUrl = resolvedMediaUrl; payload.mimeType = config.media_mime_type || 'application/octet-stream'; payload.filename = config.media_filename || resolvedMediaUrl.split('/').pop()?.split('?')[0] || 'file' }
+      const mr = await fetch(`${manusBase}/api/v1/instances/${idInstance}/${endpoint}`, {
+        method: 'POST',
+        headers: { 'X-Api-Key': apiTokenInstance, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      mediaResult = await mr.json().catch(() => ({}))
+    }
+  } else {
+    const greenApiUrl = `https://api.green-api.com/waInstance${idInstance}/sendMessage/${apiTokenInstance}`
+    const sendResponse = await fetch(greenApiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chatId,
-        urlFile: resolvedMediaUrl,
-        fileName,
-        caption: message,
-      }),
+      body: JSON.stringify({ chatId, message, linkPreview: config.media_type === 'link' }),
     })
-    mediaResult = await fileResponse.json()
+    sendResult = await sendResponse.json()
+    if (!sendResponse.ok) {
+      throw new Error(`שגיאה בשליחת הודעה: ${JSON.stringify(sendResult)}`)
+    }
+
+    if (mediaUrl && mediaType === 'file') {
+      const resolvedMediaUrl = replaceTemplateVariables(mediaUrl, { ...data, ...contactRecord }, tenantSlug)
+      const fileName = config.media_filename || resolvedMediaUrl.split('/').pop()?.split('?')[0] || 'file'
+      const fileApiUrl = `https://api.green-api.com/waInstance${idInstance}/sendFileByUrl/${apiTokenInstance}`
+      const fileResponse = await fetch(fileApiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatId, urlFile: resolvedMediaUrl, fileName, caption: message }),
+      })
+      mediaResult = await fileResponse.json()
+    }
   }
+
   
   return {
     success: true,
