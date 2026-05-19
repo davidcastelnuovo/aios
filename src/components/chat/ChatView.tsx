@@ -805,8 +805,30 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
                       )}
                     </div>
                   )}
+                  {activeProvider === 'manus_wa' && (
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground mr-2">
+                      <Badge variant="outline" className="h-5 text-xs bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">Manus WA</Badge>
+                      {contact.phone && <span className="font-mono">{contact.phone}</span>}
+                    </div>
+                  )}
+                  {availableProviders.length > 1 && (
+                    <div className="flex items-center gap-1 mr-2">
+                      {availableProviders.map(p => (
+                        <Button
+                          key={p}
+                          size="sm"
+                          variant={activeProvider === p ? "default" : "outline"}
+                          className="h-6 text-[10px] px-2"
+                          onClick={() => switchProvider(p)}
+                        >
+                          {p === 'green_api' ? 'Green' : p === 'manus_wa' ? 'Manus' : 'ManyChat'}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
+
 
               {/* Provider Controls - full for unknown */}
               {!activeProvider && contactType !== 'unknown' && (
