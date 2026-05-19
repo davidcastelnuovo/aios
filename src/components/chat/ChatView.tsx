@@ -562,11 +562,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
         const { error } = await supabase.functions.invoke("send-green-api-message", { body });
         if (error) throw error;
       } else if (activeProvider === 'manus_wa') {
-        if (contactType === 'group') {
-          toast.error("קבוצות לא נתמכות ב-Manus WhatsApp");
-          return;
-        }
-        if (!contact.phone && contactType !== 'unknown') {
+        if (!contact.phone && contactType !== 'unknown' && contactType !== 'group') {
           toast.error("חסר מספר טלפון. אנא הוסף באיש הקשר.");
           return;
         }
@@ -577,6 +573,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
         };
         if (contactType === "client") body.clientId = contactId;
         else if (contactType === "lead") body.leadId = contactId;
+        else if (contactType === "group") body.groupId = contactId;
         else if (contactType === "unknown") body.tenantId = tenantId;
 
         const { error } = await supabase.functions.invoke("send-manus-wa-message", { body });
