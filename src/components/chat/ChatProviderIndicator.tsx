@@ -35,6 +35,19 @@ export function ChatProviderIndicator({ provider, size = "sm" }: ChatProviderInd
     );
   }
 
+  if (provider === "manus_wa") {
+    return (
+      <Badge
+        variant="outline"
+        className={`bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 ${isSmall ? "text-xs px-1.5 py-0.5" : ""}`}
+      >
+        <Phone className={isSmall ? "h-2.5 w-2.5" : "h-3 w-3"} />
+        {!isSmall && <span className="mr-1">Manus WA</span>}
+      </Badge>
+    );
+  }
+
+
   return (
     <Badge 
       variant="outline" 
