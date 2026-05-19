@@ -99,13 +99,14 @@ export function ConvertContactDialog({
         .select("integration_type")
         .eq("tenant_id", tenantId)
         .eq("is_active", true)
-        .in("integration_type", ["manychat", "green_api"])
-        .single();
+        .in("integration_type", ["manychat", "green_api", "manus_wa"])
+        .limit(1)
+        .maybeSingle();
       if (error) {
         console.error("Error fetching active provider:", error);
         return null;
       }
-      return data?.integration_type as "manychat" | "green_api" | null;
+      return data?.integration_type as "manychat" | "green_api" | "manus_wa" | null;
     },
     enabled: !!tenantId && open,
   });
