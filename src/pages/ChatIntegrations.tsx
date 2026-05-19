@@ -69,6 +69,24 @@ export default function ChatIntegrations() {
     enabled: !!tenantId && !!userId,
   });
 
+  // Fetch Manus WhatsApp integration (user-specific)
+  const { data: manusWaIntegration } = useQuery({
+    queryKey: ['integration-manus-wa', tenantId, userId],
+    queryFn: async () => {
+      if (!userId) return null;
+      const { data, error } = await supabase
+        .from('tenant_integrations')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('user_id', userId)
+        .eq('integration_type', 'manus_wa')
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!tenantId && !!userId,
+  });
+
   // Fetch Green API integrations the user has permission to use (from other users)
   const { data: permittedGreenApiIntegrations = [] } = useQuery({
     queryKey: ['permitted-green-api-integrations', tenantId, userId],
@@ -266,6 +284,21 @@ export default function ChatIntegrations() {
       settingsPath: '/green-api-settings',
       badge: 'חדש',
     },
+    {
+      id: 'manus_wa',
+      name: 'Manus WhatsApp',
+      description: 'חיבור WhatsApp דרך ה-Gateway של Manus. לכל משתמש instance עצמאי.',
+      icon: Webhook,
+      color: 'from-emerald-500 to-teal-600',
+      features: [
+        'שליחת טקסט / תמונות / קבצים',
+        'קבלת הודעות נכנסות ו-ACKs',
+        'Webhook מאובטח בסוד פרטי',
+      ],
+      integration: manusWaIntegration,
+      status: manusWaIntegration?.is_active ? 'active' : 'inactive',
+      hasApiKey: !!manusWaIntegration?.api_key,
+      settingsPath: '/manus-wa-settings',
   ];
 
   return (
