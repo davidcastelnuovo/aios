@@ -561,7 +561,28 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
 
         const { error } = await supabase.functions.invoke("send-green-api-message", { body });
         if (error) throw error;
+      } else if (activeProvider === 'manus_wa') {
+        if (contactType === 'group') {
+          toast.error("קבוצות לא נתמכות ב-Manus WhatsApp");
+          return;
+        }
+        if (!contact.phone && contactType !== 'unknown') {
+          toast.error("חסר מספר טלפון. אנא הוסף באיש הקשר.");
+          return;
+        }
+        const body: any = {
+          message,
+          phoneNumber: senderPhone || contact.phone,
+          integrationId: chatIntegration?.id,
+        };
+        if (contactType === "client") body.clientId = contactId;
+        else if (contactType === "lead") body.leadId = contactId;
+        else if (contactType === "unknown") body.tenantId = tenantId;
+
+        const { error } = await supabase.functions.invoke("send-manus-wa-message", { body });
+        if (error) throw error;
       }
+
 
       queryClient.invalidateQueries({ queryKey: ["chat-messages", contactId] });
       toast.success("ההודעה נשלחה בהצלחה");
