@@ -22,6 +22,8 @@ interface AgencyDashboardContentProps {
   agencyId: string;
   agencyName: string;
   dateFilter: string;
+  customFrom?: string;
+  customTo?: string;
 }
 
 interface CampaignRecord {
