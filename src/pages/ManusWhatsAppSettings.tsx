@@ -320,6 +320,25 @@ export default function ManusWhatsAppSettings() {
                 בדשבורד של Manus, בטאב Webhook: הזן את ה-URL בשדה Webhook URL ואת ה-Secret בשדה Webhook Secret. סמן את האירועים <strong>message</strong> ו-<strong>message_ack</strong>.
               </AlertDescription>
             </Alert>
+
+            <Alert className="border-amber-500/30 bg-amber-500/5">
+              <AlertCircle className="h-4 w-4 text-amber-600" />
+              <AlertDescription className="space-y-2">
+                <div>
+                  <strong>לא רואה הודעות נכנסות?</strong> ייתכן שהסוד פה שונה מזה שמוגדר ב-Manus.
+                  לחץ "סנכרן סוד מ-Manus" — הסוד יילכד אוטומטית מה-webhook הבא שיגיע.
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => resyncSecretMutation.mutate()}
+                  disabled={resyncSecretMutation.isPending || !integration}
+                >
+                  <RefreshCw className={`h-4 w-4 ml-2 ${resyncSecretMutation.isPending ? "animate-spin" : ""}`} />
+                  סנכרן סוד מ-Manus
+                </Button>
+              </AlertDescription>
+            </Alert>
           </CardContent>
         </Card>
       </div>
