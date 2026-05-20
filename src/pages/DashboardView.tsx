@@ -132,6 +132,11 @@ export default function DashboardView() {
   const { buildPath } = useTenantPath();
   const { currentTenantId } = useTenant();
   const [dateFilter, setDateFilter] = useState('last_7_days');
+  const [customDateRange, setCustomDateRange] = useState<{ from?: Date; to?: Date }>({});
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const customFromStr = customDateRange.from ? format(customDateRange.from, 'yyyy-MM-dd') : '';
+  const customToStr = customDateRange.to ? format(customDateRange.to, 'yyyy-MM-dd') : '';
+  const isCustomReady = dateFilter !== 'custom' || (!!customFromStr && !!customToStr);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all');
   const didSetSeoDefaultRef = useRef(false);
