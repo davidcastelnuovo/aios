@@ -230,7 +230,7 @@ export default function DashboardView() {
 
   // Fetch records from all tables
   const { data: allRecords = [], isLoading: recordsLoading, refetch: refetchRecords } = useQuery({
-    queryKey: ['crm-records-dashboard', tables.map((t: any) => t.id).join(','), dateFilter],
+    queryKey: ['crm-records-dashboard', tables.map((t: any) => t.id).join(','), dateFilter, customFromStr, customToStr],
     queryFn: async () => {
       if (tables.length === 0) return [];
       const { data: { session } } = await supabase.auth.getSession();
@@ -248,6 +248,10 @@ export default function DashboardView() {
 
       const recordsPromises = tablesToFetch.map(async (table: any) => {
         const params = new URLSearchParams({ table_id: table.id, date_filter: dateFilter });
+        if (dateFilter === 'custom' && customFromStr && customToStr) {
+          params.set('date_from', customFromStr);
+          params.set('date_to', customToStr);
+        }
         const response = await supabase.functions.invoke(`crm-records?${params.toString()}`, { method: 'GET' });
         if (response.error) {
           console.error('Error fetching records for table', table.id, response.error);
@@ -267,7 +271,7 @@ export default function DashboardView() {
       const allResults = await Promise.all(recordsPromises);
       return allResults.flat();
     },
-    enabled: tables.length > 0,
+    enabled: tables.length > 0 && isCustomReady,
   });
 
   // Check if client has SEO (Ahrefs) reports
