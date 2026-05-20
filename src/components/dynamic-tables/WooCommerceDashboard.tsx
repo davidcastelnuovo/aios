@@ -14,6 +14,8 @@ interface Props {
   clientId: string;
   tenantId: string;
   dateFilter: string;
+  customFrom?: string;
+  customTo?: string;
 }
 
 const formatCurrency = (n: number) =>
