@@ -388,7 +388,7 @@ export default function DashboardView() {
   }, [dateFilter, customDateRange.from, customDateRange.to]);
 
   const { data: wooSummary = { revenue: 0, orders: 0 } } = useQuery({
-    queryKey: ['woo-summary-for-totals', dashboard?.client_id, currentTenantId, dateFilter],
+    queryKey: ['woo-summary-for-totals', dashboard?.client_id, currentTenantId, dateFilter, customFromStr, customToStr],
     queryFn: async () => {
       if (!dashboard?.client_id || !currentTenantId) return { revenue: 0, orders: 0 };
       const { data: sites } = await (supabase
