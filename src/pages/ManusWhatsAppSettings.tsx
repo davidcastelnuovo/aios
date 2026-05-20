@@ -99,10 +99,50 @@ export default function ManusWhatsAppSettings() {
       }
       setWebhookSecret(secret);
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast({ title: "נשמר בהצלחה", description: "פרטי החיבור עודכנו" });
       queryClient.invalidateQueries({ queryKey: ["manus-wa-integration", tenantId, userId] });
       queryClient.invalidateQueries({ queryKey: ["integration-manus-wa", tenantId, userId] });
+      // Auto-fetch status so phone_number gets persisted — needed for outbound-from-phone detection.
+      try {
+        const { data: integ } = await supabase
+          .from("tenant_integrations")
+          .select("id")
+          .eq("tenant_id", tenantId!)
+          .eq("user_id", userId!)
+          .eq("integration_type", "manus_wa")
+          .maybeSingle();
+        if (integ?.id) {
+          const { data } = await supabase.functions.invoke("manus-wa-status", {
+            body: { integrationId: integ.id },
+          });
+          if (data?.success) {
+            setStatusInfo({ status: data.status, phoneNumber: data.phoneNumber });
+          }
+        }
+      } catch { /* non-fatal */ }
+    },
+    onError: (e: Error) => toast({ variant: "destructive", title: "שגיאה", description: e.message }),
+  });
+
+  const resyncSecretMutation = useMutation({
+    mutationFn: async () => {
+      if (!integration?.id) throw new Error("שמור את החיבור תחילה");
+      const cur = (integration.settings as any) || {};
+      const merged = { ...cur, webhook_secret: "" };
+      const { error } = await supabase
+        .from("tenant_integrations")
+        .update({ settings: merged })
+        .eq("id", integration.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setWebhookSecret("");
+      toast({
+        title: "ממתין לסנכרון",
+        description: "שלח הודעת בדיקה ב-WhatsApp — הסוד יילכד אוטומטית מה-webhook הבא",
+      });
+      queryClient.invalidateQueries({ queryKey: ["manus-wa-integration", tenantId, userId] });
     },
     onError: (e: Error) => toast({ variant: "destructive", title: "שגיאה", description: e.message }),
   });
