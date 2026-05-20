@@ -345,8 +345,23 @@ export default function DashboardView() {
         start = sun; end = sat;
         break;
       }
+      case 'last_14_days': start = new Date(Date.UTC(y, m, d - 14, 0, 0, 0, 0)); break;
       case 'last_30_days': start = new Date(Date.UTC(y, m, d - 30, 0, 0, 0, 0)); break;
       case 'last_70_days': start = new Date(Date.UTC(y, m, d - 70, 0, 0, 0, 0)); break;
+      case 'this_week': {
+        // Week starts Sunday (locale: he)
+        const dow = now.getUTCDay(); // 0=Sun..6=Sat
+        start = new Date(Date.UTC(y, m, d - dow, 0, 0, 0, 0));
+        end = new Date(Date.UTC(y, m, d, 23, 59, 59, 999));
+        break;
+      }
+      case 'last_week': {
+        const dow = now.getUTCDay();
+        const lastSun = new Date(Date.UTC(y, m, d - dow - 7, 0, 0, 0, 0));
+        const lastSat = new Date(Date.UTC(y, m, d - dow - 1, 23, 59, 59, 999));
+        start = lastSun; end = lastSat;
+        break;
+      }
       case 'this_month':
         start = new Date(Date.UTC(y, m, 1, 0, 0, 0, 0));
         end = new Date(Date.UTC(y, m, d, 23, 59, 59, 999));
@@ -355,10 +370,22 @@ export default function DashboardView() {
         start = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0, 0));
         end = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999));
         break;
+      case 'custom':
+        if (customDateRange.from && customDateRange.to) {
+          start = new Date(Date.UTC(
+            customDateRange.from.getFullYear(), customDateRange.from.getMonth(), customDateRange.from.getDate(),
+            0, 0, 0, 0
+          ));
+          end = new Date(Date.UTC(
+            customDateRange.to.getFullYear(), customDateRange.to.getMonth(), customDateRange.to.getDate(),
+            23, 59, 59, 999
+          ));
+        }
+        break;
       default: start = new Date(Date.UTC(y, m, d - 7, 0, 0, 0, 0));
     }
     return { start: start.toISOString(), end: end.toISOString() };
-  }, [dateFilter]);
+  }, [dateFilter, customDateRange.from, customDateRange.to]);
 
   const { data: wooSummary = { revenue: 0, orders: 0 } } = useQuery({
     queryKey: ['woo-summary-for-totals', dashboard?.client_id, currentTenantId, dateFilter],
