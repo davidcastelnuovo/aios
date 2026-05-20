@@ -99,10 +99,50 @@ export default function ManusWhatsAppSettings() {
       }
       setWebhookSecret(secret);
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast({ title: "נשמר בהצלחה", description: "פרטי החיבור עודכנו" });
       queryClient.invalidateQueries({ queryKey: ["manus-wa-integration", tenantId, userId] });
       queryClient.invalidateQueries({ queryKey: ["integration-manus-wa", tenantId, userId] });
+      // Auto-fetch status so phone_number gets persisted — needed for outbound-from-phone detection.
+      try {
+        const { data: integ } = await supabase
+          .from("tenant_integrations")
+          .select("id")
+          .eq("tenant_id", tenantId!)
+          .eq("user_id", userId!)
+          .eq("integration_type", "manus_wa")
+          .maybeSingle();
+        if (integ?.id) {
+          const { data } = await supabase.functions.invoke("manus-wa-status", {
+            body: { integrationId: integ.id },
+          });
+          if (data?.success) {
+            setStatusInfo({ status: data.status, phoneNumber: data.phoneNumber });
+          }
+        }
+      } catch { /* non-fatal */ }
+    },
+    onError: (e: Error) => toast({ variant: "destructive", title: "שגיאה", description: e.message }),
+  });
+
+  const resyncSecretMutation = useMutation({
+    mutationFn: async () => {
+      if (!integration?.id) throw new Error("שמור את החיבור תחילה");
+      const cur = (integration.settings as any) || {};
+      const merged = { ...cur, webhook_secret: "" };
+      const { error } = await supabase
+        .from("tenant_integrations")
+        .update({ settings: merged })
+        .eq("id", integration.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setWebhookSecret("");
+      toast({
+        title: "ממתין לסנכרון",
+        description: "שלח הודעת בדיקה ב-WhatsApp — הסוד יילכד אוטומטית מה-webhook הבא",
+      });
+      queryClient.invalidateQueries({ queryKey: ["manus-wa-integration", tenantId, userId] });
     },
     onError: (e: Error) => toast({ variant: "destructive", title: "שגיאה", description: e.message }),
   });
@@ -278,6 +318,25 @@ export default function ManusWhatsAppSettings() {
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
                 בדשבורד של Manus, בטאב Webhook: הזן את ה-URL בשדה Webhook URL ואת ה-Secret בשדה Webhook Secret. סמן את האירועים <strong>message</strong> ו-<strong>message_ack</strong>.
+              </AlertDescription>
+            </Alert>
+
+            <Alert className="border-amber-500/30 bg-amber-500/5">
+              <AlertCircle className="h-4 w-4 text-amber-600" />
+              <AlertDescription className="space-y-2">
+                <div>
+                  <strong>לא רואה הודעות נכנסות?</strong> ייתכן שהסוד פה שונה מזה שמוגדר ב-Manus.
+                  לחץ "סנכרן סוד מ-Manus" — הסוד יילכד אוטומטית מה-webhook הבא שיגיע.
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => resyncSecretMutation.mutate()}
+                  disabled={resyncSecretMutation.isPending || !integration}
+                >
+                  <RefreshCw className={`h-4 w-4 ml-2 ${resyncSecretMutation.isPending ? "animate-spin" : ""}`} />
+                  סנכרן סוד מ-Manus
+                </Button>
               </AlertDescription>
             </Alert>
           </CardContent>

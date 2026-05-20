@@ -1,44 +1,35 @@
-## Goal
-Make the Manus WhatsApp Gateway a fully usable chat provider in the app — sending from the chat UI, badges on messages, and selectable in automations — so it can replace or run alongside Green API.
+## הבעיה
 
-## 1. ChatView send routing (`src/components/chat/ChatView.tsx`)
-- Extend the active-integration query to also include `manus_wa` in the `.in("integration_type", [...])` list.
-- Broaden `activeProvider` type to include `'manus_wa'`.
-- Add a third branch in the text-send handler that invokes `send-manus-wa-message` with `{ clientId, leadId, message, phoneNumber, integrationId }`.
-- Add a file/image branch that invokes `send-manus-wa-file` (mirrors the existing `send-green-api-file` branch).
-- Update the `active_chat_provider` write so converting an unknown contact while Manus is active sets it to `'manus_wa'`.
-- Show Manus controls (or hide Green-API-only controls) when `activeProvider === 'manus_wa'`.
+הלוגים מ-`manus-wa-webhook` מראים בבירור:
+```
+Webhook secret mismatch for instance YwIn7GY3Ul3OAxXG
+```
 
-## 2. Provider badge (`src/components/chat/ChatProviderIndicator.tsx`)
-- Add `'manus_wa'` to the `provider` union.
-- Add a Manus badge variant (distinct color, "Manus WA" label, Phone icon) so inbound/outbound rows are visually distinguishable from Green API.
+ז"א — Manus **כן** שולח webhooks (גם כשפליקס שלח, גם כשאתה שלחת מהטלפון), אבל ה-webhook שלנו דוחה את כולם עם 401 כי הסוד לא תואם. בנוסף, גם אם זה היה עובר, השדה `settings.phone_number` ריק → ההודעות שאתה שולח מהטלפון היו נרשמות בכיוון הפוך (inbound במקום outbound).
 
-## 3. Multi-provider selection
-When both Green API and Manus are active in the same tenant we need a deterministic pick:
-- In ChatView's integration query, fetch all active WhatsApp-class integrations, not just the first.
-- Add a small provider toggle in the chat header (segmented control: Green API / Manus WA) persisted in `localStorage` per tenant. Default = the only active one; if both active, default to last used.
-- Pass the chosen `integrationId` into the invoke calls so the edge function uses the right credentials.
+לכן: שום הודעה — לא נכנסת מלקוחות, ולא יוצאת מהטלפון — לא נשמרת ב-DB ולא מופיעה בצ'אט.
 
-## 4. Convert-unknown-contact (`src/components/chat/ConvertContactDialog.tsx`)
-- Add `'manus_wa'` to the `integration_type` `.in([...])` filter and to the union type so conversion works when Manus is the only provider.
-- Verify the `convert-unknown-contact` edge function tolerates `manus_wa` as `active_chat_provider`; if it hard-codes providers, add the case.
+## מה אעשה (3 תיקונים)
 
-## 5. Automations — WhatsApp send step (`src/components/automations/StepConfigPanel.tsx`)
-- Where the panel filters `integration_type = 'green_api'` to populate the connection picker, change to `.in('integration_type', ['green_api','manus_wa'])` and show provider next to each option label.
-- Add a `whatsapp_provider` field on the step config (`green_api` | `manus_wa`), defaulted from the selected integration.
-- Update the automation runner (search for where `send-green-api-message` is invoked from automations — likely `supabase/functions/run-automation*` or similar) to branch on `whatsapp_provider` and call `send-manus-wa-message` / `send-manus-wa-file` accordingly. Pass `senderUserId` (service-role path is already supported).
-- Mirror the same change in `AddAutomationForm.tsx` / `EditAutomationDialog.tsx` if they enumerate providers.
+### 1. תיקון אימות ה-Webhook Secret
+- ב-`manus-wa-webhook`: לקבל את הסוד מאחד מכמה headers אפשריים ש-Manus עשוי לשלוח: `x-wa-gateway-secret`, `x-webhook-secret`, `x-manus-secret`, או query-param `?secret=`. אם אחד מהם תואם — לקבל.
+- **Auto-heal:** אם `settings.webhook_secret` ריק במסד אבל headerSecret קיים — לשמור את הסוד שהתקבל ולקבל את ההודעה (one-time bootstrap).
+- כפתור חדש ב-`ManusWhatsAppSettings`: "סנכרן סוד מ-Manus" — מאפס את `webhook_secret` במסד וממתין ל-webhook הראשון כדי לתפוס את הסוד שמוגדר בפועל ב-Manus.
 
-## 6. Inbound message provider tagging
-- Confirm `manus-wa-webhook` already stamps `provider='manus_wa'` on inserted rows (it does per implementation summary). No change needed beyond verifying the badge renders.
+### 2. אכיפת שמירת `phone_number`
+- ב-`ManusWhatsAppSettings`: לאחר `saveMutation` מוצלח, להריץ אוטומטית `manus-wa-status` כדי למשוך את ה-`phoneNumber` ולעדכן את ה-settings.
+- ב-`manus-wa-webhook`: גם אם `myPhone` ריק, לזהות outbound לפי שדות אלטרנטיביים בפיילוד של Manus (`fromMe: true`, או `direction: 'outgoing'`) במקום להסתמך רק על השוואת מספרים.
 
-## 7. QA checklist
-- Disable Green API, keep only Manus active → chat send works, badge shows "Manus WA", inbound webhook lands in the right conversation.
-- Both active → toggle in chat header switches provider; automations pick the configured one.
-- Convert unknown contact dialog opens and converts under Manus-only mode.
-- Automation "Send WhatsApp" step with `whatsapp_provider=manus_wa` delivers via Manus.
+### 3. שיפור עמידות + לוגים
+- להדפיס ב-webhook את ה-headers שמתקבלים בפעם הראשונה (פעם אחת לכל instance) — כדי שאוכל לאתר את שם ה-header הנכון אם Manus ישנו אותו.
+- להחזיר 200 (במקום 401) על mismatch אחרי שמירת רשומת diagnostic, כדי ש-Manus לא יפסיק לנסות.
+- להוסיף Alert ב-UI: "אם אתה לא רואה הודעות נכנסות — לחץ 'סנכרן סוד'".
 
-## Out of scope
-- No DB schema changes (enum already has `manus_wa`).
-- No new edge functions (existing `send-manus-wa-message`, `send-manus-wa-file`, `manus-wa-webhook` are reused).
-- Does not touch GreenAPISettings or the Manus settings page.
+## קבצים שישתנו
+
+- `supabase/functions/manus-wa-webhook/index.ts` — multi-header secret + auto-heal + fromMe detection + diagnostic logging
+- `src/pages/ManusWhatsAppSettings.tsx` — auto-status אחרי שמירה + כפתור "סנכרן סוד" + Alert הסבר
+
+## אחרי הדפלוי
+
+תלחץ בדף ההגדרות "סנכרן סוד" → תלך ל-Manus → תוודא שה-Webhook Secret שם זהה לזה שמופיע אצלנו (או תשמור ב-Manus סוד חדש ותחזור ללחוץ "בדוק סטטוס"). ההודעה הבאה מפליקס תיכנס.
