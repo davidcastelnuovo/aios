@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -29,7 +31,9 @@ import {
   ClipboardList,
   UserPlus,
   ArrowLeftRight,
+  Play,
 } from "lucide-react";
+
 import { cn } from "@/lib/utils";
 
 interface ExecutionHistoryPanelProps {
@@ -73,6 +77,7 @@ export function ExecutionHistoryPanel({
   automationId,
 }: ExecutionHistoryPanelProps) {
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+  const [rerunningId, setRerunningId] = useState<string | null>(null);
 
   const { data: logs = [], isLoading, refetch } = useQuery({
     queryKey: ["automation-logs-flow", automationId],
@@ -92,6 +97,32 @@ export function ExecutionHistoryPanel({
   const toggleLog = (logId: string) => {
     setExpandedLogId((prev) => (prev === logId ? null : logId));
   };
+
+  const handleRerun = async (log: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!log.payload) {
+      toast({ title: "אין נתונים לריצה חוזרת", variant: "destructive" });
+      return;
+    }
+    setRerunningId(log.id);
+    try {
+      const { data, error } = await supabase.functions.invoke("trigger-automation", {
+        body: {
+          automationId,
+          payload: log.payload,
+          _rerun: true,
+        },
+      });
+      if (error) throw error;
+      toast({ title: "הריצה הופעלה מחדש", description: "בדוק את ההיסטוריה לתוצאה" });
+      setTimeout(() => refetch(), 1500);
+    } catch (err: any) {
+      toast({ title: "שגיאה בהרצה מחדש", description: err.message, variant: "destructive" });
+    } finally {
+      setRerunningId(null);
+    }
+  };
+
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
@@ -132,49 +163,67 @@ export function ExecutionHistoryPanel({
 
                 return (
                   <Collapsible key={log.id} open={isExpanded} onOpenChange={() => toggleLog(log.id)}>
-                    <CollapsibleTrigger asChild>
-                      <button className="w-full text-right p-3 hover:bg-muted/50 transition-colors">
-                        <div className="flex items-center gap-2">
-                          {log.success ? (
-                            <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
-                          ) : (
-                            <XCircle className="h-4 w-4 text-destructive shrink-0" />
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium">
-                                {triggeredAt.toLocaleDateString("he-IL")}
-                              </span>
-                              <span className="text-xs text-muted-foreground">
-                                {triggeredAt.toLocaleTimeString("he-IL")}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              {log.execution_time_ms && (
-                                <span className="text-xs text-muted-foreground">
-                                  {log.execution_time_ms}ms
+                    <div className="flex items-stretch">
+                      <CollapsibleTrigger asChild>
+                        <button className="flex-1 text-right p-3 hover:bg-muted/50 transition-colors">
+                          <div className="flex items-center gap-2">
+                            {log.success ? (
+                              <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
+                            ) : (
+                              <XCircle className="h-4 w-4 text-destructive shrink-0" />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium">
+                                  {triggeredAt.toLocaleDateString("he-IL")}
                                 </span>
-                              )}
-                              {isFlow && flowSteps.length > 0 && (
                                 <span className="text-xs text-muted-foreground">
-                                  {flowSteps.filter((s: any) => s.success).length}/{flowSteps.length} שלבים
+                                  {triggeredAt.toLocaleTimeString("he-IL")}
                                 </span>
-                              )}
-                              {log.error_message && (
-                                <Badge variant="destructive" className="text-[10px] h-4">
-                                  שגיאה
-                                </Badge>
-                              )}
+                              </div>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                {log.execution_time_ms && (
+                                  <span className="text-xs text-muted-foreground">
+                                    {log.execution_time_ms}ms
+                                  </span>
+                                )}
+                                {isFlow && flowSteps.length > 0 && (
+                                  <span className="text-xs text-muted-foreground">
+                                    {flowSteps.filter((s: any) => s.success).length}/{flowSteps.length} שלבים
+                                  </span>
+                                )}
+                                {log.error_message && (
+                                  <Badge variant="destructive" className="text-[10px] h-4">
+                                    שגיאה
+                                  </Badge>
+                                )}
+                              </div>
                             </div>
+                            {isExpanded ? (
+                              <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                            ) : (
+                              <ChevronLeft className="h-4 w-4 text-muted-foreground shrink-0" />
+                            )}
                           </div>
-                          {isExpanded ? (
-                            <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
-                          ) : (
-                            <ChevronLeft className="h-4 w-4 text-muted-foreground shrink-0" />
-                          )}
-                        </div>
-                      </button>
-                    </CollapsibleTrigger>
+                        </button>
+                      </CollapsibleTrigger>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-auto w-9 shrink-0 rounded-none hover:bg-primary/10"
+                        disabled={rerunningId === log.id || !log.payload}
+                        onClick={(e) => handleRerun(log, e)}
+                        title="הרץ מחדש עם אותם נתונים"
+                      >
+                        {rerunningId === log.id ? (
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Play className="h-4 w-4 text-primary" />
+                        )}
+                      </Button>
+                    </div>
+
+
 
                     <CollapsibleContent>
                       <div className="px-3 pb-3 space-y-3">
