@@ -2,12 +2,18 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-wa-gateway-instance, x-wa-gateway-secret',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-wa-gateway-instance, x-wa-gateway-secret, x-webhook-secret, x-manus-secret, x-webhook-signature',
 };
 
 // Last 9 digits — matches existing lead/client matching policy
 function normalizePhone(p: string): string {
   return (p || '').replace(/\D/g, '').slice(-9);
+}
+
+function ok(body: Record<string, unknown>, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+  });
 }
 
 Deno.serve(async (req) => {
@@ -19,15 +25,25 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    const url = new URL(req.url);
     const payload = await req.json();
+
+    // Collect every possible secret source Manus may use
+    const headerSecret =
+      req.headers.get('x-wa-gateway-secret') ||
+      req.headers.get('x-webhook-secret') ||
+      req.headers.get('x-manus-secret') ||
+      req.headers.get('x-webhook-signature') ||
+      url.searchParams.get('secret') ||
+      (payload?.secret as string | undefined) ||
+      '';
+
     const headerInstanceId = req.headers.get('x-wa-gateway-instance') || '';
-    const headerSecret = req.headers.get('x-wa-gateway-secret') || '';
-    const instanceId = payload.instanceId || headerInstanceId;
+    const instanceId = payload.instanceId || headerInstanceId || url.searchParams.get('instanceId') || '';
 
     if (!instanceId) {
-      return new Response(JSON.stringify({ error: 'Missing instanceId' }), {
-        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      console.error('Missing instanceId. Headers:', JSON.stringify(Object.fromEntries(req.headers)));
+      return ok({ error: 'Missing instanceId' }, 400);
     }
 
     // Find integration by instance ID
@@ -43,18 +59,25 @@ Deno.serve(async (req) => {
     const integ = integrations?.[0];
     if (!integ) {
       console.error('No active manus_wa integration for instance', instanceId);
-      return new Response(JSON.stringify({ error: 'No active integration' }), {
-        status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      return ok({ error: 'No active integration' }, 404);
     }
 
     const settings = (integ.settings as any) || {};
-    const expectedSecret = settings.webhook_secret;
-    if (expectedSecret && expectedSecret !== headerSecret) {
-      console.error('Webhook secret mismatch for instance', instanceId);
-      return new Response(JSON.stringify({ error: 'Invalid secret' }), {
-        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+    const expectedSecret: string = settings.webhook_secret || '';
+
+    // Auto-heal: if DB has no secret yet, accept the first webhook secret we see and persist it.
+    if (!expectedSecret && headerSecret) {
+      const merged = { ...settings, webhook_secret: headerSecret };
+      await supabase.from('tenant_integrations').update({ settings: merged }).eq('id', integ.id);
+      console.log('Auto-healed webhook_secret for instance', instanceId);
+    } else if (expectedSecret && expectedSecret !== headerSecret) {
+      // Log diagnostic info so we can see exactly what Manus sends, then ACK 200 so Manus doesn't disable the webhook.
+      console.error(
+        'Webhook secret mismatch for instance', instanceId,
+        '— received headers:', JSON.stringify(Object.fromEntries(req.headers)),
+        'received secret:', headerSecret ? `${headerSecret.slice(0, 6)}…` : '(none)'
+      );
+      return ok({ received: true, ignored: 'secret_mismatch' }, 200);
     }
 
     const tenantId = integ.tenant_id;
@@ -65,13 +88,8 @@ Deno.serve(async (req) => {
     if (event === 'message_ack') {
       const messageId = payload.messageId;
       const ack = Number(payload.ack);
-      if (!messageId) {
-        return new Response(JSON.stringify({ received: true }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
-      }
+      if (!messageId) return ok({ received: true });
 
-      // Find existing message by raw_provider_data->messageId
       const { data: msg } = await supabase
         .from('chat_messages')
         .select('id, read_at')
@@ -88,35 +106,29 @@ Deno.serve(async (req) => {
         }
       }
 
-      return new Response(JSON.stringify({ received: true }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      return ok({ received: true });
     }
 
     // ===== Incoming message =====
-    if (event !== 'message') {
-      return new Response(JSON.stringify({ received: true, ignored: event }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
+    if (event !== 'message') return ok({ received: true, ignored: event });
 
     const fromRaw = String(payload.from || '');
     const toRaw = String(payload.to || '');
-    const isGroup = fromRaw.endsWith('@g.us');
+    const isGroup = fromRaw.endsWith('@g.us') || toRaw.endsWith('@g.us');
 
-    // Determine direction: if "from" matches my instance's own phone (settings.phone_number), it's outbound from WA app.
-    const myPhone = (settings.phone_number || '').toString();
-    const fromDigits = fromRaw.split('@')[0];
-    const isOutgoingFromPhone = myPhone && fromDigits === myPhone;
+    // Outbound detection: prefer explicit flags from Manus, then fall back to phone comparison
+    const myPhone = (settings.phone_number || '').toString().replace(/\D/g, '');
+    const fromDigits = fromRaw.split('@')[0].replace(/\D/g, '');
+    const fromMeFlag = payload.fromMe === true || payload.fromMe === 'true' ||
+                       payload.direction === 'outgoing' || payload.direction === 'outbound';
+    const isOutgoingFromPhone = fromMeFlag || (!!myPhone && fromDigits === myPhone);
+
     const counterpartRaw = isOutgoingFromPhone ? toRaw : fromRaw;
     const counterpartPhone = counterpartRaw.split('@')[0];
     const normalized = normalizePhone(counterpartPhone);
 
     if (isGroup) {
-      // Skip group messages for now (no group infrastructure built for manus_wa yet)
-      return new Response(JSON.stringify({ received: true, skippedGroup: true }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      return ok({ received: true, skippedGroup: true });
     }
 
     // Dedup by message id
@@ -129,11 +141,7 @@ Deno.serve(async (req) => {
         .eq('provider', 'manus_wa')
         .eq('raw_provider_data->>id', messageId)
         .maybeSingle();
-      if (existing) {
-        return new Response(JSON.stringify({ received: true, duplicate: true }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
-      }
+      if (existing) return ok({ received: true, duplicate: true });
     }
 
     // Look up client/lead by phone (last 9 digits)
@@ -178,19 +186,16 @@ Deno.serve(async (req) => {
       throw insertError;
     }
 
-    return new Response(JSON.stringify({
+    return ok({
       success: true,
+      direction: isOutgoingFromPhone ? 'outbound' : 'inbound',
       contactType: clientId ? 'client' : leadId ? 'lead' : 'unknown',
       contactId: clientId || leadId || null,
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
 
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Unknown error';
     console.error('manus-wa-webhook error:', msg);
-    return new Response(JSON.stringify({ error: msg }), {
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+    return ok({ error: msg }, 500);
   }
 });
