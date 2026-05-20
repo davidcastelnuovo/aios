@@ -485,7 +485,7 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter, custo
 
   // Fetch records for all tables
   const { data: allRecords = [], isLoading: recordsLoading } = useQuery({
-    queryKey: ['crm-records-agency-dashboard', tables.map((t: any) => t.id).join(','), dateFilter],
+    queryKey: ['crm-records-agency-dashboard', tables.map((t: any) => t.id).join(','), dateFilter, customFrom, customTo],
     queryFn: async () => {
       if (tables.length === 0) return [];
       
@@ -518,6 +518,10 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter, custo
           table_id: table.id,
           date_filter: dateFilter,
         });
+        if (dateFilter === 'custom' && customFrom && customTo) {
+          params.set('date_from', customFrom);
+          params.set('date_to', customTo);
+        }
         const response = await supabase.functions.invoke(`crm-records?${params.toString()}`, {
           method: 'GET',
         });
