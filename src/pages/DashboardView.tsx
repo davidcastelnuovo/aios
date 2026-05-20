@@ -1145,6 +1145,8 @@ export default function DashboardView() {
           agencyId={dashboard.agency_id!}
           agencyName={(dashboard as any).agencies?.name || ''}
           dateFilter={dateFilter}
+          customFrom={customFromStr}
+          customTo={customToStr}
         />
       ) : isOrganizationDashboard ? (
         selectedOrgAgencyId ? (
@@ -1153,6 +1155,8 @@ export default function DashboardView() {
             agencyId={selectedOrgAgencyId}
             agencyName={orgAgencies.find((a: any) => a.id === selectedOrgAgencyId)?.name || ''}
             dateFilter={dateFilter}
+            customFrom={customFromStr}
+            customTo={customToStr}
           />
         ) : (
           <Card className="p-8 text-center text-muted-foreground">
