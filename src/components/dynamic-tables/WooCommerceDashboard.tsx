@@ -121,7 +121,7 @@ export function WooCommerceDashboard({ clientId, tenantId, dateFilter, customFro
   const { start, end } = getDateRange(dateFilter, customFrom, customTo);
 
   const { data: orders = [], isLoading } = useQuery({
-    queryKey: ['woo-orders', siteIds.join(','), dateFilter],
+    queryKey: ['woo-orders', siteIds.join(','), dateFilter, customFrom, customTo],
     queryFn: async () => {
       if (siteIds.length === 0) return [];
       const { data, error } = await supabase
