@@ -203,9 +203,24 @@ export function ExecutionHistoryPanel({
                           ) : (
                             <ChevronLeft className="h-4 w-4 text-muted-foreground shrink-0" />
                           )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 shrink-0"
+                            disabled={rerunningId === log.id || !log.payload}
+                            onClick={(e) => handleRerun(log, e)}
+                            title="הרץ מחדש"
+                          >
+                            {rerunningId === log.id ? (
+                              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Play className="h-3.5 w-3.5" />
+                            )}
+                          </Button>
                         </div>
                       </button>
                     </CollapsibleTrigger>
+
 
                     <CollapsibleContent>
                       <div className="px-3 pb-3 space-y-3">
