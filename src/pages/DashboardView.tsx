@@ -1213,7 +1213,7 @@ export default function DashboardView() {
           ) : platformFilter === 'woocommerce' ? (
             /* WooCommerce tab */
             dashboard?.client_id && currentTenantId ? (
-              <WooCommerceDashboard clientId={dashboard.client_id} tenantId={currentTenantId} dateFilter={dateFilter} />
+              <WooCommerceDashboard clientId={dashboard.client_id} tenantId={currentTenantId} dateFilter={dateFilter} customFrom={customFromStr} customTo={customToStr} />
             ) : null
           ) : tables.length === 0 ? (
             <Card className="p-12 text-center">
