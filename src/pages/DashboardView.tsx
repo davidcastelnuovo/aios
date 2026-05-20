@@ -15,7 +15,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowRight, Facebook, ShoppingCart, FileSpreadsheet, TrendingUp, TrendingDown, Minus, RefreshCw, Building2, Globe } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { ArrowRight, Facebook, ShoppingCart, FileSpreadsheet, TrendingUp, TrendingDown, Minus, RefreshCw, Building2, Globe, Calendar as CalendarIcon } from "lucide-react";
+import { format } from "date-fns";
+import { he } from "date-fns/locale";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { toast } from "sonner";
 import { AgencyDashboardContent } from "@/components/dynamic-tables/AgencyDashboardContent";
@@ -34,11 +38,15 @@ import {
 const DATE_FILTERS = [
   { value: 'today', label: 'היום' },
   { value: 'yesterday', label: 'אתמול' },
+  { value: 'this_week', label: 'השבוע' },
+  { value: 'last_week', label: 'שבוע שעבר' },
   { value: 'last_7_days', label: '7 ימים אחרונים' },
+  { value: 'last_14_days', label: '14 יום אחרונים' },
   { value: 'last_30_days', label: '30 יום אחרונים' },
   { value: 'last_70_days', label: '70 יום אחרונים' },
   { value: 'this_month', label: 'החודש הנוכחי' },
   { value: 'last_month', label: 'חודש קודם' },
+  { value: 'custom', label: 'טווח מותאם אישית' },
 ];
 
 const PLATFORM_CONFIG: Record<string, { name: string; color: string; bgColor: string }> = {
@@ -124,6 +132,11 @@ export default function DashboardView() {
   const { buildPath } = useTenantPath();
   const { currentTenantId } = useTenant();
   const [dateFilter, setDateFilter] = useState('last_7_days');
+  const [customDateRange, setCustomDateRange] = useState<{ from?: Date; to?: Date }>({});
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const customFromStr = customDateRange.from ? format(customDateRange.from, 'yyyy-MM-dd') : '';
+  const customToStr = customDateRange.to ? format(customDateRange.to, 'yyyy-MM-dd') : '';
+  const isCustomReady = dateFilter !== 'custom' || (!!customFromStr && !!customToStr);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all');
   const didSetSeoDefaultRef = useRef(false);
@@ -217,7 +230,7 @@ export default function DashboardView() {
 
   // Fetch records from all tables
   const { data: allRecords = [], isLoading: recordsLoading, refetch: refetchRecords } = useQuery({
-    queryKey: ['crm-records-dashboard', tables.map((t: any) => t.id).join(','), dateFilter],
+    queryKey: ['crm-records-dashboard', tables.map((t: any) => t.id).join(','), dateFilter, customFromStr, customToStr],
     queryFn: async () => {
       if (tables.length === 0) return [];
       const { data: { session } } = await supabase.auth.getSession();
@@ -235,6 +248,10 @@ export default function DashboardView() {
 
       const recordsPromises = tablesToFetch.map(async (table: any) => {
         const params = new URLSearchParams({ table_id: table.id, date_filter: dateFilter });
+        if (dateFilter === 'custom' && customFromStr && customToStr) {
+          params.set('date_from', customFromStr);
+          params.set('date_to', customToStr);
+        }
         const response = await supabase.functions.invoke(`crm-records?${params.toString()}`, { method: 'GET' });
         if (response.error) {
           console.error('Error fetching records for table', table.id, response.error);
@@ -254,7 +271,7 @@ export default function DashboardView() {
       const allResults = await Promise.all(recordsPromises);
       return allResults.flat();
     },
-    enabled: tables.length > 0,
+    enabled: tables.length > 0 && isCustomReady,
   });
 
   // Check if client has SEO (Ahrefs) reports
@@ -328,8 +345,23 @@ export default function DashboardView() {
         start = sun; end = sat;
         break;
       }
+      case 'last_14_days': start = new Date(Date.UTC(y, m, d - 14, 0, 0, 0, 0)); break;
       case 'last_30_days': start = new Date(Date.UTC(y, m, d - 30, 0, 0, 0, 0)); break;
       case 'last_70_days': start = new Date(Date.UTC(y, m, d - 70, 0, 0, 0, 0)); break;
+      case 'this_week': {
+        // Week starts Sunday (locale: he)
+        const dow = now.getUTCDay(); // 0=Sun..6=Sat
+        start = new Date(Date.UTC(y, m, d - dow, 0, 0, 0, 0));
+        end = new Date(Date.UTC(y, m, d, 23, 59, 59, 999));
+        break;
+      }
+      case 'last_week': {
+        const dow = now.getUTCDay();
+        const lastSun = new Date(Date.UTC(y, m, d - dow - 7, 0, 0, 0, 0));
+        const lastSat = new Date(Date.UTC(y, m, d - dow - 1, 23, 59, 59, 999));
+        start = lastSun; end = lastSat;
+        break;
+      }
       case 'this_month':
         start = new Date(Date.UTC(y, m, 1, 0, 0, 0, 0));
         end = new Date(Date.UTC(y, m, d, 23, 59, 59, 999));
@@ -338,13 +370,25 @@ export default function DashboardView() {
         start = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0, 0));
         end = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999));
         break;
+      case 'custom':
+        if (customDateRange.from && customDateRange.to) {
+          start = new Date(Date.UTC(
+            customDateRange.from.getFullYear(), customDateRange.from.getMonth(), customDateRange.from.getDate(),
+            0, 0, 0, 0
+          ));
+          end = new Date(Date.UTC(
+            customDateRange.to.getFullYear(), customDateRange.to.getMonth(), customDateRange.to.getDate(),
+            23, 59, 59, 999
+          ));
+        }
+        break;
       default: start = new Date(Date.UTC(y, m, d - 7, 0, 0, 0, 0));
     }
     return { start: start.toISOString(), end: end.toISOString() };
-  }, [dateFilter]);
+  }, [dateFilter, customDateRange.from, customDateRange.to]);
 
   const { data: wooSummary = { revenue: 0, orders: 0 } } = useQuery({
-    queryKey: ['woo-summary-for-totals', dashboard?.client_id, currentTenantId, dateFilter],
+    queryKey: ['woo-summary-for-totals', dashboard?.client_id, currentTenantId, dateFilter, customFromStr, customToStr],
     queryFn: async () => {
       if (!dashboard?.client_id || !currentTenantId) return { revenue: 0, orders: 0 };
       const { data: sites } = await (supabase
@@ -1052,7 +1096,7 @@ export default function DashboardView() {
               רענן נתונים
             </Button>
           )}
-          <Select value={dateFilter} onValueChange={setDateFilter}>
+          <Select value={dateFilter} onValueChange={(v) => { setDateFilter(v); if (v === 'custom') setCalendarOpen(true); }}>
             <SelectTrigger className="w-[180px]">
               <SelectValue />
             </SelectTrigger>
@@ -1062,6 +1106,36 @@ export default function DashboardView() {
               ))}
             </SelectContent>
           </Select>
+          {dateFilter === 'custom' && (
+            <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <CalendarIcon className="h-4 w-4" />
+                  {customDateRange.from && customDateRange.to ? (
+                    <>
+                      {format(customDateRange.from, 'dd/MM/yyyy', { locale: he })} - {format(customDateRange.to, 'dd/MM/yyyy', { locale: he })}
+                    </>
+                  ) : (
+                    'בחר תאריכים'
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0 pointer-events-auto" align="start">
+                <Calendar
+                  initialFocus
+                  mode="range"
+                  defaultMonth={customDateRange.from}
+                  selected={{ from: customDateRange.from, to: customDateRange.to }}
+                  onSelect={(range: any) => {
+                    setCustomDateRange({ from: range?.from, to: range?.to });
+                    if (range?.from && range?.to) setCalendarOpen(false);
+                  }}
+                  numberOfMonths={2}
+                  className="pointer-events-auto"
+                />
+              </PopoverContent>
+            </Popover>
+          )}
         </div>
       </div>
 
@@ -1071,6 +1145,8 @@ export default function DashboardView() {
           agencyId={dashboard.agency_id!}
           agencyName={(dashboard as any).agencies?.name || ''}
           dateFilter={dateFilter}
+          customFrom={customFromStr}
+          customTo={customToStr}
         />
       ) : isOrganizationDashboard ? (
         selectedOrgAgencyId ? (
@@ -1079,6 +1155,8 @@ export default function DashboardView() {
             agencyId={selectedOrgAgencyId}
             agencyName={orgAgencies.find((a: any) => a.id === selectedOrgAgencyId)?.name || ''}
             dateFilter={dateFilter}
+            customFrom={customFromStr}
+            customTo={customToStr}
           />
         ) : (
           <Card className="p-8 text-center text-muted-foreground">
@@ -1135,7 +1213,7 @@ export default function DashboardView() {
           ) : platformFilter === 'woocommerce' ? (
             /* WooCommerce tab */
             dashboard?.client_id && currentTenantId ? (
-              <WooCommerceDashboard clientId={dashboard.client_id} tenantId={currentTenantId} dateFilter={dateFilter} />
+              <WooCommerceDashboard clientId={dashboard.client_id} tenantId={currentTenantId} dateFilter={dateFilter} customFrom={customFromStr} customTo={customToStr} />
             ) : null
           ) : tables.length === 0 ? (
             <Card className="p-12 text-center">

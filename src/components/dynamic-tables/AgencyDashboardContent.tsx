@@ -22,6 +22,8 @@ interface AgencyDashboardContentProps {
   agencyId: string;
   agencyName: string;
   dateFilter: string;
+  customFrom?: string;
+  customTo?: string;
 }
 
 interface CampaignRecord {
@@ -303,7 +305,7 @@ function ClientTableCard({ data }: { data: ClientTableData }) {
   );
 }
 
-export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: AgencyDashboardContentProps) {
+export function AgencyDashboardContent({ agencyId, agencyName, dateFilter, customFrom, customTo }: AgencyDashboardContentProps) {
   const [mainTab, setMainTab] = useState<'performance' | 'crm'>('performance');
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all');
   const { tenantId } = useCurrentTenant();
@@ -483,7 +485,7 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
 
   // Fetch records for all tables
   const { data: allRecords = [], isLoading: recordsLoading } = useQuery({
-    queryKey: ['crm-records-agency-dashboard', tables.map((t: any) => t.id).join(','), dateFilter],
+    queryKey: ['crm-records-agency-dashboard', tables.map((t: any) => t.id).join(','), dateFilter, customFrom, customTo],
     queryFn: async () => {
       if (tables.length === 0) return [];
       
@@ -516,6 +518,10 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
           table_id: table.id,
           date_filter: dateFilter,
         });
+        if (dateFilter === 'custom' && customFrom && customTo) {
+          params.set('date_from', customFrom);
+          params.set('date_to', customTo);
+        }
         const response = await supabase.functions.invoke(`crm-records?${params.toString()}`, {
           method: 'GET',
         });
