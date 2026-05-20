@@ -1096,7 +1096,7 @@ export default function DashboardView() {
               רענן נתונים
             </Button>
           )}
-          <Select value={dateFilter} onValueChange={setDateFilter}>
+          <Select value={dateFilter} onValueChange={(v) => { setDateFilter(v); if (v === 'custom') setCalendarOpen(true); }}>
             <SelectTrigger className="w-[180px]">
               <SelectValue />
             </SelectTrigger>
@@ -1106,6 +1106,36 @@ export default function DashboardView() {
               ))}
             </SelectContent>
           </Select>
+          {dateFilter === 'custom' && (
+            <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <CalendarIcon className="h-4 w-4" />
+                  {customDateRange.from && customDateRange.to ? (
+                    <>
+                      {format(customDateRange.from, 'dd/MM/yyyy', { locale: he })} - {format(customDateRange.to, 'dd/MM/yyyy', { locale: he })}
+                    </>
+                  ) : (
+                    'בחר תאריכים'
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0 pointer-events-auto" align="start">
+                <Calendar
+                  initialFocus
+                  mode="range"
+                  defaultMonth={customDateRange.from}
+                  selected={{ from: customDateRange.from, to: customDateRange.to }}
+                  onSelect={(range: any) => {
+                    setCustomDateRange({ from: range?.from, to: range?.to });
+                    if (range?.from && range?.to) setCalendarOpen(false);
+                  }}
+                  numberOfMonths={2}
+                  className="pointer-events-auto"
+                />
+              </PopoverContent>
+            </Popover>
+          )}
         </div>
       </div>
 
