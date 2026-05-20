@@ -77,6 +77,7 @@ export function ExecutionHistoryPanel({
   automationId,
 }: ExecutionHistoryPanelProps) {
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+  const [rerunningId, setRerunningId] = useState<string | null>(null);
 
   const { data: logs = [], isLoading, refetch } = useQuery({
     queryKey: ["automation-logs-flow", automationId],
@@ -96,6 +97,32 @@ export function ExecutionHistoryPanel({
   const toggleLog = (logId: string) => {
     setExpandedLogId((prev) => (prev === logId ? null : logId));
   };
+
+  const handleRerun = async (log: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!log.payload) {
+      toast({ title: "אין נתונים לריצה חוזרת", variant: "destructive" });
+      return;
+    }
+    setRerunningId(log.id);
+    try {
+      const { data, error } = await supabase.functions.invoke("trigger-automation", {
+        body: {
+          automationId,
+          payload: log.payload,
+          _rerun: true,
+        },
+      });
+      if (error) throw error;
+      toast({ title: "הריצה הופעלה מחדש", description: "בדוק את ההיסטוריה לתוצאה" });
+      setTimeout(() => refetch(), 1500);
+    } catch (err: any) {
+      toast({ title: "שגיאה בהרצה מחדש", description: err.message, variant: "destructive" });
+    } finally {
+      setRerunningId(null);
+    }
+  };
+
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
