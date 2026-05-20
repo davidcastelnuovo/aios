@@ -31,7 +31,9 @@ import {
   ClipboardList,
   UserPlus,
   ArrowLeftRight,
+  Play,
 } from "lucide-react";
+
 import { cn } from "@/lib/utils";
 
 interface ExecutionHistoryPanelProps {
