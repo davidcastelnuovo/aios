@@ -305,7 +305,7 @@ function ClientTableCard({ data }: { data: ClientTableData }) {
   );
 }
 
-export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: AgencyDashboardContentProps) {
+export function AgencyDashboardContent({ agencyId, agencyName, dateFilter, customFrom, customTo }: AgencyDashboardContentProps) {
   const [mainTab, setMainTab] = useState<'performance' | 'crm'>('performance');
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all');
   const { tenantId } = useCurrentTenant();
