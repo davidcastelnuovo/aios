@@ -569,16 +569,35 @@ export default function WordPressSettings() {
       const payload: any = { updated_at: new Date().toISOString() };
       if (mode === "form") payload.campaign_form_mapping = clean;
       else payload.campaign_url_mapping = clean;
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("social_media_wordpress_sites" as any)
         .update(payload)
-        .eq("id", id);
+        .eq("id", id)
+        .select()
+        .single();
       if (error) throw error;
+      return { clean, mode, data };
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["wordpress-sites-admin"] });
+    onSuccess: async ({ clean, mode, data }) => {
+      // Update local mappingSite snapshot so re-opening the dropdowns shows the saved values
+      setMappingSite((prev) =>
+        prev
+          ? {
+              ...prev,
+              ...(data as any),
+              campaign_form_mapping:
+                mode === "form" ? clean : (data as any)?.campaign_form_mapping ?? prev.campaign_form_mapping,
+              campaign_url_mapping:
+                mode === "slug" ? clean : (data as any)?.campaign_url_mapping ?? prev.campaign_url_mapping,
+            }
+          : prev
+      );
+      // Sync local per-mode drafts with what was saved
+      if (mode === "form") setFormDraft(clean);
+      else setSlugDraft(clean);
+      await queryClient.invalidateQueries({ queryKey: ["wordpress-sites-admin"] });
       toast.success("המיפוי נשמר. סנכרן את דוח גוגל אדס כדי לראות את ההשפעה");
-      setMappingSite(null);
+      // Keep dialog open so the user immediately sees the persisted selection
     },
     onError: (e: Error) => toast.error("שגיאה: " + e.message),
   });
