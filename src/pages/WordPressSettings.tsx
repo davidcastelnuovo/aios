@@ -109,9 +109,19 @@ export default function WordPressSettings() {
   const [filterTenant, setFilterTenant] = useState<string>("all");
   const [testingId, setTestingId] = useState<string | null>(null);
   const [mappingSite, setMappingSite] = useState<WordPressSite | null>(null);
-  const [mappingDraft, setMappingDraft] = useState<Record<string, string>>({});
+  const [formDraft, setFormDraft] = useState<Record<string, string>>({});
+  const [slugDraft, setSlugDraft] = useState<Record<string, string>>({});
   const [mappingMode, setMappingMode] = useState<"form" | "slug">("form");
   const [campaignSearch, setCampaignSearch] = useState<string>("");
+  const mappingDraft = mappingMode === "form" ? formDraft : slugDraft;
+  const setMappingDraft = (
+    updater:
+      | Record<string, string>
+      | ((prev: Record<string, string>) => Record<string, string>)
+  ) => {
+    const setter = mappingMode === "form" ? setFormDraft : setSlugDraft;
+    setter(updater as any);
+  };
 
   // Fetch all tenants (super admin only)
   const { data: allTenants = [] } = useQuery<Tenant[]>({
@@ -472,11 +482,20 @@ export default function WordPressSettings() {
   };
 
   const openMapping = (site: WordPressSite) => {
-    setMappingSite(site);
-    setMappingMode("form");
+    // Always use the freshest copy from the sites list (post-save state)
+    const fresh = sites.find((s) => s.id === site.id) || site;
+    setMappingSite(fresh);
+    const formMap = { ...(fresh.campaign_form_mapping || {}) };
+    const slugMap = { ...(fresh.campaign_url_mapping || {}) };
+    setFormDraft(formMap);
+    setSlugDraft(slugMap);
+    // Prefer 'form' tab unless only slug mapping has data
+    const startMode: "form" | "slug" =
+      Object.keys(formMap).length === 0 && Object.keys(slugMap).length > 0
+        ? "slug"
+        : "form";
+    setMappingMode(startMode);
     setCampaignSearch("");
-    // Default draft = current form mapping (primary). Slug mapping kept available too.
-    setMappingDraft({ ...(site.campaign_form_mapping || {}) });
   };
 
   // Discover forms + slugs for the mapping site (last 90 days of submissions)
@@ -534,11 +553,25 @@ export default function WordPressSettings() {
     enabled: !!mappingSite?.client_id,
   });
 
+  // Ensure any campaign IDs already referenced in saved/draft mappings appear in the dropdown,
+  // even if they were removed from Google Ads sync (otherwise the Select renders as empty).
+  const referencedIds = new Set<string>([
+    ...Object.values(formDraft),
+    ...Object.values(slugDraft),
+    ...Object.values(mappingSite?.campaign_form_mapping || {}),
+    ...Object.values(mappingSite?.campaign_url_mapping || {}),
+  ].filter(Boolean));
+  const knownIds = new Set(clientCampaigns.map((c) => c.campaign_id));
+  const orphanCampaigns = Array.from(referencedIds)
+    .filter((id) => !knownIds.has(id))
+    .map((id) => ({ campaign_id: id, campaign_name: `(לא מסונכרן) ${id}` }));
+  const allCampaigns = [...clientCampaigns, ...orphanCampaigns];
+
   const filteredCampaigns = campaignSearch.trim()
-    ? clientCampaigns.filter((c) =>
+    ? allCampaigns.filter((c) =>
         c.campaign_name.toLowerCase().includes(campaignSearch.trim().toLowerCase())
       )
-    : clientCampaigns;
+    : allCampaigns;
 
 
 
@@ -550,16 +583,35 @@ export default function WordPressSettings() {
       const payload: any = { updated_at: new Date().toISOString() };
       if (mode === "form") payload.campaign_form_mapping = clean;
       else payload.campaign_url_mapping = clean;
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("social_media_wordpress_sites" as any)
         .update(payload)
-        .eq("id", id);
+        .eq("id", id)
+        .select()
+        .single();
       if (error) throw error;
+      return { clean, mode, data };
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["wordpress-sites-admin"] });
+    onSuccess: async ({ clean, mode, data }) => {
+      // Update local mappingSite snapshot so re-opening the dropdowns shows the saved values
+      setMappingSite((prev) =>
+        prev
+          ? {
+              ...prev,
+              ...(data as any),
+              campaign_form_mapping:
+                mode === "form" ? clean : (data as any)?.campaign_form_mapping ?? prev.campaign_form_mapping,
+              campaign_url_mapping:
+                mode === "slug" ? clean : (data as any)?.campaign_url_mapping ?? prev.campaign_url_mapping,
+            }
+          : prev
+      );
+      // Sync local per-mode drafts with what was saved
+      if (mode === "form") setFormDraft(clean);
+      else setSlugDraft(clean);
+      await queryClient.invalidateQueries({ queryKey: ["wordpress-sites-admin"] });
       toast.success("המיפוי נשמר. סנכרן את דוח גוגל אדס כדי לראות את ההשפעה");
-      setMappingSite(null);
+      // Keep dialog open so the user immediately sees the persisted selection
     },
     onError: (e: Error) => toast.error("שגיאה: " + e.message),
   });
@@ -1353,11 +1405,8 @@ export default function WordPressSettings() {
             </div>
 
             <Tabs value={mappingMode} onValueChange={(v) => {
-              const newMode = v as "form" | "slug";
-              setMappingMode(newMode);
-              setMappingDraft({
-                ...((newMode === "form" ? mappingSite?.campaign_form_mapping : mappingSite?.campaign_url_mapping) || {}),
-              });
+              setMappingMode(v as "form" | "slug");
+              setCampaignSearch("");
             }}>
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="form">לפי טופס (מומלץ)</TabsTrigger>
