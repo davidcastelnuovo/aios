@@ -534,6 +534,14 @@ export default function WordPressSettings() {
     enabled: !!mappingSite?.client_id,
   });
 
+  const filteredCampaigns = campaignSearch.trim()
+    ? clientCampaigns.filter((c) =>
+        c.campaign_name.toLowerCase().includes(campaignSearch.trim().toLowerCase())
+      )
+    : clientCampaigns;
+
+
+
   const mappingMutation = useMutation({
     mutationFn: async ({ id, mapping, mode }: { id: string; mapping: Record<string, string>; mode: "form" | "slug" }) => {
       const clean = Object.fromEntries(
