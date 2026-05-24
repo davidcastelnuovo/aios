@@ -420,6 +420,23 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || "שגיאה בשליחה");
         toast.success("הדוח נשלח בוואטסאפ בהצלחה");
+
+        // Auto-save the WhatsApp text as a weekly update in the client updates tab
+        if (messageText.trim()) {
+          try {
+            const { data: { user } } = await supabase.auth.getUser();
+            await supabase.from("client_updates").insert({
+              client_id: clientId,
+              tenant_id: tenantId,
+              user_id: user?.id,
+              content: messageText.trim(),
+              update_type: "weekly_update",
+            } as any);
+            queryClient.invalidateQueries({ queryKey: ["client-updates"] });
+          } catch (e) {
+            console.warn("Failed to auto-save weekly update:", e);
+          }
+        }
       }
 
       if (sendEmail) {
