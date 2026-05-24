@@ -1372,11 +1372,8 @@ export default function WordPressSettings() {
             </div>
 
             <Tabs value={mappingMode} onValueChange={(v) => {
-              const newMode = v as "form" | "slug";
-              setMappingMode(newMode);
-              setMappingDraft({
-                ...((newMode === "form" ? mappingSite?.campaign_form_mapping : mappingSite?.campaign_url_mapping) || {}),
-              });
+              setMappingMode(v as "form" | "slug");
+              setCampaignSearch("");
             }}>
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="form">לפי טופס (מומלץ)</TabsTrigger>
