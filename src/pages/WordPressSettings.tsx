@@ -1416,12 +1416,26 @@ export default function WordPressSettings() {
                                 } />
                               </SelectTrigger>
                               <SelectContent>
+                                <div className="sticky top-0 bg-popover p-1 border-b z-10">
+                                  <Input
+                                    placeholder="חיפוש קמפיין..."
+                                    value={campaignSearch}
+                                    onChange={(e) => setCampaignSearch(e.target.value)}
+                                    onKeyDown={(e) => e.stopPropagation()}
+                                    className="h-7 text-xs"
+                                  />
+                                </div>
                                 <SelectItem value="none">ללא שיוך</SelectItem>
-                                {clientCampaigns.map((c) => (
+                                {filteredCampaigns.map((c) => (
                                   <SelectItem key={c.campaign_id} value={c.campaign_id}>
                                     {c.campaign_name}
                                   </SelectItem>
                                 ))}
+                                {filteredCampaigns.length === 0 && clientCampaigns.length > 0 && (
+                                  <div className="px-2 py-2 text-xs text-muted-foreground text-center">
+                                    לא נמצאו תוצאות
+                                  </div>
+                                )}
                               </SelectContent>
                             </Select>
                           </div>
