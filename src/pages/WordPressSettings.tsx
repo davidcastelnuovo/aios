@@ -482,11 +482,20 @@ export default function WordPressSettings() {
   };
 
   const openMapping = (site: WordPressSite) => {
-    setMappingSite(site);
-    setMappingMode("form");
+    // Always use the freshest copy from the sites list (post-save state)
+    const fresh = sites.find((s) => s.id === site.id) || site;
+    setMappingSite(fresh);
+    const formMap = { ...(fresh.campaign_form_mapping || {}) };
+    const slugMap = { ...(fresh.campaign_url_mapping || {}) };
+    setFormDraft(formMap);
+    setSlugDraft(slugMap);
+    // Prefer 'form' tab unless only slug mapping has data
+    const startMode: "form" | "slug" =
+      Object.keys(formMap).length === 0 && Object.keys(slugMap).length > 0
+        ? "slug"
+        : "form";
+    setMappingMode(startMode);
     setCampaignSearch("");
-    // Default draft = current form mapping (primary). Slug mapping kept available too.
-    setMappingDraft({ ...(site.campaign_form_mapping || {}) });
   };
 
   // Discover forms + slugs for the mapping site (last 90 days of submissions)
