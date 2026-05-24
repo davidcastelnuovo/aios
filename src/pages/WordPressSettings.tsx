@@ -479,9 +479,6 @@ export default function WordPressSettings() {
     setMappingDraft({ ...(site.campaign_form_mapping || {}) });
   };
 
-      )
-    : clientCampaigns;
-
   // Discover forms + slugs for the mapping site (last 90 days of submissions)
   const { data: discovery, isLoading: isLoadingDiscovery } = useQuery<{
     per_form: Array<{ form_id: string; form_name: string; total: number; last_30_days: number; sources: Record<string, number>; slugs?: string[]; sample_referer?: string | null }>;
