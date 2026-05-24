@@ -553,11 +553,25 @@ export default function WordPressSettings() {
     enabled: !!mappingSite?.client_id,
   });
 
+  // Ensure any campaign IDs already referenced in saved/draft mappings appear in the dropdown,
+  // even if they were removed from Google Ads sync (otherwise the Select renders as empty).
+  const referencedIds = new Set<string>([
+    ...Object.values(formDraft),
+    ...Object.values(slugDraft),
+    ...Object.values(mappingSite?.campaign_form_mapping || {}),
+    ...Object.values(mappingSite?.campaign_url_mapping || {}),
+  ].filter(Boolean));
+  const knownIds = new Set(clientCampaigns.map((c) => c.campaign_id));
+  const orphanCampaigns = Array.from(referencedIds)
+    .filter((id) => !knownIds.has(id))
+    .map((id) => ({ campaign_id: id, campaign_name: `(לא מסונכרן) ${id}` }));
+  const allCampaigns = [...clientCampaigns, ...orphanCampaigns];
+
   const filteredCampaigns = campaignSearch.trim()
-    ? clientCampaigns.filter((c) =>
+    ? allCampaigns.filter((c) =>
         c.campaign_name.toLowerCase().includes(campaignSearch.trim().toLowerCase())
       )
-    : clientCampaigns;
+    : allCampaigns;
 
 
 
