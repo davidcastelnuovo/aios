@@ -109,9 +109,19 @@ export default function WordPressSettings() {
   const [filterTenant, setFilterTenant] = useState<string>("all");
   const [testingId, setTestingId] = useState<string | null>(null);
   const [mappingSite, setMappingSite] = useState<WordPressSite | null>(null);
-  const [mappingDraft, setMappingDraft] = useState<Record<string, string>>({});
+  const [formDraft, setFormDraft] = useState<Record<string, string>>({});
+  const [slugDraft, setSlugDraft] = useState<Record<string, string>>({});
   const [mappingMode, setMappingMode] = useState<"form" | "slug">("form");
   const [campaignSearch, setCampaignSearch] = useState<string>("");
+  const mappingDraft = mappingMode === "form" ? formDraft : slugDraft;
+  const setMappingDraft = (
+    updater:
+      | Record<string, string>
+      | ((prev: Record<string, string>) => Record<string, string>)
+  ) => {
+    const setter = mappingMode === "form" ? setFormDraft : setSlugDraft;
+    setter(updater as any);
+  };
 
   // Fetch all tenants (super admin only)
   const { data: allTenants = [] } = useQuery<Tenant[]>({
