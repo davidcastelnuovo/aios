@@ -111,6 +111,7 @@ export default function WordPressSettings() {
   const [mappingSite, setMappingSite] = useState<WordPressSite | null>(null);
   const [mappingDraft, setMappingDraft] = useState<Record<string, string>>({});
   const [mappingMode, setMappingMode] = useState<"form" | "slug">("form");
+  const [campaignSearch, setCampaignSearch] = useState<string>("");
 
   // Fetch all tenants (super admin only)
   const { data: allTenants = [] } = useQuery<Tenant[]>({
