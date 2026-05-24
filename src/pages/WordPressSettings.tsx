@@ -474,9 +474,16 @@ export default function WordPressSettings() {
   const openMapping = (site: WordPressSite) => {
     setMappingSite(site);
     setMappingMode("form");
+    setCampaignSearch("");
     // Default draft = current form mapping (primary). Slug mapping kept available too.
     setMappingDraft({ ...(site.campaign_form_mapping || {}) });
   };
+
+  const filteredCampaigns = campaignSearch.trim()
+    ? clientCampaigns.filter((c) =>
+        c.campaign_name.toLowerCase().includes(campaignSearch.trim().toLowerCase())
+      )
+    : clientCampaigns;
 
   // Discover forms + slugs for the mapping site (last 90 days of submissions)
   const { data: discovery, isLoading: isLoadingDiscovery } = useQuery<{
