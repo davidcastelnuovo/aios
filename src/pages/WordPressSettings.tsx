@@ -479,9 +479,6 @@ export default function WordPressSettings() {
     setMappingDraft({ ...(site.campaign_form_mapping || {}) });
   };
 
-  const filteredCampaigns = campaignSearch.trim()
-    ? clientCampaigns.filter((c) =>
-        c.campaign_name.toLowerCase().includes(campaignSearch.trim().toLowerCase())
       )
     : clientCampaigns;
 
