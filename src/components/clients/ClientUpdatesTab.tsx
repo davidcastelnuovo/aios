@@ -67,14 +67,14 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
   const [dateFilter, setDateFilter] = useState<DateFilter>("month");
   const [editingTask, setEditingTask] = useState<any>(null);
   const [newUpdate, setNewUpdate] = useState("");
-  const [newUpdateType, setNewUpdateType] = useState<string>("call");
+  const [newUpdateType, setNewUpdateType] = useState<string>("weekly_update");
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
   const { user } = useCurrentUser();
 
   // ── CRM: communication log state ──────────────────────────────────────────
   const [commStatus, setCommStatus] = useState<string>(currentMoodStatus || "happy");
-  const [commInteraction, setCommInteraction] = useState<string>("call");
+  const [commInteraction, setCommInteraction] = useState<string>("weekly_update");
 
   // Sync local state with the actual client mood_status whenever it changes
   useEffect(() => {
