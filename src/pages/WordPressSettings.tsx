@@ -111,6 +111,7 @@ export default function WordPressSettings() {
   const [mappingSite, setMappingSite] = useState<WordPressSite | null>(null);
   const [mappingDraft, setMappingDraft] = useState<Record<string, string>>({});
   const [mappingMode, setMappingMode] = useState<"form" | "slug">("form");
+  const [campaignSearch, setCampaignSearch] = useState<string>("");
 
   // Fetch all tenants (super admin only)
   const { data: allTenants = [] } = useQuery<Tenant[]>({
@@ -473,6 +474,7 @@ export default function WordPressSettings() {
   const openMapping = (site: WordPressSite) => {
     setMappingSite(site);
     setMappingMode("form");
+    setCampaignSearch("");
     // Default draft = current form mapping (primary). Slug mapping kept available too.
     setMappingDraft({ ...(site.campaign_form_mapping || {}) });
   };
@@ -531,6 +533,14 @@ export default function WordPressSettings() {
     },
     enabled: !!mappingSite?.client_id,
   });
+
+  const filteredCampaigns = campaignSearch.trim()
+    ? clientCampaigns.filter((c) =>
+        c.campaign_name.toLowerCase().includes(campaignSearch.trim().toLowerCase())
+      )
+    : clientCampaigns;
+
+
 
   const mappingMutation = useMutation({
     mutationFn: async ({ id, mapping, mode }: { id: string; mapping: Record<string, string>; mode: "form" | "slug" }) => {
@@ -1406,12 +1416,26 @@ export default function WordPressSettings() {
                                 } />
                               </SelectTrigger>
                               <SelectContent>
+                                <div className="sticky top-0 bg-popover p-1 border-b z-10">
+                                  <Input
+                                    placeholder="חיפוש קמפיין..."
+                                    value={campaignSearch}
+                                    onChange={(e) => setCampaignSearch(e.target.value)}
+                                    onKeyDown={(e) => e.stopPropagation()}
+                                    className="h-7 text-xs"
+                                  />
+                                </div>
                                 <SelectItem value="none">ללא שיוך</SelectItem>
-                                {clientCampaigns.map((c) => (
+                                {filteredCampaigns.map((c) => (
                                   <SelectItem key={c.campaign_id} value={c.campaign_id}>
                                     {c.campaign_name}
                                   </SelectItem>
                                 ))}
+                                {filteredCampaigns.length === 0 && clientCampaigns.length > 0 && (
+                                  <div className="px-2 py-2 text-xs text-muted-foreground text-center">
+                                    לא נמצאו תוצאות
+                                  </div>
+                                )}
                               </SelectContent>
                             </Select>
                           </div>
@@ -1466,12 +1490,26 @@ export default function WordPressSettings() {
                               } />
                             </SelectTrigger>
                             <SelectContent>
+                              <div className="sticky top-0 bg-popover p-1 border-b z-10">
+                                <Input
+                                  placeholder="חיפוש קמפיין..."
+                                  value={campaignSearch}
+                                  onChange={(e) => setCampaignSearch(e.target.value)}
+                                  onKeyDown={(e) => e.stopPropagation()}
+                                  className="h-7 text-xs"
+                                />
+                              </div>
                               <SelectItem value="none">ללא שיוך</SelectItem>
-                              {clientCampaigns.map((c) => (
+                              {filteredCampaigns.map((c) => (
                                 <SelectItem key={c.campaign_id} value={c.campaign_id}>
                                   {c.campaign_name}
                                 </SelectItem>
                               ))}
+                              {filteredCampaigns.length === 0 && clientCampaigns.length > 0 && (
+                                <div className="px-2 py-2 text-xs text-muted-foreground text-center">
+                                  לא נמצאו תוצאות
+                                </div>
+                              )}
                             </SelectContent>
                           </Select>
                         </div>

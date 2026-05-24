@@ -1,28 +1,19 @@
-## מטרה
-לעדכן את לשונית "עדכונים" כך ש"עדכון שבועי" יהיה ברירת המחדל, ולגרום לכך שכאשר נשלח דוח בוואטסאפ דרך לשונית הדוחות — הטקסט יישמר אוטומטית גם כעדכון שבועי בלשונית העדכונים.
+## הוספת שורת חיפוש קמפיינים בדיאלוג מיפוי WordPress
 
-## שינויים
+### רקע
+בדיאלוג "שייך טפסים לקמפיינים" (WordPress Settings → Map Forms/Slugs to Campaigns), המשתמש צריך לבחור קמפיין מרשימת הקמפיינים המסונכרנים מהלקוח. כשיש הרבה קמפיינים, קשה למצוא את הנכון.
 
-### 1. `src/components/clients/ClientUpdatesTab.tsx`
-- שינוי `useState<string>("call")` → `useState<string>("weekly_update")` עבור `newUpdateType` (שורה 70).
-- שינוי גם של `commInteraction` הפנימי ל-`"weekly_update"` כברירת מחדל לעקביות (שורה 77).
+### שינוי
+1. הוספת state `campaignSearch` בקומפוננטה הראשית שמתאפס כש-`mappingSite` משתנה.
+2. חישוב `filteredCampaigns` על ידי סינון `clientCampaigns` לפי `campaign_name` (case-insensitive, includes).
+3. בכל `SelectContent` (טאב form וטאב slug) - הוספת `Input` חיפוש בראש הרשימה (sticky) עם `onKeyDown={(e) => e.stopPropagation()}` כדי לא להפריע ל-typeahead של Radix Select.
+4. הצגת `filteredCampaigns` במקום `clientCampaigns` בתוך כל Select.
+5. הצגת הודעת "לא נמצאו תוצאות" אם אין קמפיינים תואמים.
 
-### 2. `src/components/clients/ClientReportPanel.tsx`
-- בתוך `handleSend` (שורה ~383), לאחר שליחת וואטסאפ מוצלחת (`toast.success("הדוח נשלח בוואטסאפ בהצלחה")`):
-  - אם `messageText.trim()` לא ריק — להוסיף `INSERT` לטבלת `client_updates`:
-    ```ts
-    const { data: { user } } = await supabase.auth.getUser();
-    await supabase.from("client_updates").insert({
-      client_id: clientId,
-      tenant_id: tenantId,
-      user_id: user?.id,
-      content: messageText.trim(),
-      update_type: "weekly_update",
-    } as any);
-    queryClient.invalidateQueries({ queryKey: ["client-updates"] });
-    ```
-- כשל בשמירה נרשם ל-console בלבד (לא עוצר את זרימת השליחה).
+### קבצים
+- `src/pages/WordPressSettings.tsx` — שינוי בדיאלוג מיפוי הקמפיינים בלבד.
 
-## מה שלא משתנה
-- לוגיקת שליחת הדוח, הצילום, מבנה ה-UI, וטבלאות אחרות לא משתנים.
-- לא משנים את `ClientUpdatesTab` מעבר לברירת המחדל.
+### פרטים טכניים
+- השדה יופיע בתוך `SelectContent` לפני ה-`SelectItem` הראשון.
+- `campaignSearch` shared state עבור שני הטאבים (מספיק כי רק טאב אחד נראה בכל רגע).
+- לא משפיע על שמירה/טעינה של מיפוי.
