@@ -191,9 +191,9 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
       // Get tenant integrations
       const { data: tenantIntegrations, error: tenantError } = await supabase
         .from('tenant_integrations')
-        .select('id, settings, user_id')
+        .select('id, settings, user_id, integration_type')
         .eq('tenant_id', automation.tenant_id)
-        .eq('integration_type', 'green_api')
+        .in('integration_type', ['green_api', 'manus_wa'])
         .eq('is_active', true);
       
       if (tenantError) throw tenantError;
@@ -212,10 +212,11 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
         // Fetch permitted integrations from other tenants
         const { data: permittedIntegrations } = await supabase
           .from('tenant_integrations')
-          .select('id, settings, user_id')
+          .select('id, settings, user_id, integration_type')
           .in('id', permittedIds)
-          .eq('integration_type', 'green_api')
+          .in('integration_type', ['green_api', 'manus_wa'])
           .eq('is_active', true);
+
         
         // Merge and deduplicate
         const existingIds = new Set(allIntegrations.map(i => i.id));
