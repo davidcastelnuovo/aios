@@ -191,9 +191,9 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
       // Get tenant integrations
       const { data: tenantIntegrations, error: tenantError } = await supabase
         .from('tenant_integrations')
-        .select('id, settings, user_id')
+        .select('id, settings, user_id, integration_type')
         .eq('tenant_id', automation.tenant_id)
-        .eq('integration_type', 'green_api')
+        .in('integration_type', ['green_api', 'manus_wa'])
         .eq('is_active', true);
       
       if (tenantError) throw tenantError;
@@ -212,10 +212,11 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
         // Fetch permitted integrations from other tenants
         const { data: permittedIntegrations } = await supabase
           .from('tenant_integrations')
-          .select('id, settings, user_id')
+          .select('id, settings, user_id, integration_type')
           .in('id', permittedIds)
-          .eq('integration_type', 'green_api')
+          .in('integration_type', ['green_api', 'manus_wa'])
           .eq('is_active', true);
+
         
         // Merge and deduplicate
         const existingIds = new Set(allIntegrations.map(i => i.id));
@@ -884,7 +885,7 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                   name="green_api_integration_id"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>בחר חיבור Green API *</FormLabel>
+                      <FormLabel>בחר חיבור WhatsApp *</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
@@ -893,23 +894,27 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                         </FormControl>
                         <SelectContent className="bg-background z-[100]">
                           {greenApiIntegrations && greenApiIntegrations.length > 0 ? (
-                            greenApiIntegrations.map((integration: any) => (
-                              <SelectItem key={integration.id} value={integration.id}>
-                                {integration.owner_name || 'חיבור'} ({integration.settings?.idInstance?.slice(-4) || 'לא ידוע'})
-                              </SelectItem>
-                            ))
+                            greenApiIntegrations.map((integration: any) => {
+                              const providerLabel = integration.integration_type === 'manus_wa' ? 'Manus WA' : 'Green API';
+                              return (
+                                <SelectItem key={integration.id} value={integration.id}>
+                                  [{providerLabel}] {integration.owner_name || 'חיבור'} ({integration.settings?.idInstance?.slice(-4) || integration.settings?.instanceId?.slice(-4) || 'לא ידוע'})
+                                </SelectItem>
+                              );
+                            })
                           ) : (
-                            <div className="py-2 px-3 text-sm text-muted-foreground">לא נמצאו חיבורי Green API</div>
+                            <div className="py-2 px-3 text-sm text-muted-foreground">לא נמצאו חיבורי WhatsApp</div>
                           )}
                         </SelectContent>
                       </Select>
                       <FormDescription className="text-xs">
-                        בחר איזה חיבור Green API להשתמש לשליחת ההודעה
+                        בחר באיזה חיבור WhatsApp (Green API או Manus) להשתמש לשליחת ההודעה
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+
                 
                 <FormField
                   control={form.control}
@@ -1002,7 +1007,7 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                   name="green_api_integration_id"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>בחר חיבור Green API *</FormLabel>
+                      <FormLabel>בחר חיבור WhatsApp *</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
@@ -1011,23 +1016,27 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                         </FormControl>
                         <SelectContent className="bg-background z-[100]">
                           {greenApiIntegrations && greenApiIntegrations.length > 0 ? (
-                            greenApiIntegrations.map((integration: any) => (
-                              <SelectItem key={integration.id} value={integration.id}>
-                                {integration.owner_name || 'חיבור'} ({integration.settings?.idInstance?.slice(-4) || 'לא ידוע'})
-                              </SelectItem>
-                            ))
+                            greenApiIntegrations.map((integration: any) => {
+                              const providerLabel = integration.integration_type === 'manus_wa' ? 'Manus WA' : 'Green API';
+                              return (
+                                <SelectItem key={integration.id} value={integration.id}>
+                                  [{providerLabel}] {integration.owner_name || 'חיבור'} ({integration.settings?.idInstance?.slice(-4) || integration.settings?.instanceId?.slice(-4) || 'לא ידוע'})
+                                </SelectItem>
+                              );
+                            })
                           ) : (
-                            <div className="py-2 px-3 text-sm text-muted-foreground">לא נמצאו חיבורי Green API</div>
+                            <div className="py-2 px-3 text-sm text-muted-foreground">לא נמצאו חיבורי WhatsApp</div>
                           )}
                         </SelectContent>
                       </Select>
                       <FormDescription className="text-xs">
-                        בחר איזה חיבור Green API להשתמש לשליחת ההודעה
+                        בחר באיזה חיבור WhatsApp (Green API או Manus) להשתמש לשליחת ההודעה
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+
                 <FormField
                   control={form.control}
                   name="campaigner_send_target"

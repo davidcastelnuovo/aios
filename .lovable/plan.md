@@ -1,38 +1,34 @@
-## הבעיה
+## מטרה
+לאפשר ש‑Green API ו‑Manus WhatsApp יהיו מחוברים ופעילים בו‑זמנית לאותו משתמש, עם בחירת ספק בצ'אט ובאוטומציות.
 
-ב-`src/pages/WordPressSettings.tsx` הדיאלוג "שייך טפסים לקמפיינים" שומר את הערכים ל-DB (אימתתי שלאתר eco-trip יש כיום `campaign_form_mapping` ו-`campaign_url_mapping` מאוכלסים), אבל בפתיחה מחדש השיוך נראה ריק. הסיבה שילוב של מספר באגים:
+## מצב נוכחי
+- **דף "אינטגרציות צ'אט"**: ה‑toggles של Green API ו‑Manus WA כבר נפרדים פר־משתמש ולא מבטלים אחד את השני. אפשרי טכנית להפעיל את שניהם.
+- **`ChatView`**: כבר קיים מתג בין ספקים (`availableProviders.length > 1`) — מציג כפתורי Green / Manus / ManyChat ושומר את הבחירה ב‑localStorage לכל tenant.
+- **`StepConfigPanel` (אוטומציות חדשות, צעדי WhatsApp)**: כבר טוען גם `green_api` וגם `manus_wa` ובוחר ביניהם.
+- **`AddAutomationForm` / `EditAutomationDialog` (המסך הישן של אוטומציות)**: טוענים אך ורק `green_api` בשם השדה `green_api_integration_id` — לא ניתן לבחור Manus.
+- **`ChatView` שאילתת `chat-integrations`**: לא מסננת לפי `user_id`, ולכן אם באותו tenant יש חיבור Green של משתמש אחר היא עלולה להציג ספק שאינו של המשתמש המחובר.
 
-1. **`mappingMode` לא מתאפס ב-`openMapping`** — אם בפעם הקודמת היה במצב "slug", נשאר במצב הזה גם עבור אתר חדש. ה-draft מתאתחל מ-`campaign_form_mapping` (לא מ-url) — חוסר התאמה.
-2. **התחלת ה-draft שלא תואמת ל-mode הנבחר** — `openMapping` תמיד מטעין `campaign_form_mapping` ל-draft, גם כשהטאב הפעיל הוא slug. התוצאה: ערכי slug שמורים לא מופיעים.
-3. **`mappingSite` הוא snapshot ישן** — אחרי שמירה, הדיאלוג נסגר ו-`setMappingSite(null)`. כשהמשתמש פותח שוב מיד, ייתכן שה-query עוד לא הספיק לעדכן, ו-`site` מגיע במצב ישן.
-4. **דריסת mappingDraft בשינוי טאב** מאפסת עריכות לא שמורות — לא קריטי, אבל כדאי לתקן.
+## שינויים מוצעים (Frontend בלבד)
 
-## התיקון
+### 1. `src/components/chat/ChatView.tsx`
+- להוסיף סינון `user_id = currentUser` לשאילתת `chat-integrations` עבור `green_api` ו‑`manus_wa` (לשמור על `manychat` ברמת tenant).
+- כך מתג הספקים יציג רק את אלה ששייכים למשתמש המחובר ובאמת פעילים אצלו.
+- לוודא שכשמשנים ספק נטענת מחדש היסטוריית ההודעות עבור אותו contact מאותו ספק (כבר כך לפי `connectionUserId`).
 
-ערוך את `src/pages/WordPressSettings.tsx`:
+### 2. `src/pages/ChatIntegrations.tsx`
+- שום שינוי לוגי נדרש — אבל לעדכן את הטקסט/UX כך שיובהר שניתן להפעיל גם Green וגם Manus במקביל, ולהסיר כל רמיזה ל"בחירה הדדית" אם קיימת.
+- (אופציונלי) הוספת חיווי "ספק ברירת מחדל לצ'אט" שמסומן ב‑localStorage כדי שיהיה ברור איזה ייפתח כברירת מחדל בצ'אט.
 
-**א. `openMapping` (סביב שורה 474):**
-- בחר mode התחלתי לפי תוכן: אם `campaign_form_mapping` ריק ויש ערכים ב-`campaign_url_mapping` — התחל ב-`"slug"`, אחרת `"form"`.
-- אתחל את `mappingDraft` מהמיפוי שתואם ל-mode הנבחר.
-- שמור את ה-mode שנבחר באמצעות `setMappingMode(...)`.
+### 3. `src/components/forms/AddAutomationForm.tsx` ו‑`EditAutomationDialog.tsx`
+- בשליפת האינטגרציות לאוטומציות WhatsApp: להחליף את הסינון מ‑`.eq('integration_type', 'green_api')` ל‑`.in('integration_type', ['green_api','manus_wa'])`.
+- לשנות את שם השדה הלוגי בטופס מ‑`green_api_integration_id` ל‑`whatsapp_integration_id` (השמירה עדיין ב‑`configuration.integration_id` כפי שהיום — תאימות לאחור נשמרת).
+- ב‑Select של החיבור להציג תווית "Green API" / "Manus WA" לצד שם החיבור (כמו ש‑`StepConfigPanel` כבר עושה).
+- לעדכן את ה‑labels וה‑placeholders בטופס מ"חיבור Green API" ל"חיבור WhatsApp".
 
-**ב. שינוי טאב (סביב שורה 1355):**
-- במקום לדרוס draft מ-`mappingSite`, מזג: שמור את ערכי ה-mode הנוכחי, החלף mode, וטען את ה-draft מ-`mappingSite[mode-המתאים]` רק אם ה-draft של ה-mode החדש עוד לא נטען (כלומר שמור per-mode draft). אופציה פשוטה יותר: שמור שני state נפרדים `formDraft` ו-`slugDraft` והשתמש בנבחר לפי mode.
+### 4. בדיקה ידנית
+- להפעיל את שני הספקים באותו משתמש, לפתוח צ'אט ולוודא שהמתג בין Green ל‑Manus מופיע ועובד.
+- ביצירת אוטומציה חדשה לבחור חיבור Manus WA ולוודא שמירה ושליחה תקינה.
 
-**ג. שמירה (`mappingMutation` סביב שורה 545):**
-- אחרי הצלחה: במקום לסגור מיד את הדיאלוג, עדכן את `mappingSite` המקומי עם הערכים החדשים שנשמרו (`{...mappingSite, campaign_form_mapping: clean}` או url בהתאם), והשאר את הדיאלוג פתוח. כך המשתמש רואה מיד שהשיוך נשמר. הוסף כפתור "סגור" לצד "שמור".
-- לחילופין, אם רוצים לסגור: השתמש ב-`await queryClient.refetchQueries({ queryKey: ["wordpress-sites-admin"] })` לפני `setMappingSite(null)` כדי להבטיח ש-`sites` עודכן.
-
-**ד. הגנה נוספת:** ב-`openMapping` קרא ל-`queryClient.invalidateQueries(["wordpress-sites-admin"])` ואז השתמש בנתוני האתר הטריים (אפשר לעשות זאת ע"י לקיחת ה-site מתוך `sites.find(s => s.id === site.id)` בכל פתיחה).
-
-## בלי שינוי
-- אין שינוי בסכמת DB / RLS — בדקתי ש-`tenant_isolation` policy מאפשרת UPDATE.
-- אין שינוי ב-edge function `fetch-elementor-submissions`.
-- אין שינוי בלוגיקת הסנכרון של Google Ads.
-
-## אימות
-אחרי התיקון:
-1. פתח דיאלוג, בחר קמפיין בטופס, שמור — אמור להישאר פתוח עם הערך מוצג.
-2. סגור ופתח מחדש — הערך השמור עדיין מוצג.
-3. עבור בין טאב טופס לעמוד — עריכות לא שמורות נשמרות לכל טאב בנפרד.
-4. שמירה ב-slug לא דורסת `campaign_form_mapping` ולהפך (כבר כך מאחר ש-payload כולל רק שדה אחד).
+## הערות
+- אין שינויי DB / RLS / Edge Functions — כל היכולת קיימת כבר ברמת הנתונים; חסר רק חשיפה ב‑UI ותיקון סינון.
+- אין שינוי לפלואים שאינם WhatsApp (ManyChat / Telegram).

@@ -137,7 +137,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
   const tenantIdForProvider = contactType === "unknown" ? currentTenant?.id : contact?.tenant_id;
   
   const { data: chatIntegrations } = useQuery({
-    queryKey: ["chat-integrations", tenantIdForProvider],
+    queryKey: ["chat-integrations", tenantIdForProvider, userId],
     queryFn: async () => {
       if (!tenantIdForProvider) return [];
       const { data, error } = await supabase
@@ -147,10 +147,14 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
         .eq("is_active", true)
         .in("integration_type", ["manychat", "green_api", "manus_wa"]);
       if (error) return [];
-      return data || [];
+      // Scope per-user providers (green_api / manus_wa) to current user; keep manychat at tenant level
+      return (data || []).filter((i: any) =>
+        i.integration_type === "manychat" ? true : i.user_id === userId
+      );
     },
     enabled: !!tenantIdForProvider,
   });
+
 
   // Persist provider selection per tenant
   const providerStorageKey = tenantIdForProvider ? `chat_provider_${tenantIdForProvider}` : null;
