@@ -962,7 +962,7 @@ export function AddAutomationForm() {
                   name="green_api_integration_id"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>בחר חיבור Green API *</FormLabel>
+                      <FormLabel>בחר חיבור WhatsApp *</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
@@ -971,23 +971,27 @@ export function AddAutomationForm() {
                         </FormControl>
                         <SelectContent className="bg-background z-[100]">
                           {greenApiIntegrations && greenApiIntegrations.length > 0 ? (
-                            greenApiIntegrations.map((integration: any) => (
-                              <SelectItem key={integration.id} value={integration.id}>
-                                {integration.owner_name || 'חיבור'} ({integration.settings?.idInstance?.slice(-4) || 'לא ידוע'})
-                              </SelectItem>
-                            ))
+                            greenApiIntegrations.map((integration: any) => {
+                              const providerLabel = integration.integration_type === 'manus_wa' ? 'Manus WA' : 'Green API';
+                              return (
+                                <SelectItem key={integration.id} value={integration.id}>
+                                  [{providerLabel}] {integration.owner_name || 'חיבור'} ({integration.settings?.idInstance?.slice(-4) || integration.settings?.instanceId?.slice(-4) || 'לא ידוע'})
+                                </SelectItem>
+                              );
+                            })
                           ) : (
-                            <div className="py-2 px-3 text-sm text-muted-foreground">לא נמצאו חיבורי Green API</div>
+                            <div className="py-2 px-3 text-sm text-muted-foreground">לא נמצאו חיבורי WhatsApp</div>
                           )}
                         </SelectContent>
                       </Select>
                       <FormDescription className="text-xs">
-                        בחר איזה חיבור Green API להשתמש לשליחת ההודעה
+                        בחר באיזה חיבור WhatsApp (Green API או Manus) להשתמש לשליחת ההודעה
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+
                 
                 <FormField
                   control={form.control}
