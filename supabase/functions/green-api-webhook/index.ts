@@ -512,7 +512,7 @@ Deno.serve(async (req) => {
     // Use limit(1) and order by created_at desc to get the most recent if duplicates exist
     const { data: integrations, error: integrationError } = await supabaseClient
       .from('tenant_integrations')
-      .select('tenant_id, user_id, settings, instance_id, api_key')
+      .select('id, tenant_id, user_id, settings, instance_id, api_key')
       .eq('integration_type', 'green_api')
       .eq('is_active', true)
       .eq('instance_id', instanceId)
