@@ -926,7 +926,7 @@ Deno.serve(async (req) => {
 
                     if (isCarmenFlow) {
                       const sPhone = payloadData?.sender_phone || payloadData?.phone || ''
-                      const cId = payloadData?.chat_id || ''
+                      const cId = payloadData?.chat_id || payloadData?.group_chat_id || ''
 
                       // ── Timeout check: close expired sessions ──────────────
                       const timeoutMinutes = triggerCfg.session_timeout_minutes ??
@@ -955,15 +955,16 @@ Deno.serve(async (req) => {
 
                       if (!payloadData._carmen_session_id) {
                         // No active session — only create one if trigger keyword is present AND message is outgoing
-                        const messageDirection = payloadData?.direction || ''
+                        const messageDirection = String(payloadData?.direction || '').toLowerCase()
+                        const isOutgoingMessage = messageDirection === 'outgoing' || messageDirection === 'outbound'
                         const triggerKeyword = triggerCfg.trigger_keyword ||
                           (automation as any).configuration?.trigger_keyword || 'כרמן'
                         const messageText = (payloadData?.text || payloadData?.message_text || '').toLowerCase()
                         const triggerWords = [triggerKeyword.toLowerCase(), 'carmen', 'כרמן']
                         const hasTrigger = triggerWords.some(kw => messageText.includes(kw))
 
-                        if (!hasTrigger || messageDirection !== 'outgoing') {
-                          console.log(`[CARMEN] No active session — skipping: hasTrigger=${hasTrigger}, direction=${messageDirection} (need outgoing) for chat ${cId}`)
+                        if (!hasTrigger || !isOutgoingMessage) {
+                          console.log(`[CARMEN] No active session — skipping: hasTrigger=${hasTrigger}, direction=${messageDirection} (need outgoing/outbound) for chat ${cId}`)
                           // Skip the agent step entirely — only the connection owner can start a session
                           continue
                         }
@@ -1130,6 +1131,9 @@ Deno.serve(async (req) => {
                   }
                 } else if (effectiveActionType === 'send_greenapi_message' || effectiveActionType === 'send_manus_message') {
                   // If message_template contains {{agent_output}}, replace it
+                  if (stepConfig.message_template?.includes('{{agent_output}}') && !previousStepOutput?.output) {
+                    throw new Error('כרמן לא החזירה תשובה לשליחה, לכן ההודעה לא נשלחה')
+                  }
                   if (stepConfig.message_template && previousStepOutput) {
                     const agentText = previousStepOutput?.output || (typeof previousStepOutput === 'string' ? previousStepOutput : JSON.stringify(previousStepOutput))
                     stepConfig.message_template = stepConfig.message_template.replace(/\{\{agent_output\}\}/g, agentText)
