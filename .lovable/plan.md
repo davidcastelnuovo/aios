@@ -1,10 +1,21 @@
-## Change
+## הבעיה
+המיני-טאב של דוח Google Analytics מצלם מסך לבן/ריק. הסיבה: ב-`DynamicTableView.tsx` הרינדור של GA (וגם GSC) חסום מאחורי `!summaryOnly`. ב-`ClientReportPanel.tsx` רק `ahrefs` מקבל `summaryOnly={false}`, לכן ה-snapshot של GA רץ ב-summaryOnly ולא מציג כלום — והצילום יוצא ריק.
 
-In `src/pages/GoogleAnalyticsSettings.tsx`:
+## התיקון
+בקובץ `src/components/clients/ClientReportPanel.tsx` שורה 703 — להרחיב את החריגה כך שגם `google_analytics` ו-`google_search_console` יצולמו במצב מלא ולא ב-summary:
 
-1. Default the active tab to `"direct"` instead of `"make"` (line 25: `useState("direct")`).
-2. Move the "מומלץ" badge from the Make.com trigger to the API ישיר trigger.
-3. Reorder the `TabsList` so **API ישיר** is the primary/first tab and **Make.com** is the secondary one — under RTL this puts API on the right (the visually-default position the user expects).
-4. Update the help line currently at line 441 ("מומלץ לנסות את אפשרות Make.com") to drop the "recommended" framing — phrase Make.com as a fallback only.
+```tsx
+summaryOnly={
+  ["ahrefs", "google_analytics", "google_search_console"].includes(table.integration_type)
+    ? false
+    : true
+}
+```
 
-No logic, queries, or backend changes — pure UI/default-state tweak. Scope limited to GA settings (not Google Ads) per the request.
+זה גם יישר את ההתנהגות עם דוחות SEO (GSC) ש-לא בדקת אבל סובלים מאותה בעיה בשקט.
+
+## אופציונלי — להוסיף עיכוב גדול יותר ל-GA
+GA טוען כמה queries מקבילים (פלחי תאריכים, אירועים). אם אחרי התיקון הצילום יוצא חלקי, נעלה את ה-`delay` ב-`useEffect` (שורה 226) גם ל-GA ל-6000ms (כמו ahrefs) במקום 3000.
+
+## קבצים שיתעדכנו
+- `src/components/clients/ClientReportPanel.tsx` (שורה 703, ואופציונלית גם 226)

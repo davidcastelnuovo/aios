@@ -700,7 +700,13 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
           <ClientTableSnapshot
             ref={snapshotRef}
             tableSlug={table.slug}
-            summaryOnly={table.integration_type === "ahrefs" ? false : true}
+            summaryOnly={
+              ["ahrefs", "google_analytics", "google_search_console"].includes(
+                table.integration_type
+              )
+                ? false
+                : true
+            }
           />
           {/* Keep import to avoid dead-code lint while preserving fallback type */}
           {false && <SeoCombinedSnapshot tableId={table.id} tableName={table.name} />}
