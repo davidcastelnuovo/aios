@@ -325,7 +325,7 @@ Deno.serve(async (req) => {
       if (safeConfig.facebook_form_id && safeConfig.facebook_form_id !== safeData.facebook_form_id) {
         return { matches: false, reason: 'facebook_form_id_mismatch' }
       }
-      if (safeConfig.group_id && safeConfig.group_id !== safeData.group_id) {
+      if (safeConfig.group_id && !groupCandidates.includes(safeConfig.group_id)) {
         return { matches: false, reason: 'group_id_mismatch' }
       }
       if (safeConfig.connection_user_id && safeConfig.connection_user_id !== safeData.connection_user_id) {
