@@ -354,8 +354,12 @@ Deno.serve(async (req) => {
     }
 
     // ===== Carmen WhatsApp session handling =====
-    // Build a chat_id compatible with Carmen session lookup (matches "<phone>@c.us" convention).
-    const chatIdForCarmen = `${counterpartPhone}@c.us`;
+    // If this came from the operator's personal phone (paired via Green API),
+    // Carmen should reply BACK to the operator's phone — NOT to the device itself.
+    const carmenTargetPhone = pairedFromGreenApi && sourcePhoneNumber
+      ? sourcePhoneNumber
+      : counterpartPhone;
+    const chatIdForCarmen = `${carmenTargetPhone}@c.us`;
     const senderName = (payload.senderName || payload.fromName || null) as string | null;
 
     let carmenOutcome: string | null = null;
@@ -366,7 +370,7 @@ Deno.serve(async (req) => {
         integrationId: integ.id,
         connectionUserId,
         chatId: chatIdForCarmen,
-        phoneNumber: counterpartPhone,
+        phoneNumber: carmenTargetPhone,
           sourcePhoneNumber,
         senderName,
         messageText,
@@ -377,7 +381,7 @@ Deno.serve(async (req) => {
           try {
             const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
             const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-            console.log('[carmen->manus] sending', { integrationId: integ.id, tenantId, phoneNumber: counterpartPhone, connectionUserId, messageLen: message.length });
+            console.log('[carmen->manus] sending', { integrationId: integ.id, tenantId, phoneNumber: carmenTargetPhone, connectionUserId, messageLen: message.length });
             const res = await fetch(`${supabaseUrl}/functions/v1/send-manus-wa-message`, {
               method: 'POST',
               headers: {
@@ -387,7 +391,7 @@ Deno.serve(async (req) => {
               body: JSON.stringify({
                 integrationId: integ.id,
                 tenantId,
-                phoneNumber: counterpartPhone,
+                phoneNumber: carmenTargetPhone,
                 senderUserId: connectionUserId,
                 message,
               }),
@@ -402,7 +406,7 @@ Deno.serve(async (req) => {
         },
       });
       if (result.handled) carmenOutcome = result.outcome;
-      console.log('[carmen-private]', { chatId: chatIdForCarmen, phoneNumber: counterpartPhone, sourcePhoneNumber, isOutgoingFromPhone, handled: result.handled, outcome: (result as any).outcome, reason: (result as any).reason, body: String(messageText).slice(0, 60) });
+      console.log('[carmen-private]', { chatId: chatIdForCarmen, carmenTargetPhone, counterpartPhone, sourcePhoneNumber, pairedFromGreenApi, isOutgoingFromPhone, handled: result.handled, outcome: (result as any).outcome, reason: (result as any).reason, body: String(messageText).slice(0, 60) });
     } catch (err) {
       console.error('manus-wa Carmen handler error:', err);
     }
