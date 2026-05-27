@@ -1102,6 +1102,58 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
 
       return { count: unconnected.length, unconnected_clients: unconnected }
     }
+    case 'list_integrations': {
+      let q = supabase.from('tenant_integrations').select('id, integration_type, is_active, settings, last_sync_at, created_at').eq('tenant_id', tenantId)
+      if (args.type) q = q.eq('integration_type', args.type)
+      if (args.only_active) q = q.eq('is_active', true)
+      const { data, error } = await q.order('integration_type')
+      if (error) throw error
+      return { count: data?.length || 0, integrations: (data || []).map((i: any) => ({ id: i.id, type: i.integration_type, is_active: i.is_active, last_sync_at: i.last_sync_at })) }
+    }
+    case 'toggle_integration': {
+      const { data, error } = await supabase.from('tenant_integrations').update({ is_active: args.is_active }).eq('id', args.integration_id).eq('tenant_id', tenantId).select('id, integration_type, is_active').single()
+      if (error) throw error
+      return data
+    }
+    case 'list_agents': {
+      let q = supabase.from('ai_agents').select('id, name, talent, engine, active').eq('tenant_id', tenantId)
+      if (args.only_active) q = q.eq('active', true)
+      const { data, error } = await q.order('name')
+      if (error) throw error
+      return { count: data?.length || 0, agents: data }
+    }
+    case 'create_agent': {
+      const { data, error } = await supabase.from('ai_agents').insert({
+        tenant_id: tenantId,
+        name: args.name,
+        talent: args.talent,
+        personality: args.personality || null,
+        soul: args.soul || null,
+        engine: args.engine || 'gemini-3-flash',
+        active: true,
+      }).select('id, name').single()
+      if (error) throw error
+      return { agent_id: data.id, name: data.name, message: `סוכן ${data.name} נוצר בהצלחה תחת כרמן` }
+    }
+    case 'update_agent': {
+      const updates: any = {}
+      for (const k of ['name', 'talent', 'personality', 'soul', 'engine', 'active']) {
+        if (args[k] !== undefined) updates[k] = args[k]
+      }
+      const { data, error } = await supabase.from('ai_agents').update(updates).eq('id', args.agent_id).eq('tenant_id', tenantId).select('id, name, active').single()
+      if (error) throw error
+      return data
+    }
+    case 'delegate_to_github_agent': {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/github-agent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+        body: JSON.stringify({ action: args.action || 'chat_support', tenant_id: tenantId, message: args.message }),
+      })
+      const txt = await res.text()
+      if (!res.ok) return { error: `github-agent failed [${res.status}]: ${txt}` }
+      try { return JSON.parse(txt) } catch { return { response: txt } }
+    }
     default:
       throw new Error(`Unknown tool: ${name}`)
   }
