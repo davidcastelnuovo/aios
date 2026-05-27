@@ -1936,7 +1936,7 @@ function CarmenSessionConfig({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">כל ההודעות (ללא הגבלה)</SelectItem>
-              <SelectItem value="specific_group">קבוצה ספציפית בלבד</SelectItem>
+              <SelectItem value="specific_group">קבוצות ספציפיות בלבד</SelectItem>
               <SelectItem value="specific_phone">מספר טלפון ספציפי בלבד</SelectItem>
               <SelectItem value="private_only">שיחות פרטיות בלבד (לא קבוצות)</SelectItem>
             </SelectContent>
