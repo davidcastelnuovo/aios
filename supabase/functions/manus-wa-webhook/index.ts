@@ -159,10 +159,10 @@ Deno.serve(async (req) => {
               const instanceId = settingsAny.instance_id;
               const apiKey = integ.api_key;
               if (!instanceId || !apiKey) return false;
-              const res = await fetch(`${baseUrl}/api/v1/instances/${instanceId}/send/text`, {
+              const res = await fetch(`${baseUrl}/api/v1/instances/${instanceId}/send/group`, {
                 method: 'POST',
                 headers: { 'X-Api-Key': apiKey, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ to: groupChatId, body: message }),
+                body: JSON.stringify({ groupId: groupChatId, body: message }),
               });
               return res.ok;
             } catch (err) {
