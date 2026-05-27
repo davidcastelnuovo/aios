@@ -375,21 +375,27 @@ async function findCarmenAgent(
   return data || null;
 }
 
-// Check if any automation has a Carmen WhatsApp session trigger configured
+// Check if any automation has a Carmen WhatsApp session trigger configured.
+// If `integrationId` is provided, automations pinned to a different integration are skipped
+// (so the user can dedicate Carmen to a specific WhatsApp connection, e.g. Manus only).
 async function findCarmenSessionAutomation(
   supabase: any,
-  tenantId: string
+  tenantId: string,
+  integrationId?: string | null,
 ): Promise<any | null> {
   // Method 1: Legacy — top-level configuration.carmen_session_mode
-  const { data: legacyMatch } = await supabase
+  const { data: legacyMatches } = await supabase
     .from('automations')
     .select('id, name, configuration')
     .eq('tenant_id', tenantId)
     .eq('trigger_type', 'whatsapp_message_received')
     .eq('active', true)
     .filter('configuration->>carmen_session_mode', 'eq', 'true')
-    .limit(1)
-    .maybeSingle();
+    .limit(10);
+  const legacyMatch = (legacyMatches || []).find((a: any) => {
+    const pinned = a.configuration?.carmen_integration_id;
+    return !pinned || !integrationId || pinned === integrationId;
+  });
   if (legacyMatch) return legacyMatch;
 
   // Method 2: Flow Builder — trigger step with action_type = carmen_whatsapp_session
@@ -400,23 +406,26 @@ async function findCarmenSessionAutomation(
     .eq('step_type', 'trigger')
     .eq('action_type', 'carmen_whatsapp_session');
 
-  if (flowSteps && flowSteps.length > 0) {
-    const automationIds = flowSteps.map((s: any) => s.automation_id);
-    const { data: automations } = await supabase
-      .from('automations')
-      .select('id, name, configuration')
-      .in('id', automationIds)
-      .eq('active', true)
-      .limit(1);
-    if (automations && automations.length > 0) {
-      // Merge trigger step config into the automation config for downstream use
-      const auto = automations[0];
-      const stepConfig = flowSteps.find((s: any) => s.automation_id === auto.id)?.configuration || {};
-      auto.configuration = { ...auto.configuration, ...stepConfig };
-      return auto;
-    }
-  }
+  if (!flowSteps || flowSteps.length === 0) return null;
+  const eligibleSteps = flowSteps.filter((s: any) => {
+    const pinned = s.configuration?.carmen_integration_id;
+    return !pinned || !integrationId || pinned === integrationId;
+  });
+  if (eligibleSteps.length === 0) return null;
 
+  const automationIds = eligibleSteps.map((s: any) => s.automation_id);
+  const { data: automations } = await supabase
+    .from('automations')
+    .select('id, name, configuration')
+    .in('id', automationIds)
+    .eq('active', true)
+    .limit(1);
+  if (automations && automations.length > 0) {
+    const auto = automations[0];
+    const stepConfig = eligibleSteps.find((s: any) => s.automation_id === auto.id)?.configuration || {};
+    auto.configuration = { ...auto.configuration, ...stepConfig };
+    return auto;
+  }
   return null;
 }
 
@@ -512,7 +521,7 @@ Deno.serve(async (req) => {
     // Use limit(1) and order by created_at desc to get the most recent if duplicates exist
     const { data: integrations, error: integrationError } = await supabaseClient
       .from('tenant_integrations')
-      .select('tenant_id, user_id, settings, instance_id, api_key')
+      .select('id, tenant_id, user_id, settings, instance_id, api_key')
       .eq('integration_type', 'green_api')
       .eq('is_active', true)
       .eq('instance_id', instanceId)
@@ -1716,7 +1725,7 @@ Deno.serve(async (req) => {
           // Incoming message but no active session — skip Carmen entirely
         } else {
         // Step 1: Find active Carmen automation for this tenant
-        const carmenAutomation = await findCarmenSessionAutomation(supabaseClient, tenantId);
+        const carmenAutomation = await findCarmenSessionAutomation(supabaseClient, tenantId, integration.id);
         
         if (!carmenAutomation) {
           // No Carmen automation configured — skip silently
