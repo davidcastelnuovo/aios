@@ -877,6 +877,118 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (error) throw error
       return { deleted: true, key: args.key }
     }
+    // KNOWLEDGE BASE
+    case 'kb_list_folder': {
+      let q = supabase.from('carmen_memory_pointers')
+        .select('id, category, subcategory, path, entity_type, entity_id, title, summary, ref_date, importance')
+        .eq('tenant_id', tenantId)
+      if (args.category) q = q.eq('category', args.category)
+      if (args.subcategory) q = q.eq('subcategory', args.subcategory)
+      if (args.path_prefix) q = q.like('path', `${args.path_prefix}%`)
+      const { data, error } = await q.order('ref_date', { ascending: false, nullsFirst: false }).limit(args.limit || 50)
+      if (error) throw error
+      return { count: data.length, pointers: data }
+    }
+    case 'kb_search': {
+      // Try semantic via embedding; fall back to text ILIKE on title/summary
+      try {
+        const embedRes = await fetch('https://ai.gateway.lovable.dev/v1/embeddings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('LOVABLE_API_KEY')}` },
+          body: JSON.stringify({ model: 'google/gemini-embedding-001', input: args.query, dimensions: 1536 }),
+        })
+        if (embedRes.ok) {
+          const j = await embedRes.json()
+          const vec = j?.data?.[0]?.embedding
+          if (vec) {
+            const sinceFilter = args.since_days ? `,ref_date.gte.${new Date(Date.now() - args.since_days*86400000).toISOString()}` : ''
+            const { data, error } = await supabase.rpc('kb_match_pointers', {
+              p_tenant_id: tenantId,
+              p_query_embedding: vec,
+              p_category: args.category || null,
+              p_since_days: args.since_days || null,
+              p_limit: args.limit || 20,
+            })
+            if (!error && data) return { count: data.length, results: data, mode: 'semantic' }
+          }
+        }
+      } catch (_) {/* fall through */}
+      // Fallback text search
+      let q = supabase.from('carmen_memory_pointers')
+        .select('id, category, subcategory, path, entity_type, entity_id, title, summary, ref_date')
+        .eq('tenant_id', tenantId)
+        .or(`title.ilike.%${args.query}%,summary.ilike.%${args.query}%`)
+      if (args.category) q = q.eq('category', args.category)
+      if (args.since_days) q = q.gte('ref_date', new Date(Date.now() - args.since_days*86400000).toISOString())
+      const { data, error } = await q.order('ref_date', { ascending: false, nullsFirst: false }).limit(args.limit || 20)
+      if (error) throw error
+      return { count: data.length, results: data, mode: 'text' }
+    }
+    case 'kb_open': {
+      const { data: ptr, error: pErr } = await supabase.from('carmen_memory_pointers')
+        .select('*').eq('id', args.pointer_id).eq('tenant_id', tenantId).maybeSingle()
+      if (pErr) throw pErr
+      if (!ptr) return { error: 'pointer not found' }
+      // Fetch live row from source
+      let live: any = null
+      try {
+        const tableMap: Record<string,string> = { client: 'clients', campaigner: 'campaigners', task: 'tasks', message: 'chat_messages', lead: 'leads', report: 'seo_reports', system: '' }
+        const table = tableMap[ptr.entity_type] ?? ptr.entity_type
+        if (table) {
+          const { data } = await supabase.from(table).select('*').eq('id', ptr.entity_id).maybeSingle()
+          live = data
+        }
+      } catch (_) {/* ignore */}
+      // Bump access count async
+      supabase.from('carmen_memory_pointers').update({ updated_at: new Date().toISOString() }).eq('id', ptr.id).then(()=>{})
+      return { pointer: ptr, live }
+    }
+    case 'kb_recall_conversation': {
+      let q = supabase.from('carmen_memory_episodes')
+        .select('id, topic, topic_tags, summary, source_table, source_ids, ref_date, importance, retention_score')
+        .eq('tenant_id', tenantId)
+      if (args.topic) q = q.ilike('topic', `%${args.topic}%`)
+      if (args.query) q = q.or(`topic.ilike.%${args.query}%,summary.ilike.%${args.query}%`)
+      if (args.since_days) q = q.gte('ref_date', new Date(Date.now() - args.since_days*86400000).toISOString())
+      const { data, error } = await q.order('ref_date', { ascending: false, nullsFirst: false }).limit(args.limit || 10)
+      if (error) throw error
+      // Bump access count on returned episodes (non-blocking)
+      if (data?.length) {
+        supabase.from('carmen_memory_episodes')
+          .update({ last_accessed_at: new Date().toISOString() })
+          .in('id', data.map((d: any) => d.id)).then(()=>{})
+      }
+      return { count: data.length, episodes: data }
+    }
+    case 'kb_learn': {
+      // Generate embedding (best-effort)
+      let embedding: number[] | null = null
+      try {
+        const embedRes = await fetch('https://ai.gateway.lovable.dev/v1/embeddings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('LOVABLE_API_KEY')}` },
+          body: JSON.stringify({ model: 'google/gemini-embedding-001', input: `${args.topic}\n\n${args.summary}`, dimensions: 1536 }),
+        })
+        if (embedRes.ok) {
+          const j = await embedRes.json()
+          embedding = j?.data?.[0]?.embedding || null
+        }
+      } catch (_) {/* ignore */}
+      const { data, error } = await supabase.from('carmen_memory_episodes').insert({
+        tenant_id: tenantId,
+        topic: args.topic,
+        topic_tags: args.topic_tags || [],
+        summary: args.summary,
+        summary_embedding: embedding,
+        source_table: args.source_table || null,
+        source_ids: args.source_ids || [],
+        importance: Math.max(1, Math.min(10, args.importance || 5)),
+        retention_score: 1.0,
+        ref_date: new Date().toISOString(),
+      }).select('id, topic').single()
+      if (error) throw error
+      return { learned: true, episode_id: data.id, topic: data.topic }
+    }
     // CHAT HISTORY
     case 'get_chat_history': {
       const filterCol = args.contact_type === 'client' ? 'client_id' : 'lead_id'
