@@ -34,6 +34,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
   const [showTableDropdown, setShowTableDropdown] = useState(false);
   const [viewDashboard, setViewDashboard] = useState<{ id: string; name: string } | null>(null);
   const [showLinkSection, setShowLinkSection] = useState(false);
+  const [activeTabId, setActiveTabId] = useState<string | null>(null);
 
   // All tables for the tenant
   const { data: allTables = [], isLoading } = useQuery({
