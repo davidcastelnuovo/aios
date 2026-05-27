@@ -1,29 +1,22 @@
 ## הבעיה
+כששואלים את כרמן "אילו לקוחות משוייכים לדקל", היא לא יודעת לבדוק את שיוך הלקוחות עצמם (טבלת `client_team` שמקשרת `campaigner_id` ל-`client_id`), אז היא נסוגה למשימות ולפעמים מחזירה תשובה לא מדויקת.
 
-הלוגים של `manus-wa-webhook` מראים:
-```
-event= undefined from= undefined to= undefined fromMe= undefined bodyPreview=
-```
-רק `instanceId` נקלט. ה-webhook מזהה את החיבור, אבל מאחר ש-`event` הוא `undefined` הוא מחזיר מיד `{ignored: undefined}` ולא קורא ל-`handleCarmenMessage`. לכן כרמן לא מגיבה — לא משנה מה כתוב באוטומציה או ברשימת המספרים המורשים.
+## הפתרון
+להוסיף ל-Carmen יכולת לסנן לקוחות לפי קמפיינר משוייך, דרך הכלי `list_clients` (ב-`supabase/functions/run-ai-agent/index.ts`).
 
-הסיבה: שער ה-WhatsApp של Manus שולח את ההודעה במבנה payload שונה (כנראה עטוף ב-`data` / `message` / `payload` פנימי), והקוד הנוכחי קורא ישירות `payload.event`, `payload.from` וכו'.
+### שינויים
 
-## התיקון
+1. **הרחבת `list_clients`** — להוסיף שני פרמטרים אופציונליים:
+   - `campaigner_id` — סינון לפי מזהה קמפיינר
+   - `campaigner_name` — סינון לפי שם (מילת חיפוש, ילך דרך `campaigners.full_name ilike`)
+   
+   כשאחד מהם מועבר, השאילתה תבצע join מול `client_team` ותחזיר רק לקוחות עם שורה תואמת. תיאור הכלי יעודכן כדי שכרמן תדע להשתמש בו לשאלות מסוג "מי הלקוחות של X".
 
-1. **לוג אבחון זמני** ב-`supabase/functions/manus-wa-webhook/index.ts` — להדפיס את מפתחות ה-payload המלא ברגע שמתקבל, כדי לדעת בוודאות את המבנה שמאנוס שולחת.
-2. **נרמול payload** — להוסיף בתחילת ה-handler חילוץ של אובייקט ההודעה האמיתי מכל המבנים הנפוצים של Manus WA Gateway:
-   - שטוח: `payload`
-   - עטוף: `payload.data`, `payload.message`, `payload.payload`, `payload.body` (כשהוא אובייקט)
-   - וריאציות שמות שדות: `messageType`/`type` במקום `event`, `chatId`/`remoteJid` במקום `from`, `text`/`message`/`content` במקום `body`, `key.fromMe` במקום `fromMe`.
-3. להמיר את הכל למבנה אחיד שבו שאר הקוד (`event`, `from`, `to`, `body`, `fromMe`, `id`, `senderName`, `author`) ממשיך לעבוד בלי שינוי בלוגיקה של Carmen, הכנסת `chat_messages`, וזיהוי קבוצה/יחיד.
-4. **לאחר פריסה** — לקרוא ללוגים שוב, לראות את המבנה בפועל, ולוודא שהפעם נקלטים `event=message`, `from=...`, ו-Carmen מופעלת. אם נדרש כוונון נוסף למפתחות ספציפיים שראינו בלוג — מעדכנים את ה-normalizer.
+2. **תיאור כלי** — לעדכן את ה-description של `list_clients` ל: "רשימת לקוחות. אפשר לסנן לפי סטטוס, או לפי קמפיינר משוייך (campaigner_id / campaigner_name) — השתמש בזה לשאלות כמו 'אילו לקוחות משוייכים ל-X'."
 
-## מה לא נשנה
+3. **חיזוק ה-system prompt** (אזור הוראות הכלים, סביב שורה 1415) — להוסיף משפט: "לשאלות 'אילו לקוחות משוייכים ל-X' השתמש ב-`list_clients` עם `campaigner_name`, ולא ב-`list_tasks`."
 
-- לוגיקת Carmen, RecipientsListEditor, ובחירת ספק/חיבור — לא נוגעים.
-- האוטומציה עצמה (Trigger → AI סוכן → שלח WhatsApp) תקינה; הבעיה היא בכניסה של ההודעה הנכנסת בלבד.
-- חתימת ה-webhook, ה-secret, וזיהוי ה-integration — כבר עובדים.
-
-## איך נדע שזה עובד
-
-אחרי הפריסה תשלח הודעה אחת לכרמן; הלוגים יראו `event= message from= 972...@c.us bodyPreview= ...` וכרמן תגיב (או נקבל `[carmen]` outcome ברור בלוג שמסביר למה לא הגיבה — למשל cooldown, ואז זו בעיה אחרת שנטפל בה בנפרד).
+### Technical details
+- שאילתה: `clients` join `client_team` on `client_team.client_id = clients.id`, פילטר `tenant_id`, ואז `client_team.campaigner_id = ?` או join נוסף ל-`campaigners` עם `full_name ilike %X%`.
+- אם `campaigner_name` לא מזהה אף קמפיינר → מחזירים `{count:0, clients:[], note:'no campaigner matched'}` כדי שכרמן תוכל לדווח נכון.
+- אין שינויי DB, אין שינויי UI, אין שינויים נוספים בקבצים אחרים.
