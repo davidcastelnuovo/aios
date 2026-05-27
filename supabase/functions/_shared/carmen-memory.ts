@@ -1,0 +1,77 @@
+// Shared helpers for Carmen Memory Kingdom
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+
+export function svc() {
+  return createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    { auth: { persistSession: false } }
+  );
+}
+
+const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+
+export async function embed(text: string): Promise<number[] | null> {
+  if (!LOVABLE_API_KEY || !text?.trim()) return null;
+  try {
+    const r = await fetch("https://ai.gateway.lovable.dev/v1/embeddings", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "google/gemini-embedding-001",
+        input: text.slice(0, 8000),
+        dimensions: 1536,
+      }),
+    });
+    if (!r.ok) return null;
+    const j = await r.json();
+    return j?.data?.[0]?.embedding ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function upsertPointer(supabase: any, p: {
+  tenant_id: string;
+  category: string;
+  subcategory?: string | null;
+  path: string;
+  entity_type: string;
+  entity_id: string;
+  title: string;
+  summary?: string | null;
+  ref_date?: string | null;
+  importance?: number;
+  metadata?: Record<string, unknown>;
+  withEmbedding?: boolean;
+}) {
+  const row: any = {
+    tenant_id: p.tenant_id,
+    category: p.category,
+    subcategory: p.subcategory ?? null,
+    path: p.path,
+    entity_type: p.entity_type,
+    entity_id: p.entity_id,
+    title: p.title,
+    summary: p.summary ?? null,
+    ref_date: p.ref_date ?? null,
+    importance: p.importance ?? 50,
+    metadata: p.metadata ?? {},
+  };
+  if (p.withEmbedding && p.summary) {
+    const e = await embed(`${p.title}\n${p.summary}`);
+    if (e) row.summary_embedding = e as any;
+  }
+  await supabase
+    .from("carmen_memory_pointers")
+    .upsert(row, { onConflict: "tenant_id,path,entity_type,entity_id,subcategory" });
+}
+
+export function shortText(s: string | null | undefined, n = 240): string {
+  if (!s) return "";
+  const t = String(s).replace(/\s+/g, " ").trim();
+  return t.length > n ? t.slice(0, n - 1) + "…" : t;
+}

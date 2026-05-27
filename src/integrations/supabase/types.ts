@@ -1278,6 +1278,165 @@ export type Database = {
           },
         ]
       }
+      carmen_memory_episodes: {
+        Row: {
+          access_count: number
+          created_at: string
+          id: string
+          importance: number
+          last_accessed_at: string
+          participants: Json | null
+          ref_date: string
+          retention_score: number
+          session_ref: string | null
+          source_ids: string[] | null
+          source_table: string | null
+          summary: string
+          summary_embedding: string | null
+          tenant_id: string
+          topic: string | null
+          topic_tags: string[] | null
+          updated_at: string
+        }
+        Insert: {
+          access_count?: number
+          created_at?: string
+          id?: string
+          importance?: number
+          last_accessed_at?: string
+          participants?: Json | null
+          ref_date?: string
+          retention_score?: number
+          session_ref?: string | null
+          source_ids?: string[] | null
+          source_table?: string | null
+          summary: string
+          summary_embedding?: string | null
+          tenant_id: string
+          topic?: string | null
+          topic_tags?: string[] | null
+          updated_at?: string
+        }
+        Update: {
+          access_count?: number
+          created_at?: string
+          id?: string
+          importance?: number
+          last_accessed_at?: string
+          participants?: Json | null
+          ref_date?: string
+          retention_score?: number
+          session_ref?: string | null
+          source_ids?: string[] | null
+          source_table?: string | null
+          summary?: string
+          summary_embedding?: string | null
+          tenant_id?: string
+          topic?: string | null
+          topic_tags?: string[] | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      carmen_memory_outbox: {
+        Row: {
+          created_at: string
+          entity_id: string
+          entity_type: string
+          error: string | null
+          id: number
+          op: string
+          payload: Json
+          processed_at: string | null
+          retry_count: number
+          tenant_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          entity_id: string
+          entity_type: string
+          error?: string | null
+          id?: number
+          op: string
+          payload?: Json
+          processed_at?: string | null
+          retry_count?: number
+          tenant_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          entity_id?: string
+          entity_type?: string
+          error?: string | null
+          id?: number
+          op?: string
+          payload?: Json
+          processed_at?: string | null
+          retry_count?: number
+          tenant_id?: string | null
+        }
+        Relationships: []
+      }
+      carmen_memory_pointers: {
+        Row: {
+          category: string
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          id: string
+          importance: number
+          metadata: Json
+          path: string
+          ref_date: string | null
+          subcategory: string | null
+          summary: string | null
+          summary_embedding: string | null
+          tenant_id: string
+          title: string
+          updated_at: string
+          valid_from: string
+          valid_until: string | null
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          importance?: number
+          metadata?: Json
+          path: string
+          ref_date?: string | null
+          subcategory?: string | null
+          summary?: string | null
+          summary_embedding?: string | null
+          tenant_id: string
+          title: string
+          updated_at?: string
+          valid_from?: string
+          valid_until?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          importance?: number
+          metadata?: Json
+          path?: string
+          ref_date?: string | null
+          subcategory?: string | null
+          summary?: string | null
+          summary_embedding?: string | null
+          tenant_id?: string
+          title?: string
+          updated_at?: string
+          valid_from?: string
+          valid_until?: string | null
+        }
+        Relationships: []
+      }
       carmen_whatsapp_sessions: {
         Row: {
           agent_id: string | null
