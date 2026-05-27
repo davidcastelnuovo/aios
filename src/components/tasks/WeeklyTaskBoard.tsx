@@ -648,14 +648,15 @@ export function WeeklyTaskBoard() {
     onMutate: async ({ taskId, clientId }) => {
       await queryClient.cancelQueries({ queryKey: ["tasks"] });
       const clientName = clientsList?.find((c) => c.id === clientId)?.name ?? null;
+      const patch = (t: any) =>
+        t?.id === taskId
+          ? { ...t, client_id: clientId, clients: clientName ? { name: clientName } : null }
+          : t;
       queryClient.setQueriesData<any[]>({ queryKey: ["tasks"] }, (old) => {
         if (!Array.isArray(old)) return old;
-        return old.map((t) =>
-          t?.id === taskId
-            ? { ...t, client_id: clientId, clients: clientName ? { name: clientName } : null }
-            : t,
-        );
+        return old.map(patch);
       });
+      setLocalTasks((prev) => prev.map(patch));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
