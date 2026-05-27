@@ -1895,7 +1895,7 @@ function CarmenSessionConfig({
   // Helper label for connection
   const getConnectionLabel = (c: any) => {
     const settings = c.settings as any;
-    const displayName = settings?.display_name || settings?.phone_number || settings?.instance_id || c.instance_id;
+    const displayName = c.display_name || settings?.display_name || settings?.phone_number || settings?.instance_id || c.instance_id;
     const providerLabel = c.integration_type === "manus_wa" ? "מאנוס" : "Green API";
     return `${providerLabel} — ${displayName}`;
   };
