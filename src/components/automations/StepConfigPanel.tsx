@@ -24,6 +24,7 @@ import {
 import { FlowNodeData } from "./FlowNode";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useToast } from "@/hooks/use-toast";
+import { RecipientsListEditor, migrateLegacyRecipients } from "./RecipientsListEditor";
 
 // Trigger options organized by category for the Flow Builder
 export const TRIGGER_CATEGORIES = [
