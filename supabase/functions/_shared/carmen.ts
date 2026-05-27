@@ -235,7 +235,7 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     isIncoming, isManualOutgoing, isGroup, sendMessage,
   } = ctx;
 
-  if (isGroup) return { handled: false, reason: 'group' };
+  // Groups are supported — Carmen replies in the group chat.
   if (!isIncoming && !isManualOutgoing) return { handled: false, reason: 'not_user_message' };
 
   const normalizedMsg = (messageText || '').trim().toLowerCase();
