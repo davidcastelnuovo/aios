@@ -114,8 +114,8 @@ const TRIGGER_OPTIONS = TRIGGER_CATEGORIES.flatMap(c => c.options);
 
 const ACTION_OPTIONS = [
   { value: "send_whatsapp", label: "שלח WhatsApp (ManyChat)" },
-  { value: "send_manus_message", label: "שלח WhatsApp (Manus)" },
-  { value: "send_greenapi_message", label: "שלח WhatsApp (Green API)" },
+  { value: "send_greenapi_message", label: "שלח WhatsApp (Green API / Manus)" },
+  { value: "send_manus_message", label: "שלח WhatsApp (Manus - legacy)" },
   { value: "send_telegram", label: "שלח הודעת Telegram" },
   { value: "create_task", label: "צור משימה" },
   { value: "add_lead_update", label: "הוסף עדכון לליד" },
@@ -126,6 +126,7 @@ const ACTION_OPTIONS = [
   { value: "email", label: "אימייל" },
   { value: "notification", label: "התראה" },
 ];
+
 
 const DELAY_UNITS = [
   { value: "minutes", label: "דקות" },
@@ -1040,12 +1041,65 @@ function GreenAPIActionConfig({
   const phoneMode = configuration?.phone_mode || "field";
   const isManus = providerFilter === "manus_wa";
 
+  // Provider selection (Green API vs Manus). Locked when invoked via legacy send_manus_message action.
+  const selectedProvider: "green_api" | "manus_wa" =
+    providerFilter || (configuration?.wa_provider as "green_api" | "manus_wa") || "green_api";
+
+  // Filter integrations by selected provider
+  const filteredIntegrations = useMemo(
+    () => (greenApiIntegrations || []).filter((i) => i.integration_type === selectedProvider),
+    [greenApiIntegrations, selectedProvider],
+  );
+
+  // Auto-select integration when there is exactly one of the selected provider
+  useEffect(() => {
+    if (greenApiMode !== "tenant") return;
+    if (!filteredIntegrations || filteredIntegrations.length === 0) return;
+    const current = configuration?.green_api_integration_id;
+    const stillValid = current && filteredIntegrations.some((i) => i.id === current);
+    if (!stillValid) {
+      // Pick the only integration, or clear if multiple available and current invalid
+      if (filteredIntegrations.length === 1) {
+        onConfigChange("green_api_integration_id", filteredIntegrations[0].id);
+      } else if (current) {
+        onConfigChange("green_api_integration_id", "");
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProvider, filteredIntegrations.length, greenApiMode]);
+
   return (
     <div className="space-y-4">
-      {/* Connection mode (hidden for Manus — only tenant connections supported) */}
-      {!isManus && (
+      {/* Provider selector (Green API / Manus WA) — hidden when locked by legacy action type */}
+      {!providerFilter && (
         <div className="space-y-2">
-          <Label className="text-right block">מקור חיבור Green API</Label>
+          <Label className="text-right block">ספק WhatsApp</Label>
+          <RadioGroup
+            value={selectedProvider}
+            onValueChange={(v) => {
+              onConfigChange("wa_provider", v);
+              // Reset selected integration so user re-picks for the new provider
+              onConfigChange("green_api_integration_id", "");
+            }}
+            className="flex gap-4 justify-end"
+            dir="rtl"
+          >
+            <div className="flex items-center gap-2">
+              <RadioGroupItem value="green_api" id="wa-prov-green" />
+              <Label htmlFor="wa-prov-green" className="cursor-pointer text-sm">Green API</Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <RadioGroupItem value="manus_wa" id="wa-prov-manus" />
+              <Label htmlFor="wa-prov-manus" className="cursor-pointer text-sm">Manus WA</Label>
+            </div>
+          </RadioGroup>
+        </div>
+      )}
+
+      {/* Connection mode (Green API only supports external connections) */}
+      {selectedProvider === "green_api" && (
+        <div className="space-y-2">
+          <Label className="text-right block">מקור חיבור</Label>
           <RadioGroup
             value={greenApiMode}
             onValueChange={(v) => onConfigChange("green_api_mode", v)}
@@ -1066,12 +1120,14 @@ function GreenAPIActionConfig({
 
       {greenApiMode === "tenant" ? (
         <div className="space-y-2">
-          <Label className="text-right block">{isManus ? "חיבור Manus" : "חיבור Green API"}</Label>
+          <Label className="text-right block">
+            {selectedProvider === "manus_wa" ? "חיבור Manus" : "חיבור Green API"}
+          </Label>
           {isLoading ? (
             <div className="flex items-center justify-center py-2">
               <Loader2 className="h-4 w-4 animate-spin" />
             </div>
-          ) : greenApiIntegrations && greenApiIntegrations.length > 0 ? (
+          ) : filteredIntegrations && filteredIntegrations.length > 0 ? (
             <Select
               value={configuration?.green_api_integration_id || ""}
               onValueChange={(v) => onConfigChange("green_api_integration_id", v)}
@@ -1080,7 +1136,7 @@ function GreenAPIActionConfig({
                 <SelectValue placeholder="בחר חיבור..." />
               </SelectTrigger>
               <SelectContent>
-                {greenApiIntegrations.map((integration) => {
+                {filteredIntegrations.map((integration) => {
                   const settings = integration.settings as Record<string, any> | null;
                   const providerLabel = integration.integration_type === 'manus_wa' ? 'Manus WA' : 'Green API';
                   const name = (integration as any).display_name || settings?.instance_name || settings?.connection_name || providerLabel;
@@ -1094,12 +1150,15 @@ function GreenAPIActionConfig({
             </Select>
           ) : (
             <div className="rounded-lg border border-dashed p-3 text-center">
-              <p className="text-sm text-muted-foreground">אין חיבור Green API פעיל.</p>
+              <p className="text-sm text-muted-foreground">
+                אין חיבור {selectedProvider === "manus_wa" ? "Manus" : "Green API"} פעיל.
+              </p>
               <p className="text-xs text-muted-foreground mt-1">הגדר חיבור בעמוד האינטגרציות.</p>
             </div>
           )}
         </div>
       ) : (
+
         <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
           <p className="text-xs text-muted-foreground text-right">הזן פרטי חיבור Green API חיצוני:</p>
           <div className="space-y-2">
