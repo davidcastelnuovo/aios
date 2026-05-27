@@ -22,7 +22,7 @@ export default function GoogleAnalyticsSettings() {
   const { buildPath } = useTenantPath();
   const queryClient = useQueryClient();
   const [isConnecting, setIsConnecting] = useState(false);
-  const [activeTab, setActiveTab] = useState("make");
+  const [activeTab, setActiveTab] = useState("direct");
   const [webhookCopied, setWebhookCopied] = useState(false);
   const [sharingIntegrationId, setSharingIntegrationId] = useState<string | null>(null);
   const [sharingIntegrationName, setSharingIntegrationName] = useState("");
@@ -139,14 +139,14 @@ export default function GoogleAnalyticsSettings() {
       {/* Connection Method Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} dir="rtl">
         <TabsList className="grid w-full grid-cols-2 max-w-md">
-          <TabsTrigger value="make" className="flex items-center gap-2">
-            <Zap className="h-4 w-4" />
-            Make.com
-            <Badge variant="secondary" className="text-xs">מומלץ</Badge>
-          </TabsTrigger>
           <TabsTrigger value="direct" className="flex items-center gap-2">
             <BarChart3 className="h-4 w-4" />
             API ישיר
+            <Badge variant="secondary" className="text-xs">מומלץ</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="make" className="flex items-center gap-2">
+            <Zap className="h-4 w-4" />
+            Make.com
           </TabsTrigger>
         </TabsList>
 
@@ -438,7 +438,7 @@ export default function GoogleAnalyticsSettings() {
                   <Alert>
                     <AlertCircle className="h-4 w-4" />
                     <AlertDescription>
-                      חיבור ישיר דורש הגדרה ב-Google Cloud Console. אם אתה נתקל בבעיות OAuth, מומלץ לנסות את אפשרות Make.com.
+                      חיבור ישיר ל-Google Analytics דרך OAuth. אם נתקלת בבעיות הגדרה, ניתן להשתמש ב-Make.com כחלופה.
                     </AlertDescription>
                   </Alert>
 
