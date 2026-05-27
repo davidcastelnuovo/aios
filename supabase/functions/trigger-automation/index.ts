@@ -1336,7 +1336,7 @@ Deno.serve(async (req) => {
               response = await executeSendWhatsapp(supabase, automation.configuration, payloadData, tenantId)
             } else if (automation.action_type === 'create_manychat_subscriber') {
               response = await executeCreateManychatSubscriber(supabase, automation.configuration, payloadData, tenantId)
-            } else if (automation.action_type === 'send_greenapi_message') {
+            } else if (automation.action_type === 'send_greenapi_message' || automation.action_type === 'send_manus_message') {
               response = await executeGreenApiMessage(supabase, automation.configuration, payloadData, tenantId)
             } else if (automation.action_type === 'send_greenapi_to_campaigner') {
               response = await executeGreenApiToCampaigner(supabase, automation.configuration, payloadData, tenantId)
