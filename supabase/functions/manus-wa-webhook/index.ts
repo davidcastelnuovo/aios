@@ -198,12 +198,14 @@ Deno.serve(async (req) => {
 
     // Manus sometimes reports manual outgoing phone messages as inbound @lid events.
     // If Green API receives the same WhatsApp message as outbound moments later, use it
-    // as the direction/contact source while still replying through the selected Manus connection.
+    // as the direction/contact source AND route Carmen replies through Green API
+    // (so the reply comes from the same WhatsApp number the operator actually used).
+    let pairedFromGreenApi = false;
     if (!isOutgoingFromPhone && !isGroup && fromRaw.endsWith('@lid') && messageText.trim()) {
       await new Promise((resolve) => setTimeout(resolve, 2600));
       const { data: greenMatches } = await supabase
         .from('chat_messages')
-        .select('sender_phone, raw_provider_data, created_at')
+        .select('sender_phone, raw_provider_data, created_at, connection_user_id')
         .eq('tenant_id', tenantId)
         .eq('provider', 'green_api')
         .eq('direction', 'outbound')
@@ -224,6 +226,7 @@ Deno.serve(async (req) => {
           pairedOutgoing.raw_provider_data?.instanceData?.wid ||
           ''
         ).split('@')[0].replace(/[^0-9]/g, '');
+        pairedFromGreenApi = true;
         console.log('[manus-wa] paired LID event with Green API outbound', { messageId, counterpartPhone, sourcePhoneNumber });
       }
     }
@@ -355,6 +358,28 @@ Deno.serve(async (req) => {
           try {
             const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
             const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+            // If this message was actually sent via Green API (LID paired event),
+            // reply through Green API so the response comes from the same WhatsApp number.
+            if (pairedFromGreenApi) {
+              const res = await fetch(`${supabaseUrl}/functions/v1/send-green-api-message`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${serviceKey}`,
+                },
+                body: JSON.stringify({
+                  tenantId,
+                  phoneNumber: counterpartPhone,
+                  senderUserId: connectionUserId,
+                  message,
+                }),
+              });
+              if (!res.ok) {
+                const txt = await res.text();
+                console.error('[carmen] green-api send failed', res.status, txt);
+              }
+              return res.ok;
+            }
             const res = await fetch(`${supabaseUrl}/functions/v1/send-manus-wa-message`, {
               method: 'POST',
               headers: {
@@ -369,6 +394,10 @@ Deno.serve(async (req) => {
                 message,
               }),
             });
+            if (!res.ok) {
+              const txt = await res.text();
+              console.error('[carmen] manus send failed', res.status, txt);
+            }
             return res.ok;
           } catch (err) {
             console.error('manus-wa Carmen sendMessage error:', err);
