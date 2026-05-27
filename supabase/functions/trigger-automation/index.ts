@@ -995,7 +995,17 @@ Deno.serve(async (req) => {
                           console.log(`[CARMEN] New session created: ${newSession.id} for chat ${cId}`)
                         }
                       } else {
-                        // Update last_message_at on every message to keep session alive
+                        // Session exists — only respond to INBOUND messages from the user.
+                        // Outbound messages are Carmen's own replies echoed back by the webhook;
+                        // processing them would cause Carmen to reply to herself in a loop and
+                        // hallucinate confirmations without actually invoking tools.
+                        const messageDirection = String(payloadData?.direction || '').toLowerCase()
+                        const isOutgoingMessage = messageDirection === 'outgoing' || messageDirection === 'outbound'
+                        if (isOutgoingMessage) {
+                          console.log(`[CARMEN] Active session ${payloadData._carmen_session_id} — skipping outbound echo for chat ${cId}`)
+                          continue
+                        }
+                        // Update last_message_at on inbound messages to keep session alive
                         await supabase
                           .from('carmen_whatsapp_sessions')
                           .update({ last_message_at: new Date().toISOString() })
