@@ -1352,7 +1352,7 @@ Deno.serve(async (req) => {
     // Fetch tenant context, memory for Carmen and all agents
     const [tenantRes, agenciesRes, statsRes, memoryRes] = await Promise.all([
       supabase.from('tenants').select('name, type').eq('id', resolvedTenantId).single(),
-      supabase.from('agencies').select('id, name').eq('tenant_id', resolvedTenantId).order('name').limit(20),
+      supabase.from('agencies').select('id, name, tenant_id').eq('tenant_id', resolvedTenantId).order('name').limit(50),
       Promise.all([
         supabase.from('leads').select('status', { count: 'exact', head: false }).eq('tenant_id', resolvedTenantId),
         supabase.from('clients').select('id', { count: 'exact', head: false }).eq('tenant_id', resolvedTenantId),
@@ -1361,12 +1361,28 @@ Deno.serve(async (req) => {
       supabase.from('ai_memory').select('key, content, category').eq('tenant_id', resolvedTenantId).order('updated_at', { ascending: false }).limit(30),
     ])
     const tenantName = tenantRes.data?.name || 'הארגון'
-    const agencyList = (agenciesRes.data || []).map((a: any) => `${a.name} (${a.id})`).join(', ')
+    // Resolve shared agencies from other tenants accessible to us
+    const { data: sharedAccess } = await supabase
+      .from('agency_tenant_access')
+      .select('agency_id, source_tenant_id, agencies(name), tenants:source_tenant_id(name)')
+      .eq('accessing_tenant_id', resolvedTenantId)
+    const sharedAgencies = (sharedAccess || []).map((s: any) => ({
+      id: s.agency_id,
+      name: s.agencies?.name || 'agency',
+      source_tenant_id: s.source_tenant_id,
+      source_tenant_name: s.tenants?.name || 'other-tenant',
+    }))
+    const ownAgencyList = (agenciesRes.data || []).map((a: any) => `${a.name} (${a.id})`).join(', ')
+    const sharedAgencyList = sharedAgencies.map((a: any) => `${a.name} [משותפת מ-${a.source_tenant_name}] (${a.id})`).join(', ')
     const [leadsData, clientsData, tasksData] = statsRes
     const leadsByStatus = (leadsData.data || []).reduce((acc: any, l: any) => { acc[l.status] = (acc[l.status] || 0) + 1; return acc }, {})
     const tenantContext = [
       `ארגון: ${tenantName} (tenant_id: ${resolvedTenantId})`,
-      agencyList ? `סוכנויות: ${agencyList}` : '',
+      ownAgencyList ? `סוכנויות שלנו: ${ownAgencyList}` : '',
+      sharedAgencyList ? `סוכנויות משותפות (יש לנו גישה לדאטה שלהן): ${sharedAgencyList}` : '',
+      sharedAgencies.length > 0
+        ? `חשוב: יש לך גישה לקריאה/עדכון של לקוחות, לידים, משימות ושיחות מהסוכנויות המשותפות לעיל — גם אם הן שייכות לארגון אחר. כשמחפשים לקוח/ליד, חפשו גם בסוכנויות המשותפות.`
+        : '',
       `לידים: ${leadsData.data?.length || 0} (${Object.entries(leadsByStatus).map(([k,v]) => `${k}: ${v}`).join(', ')})`,
       `לקוחות פעילים: ${clientsData.data?.length || 0}`,
       `משימות פתוחות: ${tasksData.data?.length || 0}`,
