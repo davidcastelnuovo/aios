@@ -13,6 +13,33 @@ interface ClientCredentialsTabProps {
 }
 
 const emptyCred = { service_name: "", username: "", password: "", url: "", notes: "" };
+type CredValues = typeof emptyCred;
+
+interface CredFormProps {
+  values: CredValues;
+  onChange: (v: CredValues) => void;
+  onSave: () => void;
+  onCancel: () => void;
+  saveLabel: string;
+}
+
+function CredForm({ values, onChange, onSave, onCancel, saveLabel }: CredFormProps) {
+  return (
+    <Card className="p-3 space-y-2 bg-muted/30">
+      <Input placeholder="שם שירות *" value={values.service_name} onChange={e => onChange({ ...values, service_name: e.target.value })} className="text-sm h-8 text-right" dir="rtl" />
+      <div className="grid grid-cols-2 gap-2">
+        <Input placeholder="שם משתמש" value={values.username} onChange={e => onChange({ ...values, username: e.target.value })} className="text-sm h-8 text-right" dir="rtl" />
+        <Input placeholder="סיסמה" value={values.password} onChange={e => onChange({ ...values, password: e.target.value })} className="text-sm h-8 text-right" dir="rtl" type="text" />
+      </div>
+      <Input placeholder="כתובת URL" value={values.url} onChange={e => onChange({ ...values, url: e.target.value })} className="text-sm h-8 text-right" dir="rtl" />
+      <Input placeholder="הערות" value={values.notes} onChange={e => onChange({ ...values, notes: e.target.value })} className="text-sm h-8 text-right" dir="rtl" />
+      <div className="flex gap-2 justify-start">
+        <Button size="sm" className="h-7 text-xs" disabled={!values.service_name.trim()} onClick={onSave}>{saveLabel}</Button>
+        <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={onCancel}>ביטול</Button>
+      </div>
+    </Card>
+  );
+}
 
 export function ClientCredentialsTab({ clientId, tenantId }: ClientCredentialsTabProps) {
   const queryClient = useQueryClient();
@@ -109,27 +136,6 @@ export function ClientCredentialsTab({ clientId, tenantId }: ClientCredentialsTa
     }
   };
 
-  const CredForm = ({ values, onChange, onSave, onCancel, saveLabel }: {
-    values: typeof emptyCred;
-    onChange: (v: typeof emptyCred) => void;
-    onSave: () => void;
-    onCancel: () => void;
-    saveLabel: string;
-  }) => (
-    <Card className="p-3 space-y-2 bg-muted/30">
-      <Input placeholder="שם שירות *" value={values.service_name} onChange={e => onChange({ ...values, service_name: e.target.value })} className="text-sm h-8 text-right" dir="rtl" />
-      <div className="grid grid-cols-2 gap-2">
-        <Input placeholder="שם משתמש" value={values.username} onChange={e => onChange({ ...values, username: e.target.value })} className="text-sm h-8 text-right" dir="rtl" />
-        <Input placeholder="סיסמה" value={values.password} onChange={e => onChange({ ...values, password: e.target.value })} className="text-sm h-8 text-right" dir="rtl" type="text" />
-      </div>
-      <Input placeholder="כתובת URL" value={values.url} onChange={e => onChange({ ...values, url: e.target.value })} className="text-sm h-8 text-right" dir="rtl" />
-      <Input placeholder="הערות" value={values.notes} onChange={e => onChange({ ...values, notes: e.target.value })} className="text-sm h-8 text-right" dir="rtl" />
-      <div className="flex gap-2 justify-start">
-        <Button size="sm" className="h-7 text-xs" disabled={!values.service_name.trim()} onClick={onSave}>{saveLabel}</Button>
-        <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={onCancel}>ביטול</Button>
-      </div>
-    </Card>
-  );
 
   return (
     <div className="space-y-3" dir="rtl">
