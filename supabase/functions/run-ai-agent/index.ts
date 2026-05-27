@@ -144,7 +144,7 @@ const ALL_TOOLS = [
 async function executeTool(name: string, args: Record<string, any>, supabase: any, tenantId: string, userId: string, callerCampaignerId?: string | null, agentId?: string | null): Promise<any> {
   switch (name) {
     case 'create_lead': {
-      const { data: agency } = await supabase.from('agencies').select('id').eq('tenant_id', tenantId).limit(1).single()
+      const { data: agency } = await supabase.from('agencies').select('id').in('tenant_id', accessibleTenantIds).limit(1).single()
       const { data, error } = await supabase.from('leads').insert({
         ...args, status: 'new', agency_id: agency?.id, tenant_id: tenantId,
         company_name: args.company_name || args.contact_name,
@@ -153,14 +153,14 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return { lead_id: data.id, company_name: data.company_name, status: data.status }
     }
     case 'list_leads': {
-      let query = supabase.from('leads').select('id, company_name, contact_name, phone, status, source, created_at').eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(args.limit || 20)
+      let query = supabase.from('leads').select('id, company_name, contact_name, phone, status, source, created_at').in('tenant_id', accessibleTenantIds).order('created_at', { ascending: false }).limit(args.limit || 20)
       if (args.status) query = query.eq('status', args.status)
       const { data, error } = await query
       if (error) throw error
       return { count: data.length, leads: data }
     }
     case 'update_lead_status': {
-      const { data, error } = await supabase.from('leads').update({ status: args.status }).eq('id', args.lead_id).eq('tenant_id', tenantId).select('id, company_name, status').single()
+      const { data, error } = await supabase.from('leads').update({ status: args.status }).eq('id', args.lead_id).in('tenant_id', accessibleTenantIds).select('id, company_name, status').single()
       if (error) throw error
       return data
     }
@@ -193,11 +193,11 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         agencyId = campAgency?.agency_id
       }
       if (!agencyId) {
-        const { data: defaultAgency } = await supabase.from('agencies').select('id').eq('tenant_id', tenantId).eq('is_default', true).limit(1).maybeSingle()
+        const { data: defaultAgency } = await supabase.from('agencies').select('id').in('tenant_id', accessibleTenantIds).eq('is_default', true).limit(1).maybeSingle()
         if (defaultAgency) {
           agencyId = defaultAgency.id
         } else {
-          const { data: fallbackAgency } = await supabase.from('agencies').select('id').eq('tenant_id', tenantId).order('created_at', { ascending: true }).limit(1).single()
+          const { data: fallbackAgency } = await supabase.from('agencies').select('id').in('tenant_id', accessibleTenantIds).order('created_at', { ascending: true }).limit(1).single()
           agencyId = fallbackAgency?.id
         }
       }
@@ -234,7 +234,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     }
     case 'search_tasks': {
       let query = supabase.from('tasks').select('id, title, status, priority, due_date, due_time, notes, duration_minutes, clients(name), leads(company_name), campaigners(full_name)')
-        .eq('tenant_id', tenantId)
+        .in('tenant_id', accessibleTenantIds)
         .ilike('title', `%${args.search_term}%`)
         .order('created_at', { ascending: false })
         .limit(10)
@@ -245,7 +245,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return { count: data.length, tasks: data.map((t: any) => ({ ...t, client_name: t.clients?.name, lead_name: t.leads?.company_name, campaigner_name: t.campaigners?.full_name })) }
     }
     case 'list_tasks': {
-      let query = supabase.from('tasks').select('id, title, status, priority, due_date, due_time, duration_minutes, clients(name), leads(company_name), campaigners(full_name)').eq('tenant_id', tenantId).order('priority', { ascending: false }).limit(args.limit || 20)
+      let query = supabase.from('tasks').select('id, title, status, priority, due_date, due_time, duration_minutes, clients(name), leads(company_name), campaigners(full_name)').in('tenant_id', accessibleTenantIds).order('priority', { ascending: false }).limit(args.limit || 20)
       if (args.status) query = query.eq('status', args.status)
       if (args.client_id) query = query.eq('client_id', args.client_id)
       const { data, error } = await query
@@ -253,7 +253,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return { count: data.length, tasks: data.map((t: any) => ({ ...t, client_name: t.clients?.name, lead_name: t.leads?.company_name, campaigner_name: t.campaigners?.full_name })) }
     }
     case 'update_task_status': {
-      const { data, error } = await supabase.from('tasks').update({ status: args.status }).eq('id', args.task_id).eq('tenant_id', tenantId).select('id, title, status').single()
+      const { data, error } = await supabase.from('tasks').update({ status: args.status }).eq('id', args.task_id).in('tenant_id', accessibleTenantIds).select('id, title, status').single()
       if (error) throw error
       return data
     }
@@ -266,7 +266,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         const { data: camps } = await supabase
           .from('campaigners')
           .select('id, full_name')
-          .eq('tenant_id', tenantId)
+          .in('tenant_id', accessibleTenantIds)
           .ilike('full_name', `%${args.campaigner_name}%`)
         campaignerIds = (camps || []).map((c: any) => c.id)
         if (campaignerIds.length === 0) {
@@ -287,7 +287,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         }
       }
 
-      let query = supabase.from('clients').select('id, name, contact_name, phone, status').eq('tenant_id', tenantId).order('name').limit(args.limit || 50)
+      let query = supabase.from('clients').select('id, name, contact_name, phone, status').in('tenant_id', accessibleTenantIds).order('name').limit(args.limit || 50)
       if (args.status) query = query.eq('status', args.status)
       if (clientIdsFilter) query = query.in('id', clientIdsFilter)
       if (args.name_search) {
@@ -299,7 +299,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return { count: data.length, clients: data }
     }
     case 'get_client_info': {
-      const { data, error } = await supabase.from('clients').select('*, agencies(name)').eq('id', args.client_id).eq('tenant_id', tenantId).single()
+      const { data, error } = await supabase.from('clients').select('*, agencies(name)').eq('id', args.client_id).in('tenant_id', accessibleTenantIds).single()
       if (error) throw error
       return data
     }
@@ -332,7 +332,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const nameMap: Record<string, string> = { agency: 'name', client: 'name', campaigner: 'full_name', lead: 'company_name' }
       const table = tableMap[args.entity_type]
       const nameField = nameMap[args.entity_type]
-      const { data, error } = await supabase.from(table).select('id, ' + nameField).eq('tenant_id', tenantId).ilike(nameField, `%${args.search_term}%`).limit(10)
+      const { data, error } = await supabase.from(table).select('id, ' + nameField).in('tenant_id', accessibleTenantIds).ilike(nameField, `%${args.search_term}%`).limit(10)
       if (error) throw error
       return { count: data.length, results: data }
     }
@@ -379,7 +379,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       let query = supabase
         .from('facebook_insights')
         .select('campaign_name, date, impressions, clicks, spend, leads_count, reach, cpc, cpm, ctr, cost_per_lead, campaign_status')
-        .eq('tenant_id', tenantId)
+        .in('tenant_id', accessibleTenantIds)
         .gte('date', sinceDateStr)
         .order('date', { ascending: false })
         .limit(500)
@@ -397,7 +397,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const { data: crmTables, error: tablesErr } = await supabase
         .from('crm_tables')
         .select('id, client_id, slug, name')
-        .eq('tenant_id', tenantId)
+        .in('tenant_id', accessibleTenantIds)
         .ilike('slug', '%facebook%')
       if (tablesErr) throw tablesErr
       if (!crmTables || crmTables.length === 0) {
@@ -422,7 +422,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
           .from('crm_records')
           .select('data')
           .eq('table_id', table.id)
-          .eq('tenant_id', tenantId)
+          .in('tenant_id', accessibleTenantIds)
 
         if (!records || records.length === 0) continue
 
@@ -494,7 +494,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         const { data: ownerRole } = await supabase
           .from('user_roles')
           .select('user_id')
-          .eq('tenant_id', tenantId)
+          .in('tenant_id', accessibleTenantIds)
           .eq('role', 'owner')
           .limit(1)
           .maybeSingle()
@@ -508,7 +508,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         .from('clients')
         .update(updateData)
         .eq('id', args.client_id)
-        .eq('tenant_id', tenantId)
+        .in('tenant_id', accessibleTenantIds)
       if (clientErr) throw clientErr
 
       // 2. Create communication_log entry
@@ -653,7 +653,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     }
     // CLIENTS - full CRUD
     case 'create_client': {
-      const { data: defaultAgency } = await supabase.from('agencies').select('id').eq('tenant_id', tenantId).limit(1).single()
+      const { data: defaultAgency } = await supabase.from('agencies').select('id').in('tenant_id', accessibleTenantIds).limit(1).single()
       const { data, error } = await supabase.from('clients').insert({
         name: args.name, contact_name: args.contact_name || null, phone: args.phone || null,
         email: args.email || null, notes: args.notes || null, tenant_id: tenantId,
@@ -670,12 +670,12 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (args.email !== undefined) updates.email = args.email
       if (args.status) updates.status = args.status
       if (args.notes !== undefined) updates.notes = args.notes
-      const { data, error } = await supabase.from('clients').update(updates).eq('id', args.client_id).eq('tenant_id', tenantId).select('id, name, status').single()
+      const { data, error } = await supabase.from('clients').update(updates).eq('id', args.client_id).in('tenant_id', accessibleTenantIds).select('id, name, status').single()
       if (error) throw error
       return data
     }
     case 'update_client_status': {
-      const { data, error } = await supabase.from('clients').update({ status: args.status }).eq('id', args.client_id).eq('tenant_id', tenantId).select('id, name, status').single()
+      const { data, error } = await supabase.from('clients').update({ status: args.status }).eq('id', args.client_id).in('tenant_id', accessibleTenantIds).select('id, name, status').single()
       if (error) throw error
       return data
     }
@@ -689,12 +689,12 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (args.source !== undefined) updates.source = args.source
       if (args.notes !== undefined) updates.notes = args.notes
       if (args.follow_up_date !== undefined) updates.follow_up_date = args.follow_up_date
-      const { data, error } = await supabase.from('leads').update(updates).eq('id', args.lead_id).eq('tenant_id', tenantId).select('id, company_name, status').single()
+      const { data, error } = await supabase.from('leads').update(updates).eq('id', args.lead_id).in('tenant_id', accessibleTenantIds).select('id, company_name, status').single()
       if (error) throw error
       return data
     }
     case 'delete_lead': {
-      const { error } = await supabase.from('leads').delete().eq('id', args.lead_id).eq('tenant_id', tenantId)
+      const { error } = await supabase.from('leads').delete().eq('id', args.lead_id).in('tenant_id', accessibleTenantIds)
       if (error) throw error
       return { success: true, deleted_id: args.lead_id }
     }
@@ -711,12 +711,12 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (args.campaigner_id !== undefined) updates.campaigner_id = args.campaigner_id
       if (args.duration_minutes !== undefined) updates.duration_minutes = args.duration_minutes
       if (args.status) updates.status = args.status
-      const { data, error } = await supabase.from('tasks').update(updates).eq('id', args.task_id).eq('tenant_id', tenantId).select('id, title, status').single()
+      const { data, error } = await supabase.from('tasks').update(updates).eq('id', args.task_id).in('tenant_id', accessibleTenantIds).select('id, title, status').single()
       if (error) throw error
       return data
     }
     case 'delete_task': {
-      const { error } = await supabase.from('tasks').delete().eq('id', args.task_id).eq('tenant_id', tenantId)
+      const { error } = await supabase.from('tasks').delete().eq('id', args.task_id).in('tenant_id', accessibleTenantIds)
       if (error) throw error
       return { success: true, deleted_id: args.task_id }
     }
@@ -734,7 +734,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         return { success: true, action: 'added', collaborator_id: data.id }
       } else {
         const { error } = await supabase.from('task_collaborators').delete()
-          .eq('task_id', args.task_id).eq('campaigner_id', args.campaigner_id).eq('tenant_id', tenantId)
+          .eq('task_id', args.task_id).eq('campaigner_id', args.campaigner_id).in('tenant_id', accessibleTenantIds)
         if (error) throw error
         return { success: true, action: 'removed' }
       }
@@ -749,20 +749,20 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return { onboarding_id: data.id, title: data.title, status: data.status }
     }
     case 'list_onboarding': {
-      let query = supabase.from('client_onboarding').select('id, title, status, clients(name)').eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(args.limit || 20)
+      let query = supabase.from('client_onboarding').select('id, title, status, clients(name)').in('tenant_id', accessibleTenantIds).order('created_at', { ascending: false }).limit(args.limit || 20)
       if (args.status) query = query.eq('status', args.status)
       const { data, error } = await query
       if (error) throw error
       return { count: data.length, onboarding: data.map((o: any) => ({ ...o, client_name: o.clients?.name })) }
     }
     case 'update_onboarding_status': {
-      const { data, error } = await supabase.from('client_onboarding').update({ status: args.status }).eq('id', args.onboarding_id).eq('tenant_id', tenantId).select('id, title, status').single()
+      const { data, error } = await supabase.from('client_onboarding').update({ status: args.status }).eq('id', args.onboarding_id).in('tenant_id', accessibleTenantIds).select('id, title, status').single()
       if (error) throw error
       return data
     }
     // CAMPAIGNERS
     case 'list_campaigners': {
-      const { data, error } = await supabase.from('campaigners').select('id, full_name, phone, email, role').eq('tenant_id', tenantId).order('full_name').limit(args.limit || 50)
+      const { data, error } = await supabase.from('campaigners').select('id, full_name, phone, email, role').in('tenant_id', accessibleTenantIds).order('full_name').limit(args.limit || 50)
       if (error) throw error
       return { count: data.length, campaigners: data }
     }
@@ -776,7 +776,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     }
     // SALES PEOPLE
     case 'list_sales_people': {
-      const { data, error } = await supabase.from('sales_people').select('id, full_name, phone, email').eq('tenant_id', tenantId).order('full_name').limit(args.limit || 50)
+      const { data, error } = await supabase.from('sales_people').select('id, full_name, phone, email').in('tenant_id', accessibleTenantIds).order('full_name').limit(args.limit || 50)
       if (error) throw error
       return { count: data.length, sales_people: data }
     }
@@ -789,7 +789,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     }
     // AGENCIES
     case 'list_agencies': {
-      const { data, error } = await supabase.from('agencies').select('id, name, contact_name, phone, email').eq('tenant_id', tenantId).order('name').limit(args.limit || 50)
+      const { data, error } = await supabase.from('agencies').select('id, name, contact_name, phone, email').in('tenant_id', accessibleTenantIds).order('name').limit(args.limit || 50)
       if (error) throw error
       return { count: data.length, agencies: data }
     }
@@ -803,7 +803,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     }
     // SUPPLIERS
     case 'list_suppliers': {
-      const { data, error } = await supabase.from('suppliers').select('id, name, type, phone, email').eq('tenant_id', tenantId).order('name').limit(args.limit || 50)
+      const { data, error } = await supabase.from('suppliers').select('id, name, type, phone, email').in('tenant_id', accessibleTenantIds).order('name').limit(args.limit || 50)
       if (error) throw error
       return { count: data.length, suppliers: data }
     }
@@ -817,7 +817,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     }
     // PRODUCTS
     case 'list_products': {
-      const { data, error } = await supabase.from('products').select('id, name, description, price, active').eq('tenant_id', tenantId).order('name').limit(args.limit || 50)
+      const { data, error } = await supabase.from('products').select('id, name, description, price, active').in('tenant_id', accessibleTenantIds).order('name').limit(args.limit || 50)
       if (error) throw error
       return { count: data.length, products: data }
     }
@@ -830,22 +830,22 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     }
     // AUTOMATIONS
     case 'list_automations': {
-      const { data, error } = await supabase.from('automations').select('id, name, active, trigger_type').eq('tenant_id', tenantId).order('name').limit(args.limit || 50)
+      const { data, error } = await supabase.from('automations').select('id, name, active, trigger_type').in('tenant_id', accessibleTenantIds).order('name').limit(args.limit || 50)
       if (error) throw error
       return { count: data.length, automations: data }
     }
     case 'toggle_automation': {
-      const { data, error } = await supabase.from('automations').update({ active: args.active }).eq('id', args.automation_id).eq('tenant_id', tenantId).select('id, name, active').single()
+      const { data, error } = await supabase.from('automations').update({ active: args.active }).eq('id', args.automation_id).in('tenant_id', accessibleTenantIds).select('id, name, active').single()
       if (error) throw error
       return { automation_id: data.id, name: data.name, active: data.active }
     }
     // DASHBOARD STATS
     case 'get_dashboard_stats': {
       const [leadsRes, clientsRes, tasksRes, onboardingRes] = await Promise.all([
-        supabase.from('leads').select('status', { count: 'exact', head: false }).eq('tenant_id', tenantId),
-        supabase.from('clients').select('status', { count: 'exact', head: false }).eq('tenant_id', tenantId),
-        supabase.from('tasks').select('status', { count: 'exact', head: false }).eq('tenant_id', tenantId).eq('status', 'open'),
-        supabase.from('client_onboarding').select('status', { count: 'exact', head: false }).eq('tenant_id', tenantId).eq('status', 'in_progress'),
+        supabase.from('leads').select('status', { count: 'exact', head: false }).in('tenant_id', accessibleTenantIds),
+        supabase.from('clients').select('status', { count: 'exact', head: false }).in('tenant_id', accessibleTenantIds),
+        supabase.from('tasks').select('status', { count: 'exact', head: false }).in('tenant_id', accessibleTenantIds).eq('status', 'open'),
+        supabase.from('client_onboarding').select('status', { count: 'exact', head: false }).in('tenant_id', accessibleTenantIds).eq('status', 'in_progress'),
       ])
       const leadsByStatus = (leadsRes.data || []).reduce((acc: any, l: any) => { acc[l.status] = (acc[l.status] || 0) + 1; return acc }, {})
       const clientsByStatus = (clientsRes.data || []).reduce((acc: any, c: any) => { acc[c.status] = (acc[c.status] || 0) + 1; return acc }, {})
@@ -865,7 +865,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return { saved: true, key: data.key, category: data.category }
     }
     case 'recall_memory': {
-      let query = supabase.from('ai_memory').select('key, content, category, updated_at').eq('tenant_id', tenantId)
+      let query = supabase.from('ai_memory').select('key, content, category, updated_at').in('tenant_id', accessibleTenantIds)
       if (args.category) query = query.eq('category', args.category)
       if (args.search) query = query.ilike('content', `%${args.search}%`)
       const { data, error } = await query.order('updated_at', { ascending: false }).limit(20)
@@ -873,7 +873,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return { count: data.length, memories: data }
     }
     case 'delete_memory': {
-      const { error } = await supabase.from('ai_memory').delete().eq('tenant_id', tenantId).eq('key', args.key)
+      const { error } = await supabase.from('ai_memory').delete().in('tenant_id', accessibleTenantIds).eq('key', args.key)
       if (error) throw error
       return { deleted: true, key: args.key }
     }
@@ -881,7 +881,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     case 'kb_list_folder': {
       let q = supabase.from('carmen_memory_pointers')
         .select('id, category, subcategory, path, entity_type, entity_id, title, summary, ref_date, importance')
-        .eq('tenant_id', tenantId)
+        .in('tenant_id', accessibleTenantIds)
       if (args.category) q = q.eq('category', args.category)
       if (args.subcategory) q = q.eq('subcategory', args.subcategory)
       if (args.path_prefix) q = q.like('path', `${args.path_prefix}%`)
@@ -916,7 +916,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       // Fallback text search
       let q = supabase.from('carmen_memory_pointers')
         .select('id, category, subcategory, path, entity_type, entity_id, title, summary, ref_date')
-        .eq('tenant_id', tenantId)
+        .in('tenant_id', accessibleTenantIds)
         .or(`title.ilike.%${args.query}%,summary.ilike.%${args.query}%`)
       if (args.category) q = q.eq('category', args.category)
       if (args.since_days) q = q.gte('ref_date', new Date(Date.now() - args.since_days*86400000).toISOString())
@@ -926,7 +926,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     }
     case 'kb_open': {
       const { data: ptr, error: pErr } = await supabase.from('carmen_memory_pointers')
-        .select('*').eq('id', args.pointer_id).eq('tenant_id', tenantId).maybeSingle()
+        .select('*').eq('id', args.pointer_id).in('tenant_id', accessibleTenantIds).maybeSingle()
       if (pErr) throw pErr
       if (!ptr) return { error: 'pointer not found' }
       // Fetch live row from source
@@ -946,7 +946,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     case 'kb_recall_conversation': {
       let q = supabase.from('carmen_memory_episodes')
         .select('id, topic, topic_tags, summary, source_table, source_ids, ref_date, importance, retention_score')
-        .eq('tenant_id', tenantId)
+        .in('tenant_id', accessibleTenantIds)
       if (args.topic) q = q.ilike('topic', `%${args.topic}%`)
       if (args.query) q = q.or(`topic.ilike.%${args.query}%,summary.ilike.%${args.query}%`)
       if (args.since_days) q = q.gte('ref_date', new Date(Date.now() - args.since_days*86400000).toISOString())
@@ -993,7 +993,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     case 'get_chat_history': {
       const filterCol = args.contact_type === 'client' ? 'client_id' : 'lead_id'
       const { data, error } = await supabase.from('chat_messages').select('id, message_text, direction, sender_name, created_at')
-        .eq('tenant_id', tenantId).eq(filterCol, args.contact_id)
+        .in('tenant_id', accessibleTenantIds).eq(filterCol, args.contact_id)
         .order('created_at', { ascending: false }).limit(args.limit || 20)
       if (error) throw error
       return { count: data.length, messages: data.reverse() }
@@ -1003,14 +1003,14 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const since = new Date(Date.now() - hoursAgo * 60 * 60 * 1000).toISOString()
       const { data, error } = await supabase.from('chat_messages')
         .select('id, message_text, sender_name, sender_phone, created_at, client_id, lead_id, clients(name), leads(company_name)')
-        .eq('tenant_id', tenantId).eq('direction', 'inbound').gte('created_at', since)
+        .in('tenant_id', accessibleTenantIds).eq('direction', 'inbound').gte('created_at', since)
         .order('created_at', { ascending: false }).limit(args.limit || 30)
       if (error) throw error
       return { count: data.length, messages: data.map((m: any) => ({ ...m, contact_name: m.clients?.name || m.leads?.company_name || m.sender_name || m.sender_phone })) }
     }
     // FINANCE
     case 'list_finance': {
-      let query = supabase.from('finance').select('id, amount, type, description, date, client_id, clients(name)').eq('tenant_id', tenantId).order('date', { ascending: false }).limit(args.limit || 20)
+      let query = supabase.from('finance').select('id, amount, type, description, date, client_id, clients(name)').in('tenant_id', accessibleTenantIds).order('date', { ascending: false }).limit(args.limit || 20)
       if (args.client_id) query = query.eq('client_id', args.client_id)
       if (args.type) query = query.eq('type', args.type)
       const { data, error } = await query
@@ -1030,7 +1030,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const month = args.month || new Date().toISOString().slice(0, 7)
       const startDate = `${month}-01`
       const endDate = new Date(parseInt(month.split('-')[0]), parseInt(month.split('-')[1]), 0).toISOString().split('T')[0]
-      const { data, error } = await supabase.from('finance').select('amount, type').eq('tenant_id', tenantId).gte('date', startDate).lte('date', endDate)
+      const { data, error } = await supabase.from('finance').select('amount, type').in('tenant_id', accessibleTenantIds).gte('date', startDate).lte('date', endDate)
       if (error) throw error
       const income = (data || []).filter((f: any) => f.type === 'income').reduce((s: number, f: any) => s + (f.amount || 0), 0)
       const expense = (data || []).filter((f: any) => f.type === 'expense').reduce((s: number, f: any) => s + (f.amount || 0), 0)
@@ -1062,7 +1062,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     }
     case 'list_goals': {
       let query = supabase.from('goals').select('id, title, description, status, progress_percent, parent_goal_id, due_date, owner_type, owner_id, created_at')
-        .eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(args.limit || 20)
+        .in('tenant_id', accessibleTenantIds).order('created_at', { ascending: false }).limit(args.limit || 20)
       if (args.status) query = query.eq('status', args.status)
       const { data, error } = await query
       if (error) throw error
@@ -1073,7 +1073,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const agentName = args.agent_name || 'carmen'
       const { data, error } = await supabase.from('tasks')
         .update({ assigned_agent: agentName, status: 'in_progress' })
-        .eq('id', args.task_id).eq('tenant_id', tenantId)
+        .eq('id', args.task_id).in('tenant_id', accessibleTenantIds)
         .select('id, title, status, assigned_agent').single()
       if (error) throw error
       // Log the action
@@ -1095,7 +1095,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (args.mark_complete) {
         await supabase.from('tasks')
           .update({ status: 'done', assigned_agent: null })
-          .eq('id', args.task_id).eq('tenant_id', tenantId)
+          .eq('id', args.task_id).in('tenant_id', accessibleTenantIds)
       }
       return { success: true, task_id: args.task_id, completed: !!args.mark_complete }
     }
@@ -1103,7 +1103,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       // Fetch open tasks with their goals
       const { data: openTasks, error } = await supabase.from('tasks')
         .select('id, title, status, priority, due_date, due_time, assigned_agent, goal_id, clients(name), leads(company_name), campaigners(full_name)')
-        .eq('tenant_id', tenantId)
+        .in('tenant_id', accessibleTenantIds)
         .in('status', ['open', 'in_progress'])
         .order('priority', { ascending: false })
         .limit(args.limit || 30)
@@ -1132,7 +1132,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       let { data: integration } = await supabase
         .from('tenant_integrations')
         .select('api_key, settings, shared_from_integration_id')
-        .eq('tenant_id', tenantId)
+        .in('tenant_id', accessibleTenantIds)
         .in('integration_type', ['facebook', 'facebook_lead_ads'])
         .eq('is_active', true)
         .limit(1)
@@ -1172,7 +1172,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const { data: existing } = await supabase
         .from('crm_tables')
         .select('id, name')
-        .eq('tenant_id', tenantId)
+        .in('tenant_id', accessibleTenantIds)
         .eq('client_id', client_id)
         .eq('integration_type', 'facebook_insights')
         .maybeSingle()
@@ -1206,7 +1206,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const { data: allClients, error: clientsErr } = await supabase
         .from('clients')
         .select('id, name, agency_id, agencies(name)')
-        .eq('tenant_id', tenantId)
+        .in('tenant_id', accessibleTenantIds)
         .in('status', ['active', 'onboarding'])
         .order('name')
       if (clientsErr) throw clientsErr
@@ -1214,7 +1214,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const { data: connectedTables } = await supabase
         .from('crm_tables')
         .select('client_id')
-        .eq('tenant_id', tenantId)
+        .in('tenant_id', accessibleTenantIds)
         .eq('integration_type', 'facebook_insights')
         .not('client_id', 'is', null)
 
@@ -1225,7 +1225,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return { count: unconnected.length, unconnected_clients: unconnected }
     }
     case 'list_integrations': {
-      let q = supabase.from('tenant_integrations').select('id, integration_type, is_active, settings, last_sync_at, created_at').eq('tenant_id', tenantId)
+      let q = supabase.from('tenant_integrations').select('id, integration_type, is_active, settings, last_sync_at, created_at').in('tenant_id', accessibleTenantIds)
       if (args.type) q = q.eq('integration_type', args.type)
       if (args.only_active) q = q.eq('is_active', true)
       const { data, error } = await q.order('integration_type')
@@ -1233,12 +1233,12 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return { count: data?.length || 0, integrations: (data || []).map((i: any) => ({ id: i.id, type: i.integration_type, is_active: i.is_active, last_sync_at: i.last_sync_at })) }
     }
     case 'toggle_integration': {
-      const { data, error } = await supabase.from('tenant_integrations').update({ is_active: args.is_active }).eq('id', args.integration_id).eq('tenant_id', tenantId).select('id, integration_type, is_active').single()
+      const { data, error } = await supabase.from('tenant_integrations').update({ is_active: args.is_active }).eq('id', args.integration_id).in('tenant_id', accessibleTenantIds).select('id, integration_type, is_active').single()
       if (error) throw error
       return data
     }
     case 'list_agents': {
-      let q = supabase.from('ai_agents').select('id, name, talent, engine, active').eq('tenant_id', tenantId)
+      let q = supabase.from('ai_agents').select('id, name, talent, engine, active').in('tenant_id', accessibleTenantIds)
       if (args.only_active) q = q.eq('active', true)
       const { data, error } = await q.order('name')
       if (error) throw error
@@ -1262,7 +1262,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       for (const k of ['name', 'talent', 'personality', 'soul', 'engine', 'active']) {
         if (args[k] !== undefined) updates[k] = args[k]
       }
-      const { data, error } = await supabase.from('ai_agents').update(updates).eq('id', args.agent_id).eq('tenant_id', tenantId).select('id, name, active').single()
+      const { data, error } = await supabase.from('ai_agents').update(updates).eq('id', args.agent_id).in('tenant_id', accessibleTenantIds).select('id, name, active').single()
       if (error) throw error
       return data
     }
