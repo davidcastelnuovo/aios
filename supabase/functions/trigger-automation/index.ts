@@ -461,6 +461,21 @@ Deno.serve(async (req) => {
             .limit(1)
             .maybeSingle()
 
+          // 🔁 ECHO/LOOP GUARD: if incoming text equals Carmen's last assistant reply in this
+          // session, it's a self-echo from the WhatsApp provider — skip session continuation.
+          if (activeSession) {
+            const hist = activeSession.conversation_history || []
+            const lastAssistant = [...hist].reverse().find((m: any) => m?.role === 'assistant')
+            const incomingText = String(payloadData?.message_text || '').trim()
+            const lastText = String(lastAssistant?.content || '').trim()
+            if (incomingText && lastText && (incomingText === lastText || lastText.startsWith(incomingText) || incomingText.startsWith(lastText))) {
+              console.log('[CARMEN] Dropping echoed assistant reply for session', activeSession.id)
+              return new Response(JSON.stringify({ success: true, skipped: 'carmen_echo' }), {
+                status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              })
+            }
+          }
+
           if (activeSession) {
             // ── Timeout check: if session is stale, close it ──────────────────────
             // We need the trigger config to know the timeout setting
