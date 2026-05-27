@@ -1,54 +1,39 @@
-## המטרה
-טריגר אוטומציה חדש שמופעל אוטומטית כאשר חיבור (Google Analytics / Ads / Search Console / Gmail / Calendar / Facebook וכו') מתנתק או דורש חיבור מחדש — כדי שתוכל להגדיר אוטומציה ששולחת התראה (WhatsApp / Email / Task) ברגע שזה קורה, במקום לגלות שבועיים אחר כך שהדוחות ריקים.
+## מטרה
+לאפשר לטריגר "שיחת כרמן ב-WhatsApp" לעבוד גם דרך חיבור Manus WA (לא רק Green API), ולתת בחירה מפורשת איזה חיבור יהיה זה שכרמן תקשיב ותגיב דרכו — בדיוק כמו בצעד "שלח WhatsApp (Green API)" שכבר תומך ב-Manus.
 
-## ארכיטקטורה
-היום כל אינטגרציות גוגל כבר מסמנות `settings->>'needs_reauth' = true` בטבלת `tenant_integrations` ברגע שגוגל דוחה את ה-refresh token (ראיתי ב-`sync-google-analytics-data`, `sync-google-ads-data`, `google-ads-auth`). נשתמש בזה כמקור אמת אחיד.
+## מצב היום
+- ה־UI של `CarmenSessionConfig` שולף רק חיבורי `green_api`, ומציג בורר רק כשיש יותר מחיבור אחד.
+- הסלקטור שומר `carmen_connection_user_id` (מזהה משתמש) — לא ID של חיבור ספציפי, ולכן לא יכול להבחין בין שתי אינטגרציות של אותו משתמש.
+- `green-api-webhook` הוא היחיד שיודע לטפל בכרמן (זיהוי מילת הפעלה, פתיחת session, קריאה ל-`run-ai-agent` ושליחת תשובה).
+- `manus-wa-webhook` כרגע רק כותב הודעות נכנסות לטבלת `chat_messages` ולא מפעיל כרמן כלל.
 
-### 1. Database Trigger (מרכזי — כיסוי לכל החיבורים)
-טריגר Postgres על `tenant_integrations` שמתעורר ב-UPDATE כאשר `(OLD.settings->>'needs_reauth') IS DISTINCT FROM 'true'` וה-`NEW.settings->>'needs_reauth' = 'true'`. הטריגר קורא לפונקציית `pg_net.http_post` שמפעילה את ה-Edge Function `trigger-automation` עם:
+## שינויים מתוכננים
 
-```json
-{
-  "trigger_type": "integration_disconnected",
-  "tenant_id": "<uuid>",
-  "payload": {
-    "integration_type": "google_analytics",
-    "integration_name": "Google Analytics",
-    "last_error": "...",
-    "last_error_at": "...",
-    "disconnected_at": "<now>"
-  }
-}
-```
+### 1. UI — `src/components/automations/StepConfigPanel.tsx` (CarmenSessionConfig)
+- לשלוף גם `green_api` וגם `manus_wa` מ-`tenant_integrations` (אותה שאילתה כמו ב-`GreenAPIActionConfig`).
+- להוסיף שדה חדש בקונפיג: **"חיבור WhatsApp לכרמן"** עם בורר שמציג כל החיבורים (Green API + Manus WA) עם תווית ספק, וברירת מחדל "כל החיבורים".
+- שמירה תחת `carmen_integration_id` (מזהה רשומת `tenant_integrations`).
+- הצגה תמיד, גם אם יש חיבור יחיד (כדי שאפשר יהיה להגביל במפורש ל-Manus).
+- שמירה על תאימות לאחור: אם קיים `carmen_connection_user_id` ישן — להמשיך לכבד אותו, ולהציע אזהרה קלה לעדכון.
 
-זה מבטיח שכל אינטגרציה שמסמנת `needs_reauth` תפעיל את הטריגר — בלי שצריך לשנות כל edge function בנפרד.
+### 2. שרת — `supabase/functions/green-api-webhook/index.ts`
+- במקום (או בנוסף ל-) השוואת `carmen_connection_user_id`, להשוות `carmen_integration_id` עם ה-`integration.id` שזיהה את הוובהוק.
+- אם `carmen_integration_id` מוגדר ושייך לאינטגרציה מסוג `manus_wa` — לדלג (לתת ל-manus-wa-webhook לטפל).
 
-### 2. רישום הטריגר ב-UI של בונה האוטומציות
-ב-`src/components/automations/StepConfigPanel.tsx` תחת הקטגוריה `🔗 אינטגרציות`, נוסיף:
-```ts
-{ value: "integration_disconnected", label: "חיבור התנתק / דורש חיבור מחדש" },
-```
+### 3. שרת — `supabase/functions/manus-wa-webhook/index.ts`
+- להוסיף תמיכת כרמן סימטרית ל-green-api-webhook:
+  - אחרי שמירת ההודעה הנכנסת, להריץ את אותה לוגיקה: `findCarmenSessionAutomation`, בדיקת `scope`, מילת הפעלה/סיום, פתיחה/סגירה של `carmen_whatsapp_sessions`, ריצת `runCarmenAI` ושליחה חזרה דרך `send-manus-wa-message`.
+  - לכבד `carmen_integration_id` — להריץ רק אם תואם ל-`integ.id`.
+- כדי לא לשכפל קוד, להוציא helpers משותפים (`findCarmenAgent`, `findCarmenSessionAutomation`, `runCarmenAI`, ניהול session) לקובץ `_shared/carmen.ts` ולייבא משני הוובהוקים.
 
-המשתמש יוכל לבחור אותו כטריגר, ובשלב הפעולה לבחור: שלח WhatsApp / Email / צור משימה — עם משתנים `{{integration_name}}`, `{{last_error}}`, `{{disconnected_at}}` בתוך הטקסט.
-
-### 3. עדכון `trigger-automation` edge function
-לוודא שהפונקציה מקבלת את ה-`trigger_type` החדש ומעבירה את ה-`payload` ל-template variables של הצעדים. זה כבר הדפוס הקיים, אבל נוסיף `integration_disconnected` למיפוי המשתנים הזמינים בעריכת ההודעה.
-
-### 4. Idempotency / מניעת ספאם
-נוסיף בטריגר ה-DB תנאי שלא יורה אם `last_disconnect_trigger_at` קרוב לעכשיו (פחות מ-24 שעות מאז ההתראה האחרונה). הסימון יישמר ב-`settings->>'last_disconnect_trigger_at'` ויעודכן ע"י ה-edge function אחרי שיגור מוצלח.
-
-### 5. תיעוד דוגמת אוטומציה מובנית (אופציונלי)
-נוסיף ב-`src/pages/Automations.tsx` כפתור "צור אוטומציה לדוגמה: התראת ניתוק חיבור" שיוצר אוטומציה מוכנה עם הטריגר החדש + צעד WhatsApp לטלפון בעלים.
+### 4. תאימות לאחור
+- אם באוטומציה קיימת רק שדה `carmen_connection_user_id` (ללא `carmen_integration_id`) — להמשיך לסנן לפי `connection_user_id` בלבד (התנהגות נוכחית).
 
 ## קבצים שיתעדכנו
-- **migration חדשה**: פונקציה + טריגר על `tenant_integrations` + שימוש ב-`pg_net`
-- `src/components/automations/StepConfigPanel.tsx` — הוספת הטריגר לרשימה
-- `supabase/functions/trigger-automation/index.ts` — תמיכה ב-`integration_disconnected` ובמשתני ה-payload
-- אופציונלי: `src/pages/Automations.tsx` — כפתור יצירת אוטומציה מובנית
+- `src/components/automations/StepConfigPanel.tsx`
+- `supabase/functions/green-api-webhook/index.ts`
+- `supabase/functions/manus-wa-webhook/index.ts`
+- חדש: `supabase/functions/_shared/carmen.ts`
 
-## מה לא נכלל בשלב הזה
-- **אימות דומיין** — נטפל בו בשלב הבא כפי שביקשת
-- שינוי לוגיקת רענון הטוקנים עצמה (זה נושא נפרד שכבר דנו בו)
-
-## שאלת הבהרה אחת
-האם תרצה שהטריגר יורה גם כאשר אינטגרציה **מושבתת ידנית** (`is_active = false`), או רק על ניתוקים אוטומטיים מצד הספק (refresh token נדחה)? ההמלצה שלי: רק אוטומטיים, כי השבתה ידנית היא פעולה מודעת ולא דורשת התראה.
+## שאלה לפני בנייה
+האם להפעיל כרמן **באופן בלעדי** דרך החיבור שנבחר (כלומר, אם נבחר Manus — Green API לא יפעיל אותה אפילו אם תגיע אליו הודעה עם מילת ההפעלה), או להשאיר "כל החיבורים" כברירת מחדל גמישה? ההמלצה: בלעדי כשנבחר חיבור, "כל החיבורים" כשלא נבחר.
