@@ -153,7 +153,7 @@ Deno.serve(async (req) => {
           isGroup: true,
           sendMessage: async (_chatId: string, message: string) => {
             try {
-              const baseUrl = 'https://wagateway.manus.cloud';
+              const baseUrl = 'https://whatsappgw-pzpyrrww.manus.space';
               const settingsAny = (integ.settings as any) || {};
               const instanceId = settingsAny.instance_id;
               const apiKey = integ.api_key;
