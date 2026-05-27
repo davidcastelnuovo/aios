@@ -243,8 +243,38 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return data
     }
     case 'list_clients': {
-      let query = supabase.from('clients').select('id, name, contact_name, phone, status').eq('tenant_id', tenantId).order('name').limit(args.limit || 20)
+      // Resolve campaigner filter if provided
+      let campaignerIds: string[] | null = null
+      if (args.campaigner_id) {
+        campaignerIds = [args.campaigner_id]
+      } else if (args.campaigner_name) {
+        const { data: camps } = await supabase
+          .from('campaigners')
+          .select('id, full_name')
+          .eq('tenant_id', tenantId)
+          .ilike('full_name', `%${args.campaigner_name}%`)
+        campaignerIds = (camps || []).map((c: any) => c.id)
+        if (campaignerIds.length === 0) {
+          return { count: 0, clients: [], note: `no campaigner matched "${args.campaigner_name}"` }
+        }
+      }
+
+      let clientIdsFilter: string[] | null = null
+      if (campaignerIds) {
+        const { data: links, error: linkErr } = await supabase
+          .from('client_team')
+          .select('client_id')
+          .in('campaigner_id', campaignerIds)
+        if (linkErr) throw linkErr
+        clientIdsFilter = Array.from(new Set((links || []).map((l: any) => l.client_id)))
+        if (clientIdsFilter.length === 0) {
+          return { count: 0, clients: [], note: 'no clients assigned to this campaigner' }
+        }
+      }
+
+      let query = supabase.from('clients').select('id, name, contact_name, phone, status').eq('tenant_id', tenantId).order('name').limit(args.limit || 50)
       if (args.status) query = query.eq('status', args.status)
+      if (clientIdsFilter) query = query.in('id', clientIdsFilter)
       const { data, error } = await query
       if (error) throw error
       return { count: data.length, clients: data }
