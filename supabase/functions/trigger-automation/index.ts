@@ -353,20 +353,20 @@ Deno.serve(async (req) => {
         return { matches: false, reason: 'source_filter_all_groups' }
       }
       if (safeConfig.source_filter === 'all_groups_except') {
-        if (!safeData.group_id) {
+        if (groupCandidates.length === 0) {
           return { matches: false, reason: 'source_filter_all_groups_except' }
         }
         const excludedIds = safeConfig.excluded_group_ids || []
-        if (excludedIds.length > 0 && excludedIds.includes(safeData.group_id)) {
+        if (excludedIds.length > 0 && excludedIds.some((id: string) => groupCandidates.includes(id))) {
           return { matches: false, reason: 'group_excluded' }
         }
       }
       if (safeConfig.source_filter === 'multiple_groups') {
-        if (!safeData.group_id) {
+        if (groupCandidates.length === 0) {
           return { matches: false, reason: 'source_filter_multiple_groups' }
         }
         const selectedIds = safeConfig.selected_group_ids || []
-        if (selectedIds.length > 0 && !selectedIds.includes(safeData.group_id)) {
+        if (selectedIds.length > 0 && !selectedIds.some((id: string) => groupCandidates.includes(id))) {
           return { matches: false, reason: 'group_not_selected' }
         }
       }
