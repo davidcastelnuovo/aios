@@ -111,6 +111,7 @@ Deno.serve(async (req) => {
     }
 
     // ===== Incoming message =====
+    console.log('[manus-wa] event=', event, 'instance=', instanceId, 'from=', payload.from, 'to=', payload.to, 'fromMe=', payload.fromMe, 'direction=', payload.direction, 'bodyPreview=', String(payload.body || '').slice(0, 80));
     if (event !== 'message') return ok({ received: true, ignored: event });
 
     const fromRaw = String(payload.from || '');
