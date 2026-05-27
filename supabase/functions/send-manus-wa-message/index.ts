@@ -146,6 +146,7 @@ Deno.serve(async (req) => {
     const payload = groupChatId
       ? { groupId: groupChatId, body: message }
       : { to, body: message };
+    console.log('[send-manus-wa] POST', url, 'to=', to, 'instanceId=', instanceId, 'messageLen=', message.length);
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'X-Api-Key': apiKey, 'Content-Type': 'application/json' },
@@ -155,6 +156,7 @@ Deno.serve(async (req) => {
     const respText = await res.text();
     let respData: any;
     try { respData = JSON.parse(respText); } catch { respData = { raw: respText }; }
+    console.log('[send-manus-wa] response', { status: res.status, ok: res.ok, body: respText.slice(0, 500) });
 
     if (!res.ok || respData?.success === false) {
       throw new Error(`Manus WA error [${res.status}]: ${JSON.stringify(respData)}`);
