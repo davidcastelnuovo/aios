@@ -54,7 +54,10 @@ Deno.serve(async (req) => {
     const looksLikeMessage =
       !!(outer.from || inner.from || inner.chatId || outer.chatId || outer.body || inner.body || inner.text || outer.text ||
          (pickObj(inner.message, outer.message)));
-    const normalizedEvent = rawEventField ?? (looksLikeMessage ? 'message' : 'ping');
+    const normalizedEvent =
+      (rawEventField === 'chat' || rawEventField === 'text' || rawEventField === 'message') && looksLikeMessage
+        ? 'message'
+        : rawEventField ?? (looksLikeMessage ? 'message' : 'ping');
     const fromField =
       outer.from ?? inner.from ?? inner.chatId ?? outer.chatId ?? key.remoteJid ?? inner.remoteJid ?? '';
     const toField =
@@ -326,9 +329,10 @@ Deno.serve(async (req) => {
                 'Authorization': `Bearer ${serviceKey}`,
               },
               body: JSON.stringify({
-                integration_id: integ.id,
-                tenant_id: tenantId,
-                phone: counterpartPhone,
+                integrationId: integ.id,
+                tenantId,
+                phoneNumber: counterpartPhone,
+                senderUserId: connectionUserId,
                 message,
               }),
             });
