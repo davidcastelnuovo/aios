@@ -121,6 +121,15 @@ const ALL_TOOLS = [
   { name: 'list_facebook_ad_accounts', description: 'שליפת כל חשבונות המודעות מפייסבוק. מחזיר id, name, status, currency.', parameters: { type: 'object', properties: {} } },
   { name: 'create_facebook_report_table', description: 'חיבור חשבון מודעות פייסבוק ללקוח — יוצר טבלת דוח facebook_insights ב-CRM', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח' }, ad_account_id: { type: 'string', description: 'מזהה חשבון מודעות פייסבוק (act_XXXXX)' }, ad_account_name: { type: 'string', description: 'שם חשבון המודעות' } }, required: ['client_id', 'ad_account_id', 'ad_account_name'] } },
   { name: 'list_unconnected_clients', description: 'רשימת לקוחות פעילים שאין להם עדיין טבלת דוח פייסבוק (facebook_insights) ב-CRM. שימושי לזיהוי לקוחות שצריכים חיבור.', parameters: { type: 'object', properties: {} } },
+  // INTEGRATIONS MANAGEMENT
+  { name: 'list_integrations', description: 'רשימת אינטגרציות מוגדרות בטננט (סוג, סטטוס פעיל, הגדרות בסיסיות). שימושי כשרוצים לדעת מה מחובר ומה לא.', parameters: { type: 'object', properties: { type: { type: 'string', description: 'סינון לפי סוג אינטגרציה' }, only_active: { type: 'boolean' } } } },
+  { name: 'toggle_integration', description: 'הפעלה או השבתה של אינטגרציה לפי מזהה.', parameters: { type: 'object', properties: { integration_id: { type: 'string' }, is_active: { type: 'boolean' } }, required: ['integration_id', 'is_active'] } },
+  // AGENT MANAGEMENT (Carmen building & managing sub-agents)
+  { name: 'list_agents', description: 'רשימת סוכני AI בטננט (כולל סוכנים תחתיים של כרמן).', parameters: { type: 'object', properties: { only_active: { type: 'boolean' } } } },
+  { name: 'create_agent', description: 'יצירת סוכן AI חדש תחת כרמן. השתמש כשהמשתמש מבקש לבנות סוכן חדש לתפקיד ספציפי.', parameters: { type: 'object', properties: { name: { type: 'string' }, talent: { type: 'string', description: 'תיאור התפקיד והמומחיות' }, personality: { type: 'string' }, soul: { type: 'string', description: 'מטרה/ייעוד' }, engine: { type: 'string', description: 'מודל (gemini-3-flash וכו׳)' } }, required: ['name', 'talent'] } },
+  { name: 'update_agent', description: 'עדכון פרטי סוכן קיים.', parameters: { type: 'object', properties: { agent_id: { type: 'string' }, name: { type: 'string' }, talent: { type: 'string' }, personality: { type: 'string' }, soul: { type: 'string' }, engine: { type: 'string' }, active: { type: 'boolean' } }, required: ['agent_id'] } },
+  // GITHUB AGENT DELEGATION (system self-repair)
+  { name: 'delegate_to_github_agent', description: 'האצלת בעיה טכנית/באג במערכת לסוכן הגיטהאב לאבחון או תיקון. השתמש כשמדווחים על תקלה במערכת או באג בקוד.', parameters: { type: 'object', properties: { message: { type: 'string', description: 'תיאור הבעיה/הבקשה הטכנית' }, action: { type: 'string', enum: ['chat_support', 'analyze_error', 'fix_code', 'check_permissions'], description: 'ברירת מחדל: chat_support' } }, required: ['message'] } },
 ]
 
 // ===========================
@@ -1093,6 +1102,58 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
 
       return { count: unconnected.length, unconnected_clients: unconnected }
     }
+    case 'list_integrations': {
+      let q = supabase.from('tenant_integrations').select('id, integration_type, is_active, settings, last_sync_at, created_at').eq('tenant_id', tenantId)
+      if (args.type) q = q.eq('integration_type', args.type)
+      if (args.only_active) q = q.eq('is_active', true)
+      const { data, error } = await q.order('integration_type')
+      if (error) throw error
+      return { count: data?.length || 0, integrations: (data || []).map((i: any) => ({ id: i.id, type: i.integration_type, is_active: i.is_active, last_sync_at: i.last_sync_at })) }
+    }
+    case 'toggle_integration': {
+      const { data, error } = await supabase.from('tenant_integrations').update({ is_active: args.is_active }).eq('id', args.integration_id).eq('tenant_id', tenantId).select('id, integration_type, is_active').single()
+      if (error) throw error
+      return data
+    }
+    case 'list_agents': {
+      let q = supabase.from('ai_agents').select('id, name, talent, engine, active').eq('tenant_id', tenantId)
+      if (args.only_active) q = q.eq('active', true)
+      const { data, error } = await q.order('name')
+      if (error) throw error
+      return { count: data?.length || 0, agents: data }
+    }
+    case 'create_agent': {
+      const { data, error } = await supabase.from('ai_agents').insert({
+        tenant_id: tenantId,
+        name: args.name,
+        talent: args.talent,
+        personality: args.personality || null,
+        soul: args.soul || null,
+        engine: args.engine || 'gemini-3-flash',
+        active: true,
+      }).select('id, name').single()
+      if (error) throw error
+      return { agent_id: data.id, name: data.name, message: `סוכן ${data.name} נוצר בהצלחה תחת כרמן` }
+    }
+    case 'update_agent': {
+      const updates: any = {}
+      for (const k of ['name', 'talent', 'personality', 'soul', 'engine', 'active']) {
+        if (args[k] !== undefined) updates[k] = args[k]
+      }
+      const { data, error } = await supabase.from('ai_agents').update(updates).eq('id', args.agent_id).eq('tenant_id', tenantId).select('id, name, active').single()
+      if (error) throw error
+      return data
+    }
+    case 'delegate_to_github_agent': {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/github-agent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+        body: JSON.stringify({ action: args.action || 'chat_support', tenant_id: tenantId, message: args.message }),
+      })
+      const txt = await res.text()
+      if (!res.ok) return { error: `github-agent failed [${res.status}]: ${txt}` }
+      try { return JSON.parse(txt) } catch { return { response: txt } }
+    }
     default:
       throw new Error(`Unknown tool: ${name}`)
   }
@@ -1444,6 +1505,7 @@ Deno.serve(async (req) => {
       if (callerCampaignerId && callerName) {
         systemPrompt += `\n\n👤 **זהות המשתמש הנוכחי:** ${callerName} (campaigner_id: ${callerCampaignerId}). כשיוצרים משימה, שייך אותה אוטומטית ל-${callerName} אלא אם המשתמש מבקש במפורש לשייך למישהו אחר.`
         systemPrompt += `\n\n📋 **שיוך לקוחות לקמפיינר:** לשאלות כמו "אילו לקוחות משוייכים ל-X" השתמש תמיד ב-list_clients עם campaigner_name (או campaigner_id), שמסתכל על טבלת client_team. אל תשתמש ב-list_tasks או בחיפוש משימות לשם כך — שיוך לקוח לקמפיינר נקבע בכרטיסיית הלקוח/הקמפיינר, לא לפי משימות.`
+        systemPrompt += `\n\n🔓 **גישה מלאה למערכת (מנהלת ראשית):** יש לך גישה לכל המודולים — צוות (list_campaigners, list_sales_people), לקוחות וסוכנויות, אוטומציות (list_automations, toggle_automation), אינטגרציות (list_integrations, toggle_integration), דוחות (get_dashboard_stats, analyze_campaign_performance, get_finance_summary), ניהול סוכנים (list_agents, create_agent, update_agent — תוכלי לבנות סוכנים תחתייך ולהפעיל אותם), וסוכן הגיטהאב לתיקון המערכת (delegate_to_github_agent). אל תאמרי "אין לי גישה" — תמיד נסי את הכלי המתאים קודם.`
       }
     }
 
