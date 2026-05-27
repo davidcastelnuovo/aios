@@ -2823,27 +2823,29 @@ async function executeGreenApiToCampaigner(supabase: any, config: any, data: any
     throw new Error('לא נמצא מספר טלפון לקמפיינר')
   }
   
-  // Find Green API integration - use specified ID or fall back to first active
+  // Find Green API / Manus WA integration - use specified ID or fall back to first active
   let integration: any = null
+  let providerType: 'green_api' | 'manus_wa' = 'green_api'
   
   if (integration_id) {
     const { data: specificIntegration, error } = await supabase
       .from('tenant_integrations')
-      .select('id, api_key, settings, user_id')
+      .select('id, api_key, settings, user_id, integration_type, instance_id')
       .eq('id', integration_id)
       .eq('is_active', true)
       .maybeSingle()
     
     if (!error && specificIntegration) {
       integration = specificIntegration
+      if (specificIntegration.integration_type === 'manus_wa') providerType = 'manus_wa'
     }
   }
   
-  // Fallback to first active integration
+  // Fallback to first active Green API integration
   if (!integration) {
     const { data: fallbackIntegration, error: integrationError } = await supabase
       .from('tenant_integrations')
-      .select('id, api_key, settings, user_id')
+      .select('id, api_key, settings, user_id, integration_type, instance_id')
       .eq('tenant_id', tenantId)
       .eq('integration_type', 'green_api')
       .eq('is_active', true)
@@ -2851,39 +2853,58 @@ async function executeGreenApiToCampaigner(supabase: any, config: any, data: any
       .maybeSingle()
     
     if (integrationError || !fallbackIntegration) {
-      throw new Error('לא נמצא חיבור Green API פעיל')
+      throw new Error('לא נמצא חיבור WhatsApp פעיל')
     }
     integration = fallbackIntegration
   }
   
-  // Support both naming conventions: idInstance/apiTokenInstance and instance_id/api_key
-  // Also check both settings object AND direct columns (fixed Dec 14, 2025)
-  const idInstance = integration.settings?.idInstance || integration.settings?.instance_id || integration.instance_id
-  const apiTokenInstance = integration.settings?.apiTokenInstance || integration.api_key
-  
-  if (!idInstance || !apiTokenInstance) {
-    throw new Error('הגדרות Green API חסרות')
+  let idInstance: string
+  let apiTokenInstance: string
+  if (providerType === 'manus_wa') {
+    idInstance = integration.settings?.instance_id || integration.instance_id
+    apiTokenInstance = integration.api_key
+    if (!idInstance || !apiTokenInstance) {
+      throw new Error('הגדרות Manus WhatsApp חסרות')
+    }
+  } else {
+    idInstance = integration.settings?.idInstance || integration.settings?.instance_id || integration.instance_id
+    apiTokenInstance = integration.settings?.apiTokenInstance || integration.api_key
+    if (!idInstance || !apiTokenInstance) {
+      throw new Error('הגדרות Green API חסרות')
+    }
   }
   
   // Replace template variables
   const message = replaceTemplateVariables(message_template, data, tenantSlug)
   
-  // Send message via Green API
-  const greenApiUrl = `https://api.green-api.com/waInstance${idInstance}/sendMessage/${apiTokenInstance}`
-  
-  const sendResponse = await fetch(greenApiUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chatId,
-      message,
-    }),
-  })
-  
-  const sendResult = await sendResponse.json()
-  
-  if (!sendResponse.ok) {
-    throw new Error(`שגיאה בשליחת הודעה: ${JSON.stringify(sendResult)}`)
+  let sendResult: any
+  if (providerType === 'manus_wa') {
+    const isGroup = chatId.includes('@g.us')
+    const manusBase = 'https://whatsappgw-pzpyrrww.manus.space'
+    const endpoint = isGroup ? 'send/group' : 'send/text'
+    const payload: Record<string, unknown> = isGroup
+      ? { groupId: chatId, body: message }
+      : { to: chatId.replace(/[^0-9]/g, ''), body: message }
+    const sendResponse = await fetch(`${manusBase}/api/v1/instances/${idInstance}/${endpoint}`, {
+      method: 'POST',
+      headers: { 'X-Api-Key': apiTokenInstance, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    sendResult = await sendResponse.json().catch(() => ({}))
+    if (!sendResponse.ok || sendResult?.success === false) {
+      throw new Error(`שגיאה בשליחת הודעה (Manus): ${JSON.stringify(sendResult)}`)
+    }
+  } else {
+    const greenApiUrl = `https://api.green-api.com/waInstance${idInstance}/sendMessage/${apiTokenInstance}`
+    const sendResponse = await fetch(greenApiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chatId, message }),
+    })
+    sendResult = await sendResponse.json()
+    if (!sendResponse.ok) {
+      throw new Error(`שגיאה בשליחת הודעה: ${JSON.stringify(sendResult)}`)
+    }
   }
   
   // Save message to chat_messages for chat history

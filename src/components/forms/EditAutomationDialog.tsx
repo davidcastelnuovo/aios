@@ -561,8 +561,8 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                       <SelectItem value="update_status">שינוי סטטוס</SelectItem>
                       <SelectItem value="send_whatsapp">שלח WhatsApp (ManyChat)</SelectItem>
                       <SelectItem value="create_manychat_subscriber">צור subscriber ב-ManyChat</SelectItem>
-                      <SelectItem value="send_greenapi_message">שלח WhatsApp (Green API)</SelectItem>
-                      <SelectItem value="send_greenapi_to_campaigner">שלח WhatsApp לקמפיינר (Green API)</SelectItem>
+                      <SelectItem value="send_greenapi_message">שלח WhatsApp (Green API / Manus)</SelectItem>
+                      <SelectItem value="send_greenapi_to_campaigner">שלח WhatsApp לקמפיינר (Green API / Manus)</SelectItem>
                       <SelectItem value="add_lead_update">הוסף עדכון לליד</SelectItem>
                       <SelectItem value="add_client_update">הוסף עדכון ללקוח</SelectItem>
                       <SelectItem value="create_task">צור משימה</SelectItem>
