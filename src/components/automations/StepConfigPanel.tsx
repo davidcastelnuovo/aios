@@ -1852,14 +1852,16 @@ function CarmenSessionConfig({
       if (!tenantId) return [];
       const { data, error } = await supabase
         .from("whatsapp_groups")
-        .select("id, group_name, group_chat_id")
+        .select("id, group_name, group_chat_id, is_blocked")
         .eq("tenant_id", tenantId)
+        .or("is_blocked.is.null,is_blocked.eq.false")
         .order("group_name");
       if (error) throw error;
       return data || [];
     },
     enabled: !!tenantId,
   });
+  const [groupSearch, setGroupSearch] = useState("");
 
   // Fetch ALL WhatsApp connections (Green API + Manus WA)
   const { data: waConnections } = useQuery({
