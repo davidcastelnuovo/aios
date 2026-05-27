@@ -1125,27 +1125,42 @@ function GreenAPIActionConfig({
         </div>
       )}
 
-      {/* Phone mode toggle */}
+      {/* Destination mode toggle */}
       <div className="space-y-2">
-        <Label className="text-right block">מספר טלפון לשליחה</Label>
+        <Label className="text-right block">יעד שליחה</Label>
         <RadioGroup
           value={phoneMode}
           onValueChange={(v) => onConfigChange("phone_mode", v)}
-          className="flex gap-4 justify-end"
+          className="grid grid-cols-2 gap-2"
           dir="rtl"
         >
           <div className="flex items-center gap-2">
             <RadioGroupItem value="field" id="phone-field" />
-            <Label htmlFor="phone-field" className="cursor-pointer text-sm">שדה דינמי</Label>
+            <Label htmlFor="phone-field" className="cursor-pointer text-sm">טלפון - שדה דינמי</Label>
           </div>
           <div className="flex items-center gap-2">
             <RadioGroupItem value="manual" id="phone-manual" />
-            <Label htmlFor="phone-manual" className="cursor-pointer text-sm">מספר ידני</Label>
+            <Label htmlFor="phone-manual" className="cursor-pointer text-sm">טלפון - ידני</Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <RadioGroupItem value="group_field" id="group-field" disabled={isManus} />
+            <Label htmlFor="group-field" className={`cursor-pointer text-sm ${isManus ? 'opacity-50' : ''}`}>
+              קבוצה - שדה דינמי
+            </Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <RadioGroupItem value="group_manual" id="group-manual" disabled={isManus} />
+            <Label htmlFor="group-manual" className={`cursor-pointer text-sm ${isManus ? 'opacity-50' : ''}`}>
+              קבוצה - מזהה ידני
+            </Label>
           </div>
         </RadioGroup>
+        {isManus && (
+          <p className="text-xs text-amber-600 text-right">Manus WhatsApp לא תומך בשליחה לקבוצות</p>
+        )}
       </div>
 
-      {phoneMode === "field" ? (
+      {phoneMode === "field" && (
         <div className="space-y-2">
           <Label className="text-right block">שדה מספר טלפון</Label>
           <Select
@@ -1183,7 +1198,9 @@ function GreenAPIActionConfig({
             השדה שממנו יילקח מספר הטלפון לשליחת ההודעה
           </p>
         </div>
-      ) : (
+      )}
+
+      {phoneMode === "manual" && (
         <div className="space-y-2">
           <Label className="text-right block">מספר טלפון</Label>
           <Input
@@ -1195,6 +1212,50 @@ function GreenAPIActionConfig({
           />
           <p className="text-xs text-muted-foreground text-right">
             הזן מספר טלפון קבוע שאליו תישלח ההודעה
+          </p>
+        </div>
+      )}
+
+      {phoneMode === "group_field" && (
+        <div className="space-y-2">
+          <Label className="text-right block">שדה מזהה קבוצה</Label>
+          <Select
+            value={configuration?.group_id_field || "group_id"}
+            onValueChange={(v) => onConfigChange("group_id_field", v)}
+          >
+            <SelectTrigger className="text-right">
+              <SelectValue placeholder="בחר שדה..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="group_id">מזהה קבוצה ({`{{group_id}}`})</SelectItem>
+              {availableFields
+                .filter(f => f.key.toLowerCase().includes("group") || f.key === "chat_id")
+                .filter(f => f.key !== "group_id")
+                .map((field) => (
+                  <SelectItem key={field.key} value={field.key}>
+                    {field.label} ({`{{${field.key}}}`})
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground text-right">
+            ההודעה תישלח לאותה קבוצה שממנה הגיע הטריגר
+          </p>
+        </div>
+      )}
+
+      {phoneMode === "group_manual" && (
+        <div className="space-y-2">
+          <Label className="text-right block">מזהה קבוצה</Label>
+          <Input
+            value={configuration?.manual_group_id || ""}
+            onChange={(e) => onConfigChange("manual_group_id", e.target.value)}
+            placeholder="120363012345678901 או 120363...@g.us"
+            dir="ltr"
+            className="text-right font-mono text-xs"
+          />
+          <p className="text-xs text-muted-foreground text-right">
+            הזן את מזהה הקבוצה הקבוע (chatId של הקבוצה ב-WhatsApp)
           </p>
         </div>
       )}
