@@ -1127,7 +1127,7 @@ Deno.serve(async (req) => {
                       }
                     }
                   }
-                } else if (effectiveActionType === 'send_greenapi_message') {
+                } else if (effectiveActionType === 'send_greenapi_message' || effectiveActionType === 'send_manus_message') {
                   // If message_template contains {{agent_output}}, replace it
                   if (stepConfig.message_template && previousStepOutput) {
                     const agentText = previousStepOutput?.output || (typeof previousStepOutput === 'string' ? previousStepOutput : JSON.stringify(previousStepOutput))
@@ -1336,7 +1336,7 @@ Deno.serve(async (req) => {
               response = await executeSendWhatsapp(supabase, automation.configuration, payloadData, tenantId)
             } else if (automation.action_type === 'create_manychat_subscriber') {
               response = await executeCreateManychatSubscriber(supabase, automation.configuration, payloadData, tenantId)
-            } else if (automation.action_type === 'send_greenapi_message') {
+            } else if (automation.action_type === 'send_greenapi_message' || automation.action_type === 'send_manus_message') {
               response = await executeGreenApiMessage(supabase, automation.configuration, payloadData, tenantId)
             } else if (automation.action_type === 'send_greenapi_to_campaigner') {
               response = await executeGreenApiToCampaigner(supabase, automation.configuration, payloadData, tenantId)

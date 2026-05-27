@@ -113,6 +113,7 @@ const TRIGGER_OPTIONS = TRIGGER_CATEGORIES.flatMap(c => c.options);
 
 const ACTION_OPTIONS = [
   { value: "send_whatsapp", label: "שלח WhatsApp (ManyChat)" },
+  { value: "send_manus_message", label: "שלח WhatsApp (Manus)" },
   { value: "send_greenapi_message", label: "שלח WhatsApp (Green API)" },
   { value: "send_telegram", label: "שלח הודעת Telegram" },
   { value: "create_task", label: "צור משימה" },
@@ -864,12 +865,13 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [] }
           )}
 
           {/* Green API WhatsApp config with connection selector + field mapping */}
-          {node.action_type === "send_greenapi_message" && (
+          {(node.action_type === "send_greenapi_message" || node.action_type === "send_manus_message") && (
             <GreenAPIActionConfig
               tenantId={tenantId}
               configuration={node.configuration}
               availableFields={availableFields}
               onConfigChange={handleConfigChange}
+              providerFilter={node.action_type === "send_manus_message" ? "manus_wa" : undefined}
             />
           )}
 
@@ -992,25 +994,28 @@ function GreenAPIActionConfig({
   configuration,
   availableFields,
   onConfigChange,
+  providerFilter,
 }: {
   tenantId: string | undefined;
   configuration: Record<string, any>;
   availableFields: { key: string; label: string }[];
   onConfigChange: (key: string, value: any) => void;
+  providerFilter?: "green_api" | "manus_wa";
 }) {
   const [cursorPos, setCursorPos] = useState<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Fetch WhatsApp integrations (Green API + Manus WA)
+  // Fetch WhatsApp integrations (Green API + Manus WA), optionally filtered
   const { data: greenApiIntegrations, isLoading } = useQuery({
-    queryKey: ["wa-integrations-for-flow", tenantId],
+    queryKey: ["wa-integrations-for-flow", tenantId, providerFilter || "all"],
     queryFn: async () => {
       if (!tenantId) return [];
+      const types = providerFilter ? [providerFilter] : ["green_api", "manus_wa"];
       const { data, error } = await supabase
         .from("tenant_integrations")
         .select("id, integration_type, settings, is_active, user_id")
         .eq("tenant_id", tenantId)
-        .in("integration_type", ["green_api", "manus_wa"])
+        .in("integration_type", types)
         .eq("is_active", true);
       if (error) throw error;
       return data || [];
@@ -1030,34 +1035,37 @@ function GreenAPIActionConfig({
     onConfigChange("message_template", newValue);
   };
 
-  const greenApiMode = configuration?.green_api_mode || "tenant";
+  const greenApiMode = providerFilter === "manus_wa" ? "tenant" : (configuration?.green_api_mode || "tenant");
   const phoneMode = configuration?.phone_mode || "field";
+  const isManus = providerFilter === "manus_wa";
 
   return (
     <div className="space-y-4">
-      {/* Green API connection mode */}
-      <div className="space-y-2">
-        <Label className="text-right block">מקור חיבור Green API</Label>
-        <RadioGroup
-          value={greenApiMode}
-          onValueChange={(v) => onConfigChange("green_api_mode", v)}
-          className="flex gap-4 justify-end"
-          dir="rtl"
-        >
-          <div className="flex items-center gap-2">
-            <RadioGroupItem value="tenant" id="gapi-tenant" />
-            <Label htmlFor="gapi-tenant" className="cursor-pointer text-sm">מהארגון</Label>
-          </div>
-          <div className="flex items-center gap-2">
-            <RadioGroupItem value="external" id="gapi-external" />
-            <Label htmlFor="gapi-external" className="cursor-pointer text-sm">חיבור חיצוני</Label>
-          </div>
-        </RadioGroup>
-      </div>
+      {/* Connection mode (hidden for Manus — only tenant connections supported) */}
+      {!isManus && (
+        <div className="space-y-2">
+          <Label className="text-right block">מקור חיבור Green API</Label>
+          <RadioGroup
+            value={greenApiMode}
+            onValueChange={(v) => onConfigChange("green_api_mode", v)}
+            className="flex gap-4 justify-end"
+            dir="rtl"
+          >
+            <div className="flex items-center gap-2">
+              <RadioGroupItem value="tenant" id="gapi-tenant" />
+              <Label htmlFor="gapi-tenant" className="cursor-pointer text-sm">מהארגון</Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <RadioGroupItem value="external" id="gapi-external" />
+              <Label htmlFor="gapi-external" className="cursor-pointer text-sm">חיבור חיצוני</Label>
+            </div>
+          </RadioGroup>
+        </div>
+      )}
 
       {greenApiMode === "tenant" ? (
         <div className="space-y-2">
-          <Label className="text-right block">חיבור Green API</Label>
+          <Label className="text-right block">{isManus ? "חיבור Manus" : "חיבור Green API"}</Label>
           {isLoading ? (
             <div className="flex items-center justify-center py-2">
               <Loader2 className="h-4 w-4 animate-spin" />
