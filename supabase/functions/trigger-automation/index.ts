@@ -2548,7 +2548,174 @@ function replaceTemplateVariables(template: string, data: any, tenantSlug?: stri
   return result
 }
 
+// ---------- Multi-recipient helpers ----------
+function phoneToChatId(phone: string): string {
+  const clean = String(phone).replace(/\D/g, '')
+  const last9 = clean.slice(-9)
+  return `972${last9}@c.us`
+}
+
+function normalizeGroupId(raw: string): string {
+  const v = String(raw).trim()
+  return v.includes('@g.us') ? v : `${v}@g.us`
+}
+
+async function resolveRecipientsToChatIds(
+  supabase: any,
+  recipients: any[],
+  data: any,
+  tenantId: string,
+): Promise<string[]> {
+  const out: string[] = []
+  for (const r of recipients) {
+    try {
+      if (!r || typeof r !== 'object') continue
+      switch (r.type) {
+        case 'phone_field': {
+          const v = r.field ? data?.[r.field] : null
+          if (v) {
+            const s = String(v).trim()
+            const keyLower = String(r.field).toLowerCase()
+            const isGroup = data?.contact_type === 'group' || keyLower.includes('group') || s.includes('@g.us')
+            out.push(isGroup ? normalizeGroupId(s) : phoneToChatId(s))
+          }
+          break
+        }
+        case 'phone_manual': {
+          if (r.phone) {
+            out.push(r.phone.includes('@g.us') ? r.phone : phoneToChatId(r.phone))
+          }
+          break
+        }
+        case 'group_field': {
+          const fieldKey = r.field || 'group_chat_id'
+          const raw = data?.[fieldKey]
+          const v = data?.contact_type === 'group' && data?.group_chat_id &&
+            (fieldKey === 'group_id' || !raw || !String(raw).includes('@g.us'))
+            ? data.group_chat_id
+            : raw
+          if (v) out.push(normalizeGroupId(v))
+          break
+        }
+        case 'group_manual': {
+          if (r.group_id) out.push(normalizeGroupId(r.group_id))
+          break
+        }
+        case 'contact_lookup': {
+          if (!r.id) break
+          const table = r.entity === 'client' ? 'clients' : 'leads'
+          const { data: row } = await supabase
+            .from(table).select('phone').eq('id', r.id).eq('tenant_id', tenantId).maybeSingle()
+          if (row?.phone) out.push(phoneToChatId(row.phone))
+          break
+        }
+        case 'group_lookup': {
+          if (r.group_id) out.push(normalizeGroupId(r.group_id))
+          break
+        }
+      }
+    } catch (e) {
+      console.error('[recipients] resolve error', r, e)
+    }
+  }
+  // Dedupe
+  return Array.from(new Set(out))
+}
+
+async function resolveWaIntegration(supabase: any, config: any, tenantId: string) {
+  const integration_id = config.integration_id || config.green_api_integration_id
+  let providerType: 'green_api' | 'manus_wa' = 'green_api'
+  let integration: any = null
+  let idInstance = ''
+  let apiTokenInstance = ''
+
+  if (config.green_api_mode === 'external' && config.external_instance_id && config.external_api_token) {
+    return { idInstance: config.external_instance_id, apiTokenInstance: config.external_api_token, providerType: 'green_api' as const }
+  }
+
+  if (integration_id) {
+    const { data: row } = await supabase
+      .from('tenant_integrations')
+      .select('id, api_key, settings, user_id, integration_type, instance_id')
+      .eq('id', integration_id).eq('is_active', true).maybeSingle()
+    if (row) {
+      integration = row
+      if (row.integration_type === 'manus_wa') providerType = 'manus_wa'
+    }
+  }
+  if (!integration) {
+    const { data: row } = await supabase
+      .from('tenant_integrations')
+      .select('id, api_key, settings, user_id, integration_type, instance_id')
+      .eq('tenant_id', tenantId).eq('integration_type', 'green_api').eq('is_active', true).limit(1).maybeSingle()
+    if (!row) throw new Error('לא נמצא חיבור WhatsApp פעיל')
+    integration = row
+  }
+  if (providerType === 'manus_wa') {
+    idInstance = integration.settings?.instance_id || integration.instance_id
+    apiTokenInstance = integration.api_key
+    if (!idInstance || !apiTokenInstance) throw new Error('הגדרות Manus WhatsApp חסרות')
+  } else {
+    idInstance = integration.settings?.idInstance || integration.settings?.instance_id || integration.instance_id
+    apiTokenInstance = integration.settings?.apiTokenInstance || integration.api_key
+    if (!idInstance || !apiTokenInstance) throw new Error('הגדרות Green API חסרות')
+  }
+  return { idInstance, apiTokenInstance, providerType }
+}
+
+async function sendWaMessage(opts: {
+  providerType: 'green_api' | 'manus_wa',
+  idInstance: string,
+  apiTokenInstance: string,
+  chatId: string,
+  message: string,
+  config: any,
+  data: any,
+  tenantSlug?: string,
+}) {
+  const { providerType, idInstance, apiTokenInstance, chatId, message, config, data, tenantSlug } = opts
+  const mediaType = config.media_type
+  const mediaUrl = config.media_url
+
+  if (providerType === 'manus_wa') {
+    const isGroup = chatId.includes('@g.us')
+    const manusRecipient = isGroup ? chatId : chatId.replace(/[^0-9]/g, '')
+    const manusBase = 'https://whatsappgw-pzpyrrww.manus.space'
+    const endpoint = isGroup ? 'send/group' : 'send/text'
+    const payload: Record<string, unknown> = isGroup
+      ? { groupId: manusRecipient, body: message }
+      : { to: manusRecipient, body: message }
+    const r = await fetch(`${manusBase}/api/v1/instances/${idInstance}/${endpoint}`, {
+      method: 'POST', headers: { 'X-Api-Key': apiTokenInstance, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    const j = await r.json().catch(() => ({}))
+    if (!r.ok || j?.success === false) throw new Error(`Manus error: ${JSON.stringify(j)}`)
+    return j
+  } else {
+    const url = `https://api.green-api.com/waInstance${idInstance}/sendMessage/${apiTokenInstance}`
+    const r = await fetch(url, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chatId, message, linkPreview: mediaType === 'link' }),
+    })
+    const j = await r.json()
+    if (!r.ok) throw new Error(`Green API error: ${JSON.stringify(j)}`)
+
+    if (mediaUrl && mediaType === 'file') {
+      const resolvedMediaUrl = replaceTemplateVariables(mediaUrl, { ...data }, tenantSlug)
+      const fileName = config.media_filename || resolvedMediaUrl.split('/').pop()?.split('?')[0] || 'file'
+      const fileUrl = `https://api.green-api.com/waInstance${idInstance}/sendFileByUrl/${apiTokenInstance}`
+      await fetch(fileUrl, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatId, urlFile: resolvedMediaUrl, fileName, caption: message }),
+      })
+    }
+    return j
+  }
+}
+
 // Execute Green API message action
+
 async function executeGreenApiMessage(supabase: any, config: any, data: any, tenantId: string) {
   
   const { message_template, send_to_type, manual_phone, manual_group_id, phone_mode, green_api_mode, external_instance_id, external_api_token, phone_field, group_id_field } = config
