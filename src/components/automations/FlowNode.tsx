@@ -136,6 +136,7 @@ export const ACTION_TYPE_LABELS: Record<string, string> = {
   whatsapp_session: "שמור סשן שיחה",
   send_whatsapp: "שלח WhatsApp (ManyChat)",
   send_greenapi_message: "שלח WhatsApp (Green API)",
+  send_manus_message: "שלח WhatsApp (Manus)",
   send_greenapi_to_campaigner: "שלח WhatsApp ל-Campaigner",
   send_telegram: "שלח הודעת Telegram",
   create_task: "צור משימה",
