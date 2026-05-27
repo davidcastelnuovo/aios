@@ -1725,7 +1725,7 @@ Deno.serve(async (req) => {
           // Incoming message but no active session — skip Carmen entirely
         } else {
         // Step 1: Find active Carmen automation for this tenant
-        const carmenAutomation = await findCarmenSessionAutomation(supabaseClient, tenantId);
+        const carmenAutomation = await findCarmenSessionAutomation(supabaseClient, tenantId, integration.id);
         
         if (!carmenAutomation) {
           // No Carmen automation configured — skip silently
