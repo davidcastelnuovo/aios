@@ -141,7 +141,21 @@ const ALL_TOOLS = [
 // ===========================
 // TOOL EXECUTOR
 // ===========================
+async function getAccessibleTenantIds(supabase: any, tenantId: string): Promise<string[]> {
+  try {
+    const { data } = await supabase
+      .from('agency_tenant_access')
+      .select('source_tenant_id')
+      .eq('accessing_tenant_id', tenantId)
+    const extra = (data || []).map((r: any) => r.source_tenant_id).filter(Boolean)
+    return Array.from(new Set([tenantId, ...extra]))
+  } catch (_) {
+    return [tenantId]
+  }
+}
+
 async function executeTool(name: string, args: Record<string, any>, supabase: any, tenantId: string, userId: string, callerCampaignerId?: string | null, agentId?: string | null): Promise<any> {
+  const accessibleTenantIds = await getAccessibleTenantIds(supabase, tenantId)
   switch (name) {
     case 'create_lead': {
       const { data: agency } = await supabase.from('agencies').select('id').in('tenant_id', accessibleTenantIds).limit(1).single()
