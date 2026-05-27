@@ -97,8 +97,9 @@ Deno.serve(async (req) => {
     } else {
       const { data } = await supabase.from('tenant_integrations').select('*')
         .eq('tenant_id', tenantId).eq('user_id', userId)
-        .eq('integration_type', 'manus_wa').eq('is_active', true).maybeSingle();
-      integ = data;
+        .eq('integration_type', 'manus_wa').eq('is_active', true)
+        .order('created_at', { ascending: true }).limit(1);
+      integ = data?.[0] || null;
     }
 
     if (!integ?.api_key || !(integ?.settings as any)?.instance_id) {
