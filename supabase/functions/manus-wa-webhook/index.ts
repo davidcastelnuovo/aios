@@ -188,6 +188,7 @@ Deno.serve(async (req) => {
     const fromMeFlag = payload.fromMe === true || payload.fromMe === 'true' ||
                        payload.direction === 'outgoing' || payload.direction === 'outbound';
     const isOutgoingFromPhone = fromMeFlag || (!!myPhone && fromDigits === myPhone);
+    const sourcePhoneNumber = isOutgoingFromPhone ? fromDigits : myPhone;
 
     const counterpartRaw = isOutgoingFromPhone ? toRaw : fromRaw;
     const counterpartPhone = counterpartRaw.split('@')[0];
@@ -313,6 +314,7 @@ Deno.serve(async (req) => {
         connectionUserId,
         chatId: chatIdForCarmen,
         phoneNumber: counterpartPhone,
+          sourcePhoneNumber,
         senderName,
         messageText,
         isIncoming: !isOutgoingFromPhone,
