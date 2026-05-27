@@ -978,9 +978,12 @@ Deno.serve(async (req) => {
                         const triggerWords = [triggerKeyword.toLowerCase(), 'carmen', 'כרמן']
                         const hasTrigger = triggerWords.some(kw => messageText.includes(kw))
 
-                        if (!hasTrigger || !isOutgoingMessage) {
-                          console.log(`[CARMEN] No active session — skipping: hasTrigger=${hasTrigger}, direction=${messageDirection} (need outgoing/outbound) for chat ${cId}`)
-                          // Skip the agent step entirely — only the connection owner can start a session
+                        // In group chats, allow inbound trigger keyword (group members can invoke Carmen).
+                        // In private chats, only outbound (operator's own device) can start a session.
+                        const isGroupChat = String(cId).includes('@g.us')
+                        const allowedByDirection = isOutgoingMessage || (isGroupChat && messageDirection === 'inbound')
+                        if (!hasTrigger || !allowedByDirection) {
+                          console.log(`[CARMEN] No active session — skipping: hasTrigger=${hasTrigger}, direction=${messageDirection}, isGroup=${isGroupChat} for chat ${cId}`)
                           continue
                         }
 
