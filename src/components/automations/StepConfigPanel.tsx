@@ -1220,17 +1220,18 @@ function GreenAPIActionConfig({
         <div className="space-y-2">
           <Label className="text-right block">שדה מזהה קבוצה</Label>
           <Select
-            value={configuration?.group_id_field || "group_id"}
+            value={configuration?.group_id_field || "group_chat_id"}
             onValueChange={(v) => onConfigChange("group_id_field", v)}
           >
             <SelectTrigger className="text-right">
               <SelectValue placeholder="בחר שדה..." />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="group_chat_id">מזהה צ'אט קבוצה - מומלץ ({`{{group_chat_id}}`})</SelectItem>
               <SelectItem value="group_id">מזהה קבוצה ({`{{group_id}}`})</SelectItem>
               {availableFields
-                .filter(f => f.key.toLowerCase().includes("group") || f.key === "chat_id")
-                .filter(f => f.key !== "group_id")
+                .filter(f => (f.key.toLowerCase().includes("group") || f.key === "chat_id"))
+                .filter(f => f.key !== "group_id" && f.key !== "group_chat_id")
                 .map((field) => (
                   <SelectItem key={field.key} value={field.key}>
                     {field.label} ({`{{${field.key}}}`})
