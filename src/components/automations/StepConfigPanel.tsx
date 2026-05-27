@@ -1791,24 +1791,45 @@ function CarmenSessionConfig({
     enabled: !!tenantId,
   });
 
-  // Fetch Green API connections
-  const { data: connections } = useQuery({
-    queryKey: ["green-api-connections-carmen", tenantId],
+  // Fetch ALL WhatsApp connections (Green API + Manus WA)
+  const { data: waConnections } = useQuery({
+    queryKey: ["wa-connections-for-carmen", tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
       const { data, error } = await supabase
         .from("tenant_integrations")
-        .select("id, settings, user_id, instance_id")
+        .select("id, integration_type, settings, user_id, instance_id")
         .eq("tenant_id", tenantId)
-        .eq("integration_type", "green_api")
-        .eq("is_active", true);
+        .in("integration_type", ["green_api", "manus_wa"])
+        .eq("is_active", true)
+        .order("integration_type", { ascending: false });
       if (error) throw error;
       return data || [];
     },
     enabled: !!tenantId,
   });
 
+  // Default to Manus if no integration is selected yet and Manus exists
+  useEffect(() => {
+    if (!waConnections || waConnections.length === 0) return;
+    const hasIntegrationId = configuration?.carmen_integration_id;
+    if (!hasIntegrationId) {
+      const manusConn = waConnections.find((c: any) => c.integration_type === "manus_wa");
+      if (manusConn) {
+        onConfigChange("carmen_integration_id", manusConn.id);
+      }
+    }
+  }, [waConnections]);
+
   const scopeMode = configuration?.carmen_scope_mode || "all";
+
+  // Helper label for connection
+  const getConnectionLabel = (c: any) => {
+    const settings = c.settings as any;
+    const displayName = settings?.display_name || settings?.phone_number || settings?.instance_id || c.instance_id;
+    const providerLabel = c.integration_type === "manus_wa" ? "מאנוס" : "Green API";
+    return `${providerLabel} — ${displayName}`;
+  };
 
   return (
     <div className="space-y-4">
@@ -1991,26 +2012,46 @@ function CarmenSessionConfig({
           </div>
         )}
 
-        {/* בחירת חיבור Green API */}
-        {connections && connections.length > 1 && (
-          <div className="space-y-2">
-            <Label className="text-right block">חיבור Green API ספציפי</Label>
+        {/* בחירת חיבור WhatsApp (Green API / Manus) */}
+        <div className="space-y-2 pt-2 border-t border-red-500/20">
+          <Label className="text-right block font-semibold">חיבור WhatsApp לכרמן</Label>
+          {waConnections && waConnections.length > 0 ? (
             <Select
-              value={configuration?.carmen_connection_user_id || "all"}
-              onValueChange={(v) => onConfigChange("carmen_connection_user_id", v === "all" ? "" : v)}
+              value={configuration?.carmen_integration_id || "all"}
+              onValueChange={(v) => onConfigChange("carmen_integration_id", v === "all" ? "" : v)}
             >
               <SelectTrigger className="text-right">
                 <SelectValue placeholder="כל החיבורים" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">כל החיבורים</SelectItem>
-                {connections.map((c: any) => (
-                  <SelectItem key={c.id} value={c.user_id}>
-                    {(c.settings as any)?.display_name || `חיבור ${c.instance_id}`}
+                <SelectItem value="all">כל החיבורים (Green API + מאנוס)</SelectItem>
+                {waConnections.map((c: any) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {getConnectionLabel(c)}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+          ) : (
+            <p className="text-xs text-muted-foreground text-right">
+              לא נמצאו חיבורי WhatsApp פעילים.
+            </p>
+          )}
+          {configuration?.carmen_integration_id && (
+            <div className="flex items-center gap-1 bg-green-500/10 border border-green-500/30 rounded p-2">
+              <span className="text-xs text-green-600 text-right flex-1">
+                ✅ כרמן תגיב רק דרך חיבור זה
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Legacy backward compat warning */}
+        {configuration?.carmen_connection_user_id && !configuration?.carmen_integration_id && (
+          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded p-2">
+            <p className="text-xs text-yellow-600 text-right">
+              ⚠️ יש לבחור חיבור WhatsApp מחדש מהרשימה למעלה (הגדרה קודמת מיושנת)
+            </p>
           </div>
         )}
       </div>
