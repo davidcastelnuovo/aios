@@ -368,7 +368,7 @@ export function WeeklyTaskBoard() {
     if (fetchedTasks && fetchedTasks.length > 0) {
       setLocalTasks(fetchedTasks);
     }
-  }, [JSON.stringify(fetchedTasks?.map(t => `${t.id}_${t.duration_minutes}_${t.status}`))]);
+  }, [JSON.stringify(fetchedTasks?.map(t => `${t.id}_${t.duration_minutes}_${t.status}_${t.campaigner_id}_${t.client_id}`))]);
   
   // Use localTasks for rendering, fallback to fetchedTasks if empty
   const tasks = localTasks.length > 0 ? localTasks : (fetchedTasks || []);
@@ -648,14 +648,15 @@ export function WeeklyTaskBoard() {
     onMutate: async ({ taskId, clientId }) => {
       await queryClient.cancelQueries({ queryKey: ["tasks"] });
       const clientName = clientsList?.find((c) => c.id === clientId)?.name ?? null;
+      const patch = (t: any) =>
+        t?.id === taskId
+          ? { ...t, client_id: clientId, clients: clientName ? { name: clientName } : null }
+          : t;
       queryClient.setQueriesData<any[]>({ queryKey: ["tasks"] }, (old) => {
         if (!Array.isArray(old)) return old;
-        return old.map((t) =>
-          t?.id === taskId
-            ? { ...t, client_id: clientId, clients: clientName ? { name: clientName } : null }
-            : t,
-        );
+        return old.map(patch);
       });
+      setLocalTasks((prev) => prev.map(patch));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
@@ -679,14 +680,16 @@ export function WeeklyTaskBoard() {
     onMutate: async ({ taskId, campaignerId }) => {
       await queryClient.cancelQueries({ queryKey: ["tasks"] });
       const campaignerName = campaignersList?.find((c) => c.id === campaignerId)?.full_name ?? null;
+      const patch = (t: any) =>
+        t?.id === taskId
+          ? { ...t, campaigner_id: campaignerId, campaigners: campaignerName ? { full_name: campaignerName } : null }
+          : t;
       queryClient.setQueriesData<any[]>({ queryKey: ["tasks"] }, (old) => {
         if (!Array.isArray(old)) return old;
-        return old.map((t) =>
-          t?.id === taskId
-            ? { ...t, campaigner_id: campaignerId, campaigners: campaignerName ? { full_name: campaignerName } : null }
-            : t,
-        );
+        return old.map(patch);
       });
+      // Also update local tasks state since rendering reads from it
+      setLocalTasks((prev) => prev.map(patch));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
