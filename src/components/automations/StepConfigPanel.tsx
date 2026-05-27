@@ -1143,21 +1143,18 @@ function GreenAPIActionConfig({
             <Label htmlFor="phone-manual" className="cursor-pointer text-sm">טלפון - ידני</Label>
           </div>
           <div className="flex items-center gap-2">
-            <RadioGroupItem value="group_field" id="group-field" disabled={isManus} />
-            <Label htmlFor="group-field" className={`cursor-pointer text-sm ${isManus ? 'opacity-50' : ''}`}>
+            <RadioGroupItem value="group_field" id="group-field" />
+            <Label htmlFor="group-field" className="cursor-pointer text-sm">
               קבוצה - שדה דינמי
             </Label>
           </div>
           <div className="flex items-center gap-2">
-            <RadioGroupItem value="group_manual" id="group-manual" disabled={isManus} />
-            <Label htmlFor="group-manual" className={`cursor-pointer text-sm ${isManus ? 'opacity-50' : ''}`}>
+            <RadioGroupItem value="group_manual" id="group-manual" />
+            <Label htmlFor="group-manual" className="cursor-pointer text-sm">
               קבוצה - מזהה ידני
             </Label>
           </div>
         </RadioGroup>
-        {isManus && (
-          <p className="text-xs text-amber-600 text-right">Manus WhatsApp לא תומך בשליחה לקבוצות</p>
-        )}
       </div>
 
       {phoneMode === "field" && (
