@@ -337,6 +337,19 @@ Deno.serve(async (req) => {
     // Manual outgoing = sent from WhatsApp app directly (NOT via API/automations)
     const isManualOutgoing = typeWebhook === 'outgoingMessageReceived';
     const isOutgoingStatus = typeWebhook === 'outgoingMessageStatus';
+
+    // 🔁 LOOP GUARD: Drop echo of our own sends arriving as "incomingMessageReceived".
+    // Green API can mirror API-sent messages back as incoming events in some groups,
+    // which caused Carmen to re-trigger on her own replies (infinite reply loop).
+    // If the sender wid matches our own instance wid → it's us → ignore the event entirely.
+    const selfWid: string | null = webhookData?.instanceData?.wid || null;
+    const senderWid: string | null = webhookData?.senderData?.sender || null;
+    if (isIncoming && selfWid && senderWid && senderWid === selfWid) {
+      console.log('🔁 Dropping self-echo incoming message from', senderWid);
+      return new Response(JSON.stringify({ received: true, self_echo: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     
     // Handle outgoingMessageStatus for messages sent from WhatsApp directly
     if (isOutgoingStatus) {
