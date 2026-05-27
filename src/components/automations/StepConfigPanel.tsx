@@ -1005,16 +1005,17 @@ function GreenAPIActionConfig({
   const [cursorPos, setCursorPos] = useState<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Fetch WhatsApp integrations (Green API + Manus WA)
+  // Fetch WhatsApp integrations (Green API + Manus WA), optionally filtered
   const { data: greenApiIntegrations, isLoading } = useQuery({
-    queryKey: ["wa-integrations-for-flow", tenantId],
+    queryKey: ["wa-integrations-for-flow", tenantId, providerFilter || "all"],
     queryFn: async () => {
       if (!tenantId) return [];
+      const types = providerFilter ? [providerFilter] : ["green_api", "manus_wa"];
       const { data, error } = await supabase
         .from("tenant_integrations")
         .select("id, integration_type, settings, is_active, user_id")
         .eq("tenant_id", tenantId)
-        .in("integration_type", ["green_api", "manus_wa"])
+        .in("integration_type", types)
         .eq("is_active", true);
       if (error) throw error;
       return data || [];
