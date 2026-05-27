@@ -1,34 +1,44 @@
+
 ## הבעיה
 
-האוטומציה של כרמן הוגדרה נכון: `carmen_scope_mode = specific_group` ורשימת `carmen_allowed_group_ids` מכילה מזהי צ׳אט (`120363...@g.us`).
+ב-`supabase/functions/_shared/carmen.ts` שורה 280:
+```ts
+if (!isManualOutgoing) return { handled: false, reason: 'no_session_inbound' };
+```
 
-אבל ה-webhook (`green-api-webhook`) שולח ל-`trigger-automation` payload עם:
-- `group_id` = ה-UUID של הקבוצה ב-DB (`whatsapp_groups.id`)
-- `group_chat_id` = המזהה של ווטסאפ (`@g.us`)
+הבלוק הזה דורש שכדי לפתוח סשן חדש של כרמן, ההודעה תהיה **outgoing** מהטלפון של החיבור עצמו (כלומר רק בעל הטלפון של כרמן יכול לטרגר אותה). זה תקין כשהחיבור היה הטלפון האישי של המשתמש, אבל עכשיו שהטלפון של מנוס הוא הטלפון של כרמן עצמה — אף הודעה נכנסת מהקבוצה לא יכולה להפעיל אותה.
 
-הבדיקה ב-`trigger-automation/index.ts` (שורה 276) משווה `safeData.group_id` (UUID) מול `carmen_allowed_group_ids` (`@g.us`) — תמיד נכשל → הטריגר נדחה עם `carmen_scope_group_mismatch` ולכן כרמן לא עונה (אין שום `automation_executions` חדש לטננט).
-
-אותה בעיה קיימת גם בבדיקות הרגילות:
-- שורה 327: `safeConfig.group_id !== safeData.group_id`
-- שורה 348-371: `source_filter` שמשתמש ב-`selected_group_ids` / `excluded_group_ids` (גם שם נשמרים `@g.us` ב-UI).
+בנוסף, בלוק ה-scope (שורות 293–304) לא מטפל נכון בקבוצות:
+- `specific_phone` בודק את `phoneNumber` בלי לזהות שב-group ה-`chatId` הוא `@g.us`.
+- `specific_group` מחזיר תמיד `false` ללא בדיקה.
 
 ## התיקון
 
-ב-`supabase/functions/trigger-automation/index.ts`, להתאים את כל השוואות הקבוצות כך שיתאימו גם ל-`group_chat_id` וגם ל-`group_id` (UUID):
+קובץ יחיד: `supabase/functions/_shared/carmen.ts`
 
-```text
-const candidates = [safeData.group_id, safeData.group_chat_id].filter(Boolean)
-const matches = allowedGroupIds.some(id => candidates.includes(id))
-```
+1. **שורה 280** — לאפשר גם הודעות נכנסות לפתוח סשן חדש כשמדובר בקבוצה:
+   ```ts
+   if (!isManualOutgoing && !isGroup) return { handled: false, reason: 'no_session_inbound' };
+   ```
+   ב־1-on-1 נשמרת התנהגות קיימת (רק owner מטרגר). בקבוצות — כל מי שכותב את מילת הטריגר ("כרמן") יוכל להפעיל אותה.
 
-מקומות לעדכן:
-1. בדיקת `carmen_scope_mode === 'specific_group'` (~שורה 276)
-2. בדיקת `safeConfig.group_id` הישנה (~שורה 327)
-3. `source_filter === 'multiple_groups'` עם `selected_group_ids` (~שורה 367)
-4. `source_filter === 'all_groups_except'` עם `excluded_group_ids` (~שורה 358)
+2. **בלוק ה-scope (שורות 293–304)** — להוסיף טיפול תקין לקבוצות:
+   - `specific_phone`: לדלג על הבדיקה כשמדובר בקבוצה (טלפון לא רלוונטי שם), או לבדוק את `authorPhone` של השולח.
+   - `specific_group`: לבדוק שה-`chatId` (שהוא ה-group JID) נמצא ב-`carmen_allowed_groups` מההגדרה, ולא להחזיר חסימה גורפת.
 
-לא נדרשים שינויי DB או UI — רק יישור של הבדיקה ב-edge function.
+3. **לוג קצר** של ה-reason כשכרמן לא נכנסת לפעולה בקבוצה, כדי להקל על דיבוג עתידי.
 
-## איך לוודא
+## בלי שינויים
 
-לאחר ההטמעה: לשלוח "כרמן" באחת מהקבוצות המורשות. נצפה ל-`automation_executions` חדש לטננט עם `status` שונה מ-running תקוע, וכרמן תענה.
+- אין שינוי בלוגיקת ה-Manus webhook, שליחת ההודעות, או מבנה הסשנים.
+- אין שינוי ב-frontend.
+- אין מיגרציות DB.
+
+## אימות
+
+לאחר הדיפלוי:
+1. כתיבת "כרמן" בקבוצה שבה הטלפון של מנוס נמצא → כרמן צריכה לענות בקבוצה.
+2. הודעה רגילה בקבוצה (בלי מילת הטריגר) → התעלמות.
+3. צ׳אט 1-on-1 — לוודא שלא נשברה ההתנהגות הקיימת.
+
+בדיקה דרך לוגי `manus-wa-webhook` ו-`carmen` — לוודא שאין יותר `no_session_inbound` בקבוצות.
