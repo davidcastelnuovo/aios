@@ -140,11 +140,16 @@ Deno.serve(async (req) => {
       ? groupChatId
       : toGatewayPhone(String(phoneNumber || ''), /^\d{1,3}$/.test(cc) ? cc : '972');
 
-    const url = `${BASE_URL}/api/v1/instances/${instanceId}/send/text`;
+    const url = groupChatId
+      ? `${BASE_URL}/api/v1/instances/${instanceId}/send/group`
+      : `${BASE_URL}/api/v1/instances/${instanceId}/send/text`;
+    const payload = groupChatId
+      ? { groupId: groupChatId, body: message }
+      : { to, body: message };
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'X-Api-Key': apiKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to, body: message }),
+      body: JSON.stringify(payload),
     });
 
     const respText = await res.text();
