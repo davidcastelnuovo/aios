@@ -121,6 +121,15 @@ const ALL_TOOLS = [
   { name: 'list_facebook_ad_accounts', description: 'שליפת כל חשבונות המודעות מפייסבוק. מחזיר id, name, status, currency.', parameters: { type: 'object', properties: {} } },
   { name: 'create_facebook_report_table', description: 'חיבור חשבון מודעות פייסבוק ללקוח — יוצר טבלת דוח facebook_insights ב-CRM', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח' }, ad_account_id: { type: 'string', description: 'מזהה חשבון מודעות פייסבוק (act_XXXXX)' }, ad_account_name: { type: 'string', description: 'שם חשבון המודעות' } }, required: ['client_id', 'ad_account_id', 'ad_account_name'] } },
   { name: 'list_unconnected_clients', description: 'רשימת לקוחות פעילים שאין להם עדיין טבלת דוח פייסבוק (facebook_insights) ב-CRM. שימושי לזיהוי לקוחות שצריכים חיבור.', parameters: { type: 'object', properties: {} } },
+  // INTEGRATIONS MANAGEMENT
+  { name: 'list_integrations', description: 'רשימת אינטגרציות מוגדרות בטננט (סוג, סטטוס פעיל, הגדרות בסיסיות). שימושי כשרוצים לדעת מה מחובר ומה לא.', parameters: { type: 'object', properties: { type: { type: 'string', description: 'סינון לפי סוג אינטגרציה' }, only_active: { type: 'boolean' } } } },
+  { name: 'toggle_integration', description: 'הפעלה או השבתה של אינטגרציה לפי מזהה.', parameters: { type: 'object', properties: { integration_id: { type: 'string' }, is_active: { type: 'boolean' } }, required: ['integration_id', 'is_active'] } },
+  // AGENT MANAGEMENT (Carmen building & managing sub-agents)
+  { name: 'list_agents', description: 'רשימת סוכני AI בטננט (כולל סוכנים תחתיים של כרמן).', parameters: { type: 'object', properties: { only_active: { type: 'boolean' } } } },
+  { name: 'create_agent', description: 'יצירת סוכן AI חדש תחת כרמן. השתמש כשהמשתמש מבקש לבנות סוכן חדש לתפקיד ספציפי.', parameters: { type: 'object', properties: { name: { type: 'string' }, talent: { type: 'string', description: 'תיאור התפקיד והמומחיות' }, personality: { type: 'string' }, soul: { type: 'string', description: 'מטרה/ייעוד' }, engine: { type: 'string', description: 'מודל (gemini-3-flash וכו׳)' } }, required: ['name', 'talent'] } },
+  { name: 'update_agent', description: 'עדכון פרטי סוכן קיים.', parameters: { type: 'object', properties: { agent_id: { type: 'string' }, name: { type: 'string' }, talent: { type: 'string' }, personality: { type: 'string' }, soul: { type: 'string' }, engine: { type: 'string' }, active: { type: 'boolean' } }, required: ['agent_id'] } },
+  // GITHUB AGENT DELEGATION (system self-repair)
+  { name: 'delegate_to_github_agent', description: 'האצלת בעיה טכנית/באג במערכת לסוכן הגיטהאב לאבחון או תיקון. השתמש כשמדווחים על תקלה במערכת או באג בקוד.', parameters: { type: 'object', properties: { message: { type: 'string', description: 'תיאור הבעיה/הבקשה הטכנית' }, action: { type: 'string', enum: ['chat_support', 'analyze_error', 'fix_code', 'check_permissions'], description: 'ברירת מחדל: chat_support' } }, required: ['message'] } },
 ]
 
 // ===========================
