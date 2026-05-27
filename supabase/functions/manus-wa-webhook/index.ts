@@ -27,7 +27,59 @@ Deno.serve(async (req) => {
     );
 
     const url = new URL(req.url);
-    const payload = await req.json();
+    const rawPayload = await req.json();
+
+    // Diagnostic: log top-level shape so we can see exactly what Manus sends
+    try {
+      console.log('[manus-wa] raw keys=', Object.keys(rawPayload || {}).join(','), 'preview=', JSON.stringify(rawPayload).slice(0, 800));
+    } catch {}
+
+    // Normalize Manus WA Gateway payload — it may be flat, or wrapped in
+    // { data }, { message }, { payload }, { event, data: {...} }, etc.
+    function pickObj(...candidates: unknown[]): Record<string, any> | null {
+      for (const c of candidates) {
+        if (c && typeof c === 'object' && !Array.isArray(c)) return c as Record<string, any>;
+      }
+      return null;
+    }
+    const outer = rawPayload as Record<string, any>;
+    const inner = pickObj(outer.data, outer.message, outer.payload, outer.body) || {};
+    const key = pickObj(inner.key, outer.key) || {};
+    const msgContainer = pickObj(inner.message, outer.message) || {};
+
+    const event =
+      outer.event ?? inner.event ?? outer.type ?? inner.type ?? outer.messageType ?? inner.messageType ?? 'message';
+    const fromField =
+      outer.from ?? inner.from ?? inner.chatId ?? outer.chatId ?? key.remoteJid ?? inner.remoteJid ?? '';
+    const toField =
+      outer.to ?? inner.to ?? inner.recipientId ?? outer.recipientId ?? '';
+    const bodyField =
+      outer.body ?? inner.body ?? inner.text ?? outer.text ?? inner.content ?? outer.content ??
+      msgContainer.conversation ?? msgContainer.text ?? msgContainer.body ?? '';
+    const fromMeField =
+      outer.fromMe ?? inner.fromMe ?? key.fromMe ?? (outer.direction === 'outgoing' || inner.direction === 'outgoing');
+    const directionField = outer.direction ?? inner.direction;
+    const idField = outer.id ?? inner.id ?? outer.messageId ?? inner.messageId ?? key.id;
+    const senderNameField = outer.senderName ?? inner.senderName ?? outer.fromName ?? inner.fromName ?? outer.pushName ?? inner.pushName ?? null;
+    const authorField = outer.author ?? inner.author ?? outer.participant ?? inner.participant ?? key.participant ?? null;
+    const hasMediaField = outer.hasMedia ?? inner.hasMedia ?? !!(msgContainer.imageMessage || msgContainer.audioMessage || msgContainer.videoMessage || msgContainer.documentMessage);
+
+    // Build a unified payload object that the rest of the code uses
+    const payload: Record<string, any> = {
+      ...outer,
+      ...inner,
+      event,
+      from: fromField,
+      to: toField,
+      body: typeof bodyField === 'string' ? bodyField : (bodyField?.text ?? ''),
+      fromMe: fromMeField,
+      direction: directionField,
+      id: idField,
+      messageId: outer.messageId ?? inner.messageId ?? idField,
+      senderName: senderNameField,
+      author: authorField,
+      hasMedia: hasMediaField,
+    };
 
     // Collect every possible secret source Manus may use
     const headerSecret =
@@ -36,11 +88,14 @@ Deno.serve(async (req) => {
       req.headers.get('x-manus-secret') ||
       req.headers.get('x-webhook-signature') ||
       url.searchParams.get('secret') ||
-      (payload?.secret as string | undefined) ||
+      (outer?.secret as string | undefined) ||
+      (inner?.secret as string | undefined) ||
       '';
 
     const headerInstanceId = req.headers.get('x-wa-gateway-instance') || '';
-    const instanceId = payload.instanceId || headerInstanceId || url.searchParams.get('instanceId') || '';
+    const instanceId =
+      outer.instanceId || inner.instanceId || outer.instance_id || inner.instance_id ||
+      headerInstanceId || url.searchParams.get('instanceId') || '';
 
     if (!instanceId) {
       console.error('Missing instanceId. Headers:', JSON.stringify(Object.fromEntries(req.headers)));
