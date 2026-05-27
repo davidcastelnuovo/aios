@@ -284,6 +284,10 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       let query = supabase.from('clients').select('id, name, contact_name, phone, status').eq('tenant_id', tenantId).order('name').limit(args.limit || 50)
       if (args.status) query = query.eq('status', args.status)
       if (clientIdsFilter) query = query.in('id', clientIdsFilter)
+      if (args.name_search) {
+        const term = String(args.name_search).trim().replace(/[%_]/g, '')
+        query = query.or(`name.ilike.%${term}%,contact_name.ilike.%${term}%`)
+      }
       const { data, error } = await query
       if (error) throw error
       return { count: data.length, clients: data }
