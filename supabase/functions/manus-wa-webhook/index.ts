@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
     const key = pickObj(inner.key, outer.key) || {};
     const msgContainer = pickObj(inner.message, outer.message) || {};
 
-    const event =
+    const normalizedEvent =
       outer.event ?? inner.event ?? outer.type ?? inner.type ?? outer.messageType ?? inner.messageType ?? 'message';
     const fromField =
       outer.from ?? inner.from ?? inner.chatId ?? outer.chatId ?? key.remoteJid ?? inner.remoteJid ?? '';
@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
     const payload: Record<string, any> = {
       ...outer,
       ...inner,
-      event,
+      event: normalizedEvent,
       from: fromField,
       to: toField,
       body: typeof bodyField === 'string' ? bodyField : (bodyField?.text ?? ''),
