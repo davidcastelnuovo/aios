@@ -3097,8 +3097,8 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
               </div>
 
               {/* Rows */}
-              {filteredRecords?.map((record) => (
-                <div key={record.id} className="flex border-b hover:bg-muted/20 transition-colors group">
+              {filteredRecords?.map((record, recordIndex) => (
+                <div key={`${record.id}-${recordIndex}`} className="flex border-b hover:bg-muted/20 transition-colors group">
                   {!isEmbed && (
                   <div className="w-12 flex-shrink-0 border-l p-2 flex items-center justify-center bg-muted/10">
                     <Button 

@@ -8,13 +8,14 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
-import { FileSpreadsheet, Facebook, ShoppingCart, ExternalLink, LayoutDashboard, X, Plus, Maximize2, ChevronDown, Settings } from "lucide-react";
+import { FileSpreadsheet, ExternalLink, LayoutDashboard, X, Plus, Maximize2, ChevronDown, Settings } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { TableCardAlerts } from "@/components/dynamic-tables/TableCardAlerts";
 import { ClientReportPanel } from "@/components/clients/ClientReportPanel";
 import { ClientDashboardPanel } from "@/components/clients/ClientDashboardPanel";
+import { getIntegrationIcon } from "@/lib/integrationIcons";
 import { toast } from "sonner";
 
 interface ClientTablesTabProps {
@@ -146,16 +147,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
     queryClient.invalidateQueries({ queryKey: ["all-dashboards"] });
   };
 
-  const renderTableIcon = (table: any) => {
-    if (table.integration_type === "facebook_insights") return <Facebook className="h-4 w-4 text-blue-600 shrink-0" />;
-    if (table.integration_type === "facebook_ecommerce") return <ShoppingCart className="h-4 w-4 text-green-600 shrink-0" />;
-    if (table.integration_type === "google_ads") return (
-      <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none">
-        <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" fill="#4285F4"/>
-      </svg>
-    );
-    return <FileSpreadsheet className="h-4 w-4 shrink-0" />;
-  };
+  const renderTableIcon = (table: any) => getIntegrationIcon(table?.integration_type);
 
   const items = useMemo(() => {
     const dashItems = dashboards.map((d: any) => ({
