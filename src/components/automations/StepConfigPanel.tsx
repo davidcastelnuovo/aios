@@ -1082,7 +1082,7 @@ function GreenAPIActionConfig({
                 {greenApiIntegrations.map((integration) => {
                   const settings = integration.settings as Record<string, any> | null;
                   const providerLabel = integration.integration_type === 'manus_wa' ? 'Manus WA' : 'Green API';
-                  const name = settings?.instance_name || settings?.connection_name || providerLabel;
+                  const name = (integration as any).display_name || settings?.instance_name || settings?.connection_name || providerLabel;
                   return (
                     <SelectItem key={integration.id} value={integration.id}>
                       {name} · {providerLabel}
