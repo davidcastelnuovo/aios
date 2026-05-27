@@ -8397,6 +8397,10 @@ export type Database = {
         Args: { _campaigner_id: string; _user_id?: string }
         Returns: boolean
       }
+      carmen_memory_decay_episodes: {
+        Args: { p_lambda?: number }
+        Returns: number
+      }
       check_circuit_breaker: {
         Args: { p_provider: string; p_tenant_id: string }
         Returns: boolean
@@ -8694,6 +8698,27 @@ export type Database = {
       is_root_tenant: { Args: { tenant_id: string }; Returns: boolean }
       is_seo_staff: { Args: { _user_id: string }; Returns: boolean }
       is_super_admin: { Args: { _user_id: string }; Returns: boolean }
+      kb_match_pointers: {
+        Args: {
+          p_category?: string
+          p_limit?: number
+          p_query_embedding: string
+          p_since_days?: number
+          p_tenant_id: string
+        }
+        Returns: {
+          category: string
+          entity_id: string
+          entity_type: string
+          id: string
+          path: string
+          ref_date: string
+          similarity: number
+          subcategory: string
+          summary: string
+          title: string
+        }[]
+      }
       link_visitor_to_lead: {
         Args: {
           p_lead_id: string

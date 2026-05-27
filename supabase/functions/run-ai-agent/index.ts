@@ -101,6 +101,12 @@ const ALL_TOOLS = [
   { name: 'save_memory', description: 'שמירת מידע לזיכרון מתמשך (העדפות, פרויקטים, הוראות)', parameters: { type: 'object', properties: { key: { type: 'string', description: 'מפתח זיהוי' }, content: { type: 'string', description: 'התוכן לשמירה' }, category: { type: 'string', enum: ['preferences', 'projects', 'clients', 'workflows', 'personal', 'instructions'] } }, required: ['key', 'content'] } },
   { name: 'recall_memory', description: 'שליפת זיכרונות שנשמרו', parameters: { type: 'object', properties: { category: { type: 'string' }, search: { type: 'string' } } } },
   { name: 'delete_memory', description: 'מחיקת זיכרון', parameters: { type: 'object', properties: { key: { type: 'string' } }, required: ['key'] } },
+  // KNOWLEDGE BASE (Carmen Memory Pointers + Episodes — ממלכת הידע)
+  { name: 'kb_list_folder', description: 'דפדוף בממלכת הידע של כרמן. מחזיר מצביעים (pointers) בתיקייה: clients/, team/, messages/<date>/, conversations/<topic>/, system_map/. הציון `path` הוא ההיררכיה. השתמש כדי לראות מה קיים לפני kb_open.', parameters: { type: 'object', properties: { category: { type: 'string', enum: ['clients','team','messages','conversations','system_map'] }, subcategory: { type: 'string' }, path_prefix: { type: 'string', description: 'תחילית נתיב לסינון, למשל "clients/" או "team/<id>/tasks"' }, limit: { type: 'integer' } } } },
+  { name: 'kb_search', description: 'חיפוש סמנטי+טקסטואלי בממלכת הידע. מחזיר pointers רלוונטיים לפי דמיון embedding ל-query, מסונן אופציונלית לקטגוריה/תאריך. השתמש כשמחפשים מידע על נושא, לקוח, או אירוע ולא יודעים את הנתיב המדויק.', parameters: { type: 'object', properties: { query: { type: 'string' }, category: { type: 'string' }, since_days: { type: 'integer', description: 'הגבל לרשומות עם ref_date מ-N הימים האחרונים' }, limit: { type: 'integer' } }, required: ['query'] } },
+  { name: 'kb_open', description: 'פתיחת pointer וקבלת הנתון החי מה-DB (clients/campaigners/tasks/chat_messages/seo_reports וכו׳ — תמיד הנתון העדכני, לא העתק). השתמש אחרי kb_list_folder/kb_search.', parameters: { type: 'object', properties: { pointer_id: { type: 'string' } }, required: ['pointer_id'] } },
+  { name: 'kb_recall_conversation', description: 'שליפת סיכומי שיחות עבר (episodes) לפי נושא או חיפוש סמנטי. מחזיר summary + source_ids להפניה להודעות המקוריות.', parameters: { type: 'object', properties: { query: { type: 'string' }, topic: { type: 'string' }, since_days: { type: 'integer' }, limit: { type: 'integer' } } } },
+  { name: 'kb_learn', description: 'שמירת ידע פרוצדורלי/אפיזודי חדש (לקח שנלמד, נוהל, סיכום שיחה חשובה). שונה מ-save_memory: זה נכנס לממלכת הידע עם embedding לחיפוש סמנטי. שמור פה דברים שכרמן צריכה לזכור לטווח ארוך עם הקשר.', parameters: { type: 'object', properties: { topic: { type: 'string' }, summary: { type: 'string' }, topic_tags: { type: 'array', items: { type: 'string' } }, importance: { type: 'integer', description: '1-10' }, source_table: { type: 'string' }, source_ids: { type: 'array', items: { type: 'string' } } }, required: ['topic','summary'] } },
   // CHAT HISTORY
   { name: 'get_chat_history', description: 'שליפת היסטוריית שיחות WhatsApp עם ליד או לקוח', parameters: { type: 'object', properties: { contact_type: { type: 'string', enum: ['lead', 'client'] }, contact_id: { type: 'string' }, limit: { type: 'integer' } }, required: ['contact_type', 'contact_id'] } },
   { name: 'get_recent_inbound_messages', description: 'שליפת הודעות נכנסות אחרונות מכל השיחות', parameters: { type: 'object', properties: { limit: { type: 'integer' }, hours: { type: 'integer', description: 'כמה שעות אחורה (ברירת מחדל 24)' } } } },
@@ -871,6 +877,118 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (error) throw error
       return { deleted: true, key: args.key }
     }
+    // KNOWLEDGE BASE
+    case 'kb_list_folder': {
+      let q = supabase.from('carmen_memory_pointers')
+        .select('id, category, subcategory, path, entity_type, entity_id, title, summary, ref_date, importance')
+        .eq('tenant_id', tenantId)
+      if (args.category) q = q.eq('category', args.category)
+      if (args.subcategory) q = q.eq('subcategory', args.subcategory)
+      if (args.path_prefix) q = q.like('path', `${args.path_prefix}%`)
+      const { data, error } = await q.order('ref_date', { ascending: false, nullsFirst: false }).limit(args.limit || 50)
+      if (error) throw error
+      return { count: data.length, pointers: data }
+    }
+    case 'kb_search': {
+      // Try semantic via embedding; fall back to text ILIKE on title/summary
+      try {
+        const embedRes = await fetch('https://ai.gateway.lovable.dev/v1/embeddings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('LOVABLE_API_KEY')}` },
+          body: JSON.stringify({ model: 'google/gemini-embedding-001', input: args.query, dimensions: 1536 }),
+        })
+        if (embedRes.ok) {
+          const j = await embedRes.json()
+          const vec = j?.data?.[0]?.embedding
+          if (vec) {
+            const sinceFilter = args.since_days ? `,ref_date.gte.${new Date(Date.now() - args.since_days*86400000).toISOString()}` : ''
+            const { data, error } = await supabase.rpc('kb_match_pointers', {
+              p_tenant_id: tenantId,
+              p_query_embedding: vec,
+              p_category: args.category || null,
+              p_since_days: args.since_days || null,
+              p_limit: args.limit || 20,
+            })
+            if (!error && data) return { count: data.length, results: data, mode: 'semantic' }
+          }
+        }
+      } catch (_) {/* fall through */}
+      // Fallback text search
+      let q = supabase.from('carmen_memory_pointers')
+        .select('id, category, subcategory, path, entity_type, entity_id, title, summary, ref_date')
+        .eq('tenant_id', tenantId)
+        .or(`title.ilike.%${args.query}%,summary.ilike.%${args.query}%`)
+      if (args.category) q = q.eq('category', args.category)
+      if (args.since_days) q = q.gte('ref_date', new Date(Date.now() - args.since_days*86400000).toISOString())
+      const { data, error } = await q.order('ref_date', { ascending: false, nullsFirst: false }).limit(args.limit || 20)
+      if (error) throw error
+      return { count: data.length, results: data, mode: 'text' }
+    }
+    case 'kb_open': {
+      const { data: ptr, error: pErr } = await supabase.from('carmen_memory_pointers')
+        .select('*').eq('id', args.pointer_id).eq('tenant_id', tenantId).maybeSingle()
+      if (pErr) throw pErr
+      if (!ptr) return { error: 'pointer not found' }
+      // Fetch live row from source
+      let live: any = null
+      try {
+        const tableMap: Record<string,string> = { client: 'clients', campaigner: 'campaigners', task: 'tasks', message: 'chat_messages', lead: 'leads', report: 'seo_reports', system: '' }
+        const table = tableMap[ptr.entity_type] ?? ptr.entity_type
+        if (table) {
+          const { data } = await supabase.from(table).select('*').eq('id', ptr.entity_id).maybeSingle()
+          live = data
+        }
+      } catch (_) {/* ignore */}
+      // Bump access count async
+      supabase.from('carmen_memory_pointers').update({ updated_at: new Date().toISOString() }).eq('id', ptr.id).then(()=>{})
+      return { pointer: ptr, live }
+    }
+    case 'kb_recall_conversation': {
+      let q = supabase.from('carmen_memory_episodes')
+        .select('id, topic, topic_tags, summary, source_table, source_ids, ref_date, importance, retention_score')
+        .eq('tenant_id', tenantId)
+      if (args.topic) q = q.ilike('topic', `%${args.topic}%`)
+      if (args.query) q = q.or(`topic.ilike.%${args.query}%,summary.ilike.%${args.query}%`)
+      if (args.since_days) q = q.gte('ref_date', new Date(Date.now() - args.since_days*86400000).toISOString())
+      const { data, error } = await q.order('ref_date', { ascending: false, nullsFirst: false }).limit(args.limit || 10)
+      if (error) throw error
+      // Bump access count on returned episodes (non-blocking)
+      if (data?.length) {
+        supabase.from('carmen_memory_episodes')
+          .update({ last_accessed_at: new Date().toISOString() })
+          .in('id', data.map((d: any) => d.id)).then(()=>{})
+      }
+      return { count: data.length, episodes: data }
+    }
+    case 'kb_learn': {
+      // Generate embedding (best-effort)
+      let embedding: number[] | null = null
+      try {
+        const embedRes = await fetch('https://ai.gateway.lovable.dev/v1/embeddings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('LOVABLE_API_KEY')}` },
+          body: JSON.stringify({ model: 'google/gemini-embedding-001', input: `${args.topic}\n\n${args.summary}`, dimensions: 1536 }),
+        })
+        if (embedRes.ok) {
+          const j = await embedRes.json()
+          embedding = j?.data?.[0]?.embedding || null
+        }
+      } catch (_) {/* ignore */}
+      const { data, error } = await supabase.from('carmen_memory_episodes').insert({
+        tenant_id: tenantId,
+        topic: args.topic,
+        topic_tags: args.topic_tags || [],
+        summary: args.summary,
+        summary_embedding: embedding,
+        source_table: args.source_table || null,
+        source_ids: args.source_ids || [],
+        importance: Math.max(1, Math.min(10, args.importance || 5)),
+        retention_score: 1.0,
+        ref_date: new Date().toISOString(),
+      }).select('id, topic').single()
+      if (error) throw error
+      return { learned: true, episode_id: data.id, topic: data.topic }
+    }
     // CHAT HISTORY
     case 'get_chat_history': {
       const filterCol = args.contact_type === 'client' ? 'client_id' : 'lead_id'
@@ -1505,6 +1623,13 @@ Deno.serve(async (req) => {
       systemPrompt += `\n\n⚡ **כלל תמציתיות (חובה):** תמיד ענה ב-2-3 משפטים מקסימום. אל תפרטי מעבר לנדרש. אל תציעי פעולות נוספות אלא אם נתבקשת. אל תחזרי על מה שהמשתמש אמר. פשוט בצעי ואשרי בקצרה.`
       systemPrompt += `\n\n💬 **כשעונה להודעות WhatsApp:** כתוב בסגנון קצר, ישיר וחברותי. הימנע מטקסט ארוך מדי. אל תשתמש ב-markdown בהודעות וואטסאפ.`
       systemPrompt += `\n🧠 **זיכרון:** כשהמשתמש מספר לך העדפות, שמות פרויקטים, או מידע חשוב — שמור אותם אוטומטית באמצעות save_memory.`
+      systemPrompt += `\n\n📚 **ממלכת הידע (Knowledge Base):** יש לך גישה למפת הידע המלאה של הארגון דרך הכלים kb_*:
+- kb_list_folder — דפדוף בתיקיות (clients/, team/, messages/<date>/, conversations/, system_map/).
+- kb_search — חיפוש סמנטי לפי שאילתה כשלא יודעים את הנתיב המדויק.
+- kb_open — פתיחת pointer לקבלת הנתון החי מה-DB (תמיד הגרסה העדכנית, לא העתק).
+- kb_recall_conversation — שליפת סיכומי שיחות עבר לפי נושא.
+- kb_learn — שמירת לקח/סיכום חשוב לטווח ארוך עם embedding.
+**עיקרון:** ה-pointers הם מפה — התוכן עצמו תמיד חי ב-DB. השתמשי ב-kb_search לפני שאת אומרת "לא מצאתי" על נושא ישן או שיחה קודמת.`
       // Inject caller identity for task assignment
       if (callerCampaignerId && callerName) {
         systemPrompt += `\n\n👤 **זהות המשתמש הנוכחי:** ${callerName} (campaigner_id: ${callerCampaignerId}). כשיוצרים משימה, שייך אותה אוטומטית ל-${callerName} אלא אם המשתמש מבקש במפורש לשייך למישהו אחר.`
