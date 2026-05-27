@@ -111,6 +111,7 @@ Deno.serve(async (req) => {
     }
 
     // ===== Incoming message =====
+    console.log('[manus-wa] event=', event, 'instance=', instanceId, 'from=', payload.from, 'to=', payload.to, 'fromMe=', payload.fromMe, 'direction=', payload.direction, 'bodyPreview=', String(payload.body || '').slice(0, 80));
     if (event !== 'message') return ok({ received: true, ignored: event });
 
     const fromRaw = String(payload.from || '');
@@ -158,10 +159,10 @@ Deno.serve(async (req) => {
               const instanceId = settingsAny.instance_id;
               const apiKey = integ.api_key;
               if (!instanceId || !apiKey) return false;
-              const res = await fetch(`${baseUrl}/api/v1/instances/${instanceId}/send/text`, {
+              const res = await fetch(`${baseUrl}/api/v1/instances/${instanceId}/send/group`, {
                 method: 'POST',
                 headers: { 'X-Api-Key': apiKey, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ to: groupChatId, body: message }),
+                body: JSON.stringify({ groupId: groupChatId, body: message }),
               });
               return res.ok;
             } catch (err) {
@@ -171,6 +172,7 @@ Deno.serve(async (req) => {
           },
         });
         if (result.handled) carmenOutcome = result.outcome;
+        console.log('[carmen-group]', { groupChatId, authorPhone, isOutgoingFromPhone, handled: result.handled, outcome: (result as any).outcome, reason: (result as any).reason, body: String(messageText).slice(0, 60) });
       } catch (err) {
         console.error('manus-wa Carmen group handler error:', err);
       }
