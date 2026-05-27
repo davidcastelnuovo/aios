@@ -196,6 +196,25 @@ Deno.serve(async (req) => {
     const messageText = payload.body || (payload.hasMedia ? '[מדיה]' : '');
     const messageId = String(payload.id || '');
 
+    // ECHO GUARD: Manus mirrors EVERY message (in and out) as inbound @lid events.
+    // If we just sent this exact text via Manus or Green API in the last 2 minutes, drop it.
+    if (!isOutgoingFromPhone && fromRaw.endsWith('@lid') && messageText.trim()) {
+      const { data: ownOutbound } = await supabase
+        .from('chat_messages')
+        .select('id, provider, created_at')
+        .eq('tenant_id', tenantId)
+        .eq('direction', 'outbound')
+        .in('provider', ['manus_wa', 'green_api'])
+        .eq('message_text', messageText)
+        .gte('created_at', new Date(Date.now() - 2 * 60 * 1000).toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (ownOutbound && ownOutbound.length > 0) {
+        console.log('[manus-wa] echo dropped — matches our own outbound', { provider: ownOutbound[0].provider, messageId, bodyPreview: messageText.slice(0, 60) });
+        return ok({ received: true, ignored: 'self_echo' });
+      }
+    }
+
     // Manus sometimes reports manual outgoing phone messages as inbound @lid events.
     // If Green API receives the same WhatsApp message as outbound moments later, use it
     // as the direction/contact source AND route Carmen replies through Green API
