@@ -368,7 +368,7 @@ export function WeeklyTaskBoard() {
     if (fetchedTasks && fetchedTasks.length > 0) {
       setLocalTasks(fetchedTasks);
     }
-  }, [JSON.stringify(fetchedTasks?.map(t => `${t.id}_${t.duration_minutes}_${t.status}`))]);
+  }, [JSON.stringify(fetchedTasks?.map(t => `${t.id}_${t.duration_minutes}_${t.status}_${t.campaigner_id}_${t.client_id}`))]);
   
   // Use localTasks for rendering, fallback to fetchedTasks if empty
   const tasks = localTasks.length > 0 ? localTasks : (fetchedTasks || []);
