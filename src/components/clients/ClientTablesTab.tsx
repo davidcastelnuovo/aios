@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -6,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+
 import { FileSpreadsheet, Facebook, ShoppingCart, ExternalLink, LayoutDashboard, X, Plus, Maximize2, ChevronDown, Settings } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
@@ -33,6 +34,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
   const [showTableDropdown, setShowTableDropdown] = useState(false);
   const [viewDashboard, setViewDashboard] = useState<{ id: string; name: string } | null>(null);
   const [showLinkSection, setShowLinkSection] = useState(false);
+  const [activeTabId, setActiveTabId] = useState<string | null>(null);
 
   // All tables for the tenant
   const { data: allTables = [], isLoading } = useQuery({
@@ -144,17 +146,6 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
     queryClient.invalidateQueries({ queryKey: ["all-dashboards"] });
   };
 
-  if (isLoading) {
-    return (
-      <div className="space-y-3" dir="rtl">
-        <Skeleton className="h-24 w-full" />
-        <Skeleton className="h-24 w-full" />
-      </div>
-    );
-  }
-
-  const hasContent = tables.length > 0 || dashboards.length > 0;
-
   const renderTableIcon = (table: any) => {
     if (table.integration_type === "facebook_insights") return <Facebook className="h-4 w-4 text-blue-600 shrink-0" />;
     if (table.integration_type === "facebook_ecommerce") return <ShoppingCart className="h-4 w-4 text-green-600 shrink-0" />;
@@ -166,20 +157,80 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
     return <FileSpreadsheet className="h-4 w-4 shrink-0" />;
   };
 
+  const items = useMemo(() => {
+    const dashItems = dashboards.map((d: any) => ({
+      id: `dash-${d.id}`,
+      kind: "dashboard" as const,
+      label: d.name,
+      icon: <LayoutDashboard className="h-4 w-4 shrink-0" />,
+      raw: d,
+    }));
+    const tableItems = tables.map((t: any) => ({
+      id: `table-${t.id}`,
+      kind: "table" as const,
+      label: t.name,
+      icon: renderTableIcon(t),
+      raw: t,
+    }));
+    return [...dashItems, ...tableItems];
+  }, [dashboards, tables]);
+
+  useEffect(() => {
+    if (items.length === 0) {
+      if (activeTabId !== null) setActiveTabId(null);
+      return;
+    }
+    if (!activeTabId || !items.find((i) => i.id === activeTabId)) {
+      setActiveTabId(items[0].id);
+    }
+  }, [items, activeTabId]);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3" dir="rtl">
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-24 w-full" />
+      </div>
+    );
+  }
+
+  const hasContent = items.length > 0;
+  const activeItem = items.find((i) => i.id === activeTabId) || items[0];
+
+
   return (
-    <div className="space-y-4" dir="rtl">
-      {/* Settings toggle for linking */}
-      <div className="flex justify-end">
+    <div className="space-y-3" dir="rtl">
+      {/* Tabs row + manage-links toggle */}
+      <div className="flex items-center gap-2">
         <Button
           variant="ghost"
           size="sm"
-          className="text-xs gap-1 text-muted-foreground"
+          className="text-xs gap-1 text-muted-foreground shrink-0"
           onClick={() => setShowLinkSection(!showLinkSection)}
         >
           <Settings className="h-3.5 w-3.5" />
           ניהול שיוכים
           <ChevronDown className={`h-3 w-3 transition-transform ${showLinkSection ? 'rotate-180' : ''}`} />
         </Button>
+
+        {hasContent && (
+          <div className="flex-1 min-w-0">
+            <Tabs value={activeItem?.id} onValueChange={setActiveTabId} dir="rtl">
+              <TabsList className="h-9 w-full justify-start overflow-x-auto flex-nowrap">
+                {items.map((it) => (
+                  <TabsTrigger
+                    key={it.id}
+                    value={it.id}
+                    className="gap-1.5 text-xs shrink-0"
+                  >
+                    {it.icon}
+                    <span className="truncate max-w-[140px]">{it.label}</span>
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+          </div>
+        )}
       </div>
 
       {/* Collapsible link section */}
@@ -260,96 +311,85 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
         </div>
       )}
 
-      {/* Embedded dashboards — rendered FIRST with screenshot + send capability */}
-      {dashboards.map((dash: any) => (
-        <Collapsible key={dash.id} defaultOpen>
-          <div className="border rounded-lg overflow-hidden">
-            <CollapsibleTrigger className="w-full flex items-center justify-between px-3 py-2 bg-muted/40 hover:bg-muted/60 transition-colors group">
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 shrink-0"
-                  onClick={(e) => { e.stopPropagation(); unlinkDashboard(dash.id); }}
-                >
-                  <X className="h-3 w-3" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 shrink-0"
-                  onClick={(e) => { e.stopPropagation(); navigate(buildPath(`/dashboard/${dash.id}`)); }}
-                >
-                  <Maximize2 className="h-3 w-3" />
-                </Button>
-                <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=closed]:rotate-90" />
-              </div>
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <LayoutDashboard className="h-4 w-4" />
-                <span>{dash.name}</span>
-              </div>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <div className="border-t p-3">
-                <ClientDashboardPanel
-                  dashboard={{ id: dash.id, name: dash.name }}
-                  clientId={clientId}
-                  tenantId={tenantId || ""}
-                />
-              </div>
-            </CollapsibleContent>
+      {/* Active item content */}
+      {activeItem && activeItem.kind === "dashboard" && (
+        <div className="border rounded-lg overflow-hidden">
+          <div className="flex items-center justify-between px-3 py-2 bg-muted/40">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 shrink-0"
+                onClick={() => unlinkDashboard(activeItem.raw.id)}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 shrink-0"
+                onClick={() => navigate(buildPath(`/dashboard/${activeItem.raw.id}`))}
+              >
+                <Maximize2 className="h-3 w-3" />
+              </Button>
+            </div>
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <LayoutDashboard className="h-4 w-4" />
+              <span>{activeItem.raw.name}</span>
+            </div>
           </div>
-        </Collapsible>
-      ))}
+          <div className="border-t p-3">
+            <ClientDashboardPanel
+              dashboard={{ id: activeItem.raw.id, name: activeItem.raw.name }}
+              clientId={clientId}
+              tenantId={tenantId || ""}
+            />
+          </div>
+        </div>
+      )}
 
-      {/* Embedded tables — each table rendered inline */}
-      {tables.map((table: any) => (
-        <Collapsible key={table.id} defaultOpen>
-          <div className="border rounded-lg overflow-hidden">
-            <CollapsibleTrigger className="w-full flex items-center justify-between px-3 py-2 bg-muted/40 hover:bg-muted/60 transition-colors group">
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 shrink-0"
-                  onClick={(e) => { e.stopPropagation(); unlinkTable(table.id); }}
-                >
-                  <X className="h-3 w-3" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 shrink-0"
-                  onClick={(e) => { e.stopPropagation(); navigate(buildPath(`/table/${table.slug}`)); }}
-                >
-                  <ExternalLink className="h-3 w-3" />
-                </Button>
-                <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=closed]:rotate-90" />
-              </div>
-              <div className="flex items-center gap-2 text-sm font-medium">
-                {renderTableIcon(table)}
-                <span>{table.name}</span>
-                {(table.integration_type === "facebook_insights" || table.integration_type === "facebook_ecommerce" || table.integration_type === "google_ads") && (
-                  (table.integration_settings?.ad_account_id || table.integration_settings?.customer_id) ? (
-                    <span className="text-green-600 text-xs">✓ מחובר</span>
-                  ) : (
-                    <span className="text-amber-600 text-xs">ממתין לחיבור</span>
-                  )
-                )}
-              </div>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <div className="border-t p-3">
-                <ClientReportPanel
-                  table={table}
-                  clientId={clientId}
-                  tenantId={tenantId || ""}
-                />
-              </div>
-            </CollapsibleContent>
+      {activeItem && activeItem.kind === "table" && (
+        <div className="border rounded-lg overflow-hidden">
+          <div className="flex items-center justify-between px-3 py-2 bg-muted/40">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 shrink-0"
+                onClick={() => unlinkTable(activeItem.raw.id)}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 shrink-0"
+                onClick={() => navigate(buildPath(`/table/${activeItem.raw.slug}`))}
+              >
+                <ExternalLink className="h-3 w-3" />
+              </Button>
+            </div>
+            <div className="flex items-center gap-2 text-sm font-medium">
+              {renderTableIcon(activeItem.raw)}
+              <span>{activeItem.raw.name}</span>
+              {(activeItem.raw.integration_type === "facebook_insights" || activeItem.raw.integration_type === "facebook_ecommerce" || activeItem.raw.integration_type === "google_ads") && (
+                (activeItem.raw.integration_settings?.ad_account_id || activeItem.raw.integration_settings?.customer_id) ? (
+                  <span className="text-green-600 text-xs">✓ מחובר</span>
+                ) : (
+                  <span className="text-amber-600 text-xs">ממתין לחיבור</span>
+                )
+              )}
+            </div>
           </div>
-        </Collapsible>
-      ))}
+          <div className="border-t p-3">
+            <ClientReportPanel
+              table={activeItem.raw}
+              clientId={clientId}
+              tenantId={tenantId || ""}
+            />
+          </div>
+        </div>
+      )}
 
       {!hasContent && (
         <div className="text-center py-8 text-sm text-muted-foreground">
