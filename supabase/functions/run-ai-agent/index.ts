@@ -1443,6 +1443,7 @@ Deno.serve(async (req) => {
       // Inject caller identity for task assignment
       if (callerCampaignerId && callerName) {
         systemPrompt += `\n\n👤 **זהות המשתמש הנוכחי:** ${callerName} (campaigner_id: ${callerCampaignerId}). כשיוצרים משימה, שייך אותה אוטומטית ל-${callerName} אלא אם המשתמש מבקש במפורש לשייך למישהו אחר.`
+        systemPrompt += `\n\n📋 **שיוך לקוחות לקמפיינר:** לשאלות כמו "אילו לקוחות משוייכים ל-X" השתמש תמיד ב-list_clients עם campaigner_name (או campaigner_id), שמסתכל על טבלת client_team. אל תשתמש ב-list_tasks או בחיפוש משימות לשם כך — שיוך לקוח לקמפיינר נקבע בכרטיסיית הלקוח/הקמפיינר, לא לפי משימות.`
       }
     }
 
