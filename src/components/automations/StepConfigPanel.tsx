@@ -994,11 +994,13 @@ function GreenAPIActionConfig({
   configuration,
   availableFields,
   onConfigChange,
+  providerFilter,
 }: {
   tenantId: string | undefined;
   configuration: Record<string, any>;
   availableFields: { key: string; label: string }[];
   onConfigChange: (key: string, value: any) => void;
+  providerFilter?: "green_api" | "manus_wa";
 }) {
   const [cursorPos, setCursorPos] = useState<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
