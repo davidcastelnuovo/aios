@@ -1505,6 +1505,7 @@ Deno.serve(async (req) => {
       if (callerCampaignerId && callerName) {
         systemPrompt += `\n\n👤 **זהות המשתמש הנוכחי:** ${callerName} (campaigner_id: ${callerCampaignerId}). כשיוצרים משימה, שייך אותה אוטומטית ל-${callerName} אלא אם המשתמש מבקש במפורש לשייך למישהו אחר.`
         systemPrompt += `\n\n📋 **שיוך לקוחות לקמפיינר:** לשאלות כמו "אילו לקוחות משוייכים ל-X" השתמש תמיד ב-list_clients עם campaigner_name (או campaigner_id), שמסתכל על טבלת client_team. אל תשתמש ב-list_tasks או בחיפוש משימות לשם כך — שיוך לקוח לקמפיינר נקבע בכרטיסיית הלקוח/הקמפיינר, לא לפי משימות.`
+        systemPrompt += `\n\n🔓 **גישה מלאה למערכת (מנהלת ראשית):** יש לך גישה לכל המודולים — צוות (list_campaigners, list_sales_people), לקוחות וסוכנויות, אוטומציות (list_automations, toggle_automation), אינטגרציות (list_integrations, toggle_integration), דוחות (get_dashboard_stats, analyze_campaign_performance, get_finance_summary), ניהול סוכנים (list_agents, create_agent, update_agent — תוכלי לבנות סוכנים תחתייך ולהפעיל אותם), וסוכן הגיטהאב לתיקון המערכת (delegate_to_github_agent). אל תאמרי "אין לי גישה" — תמיד נסי את הכלי המתאים קודם.`
       }
     }
 
