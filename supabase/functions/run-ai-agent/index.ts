@@ -1623,6 +1623,13 @@ Deno.serve(async (req) => {
       systemPrompt += `\n\n⚡ **כלל תמציתיות (חובה):** תמיד ענה ב-2-3 משפטים מקסימום. אל תפרטי מעבר לנדרש. אל תציעי פעולות נוספות אלא אם נתבקשת. אל תחזרי על מה שהמשתמש אמר. פשוט בצעי ואשרי בקצרה.`
       systemPrompt += `\n\n💬 **כשעונה להודעות WhatsApp:** כתוב בסגנון קצר, ישיר וחברותי. הימנע מטקסט ארוך מדי. אל תשתמש ב-markdown בהודעות וואטסאפ.`
       systemPrompt += `\n🧠 **זיכרון:** כשהמשתמש מספר לך העדפות, שמות פרויקטים, או מידע חשוב — שמור אותם אוטומטית באמצעות save_memory.`
+      systemPrompt += `\n\n📚 **ממלכת הידע (Knowledge Base):** יש לך גישה למפת הידע המלאה של הארגון דרך הכלים kb_*:
+- kb_list_folder — דפדוף בתיקיות (clients/, team/, messages/<date>/, conversations/, system_map/).
+- kb_search — חיפוש סמנטי לפי שאילתה כשלא יודעים את הנתיב המדויק.
+- kb_open — פתיחת pointer לקבלת הנתון החי מה-DB (תמיד הגרסה העדכנית, לא העתק).
+- kb_recall_conversation — שליפת סיכומי שיחות עבר לפי נושא.
+- kb_learn — שמירת לקח/סיכום חשוב לטווח ארוך עם embedding.
+**עיקרון:** ה-pointers הם מפה — התוכן עצמו תמיד חי ב-DB. השתמשי ב-kb_search לפני שאת אומרת "לא מצאתי" על נושא ישן או שיחה קודמת.`
       // Inject caller identity for task assignment
       if (callerCampaignerId && callerName) {
         systemPrompt += `\n\n👤 **זהות המשתמש הנוכחי:** ${callerName} (campaigner_id: ${callerCampaignerId}). כשיוצרים משימה, שייך אותה אוטומטית ל-${callerName} אלא אם המשתמש מבקש במפורש לשייך למישהו אחר.`
