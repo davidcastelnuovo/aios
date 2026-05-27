@@ -1438,6 +1438,7 @@ Deno.serve(async (req) => {
           connectionUserId,
           chatId: senderData.chatId,
           phoneNumber,
+          sourcePhoneNumber: senderData.sender?.split('@')?.[0] || null,
           senderName: senderData.senderName || null,
           messageText,
           isIncoming,
