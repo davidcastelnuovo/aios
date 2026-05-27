@@ -358,6 +358,28 @@ Deno.serve(async (req) => {
           try {
             const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
             const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+            // If this message was actually sent via Green API (LID paired event),
+            // reply through Green API so the response comes from the same WhatsApp number.
+            if (pairedFromGreenApi) {
+              const res = await fetch(`${supabaseUrl}/functions/v1/send-green-api-message`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${serviceKey}`,
+                },
+                body: JSON.stringify({
+                  tenantId,
+                  phoneNumber: counterpartPhone,
+                  senderUserId: connectionUserId,
+                  message,
+                }),
+              });
+              if (!res.ok) {
+                const txt = await res.text();
+                console.error('[carmen] green-api send failed', res.status, txt);
+              }
+              return res.ok;
+            }
             const res = await fetch(`${supabaseUrl}/functions/v1/send-manus-wa-message`, {
               method: 'POST',
               headers: {
@@ -372,6 +394,10 @@ Deno.serve(async (req) => {
                 message,
               }),
             });
+            if (!res.ok) {
+              const txt = await res.text();
+              console.error('[carmen] manus send failed', res.status, txt);
+            }
             return res.ok;
           } catch (err) {
             console.error('manus-wa Carmen sendMessage error:', err);
