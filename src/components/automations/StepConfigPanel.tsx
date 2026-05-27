@@ -92,11 +92,12 @@ export const TRIGGER_CATEGORIES = [
   {
     label: "🔗 אינטגרציות",
     options: [
-      { value: "inbound_webhook_task", label: "Webhook נכנס" },
-      { value: "facebook_lead_form",   label: "טופס ליד פייסבוק" },
-      { value: "instagram_message",    label: "הודעת אינסטגרם" },
-      { value: "typeform_submitted",   label: "Typeform נשלח" },
-      { value: "stripe_payment",       label: "תשלום Stripe" },
+      { value: "inbound_webhook_task",     label: "Webhook נכנס" },
+      { value: "facebook_lead_form",       label: "טופס ליד פייסבוק" },
+      { value: "instagram_message",        label: "הודעת אינסטגרם" },
+      { value: "typeform_submitted",       label: "Typeform נשלח" },
+      { value: "stripe_payment",           label: "תשלום Stripe" },
+      { value: "integration_disconnected", label: "⚠️ חיבור התנתק / דורש חיבור מחדש" },
     ],
   },
   {
