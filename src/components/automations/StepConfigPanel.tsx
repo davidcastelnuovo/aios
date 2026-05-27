@@ -114,8 +114,8 @@ const TRIGGER_OPTIONS = TRIGGER_CATEGORIES.flatMap(c => c.options);
 
 const ACTION_OPTIONS = [
   { value: "send_whatsapp", label: "שלח WhatsApp (ManyChat)" },
-  { value: "send_manus_message", label: "שלח WhatsApp (Manus)" },
-  { value: "send_greenapi_message", label: "שלח WhatsApp (Green API)" },
+  { value: "send_greenapi_message", label: "שלח WhatsApp (Green API / Manus)" },
+  { value: "send_manus_message", label: "שלח WhatsApp (Manus - legacy)" },
   { value: "send_telegram", label: "שלח הודעת Telegram" },
   { value: "create_task", label: "צור משימה" },
   { value: "add_lead_update", label: "הוסף עדכון לליד" },
@@ -126,6 +126,7 @@ const ACTION_OPTIONS = [
   { value: "email", label: "אימייל" },
   { value: "notification", label: "התראה" },
 ];
+
 
 const DELAY_UNITS = [
   { value: "minutes", label: "דקות" },
