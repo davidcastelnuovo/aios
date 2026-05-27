@@ -46,7 +46,7 @@ const ALL_TOOLS = [
   { name: 'list_tasks', description: 'רשימת משימות', parameters: { type: 'object', properties: { status: { type: 'string' }, client_id: { type: 'string' }, limit: { type: 'integer' } } } },
   { name: 'update_task_status', description: 'עדכון סטטוס משימה', parameters: { type: 'object', properties: { task_id: { type: 'string' }, status: { type: 'string', enum: ['open', 'in_progress', 'completed', 'cancelled'] } }, required: ['task_id', 'status'] } },
   // CLIENTS
-  { name: 'list_clients', description: 'רשימת לקוחות', parameters: { type: 'object', properties: { status: { type: 'string' }, limit: { type: 'integer' } } } },
+  { name: 'list_clients', description: 'רשימת לקוחות. אפשר לסנן לפי סטטוס, או לפי קמפיינר משוייך (campaigner_id או campaigner_name) דרך טבלת client_team. השתמש בכלי הזה לשאלות כמו "אילו לקוחות משוייכים ל-X" — אל תשתמש ב-list_tasks לזה.', parameters: { type: 'object', properties: { status: { type: 'string' }, limit: { type: 'integer' }, campaigner_id: { type: 'string', description: 'סינון ללקוחות המשוייכים לקמפיינר זה (דרך client_team)' }, campaigner_name: { type: 'string', description: 'סינון לפי שם קמפיינר (חיפוש חופשי בשם המלא)' } } } },
   { name: 'get_client_info', description: 'מידע על לקוח', parameters: { type: 'object', properties: { client_id: { type: 'string' } }, required: ['client_id'] } },
   { name: 'add_client_update', description: 'הוספת עדכון ללקוח', parameters: { type: 'object', properties: { client_id: { type: 'string' }, content: { type: 'string' } }, required: ['client_id', 'content'] } },
   // MESSAGES
@@ -243,8 +243,38 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return data
     }
     case 'list_clients': {
-      let query = supabase.from('clients').select('id, name, contact_name, phone, status').eq('tenant_id', tenantId).order('name').limit(args.limit || 20)
+      // Resolve campaigner filter if provided
+      let campaignerIds: string[] | null = null
+      if (args.campaigner_id) {
+        campaignerIds = [args.campaigner_id]
+      } else if (args.campaigner_name) {
+        const { data: camps } = await supabase
+          .from('campaigners')
+          .select('id, full_name')
+          .eq('tenant_id', tenantId)
+          .ilike('full_name', `%${args.campaigner_name}%`)
+        campaignerIds = (camps || []).map((c: any) => c.id)
+        if (campaignerIds.length === 0) {
+          return { count: 0, clients: [], note: `no campaigner matched "${args.campaigner_name}"` }
+        }
+      }
+
+      let clientIdsFilter: string[] | null = null
+      if (campaignerIds) {
+        const { data: links, error: linkErr } = await supabase
+          .from('client_team')
+          .select('client_id')
+          .in('campaigner_id', campaignerIds)
+        if (linkErr) throw linkErr
+        clientIdsFilter = Array.from(new Set((links || []).map((l: any) => l.client_id)))
+        if (clientIdsFilter.length === 0) {
+          return { count: 0, clients: [], note: 'no clients assigned to this campaigner' }
+        }
+      }
+
+      let query = supabase.from('clients').select('id, name, contact_name, phone, status').eq('tenant_id', tenantId).order('name').limit(args.limit || 50)
       if (args.status) query = query.eq('status', args.status)
+      if (clientIdsFilter) query = query.in('id', clientIdsFilter)
       const { data, error } = await query
       if (error) throw error
       return { count: data.length, clients: data }
@@ -1413,6 +1443,7 @@ Deno.serve(async (req) => {
       // Inject caller identity for task assignment
       if (callerCampaignerId && callerName) {
         systemPrompt += `\n\n👤 **זהות המשתמש הנוכחי:** ${callerName} (campaigner_id: ${callerCampaignerId}). כשיוצרים משימה, שייך אותה אוטומטית ל-${callerName} אלא אם המשתמש מבקש במפורש לשייך למישהו אחר.`
+        systemPrompt += `\n\n📋 **שיוך לקוחות לקמפיינר:** לשאלות כמו "אילו לקוחות משוייכים ל-X" השתמש תמיד ב-list_clients עם campaigner_name (או campaigner_id), שמסתכל על טבלת client_team. אל תשתמש ב-list_tasks או בחיפוש משימות לשם כך — שיוך לקוח לקמפיינר נקבע בכרטיסיית הלקוח/הקמפיינר, לא לפי משימות.`
       }
     }
 
