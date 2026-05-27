@@ -266,8 +266,6 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
       }
     }
 
-
-    const history = activeSession.conversation_history || [];
     const updatedHistory = [
       ...history,
       { role: 'user', content: messageText, timestamp: new Date().toISOString() },
