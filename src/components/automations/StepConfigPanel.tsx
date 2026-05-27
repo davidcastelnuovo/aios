@@ -1852,14 +1852,16 @@ function CarmenSessionConfig({
       if (!tenantId) return [];
       const { data, error } = await supabase
         .from("whatsapp_groups")
-        .select("id, group_name, group_chat_id")
+        .select("id, group_name, group_chat_id, is_blocked")
         .eq("tenant_id", tenantId)
+        .or("is_blocked.is.null,is_blocked.eq.false")
         .order("group_name");
       if (error) throw error;
       return data || [];
     },
     enabled: !!tenantId,
   });
+  const [groupSearch, setGroupSearch] = useState("");
 
   // Fetch ALL WhatsApp connections (Green API + Manus WA)
   const { data: waConnections } = useQuery({
@@ -2041,27 +2043,47 @@ function CarmenSessionConfig({
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="end">
-                  <ScrollArea className="max-h-64">
+                  <div className="p-2 border-b">
+                    <Input
+                      value={groupSearch}
+                      onChange={(e) => setGroupSearch(e.target.value)}
+                      placeholder="חיפוש קבוצה לפי שם..."
+                      className="text-right h-8"
+                      dir="rtl"
+                    />
+                  </div>
+                  <ScrollArea className="h-72">
                     <div className="p-2 space-y-1">
-                      {(groups || []).length === 0 && (
-                        <p className="text-xs text-muted-foreground text-center py-4">אין קבוצות זמינות</p>
-                      )}
-                      {(groups || []).map((g: any) => {
-                        const gid = g.group_chat_id || g.id;
-                        const checked = selectedIds.includes(gid);
-                        return (
-                          <label
-                            key={g.id}
-                            className="flex items-center gap-2 p-2 hover:bg-accent rounded cursor-pointer text-right"
-                          >
-                            <Checkbox checked={checked} onCheckedChange={() => toggleGroup(gid)} />
-                            <span className="flex-1 text-sm">{g.group_name}</span>
-                          </label>
+                      {(() => {
+                        const q = groupSearch.trim().toLowerCase();
+                        const filtered = (groups || []).filter((g: any) =>
+                          !q || (g.group_name || "").toLowerCase().includes(q)
                         );
-                      })}
+                        if (filtered.length === 0) {
+                          return (
+                            <p className="text-xs text-muted-foreground text-center py-4">
+                              {(groups || []).length === 0 ? "אין קבוצות זמינות" : "לא נמצאו קבוצות"}
+                            </p>
+                          );
+                        }
+                        return filtered.map((g: any) => {
+                          const gid = g.group_chat_id || g.id;
+                          const checked = selectedIds.includes(gid);
+                          return (
+                            <label
+                              key={g.id}
+                              className="flex items-center gap-2 p-2 hover:bg-accent rounded cursor-pointer text-right"
+                            >
+                              <Checkbox checked={checked} onCheckedChange={() => toggleGroup(gid)} />
+                              <span className="flex-1 text-sm">{g.group_name}</span>
+                            </label>
+                          );
+                        });
+                      })()}
                     </div>
                   </ScrollArea>
                 </PopoverContent>
+
               </Popover>
 
               {selectedIds.length > 0 && (
