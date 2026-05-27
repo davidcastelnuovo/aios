@@ -2706,14 +2706,19 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
   const mediaUrl = config.media_url
 
   if (providerType === 'manus_wa') {
-    const manusRecipient = chatId.includes('@g.us')
+    const isGroup = chatId.includes('@g.us')
+    const manusRecipient = isGroup
       ? chatId
       : chatId.replace(/[^0-9]/g, '')
     const manusBase = 'https://whatsappgw-pzpyrrww.manus.space'
-    const sendResponse = await fetch(`${manusBase}/api/v1/instances/${idInstance}/send/text`, {
+    const endpoint = isGroup ? 'send/group' : 'send/text'
+    const payload: Record<string, unknown> = isGroup
+      ? { groupId: manusRecipient, body: message }
+      : { to: manusRecipient, body: message }
+    const sendResponse = await fetch(`${manusBase}/api/v1/instances/${idInstance}/${endpoint}`, {
       method: 'POST',
       headers: { 'X-Api-Key': apiTokenInstance, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to: manusRecipient, body: message }),
+      body: JSON.stringify(payload),
     })
     sendResult = await sendResponse.json().catch(() => ({}))
     if (!sendResponse.ok || sendResult?.success === false) {
