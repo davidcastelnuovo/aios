@@ -1127,7 +1127,7 @@ Deno.serve(async (req) => {
                       }
                     }
                   }
-                } else if (effectiveActionType === 'send_greenapi_message') {
+                } else if (effectiveActionType === 'send_greenapi_message' || effectiveActionType === 'send_manus_message') {
                   // If message_template contains {{agent_output}}, replace it
                   if (stepConfig.message_template && previousStepOutput) {
                     const agentText = previousStepOutput?.output || (typeof previousStepOutput === 'string' ? previousStepOutput : JSON.stringify(previousStepOutput))
