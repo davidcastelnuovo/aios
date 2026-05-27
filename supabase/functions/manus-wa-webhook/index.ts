@@ -187,11 +187,60 @@ Deno.serve(async (req) => {
       throw insertError;
     }
 
+    // ===== Carmen WhatsApp session handling =====
+    // Build a chat_id compatible with Carmen session lookup (matches "<phone>@c.us" convention).
+    const chatIdForCarmen = `${counterpartPhone}@c.us`;
+    const senderName = (payload.senderName || payload.fromName || null) as string | null;
+
+    let carmenOutcome: string | null = null;
+    try {
+      const result = await handleCarmenMessage({
+        supabase,
+        tenantId,
+        integrationId: integ.id,
+        connectionUserId,
+        chatId: chatIdForCarmen,
+        phoneNumber: counterpartPhone,
+        senderName,
+        messageText,
+        isIncoming: !isOutgoingFromPhone,
+        isManualOutgoing: isOutgoingFromPhone,
+        isGroup: false,
+        sendMessage: async (_chatId: string, message: string) => {
+          try {
+            const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+            const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+            const res = await fetch(`${supabaseUrl}/functions/v1/send-manus-wa-message`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${serviceKey}`,
+              },
+              body: JSON.stringify({
+                integration_id: integ.id,
+                tenant_id: tenantId,
+                phone: counterpartPhone,
+                message,
+              }),
+            });
+            return res.ok;
+          } catch (err) {
+            console.error('manus-wa Carmen sendMessage error:', err);
+            return false;
+          }
+        },
+      });
+      if (result.handled) carmenOutcome = result.outcome;
+    } catch (err) {
+      console.error('manus-wa Carmen handler error:', err);
+    }
+
     return ok({
       success: true,
       direction: isOutgoingFromPhone ? 'outbound' : 'inbound',
       contactType: clientId ? 'client' : leadId ? 'lead' : 'unknown',
       contactId: clientId || leadId || null,
+      carmen: carmenOutcome,
     });
 
   } catch (e) {
