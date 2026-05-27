@@ -2521,7 +2521,7 @@ function replaceTemplateVariables(template: string, data: any, tenantSlug?: stri
 // Execute Green API message action
 async function executeGreenApiMessage(supabase: any, config: any, data: any, tenantId: string) {
   
-  const { message_template, send_to_type, manual_phone, manual_group_id, phone_mode, green_api_mode, external_instance_id, external_api_token, phone_field } = config
+  const { message_template, send_to_type, manual_phone, manual_group_id, phone_mode, green_api_mode, external_instance_id, external_api_token, phone_field, group_id_field } = config
   const integration_id = config.integration_id || config.green_api_integration_id
   
   if (!message_template) {
@@ -2540,7 +2540,19 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
   let chatId: string
   let contactRecord: any = null
   
-  if (phone_mode === "manual" && manual_phone) {
+  if (phone_mode === "group_manual" && manual_group_id) {
+    // Send to a fixed group id (configured manually)
+    chatId = manual_group_id.includes("@g.us") ? manual_group_id : `${manual_group_id}@g.us`
+  } else if (phone_mode === "group_field") {
+    // Send to a group whose chat id is taken from the trigger payload
+    const fieldKey = group_id_field || "group_id"
+    const fieldValue = data?.[fieldKey]
+    if (!fieldValue) {
+      throw new Error(`לא נמצא מזהה קבוצה בשדה ${fieldKey}`)
+    }
+    const v = String(fieldValue).trim()
+    chatId = v.includes("@g.us") ? v : `${v}@g.us`
+  } else if (phone_mode === "manual" && manual_phone) {
     // New: manual phone mode from flow editor
     // Check if it's a group chat ID (contains @g.us)
     if (manual_phone.includes('@g.us')) {
