@@ -266,12 +266,14 @@ Deno.serve(async (req) => {
       const scopeMode = safeConfig.carmen_scope_mode
       if (scopeMode && scopeMode !== 'all') {
         if (scopeMode === 'specific_group') {
-          const allowedGroupId = safeConfig.carmen_allowed_group_id
-          if (!allowedGroupId) {
-            console.warn('[CARMEN SCOPE] specific_group configured but no group ID set — blocking')
+          const allowedGroupIds: string[] = Array.isArray(safeConfig.carmen_allowed_group_ids) && safeConfig.carmen_allowed_group_ids.length > 0
+            ? safeConfig.carmen_allowed_group_ids
+            : (safeConfig.carmen_allowed_group_id ? [safeConfig.carmen_allowed_group_id] : [])
+          if (allowedGroupIds.length === 0) {
+            console.warn('[CARMEN SCOPE] specific_group configured but no group IDs set — blocking')
             return { matches: false, reason: 'carmen_scope_no_group_configured' }
           }
-          if (!safeData.group_id || safeData.group_id !== allowedGroupId) {
+          if (!safeData.group_id || !allowedGroupIds.includes(safeData.group_id)) {
             return { matches: false, reason: 'carmen_scope_group_mismatch' }
           }
         } else if (scopeMode === 'specific_phone') {
