@@ -128,8 +128,54 @@ Deno.serve(async (req) => {
     const counterpartPhone = counterpartRaw.split('@')[0];
     const normalized = normalizePhone(counterpartPhone);
 
+    // Group messages: skip client/lead matching & chat_messages insert, but still let Carmen respond in-group.
     if (isGroup) {
-      return ok({ received: true, skippedGroup: true });
+      const groupChatId = fromRaw.endsWith('@g.us') ? fromRaw : toRaw;
+      const messageText = payload.body || (payload.hasMedia ? '[מדיה]' : '');
+      const senderName = (payload.senderName || payload.fromName || payload.authorName || null) as string | null;
+      // For groups, the sender's own phone is in `author` (e.g. "972501234567@c.us"); fall back to fromRaw.
+      const authorRaw = String(payload.author || payload.participant || fromRaw);
+      const authorPhone = authorRaw.split('@')[0];
+
+      let carmenOutcome: string | null = null;
+      try {
+        const result = await handleCarmenMessage({
+          supabase,
+          tenantId,
+          integrationId: integ.id,
+          connectionUserId,
+          chatId: groupChatId,
+          phoneNumber: authorPhone,
+          senderName,
+          messageText,
+          isIncoming: !isOutgoingFromPhone,
+          isManualOutgoing: isOutgoingFromPhone,
+          isGroup: true,
+          sendMessage: async (_chatId: string, message: string) => {
+            try {
+              const baseUrl = 'https://wagateway.manus.cloud';
+              const settingsAny = (integ.settings as any) || {};
+              const instanceId = settingsAny.instance_id;
+              const apiKey = integ.api_key;
+              if (!instanceId || !apiKey) return false;
+              const res = await fetch(`${baseUrl}/api/v1/instances/${instanceId}/send/text`, {
+                method: 'POST',
+                headers: { 'X-Api-Key': apiKey, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ to: groupChatId, body: message }),
+              });
+              return res.ok;
+            } catch (err) {
+              console.error('manus-wa Carmen group sendMessage error:', err);
+              return false;
+            }
+          },
+        });
+        if (result.handled) carmenOutcome = result.outcome;
+      } catch (err) {
+        console.error('manus-wa Carmen group handler error:', err);
+      }
+
+      return ok({ received: true, group: true, carmen: carmenOutcome });
     }
 
     // Dedup by message id
