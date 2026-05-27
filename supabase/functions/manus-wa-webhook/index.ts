@@ -47,8 +47,14 @@ Deno.serve(async (req) => {
     const key = pickObj(inner.key, outer.key) || {};
     const msgContainer = pickObj(inner.message, outer.message) || {};
 
-    const normalizedEvent =
-      outer.event ?? inner.event ?? outer.type ?? inner.type ?? outer.messageType ?? inner.messageType ?? 'message';
+    // Only treat as 'message' when there is actual message content (from/body/key).
+    // Otherwise keep the raw event (or 'ping' / 'unknown') so we don't falsely trigger Carmen.
+    const rawEventField =
+      outer.event ?? inner.event ?? outer.type ?? inner.type ?? outer.messageType ?? inner.messageType ?? null;
+    const looksLikeMessage =
+      !!(outer.from || inner.from || inner.chatId || outer.chatId || outer.body || inner.body || inner.text || outer.text ||
+         (pickObj(inner.message, outer.message)));
+    const normalizedEvent = rawEventField ?? (looksLikeMessage ? 'message' : 'ping');
     const fromField =
       outer.from ?? inner.from ?? inner.chatId ?? outer.chatId ?? key.remoteJid ?? inner.remoteJid ?? '';
     const toField =
