@@ -24,6 +24,7 @@ import {
 import { FlowNodeData } from "./FlowNode";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useToast } from "@/hooks/use-toast";
+import { RecipientsListEditor, migrateLegacyRecipients } from "./RecipientsListEditor";
 
 // Trigger options organized by category for the Flow Builder
 export const TRIGGER_CATEGORIES = [
@@ -1125,138 +1126,22 @@ function GreenAPIActionConfig({
         </div>
       )}
 
-      {/* Destination mode toggle */}
-      <div className="space-y-2">
-        <Label className="text-right block">יעד שליחה</Label>
-        <RadioGroup
-          value={phoneMode}
-          onValueChange={(v) => onConfigChange("phone_mode", v)}
-          className="grid grid-cols-2 gap-2"
-          dir="rtl"
-        >
-          <div className="flex items-center gap-2">
-            <RadioGroupItem value="field" id="phone-field" />
-            <Label htmlFor="phone-field" className="cursor-pointer text-sm">טלפון - שדה דינמי</Label>
-          </div>
-          <div className="flex items-center gap-2">
-            <RadioGroupItem value="manual" id="phone-manual" />
-            <Label htmlFor="phone-manual" className="cursor-pointer text-sm">טלפון - ידני</Label>
-          </div>
-          <div className="flex items-center gap-2">
-            <RadioGroupItem value="group_field" id="group-field" />
-            <Label htmlFor="group-field" className="cursor-pointer text-sm">
-              קבוצה - שדה דינמי
-            </Label>
-          </div>
-          <div className="flex items-center gap-2">
-            <RadioGroupItem value="group_manual" id="group-manual" />
-            <Label htmlFor="group-manual" className="cursor-pointer text-sm">
-              קבוצה - מזהה ידני
-            </Label>
-          </div>
-        </RadioGroup>
-      </div>
+      {/* Multi-recipient editor */}
+      <RecipientsListEditor
+        tenantId={tenantId}
+        availableFields={availableFields}
+        value={migrateLegacyRecipients(configuration || {})}
+        onChange={(next) => {
+          // Save new recipients list and clear legacy single-recipient fields
+          onConfigChange("recipients", next);
+          if (configuration?.phone_mode) onConfigChange("phone_mode", undefined);
+          if (configuration?.phone_field) onConfigChange("phone_field", undefined);
+          if (configuration?.manual_phone) onConfigChange("manual_phone", undefined);
+          if (configuration?.group_id_field) onConfigChange("group_id_field", undefined);
+          if (configuration?.manual_group_id) onConfigChange("manual_group_id", undefined);
+        }}
+      />
 
-      {phoneMode === "field" && (
-        <div className="space-y-2">
-          <Label className="text-right block">שדה מספר טלפון</Label>
-          <Select
-            value={configuration?.phone_field || ""}
-            onValueChange={(v) => onConfigChange("phone_field", v)}
-          >
-            <SelectTrigger className="text-right">
-              <SelectValue placeholder="בחר שדה..." />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectLabel className="text-xs font-bold text-muted-foreground">שדות מערכת</SelectLabel>
-                {availableFields.filter(f => !f.key.startsWith("fb_")).map((field) => (
-                  <SelectItem key={field.key} value={field.key}>
-                    {field.label} ({`{{${field.key}}}`})
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-              {availableFields.some(f => f.key.startsWith("fb_")) && (
-                <>
-                  <SelectSeparator />
-                  <SelectGroup>
-                    <SelectLabel className="text-xs font-bold text-blue-600">שדות פייסבוק</SelectLabel>
-                    {availableFields.filter(f => f.key.startsWith("fb_")).map((field) => (
-                      <SelectItem key={field.key} value={field.key} className="text-blue-700 bg-blue-50/50">
-                        {field.label} ({`{{${field.key}}}`})
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </>
-              )}
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground text-right">
-            השדה שממנו יילקח מספר הטלפון לשליחת ההודעה
-          </p>
-        </div>
-      )}
-
-      {phoneMode === "manual" && (
-        <div className="space-y-2">
-          <Label className="text-right block">מספר טלפון</Label>
-          <Input
-            value={configuration?.manual_phone || ""}
-            onChange={(e) => onConfigChange("manual_phone", e.target.value)}
-            placeholder="050-1234567"
-            dir="ltr"
-            className="text-right"
-          />
-          <p className="text-xs text-muted-foreground text-right">
-            הזן מספר טלפון קבוע שאליו תישלח ההודעה
-          </p>
-        </div>
-      )}
-
-      {phoneMode === "group_field" && (
-        <div className="space-y-2">
-          <Label className="text-right block">שדה מזהה קבוצה</Label>
-          <Select
-            value={configuration?.group_id_field || "group_chat_id"}
-            onValueChange={(v) => onConfigChange("group_id_field", v)}
-          >
-            <SelectTrigger className="text-right">
-              <SelectValue placeholder="בחר שדה..." />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="group_chat_id">מזהה צ'אט קבוצה - מומלץ ({`{{group_chat_id}}`})</SelectItem>
-              <SelectItem value="group_id">מזהה קבוצה ({`{{group_id}}`})</SelectItem>
-              {availableFields
-                .filter(f => (f.key.toLowerCase().includes("group") || f.key === "chat_id"))
-                .filter(f => f.key !== "group_id" && f.key !== "group_chat_id")
-                .map((field) => (
-                  <SelectItem key={field.key} value={field.key}>
-                    {field.label} ({`{{${field.key}}}`})
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground text-right">
-            ההודעה תישלח לאותה קבוצה שממנה הגיע הטריגר
-          </p>
-        </div>
-      )}
-
-      {phoneMode === "group_manual" && (
-        <div className="space-y-2">
-          <Label className="text-right block">מזהה קבוצה</Label>
-          <Input
-            value={configuration?.manual_group_id || ""}
-            onChange={(e) => onConfigChange("manual_group_id", e.target.value)}
-            placeholder="120363012345678901 או 120363...@g.us"
-            dir="ltr"
-            className="text-right font-mono text-xs"
-          />
-          <p className="text-xs text-muted-foreground text-right">
-            הזן את מזהה הקבוצה הקבוע (chatId של הקבוצה ב-WhatsApp)
-          </p>
-        </div>
-      )}
 
       {/* Message template with dynamic variables */}
       <div className="space-y-2">
