@@ -1142,6 +1142,8 @@ Deno.serve(async (req) => {
               contact_name: groupRecord?.group_name || null,
               group_invite_link: groupInviteLink || null,
               connection_user_id: connectionUserId,
+              direction: isOutgoing ? 'outbound' : 'inbound',
+              chat_id: groupRecord?.group_chat_id || chatId,
               tags: groupTags,
             },
           };
