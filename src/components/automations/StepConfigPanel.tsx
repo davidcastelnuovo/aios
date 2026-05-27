@@ -865,12 +865,13 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [] }
           )}
 
           {/* Green API WhatsApp config with connection selector + field mapping */}
-          {node.action_type === "send_greenapi_message" && (
+          {(node.action_type === "send_greenapi_message" || node.action_type === "send_manus_message") && (
             <GreenAPIActionConfig
               tenantId={tenantId}
               configuration={node.configuration}
               availableFields={availableFields}
               onConfigChange={handleConfigChange}
+              providerFilter={node.action_type === "send_manus_message" ? "manus_wa" : undefined}
             />
           )}
 
