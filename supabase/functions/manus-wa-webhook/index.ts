@@ -187,12 +187,46 @@ Deno.serve(async (req) => {
     const fromDigits = fromRaw.split('@')[0].replace(/\D/g, '');
     const fromMeFlag = payload.fromMe === true || payload.fromMe === 'true' ||
                        payload.direction === 'outgoing' || payload.direction === 'outbound';
-    const isOutgoingFromPhone = fromMeFlag || (!!myPhone && fromDigits === myPhone);
-    const sourcePhoneNumber = isOutgoingFromPhone ? fromDigits : myPhone;
+    let isOutgoingFromPhone = fromMeFlag || (!!myPhone && fromDigits === myPhone);
+    let sourcePhoneNumber = isOutgoingFromPhone ? fromDigits : myPhone;
 
-    const counterpartRaw = isOutgoingFromPhone ? toRaw : fromRaw;
-    const counterpartPhone = counterpartRaw.split('@')[0];
-    const normalized = normalizePhone(counterpartPhone);
+    let counterpartRaw = isOutgoingFromPhone ? toRaw : fromRaw;
+    let counterpartPhone = counterpartRaw.split('@')[0];
+    let normalized = normalizePhone(counterpartPhone);
+    const messageText = payload.body || (payload.hasMedia ? '[מדיה]' : '');
+    const messageId = String(payload.id || '');
+
+    // Manus sometimes reports manual outgoing phone messages as inbound @lid events.
+    // If Green API receives the same WhatsApp message as outbound moments later, use it
+    // as the direction/contact source while still replying through the selected Manus connection.
+    if (!isOutgoingFromPhone && !isGroup && fromRaw.endsWith('@lid') && messageText.trim()) {
+      await new Promise((resolve) => setTimeout(resolve, 2600));
+      const { data: greenMatches } = await supabase
+        .from('chat_messages')
+        .select('sender_phone, raw_provider_data, created_at')
+        .eq('tenant_id', tenantId)
+        .eq('provider', 'green_api')
+        .eq('direction', 'outbound')
+        .eq('message_text', messageText)
+        .gte('created_at', new Date(Date.now() - 2 * 60 * 1000).toISOString())
+        .order('created_at', { ascending: false })
+        .limit(5);
+      const pairedOutgoing = (greenMatches || []).find((m: any) =>
+        !messageId || String(m.raw_provider_data?.idMessage || '') === messageId
+      ) || greenMatches?.[0];
+      if (pairedOutgoing?.sender_phone) {
+        isOutgoingFromPhone = true;
+        counterpartPhone = String(pairedOutgoing.sender_phone);
+        counterpartRaw = `${counterpartPhone}@c.us`;
+        normalized = normalizePhone(counterpartPhone);
+        sourcePhoneNumber = String(
+          pairedOutgoing.raw_provider_data?.senderData?.sender ||
+          pairedOutgoing.raw_provider_data?.instanceData?.wid ||
+          ''
+        ).split('@')[0].replace(/[^0-9]/g, '');
+        console.log('[manus-wa] paired LID event with Green API outbound', { messageId, counterpartPhone, sourcePhoneNumber });
+      }
+    }
 
     // Group messages: skip client/lead matching & chat_messages insert, but still let Carmen respond in-group.
     if (isGroup) {
@@ -246,7 +280,6 @@ Deno.serve(async (req) => {
     }
 
     // Dedup by message id
-    const messageId = String(payload.id || '');
     if (messageId) {
       const { data: existing } = await supabase
         .from('chat_messages')
@@ -279,8 +312,6 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (lead) leadId = lead.id;
     }
-
-    const messageText = payload.body || (payload.hasMedia ? '[מדיה]' : '');
 
     const { error: insertError } = await supabase.from('chat_messages').insert({
       client_id: clientId,
