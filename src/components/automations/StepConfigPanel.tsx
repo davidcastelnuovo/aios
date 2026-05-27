@@ -1035,34 +1035,37 @@ function GreenAPIActionConfig({
     onConfigChange("message_template", newValue);
   };
 
-  const greenApiMode = configuration?.green_api_mode || "tenant";
+  const greenApiMode = providerFilter === "manus_wa" ? "tenant" : (configuration?.green_api_mode || "tenant");
   const phoneMode = configuration?.phone_mode || "field";
+  const isManus = providerFilter === "manus_wa";
 
   return (
     <div className="space-y-4">
-      {/* Green API connection mode */}
-      <div className="space-y-2">
-        <Label className="text-right block">מקור חיבור Green API</Label>
-        <RadioGroup
-          value={greenApiMode}
-          onValueChange={(v) => onConfigChange("green_api_mode", v)}
-          className="flex gap-4 justify-end"
-          dir="rtl"
-        >
-          <div className="flex items-center gap-2">
-            <RadioGroupItem value="tenant" id="gapi-tenant" />
-            <Label htmlFor="gapi-tenant" className="cursor-pointer text-sm">מהארגון</Label>
-          </div>
-          <div className="flex items-center gap-2">
-            <RadioGroupItem value="external" id="gapi-external" />
-            <Label htmlFor="gapi-external" className="cursor-pointer text-sm">חיבור חיצוני</Label>
-          </div>
-        </RadioGroup>
-      </div>
+      {/* Connection mode (hidden for Manus — only tenant connections supported) */}
+      {!isManus && (
+        <div className="space-y-2">
+          <Label className="text-right block">מקור חיבור Green API</Label>
+          <RadioGroup
+            value={greenApiMode}
+            onValueChange={(v) => onConfigChange("green_api_mode", v)}
+            className="flex gap-4 justify-end"
+            dir="rtl"
+          >
+            <div className="flex items-center gap-2">
+              <RadioGroupItem value="tenant" id="gapi-tenant" />
+              <Label htmlFor="gapi-tenant" className="cursor-pointer text-sm">מהארגון</Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <RadioGroupItem value="external" id="gapi-external" />
+              <Label htmlFor="gapi-external" className="cursor-pointer text-sm">חיבור חיצוני</Label>
+            </div>
+          </RadioGroup>
+        </div>
+      )}
 
       {greenApiMode === "tenant" ? (
         <div className="space-y-2">
-          <Label className="text-right block">חיבור Green API</Label>
+          <Label className="text-right block">{isManus ? "חיבור Manus" : "חיבור Green API"}</Label>
           {isLoading ? (
             <div className="flex items-center justify-center py-2">
               <Loader2 className="h-4 w-4 animate-spin" />
