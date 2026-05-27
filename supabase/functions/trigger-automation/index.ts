@@ -2566,7 +2566,49 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
     .single()
   const tenantSlug = tenant?.slug
   
+  // NEW: Multi-recipient support (recipients[] array)
+  if (Array.isArray(config.recipients) && config.recipients.length > 0) {
+    const chatIds = await resolveRecipientsToChatIds(supabase, config.recipients, data, tenantId)
+    if (chatIds.length === 0) {
+      throw new Error('לא נמצאו יעדים תקפים לשליחה')
+    }
+
+    // Resolve integration once
+    const { idInstance, apiTokenInstance, providerType } = await resolveWaIntegration(supabase, config, tenantId)
+
+    // Build message once (using available data; no per-recipient contactRecord override)
+    let message = replaceTemplateVariables(message_template, { ...data }, tenantSlug)
+    if (config.media_type === 'link' && config.media_url) {
+      const resolvedLink = replaceTemplateVariables(config.media_url, { ...data }, tenantSlug)
+      message = `${message}\n\n${resolvedLink}`
+    }
+
+    const results: any[] = []
+    for (const chatId of chatIds) {
+      try {
+        const r = await sendWaMessage({
+          providerType, idInstance, apiTokenInstance, chatId, message, config, data, tenantSlug,
+        })
+        results.push({ chatId, status: 'sent', result: r })
+      } catch (e) {
+        results.push({ chatId, status: 'failed', error: e instanceof Error ? e.message : String(e) })
+      }
+    }
+    const sentCount = results.filter(r => r.status === 'sent').length
+    if (sentCount === 0) {
+      throw new Error(`כל ${chatIds.length} היעדים נכשלו: ${JSON.stringify(results)}`)
+    }
+    return {
+      success: true,
+      message_sent: message,
+      recipients_count: chatIds.length,
+      sent_count: sentCount,
+      results,
+    }
+  }
+
   // Determine chatId based on phone_mode or legacy send_to_type
+
   let chatId: string
   let contactRecord: any = null
   
