@@ -1,30 +1,34 @@
-## תמיכה בבחירת מספר קבוצות עבור נעילת מקור של כרמן
+## הבעיה
 
-כיום ב"קבוצה ספציפית בלבד" אפשר לבחור רק קבוצה אחת (`carmen_allowed_group_id`). נרחיב לרשימה של קבוצות, תוך תאימות לאחור.
+האוטומציה של כרמן הוגדרה נכון: `carmen_scope_mode = specific_group` ורשימת `carmen_allowed_group_ids` מכילה מזהי צ׳אט (`120363...@g.us`).
 
-### שינויי UI — `src/components/automations/StepConfigPanel.tsx`
-- בענף `scopeMode === "specific_group"`:
-  - להחליף את ה־`Select` היחיד ב־Multi-Select של קבוצות (Checkbox-list עם תיבת חיפוש מעל, מבוסס `Popover` + `Command` הקיימים בפרויקט; פולבק לרשימת Checkboxes פשוטה אם אין `Command`).
-  - לקרוא/לכתוב למערך חדש `carmen_allowed_group_ids: string[]`.
-  - בעת טעינה: אם המערך ריק אך קיים `carmen_allowed_group_id` ישן — להציג אותו כפריט נבחר (תאימות לאחור) ולעדכן למערך בשמירה הבאה.
-  - להציג צ'יפים (Badges) עם שמות הקבוצות שנבחרו ואפשרות הסרה.
-  - תווית הקטע תשתנה ל"בחר קבוצות" והודעת האישור: "✅ הסוכן יגיב ל-N קבוצות".
-- שינוי הטקסט באופציית הסלקט: "קבוצה ספציפית בלבד" → "קבוצות ספציפיות בלבד" (הערך `specific_group` נשאר).
+אבל ה-webhook (`green-api-webhook`) שולח ל-`trigger-automation` payload עם:
+- `group_id` = ה-UUID של הקבוצה ב-DB (`whatsapp_groups.id`)
+- `group_chat_id` = המזהה של ווטסאפ (`@g.us`)
 
-### שינויי Backend (אכיפת scope)
-- `supabase/functions/trigger-automation/index.ts` (סביבות 268–276):
-  - לקרוא `allowedGroupIds = safeConfig.carmen_allowed_group_ids || (safeConfig.carmen_allowed_group_id ? [safeConfig.carmen_allowed_group_id] : [])`.
-  - לחסום אם הרשימה ריקה; אחרת לאשר רק אם `safeData.group_id` נמצא ברשימה.
-- `supabase/functions/_shared/carmen.ts` (סביב שורה 302): נשאר חוסם בענף `specific_group` עבור הזרימה של הודעות יוצאות (כפי שהיום) — לא נדרש שינוי לוגי שם.
+הבדיקה ב-`trigger-automation/index.ts` (שורה 276) משווה `safeData.group_id` (UUID) מול `carmen_allowed_group_ids` (`@g.us`) — תמיד נכשל → הטריגר נדחה עם `carmen_scope_group_mismatch` ולכן כרמן לא עונה (אין שום `automation_executions` חדש לטננט).
 
-### תאימות לאחור
-- אוטומציות קיימות עם `carmen_allowed_group_id` ימשיכו לעבוד (ה־backend וה־UI מתייחסים אליו כפריט יחיד במערך).
-- בשמירה ב־UI נכתוב מעתה רק `carmen_allowed_group_ids`; לא נמחק את השדה הישן כדי לא לפגוע ב־rollback.
+אותה בעיה קיימת גם בבדיקות הרגילות:
+- שורה 327: `safeConfig.group_id !== safeData.group_id`
+- שורה 348-371: `source_filter` שמשתמש ב-`selected_group_ids` / `excluded_group_ids` (גם שם נשמרים `@g.us` ב-UI).
 
-### קבצים שיתעדכנו
-- `src/components/automations/StepConfigPanel.tsx`
-- `supabase/functions/trigger-automation/index.ts`
+## התיקון
 
-### לא בתחום השינוי
-- אין שינויי DB/מיגרציות (השדות חיים בתוך `configuration JSONB`).
-- אין שינוי באפשרויות `specific_phone` / `private_only`.
+ב-`supabase/functions/trigger-automation/index.ts`, להתאים את כל השוואות הקבוצות כך שיתאימו גם ל-`group_chat_id` וגם ל-`group_id` (UUID):
+
+```text
+const candidates = [safeData.group_id, safeData.group_chat_id].filter(Boolean)
+const matches = allowedGroupIds.some(id => candidates.includes(id))
+```
+
+מקומות לעדכן:
+1. בדיקת `carmen_scope_mode === 'specific_group'` (~שורה 276)
+2. בדיקת `safeConfig.group_id` הישנה (~שורה 327)
+3. `source_filter === 'multiple_groups'` עם `selected_group_ids` (~שורה 367)
+4. `source_filter === 'all_groups_except'` עם `excluded_group_ids` (~שורה 358)
+
+לא נדרשים שינויי DB או UI — רק יישור של הבדיקה ב-edge function.
+
+## איך לוודא
+
+לאחר ההטמעה: לשלוח "כרמן" באחת מהקבוצות המורשות. נצפה ל-`automation_executions` חדש לטננט עם `status` שונה מ-running תקוע, וכרמן תענה.

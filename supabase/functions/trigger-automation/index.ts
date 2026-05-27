@@ -264,6 +264,7 @@ Deno.serve(async (req) => {
       // to wrong groups/phones even if a session is active.
       // ═══════════════════════════════════════════════════════════
       const scopeMode = safeConfig.carmen_scope_mode
+      const groupCandidates: string[] = [safeData.group_id, safeData.group_chat_id].filter(Boolean) as string[]
       if (scopeMode && scopeMode !== 'all') {
         if (scopeMode === 'specific_group') {
           const allowedGroupIds: string[] = Array.isArray(safeConfig.carmen_allowed_group_ids) && safeConfig.carmen_allowed_group_ids.length > 0
@@ -273,7 +274,7 @@ Deno.serve(async (req) => {
             console.warn('[CARMEN SCOPE] specific_group configured but no group IDs set — blocking')
             return { matches: false, reason: 'carmen_scope_no_group_configured' }
           }
-          if (!safeData.group_id || !allowedGroupIds.includes(safeData.group_id)) {
+          if (groupCandidates.length === 0 || !allowedGroupIds.some((id: string) => groupCandidates.includes(id))) {
             return { matches: false, reason: 'carmen_scope_group_mismatch' }
           }
         } else if (scopeMode === 'specific_phone') {
@@ -287,7 +288,7 @@ Deno.serve(async (req) => {
             return { matches: false, reason: 'carmen_scope_phone_not_allowed' }
           }
         } else if (scopeMode === 'private_only') {
-          if (safeData.group_id) {
+          if (safeData.group_id || safeData.group_chat_id) {
             return { matches: false, reason: 'carmen_scope_private_only_but_group' }
           }
         }
@@ -324,7 +325,7 @@ Deno.serve(async (req) => {
       if (safeConfig.facebook_form_id && safeConfig.facebook_form_id !== safeData.facebook_form_id) {
         return { matches: false, reason: 'facebook_form_id_mismatch' }
       }
-      if (safeConfig.group_id && safeConfig.group_id !== safeData.group_id) {
+      if (safeConfig.group_id && !groupCandidates.includes(safeConfig.group_id)) {
         return { matches: false, reason: 'group_id_mismatch' }
       }
       if (safeConfig.connection_user_id && safeConfig.connection_user_id !== safeData.connection_user_id) {
@@ -352,20 +353,20 @@ Deno.serve(async (req) => {
         return { matches: false, reason: 'source_filter_all_groups' }
       }
       if (safeConfig.source_filter === 'all_groups_except') {
-        if (!safeData.group_id) {
+        if (groupCandidates.length === 0) {
           return { matches: false, reason: 'source_filter_all_groups_except' }
         }
         const excludedIds = safeConfig.excluded_group_ids || []
-        if (excludedIds.length > 0 && excludedIds.includes(safeData.group_id)) {
+        if (excludedIds.length > 0 && excludedIds.some((id: string) => groupCandidates.includes(id))) {
           return { matches: false, reason: 'group_excluded' }
         }
       }
       if (safeConfig.source_filter === 'multiple_groups') {
-        if (!safeData.group_id) {
+        if (groupCandidates.length === 0) {
           return { matches: false, reason: 'source_filter_multiple_groups' }
         }
         const selectedIds = safeConfig.selected_group_ids || []
-        if (selectedIds.length > 0 && !selectedIds.includes(safeData.group_id)) {
+        if (selectedIds.length > 0 && !selectedIds.some((id: string) => groupCandidates.includes(id))) {
           return { matches: false, reason: 'group_not_selected' }
         }
       }
