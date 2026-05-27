@@ -7136,6 +7136,7 @@ export type Database = {
           auto_sync_enabled: boolean
           company_id: string | null
           created_at: string
+          display_name: string | null
           id: string
           instance_id: string | null
           integration_type: string
@@ -7153,6 +7154,7 @@ export type Database = {
           auto_sync_enabled?: boolean
           company_id?: string | null
           created_at?: string
+          display_name?: string | null
           id?: string
           instance_id?: string | null
           integration_type?: string
@@ -7170,6 +7172,7 @@ export type Database = {
           auto_sync_enabled?: boolean
           company_id?: string | null
           created_at?: string
+          display_name?: string | null
           id?: string
           instance_id?: string | null
           integration_type?: string

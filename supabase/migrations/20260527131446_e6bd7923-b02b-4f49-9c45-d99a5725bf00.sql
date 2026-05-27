@@ -1,0 +1,2 @@
+ALTER TABLE public.tenant_integrations ADD COLUMN IF NOT EXISTS display_name TEXT;
+UPDATE public.tenant_integrations SET display_name = 'Carmen' WHERE integration_type = 'manus_wa' AND (display_name IS NULL OR display_name = '');
