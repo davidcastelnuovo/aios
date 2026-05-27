@@ -34,6 +34,7 @@ import { Info, Copy, ExternalLink } from "lucide-react";
 import { useLeadStatuses } from "@/hooks/useLeadStatuses";
 import { MessageTemplateBuilder } from "./MessageTemplateBuilder";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { WaProviderConnectionPicker } from "./WaProviderConnectionPicker";
 
 const formSchema = z.object({
   name: z.string().min(1, "שם האוטומציה הוא שדה חובה"),
