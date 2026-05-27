@@ -1082,7 +1082,7 @@ function GreenAPIActionConfig({
                 {greenApiIntegrations.map((integration) => {
                   const settings = integration.settings as Record<string, any> | null;
                   const providerLabel = integration.integration_type === 'manus_wa' ? 'Manus WA' : 'Green API';
-                  const name = settings?.instance_name || settings?.connection_name || providerLabel;
+                  const name = (integration as any).display_name || settings?.instance_name || settings?.connection_name || providerLabel;
                   return (
                     <SelectItem key={integration.id} value={integration.id}>
                       {name} · {providerLabel}
@@ -1895,7 +1895,7 @@ function CarmenSessionConfig({
   // Helper label for connection
   const getConnectionLabel = (c: any) => {
     const settings = c.settings as any;
-    const displayName = settings?.display_name || settings?.phone_number || settings?.instance_id || c.instance_id;
+    const displayName = c.display_name || settings?.display_name || settings?.phone_number || settings?.instance_id || c.instance_id;
     const providerLabel = c.integration_type === "manus_wa" ? "מאנוס" : "Green API";
     return `${providerLabel} — ${displayName}`;
   };
