@@ -2706,15 +2706,14 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
   const mediaUrl = config.media_url
 
   if (providerType === 'manus_wa') {
-    if (chatId.includes('@g.us')) {
-      throw new Error('Manus WhatsApp לא תומך בשליחה לקבוצות')
-    }
-    const toDigits = chatId.replace(/[^0-9]/g, '')
+    const manusRecipient = chatId.includes('@g.us')
+      ? chatId
+      : chatId.replace(/[^0-9]/g, '')
     const manusBase = 'https://whatsappgw-pzpyrrww.manus.space'
     const sendResponse = await fetch(`${manusBase}/api/v1/instances/${idInstance}/send/text`, {
       method: 'POST',
       headers: { 'X-Api-Key': apiTokenInstance, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to: toDigits, body: message }),
+      body: JSON.stringify({ to: manusRecipient, body: message }),
     })
     sendResult = await sendResponse.json().catch(() => ({}))
     if (!sendResponse.ok || sendResult?.success === false) {
@@ -2725,7 +2724,7 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
       const resolvedMediaUrl = replaceTemplateVariables(mediaUrl, { ...data, ...contactRecord }, tenantSlug)
       const isImage = mediaType === 'image'
       const endpoint = isImage ? 'send/image' : 'send/file'
-      const payload: Record<string, unknown> = { to: toDigits, caption: message }
+      const payload: Record<string, unknown> = { to: manusRecipient, caption: message }
       if (isImage) payload.imageUrl = resolvedMediaUrl
       else { payload.fileUrl = resolvedMediaUrl; payload.mimeType = config.media_mime_type || 'application/octet-stream'; payload.filename = config.media_filename || resolvedMediaUrl.split('/').pop()?.split('?')[0] || 'file' }
       const mr = await fetch(`${manusBase}/api/v1/instances/${idInstance}/${endpoint}`, {
