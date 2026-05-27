@@ -276,8 +276,9 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     return { handled: true, outcome: 'active' };
   }
 
-  // No active session — only OUTGOING (operator-typed) messages can start a new one.
-  if (!isManualOutgoing) return { handled: false, reason: 'no_session_inbound' };
+  // No active session — outgoing (operator-typed) messages OR incoming group messages can start a new one.
+  // In 1-on-1 chats we still require the owner to type the keyword; in groups, any member can trigger Carmen.
+  if (!isManualOutgoing && !isGroup) return { handled: false, reason: 'no_session_inbound' };
 
   const carmenAutomation = await findCarmenSessionAutomation(supabase, tenantId, integrationId);
   if (!carmenAutomation) return { handled: false, reason: 'no_automation' };
@@ -292,15 +293,22 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
   // Scope enforcement
   const scopeMode = carmenAutomation.configuration?.carmen_scope_mode || 'all';
   const allowedPhones = carmenAutomation.configuration?.carmen_allowed_phones || [];
-  if (scopeMode === 'specific_phone') {
+  const allowedGroups = carmenAutomation.configuration?.carmen_allowed_groups || [];
+  if (scopeMode === 'specific_phone' && !isGroup) {
     const normalizedChatPhone = (phoneNumber || '').replace(/[^0-9]/g, '');
     const isPhoneAllowed = allowedPhones.some((p: string) => {
       const a = p.replace(/[^0-9]/g, '');
       return normalizedChatPhone.endsWith(a) || a.endsWith(normalizedChatPhone);
     });
-    if (!isPhoneAllowed) return { handled: false, reason: 'scope_phone' };
+    if (!isPhoneAllowed) {
+      console.log('[carmen] blocked by scope_phone', { chatId, phoneNumber });
+      return { handled: false, reason: 'scope_phone' };
+    }
   } else if (scopeMode === 'specific_group') {
-    return { handled: false, reason: 'scope_group_only' };
+    if (!isGroup || !allowedGroups.includes(chatId)) {
+      console.log('[carmen] blocked by scope_group', { chatId, isGroup, allowedGroups });
+      return { handled: false, reason: 'scope_group' };
+    }
   }
 
   const triggerKeyword = (carmenAutomation.configuration?.trigger_keyword || 'כרמן').toLowerCase();
