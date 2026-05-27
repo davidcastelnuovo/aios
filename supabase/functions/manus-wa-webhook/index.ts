@@ -172,6 +172,7 @@ Deno.serve(async (req) => {
           },
         });
         if (result.handled) carmenOutcome = result.outcome;
+        console.log('[carmen-group]', { groupChatId, authorPhone, isOutgoingFromPhone, handled: result.handled, outcome: (result as any).outcome, reason: (result as any).reason, body: String(messageText).slice(0, 60) });
       } catch (err) {
         console.error('manus-wa Carmen group handler error:', err);
       }
