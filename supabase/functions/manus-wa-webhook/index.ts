@@ -54,7 +54,10 @@ Deno.serve(async (req) => {
     const looksLikeMessage =
       !!(outer.from || inner.from || inner.chatId || outer.chatId || outer.body || inner.body || inner.text || outer.text ||
          (pickObj(inner.message, outer.message)));
-    const normalizedEvent = rawEventField ?? (looksLikeMessage ? 'message' : 'ping');
+    const normalizedEvent =
+      (rawEventField === 'chat' || rawEventField === 'text' || rawEventField === 'message') && looksLikeMessage
+        ? 'message'
+        : rawEventField ?? (looksLikeMessage ? 'message' : 'ping');
     const fromField =
       outer.from ?? inner.from ?? inner.chatId ?? outer.chatId ?? key.remoteJid ?? inner.remoteJid ?? '';
     const toField =
@@ -185,6 +188,7 @@ Deno.serve(async (req) => {
     const fromMeFlag = payload.fromMe === true || payload.fromMe === 'true' ||
                        payload.direction === 'outgoing' || payload.direction === 'outbound';
     const isOutgoingFromPhone = fromMeFlag || (!!myPhone && fromDigits === myPhone);
+    const sourcePhoneNumber = isOutgoingFromPhone ? fromDigits : myPhone;
 
     const counterpartRaw = isOutgoingFromPhone ? toRaw : fromRaw;
     const counterpartPhone = counterpartRaw.split('@')[0];
@@ -310,6 +314,7 @@ Deno.serve(async (req) => {
         connectionUserId,
         chatId: chatIdForCarmen,
         phoneNumber: counterpartPhone,
+          sourcePhoneNumber,
         senderName,
         messageText,
         isIncoming: !isOutgoingFromPhone,
@@ -326,9 +331,10 @@ Deno.serve(async (req) => {
                 'Authorization': `Bearer ${serviceKey}`,
               },
               body: JSON.stringify({
-                integration_id: integ.id,
-                tenant_id: tenantId,
-                phone: counterpartPhone,
+                integrationId: integ.id,
+                tenantId,
+                phoneNumber: counterpartPhone,
+                senderUserId: connectionUserId,
                 message,
               }),
             });
@@ -340,6 +346,7 @@ Deno.serve(async (req) => {
         },
       });
       if (result.handled) carmenOutcome = result.outcome;
+      console.log('[carmen-private]', { chatId: chatIdForCarmen, phoneNumber: counterpartPhone, sourcePhoneNumber, isOutgoingFromPhone, handled: result.handled, outcome: (result as any).outcome, reason: (result as any).reason, body: String(messageText).slice(0, 60) });
     } catch (err) {
       console.error('manus-wa Carmen handler error:', err);
     }

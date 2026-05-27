@@ -210,6 +210,8 @@ export interface CarmenContext {
   chatId: string;
   /** Counterpart phone (digits only or with country code). */
   phoneNumber: string;
+  /** Phone of the connected WhatsApp account/sender, when the provider exposes it. */
+  sourcePhoneNumber?: string | null;
   /** Display name of the counterpart, if known. */
   senderName?: string | null;
   messageText: string;
@@ -231,7 +233,7 @@ export type CarmenHandleResult =
 export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHandleResult> {
   const {
     supabase, tenantId, integrationId, connectionUserId,
-    chatId, phoneNumber, senderName, messageText,
+    chatId, phoneNumber, sourcePhoneNumber, senderName, messageText,
     isIncoming, isManualOutgoing, isGroup, sendMessage,
   } = ctx;
 
@@ -308,13 +310,15 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
   const allowedPhones = carmenAutomation.configuration?.carmen_allowed_phones || [];
   const allowedGroups = carmenAutomation.configuration?.carmen_allowed_groups || [];
   if (scopeMode === 'specific_phone' && !isGroup) {
-    const normalizedChatPhone = (phoneNumber || '').replace(/[^0-9]/g, '');
+    const phoneCandidates = [phoneNumber, sourcePhoneNumber, chatId?.split('@')?.[0]]
+      .map((p: string | null | undefined) => (p || '').replace(/[^0-9]/g, ''))
+      .filter(Boolean);
     const isPhoneAllowed = allowedPhones.some((p: string) => {
       const a = p.replace(/[^0-9]/g, '');
-      return normalizedChatPhone.endsWith(a) || a.endsWith(normalizedChatPhone);
+      return phoneCandidates.some((candidate: string) => candidate.endsWith(a) || a.endsWith(candidate));
     });
     if (!isPhoneAllowed) {
-      console.log('[carmen] blocked by scope_phone', { chatId, phoneNumber });
+      console.log('[carmen] blocked by scope_phone', { chatId, phoneNumber, sourcePhoneNumber, phoneCandidates });
       return { handled: false, reason: 'scope_phone' };
     }
   } else if (scopeMode === 'specific_group') {
