@@ -252,6 +252,21 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
       return { handled: true, outcome: 'ended' };
     }
 
+    // 🔁 ECHO/LOOP GUARD: if the incoming text matches Carmen's own last assistant reply
+    // (verbatim or as prefix), it's almost certainly a self-echo (provider mirrored our
+    // send back as inbound). Ignore it to prevent an infinite reply loop.
+    const history = activeSession.conversation_history || [];
+    const lastAssistant = [...history].reverse().find((m: any) => m?.role === 'assistant');
+    if (lastAssistant?.content) {
+      const a = String(lastAssistant.content).trim();
+      const b = String(messageText || '').trim();
+      if (a && b && (a === b || a.startsWith(b) || b.startsWith(a))) {
+        console.log('[carmen] Dropping echoed assistant reply for session', activeSession.id);
+        return { handled: true, outcome: 'active' };
+      }
+    }
+
+
     const history = activeSession.conversation_history || [];
     const updatedHistory = [
       ...history,
