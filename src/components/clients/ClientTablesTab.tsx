@@ -146,17 +146,6 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
     queryClient.invalidateQueries({ queryKey: ["all-dashboards"] });
   };
 
-  if (isLoading) {
-    return (
-      <div className="space-y-3" dir="rtl">
-        <Skeleton className="h-24 w-full" />
-        <Skeleton className="h-24 w-full" />
-      </div>
-    );
-  }
-
-  const hasContent = tables.length > 0 || dashboards.length > 0;
-
   const renderTableIcon = (table: any) => {
     if (table.integration_type === "facebook_insights") return <Facebook className="h-4 w-4 text-blue-600 shrink-0" />;
     if (table.integration_type === "facebook_ecommerce") return <ShoppingCart className="h-4 w-4 text-green-600 shrink-0" />;
@@ -167,6 +156,47 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
     );
     return <FileSpreadsheet className="h-4 w-4 shrink-0" />;
   };
+
+  const items = useMemo(() => {
+    const dashItems = dashboards.map((d: any) => ({
+      id: `dash-${d.id}`,
+      kind: "dashboard" as const,
+      label: d.name,
+      icon: <LayoutDashboard className="h-4 w-4 shrink-0" />,
+      raw: d,
+    }));
+    const tableItems = tables.map((t: any) => ({
+      id: `table-${t.id}`,
+      kind: "table" as const,
+      label: t.name,
+      icon: renderTableIcon(t),
+      raw: t,
+    }));
+    return [...dashItems, ...tableItems];
+  }, [dashboards, tables]);
+
+  useEffect(() => {
+    if (items.length === 0) {
+      if (activeTabId !== null) setActiveTabId(null);
+      return;
+    }
+    if (!activeTabId || !items.find((i) => i.id === activeTabId)) {
+      setActiveTabId(items[0].id);
+    }
+  }, [items, activeTabId]);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3" dir="rtl">
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-24 w-full" />
+      </div>
+    );
+  }
+
+  const hasContent = items.length > 0;
+  const activeItem = items.find((i) => i.id === activeTabId) || items[0];
+
 
   return (
     <div className="space-y-4" dir="rtl">
