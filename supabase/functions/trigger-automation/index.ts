@@ -2547,7 +2547,12 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
   } else if (phone_mode === "group_field") {
     // Send to a group whose chat id is taken from the trigger payload
     const fieldKey = group_id_field || "group_id"
-    const fieldValue = data?.[fieldKey]
+    const rawFieldValue = data?.[fieldKey]
+    const fieldValue =
+      data?.contact_type === 'group' && data?.group_chat_id &&
+      (fieldKey === 'group_id' || !rawFieldValue || !String(rawFieldValue).includes('@g.us'))
+        ? data.group_chat_id
+        : rawFieldValue
     if (!fieldValue) {
       throw new Error(`לא נמצא מזהה קבוצה בשדה ${fieldKey}`)
     }
