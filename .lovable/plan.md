@@ -1,39 +1,30 @@
-## מטרה
-לאפשר לטריגר "שיחת כרמן ב-WhatsApp" לעבוד גם דרך חיבור Manus WA (לא רק Green API), ולתת בחירה מפורשת איזה חיבור יהיה זה שכרמן תקשיב ותגיב דרכו — בדיוק כמו בצעד "שלח WhatsApp (Green API)" שכבר תומך ב-Manus.
+## תמיכה בבחירת מספר קבוצות עבור נעילת מקור של כרמן
 
-## מצב היום
-- ה־UI של `CarmenSessionConfig` שולף רק חיבורי `green_api`, ומציג בורר רק כשיש יותר מחיבור אחד.
-- הסלקטור שומר `carmen_connection_user_id` (מזהה משתמש) — לא ID של חיבור ספציפי, ולכן לא יכול להבחין בין שתי אינטגרציות של אותו משתמש.
-- `green-api-webhook` הוא היחיד שיודע לטפל בכרמן (זיהוי מילת הפעלה, פתיחת session, קריאה ל-`run-ai-agent` ושליחת תשובה).
-- `manus-wa-webhook` כרגע רק כותב הודעות נכנסות לטבלת `chat_messages` ולא מפעיל כרמן כלל.
+כיום ב"קבוצה ספציפית בלבד" אפשר לבחור רק קבוצה אחת (`carmen_allowed_group_id`). נרחיב לרשימה של קבוצות, תוך תאימות לאחור.
 
-## שינויים מתוכננים
+### שינויי UI — `src/components/automations/StepConfigPanel.tsx`
+- בענף `scopeMode === "specific_group"`:
+  - להחליף את ה־`Select` היחיד ב־Multi-Select של קבוצות (Checkbox-list עם תיבת חיפוש מעל, מבוסס `Popover` + `Command` הקיימים בפרויקט; פולבק לרשימת Checkboxes פשוטה אם אין `Command`).
+  - לקרוא/לכתוב למערך חדש `carmen_allowed_group_ids: string[]`.
+  - בעת טעינה: אם המערך ריק אך קיים `carmen_allowed_group_id` ישן — להציג אותו כפריט נבחר (תאימות לאחור) ולעדכן למערך בשמירה הבאה.
+  - להציג צ'יפים (Badges) עם שמות הקבוצות שנבחרו ואפשרות הסרה.
+  - תווית הקטע תשתנה ל"בחר קבוצות" והודעת האישור: "✅ הסוכן יגיב ל-N קבוצות".
+- שינוי הטקסט באופציית הסלקט: "קבוצה ספציפית בלבד" → "קבוצות ספציפיות בלבד" (הערך `specific_group` נשאר).
 
-### 1. UI — `src/components/automations/StepConfigPanel.tsx` (CarmenSessionConfig)
-- לשלוף גם `green_api` וגם `manus_wa` מ-`tenant_integrations` (אותה שאילתה כמו ב-`GreenAPIActionConfig`).
-- להוסיף שדה חדש בקונפיג: **"חיבור WhatsApp לכרמן"** עם בורר שמציג כל החיבורים (Green API + Manus WA) עם תווית ספק, וברירת מחדל "כל החיבורים".
-- שמירה תחת `carmen_integration_id` (מזהה רשומת `tenant_integrations`).
-- הצגה תמיד, גם אם יש חיבור יחיד (כדי שאפשר יהיה להגביל במפורש ל-Manus).
-- שמירה על תאימות לאחור: אם קיים `carmen_connection_user_id` ישן — להמשיך לכבד אותו, ולהציע אזהרה קלה לעדכון.
+### שינויי Backend (אכיפת scope)
+- `supabase/functions/trigger-automation/index.ts` (סביבות 268–276):
+  - לקרוא `allowedGroupIds = safeConfig.carmen_allowed_group_ids || (safeConfig.carmen_allowed_group_id ? [safeConfig.carmen_allowed_group_id] : [])`.
+  - לחסום אם הרשימה ריקה; אחרת לאשר רק אם `safeData.group_id` נמצא ברשימה.
+- `supabase/functions/_shared/carmen.ts` (סביב שורה 302): נשאר חוסם בענף `specific_group` עבור הזרימה של הודעות יוצאות (כפי שהיום) — לא נדרש שינוי לוגי שם.
 
-### 2. שרת — `supabase/functions/green-api-webhook/index.ts`
-- במקום (או בנוסף ל-) השוואת `carmen_connection_user_id`, להשוות `carmen_integration_id` עם ה-`integration.id` שזיהה את הוובהוק.
-- אם `carmen_integration_id` מוגדר ושייך לאינטגרציה מסוג `manus_wa` — לדלג (לתת ל-manus-wa-webhook לטפל).
+### תאימות לאחור
+- אוטומציות קיימות עם `carmen_allowed_group_id` ימשיכו לעבוד (ה־backend וה־UI מתייחסים אליו כפריט יחיד במערך).
+- בשמירה ב־UI נכתוב מעתה רק `carmen_allowed_group_ids`; לא נמחק את השדה הישן כדי לא לפגוע ב־rollback.
 
-### 3. שרת — `supabase/functions/manus-wa-webhook/index.ts`
-- להוסיף תמיכת כרמן סימטרית ל-green-api-webhook:
-  - אחרי שמירת ההודעה הנכנסת, להריץ את אותה לוגיקה: `findCarmenSessionAutomation`, בדיקת `scope`, מילת הפעלה/סיום, פתיחה/סגירה של `carmen_whatsapp_sessions`, ריצת `runCarmenAI` ושליחה חזרה דרך `send-manus-wa-message`.
-  - לכבד `carmen_integration_id` — להריץ רק אם תואם ל-`integ.id`.
-- כדי לא לשכפל קוד, להוציא helpers משותפים (`findCarmenAgent`, `findCarmenSessionAutomation`, `runCarmenAI`, ניהול session) לקובץ `_shared/carmen.ts` ולייבא משני הוובהוקים.
-
-### 4. תאימות לאחור
-- אם באוטומציה קיימת רק שדה `carmen_connection_user_id` (ללא `carmen_integration_id`) — להמשיך לסנן לפי `connection_user_id` בלבד (התנהגות נוכחית).
-
-## קבצים שיתעדכנו
+### קבצים שיתעדכנו
 - `src/components/automations/StepConfigPanel.tsx`
-- `supabase/functions/green-api-webhook/index.ts`
-- `supabase/functions/manus-wa-webhook/index.ts`
-- חדש: `supabase/functions/_shared/carmen.ts`
+- `supabase/functions/trigger-automation/index.ts`
 
-## שאלה לפני בנייה
-האם להפעיל כרמן **באופן בלעדי** דרך החיבור שנבחר (כלומר, אם נבחר Manus — Green API לא יפעיל אותה אפילו אם תגיע אליו הודעה עם מילת ההפעלה), או להשאיר "כל החיבורים" כברירת מחדל גמישה? ההמלצה: בלעדי כשנבחר חיבור, "כל החיבורים" כשלא נבחר.
+### לא בתחום השינוי
+- אין שינויי DB/מיגרציות (השדות חיים בתוך `configuration JSONB`).
+- אין שינוי באפשרויות `specific_phone` / `private_only`.

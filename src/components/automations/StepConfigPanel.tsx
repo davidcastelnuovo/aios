@@ -1936,41 +1936,92 @@ function CarmenSessionConfig({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">כל ההודעות (ללא הגבלה)</SelectItem>
-              <SelectItem value="specific_group">קבוצה ספציפית בלבד</SelectItem>
+              <SelectItem value="specific_group">קבוצות ספציפיות בלבד</SelectItem>
               <SelectItem value="specific_phone">מספר טלפון ספציפי בלבד</SelectItem>
               <SelectItem value="private_only">שיחות פרטיות בלבד (לא קבוצות)</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
-        {/* קבוצה ספציפית */}
-        {scopeMode === "specific_group" && (
-          <div className="space-y-2">
-            <Label className="text-right block">בחר קבוצה</Label>
-            <Select
-              value={configuration?.carmen_allowed_group_id || ""}
-              onValueChange={(v) => onConfigChange("carmen_allowed_group_id", v)}
-            >
-              <SelectTrigger className="text-right">
-                <SelectValue placeholder="בחר קבוצה..." />
-              </SelectTrigger>
-              <SelectContent>
-                {(groups || []).map((g: any) => (
-                  <SelectItem key={g.id} value={g.group_chat_id || g.id}>
-                    {g.group_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {configuration?.carmen_allowed_group_id && (
-              <div className="flex items-center gap-1 bg-green-500/10 border border-green-500/30 rounded p-2">
-                <span className="text-xs text-green-600 text-right flex-1">
-                  ✅ הסוכן יגיב אך ורק לקבוצה הזו
-                </span>
-              </div>
-            )}
-          </div>
-        )}
+        {/* קבוצות ספציפיות (Multi-select) */}
+        {scopeMode === "specific_group" && (() => {
+          const selectedIds: string[] = (configuration?.carmen_allowed_group_ids && configuration.carmen_allowed_group_ids.length > 0)
+            ? configuration.carmen_allowed_group_ids
+            : (configuration?.carmen_allowed_group_id ? [configuration.carmen_allowed_group_id] : []);
+          const toggleGroup = (gid: string) => {
+            const next = selectedIds.includes(gid)
+              ? selectedIds.filter((x) => x !== gid)
+              : [...selectedIds, gid];
+            onConfigChange("carmen_allowed_group_ids", next);
+          };
+          const groupNameById = (gid: string) => {
+            const g = (groups || []).find((g: any) => (g.group_chat_id || g.id) === gid);
+            return g?.group_name || gid;
+          };
+          return (
+            <div className="space-y-2">
+              <Label className="text-right block">בחר קבוצות</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-between text-right">
+                    <ChevronDown className="h-4 w-4 opacity-50" />
+                    <span className="flex-1 text-right">
+                      {selectedIds.length > 0 ? `${selectedIds.length} קבוצות נבחרו` : "בחר קבוצות..."}
+                    </span>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="end">
+                  <ScrollArea className="max-h-64">
+                    <div className="p-2 space-y-1">
+                      {(groups || []).length === 0 && (
+                        <p className="text-xs text-muted-foreground text-center py-4">אין קבוצות זמינות</p>
+                      )}
+                      {(groups || []).map((g: any) => {
+                        const gid = g.group_chat_id || g.id;
+                        const checked = selectedIds.includes(gid);
+                        return (
+                          <label
+                            key={g.id}
+                            className="flex items-center gap-2 p-2 hover:bg-accent rounded cursor-pointer text-right"
+                          >
+                            <Checkbox checked={checked} onCheckedChange={() => toggleGroup(gid)} />
+                            <span className="flex-1 text-sm">{g.group_name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </ScrollArea>
+                </PopoverContent>
+              </Popover>
+
+              {selectedIds.length > 0 && (
+                <div className="flex flex-wrap gap-1 justify-end">
+                  {selectedIds.map((gid) => (
+                    <Badge key={gid} variant="secondary" className="gap-1">
+                      <button
+                        type="button"
+                        onClick={() => toggleGroup(gid)}
+                        className="hover:text-destructive"
+                        aria-label="הסר"
+                      >
+                        ×
+                      </button>
+                      {groupNameById(gid)}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+
+              {selectedIds.length > 0 && (
+                <div className="flex items-center gap-1 bg-green-500/10 border border-green-500/30 rounded p-2">
+                  <span className="text-xs text-green-600 text-right flex-1">
+                    ✅ הסוכן יגיב ל-{selectedIds.length} קבוצות בלבד
+                  </span>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* מספר טלפון ספציפי */}
         {scopeMode === "specific_phone" && (
