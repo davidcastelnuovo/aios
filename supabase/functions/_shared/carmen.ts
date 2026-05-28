@@ -401,6 +401,33 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
   // Read configured timeout (defaults to 5 minutes). We need it both for find-active and start-session paths.
   // Look up the relevant automation up-front to get session_timeout_minutes & end_keyword.
   const earlyAutomation = await findCarmenSessionAutomation(supabase, tenantId, integrationId);
+
+  // HARD GUARD: if no flow-based Carmen automation is pinned to this integration,
+  // Carmen must stay completely silent on this channel — even if a stale session
+  // (from a deleted/legacy automation or a different integration) is still marked active.
+  // Auto-end any such stale sessions so they can't keep the channel "warm".
+  if (!earlyAutomation) {
+    const phoneOnly = chatId.split('@')[0];
+    const { data: stale } = await supabase
+      .from('carmen_whatsapp_sessions')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('status', 'active')
+      .eq('connection_user_id', connectionUserId)
+      .eq('chat_id', chatId)
+      .eq('phone', phoneOnly)
+      .limit(5);
+    if (stale && stale.length > 0) {
+      const ids = stale.map((s: any) => s.id);
+      await supabase
+        .from('carmen_whatsapp_sessions')
+        .update({ status: 'ended', ended_at: new Date().toISOString() })
+        .in('id', ids);
+      console.log('[carmen] No automation pinned to integration — ended stale sessions', { integrationId, ids });
+    }
+    return { handled: false, reason: 'no_automation_for_integration' };
+  }
+
   const cfg = earlyAutomation?.configuration || {};
   const idleMinutes = Number(cfg.session_timeout_minutes) > 0
     ? Number(cfg.session_timeout_minutes)
@@ -429,6 +456,8 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     }
     return sendMessage(toChatId, message);
   };
+
+
 
 
   if (activeSession) {
