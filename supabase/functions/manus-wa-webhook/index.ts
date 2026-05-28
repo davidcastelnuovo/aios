@@ -255,9 +255,41 @@ Deno.serve(async (req) => {
       const groupChatId = fromRaw.endsWith('@g.us') ? fromRaw : toRaw;
       const messageText = payload.body || (payload.hasMedia ? '[מדיה]' : '');
       const senderName = (payload.senderName || payload.fromName || payload.authorName || null) as string | null;
-      // For groups, the sender's own phone is in `author` (e.g. "972501234567@c.us"); fall back to fromRaw.
-      const authorRaw = String(payload.author || payload.participant || fromRaw);
-      const authorPhone = authorRaw.split('@')[0];
+
+      // Extract the REAL sender phone from author/participant fields.
+      // Falling back to fromRaw inside a group gives the group id (120363...@g.us) which is useless.
+      const authorCandidates = [
+        payload.author, payload.participant, key.participant,
+        (msgContainer as any)?.participant, (msgContainer as any)?.author,
+      ].filter((v: any) => typeof v === 'string' && v.includes('@')) as string[];
+      const authorRaw = authorCandidates[0] || '';
+      const authorPhone = authorRaw ? authorRaw.split('@')[0].replace(/\D/g, '') : '';
+
+      // ECHO / OUTBOUND GUARD for groups: Manus mirrors our own outbound back as inbound.
+      // If author's digits match our connected phone, OR if the body matches an outbound we
+      // just sent to this same group within the last 2 minutes, drop it.
+      const myDigits = (settings.phone_number || '').toString().replace(/\D/g, '');
+      const looksLikeOurOwn = !!authorPhone && !!myDigits && (authorPhone === myDigits || authorPhone.endsWith(myDigits) || myDigits.endsWith(authorPhone));
+      if (looksLikeOurOwn || isOutgoingFromPhone) {
+        console.log('[manus-wa group] dropping own outbound mirror', { groupChatId, authorPhone, myDigits, isOutgoingFromPhone });
+        return ok({ received: true, ignored: 'group_self_echo' });
+      }
+      if (messageText && messageText.trim()) {
+        const { data: recentOwn } = await supabase
+          .from('chat_messages')
+          .select('id, created_at')
+          .eq('tenant_id', tenantId)
+          .eq('direction', 'outbound')
+          .eq('group_id', null as any)
+          .in('provider', ['manus_wa', 'green_api'])
+          .eq('message_text', messageText)
+          .gte('created_at', new Date(Date.now() - 2 * 60 * 1000).toISOString())
+          .limit(1);
+        if (recentOwn && recentOwn.length > 0) {
+          console.log('[manus-wa group] dropping echoed body of our own outbound', { groupChatId, bodyPreview: messageText.slice(0, 60) });
+          return ok({ received: true, ignored: 'group_body_echo' });
+        }
+      }
 
       let carmenOutcome: string | null = null;
       try {
@@ -267,7 +299,7 @@ Deno.serve(async (req) => {
           integrationId: integ.id,
           connectionUserId,
           chatId: groupChatId,
-          phoneNumber: authorPhone,
+          phoneNumber: authorPhone || '',
           senderName,
           messageText,
           isIncoming: !isOutgoingFromPhone,
