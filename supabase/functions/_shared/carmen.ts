@@ -13,11 +13,49 @@ const END_KEYWORD_VARIANTS = [
   'stop', 'stop carmen', 'end', 'bye carmen', 'thanks carmen',
 ];
 
+// Short "thanks/acknowledgement" messages that should NOT trigger an AI reply
+// inside an active session (prevents Carmen→thanks→Carmen loops).
+const ACK_VARIANTS = [
+  'תודה', 'תודה רבה', 'מעולה', 'מעולה תודה', 'סבבה', 'סבבה תודה',
+  'אוקיי', 'אוקי', 'ok', 'okay', 'thanks', 'thank you', 'great', 'cool', '👍', '🙏',
+];
+
+function normalize(msg: string): string {
+  return (msg || '').trim().toLowerCase().replace(/[.!?,\s]+$/g, '');
+}
+
 function messageRequestsEnd(msg: string, configuredEndKeyword?: string | null): boolean {
-  const m = (msg || '').trim().toLowerCase();
+  const m = normalize(msg);
   if (!m) return false;
   if (configuredEndKeyword && m.includes(String(configuredEndKeyword).toLowerCase())) return true;
-  return END_KEYWORD_VARIANTS.some(k => m.includes(k));
+  return END_KEYWORD_VARIANTS.some(k => m === k || m.startsWith(k + ' ') || m.endsWith(' ' + k) || m.includes(' ' + k + ' '));
+}
+
+function isShortAck(msg: string): boolean {
+  const m = normalize(msg);
+  if (!m) return false;
+  if (m.length > 20) return false;
+  return ACK_VARIANTS.some(k => m === k || m === k + ' כרמן');
+}
+
+// Detect meta-instruction style messages (long lists of "תעני..." rules) that
+// shouldn't be replayed back to the model as a user turn — otherwise the model
+// "answers" the instructions instead of the real question.
+function looksLikeMetaInstruction(content: string): boolean {
+  const c = (content || '').trim();
+  if (!c) return false;
+  if (c.length > 300 && /(תעני|תשתמשי|חשוב לתת|הנחיות|הוראות)/.test(c)) return true;
+  const lines = c.split('\n').map(l => l.trim()).filter(Boolean);
+  if (lines.length >= 3 && /^(תעני|תשתמשי|תזכרי|אל ת|תמיד|חשוב|כללים)/.test(lines[0])) return true;
+  return false;
+}
+
+// Strip instruction-like content from an assistant reply so we never echo
+// "ההנחיות נשמרו / הבנתי את ההוראות" back to the chat.
+function looksLikeInstructionReport(content: string): boolean {
+  const c = (content || '').trim();
+  if (!c) return false;
+  return /(ההנחיות|ההוראות|הבנתי את ההנחיות|אפעל לפי ההנחיות|שמרתי הנחיה|הנחיותיך נשמרו)/.test(c);
 }
 
 export async function findCarmenAgent(supabase: any, tenantId: string): Promise<any | null> {
@@ -101,10 +139,13 @@ export async function runCarmenAI(
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-    const historyContext = conversationHistory.length > 0
-      ? `\n\n=== היסטוריית שיחה ===\n${conversationHistory.slice(-10).map((m: any) => `${m.role === 'user' ? 'משתמש' : 'כרמן'}: ${m.content}`).join('\n')}`
-      : '';
-    const commandWithHistory = historyContext ? `${userMessage}${historyContext}` : userMessage;
+    // Filter meta-instruction noise out of history so the model doesn't "answer" it
+    // again on every turn (root cause of Carmen reporting "ההנחיות נשמרו" in a loop).
+    const cleanHistory = conversationHistory
+      .slice(-20)
+      .filter((m: any) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
+      .filter((m: any) => !(m.role === 'user' && looksLikeMetaInstruction(m.content)))
+      .map((m: any) => ({ role: m.role, content: m.content }));
 
     const res = await fetch(`${supabaseUrl}/functions/v1/run-ai-agent`, {
       method: 'POST',
@@ -114,12 +155,14 @@ export async function runCarmenAI(
       },
       body: JSON.stringify({
         agent_id: agentId,
-        command_text: commandWithHistory,
+        command_text: userMessage,
+        conversation_history: cleanHistory,
         tenant_id: tenantId,
         user_name: senderName || 'WhatsApp',
         lead_data: senderPhone ? { phone: senderPhone } : undefined,
       }),
     });
+
 
     if (!res.ok) {
       console.error('❌ run-ai-agent failed:', res.status);
@@ -278,6 +321,28 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
       return { handled: true, outcome: 'ended' };
     }
 
+    // Short acknowledgement ("תודה" / "מעולה" / "ok") — don't reply, just keep session warm.
+    // Prevents Carmen→thanks→Carmen ping-pong loops.
+    if (isShortAck(messageText)) {
+      console.log('[carmen] Dropping short ack to avoid loop', { session: activeSession.id, body: messageText });
+      await supabase
+        .from('carmen_whatsapp_sessions')
+        .update({ last_message_at: new Date().toISOString() })
+        .eq('id', activeSession.id);
+      return { handled: true, outcome: 'active' };
+    }
+
+    // Meta-instruction noise pasted into chat — acknowledge silently, never echo back.
+    if (looksLikeMetaInstruction(messageText)) {
+      console.log('[carmen] Dropping meta-instruction message', { session: activeSession.id });
+      await supabase
+        .from('carmen_whatsapp_sessions')
+        .update({ last_message_at: new Date().toISOString() })
+        .eq('id', activeSession.id);
+      return { handled: true, outcome: 'active' };
+    }
+
+
     // 🔁 ECHO/LOOP GUARD: if the incoming text matches Carmen's own last assistant reply
     // (verbatim or as prefix), it's almost certainly a self-echo (provider mirrored our
     // send back as inbound). Ignore it to prevent an infinite reply loop.
@@ -307,6 +372,16 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
       effectivePhone, effectiveName,
     );
 
+    // Output guard: if Carmen is about to "report" instructions, suppress it.
+    if (looksLikeInstructionReport(carmenResponse)) {
+      console.log('[carmen] Suppressing instruction-report reply', { session: activeSession.id });
+      await supabase
+        .from('carmen_whatsapp_sessions')
+        .update({ last_message_at: new Date().toISOString() })
+        .eq('id', activeSession.id);
+      return { handled: true, outcome: 'active' };
+    }
+
     updatedHistory.push({
       role: 'assistant', content: carmenResponse, timestamp: new Date().toISOString(),
     });
@@ -323,6 +398,15 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
   // No active session — outgoing (operator-typed) messages OR incoming group messages can start a new one.
   // In 1-on-1 chats we still require the owner to type the keyword; in groups, any member can trigger Carmen.
   if (!isManualOutgoing && !isGroup) return { handled: false, reason: 'no_session_inbound' };
+
+  // Don't open a brand-new session from an end-message ("סיימנו כרמן" / "תודה כרמן"),
+  // even though it contains the trigger keyword. Same for short acks.
+  if (messageRequestsEnd(messageText, cfg.end_keyword)) {
+    return { handled: false, reason: 'end_message_no_session' };
+  }
+  if (isShortAck(messageText)) {
+    return { handled: false, reason: 'ack_no_session' };
+  }
 
   const carmenAutomation = earlyAutomation;
   if (!carmenAutomation) return { handled: false, reason: 'no_automation' };
@@ -355,6 +439,14 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
       console.log('[carmen] blocked by scope_group', { chatId, isGroup, allowedGroups });
       return { handled: false, reason: 'scope_group' };
     }
+  }
+
+  // Default-deny groups: a legacy "all-scope" automation must NOT auto-trigger inside
+  // WhatsApp groups. Groups require explicit opt-in via scopeMode === 'specific_group'
+  // (and the group listed in allowedGroups) — this way disabling the dedicated groups
+  // automation actually silences Carmen in groups.
+  if (isGroup && scopeMode !== 'specific_group') {
+    return { handled: false, reason: 'group_requires_explicit_scope' };
   }
 
   const triggerKeyword = (carmenAutomation.configuration?.trigger_keyword || 'כרמן').toLowerCase();
