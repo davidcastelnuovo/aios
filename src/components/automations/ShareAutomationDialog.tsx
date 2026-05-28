@@ -17,7 +17,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useUserTenants } from "@/hooks/useUserTenants";
-import { useAuth } from "@/hooks/useAuth";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { Loader2, Search } from "lucide-react";
 
 interface ShareAutomationDialogProps {
