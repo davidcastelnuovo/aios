@@ -441,6 +441,14 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     }
   }
 
+  // Default-deny groups: a legacy "all-scope" automation must NOT auto-trigger inside
+  // WhatsApp groups. Groups require explicit opt-in via scopeMode === 'specific_group'
+  // (and the group listed in allowedGroups) — this way disabling the dedicated groups
+  // automation actually silences Carmen in groups.
+  if (isGroup && scopeMode !== 'specific_group') {
+    return { handled: false, reason: 'group_requires_explicit_scope' };
+  }
+
   const triggerKeyword = (carmenAutomation.configuration?.trigger_keyword || 'כרמן').toLowerCase();
   const endKeywordConfig = carmenAutomation.configuration?.end_keyword || 'סיימנו כרמן';
   if (!normalizedMsg.includes(triggerKeyword)) return { handled: false, reason: 'no_keyword' };
