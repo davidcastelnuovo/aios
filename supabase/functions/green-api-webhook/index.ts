@@ -1431,41 +1431,30 @@ Deno.serve(async (req) => {
     // owns Carmen routing in that case to avoid duplicate replies from both providers.
     // ===========================
     let carmenOutcome: string | null = null;
-    if (!isGroup && (isIncoming || isManualOutgoing)) {
+    // Carmen runs per the automation pinned to THIS Green API integration.
+    // Groups are supported — the internal `group_requires_explicit_scope` guard
+    // ensures Carmen only replies in groups that the automation explicitly targets.
+    if (isIncoming || isManualOutgoing) {
       try {
-        const { data: manusActive } = await supabaseClient
-          .from('tenant_integrations')
-          .select('id')
-          .eq('tenant_id', tenantId)
-          .eq('integration_type', 'manus_wa')
-          .eq('is_active', true)
-          .limit(1)
-          .maybeSingle();
-
-        if (manusActive?.id) {
-          console.log('[green-api] skipping Carmen — manus_wa is active for tenant', tenantId);
-          carmenOutcome = 'skipped_manus_priority';
-        } else {
-          const result = await handleCarmenMessage({
-            supabase: supabaseClient,
-            tenantId,
-            integrationId: integration.id,
-            connectionUserId,
-            chatId: senderData.chatId,
-            phoneNumber,
-            sourcePhoneNumber: senderData.sender?.split('@')?.[0] || null,
-            senderName: senderData.senderName || null,
-            messageText,
-            isIncoming,
-            isManualOutgoing,
-            isGroup,
-            sendMessage: async (chatId: string, message: string) => {
-              return await sendGreenApiMessage(instanceId, apiToken, chatId, message);
-            },
-          });
-          if (result.handled) {
-            carmenOutcome = result.outcome;
-          }
+        const result = await handleCarmenMessage({
+          supabase: supabaseClient,
+          tenantId,
+          integrationId: integration.id,
+          connectionUserId,
+          chatId: senderData.chatId,
+          phoneNumber,
+          sourcePhoneNumber: senderData.sender?.split('@')?.[0] || null,
+          senderName: senderData.senderName || null,
+          messageText,
+          isIncoming,
+          isManualOutgoing,
+          isGroup,
+          sendMessage: async (chatId: string, message: string) => {
+            return await sendGreenApiMessage(instanceId, apiToken, chatId, message);
+          },
+        });
+        if (result.handled) {
+          carmenOutcome = result.outcome;
         }
       } catch (err) {
         console.error('green-api Carmen handler error:', err);
