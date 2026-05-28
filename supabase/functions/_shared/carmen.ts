@@ -4,7 +4,21 @@
 //
 // The transport (Green API vs Manus WA) is abstracted via the `sendMessage` callback.
 
-const CARMEN_SESSION_IDLE_MINUTES = 60;
+const CARMEN_SESSION_IDLE_MINUTES_DEFAULT = 5;
+
+// Permissive end-keywords — any of these closes the session, even without "כרמן".
+const END_KEYWORD_VARIANTS = [
+  'סיימנו', 'תודה סיימנו', 'תודה כרמן', 'תפסיקי', 'די כרמן', 'די תודה',
+  'עצרי', 'עצרי כרמן', 'מספיק', 'מספיק כרמן', 'ביי כרמן', 'להתראות כרמן',
+  'stop', 'stop carmen', 'end', 'bye carmen', 'thanks carmen',
+];
+
+function messageRequestsEnd(msg: string, configuredEndKeyword?: string | null): boolean {
+  const m = (msg || '').trim().toLowerCase();
+  if (!m) return false;
+  if (configuredEndKeyword && m.includes(String(configuredEndKeyword).toLowerCase())) return true;
+  return END_KEYWORD_VARIANTS.some(k => m.includes(k));
+}
 
 export async function findCarmenAgent(supabase: any, tenantId: string): Promise<any | null> {
   const { data } = await supabase
