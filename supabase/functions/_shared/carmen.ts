@@ -438,7 +438,7 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
         .from('carmen_whatsapp_sessions')
         .update({ status: 'ended', ended_at: new Date().toISOString() })
         .eq('id', activeSession.id);
-      await sendMessage(chatId, 'סבבה, סיימנו 🙏');
+      await routedSend(chatId, 'סבבה, סיימנו 🙏');
       return { handled: true, outcome: 'ended' };
     }
 
@@ -526,7 +526,7 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
       .from('carmen_whatsapp_sessions')
       .update({ conversation_history: updatedHistory, last_message_at: new Date().toISOString() })
       .eq('id', activeSession.id);
-    await sendMessage(chatId, carmenResponse);
+    await routedSend(chatId, carmenResponse);
     await syncCarmenToAIConversation(supabase, activeSession, updatedHistory);
     return { handled: true, outcome: 'active' };
   }
@@ -602,7 +602,7 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
   }
 
   if (!agentId) {
-    await sendMessage(chatId, 'שלום! זיהיתי שרצית לדבר עם כרמן, אך עדיין לא הוגדר סוכן AI. אנא פנה למנהל המערכת להגדרת סוכן כרמן.');
+    await routedSend(chatId, 'שלום! זיהיתי שרצית לדבר עם כרמן, אך עדיין לא הוגדר סוכן AI. אנא פנה למנהל המערכת להגדרת סוכן כרמן.');
     return { handled: true, outcome: 'error' };
   }
 
@@ -626,7 +626,7 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
 
   if (sessionError || !newSession) {
     console.error('Failed to create Carmen session:', sessionError);
-    await sendMessage(chatId, 'מצטערת, אירעה שגיאה בהפעלת השיחה. נסה שוב בעוד מספר שניות.');
+    await routedSend(chatId, 'מצטערת, אירעה שגיאה בהפעלת השיחה. נסה שוב בעוד מספר שניות.');
     return { handled: true, outcome: 'error' };
   }
 
@@ -647,7 +647,7 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
       .from('carmen_whatsapp_sessions')
       .update({ conversation_history: history, last_message_at: new Date().toISOString() })
       .eq('id', newSession.id);
-    await sendMessage(chatId, carmenResponse);
+    await routedSend(chatId, carmenResponse);
     await syncCarmenToAIConversation(supabase, newSession, history);
   } else {
     const greeting = `היי, ${agentName} כאן. מה תרצה לבדוק? (לסיום: "${endKeywordConfig}")`;
@@ -658,7 +658,7 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
       .from('carmen_whatsapp_sessions')
       .update({ conversation_history: history, last_message_at: new Date().toISOString() })
       .eq('id', newSession.id);
-    await sendMessage(chatId, greeting);
+    await routedSend(chatId, greeting);
     await syncCarmenToAIConversation(supabase, newSession, history);
   }
 
