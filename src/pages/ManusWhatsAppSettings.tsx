@@ -18,8 +18,9 @@ import {
 } from "@/components/ui/dialog";
 import {
   ArrowRight, Webhook, Key, CheckCircle2, AlertCircle, Copy, ExternalLink,
-  RefreshCw, Plus, Pencil, Trash2,
+  RefreshCw, Plus, Pencil, Trash2, Share2,
 } from "lucide-react";
+import { ShareIntegrationTenantsDialog } from "@/components/forms/ShareIntegrationTenantsDialog";
 
 const PROJECT_REF = (import.meta.env.VITE_SUPABASE_PROJECT_ID as string) || "";
 
@@ -45,6 +46,7 @@ export default function ManusWhatsAppSettings() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [sharingIntegration, setSharingIntegration] = useState<Integration | null>(null);
 
   const webhookUrl = `https://${PROJECT_REF}.supabase.co/functions/v1/manus-wa-webhook`;
 
@@ -294,6 +296,10 @@ export default function ManusWhatsAppSettings() {
                         <RefreshCw className="h-4 w-4 ml-2" />
                         סנכרן סוד
                       </Button>
+                      <Button variant="outline" size="sm" onClick={() => setSharingIntegration(i)}>
+                        <Share2 className="h-4 w-4 ml-2" />
+                        שתף עם ארגונים
+                      </Button>
                       <Button variant="ghost" size="icon" onClick={() => {
                         if (confirm(`למחוק את החיבור "${i.display_name}"?`)) deleteMutation.mutate(i.id);
                       }}>
@@ -387,6 +393,15 @@ export default function ManusWhatsAppSettings() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {sharingIntegration && (
+        <ShareIntegrationTenantsDialog
+          open={!!sharingIntegration}
+          onOpenChange={(open) => !open && setSharingIntegration(null)}
+          integrationId={sharingIntegration.id}
+          integrationName={sharingIntegration.display_name || "Manus WA"}
+        />
+      )}
     </div>
   );
 }
