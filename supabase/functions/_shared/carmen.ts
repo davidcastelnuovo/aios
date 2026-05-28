@@ -297,7 +297,7 @@ export async function sendCarmenReplyViaActionStep(args: {
     .select('action_type, configuration, created_at')
     .eq('automation_id', automationId)
     .eq('step_type', 'action')
-    .in('action_type', ['send_manus_message', 'send_green_api_message'])
+    .in('action_type', ['send_manus_message', 'send_greenapi_message', 'send_green_api_message'])
     .order('created_at', { ascending: true })
     .limit(1);
   const step = steps?.[0];
