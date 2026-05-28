@@ -1066,10 +1066,15 @@ Deno.serve(async (req) => {
                       const sessionPhone = payloadData?.sender_phone || payloadData?.phone || ''
 
                       if (sessionChatId || sessionPhone) {
+                        // Only restore from sessions that were active within the last 30 minutes —
+                        // older sessions are considered dead and must not bleed stale context
+                        // into a fresh conversation.
+                        const freshSince = new Date(Date.now() - 30 * 60_000).toISOString()
                         let previousSessionQuery = supabase
                           .from('carmen_whatsapp_sessions')
-                          .select('id, conversation_history')
+                          .select('id, conversation_history, last_message_at')
                           .eq('tenant_id', tenantId)
+                          .gte('last_message_at', freshSince)
                           .order('last_message_at', { ascending: false })
                           .order('created_at', { ascending: false })
                           .limit(1)
@@ -1095,7 +1100,7 @@ Deno.serve(async (req) => {
                         if (previousHistory.length > 0) {
                           carmenHistory = previousHistory
                           payloadData._carmen_history = previousHistory
-                          console.log(`[CARMEN] Restored ${previousHistory.length} history items from previous session ${previousSession?.id}`)
+                          console.log(`[CARMEN] Restored ${previousHistory.length} history items from recent session ${previousSession?.id}`)
                         }
                       }
                     }
@@ -1158,18 +1163,28 @@ Deno.serve(async (req) => {
                     }
                   }
                 } else if (effectiveActionType === 'send_greenapi_message' || effectiveActionType === 'send_manus_message') {
-                  // If message_template contains {{agent_output}}, replace it
+                  // If message_template contains {{agent_output}}, replace it.
+                  // Distinguish between real failures (throw) and legitimate empty output
+                  // (agent intentionally produced no text — e.g. only tool calls, or the
+                  // AI step was suppressed). In the empty-output case, skip the send step
+                  // silently instead of raising a misleading "כרמן לא החזירה תשובה" error.
                   if (stepConfig.message_template?.includes('{{agent_output}}') && !previousStepOutput?.output) {
-                    throw new Error('כרמן לא החזירה תשובה לשליחה, לכן ההודעה לא נשלחה')
+                    if (previousStepOutput && previousStepOutput.success === false) {
+                      throw new Error('כרמן לא החזירה תשובה לשליחה, לכן ההודעה לא נשלחה')
+                    }
+                    console.log('[trigger-automation] Skipping send step — agent returned no text output')
+                    stepResponse = { success: true, skipped: 'empty_agent_output' }
+                    previousStepOutput = stepResponse
+                  } else {
+                    if (stepConfig.message_template && previousStepOutput) {
+                      const agentText = previousStepOutput?.output || (typeof previousStepOutput === 'string' ? previousStepOutput : JSON.stringify(previousStepOutput))
+                      stepConfig.message_template = stepConfig.message_template.replace(/\{\{agent_output\}\}/g, agentText)
+                      // Also support {{previous_step_output}}
+                      stepConfig.message_template = stepConfig.message_template.replace(/\{\{previous_step_output\}\}/g, agentText)
+                    }
+                    stepResponse = await executeGreenApiMessage(supabase, stepConfig, stepData, tenantId)
+                    previousStepOutput = stepResponse
                   }
-                  if (stepConfig.message_template && previousStepOutput) {
-                    const agentText = previousStepOutput?.output || (typeof previousStepOutput === 'string' ? previousStepOutput : JSON.stringify(previousStepOutput))
-                    stepConfig.message_template = stepConfig.message_template.replace(/\{\{agent_output\}\}/g, agentText)
-                    // Also support {{previous_step_output}}
-                    stepConfig.message_template = stepConfig.message_template.replace(/\{\{previous_step_output\}\}/g, agentText)
-                  }
-                  stepResponse = await executeGreenApiMessage(supabase, stepConfig, stepData, tenantId)
-                  previousStepOutput = stepResponse
                 } else if (effectiveActionType === 'send_whatsapp') {
                   if (stepConfig.message_template && previousStepOutput) {
                     const agentText = previousStepOutput?.output || (typeof previousStepOutput === 'string' ? previousStepOutput : JSON.stringify(previousStepOutput))

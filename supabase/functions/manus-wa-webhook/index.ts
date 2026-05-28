@@ -307,8 +307,8 @@ Deno.serve(async (req) => {
           isGroup: true,
           sendMessage: async (_chatId: string, message: string) => {
             try {
-              const baseUrl = 'https://whatsappgw-pzpyrrww.manus.space';
               const settingsAny = (integ.settings as any) || {};
+              const baseUrl = settingsAny.gateway_url || 'https://whatsappgw-pzpyrrww.manus.space';
               const instanceId = settingsAny.instance_id;
               const apiKey = integ.api_key;
               if (!instanceId || !apiKey) return false;

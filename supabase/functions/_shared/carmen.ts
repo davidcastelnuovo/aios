@@ -135,44 +135,58 @@ export async function runCarmenAI(
   senderPhone?: string | null,
   senderName?: string | null,
 ): Promise<string> {
-  try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-    // Filter meta-instruction noise out of history so the model doesn't "answer" it
-    // again on every turn (root cause of Carmen reporting "ההנחיות נשמרו" in a loop).
-    const cleanHistory = conversationHistory
-      .slice(-20)
-      .filter((m: any) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
-      .filter((m: any) => !(m.role === 'user' && looksLikeMetaInstruction(m.content)))
-      .map((m: any) => ({ role: m.role, content: m.content }));
+  // Filter meta-instruction noise out of history so the model doesn't "answer" it
+  // again on every turn (root cause of Carmen reporting "ההנחיות נשמרו" in a loop).
+  // Also drop any assistant turn that itself looks like an instruction-report — if it
+  // ever got persisted, replaying it would re-trigger the same noise.
+  const cleanHistory = conversationHistory
+    .slice(-20)
+    .filter((m: any) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
+    .filter((m: any) => !(m.role === 'user' && looksLikeMetaInstruction(m.content)))
+    .filter((m: any) => !(m.role === 'assistant' && looksLikeInstructionReport(m.content)))
+    .map((m: any) => ({ role: m.role, content: m.content }));
 
+  const body = JSON.stringify({
+    agent_id: agentId,
+    command_text: userMessage,
+    conversation_history: cleanHistory,
+    tenant_id: tenantId,
+    user_name: senderName || 'WhatsApp',
+    lead_data: senderPhone ? { phone: senderPhone } : undefined,
+  });
+
+  // Try once; on hard failure (network error, non-2xx, or empty output) retry exactly
+  // once after a 1s delay. If the retry also fails, throw — the caller will swallow
+  // the error and stay silent rather than send a fake "טכנית" reply to WhatsApp.
+  const attempt = async (): Promise<string> => {
     const res = await fetch(`${supabaseUrl}/functions/v1/run-ai-agent`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${serviceKey}`,
-      },
-      body: JSON.stringify({
-        agent_id: agentId,
-        command_text: userMessage,
-        conversation_history: cleanHistory,
-        tenant_id: tenantId,
-        user_name: senderName || 'WhatsApp',
-        lead_data: senderPhone ? { phone: senderPhone } : undefined,
-      }),
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${serviceKey}` },
+      body,
     });
-
-
     if (!res.ok) {
-      console.error('❌ run-ai-agent failed:', res.status);
-      return 'מצטערת, אירעה שגיאה. נסה שוב.';
+      throw new Error(`run-ai-agent ${res.status}`);
     }
     const data = await res.json();
-    return data.output || 'לא הצלחתי לעבד את הבקשה.';
-  } catch (e) {
-    console.error('❌ runCarmenAI error:', e);
-    return 'מצטערת, אירעה שגיאה טכנית.';
+    const out = (data?.output || '').toString().trim();
+    if (!out) throw new Error('run-ai-agent returned empty output');
+    return out;
+  };
+
+  try {
+    return await attempt();
+  } catch (firstErr) {
+    console.error('❌ runCarmenAI attempt 1 failed:', firstErr);
+    await new Promise(r => setTimeout(r, 1000));
+    try {
+      return await attempt();
+    } catch (secondErr) {
+      console.error('❌ runCarmenAI attempt 2 failed:', secondErr);
+      throw secondErr;
+    }
   }
 }
 
@@ -346,12 +360,14 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     // 🔁 ECHO/LOOP GUARD: if the incoming text matches Carmen's own last assistant reply
     // (verbatim or as prefix), it's almost certainly a self-echo (provider mirrored our
     // send back as inbound). Ignore it to prevent an infinite reply loop.
+    // Require min length 15 on BOTH sides so short legitimate replies like
+    // "כן, אבל..." aren't swallowed when Carmen previously said "כן".
     const history = activeSession.conversation_history || [];
     const lastAssistant = [...history].reverse().find((m: any) => m?.role === 'assistant');
     if (lastAssistant?.content) {
       const a = String(lastAssistant.content).trim();
       const b = String(messageText || '').trim();
-      if (a && b && (a === b || a.startsWith(b) || b.startsWith(a))) {
+      if (a.length >= 15 && b.length >= 15 && (a === b || a.startsWith(b) || b.startsWith(a))) {
         console.log('[carmen] Dropping echoed assistant reply for session', activeSession.id);
         return { handled: true, outcome: 'active' };
       }
@@ -367,10 +383,23 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     // and only fall back to the session's original sender when the current one is missing.
     const effectivePhone = phoneNumber || activeSession.phone;
     const effectiveName = senderName || activeSession.sender_name;
-    const carmenResponse = await runCarmenAI(
-      supabase, activeSession.agent_id, tenantId, messageText, history,
-      effectivePhone, effectiveName,
-    );
+
+    let carmenResponse: string;
+    try {
+      carmenResponse = await runCarmenAI(
+        supabase, activeSession.agent_id, tenantId, messageText, history,
+        effectivePhone, effectiveName,
+      );
+    } catch (err) {
+      // AI failed twice (with retry). Stay silent — don't send "מצטערת..." to the user.
+      // Keep the session warm so the next inbound message gets a fresh attempt.
+      console.error('[carmen] AI call failed after retry, staying silent', { session: activeSession.id, err: String(err) });
+      await supabase
+        .from('carmen_whatsapp_sessions')
+        .update({ last_message_at: new Date().toISOString() })
+        .eq('id', activeSession.id);
+      return { handled: true, outcome: 'error' };
+    }
 
     // Output guard: if Carmen is about to "report" instructions, suppress it.
     if (looksLikeInstructionReport(carmenResponse)) {
