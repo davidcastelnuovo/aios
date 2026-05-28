@@ -30,7 +30,7 @@ export function ShareAutomationDialog({ automation, open, onOpenChange }: ShareA
   const { toast } = useToast();
   const { userId } = useCurrentUser();
   const { tenantId: sourceTenantId } = useCurrentTenant();
-  const { userTenants, isLoading: tenantsLoading } = useUserTenants(user?.id);
+  const { userTenants, isLoading: tenantsLoading } = useUserTenants(userId);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [submitting, setSubmitting] = useState(false);
