@@ -435,6 +435,15 @@ export default function Automations() {
         />
       )}
 
+      {/* Share Dialog */}
+      {selectedAutomation && (
+        <ShareAutomationDialog
+          automation={selectedAutomation}
+          open={shareDialogOpen}
+          onOpenChange={setShareDialogOpen}
+        />
+      )}
+
       {/* Logs Dialog */}
       <Dialog open={logsDialogOpen} onOpenChange={setLogsDialogOpen}>
         <DialogContent dir="rtl" className="max-w-4xl max-h-[80vh] overflow-y-auto">
