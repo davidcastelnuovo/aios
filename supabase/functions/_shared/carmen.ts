@@ -71,30 +71,19 @@ export async function findCarmenAgent(supabase: any, tenantId: string): Promise<
 }
 
 // Find the Carmen session automation for a tenant.
-// If `integrationId` is provided, an automation that pins `carmen_integration_id` to a
-// different integration is ignored (so two automations can coexist for different connections).
+// Only flow-based triggers (step_type='trigger', action_type='carmen_whatsapp_session') are
+// considered. The legacy `whatsapp_message_received` + `carmen_session_mode=true` form is
+// intentionally ignored — every Carmen automation must live in the flow builder so that the
+// inbound integration scope and the outbound action step are explicitly defined.
+//
+// When `integrationId` is provided, we prefer a step whose `carmen_integration_id` matches it.
+// Steps pinned to a different integration are excluded. Unpinned steps are used as a fallback
+// when no pinned match exists.
 export async function findCarmenSessionAutomation(
   supabase: any,
   tenantId: string,
   integrationId?: string | null,
 ): Promise<any | null> {
-  // Method 1: Legacy — top-level configuration.carmen_session_mode
-  const { data: legacyMatches } = await supabase
-    .from('automations')
-    .select('id, name, configuration')
-    .eq('tenant_id', tenantId)
-    .eq('trigger_type', 'whatsapp_message_received')
-    .eq('active', true)
-    .filter('configuration->>carmen_session_mode', 'eq', 'true')
-    .limit(10);
-
-  const legacyMatch = (legacyMatches || []).find((a: any) => {
-    const pinned = a.configuration?.carmen_integration_id;
-    return !pinned || !integrationId || pinned === integrationId;
-  });
-  if (legacyMatch) return legacyMatch;
-
-  // Method 2: Flow Builder — trigger step with action_type = carmen_whatsapp_session
   const { data: flowSteps } = await supabase
     .from('automation_flow_steps')
     .select('automation_id, configuration')
@@ -104,26 +93,121 @@ export async function findCarmenSessionAutomation(
 
   if (!flowSteps || flowSteps.length === 0) return null;
 
-  // Filter out steps pinned to a different integration
-  const eligibleSteps = flowSteps.filter((s: any) => {
+  // Split into pinned-match vs unpinned (drop foreign-pinned entirely).
+  const pinnedMatches: any[] = [];
+  const unpinned: any[] = [];
+  for (const s of flowSteps) {
     const pinned = s.configuration?.carmen_integration_id;
-    return !pinned || !integrationId || pinned === integrationId;
-  });
-  if (eligibleSteps.length === 0) return null;
+    if (!pinned) {
+      unpinned.push(s);
+    } else if (integrationId && pinned === integrationId) {
+      pinnedMatches.push(s);
+    }
+  }
+  const ranked = [...pinnedMatches, ...unpinned];
+  if (ranked.length === 0) return null;
 
-  const automationIds = eligibleSteps.map((s: any) => s.automation_id);
+  const automationIds = ranked.map((s: any) => s.automation_id);
   const { data: automations } = await supabase
     .from('automations')
     .select('id, name, configuration')
     .in('id', automationIds)
-    .eq('active', true)
-    .limit(1);
+    .eq('active', true);
   if (!automations || automations.length === 0) return null;
 
-  const auto = automations[0];
-  const stepConfig = eligibleSteps.find((s: any) => s.automation_id === auto.id)?.configuration || {};
-  auto.configuration = { ...auto.configuration, ...stepConfig };
-  return auto;
+  const activeById = new Map(automations.map((a: any) => [a.id, a]));
+  // Preserve ranking order (pinned-match first).
+  for (const s of ranked) {
+    const auto: any = activeById.get(s.automation_id);
+    if (!auto) continue;
+    auto.configuration = { ...auto.configuration, ...(s.configuration || {}) };
+    return auto;
+  }
+  return null;
+}
+
+// Look up the first send action step of a Carmen automation and dispatch the reply through it
+// (Manus or Green API), regardless of which webhook received the inbound message.
+// Returns true when delivery succeeded via the action step; false if no action step is configured
+// or the send failed — callers should fall back to the webhook-supplied sendMessage in that case.
+export async function sendCarmenReplyViaActionStep(args: {
+  supabase: any;
+  automationId: string;
+  tenantId: string;
+  connectionUserId: string;
+  chatId: string;
+  phoneNumber: string;
+  isGroup: boolean;
+  message: string;
+}): Promise<boolean> {
+  const { supabase, automationId, tenantId, connectionUserId, chatId, phoneNumber, isGroup, message } = args;
+
+  const { data: steps } = await supabase
+    .from('automation_flow_steps')
+    .select('action_type, configuration, created_at')
+    .eq('automation_id', automationId)
+    .eq('step_type', 'action')
+    .in('action_type', ['send_manus_message', 'send_green_api_message'])
+    .order('created_at', { ascending: true })
+    .limit(1);
+  const step = steps?.[0];
+  if (!step) return false;
+
+  const cfg = step.configuration || {};
+  const integrationId = cfg.green_api_integration_id || cfg.integration_id || null;
+
+  // Resolve group UUID (whatsapp_groups.id) when sending to a group.
+  let groupId: string | null = null;
+  if (isGroup && chatId) {
+    const { data: g } = await supabase
+      .from('whatsapp_groups')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('group_chat_id', chatId)
+      .maybeSingle();
+    groupId = g?.id || null;
+    if (!groupId) {
+      console.warn('[carmen-route] group_chat_id not found in whatsapp_groups, falling back', { chatId });
+      return false;
+    }
+  }
+
+  const fnName = step.action_type === 'send_manus_message' ? 'send-manus-wa-message' : 'send-green-api-message';
+  const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+
+  const body: any = {
+    tenantId,
+    senderUserId: connectionUserId,
+    message,
+  };
+  if (integrationId) body.integrationId = integrationId;
+  if (groupId) {
+    body.groupId = groupId;
+  } else {
+    body.phoneNumber = phoneNumber;
+  }
+
+  try {
+    console.log('[carmen-route] dispatch via', fnName, { automationId, integrationId, groupId, phoneNumber, isGroup });
+    const res = await fetch(`${supabaseUrl}/functions/v1/${fnName}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${serviceKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      console.error('[carmen-route] action-step send failed', { status: res.status, body: txt.slice(0, 300) });
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[carmen-route] action-step send error', String(err));
+    return false;
+  }
 }
 
 export async function runCarmenAI(
@@ -324,6 +408,29 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
 
   const activeSession = await findActiveCarmenSession(supabase, tenantId, chatId, connectionUserId, idleMinutes);
 
+  // Outbound routing: prefer the automation's configured action step (send_manus_message /
+  // send_green_api_message) so the reply goes through the module the user picked, regardless
+  // of which webhook received the inbound message. Falls back to the webhook-supplied
+  // sendMessage when no action step exists or the dispatch fails.
+  const routingAutomationId = activeSession?.automation_id || earlyAutomation?.id || null;
+  const routedSend = async (toChatId: string, message: string): Promise<boolean> => {
+    if (routingAutomationId) {
+      const ok = await sendCarmenReplyViaActionStep({
+        supabase,
+        automationId: routingAutomationId,
+        tenantId,
+        connectionUserId,
+        chatId: toChatId,
+        phoneNumber,
+        isGroup,
+        message,
+      });
+      if (ok) return true;
+    }
+    return sendMessage(toChatId, message);
+  };
+
+
   if (activeSession) {
     const configuredEnd = activeSession.end_keyword || cfg.end_keyword || 'סיימנו כרמן';
     if (messageRequestsEnd(messageText, configuredEnd)) {
@@ -331,7 +438,7 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
         .from('carmen_whatsapp_sessions')
         .update({ status: 'ended', ended_at: new Date().toISOString() })
         .eq('id', activeSession.id);
-      await sendMessage(chatId, 'סבבה, סיימנו 🙏');
+      await routedSend(chatId, 'סבבה, סיימנו 🙏');
       return { handled: true, outcome: 'ended' };
     }
 
@@ -419,7 +526,7 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
       .from('carmen_whatsapp_sessions')
       .update({ conversation_history: updatedHistory, last_message_at: new Date().toISOString() })
       .eq('id', activeSession.id);
-    await sendMessage(chatId, carmenResponse);
+    await routedSend(chatId, carmenResponse);
     await syncCarmenToAIConversation(supabase, activeSession, updatedHistory);
     return { handled: true, outcome: 'active' };
   }
@@ -495,7 +602,7 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
   }
 
   if (!agentId) {
-    await sendMessage(chatId, 'שלום! זיהיתי שרצית לדבר עם כרמן, אך עדיין לא הוגדר סוכן AI. אנא פנה למנהל המערכת להגדרת סוכן כרמן.');
+    await routedSend(chatId, 'שלום! זיהיתי שרצית לדבר עם כרמן, אך עדיין לא הוגדר סוכן AI. אנא פנה למנהל המערכת להגדרת סוכן כרמן.');
     return { handled: true, outcome: 'error' };
   }
 
@@ -519,7 +626,7 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
 
   if (sessionError || !newSession) {
     console.error('Failed to create Carmen session:', sessionError);
-    await sendMessage(chatId, 'מצטערת, אירעה שגיאה בהפעלת השיחה. נסה שוב בעוד מספר שניות.');
+    await routedSend(chatId, 'מצטערת, אירעה שגיאה בהפעלת השיחה. נסה שוב בעוד מספר שניות.');
     return { handled: true, outcome: 'error' };
   }
 
@@ -540,7 +647,7 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
       .from('carmen_whatsapp_sessions')
       .update({ conversation_history: history, last_message_at: new Date().toISOString() })
       .eq('id', newSession.id);
-    await sendMessage(chatId, carmenResponse);
+    await routedSend(chatId, carmenResponse);
     await syncCarmenToAIConversation(supabase, newSession, history);
   } else {
     const greeting = `היי, ${agentName} כאן. מה תרצה לבדוק? (לסיום: "${endKeywordConfig}")`;
@@ -551,7 +658,7 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
       .from('carmen_whatsapp_sessions')
       .update({ conversation_history: history, last_message_at: new Date().toISOString() })
       .eq('id', newSession.id);
-    await sendMessage(chatId, greeting);
+    await routedSend(chatId, greeting);
     await syncCarmenToAIConversation(supabase, newSession, history);
   }
 
