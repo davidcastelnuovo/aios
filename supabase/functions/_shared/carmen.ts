@@ -397,10 +397,11 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     return { handled: true, outcome: 'error' };
   }
 
-  const greeting = `שלום! אני ${agentName}, המנהלת ה-AI שלך במערכת. אפשר לשאול אותי כל שאלה ולבצע פעולות במערכת. מה אפשר לעזור לך? (כדי לסיים את השיחה, כתוב "${endKeywordConfig}")`;
-  await sendMessage(chatId, greeting);
-
   const contentAfterKeyword = messageText.replace(new RegExp(triggerKeyword, 'gi'), '').trim();
+
+  // If the user already asked a question after the keyword, answer it directly (single message).
+  // Otherwise send a brief greeting only. Either way — save the assistant reply to history
+  // so the echo-guard catches the provider mirroring it back.
   if (contentAfterKeyword.length > 2) {
     const carmenResponse = await runCarmenAI(
       supabase, agentId, tenantId, contentAfterKeyword, [], phoneNumber, senderName,
@@ -416,7 +417,16 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     await sendMessage(chatId, carmenResponse);
     await syncCarmenToAIConversation(supabase, newSession, history);
   } else {
-    await syncCarmenToAIConversation(supabase, newSession, []);
+    const greeting = `היי, ${agentName} כאן. מה תרצה לבדוק? (לסיום: "${endKeywordConfig}")`;
+    const history = [
+      { role: 'assistant', content: greeting, timestamp: new Date().toISOString() },
+    ];
+    await supabase
+      .from('carmen_whatsapp_sessions')
+      .update({ conversation_history: history, last_message_at: new Date().toISOString() })
+      .eq('id', newSession.id);
+    await sendMessage(chatId, greeting);
+    await syncCarmenToAIConversation(supabase, newSession, history);
   }
 
   return { handled: true, outcome: 'started' };
