@@ -46,6 +46,7 @@ export default function ManusWhatsAppSettings() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [sharingIntegration, setSharingIntegration] = useState<Integration | null>(null);
 
   const webhookUrl = `https://${PROJECT_REF}.supabase.co/functions/v1/manus-wa-webhook`;
 
