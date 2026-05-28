@@ -18,8 +18,9 @@ import {
 } from "@/components/ui/dialog";
 import {
   ArrowRight, Webhook, Key, CheckCircle2, AlertCircle, Copy, ExternalLink,
-  RefreshCw, Plus, Pencil, Trash2,
+  RefreshCw, Plus, Pencil, Trash2, Share2,
 } from "lucide-react";
+import { ShareIntegrationTenantsDialog } from "@/components/forms/ShareIntegrationTenantsDialog";
 
 const PROJECT_REF = (import.meta.env.VITE_SUPABASE_PROJECT_ID as string) || "";
 

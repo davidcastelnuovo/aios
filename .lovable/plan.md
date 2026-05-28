@@ -1,36 +1,20 @@
-# שיתוף אוטומציות בין ארגונים
+# שיתוף חיבור Manus WA (Carmen) עם ארגונים אחרים
 
-## איך זה יעבוד
-"שיתוף" = **שכפול** של האוטומציה לארגון יעד. האוטומציה המשוכפלת רצה לחלוטין בתוך הארגון השני: כל שאילתה (קמפיינרים, לקוחות, לידים, כרמן, וכו') תפעל על `tenant_id` של הארגון היעד בלבד — בלי ערבוב נתונים.
+## תקציר
+התשתית לשיתוף אינטגרציה בין ארגונים כבר קיימת ועובדת ב-Green API (טבלת `integration_tenant_access` + רכיב `ShareIntegrationTenantsDialog`). צריך רק לחבר את אותו רכיב לעמוד `ManusWhatsAppSettings`.
 
-## שינוי בבסיס הנתונים
-טבלה `automations` תקבל שני שדות אופציונליים:
-- `source_automation_id` (uuid) — המקור שממנו שוכפלה
-- `source_tenant_id` (uuid) — הארגון שממנו שוכפלה
+## שינוי בקוד
+**`src/pages/ManusWhatsAppSettings.tsx`**:
+1. Import `ShareIntegrationTenantsDialog` ו-`Share2` icon.
+2. State חדש: `sharingIntegrationId: string | null`.
+3. בכרטיס של כל חיבור (ליד "ערוך"/"סנכרן סוד") — כפתור חדש **"שתף עם ארגונים"** שפותח את הדיאלוג עם `integrationId={i.id}` ו-`integrationName={i.display_name || 'Manus WA'}`.
+4. רינדור הדיאלוג בתחתית הקומפוננטה.
 
-(לצורך מעקב + אפשרות "סנכרון מחדש" עתידי. הריצה תמיד מוגבלת ל-`tenant_id` של הרשומה עצמה.)
+## איך זה עובד בריצה
+- כשמסמנים ארגון יעד בדיאלוג → נוצרת רשומה ב-`integration_tenant_access` (`integration_id` של Carmen, `accessing_tenant_id` של היעד).
+- אוטומציות בארגון היעד יכולות לבחור את החיבור הזה ב-WaProviderConnectionPicker (שכבר תומך באינטגרציות משותפות).
+- ה-webhook של Manus וה-send-manus-wa-message ימשיכו לרוץ דרך אותו instance (Carmen), אבל ההודעות יתויגו לארגון של האוטומציה שהפעילה את השליחה.
 
-## Edge Function חדש: `clone-automation-to-tenant`
-קלט: `automation_id`, `target_tenant_ids[]`
-לוגיקה:
-1. ולידציה שלמשתמש יש הרשאה גם בארגון המקור וגם בארגון היעד (`super_admin` או `owner/admin` בשניהם).
-2. עבור כל ארגון יעד:
-   - יצירת רשומה חדשה ב-`automations` עם `tenant_id = target` ושאר השדות (name/trigger_type/conditions/configuration/active/is_flow) מועתקים, פלוס `source_automation_id` ו-`source_tenant_id`.
-   - העתקת כל `automation_flow_steps` עם `tenant_id` ו-`automation_id` חדשים, ושמירת מיפוי `parent_step_id` הישן→חדש.
-   - ניקוי הפניות ספציפיות-לארגון מתוך `configuration` (למשל `integration_id`, `campaigner_id`, `client_id`, `whatsapp_group_id`) — האוטומציה תיווצר במצב שדורש מהארגון היעד להשלים את החיבורים שלו עצמו, כדי שלא תפנה לאינטגרציה של ארגון אחר.
-
-## UI
-בעמוד `Automations`, על כל כרטיס אוטומציה — תפריט "שתף עם ארגון" (אייקון Share):
-- דיאלוג עם רשימת ארגונים זמינים (מתוך `tenants` שלמשתמש יש בהם הרשאה, או הכל ל-super admin), עם checkboxes.
-- כפתור "שכפל". בהצלחה — toast עם מספר השכפולים, ולינק "צפה" שמעביר לארגון היעד.
-- אם השכפול בוצע בעבר (קיים אוטומציה עם אותו `source_automation_id` בארגון יעד) — סימון "כבר שותף" + אפשרות "שכפל מחדש" (יוצר כפילות נפרדת, לא דורס).
-
-## הבטחת בידוד נתונים בריצה
-לא נדרש שינוי לוגי: `trigger-automation` ו-`_shared/carmen.ts` כבר ממסננים לפי `automation.tenant_id`. השכפול יוצר רשומה עם `tenant_id` חדש, וכל ה-queries יעבדו אוטומטית רק על נתוני הארגון היעד.
-
-## מה לא נכלל (לאישור בנפרד אם רוצים)
-- **סנכרון דו-כיווני** — שינוי במקור יתעדכן בשכפולים. כרגע זה שכפול חד-פעמי בלבד.
-- שיתוף `automation_logs` היסטוריים — לכל ארגון לוגים נפרדים מהרגע שהאוטומציה נוצרה אצלו.
-
-## שאלת בירור
-האם השכפול צריך לכלול גם **העתקת ה-`integration_id`** כשהאינטגרציה משותפת בין הארגונים (Green API/Manus וכו'), או תמיד להשאיר ריק ושהמשתמש בארגון היעד יבחר אינטגרציה משלו?
+## מה זה לא משנה
+- לא מועבר owner של החיבור; דקל/הבעלים המקורי נשאר ב-`user_id` ו-`tenant_id`.
+- ניתן להסיר שיתוף בכל רגע מאותו דיאלוג.
