@@ -4,7 +4,21 @@
 //
 // The transport (Green API vs Manus WA) is abstracted via the `sendMessage` callback.
 
-const CARMEN_SESSION_IDLE_MINUTES = 60;
+const CARMEN_SESSION_IDLE_MINUTES_DEFAULT = 5;
+
+// Permissive end-keywords — any of these closes the session, even without "כרמן".
+const END_KEYWORD_VARIANTS = [
+  'סיימנו', 'תודה סיימנו', 'תודה כרמן', 'תפסיקי', 'די כרמן', 'די תודה',
+  'עצרי', 'עצרי כרמן', 'מספיק', 'מספיק כרמן', 'ביי כרמן', 'להתראות כרמן',
+  'stop', 'stop carmen', 'end', 'bye carmen', 'thanks carmen',
+];
+
+function messageRequestsEnd(msg: string, configuredEndKeyword?: string | null): boolean {
+  const m = (msg || '').trim().toLowerCase();
+  if (!m) return false;
+  if (configuredEndKeyword && m.includes(String(configuredEndKeyword).toLowerCase())) return true;
+  return END_KEYWORD_VARIANTS.some(k => m.includes(k));
+}
 
 export async function findCarmenAgent(supabase: any, tenantId: string): Promise<any | null> {
   const { data } = await supabase
@@ -170,6 +184,7 @@ export async function findActiveCarmenSession(
   tenantId: string,
   chatId: string,
   connectionUserId: string,
+  idleMinutes: number = CARMEN_SESSION_IDLE_MINUTES_DEFAULT,
 ): Promise<any | null> {
   const phone = chatId.split('@')[0];
   const { data } = await supabase
@@ -188,8 +203,8 @@ export async function findActiveCarmenSession(
 
   const lastActivity = new Date(data.last_message_at || data.created_at).getTime();
   const ageMinutes = (Date.now() - lastActivity) / 60000;
-  if (ageMinutes > CARMEN_SESSION_IDLE_MINUTES) {
-    console.log(`[CARMEN] Session ${data.id} idle for ${ageMinutes.toFixed(1)} min — auto-expiring`);
+  if (ageMinutes > idleMinutes) {
+    console.log(`[CARMEN] Session ${data.id} idle for ${ageMinutes.toFixed(1)} min (limit ${idleMinutes}) — auto-expiring`);
     await supabase
       .from('carmen_whatsapp_sessions')
       .update({ status: 'expired', ended_at: new Date().toISOString() })
@@ -241,16 +256,25 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
   if (!isIncoming && !isManualOutgoing) return { handled: false, reason: 'not_user_message' };
 
   const normalizedMsg = (messageText || '').trim().toLowerCase();
-  const activeSession = await findActiveCarmenSession(supabase, tenantId, chatId, connectionUserId);
+
+  // Read configured timeout (defaults to 5 minutes). We need it both for find-active and start-session paths.
+  // Look up the relevant automation up-front to get session_timeout_minutes & end_keyword.
+  const earlyAutomation = await findCarmenSessionAutomation(supabase, tenantId, integrationId);
+  const cfg = earlyAutomation?.configuration || {};
+  const idleMinutes = Number(cfg.session_timeout_minutes) > 0
+    ? Number(cfg.session_timeout_minutes)
+    : CARMEN_SESSION_IDLE_MINUTES_DEFAULT;
+
+  const activeSession = await findActiveCarmenSession(supabase, tenantId, chatId, connectionUserId, idleMinutes);
 
   if (activeSession) {
-    const endKeyword = (activeSession.end_keyword || 'סיימנו כרמן').toLowerCase();
-    if (normalizedMsg.includes(endKeyword)) {
+    const configuredEnd = activeSession.end_keyword || cfg.end_keyword || 'סיימנו כרמן';
+    if (messageRequestsEnd(messageText, configuredEnd)) {
       await supabase
         .from('carmen_whatsapp_sessions')
         .update({ status: 'ended', ended_at: new Date().toISOString() })
         .eq('id', activeSession.id);
-      await sendMessage(chatId, 'השיחה עם כרמן הסתיימה. תמיד כאן בשבילך! להתראות!');
+      await sendMessage(chatId, 'סבבה, סיימנו 🙏');
       return { handled: true, outcome: 'ended' };
     }
 
@@ -295,7 +319,7 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
   // In 1-on-1 chats we still require the owner to type the keyword; in groups, any member can trigger Carmen.
   if (!isManualOutgoing && !isGroup) return { handled: false, reason: 'no_session_inbound' };
 
-  const carmenAutomation = await findCarmenSessionAutomation(supabase, tenantId, integrationId);
+  const carmenAutomation = earlyAutomation;
   if (!carmenAutomation) return { handled: false, reason: 'no_automation' };
 
   // Legacy compatibility: filter by connection_user_id if set and integration not pinned.
@@ -373,10 +397,11 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     return { handled: true, outcome: 'error' };
   }
 
-  const greeting = `שלום! אני ${agentName}, המנהלת ה-AI שלך במערכת. אפשר לשאול אותי כל שאלה ולבצע פעולות במערכת. מה אפשר לעזור לך? (כדי לסיים את השיחה, כתוב "${endKeywordConfig}")`;
-  await sendMessage(chatId, greeting);
-
   const contentAfterKeyword = messageText.replace(new RegExp(triggerKeyword, 'gi'), '').trim();
+
+  // If the user already asked a question after the keyword, answer it directly (single message).
+  // Otherwise send a brief greeting only. Either way — save the assistant reply to history
+  // so the echo-guard catches the provider mirroring it back.
   if (contentAfterKeyword.length > 2) {
     const carmenResponse = await runCarmenAI(
       supabase, agentId, tenantId, contentAfterKeyword, [], phoneNumber, senderName,
@@ -392,7 +417,16 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     await sendMessage(chatId, carmenResponse);
     await syncCarmenToAIConversation(supabase, newSession, history);
   } else {
-    await syncCarmenToAIConversation(supabase, newSession, []);
+    const greeting = `היי, ${agentName} כאן. מה תרצה לבדוק? (לסיום: "${endKeywordConfig}")`;
+    const history = [
+      { role: 'assistant', content: greeting, timestamp: new Date().toISOString() },
+    ];
+    await supabase
+      .from('carmen_whatsapp_sessions')
+      .update({ conversation_history: history, last_message_at: new Date().toISOString() })
+      .eq('id', newSession.id);
+    await sendMessage(chatId, greeting);
+    await syncCarmenToAIConversation(supabase, newSession, history);
   }
 
   return { handled: true, outcome: 'started' };
