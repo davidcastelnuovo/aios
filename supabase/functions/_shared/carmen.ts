@@ -389,6 +389,15 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
   // In 1-on-1 chats we still require the owner to type the keyword; in groups, any member can trigger Carmen.
   if (!isManualOutgoing && !isGroup) return { handled: false, reason: 'no_session_inbound' };
 
+  // Don't open a brand-new session from an end-message ("סיימנו כרמן" / "תודה כרמן"),
+  // even though it contains the trigger keyword. Same for short acks.
+  if (messageRequestsEnd(messageText, cfg.end_keyword)) {
+    return { handled: false, reason: 'end_message_no_session' };
+  }
+  if (isShortAck(messageText)) {
+    return { handled: false, reason: 'ack_no_session' };
+  }
+
   const carmenAutomation = earlyAutomation;
   if (!carmenAutomation) return { handled: false, reason: 'no_automation' };
 
