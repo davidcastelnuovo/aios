@@ -198,6 +198,7 @@ export async function findCarmenSessionAutomation(
   supabase: any,
   tenantId: string,
   integrationId?: string | null,
+  ctx?: { isGroup?: boolean; chatId?: string | null; phoneNumber?: string | null },
 ): Promise<any | null> {
   const { data: flowSteps } = await supabase
     .from('automation_flow_steps')
@@ -222,6 +223,40 @@ export async function findCarmenSessionAutomation(
   const ranked = [...pinnedMatches, ...unpinned];
   if (ranked.length === 0) return null;
 
+  // Channel-aware ranking: when multiple Carmen automations are pinned to the same
+  // integration, prefer the one whose scope actually matches the current message
+  // (e.g. groups → specific_group automation; 1:1 → specific_phone automation).
+  // Without this, the first automation in arbitrary order can block the channel
+  // even though a sibling automation explicitly enables it.
+  const isGroup = !!ctx?.isGroup;
+  const chatId = ctx?.chatId || '';
+  const phoneDigits = (ctx?.phoneNumber || '').replace(/\D/g, '');
+  const scoreStep = (s: any): number => {
+    const cfg = s?.configuration || {};
+    const mode = cfg.carmen_scope_mode || 'all';
+    const allowedGroups: string[] = Array.isArray(cfg.carmen_allowed_group_ids)
+      ? cfg.carmen_allowed_group_ids
+      : (cfg.carmen_allowed_group_id ? [cfg.carmen_allowed_group_id] : []);
+    const allowedPhones: string[] = Array.isArray(cfg.carmen_allowed_phones)
+      ? cfg.carmen_allowed_phones.map((p: any) => String(p).replace(/\D/g, ''))
+      : [];
+
+    if (isGroup) {
+      if (mode === 'specific_group' && chatId && allowedGroups.includes(chatId)) return 100;
+      if (mode === 'specific_group') return 40; // group-mode but this chat isn't listed
+      if (mode === 'all') return 20;
+      // specific_phone in a group context → unusable
+      return -50;
+    }
+    if (mode === 'specific_phone' && phoneDigits && allowedPhones.some(p => p && (p === phoneDigits || phoneDigits.endsWith(p) || p.endsWith(phoneDigits)))) return 100;
+    if (mode === 'specific_phone') return 40;
+    if (mode === 'all') return 20;
+    // specific_group in a 1:1 context → unusable
+    return -50;
+  };
+
+  ranked.sort((a, b) => scoreStep(b) - scoreStep(a));
+
   const automationIds = ranked.map((s: any) => s.automation_id);
   const { data: automations } = await supabase
     .from('automations')
@@ -231,7 +266,6 @@ export async function findCarmenSessionAutomation(
   if (!automations || automations.length === 0) return null;
 
   const activeById = new Map(automations.map((a: any) => [a.id, a]));
-  // Preserve ranking order (pinned-match first).
   for (const s of ranked) {
     const auto: any = activeById.get(s.automation_id);
     if (!auto) continue;
@@ -240,6 +274,7 @@ export async function findCarmenSessionAutomation(
   }
   return null;
 }
+
 
 // Look up the first send action step of a Carmen automation and dispatch the reply through it
 // (Manus or Green API), regardless of which webhook received the inbound message.
@@ -515,7 +550,7 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
 
   // Read configured timeout (defaults to 5 minutes). We need it both for find-active and start-session paths.
   // Look up the relevant automation up-front to get session_timeout_minutes & end_keyword.
-  const earlyAutomation = await findCarmenSessionAutomation(supabase, tenantId, integrationId);
+  const earlyAutomation = await findCarmenSessionAutomation(supabase, tenantId, integrationId, { isGroup, chatId, phoneNumber });
 
   // HARD GUARD: if no flow-based Carmen automation is pinned to this integration,
   // Carmen must stay completely silent on this channel — even if a stale session
