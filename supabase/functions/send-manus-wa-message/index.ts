@@ -147,19 +147,55 @@ Deno.serve(async (req) => {
       ? { groupId: groupChatId, body: message }
       : { to, body: message };
     console.log('[send-manus-wa] POST', url, 'to=', to, 'instanceId=', instanceId, 'messageLen=', message.length);
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'X-Api-Key': apiKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
 
-    const respText = await res.text();
-    let respData: any;
-    try { respData = JSON.parse(respText); } catch { respData = { raw: respText }; }
-    console.log('[send-manus-wa] response', { status: res.status, ok: res.ok, body: respText.slice(0, 500) });
+    // Retry on timeout/network errors (Manus gateway is sometimes slow on groups).
+    const MAX_ATTEMPTS = 2;
+    const FETCH_TIMEOUT_MS = 25000;
+    let res: Response | null = null;
+    let respText = '';
+    let respData: any = null;
+    let lastErr: any = null;
 
-    if (!res.ok || respData?.success === false) {
-      throw new Error(`Manus WA error [${res.status}]: ${JSON.stringify(respData)}`);
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const started = Date.now();
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+      try {
+        res = await fetch(url, {
+          method: 'POST',
+          headers: { 'X-Api-Key': apiKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+        clearTimeout(timer);
+        respText = await res.text();
+        try { respData = JSON.parse(respText); } catch { respData = { raw: respText }; }
+        const elapsed = Date.now() - started;
+        console.log('[send-manus-wa] attempt', attempt, 'response', { status: res.status, ok: res.ok, elapsedMs: elapsed, body: respText.slice(0, 500) });
+
+        // Manus-internal timeout in body (e.g. "timeout of 8000ms exceeded") => retry.
+        const isManusTimeout = typeof respData?.error === 'string' && /timeout of \d+ms exceeded/i.test(respData.error);
+        if (res.ok && respData?.success !== false) break;
+        if (!isManusTimeout && res.status < 500) {
+          // non-retryable client error
+          break;
+        }
+        lastErr = new Error(`Manus WA error [${res.status}]: ${respText.slice(0, 300)}`);
+      } catch (err: any) {
+        clearTimeout(timer);
+        const elapsed = Date.now() - started;
+        const isAbort = err?.name === 'AbortError';
+        console.error('[send-manus-wa] attempt', attempt, isAbort ? 'aborted (timeout)' : 'fetch error', { elapsedMs: elapsed, msg: err?.message });
+        lastErr = err;
+      }
+
+      if (attempt < MAX_ATTEMPTS) {
+        await new Promise(r => setTimeout(r, 2000));
+      }
+    }
+
+    if (!res || !res.ok || respData?.success === false) {
+      throw lastErr || new Error(`Manus WA error [${res?.status ?? 'no-response'}]: ${JSON.stringify(respData)}`);
     }
 
     // Save to chat_messages
