@@ -7,11 +7,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Zap, Activity, Trash2, Edit, TestTube, Workflow, MessageCircle, Bot } from "lucide-react";
+import { Plus, Zap, Activity, Trash2, Edit, TestTube, Workflow, MessageCircle, Bot, Share2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AddAutomationForm } from "@/components/forms/AddAutomationForm";
 import { EditAutomationDialog } from "@/components/forms/EditAutomationDialog";
 import { TestAutomationDialog } from "@/components/forms/TestAutomationDialog";
+import { ShareAutomationDialog } from "@/components/automations/ShareAutomationDialog";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import {
@@ -67,6 +68,7 @@ export default function Automations() {
   const [selectedAutomationId, setSelectedAutomationId] = useState<string | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [testDialogOpen, setTestDialogOpen] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [selectedAutomation, setSelectedAutomation] = useState<any>(null);
   const { tenantId, isActiveTenantSynced } = useCurrentTenant();
   const { buildPath } = useTenantPath();
@@ -375,6 +377,19 @@ export default function Automations() {
                 </Button>
                 <Button
                   size="sm"
+                  variant="outline"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedAutomation(automation);
+                    setShareDialogOpen(true);
+                  }}
+                  title="שתף עם ארגון אחר"
+                >
+                  <Share2 className="h-3 w-3 ml-1" />
+                  שתף
+                </Button>
+                <Button
+                  size="sm"
                   variant="destructive"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -417,6 +432,15 @@ export default function Automations() {
           automation={selectedAutomation}
           open={testDialogOpen}
           onOpenChange={setTestDialogOpen}
+        />
+      )}
+
+      {/* Share Dialog */}
+      {selectedAutomation && (
+        <ShareAutomationDialog
+          automation={selectedAutomation}
+          open={shareDialogOpen}
+          onOpenChange={setShareDialogOpen}
         />
       )}
 

@@ -905,6 +905,8 @@ export type Database = {
           id: string
           is_flow: boolean
           name: string
+          source_automation_id: string | null
+          source_tenant_id: string | null
           tenant_id: string | null
           trigger_type: Database["public"]["Enums"]["automation_trigger"]
           updated_at: string | null
@@ -919,6 +921,8 @@ export type Database = {
           id?: string
           is_flow?: boolean
           name: string
+          source_automation_id?: string | null
+          source_tenant_id?: string | null
           tenant_id?: string | null
           trigger_type: Database["public"]["Enums"]["automation_trigger"]
           updated_at?: string | null
@@ -933,6 +937,8 @@ export type Database = {
           id?: string
           is_flow?: boolean
           name?: string
+          source_automation_id?: string | null
+          source_tenant_id?: string | null
           tenant_id?: string | null
           trigger_type?: Database["public"]["Enums"]["automation_trigger"]
           updated_at?: string | null
