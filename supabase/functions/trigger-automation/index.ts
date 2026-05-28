@@ -946,8 +946,23 @@ Deno.serve(async (req) => {
                     // "ההנחיות נשמרו" loops. Skip the agent + downstream send entirely.
                     if (isCarmenFlow) {
                       console.log('[trigger-automation] Skipping legacy Carmen agent path — owned by webhook handler', { automationId: automation.id })
+                      // Mark all downstream steps as skipped so the executed send step
+                      // (which would otherwise log "send_manus_message" without text) is
+                      // not reported as a successful run.
+                      const queue: string[] = [step.id]
+                      while (queue.length) {
+                        const cur = queue.shift()!
+                        for (const edge of (outEdges[cur] || [])) {
+                          if (!skippedNodes.has(edge.targetId)) {
+                            skippedNodes.add(edge.targetId)
+                            queue.push(edge.targetId)
+                          }
+                        }
+                      }
                       stepResponse = { success: true, skipped: 'carmen_owned_by_webhook' }
                       previousStepOutput = { success: true, output: '', skipped: 'carmen_owned_by_webhook' }
+                      nodeOutputs[step.id] = stepData
+                      stepResults.push({ step_id: step.id, action_type: 'agent', success: true, response: stepResponse })
                       continue
                     }
 
