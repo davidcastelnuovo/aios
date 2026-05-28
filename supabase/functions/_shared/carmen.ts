@@ -408,6 +408,29 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
 
   const activeSession = await findActiveCarmenSession(supabase, tenantId, chatId, connectionUserId, idleMinutes);
 
+  // Outbound routing: prefer the automation's configured action step (send_manus_message /
+  // send_green_api_message) so the reply goes through the module the user picked, regardless
+  // of which webhook received the inbound message. Falls back to the webhook-supplied
+  // sendMessage when no action step exists or the dispatch fails.
+  const routingAutomationId = activeSession?.automation_id || earlyAutomation?.id || null;
+  const routedSend = async (toChatId: string, message: string): Promise<boolean> => {
+    if (routingAutomationId) {
+      const ok = await sendCarmenReplyViaActionStep({
+        supabase,
+        automationId: routingAutomationId,
+        tenantId,
+        connectionUserId,
+        chatId: toChatId,
+        phoneNumber,
+        isGroup,
+        message,
+      });
+      if (ok) return true;
+    }
+    return sendMessage(toChatId, message);
+  };
+
+
   if (activeSession) {
     const configuredEnd = activeSession.end_keyword || cfg.end_keyword || 'סיימנו כרמן';
     if (messageRequestsEnd(messageText, configuredEnd)) {
