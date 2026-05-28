@@ -1,47 +1,25 @@
-## הבעיה
-ב-tenant הזה יש 3 אוטומציות פעילות של כרמן. ה-Legacy ("שיחת כרמן ב-WhatsApp", `trigger_type=whatsapp_message_received`, ללא pinning וללא scope) **נתפס תמיד ראשון** ב-`findCarmenSessionAutomation`. תוצאה:
-- ההודעה הגיעה ב-Green API → כרמן ענתה דרך Green API (במקום Manus כפי שמוגדר ב"כרמן / ישיר").
-- בקבוצות פנימיות — Legacy חוסם עם `group_requires_explicit_scope`, ו"כרמן / קבוצות פנימיות" אף פעם לא נבדק.
+נמצא שיש עדיין סשן Carmen פעיל ישן על אוטומציית Legacy בשם `שיחת כרמן ב-WhatsApp`, עם `chat_id=972549696673@c.us`. בגלל שהסשן כבר פעיל, Green API ממשיך לענות למרות שהאוטומציה החדשה לא מחוברת אליו.
 
-בנוסף, גם כשפלואו נתפס — התשובה נשלחת דרך ה-`sendMessage` של ה-webhook הנכנס, ולא דרך ה-action step (`send_manus_message` / `send_green_api_message`) שמוגדר באוטומציה.
+## תוכנית תיקון
 
-## תיקון
+1. לכבות מיידית את סשן Green API הפעיל
+   - לעדכן את הסשן הפעיל הישן לסטטוס `ended`.
+   - זה יעצור את התגובה הנוכחית של Carmen דרך Green API.
 
-### 1. `supabase/functions/_shared/carmen.ts` — `findCarmenSessionAutomation`
-- **למחוק לחלוטין את Method 1 (Legacy)**. הפונקציה תחפש רק `automation_flow_steps` עם `step_type='trigger'` ו-`action_type='carmen_whatsapp_session'`.
-- כשמסננים לפי `integrationId`: רק steps עם `carmen_integration_id` שווה ל-integrationId, או ללא pinning. (אם יש כמה — להעדיף את ה-pinned-match על פני unpinned.)
+2. לחסום Carmen מתוך Green API כשאין אוטומציה flow-based שמחוברת ל-Green API
+   - ב-`green-api-webhook`, לפני קריאה ל-`handleCarmenMessage`, לבדוק שקיימת אוטומציית Carmen חדשה שמחוברת ספציפית ל-integration של Green API.
+   - אם אין כזו, לא להריץ Carmen בכלל דרך Green API.
+   - זה מונע מסשנים ישנים/Legacy להמשיך לענות דרך Green API.
 
-### 2. `_shared/carmen.ts` — `handleCarmenMessage` — ניתוב יציאה לפי action step
-לאחר ש-`runCarmenAI` מחזירה טקסט, להוסיף שלב חדש שמחפש את ה-action step של אותה אוטומציה ושולח דרכו:
+3. לטפל בסשנים קיימים שלא שייכים לאוטומציה החדשה
+   - בתוך `_shared/carmen.ts`, כשנמצא active session שהאוטומציה שלו כבר לא תקפה/Legacy/לא מחוברת ל-integration הנוכחי — לסיים אותו אוטומטית ולא לענות.
+   - כך גם אם נשארו סשנים פעילים ישנים, הם לא ימשיכו להחזיק את Green API בחיים.
 
-```ts
-const { data: actionStep } = await supabase
-  .from('automation_flow_steps')
-  .select('action_type, configuration')
-  .eq('automation_id', carmenAutomation.id)
-  .eq('step_type', 'action')
-  .in('action_type', ['send_manus_message', 'send_green_api_message'])
-  .order('created_at', { ascending: true })
-  .limit(1)
-  .maybeSingle();
-```
+4. לפרוס מחדש
+   - לפרוס את `green-api-webhook` ואת `manus-wa-webhook` כי שניהם משתמשים בקובץ המשותף של Carmen.
 
-- אם `action_type === 'send_manus_message'`: לקרוא ל-`send-manus-wa-message` עם `integrationId = actionStep.configuration.green_api_integration_id` (שם השדה כך בקונפיג הקיים — מצביע על integration_id של Manus כשהאקשן הוא send_manus_message), `phoneNumber`/`chatId` לפי `recipients` (תמיכה ב-`type:phone_manual`, `type:group_field`, ו-fallback ל-`chatId` הנוכחי לקבוצות).
-- אם `action_type === 'send_green_api_message'`: לקרוא ל-`send-green-api-message` עם `tenantId` + `phoneNumber`/`groupId` בהתאם.
-- אם **לא נמצא action step**: fallback ל-`sendMessage` שה-webhook הזריק (התנהגות קיימת, כדי לא לשבור אוטומציות בלי action).
-- במקרה כישלון בשליחה דרך ה-action step — לוג + fallback ל-`sendMessage` של ה-webhook.
+## בדיקה אחרי התיקון
 
-### 3. שדרוג webhooks — `green-api-webhook` ו-`manus-wa-webhook`
-- אין צורך לשנות את ה-`sendMessage` callback (נשאר כ-fallback). השינוי המהותי בשכבת ה-shared.
-- לאחר מחיקת ה-Legacy: ב-green-api-webhook, אם `findCarmenSessionAutomation` מחזירה null (כי כל הפלואו pinned ל-Manus), כרמן פשוט לא תרוץ דרך Green API. זה התנהגות נכונה.
-
-### 4. בלי שינויי DB
-לא נוגעים באוטומציות הקיימות. המשתמש יוכל לבטל ידנית את ה-Legacy ("שיחת כרמן ב-WhatsApp") אם ירצה — אבל הקוד יתעלם ממנה בכל מקרה.
-
-### 5. Deploy
-`green-api-webhook`, `manus-wa-webhook` (כדי שיטענו את ה-`_shared/carmen.ts` המעודכן).
-
-## אימות אחרי הפריסה
-- שליחה ב-WhatsApp ישיר ל-Manus עם המילה "כרמן": תשובה דרך Manus (לא Green API).
-- שליחה בקבוצה פנימית מורשית (מתוך `carmen_allowed_group_ids` של "כרמן / קבוצות פנימיות") עם "כרמן": תשובה תופיע בקבוצה דרך Manus.
-- שליחה ב-Green API ישיר: אין תגובה של כרמן (כי שתי האוטומציות pinned ל-Manus) — זו ההתנהגות הנכונה כעת.
+- הודעה ל-Green API בלי אוטומציית Carmen מחוברת: לא תקבל תשובת Carmen.
+- הודעה בקבוצת Manus שמוגדרת באוטומציה: תמשיך לענות דרך Manus בלבד.
+- סשן Legacy פעיל ישן: ייסגר ולא יוכל להמשיך לייצר לופים.
