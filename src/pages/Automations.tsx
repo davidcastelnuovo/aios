@@ -377,6 +377,19 @@ export default function Automations() {
                 </Button>
                 <Button
                   size="sm"
+                  variant="outline"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedAutomation(automation);
+                    setShareDialogOpen(true);
+                  }}
+                  title="שתף עם ארגון אחר"
+                >
+                  <Share2 className="h-3 w-3 ml-1" />
+                  שתף
+                </Button>
+                <Button
+                  size="sm"
                   variant="destructive"
                   onClick={(e) => {
                     e.stopPropagation();
