@@ -550,7 +550,7 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
 
   // Read configured timeout (defaults to 5 minutes). We need it both for find-active and start-session paths.
   // Look up the relevant automation up-front to get session_timeout_minutes & end_keyword.
-  const earlyAutomation = await findCarmenSessionAutomation(supabase, tenantId, integrationId);
+  const earlyAutomation = await findCarmenSessionAutomation(supabase, tenantId, integrationId, { isGroup, chatId, phoneNumber });
 
   // HARD GUARD: if no flow-based Carmen automation is pinned to this integration,
   // Carmen must stay completely silent on this channel — even if a stale session
