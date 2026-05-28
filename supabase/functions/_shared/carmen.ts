@@ -637,8 +637,12 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
 
     let carmenResponse: string;
     try {
+      const recentContext = await fetchRecentChatContext(
+        supabase, tenantId, chatId, isGroup, effectivePhone,
+      );
+      const mergedHistory = buildCarmenMergedHistory(recentContext, history);
       carmenResponse = await runCarmenAI(
-        supabase, activeSession.agent_id, tenantId, messageText, history,
+        supabase, activeSession.agent_id, tenantId, messageText, mergedHistory,
         effectivePhone, effectiveName,
       );
     } catch (err) {
