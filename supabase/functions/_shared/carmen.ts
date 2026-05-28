@@ -256,16 +256,25 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
   if (!isIncoming && !isManualOutgoing) return { handled: false, reason: 'not_user_message' };
 
   const normalizedMsg = (messageText || '').trim().toLowerCase();
-  const activeSession = await findActiveCarmenSession(supabase, tenantId, chatId, connectionUserId);
+
+  // Read configured timeout (defaults to 5 minutes). We need it both for find-active and start-session paths.
+  // Look up the relevant automation up-front to get session_timeout_minutes & end_keyword.
+  const earlyAutomation = await findCarmenSessionAutomation(supabase, tenantId, integrationId);
+  const cfg = earlyAutomation?.configuration || {};
+  const idleMinutes = Number(cfg.session_timeout_minutes) > 0
+    ? Number(cfg.session_timeout_minutes)
+    : CARMEN_SESSION_IDLE_MINUTES_DEFAULT;
+
+  const activeSession = await findActiveCarmenSession(supabase, tenantId, chatId, connectionUserId, idleMinutes);
 
   if (activeSession) {
-    const endKeyword = (activeSession.end_keyword || 'סיימנו כרמן').toLowerCase();
-    if (normalizedMsg.includes(endKeyword)) {
+    const configuredEnd = activeSession.end_keyword || cfg.end_keyword || 'סיימנו כרמן';
+    if (messageRequestsEnd(messageText, configuredEnd)) {
       await supabase
         .from('carmen_whatsapp_sessions')
         .update({ status: 'ended', ended_at: new Date().toISOString() })
         .eq('id', activeSession.id);
-      await sendMessage(chatId, 'השיחה עם כרמן הסתיימה. תמיד כאן בשבילך! להתראות!');
+      await sendMessage(chatId, 'סבבה, סיימנו 🙏');
       return { handled: true, outcome: 'ended' };
     }
 
@@ -310,7 +319,7 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
   // In 1-on-1 chats we still require the owner to type the keyword; in groups, any member can trigger Carmen.
   if (!isManualOutgoing && !isGroup) return { handled: false, reason: 'no_session_inbound' };
 
-  const carmenAutomation = await findCarmenSessionAutomation(supabase, tenantId, integrationId);
+  const carmenAutomation = earlyAutomation;
   if (!carmenAutomation) return { handled: false, reason: 'no_automation' };
 
   // Legacy compatibility: filter by connection_user_id if set and integration not pinned.
