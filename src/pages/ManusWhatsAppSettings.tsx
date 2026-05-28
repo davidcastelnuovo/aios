@@ -296,6 +296,10 @@ export default function ManusWhatsAppSettings() {
                         <RefreshCw className="h-4 w-4 ml-2" />
                         סנכרן סוד
                       </Button>
+                      <Button variant="outline" size="sm" onClick={() => setSharingIntegration(i)}>
+                        <Share2 className="h-4 w-4 ml-2" />
+                        שתף עם ארגונים
+                      </Button>
                       <Button variant="ghost" size="icon" onClick={() => {
                         if (confirm(`למחוק את החיבור "${i.display_name}"?`)) deleteMutation.mutate(i.id);
                       }}>
