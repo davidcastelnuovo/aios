@@ -939,6 +939,18 @@ Deno.serve(async (req) => {
                         triggerCfg.carmen_session_mode ||
                       (automation as any).configuration?.carmen_session_mode
 
+                    // HARD GUARD: Carmen WhatsApp flows are now owned end-to-end by
+                    // `handleCarmenMessage` in the webhooks (green-api-webhook / manus-wa-webhook).
+                    // Running this legacy path duplicates replies AND leaks the agent step's
+                    // `step_instruction` (treated as a user message) back into the chat as
+                    // "ההנחיות נשמרו" loops. Skip the agent + downstream send entirely.
+                    if (isCarmenFlow) {
+                      console.log('[trigger-automation] Skipping legacy Carmen agent path — owned by webhook handler', { automationId: automation.id })
+                      stepResponse = { success: true, skipped: 'carmen_owned_by_webhook' }
+                      previousStepOutput = { success: true, output: '', skipped: 'carmen_owned_by_webhook' }
+                      continue
+                    }
+
                     if (isCarmenFlow) {
                       const sPhone = payloadData?.sender_phone || payloadData?.phone || ''
                       const cId = payloadData?.chat_id || payloadData?.group_chat_id || ''
