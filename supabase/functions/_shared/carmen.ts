@@ -184,6 +184,7 @@ export async function findActiveCarmenSession(
   tenantId: string,
   chatId: string,
   connectionUserId: string,
+  idleMinutes: number = CARMEN_SESSION_IDLE_MINUTES_DEFAULT,
 ): Promise<any | null> {
   const phone = chatId.split('@')[0];
   const { data } = await supabase
@@ -202,8 +203,8 @@ export async function findActiveCarmenSession(
 
   const lastActivity = new Date(data.last_message_at || data.created_at).getTime();
   const ageMinutes = (Date.now() - lastActivity) / 60000;
-  if (ageMinutes > CARMEN_SESSION_IDLE_MINUTES) {
-    console.log(`[CARMEN] Session ${data.id} idle for ${ageMinutes.toFixed(1)} min — auto-expiring`);
+  if (ageMinutes > idleMinutes) {
+    console.log(`[CARMEN] Session ${data.id} idle for ${ageMinutes.toFixed(1)} min (limit ${idleMinutes}) — auto-expiring`);
     await supabase
       .from('carmen_whatsapp_sessions')
       .update({ status: 'expired', ended_at: new Date().toISOString() })
