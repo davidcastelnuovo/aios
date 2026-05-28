@@ -297,9 +297,14 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
       { role: 'user', content: messageText, timestamp: new Date().toISOString() },
     ];
 
+    // IMPORTANT: in groups, every message has a different author. Always prefer the
+    // CURRENT sender's phone/name (so Carmen attributes correctly to David vs Daniel),
+    // and only fall back to the session's original sender when the current one is missing.
+    const effectivePhone = phoneNumber || activeSession.phone;
+    const effectiveName = senderName || activeSession.sender_name;
     const carmenResponse = await runCarmenAI(
       supabase, activeSession.agent_id, tenantId, messageText, history,
-      activeSession.phone || phoneNumber, activeSession.sender_name || senderName,
+      effectivePhone, effectiveName,
     );
 
     updatedHistory.push({
