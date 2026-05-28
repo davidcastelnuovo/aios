@@ -393,6 +393,15 @@ export default function ManusWhatsAppSettings() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {sharingIntegration && (
+        <ShareIntegrationTenantsDialog
+          open={!!sharingIntegration}
+          onOpenChange={(open) => !open && setSharingIntegration(null)}
+          integrationId={sharingIntegration.id}
+          integrationName={sharingIntegration.display_name || "Manus WA"}
+        />
+      )}
     </div>
   );
 }
