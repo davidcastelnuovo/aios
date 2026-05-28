@@ -372,6 +372,16 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
       effectivePhone, effectiveName,
     );
 
+    // Output guard: if Carmen is about to "report" instructions, suppress it.
+    if (looksLikeInstructionReport(carmenResponse)) {
+      console.log('[carmen] Suppressing instruction-report reply', { session: activeSession.id });
+      await supabase
+        .from('carmen_whatsapp_sessions')
+        .update({ last_message_at: new Date().toISOString() })
+        .eq('id', activeSession.id);
+      return { handled: true, outcome: 'active' };
+    }
+
     updatedHistory.push({
       role: 'assistant', content: carmenResponse, timestamp: new Date().toISOString(),
     });
