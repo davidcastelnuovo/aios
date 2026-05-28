@@ -784,8 +784,12 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
   // Otherwise send a brief greeting only. Either way — save the assistant reply to history
   // so the echo-guard catches the provider mirroring it back.
   if (contentAfterKeyword.length > 2) {
+    const recentContext = await fetchRecentChatContext(
+      supabase, tenantId, chatId, isGroup, phoneNumber,
+    );
+    const mergedHistory = buildCarmenMergedHistory(recentContext, []);
     const carmenResponse = await runCarmenAI(
-      supabase, agentId, tenantId, contentAfterKeyword, [], phoneNumber, senderName,
+      supabase, agentId, tenantId, contentAfterKeyword, mergedHistory, phoneNumber, senderName,
     );
     const history = [
       { role: 'user', content: contentAfterKeyword, timestamp: new Date().toISOString() },
