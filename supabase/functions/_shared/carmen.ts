@@ -139,10 +139,13 @@ export async function runCarmenAI(
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-    const historyContext = conversationHistory.length > 0
-      ? `\n\n=== היסטוריית שיחה ===\n${conversationHistory.slice(-10).map((m: any) => `${m.role === 'user' ? 'משתמש' : 'כרמן'}: ${m.content}`).join('\n')}`
-      : '';
-    const commandWithHistory = historyContext ? `${userMessage}${historyContext}` : userMessage;
+    // Filter meta-instruction noise out of history so the model doesn't "answer" it
+    // again on every turn (root cause of Carmen reporting "ההנחיות נשמרו" in a loop).
+    const cleanHistory = conversationHistory
+      .slice(-20)
+      .filter((m: any) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
+      .filter((m: any) => !(m.role === 'user' && looksLikeMetaInstruction(m.content)))
+      .map((m: any) => ({ role: m.role, content: m.content }));
 
     const res = await fetch(`${supabaseUrl}/functions/v1/run-ai-agent`, {
       method: 'POST',
@@ -152,12 +155,14 @@ export async function runCarmenAI(
       },
       body: JSON.stringify({
         agent_id: agentId,
-        command_text: commandWithHistory,
+        command_text: userMessage,
+        conversation_history: cleanHistory,
         tenant_id: tenantId,
         user_name: senderName || 'WhatsApp',
         lead_data: senderPhone ? { phone: senderPhone } : undefined,
       }),
     });
+
 
     if (!res.ok) {
       console.error('❌ run-ai-agent failed:', res.status);
