@@ -1,28 +1,47 @@
-# תוכנית תיקונים סופית ל-Carmen
+## הבעיה
+ב-tenant הזה יש 3 אוטומציות פעילות של כרמן. ה-Legacy ("שיחת כרמן ב-WhatsApp", `trigger_type=whatsapp_message_received`, ללא pinning וללא scope) **נתפס תמיד ראשון** ב-`findCarmenSessionAutomation`. תוצאה:
+- ההודעה הגיעה ב-Green API → כרמן ענתה דרך Green API (במקום Manus כפי שמוגדר ב"כרמן / ישיר").
+- בקבוצות פנימיות — Legacy חוסם עם `group_requires_explicit_scope`, ו"כרמן / קבוצות פנימיות" אף פעם לא נבדק.
 
-## החלטות
-- **Green API קבוצות:** Carmen תעבוד גם בקבוצות לפי הערוץ שנבחר באוטומציה (Manus או Green API), בדיוק לפי האוטומציה הספציפית.
-- **כשל AI:** ניסיון חוזר אוטומטי פעם אחת; אם גם הוא נכשל — שתיקה מוחלטת (רק לוג, בלי הודעה למשתמש).
-- **שחזור היסטוריה:** רק מסשנים שנסגרו ב-30 דקות האחרונות; ישנים מזה — מתעלמים.
+בנוסף, גם כשפלואו נתפס — התשובה נשלחת דרך ה-`sendMessage` של ה-webhook הנכנס, ולא דרך ה-action step (`send_manus_message` / `send_green_api_message`) שמוגדר באוטומציה.
 
-## שינויים
+## תיקון
 
-### 1. `supabase/functions/green-api-webhook/index.ts`
-- להזיז את הקריאה ל-`handleCarmenMessage` כך שתרוץ גם כש-`isGroup === true`, ולהעביר `isGroup` כפרמטר. הגארד הקיים `group_requires_explicit_scope` יחסום אוטומטית אוטומציות שלא הוגדרו לקבוצה ספציפית.
+### 1. `supabase/functions/_shared/carmen.ts` — `findCarmenSessionAutomation`
+- **למחוק לחלוטין את Method 1 (Legacy)**. הפונקציה תחפש רק `automation_flow_steps` עם `step_type='trigger'` ו-`action_type='carmen_whatsapp_session'`.
+- כשמסננים לפי `integrationId`: רק steps עם `carmen_integration_id` שווה ל-integrationId, או ללא pinning. (אם יש כמה — להעדיף את ה-pinned-match על פני unpinned.)
 
-### 2. `supabase/functions/_shared/carmen.ts`
-- **כשל AI עם retry:** ב-`runCarmenAI` — אם הקריאה ל-`run-ai-agent` נכשלת או חוזרת ריקה, לנסות שוב פעם אחת אחרי 1 שנייה. אם גם הניסיון השני נכשל — `throw`, ולא להחזיר מחרוזת "מצטערת...".
-- **טיפול בכשל ב-`handleCarmenMessage`:** עוטפים את `runCarmenAI` ב-try/catch — אם נזרק, רושמים `console.error`, מעדכנים `last_message_at` בסשן ומחזירים `{ handled: true, outcome: 'error' }` בלי `sendMessage`.
-- **Echo-loop:** להוסיף ב-`carmen.ts:351-357` תנאי `a.length >= 15 && b.length >= 15` לפני ההשוואה, כדי לא להפיל הודעות קצרות לגיטימיות.
-- **סינון instruction-reports מהיסטוריית assistant:** ב-`cleanHistory` ב-`runCarmenAI` להוסיף סינון גם להודעות assistant שעוברות `looksLikeInstructionReport`.
+### 2. `_shared/carmen.ts` — `handleCarmenMessage` — ניתוב יציאה לפי action step
+לאחר ש-`runCarmenAI` מחזירה טקסט, להוסיף שלב חדש שמחפש את ה-action step של אותה אוטומציה ושולח דרכו:
 
-### 3. `supabase/functions/trigger-automation/index.ts`
-- **בדיקת `output` ריק (שורה 1163):** להבחין בין כשל אמיתי (`stepResponse.success === false` → throw) לבין פלט ריק לגיטימי (skip שקט של שלב השליחה בלי שגיאה).
-- **שחזור היסטוריה מסשנים ישנים (שורות 1063-1099):** להוסיף תנאי `ended_at > now() - 30 min` בשליפת הסשן הקודם. סשנים ישנים מזה — מתעלמים ומתחילים נקי.
+```ts
+const { data: actionStep } = await supabase
+  .from('automation_flow_steps')
+  .select('action_type, configuration')
+  .eq('automation_id', carmenAutomation.id)
+  .eq('step_type', 'action')
+  .in('action_type', ['send_manus_message', 'send_green_api_message'])
+  .order('created_at', { ascending: true })
+  .limit(1)
+  .maybeSingle();
+```
 
-### 4. `supabase/functions/manus-wa-webhook/index.ts`
-- **URL קשיח (שורה 310):** להחליף ב-`settings.gateway_url || 'https://whatsappgw-pzpyrrww.manus.space'`.
+- אם `action_type === 'send_manus_message'`: לקרוא ל-`send-manus-wa-message` עם `integrationId = actionStep.configuration.green_api_integration_id` (שם השדה כך בקונפיג הקיים — מצביע על integration_id של Manus כשהאקשן הוא send_manus_message), `phoneNumber`/`chatId` לפי `recipients` (תמיכה ב-`type:phone_manual`, `type:group_field`, ו-fallback ל-`chatId` הנוכחי לקבוצות).
+- אם `action_type === 'send_green_api_message'`: לקרוא ל-`send-green-api-message` עם `tenantId` + `phoneNumber`/`groupId` בהתאם.
+- אם **לא נמצא action step**: fallback ל-`sendMessage` שה-webhook הזריק (התנהגות קיימת, כדי לא לשבור אוטומציות בלי action).
+- במקרה כישלון בשליחה דרך ה-action step — לוג + fallback ל-`sendMessage` של ה-webhook.
 
-## אחרי השינויים
-- Deploy ל-3 הפונקציות: `green-api-webhook`, `manus-wa-webhook`, `trigger-automation` (ו-`_shared` נכלל אוטומטית).
-- בדיקה בלוגים שאין יותר `Error: כרמן לא החזירה תשובה` על מקרים לגיטימיים, ושקבוצות Green API עם אוטומציה ספציפית מקבלות תגובה.
+### 3. שדרוג webhooks — `green-api-webhook` ו-`manus-wa-webhook`
+- אין צורך לשנות את ה-`sendMessage` callback (נשאר כ-fallback). השינוי המהותי בשכבת ה-shared.
+- לאחר מחיקת ה-Legacy: ב-green-api-webhook, אם `findCarmenSessionAutomation` מחזירה null (כי כל הפלואו pinned ל-Manus), כרמן פשוט לא תרוץ דרך Green API. זה התנהגות נכונה.
+
+### 4. בלי שינויי DB
+לא נוגעים באוטומציות הקיימות. המשתמש יוכל לבטל ידנית את ה-Legacy ("שיחת כרמן ב-WhatsApp") אם ירצה — אבל הקוד יתעלם ממנה בכל מקרה.
+
+### 5. Deploy
+`green-api-webhook`, `manus-wa-webhook` (כדי שיטענו את ה-`_shared/carmen.ts` המעודכן).
+
+## אימות אחרי הפריסה
+- שליחה ב-WhatsApp ישיר ל-Manus עם המילה "כרמן": תשובה דרך Manus (לא Green API).
+- שליחה בקבוצה פנימית מורשית (מתוך `carmen_allowed_group_ids` של "כרמן / קבוצות פנימיות") עם "כרמן": תשובה תופיע בקבוצה דרך Manus.
+- שליחה ב-Green API ישיר: אין תגובה של כרמן (כי שתי האוטומציות pinned ל-Manus) — זו ההתנהגות הנכונה כעת.
