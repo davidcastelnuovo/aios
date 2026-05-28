@@ -58,6 +58,121 @@ function looksLikeInstructionReport(content: string): boolean {
   return /(ההנחיות|ההוראות|הבנתי את ההנחיות|אפעל לפי ההנחיות|שמרתי הנחיה|הנחיותיך נשמרו|נכנסו לכספת|לכספת שלי|לא משחררת מידע|השומרת הכי|הסלקטורית הכי|מוכנה לפקודת|אני כאן לכל משימה|אני כאן ומחכה לפקודות|דרוכה ומוכנה|בסבלנות של נזירה|בלי דליפות מידע|רשמתי לפניי את עניין)/.test(c);
 }
 
+// Pull the last few days of chat history for the current chat (group or 1:1) so Carmen
+// can answer questions about prior conversations, not just messages inside the current
+// session window.
+//
+// - Groups: look up whatsapp_groups by (tenant_id, group_chat_id=chatId), then fetch
+//   chat_messages WHERE group_id = <uuid>.
+// - 1:1: fetch chat_messages WHERE group_id IS NULL AND sender_phone LIKE %last9digits%.
+export async function fetchRecentChatContext(
+  supabase: any,
+  tenantId: string,
+  chatId: string,
+  isGroup: boolean,
+  phoneNumber?: string | null,
+  maxMessages = 60,
+  dayWindow = 3,
+): Promise<Array<{ role: 'user' | 'assistant'; content: string; timestamp: string }>> {
+  try {
+    const since = new Date(Date.now() - dayWindow * 24 * 60 * 60 * 1000).toISOString();
+    let query = supabase
+      .from('chat_messages')
+      .select('direction, message_text, sender_name, sender_phone, created_at, group_id')
+      .eq('tenant_id', tenantId)
+      .gte('created_at', since)
+      .not('message_text', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(maxMessages);
+
+    if (isGroup) {
+      const { data: groupRow } = await supabase
+        .from('whatsapp_groups')
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .eq('group_chat_id', chatId)
+        .maybeSingle();
+      if (!groupRow?.id) return [];
+      query = query.eq('group_id', groupRow.id);
+    } else {
+      const digits = (phoneNumber || chatId.split('@')[0] || '').replace(/\D/g, '');
+      if (!digits) return [];
+      const last9 = digits.slice(-9);
+      query = query.is('group_id', null).ilike('sender_phone', `%${last9}%`);
+    }
+
+    const { data, error } = await query;
+    if (error || !Array.isArray(data)) return [];
+
+    return data
+      .reverse() // oldest-first
+      .map((m: any) => {
+        const text = String(m.message_text || '').trim();
+        if (!text) return null;
+        const who = m.sender_name || m.sender_phone || (m.direction === 'outbound' ? 'צוות' : 'משתמש');
+        if (m.direction === 'outbound') {
+          return {
+            role: 'user' as const,
+            content: `[צוות] ${who}: ${text}`,
+            timestamp: m.created_at,
+          };
+        }
+        return {
+          role: 'user' as const,
+          content: isGroup ? `${who}: ${text}` : text,
+          timestamp: m.created_at,
+        };
+      })
+      .filter(Boolean) as Array<{ role: 'user' | 'assistant'; content: string; timestamp: string }>;
+  } catch (err) {
+    console.error('[carmen] fetchRecentChatContext error', String(err));
+    return [];
+  }
+}
+
+// Merge background chat-history context with the in-session conversation history.
+// Drops items from the background context that overlap with the session by timestamp,
+// and prepends a short note so the model treats them as background, not as a new question.
+export function buildCarmenMergedHistory(
+  recentContext: Array<{ role: string; content: string; timestamp?: string }>,
+  sessionHistory: any[],
+  hardCap = 40,
+): any[] {
+  const sessionTimestamps = new Set(
+    (sessionHistory || [])
+      .map((m: any) => (m?.timestamp ? String(m.timestamp) : null))
+      .filter(Boolean) as string[],
+  );
+  const oldestSessionTs = sessionHistory && sessionHistory.length
+    ? (sessionHistory
+        .map((m: any) => m?.timestamp)
+        .filter(Boolean)
+        .sort()[0] as string | undefined)
+    : null;
+
+  const dedupedContext = recentContext.filter((m) => {
+    if (!m?.timestamp) return true;
+    if (sessionTimestamps.has(m.timestamp)) return false;
+    if (oldestSessionTs && m.timestamp >= oldestSessionTs) return false;
+    return true;
+  });
+
+  const merged: any[] = [];
+  if (dedupedContext.length > 0) {
+    merged.push({
+      role: 'user',
+      content:
+        '[רקע: להלן היסטוריית הצ׳אט מהימים האחרונים מאותה שיחה. השתמשי בה כדי לענות על שאלות לגבי מה שנאמר או הוחלט קודם. אל תתייחסי להודעות האלה כשאלה חדשה.]',
+      timestamp: new Date(0).toISOString(),
+    });
+    merged.push(...dedupedContext);
+  }
+  merged.push(...(sessionHistory || []));
+
+  if (merged.length <= hardCap) return merged;
+  return [merged[0], ...merged.slice(-(hardCap - 1))];
+}
+
 export async function findCarmenAgent(supabase: any, tenantId: string): Promise<any | null> {
   const { data } = await supabase
     .from('ai_agents')
@@ -522,8 +637,12 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
 
     let carmenResponse: string;
     try {
+      const recentContext = await fetchRecentChatContext(
+        supabase, tenantId, chatId, isGroup, effectivePhone,
+      );
+      const mergedHistory = buildCarmenMergedHistory(recentContext, history);
       carmenResponse = await runCarmenAI(
-        supabase, activeSession.agent_id, tenantId, messageText, history,
+        supabase, activeSession.agent_id, tenantId, messageText, mergedHistory,
         effectivePhone, effectiveName,
       );
     } catch (err) {
@@ -665,8 +784,12 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
   // Otherwise send a brief greeting only. Either way — save the assistant reply to history
   // so the echo-guard catches the provider mirroring it back.
   if (contentAfterKeyword.length > 2) {
+    const recentContext = await fetchRecentChatContext(
+      supabase, tenantId, chatId, isGroup, phoneNumber,
+    );
+    const mergedHistory = buildCarmenMergedHistory(recentContext, []);
     const carmenResponse = await runCarmenAI(
-      supabase, agentId, tenantId, contentAfterKeyword, [], phoneNumber, senderName,
+      supabase, agentId, tenantId, contentAfterKeyword, mergedHistory, phoneNumber, senderName,
     );
     const history = [
       { role: 'user', content: contentAfterKeyword, timestamp: new Date().toISOString() },
