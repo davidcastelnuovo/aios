@@ -13,11 +13,49 @@ const END_KEYWORD_VARIANTS = [
   'stop', 'stop carmen', 'end', 'bye carmen', 'thanks carmen',
 ];
 
+// Short "thanks/acknowledgement" messages that should NOT trigger an AI reply
+// inside an active session (prevents Carmen→thanks→Carmen loops).
+const ACK_VARIANTS = [
+  'תודה', 'תודה רבה', 'מעולה', 'מעולה תודה', 'סבבה', 'סבבה תודה',
+  'אוקיי', 'אוקי', 'ok', 'okay', 'thanks', 'thank you', 'great', 'cool', '👍', '🙏',
+];
+
+function normalize(msg: string): string {
+  return (msg || '').trim().toLowerCase().replace(/[.!?,\s]+$/g, '');
+}
+
 function messageRequestsEnd(msg: string, configuredEndKeyword?: string | null): boolean {
-  const m = (msg || '').trim().toLowerCase();
+  const m = normalize(msg);
   if (!m) return false;
   if (configuredEndKeyword && m.includes(String(configuredEndKeyword).toLowerCase())) return true;
-  return END_KEYWORD_VARIANTS.some(k => m.includes(k));
+  return END_KEYWORD_VARIANTS.some(k => m === k || m.startsWith(k + ' ') || m.endsWith(' ' + k) || m.includes(' ' + k + ' '));
+}
+
+function isShortAck(msg: string): boolean {
+  const m = normalize(msg);
+  if (!m) return false;
+  if (m.length > 20) return false;
+  return ACK_VARIANTS.some(k => m === k || m === k + ' כרמן');
+}
+
+// Detect meta-instruction style messages (long lists of "תעני..." rules) that
+// shouldn't be replayed back to the model as a user turn — otherwise the model
+// "answers" the instructions instead of the real question.
+function looksLikeMetaInstruction(content: string): boolean {
+  const c = (content || '').trim();
+  if (!c) return false;
+  if (c.length > 300 && /(תעני|תשתמשי|חשוב לתת|הנחיות|הוראות)/.test(c)) return true;
+  const lines = c.split('\n').map(l => l.trim()).filter(Boolean);
+  if (lines.length >= 3 && /^(תעני|תשתמשי|תזכרי|אל ת|תמיד|חשוב|כללים)/.test(lines[0])) return true;
+  return false;
+}
+
+// Strip instruction-like content from an assistant reply so we never echo
+// "ההנחיות נשמרו / הבנתי את ההוראות" back to the chat.
+function looksLikeInstructionReport(content: string): boolean {
+  const c = (content || '').trim();
+  if (!c) return false;
+  return /(ההנחיות|ההוראות|הבנתי את ההנחיות|אפעל לפי ההנחיות|שמרתי הנחיה|הנחיותיך נשמרו)/.test(c);
 }
 
 export async function findCarmenAgent(supabase: any, tenantId: string): Promise<any | null> {
