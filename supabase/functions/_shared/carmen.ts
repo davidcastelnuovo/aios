@@ -321,6 +321,28 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
       return { handled: true, outcome: 'ended' };
     }
 
+    // Short acknowledgement ("תודה" / "מעולה" / "ok") — don't reply, just keep session warm.
+    // Prevents Carmen→thanks→Carmen ping-pong loops.
+    if (isShortAck(messageText)) {
+      console.log('[carmen] Dropping short ack to avoid loop', { session: activeSession.id, body: messageText });
+      await supabase
+        .from('carmen_whatsapp_sessions')
+        .update({ last_message_at: new Date().toISOString() })
+        .eq('id', activeSession.id);
+      return { handled: true, outcome: 'active' };
+    }
+
+    // Meta-instruction noise pasted into chat — acknowledge silently, never echo back.
+    if (looksLikeMetaInstruction(messageText)) {
+      console.log('[carmen] Dropping meta-instruction message', { session: activeSession.id });
+      await supabase
+        .from('carmen_whatsapp_sessions')
+        .update({ last_message_at: new Date().toISOString() })
+        .eq('id', activeSession.id);
+      return { handled: true, outcome: 'active' };
+    }
+
+
     // 🔁 ECHO/LOOP GUARD: if the incoming text matches Carmen's own last assistant reply
     // (verbatim or as prefix), it's almost certainly a self-echo (provider mirrored our
     // send back as inbound). Ignore it to prevent an infinite reply loop.
