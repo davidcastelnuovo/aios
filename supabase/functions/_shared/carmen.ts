@@ -55,7 +55,7 @@ function looksLikeMetaInstruction(content: string): boolean {
 function looksLikeInstructionReport(content: string): boolean {
   const c = (content || '').trim();
   if (!c) return false;
-  return /(ההנחיות|ההוראות|הבנתי את ההנחיות|אפעל לפי ההנחיות|שמרתי הנחיה|הנחיותיך נשמרו)/.test(c);
+  return /(ההנחיות|ההוראות|הבנתי את ההנחיות|אפעל לפי ההנחיות|שמרתי הנחיה|הנחיותיך נשמרו|נכנסו לכספת|לכספת שלי|לא משחררת מידע|השומרת הכי|הסלקטורית הכי|מוכנה לפקודת|אני כאן לכל משימה|אני כאן ומחכה לפקודות|דרוכה ומוכנה|בסבלנות של נזירה|בלי דליפות מידע|רשמתי לפניי את עניין)/.test(c);
 }
 
 export async function findCarmenAgent(supabase: any, tenantId: string): Promise<any | null> {
