@@ -68,6 +68,7 @@ export default function Automations() {
   const [selectedAutomationId, setSelectedAutomationId] = useState<string | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [testDialogOpen, setTestDialogOpen] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [selectedAutomation, setSelectedAutomation] = useState<any>(null);
   const { tenantId, isActiveTenantSynced } = useCurrentTenant();
   const { buildPath } = useTenantPath();
