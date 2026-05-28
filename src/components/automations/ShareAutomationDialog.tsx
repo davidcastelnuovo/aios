@@ -28,7 +28,7 @@ interface ShareAutomationDialogProps {
 
 export function ShareAutomationDialog({ automation, open, onOpenChange }: ShareAutomationDialogProps) {
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { userId } = useCurrentUser();
   const { tenantId: sourceTenantId } = useCurrentTenant();
   const { userTenants, isLoading: tenantsLoading } = useUserTenants(user?.id);
   const [selected, setSelected] = useState<Set<string>>(new Set());
