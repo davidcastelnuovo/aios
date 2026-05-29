@@ -1,52 +1,39 @@
-# תיקון בעיית הצ'אט אחרי בחירת חיבור ספציפי
 
-## הבעיה
-1. בלוג הדפדפן רואים שגיאה חוזרת:
-   `invalid UNION/INTERSECT/EXCEPT ORDER BY clause — Only result column names can be used`.
-   ה-RPC `get_chat_contacts` נכשל בכל קריאה אחרי המיגרציה האחרונה. לכן הרשימה לא מתרעננת לפי החיבור הנבחר ומציגה צ'אטים מקאש ישן/שונים מקרמן.
-2. גם כשנתקן את השגיאה — סינון לפי "חיבור ספציפי" מסתמך רק על `connection_user_id` של בעל החיבור. אם לאותו משתמש קיימים מספר חיבורים מאותו סוג (למשל יותר מחיבור Manus אחד) — הרשימה תכלול את כולם, ולא רק את החיבור שנבחר.
+# Manus WhatsApp Gateway Integration
 
-## מה לתקן
+מטרה: לאפשר לכרמן ליצור instances של WhatsApp דרך Manus Gateway, לקבל QR לחיבור, לבדוק סטטוס ולשלוח הודעות — בלי לגעת בקוד קיים.
 
-### 1. מיגרציה: שכתוב `get_chat_contacts`
-- לעטוף את שלושת ה-`SELECT` (clients / leads / groups) ב-CTE או ב-`SELECT * FROM (... UNION ALL ...) sub` ולעשות `ORDER BY sub.last_message_at DESC NULLS LAST` בחוץ — כך שלא נסמך על שם עמודה משתנה אחרי UNION.
-- להוסיף פרמטר אופציונלי חדש `p_provider chat_provider DEFAULT NULL` ולסנן בכל אחד מ-EXISTS/COUNT/MAX לפי `cm.provider = p_provider` כשהוא לא NULL. ככה כשבוחרים חיבור ספציפי נוכל להגביל גם לפי הספק של אותו חיבור.
-- שמירה על שמות עמודות, סדר, וכל שאר ההתנהגות (החסימות, agency join, אווטאר וכו') בדיוק כמו היום.
+## שינויים
 
-### 2. עדכון `src/pages/Chat.tsx`
-- כש-`chatFilter.kind === "connection"`: למצוא את האובייקט של החיבור הנבחר ב-`chatConnections`, ולהעביר ל-RPC גם את `p_provider` שמתאים ל-`provider` של אותו חיבור (ממופה ל-enum `chat_provider`: `green_api`/`manus_wa`/`telegram`/`manychat`).
-- בשאר המקרים (all / platform) — לא להעביר `p_provider`, להשאיר את ההתנהגות הקיימת.
-- להוסיף את ה-provider ל-`queryKey` כדי שהקאש יתרענן בצורה נכונה בין חיבורים.
+### 1. קובץ חדש: `supabase/functions/manage-manus-wa/index.ts`
+Edge Function חדשה המשמשת כ-proxy מאובטח בין כרמן ל-Gateway.
+תומכת ב-5 פעולות:
+- `create_instance` — יצירת instance חדש
+- `get_qr_link` — קבלת קישור QR לחיבור
+- `get_status` — בדיקת סטטוס חיבור
+- `connect` — חיבור instance
+- `send_message` — שליחת הודעה דרך ה-Gateway
 
-### 3. בלי שינויים אחרים
-- אין לגעת ב-`useChatConnections`, ב-`ChatConnectionSelector`, ב-RLS, או בלוגיקת השליחה. רק תיקון ה-RPC + העברת הפרמטר.
+### 2. עריכה: `supabase/functions/run-ai-agent/index.ts` (הוספה בלבד)
+- שורה ~138: הוספת 4 tool definitions ל-`ALL_TOOLS`
+- שורה ~1291: הוספת 4 `case` חדשים ב-switch של `executeTool` לפני `default:`
 
-## פירוט טכני (ל-AI שמיישם)
+כלים חדשים לכרמן:
+- `create_whatsapp_instance`
+- `get_whatsapp_qr_link`
+- `get_whatsapp_status`
+- `send_whatsapp_via_gateway`
 
-מיגרציה חדשה — `CREATE OR REPLACE FUNCTION public.get_chat_contacts(p_tenant_id uuid DEFAULT NULL, p_connection_user_ids uuid[] DEFAULT NULL, p_provider chat_provider DEFAULT NULL)` עם אותה החתימה של `RETURNS TABLE`. מבנה:
+### 3. עריכה: `supabase/functions/agent-heartbeat/index.ts` (הוספה בלבד)
+14 שורות לפני ה-return הסופי — שליחת ping ל-`run-ai-agent` בכל ריצת heartbeat כדי למנוע cold start.
 
-```sql
-RETURN QUERY
-SELECT * FROM (
-  -- clients SELECT ... (כל ה-EXISTS / COUNT / MAX מוסיפים: AND (p_provider IS NULL OR cm.provider = p_provider))
-  UNION ALL
-  -- leads SELECT ... (אותו דבר)
-  UNION ALL
-  -- groups SELECT ... (אותו דבר)
-) sub
-ORDER BY sub.last_message_at DESC NULLS LAST;
+## Secret נדרש לאחר הדחיפה
 ```
-
-ב-`Chat.tsx` ליד `connectionUserIds`:
-```ts
-const selectedConnection = chatFilter.kind === "connection"
-  ? chatConnections.find(c => c.id === chatFilter.integrationId)
-  : null;
-const providerFilter = selectedConnection?.provider ?? null;
+GATEWAY_SESSION_TOKEN = <session token מה-Gateway>
 ```
-ולהעביר ב-RPC `p_provider: providerFilter ?? undefined`, ולהוסיף את `providerFilter` ל-`queryKey`.
+נדרש כדי ש-`create_instance` ו-`get_qr_link` יעבדו. אבקש אותו דרך טופס מאובטח אחרי המעבר ל-build.
 
-## אימות אחרי היישום
-- לבחור "All chats" → לראות שהרשימה נטענת בלי שגיאה ב-console.
-- לבחור חיבור ספציפי (קרמן) → לראות רק אנשי קשר שיש להם הודעות דרך אותו חיבור בלבד.
-- לעבור בין חיבורים → הרשימה מתחלפת מיד ולא נשארת מהחיבור הקודם.
+## הערות
+- כל השינויים הם הוספות בלבד, אין שינוי בקוד קיים.
+- לא נוגעים ב-`src/integrations/supabase/client.ts` ולא ב-`types.ts`.
+- אחרי build אבדוק deploy של 3 ה-functions ואוודא שאין שגיאות.
