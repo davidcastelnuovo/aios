@@ -39,43 +39,42 @@ export default function FacebookSettings() {
   const [testEventCode, setTestEventCode] = useState<string>("");
   const [manualToken, setManualToken] = useState<string>("");
   const [pageSearchQuery, setPageSearchQuery] = useState<string>("");
+  const [selectedLeadAdsId, setSelectedLeadAdsId] = useState<string>("");
+  const [sharingIntegrationId, setSharingIntegrationId] = useState<string | null>(null);
+  const [sharingIntegrationName, setSharingIntegrationName] = useState<string>("");
+  const [sharingOwnerId, setSharingOwnerId] = useState<string | null>(null);
 
   const projectUrl = import.meta.env.VITE_SUPABASE_URL || '';
   const webhookUrl = `${projectUrl}/functions/v1/facebook-lead-webhook`;
 
-  // Fetch Lead Ads integration
-  const { data: leadAdsIntegration, isLoading: loadingLeadAds } = useQuery({
-    queryKey: ['facebook-lead-ads-integration', currentTenant?.id],
-    queryFn: async () => {
-      if (!currentTenant?.id) return null;
-      const { data, error } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', currentTenant.id)
-        .eq('integration_type', 'facebook_lead_ads')
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!currentTenant?.id,
-  });
+  // Fetch ALL Lead Ads integrations visible to this user in this tenant
+  // (own + permission-shared). Each user can have their own per-user FB
+  // connection alongside any shared/mirror connection from the agency owner.
+  const { data: leadAdsList = [], isLoading: loadingLeadAds } = useUserIntegrations(
+    currentTenant?.id,
+    'facebook_lead_ads'
+  );
+  const { data: capiList = [], isLoading: loadingCapi } = useUserIntegrations(
+    currentTenant?.id,
+    'facebook_capi'
+  );
 
-  // Fetch CAPI integration
-  const { data: capiIntegration, isLoading: loadingCapi } = useQuery({
-    queryKey: ['facebook-capi-integration', currentTenant?.id],
-    queryFn: async () => {
-      if (!currentTenant?.id) return null;
-      const { data, error } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', currentTenant.id)
-        .eq('integration_type', 'facebook_capi')
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!currentTenant?.id,
-  });
+  // Auto-select first integration when list changes (prefer own connections)
+  useEffect(() => {
+    if (leadAdsList.length === 0) {
+      if (selectedLeadAdsId) setSelectedLeadAdsId("");
+      return;
+    }
+    const stillExists = leadAdsList.some((i: any) => i.id === selectedLeadAdsId);
+    if (!stillExists) {
+      const ownFirst = leadAdsList.find((i: any) => i._isOwn) || leadAdsList[0];
+      setSelectedLeadAdsId(ownFirst.id);
+    }
+  }, [leadAdsList, selectedLeadAdsId]);
+
+  const leadAdsIntegration: any = leadAdsList.find((i: any) => i.id === selectedLeadAdsId) || leadAdsList[0] || null;
+  const capiIntegration: any = capiList[0] || null;
+
 
   // Fetch agencies for form mapping
   const { data: agencies } = useQuery({
