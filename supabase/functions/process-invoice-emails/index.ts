@@ -157,8 +157,8 @@ serve(async (req) => {
 
             let fileUrl: string | null = null;
             if (!uploadError) {
-              const { data: urlData } = serviceClient.storage.from("supplier-invoices").getPublicUrl(storagePath);
-              fileUrl = urlData.publicUrl;
+              const { data: urlData } = await serviceClient.storage.from("supplier-invoices").createSignedUrl(storagePath, 60 * 60 * 24 * 365 * 10);
+              fileUrl = urlData?.signedUrl ?? null;
             }
 
             // 6. Extract invoice data with AI
