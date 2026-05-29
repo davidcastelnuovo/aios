@@ -25,18 +25,14 @@ export default function SignDocument() {
   const [hasSignature, setHasSignature] = useState(false);
   const [signed, setSigned] = useState(false);
 
-  // Fetch recipient by token
+  // Fetch recipient by token via secured RPC (no direct table access)
   const { data: recipient, isLoading: loadingRecipient } = useQuery({
     queryKey: ["sign-recipient", token],
     queryFn: async () => {
       if (!token) return null;
-      const { data, error } = await supabase
-        .from("signature_recipients")
-        .select("*, signature_documents(*)")
-        .eq("sign_token", token)
-        .single();
+      const { data, error } = await supabase.rpc("get_signature_by_token", { _token: token });
       if (error) throw error;
-      return data;
+      return data as any;
     },
     enabled: !!token,
   });
