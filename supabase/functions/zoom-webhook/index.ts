@@ -43,7 +43,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    const body = await req.json();
+    const rawBody = await req.text();
+    const body = JSON.parse(rawBody);
     const { event, payload } = body;
 
     // Create Supabase client with service role
