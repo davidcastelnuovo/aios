@@ -1,35 +1,47 @@
-# העברת Facebook למודל פר-משתמש עם שיתוף מבוקר
+## מטרה
+בסלקטור הצ׳אט (כיום: "צ׳אט / וואטסאפ / טלגרם / ManyChat / סוכני AI") — להוסיף אפשרות לבחור **חיבור ספציפי בשם שלו** (לדוגמה: "Manus – Carmen", "Green API – שיווק", "טלגרם – ראשי") במקום רק סוג הפלטפורמה.
 
-## מצב היום
-- `tenant_integrations` של `facebook_lead_ads` היא רשומה אחת לכל טננט. ל-MarketingCaptain יש את החיבור המקורי שלך (`user_id=שלך`), ול-7 ארגונים אחרים (כולל DMM) יש Mirror דרך `shared_from_integration_id`.
-- אין לקמפיינרים אפשרות להוסיף חיבור Facebook אישי משלהם.
-- לא ניתן לבחור איזה קמפיינר רואה את החיבור המשותף.
+## איך זה ייראה
+דרופדאון מקובץ עם כותרות:
 
-## המטרה
-זהה ל-Google Ads:
-1. **חיבור פר-משתמש**: כל קמפיינר יכול לחבר את הפייסבוק שלו ולראות את חשבונות המודעות שלו.
-2. **שיתוף מבוקר**: בעלי חיבור (כולל המשותף שלך מ-MarketingCaptain) קובעים אילו משתמשים בארגון מקבלים גישת צפייה אליו.
-3. **בורר חיבור**: קמפיינר עם גישה רואה גם את החיבור שלו וגם חיבורים משותפים, ובוחר באיזה להשתמש.
+```text
+✓ הכל
+── וואטסאפ ──
+   כל הוואטסאפ
+   Manus · Carmen
+   Manus · משרד
+   Green API · שיווק
+── טלגרם ──
+   כל הטלגרם
+   טלגרם · בוט ראשי
+── ManyChat ──
+   כל ה-ManyChat
+── סוכני AI 🤖 ──
+```
 
-## שינויים
+חיבורים ללא `display_name` יקבלו שם דיפולטיבי (לדוגמה "Manus WA"/"Green API" + 4 ספרות אחרונות של מספר/טוקן).
 
-### 1. סכימה
-- אין צורך בטבלה חדשה: כבר קיימת `integration_user_permissions` (לפי המוזיקרון `Integration Permissions RLS`).
-- וידוא שב-`tenant_integrations` עמודת `user_id` נשמרת כבעלים של הרשומה (היא כבר קיימת ומשמשת ב-Google).
-- מיגרציה: עדכון מדיניות RLS על `tenant_integrations` כך ש-SELECT עבור `facebook_lead_ads`/`facebook_capi` יחזיר:
-  - רשומות שבהן `user_id = auth.uid()` (חיבור אישי), **או**
-  - רשומות שיש להן שורה ב-`integration_user_permissions` עבור המשתמש הנוכחי (חיבור משותף אליו), **או**
-  - super_admin.
-  - שימוש בפונקציית `SECURITY DEFINER` קיימת/חדשה כדי למנוע recursion.
+## איך זה יעבוד טכנית
+1. **שליפת חיבורים זמינים**: hook חדש `useChatConnections()` ש-שולף מ-`tenant_integrations` את כל הרשומות מסוג `green_api`, `manus_wa`, `telegram`, `manychat` שהמשתמש רשאי לראות (own + shared דרך `integration_user_permissions`, בדיוק כמו `useUserIntegrations`).
+2. **State בעמוד `Chat.tsx`**: להחליף את `platformFilter: "all" | "whatsapp" | ...` ב:
+   ```ts
+   type ChatFilter =
+     | { kind: 'all' }
+     | { kind: 'platform', platform: 'whatsapp' | 'telegram' | 'manychat' | 'agents' }
+     | { kind: 'connection', integrationId: string, ownerUserId: string, provider: string }
+   ```
+3. **לוגיקת סינון** ב-`filteredContacts`:
+   - `platform` — כמו היום (לפי `active_chat_provider`/`contact_type`).
+   - `connection` — סינון כפול: `active_chat_provider === provider` **וגם** `connection_user_id === ownerUserId` של החיבור. (כיום ב-`chat_messages` יש `connection_user_id` אבל אין `integration_id`; השדות `provider + connection_user_id` מספיקים כדי לזהות חיבור ספציפי לכל מקרה ריאלי שראיתי בנתונים.)
+   - ה-RPC `get_chat_contacts` כבר מסנן לפי `connection_user_id = auth.uid()`, אז כדי לראות צ׳אטים של חיבור משותף (בבעלות מישהו אחר) — נשנה את ה-RPC לקבל פרמטר אופציונלי `p_connection_user_id` ו-להשתמש בו במקום `auth.uid()`. רק אם המשתמש בעצם רשאי על אותו integration (נוודא RLS-style ב-function עצמה).
+4. **UI**: רכיב חדש `ChatConnectionSelector` שמחליף את ה-`Select` הקיים בשתי הקריאות (שורות 559 ו-585 ב-`Chat.tsx`). שימוש ב-`Select` עם `SelectGroup`/`SelectLabel` קיימים מ-shadcn לכותרות לפי פלטפורמה.
 
-### 2. Hook חדש: `useFacebookIntegrations`
-מקביל ל-`useUserIntegrations`. מחזיר מערך של חיבורים הזמינים למשתמש הנוכחי בארגון, עם דגל `is_own`/`is_shared` ושם הבעלים.
+## קבצים שישתנו
+- חדש: `src/hooks/useChatConnections.ts`
+- חדש: `src/components/chat/ChatConnectionSelector.tsx`
+- ערכת מיגרציה: עדכון `get_chat_contacts` להוסיף `p_connection_user_id` אופציונלי.
+- `src/pages/Chat.tsx`: state חדש, שימוש בסלקטור החדש, סינון לפי connection, העברת `p_connection_user_id` ל-RPC.
 
-### 3. דף `FacebookSettings.tsx`
-- **רשימת חיבורים** במקום `maybeSingle()` - מציג את כל החיבורים הזמינים (אישי + משותפים), עם בורר.
-- כפתור "חבר את הפייסבוק שלי" - מבצע OAuth ויוצר רשומה חדשה עם `user_id = auth.uid()` (לא דורס את החיבור המשותף).
-- לכל חיבור שאני בעליו: כפתור "ניהול שיתוף" שפותח דיאלוג בחירת משתמשים בארגון (לפי `tenant_users`) שמקבלים גישת צפייה - upsert/delete ב-`integration_user_permissions`.
-
-### 4. Mirror Sharing קיים בין ארגונים
-- נשמר כפי שהוא. החיבור המקורי שלך ב-MarketingCaptain ממשיך להופיע ב-DMM כ-Mirror, ומופיע בבורר עבור כל מי שיש לו `integration_user_permissions` עליו (או עבורך כבעלים).
-- אם קמפיינר ב-DMM מחבר Facebook משלו - נוצרת רשומה חדשה עם `tenant_id=DMM`, `user_id=הקמפיינר`, 
+## מה לא משתנה
+- עמודי הצ׳אט הספציפיים (`ChatView`, התראות) — ממשיכים לעבוד עם הקשר הנוכחי. רק רשימת הקונטקטים נחתכת.
+- הסלקטור עדיין תומך באופציות הגנריות הקיימות ("כל הוואטסאפ", "טלגרם", "ManyChat", "סוכני AI") כברירות מחדל.
