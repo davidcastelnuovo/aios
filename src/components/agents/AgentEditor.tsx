@@ -8,6 +8,7 @@ import { GoalsTab } from "./tabs/GoalsTab";
 import { ToolsTab } from "./tabs/ToolsTab";
 import { KnowledgeTab } from "./tabs/KnowledgeTab";
 import { MemoryTab } from "./tabs/MemoryTab";
+import { TasksTab } from "./tabs/TasksTab";
 import { Crown, Bot } from "lucide-react";
 import { toast } from "sonner";
 
@@ -65,6 +66,7 @@ export function AgentEditor({ agent }: { agent: any }) {
         <TabsList className="mx-4 mt-3 self-start">
           <TabsTrigger value="profile">⚙️ פרופיל</TabsTrigger>
           <TabsTrigger value="goals">🎯 מטרות</TabsTrigger>
+          <TabsTrigger value="tasks">📋 משימות</TabsTrigger>
           <TabsTrigger value="tools">🛠️ כלים</TabsTrigger>
           <TabsTrigger value="knowledge">📚 ידע</TabsTrigger>
           <TabsTrigger value="memory">🧠 זיכרון</TabsTrigger>
@@ -72,6 +74,7 @@ export function AgentEditor({ agent }: { agent: any }) {
         <div className="flex-1 overflow-auto p-4">
           <TabsContent value="profile" className="mt-0"><ProfileTab agent={agent} /></TabsContent>
           <TabsContent value="goals" className="mt-0"><GoalsTab agentId={agent.id} /></TabsContent>
+          <TabsContent value="tasks" className="mt-0"><TasksTab agent={agent} /></TabsContent>
           <TabsContent value="tools" className="mt-0"><ToolsTab agent={agent} /></TabsContent>
           <TabsContent value="knowledge" className="mt-0"><KnowledgeTab agentId={agent.id} /></TabsContent>
           <TabsContent value="memory" className="mt-0"><MemoryTab agent={agent} /></TabsContent>
