@@ -580,6 +580,11 @@ export default function FlowEditor() {
 
   return (
     <div className="flex flex-col h-screen" dir="rtl">
+      {isReadOnlyMirror && (
+        <div className="px-4 py-2 bg-amber-500/10 border-b border-amber-500/30 text-xs text-amber-700 dark:text-amber-400 text-center">
+          אוטומציה זו שותפה אליך מארגון אחר ומוצגת כצפייה בלבד. היא רצה פעם אחת בלבד מהארגון שבעליה.
+        </div>
+      )}
       {/* ── Top bar ── */}
       <div className="flex items-center gap-3 px-4 py-2 border-b bg-background flex-wrap">
         <Button
@@ -597,46 +602,53 @@ export default function FlowEditor() {
           onChange={(e) => setAutomationName(e.target.value)}
           className="w-56 h-8 text-sm font-semibold"
           placeholder="שם האוטומציה"
+          disabled={isReadOnlyMirror}
         />
         <div className="flex items-center gap-2">
           <Switch
             checked={automationActive}
-            onCheckedChange={(v) => toggleActiveMutation.mutate(v)}
+            disabled={isReadOnlyMirror}
+            onCheckedChange={(v) => !isReadOnlyMirror && toggleActiveMutation.mutate(v)}
           />
           <Label className="text-xs">{automationActive ? "פעיל" : "מושהה"}</Label>
         </div>
 
         <div className="flex-1" />
 
-        <AddStepMenu onAdd={addStep} />
-        {insertBetween && (
+        {!isReadOnlyMirror && <AddStepMenu onAdd={addStep} />}
+        {!isReadOnlyMirror && insertBetween && (
           <AddStepMenu onAdd={(stepType) => doInsertBetween(stepType)} label="הוסף באמצע" />
         )}
-        {insertBetween && (
+        {!isReadOnlyMirror && insertBetween && (
           <Button variant="ghost" size="sm" onClick={() => setInsertBetween(null)} className="text-xs text-muted-foreground">
             ביטול
           </Button>
         )}
 
-        {allNodes.some((n) => n.step_type === "trigger" && n.action_type === "manual_command") && (
+        {!isReadOnlyMirror && allNodes.some((n) => n.step_type === "trigger" && n.action_type === "manual_command") && (
           <Button variant="outline" size="sm" onClick={() => setShowManualTrigger(true)}>
             <MessageSquare className="h-4 w-4 ml-1" />
             הפעל ידנית
           </Button>
         )}
-        <Button variant="outline" size="sm" onClick={() => setShowTestWithLead(true)}>
-          <TestTube className="h-4 w-4 ml-1" />
-          בדוק עם ליד
-        </Button>
+        {!isReadOnlyMirror && (
+          <Button variant="outline" size="sm" onClick={() => setShowTestWithLead(true)}>
+            <TestTube className="h-4 w-4 ml-1" />
+            בדוק עם ליד
+          </Button>
+        )}
         <Button variant="outline" size="sm" onClick={() => setShowHistory(true)}>
           <History className="h-4 w-4 ml-1" />
           היסטוריה
         </Button>
-        <Button size="sm" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
-          <Save className="h-4 w-4 ml-1" />
-          {saveMutation.isPending ? "שומר..." : "שמור"}
-        </Button>
+        {!isReadOnlyMirror && (
+          <Button size="sm" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+            <Save className="h-4 w-4 ml-1" />
+            {saveMutation.isPending ? "שומר..." : "שמור"}
+          </Button>
+        )}
       </div>
+
 
       {/* ── Canvas ── */}
       <div className="flex-1 relative">
