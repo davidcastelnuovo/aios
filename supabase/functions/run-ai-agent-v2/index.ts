@@ -317,10 +317,34 @@ Deno.serve(async (req) => {
     }
 
     const tools = await loadTools(supabase, run.tenant_id);
-    const toolsByName = new Map(tools.map((t) => [t.name, t]));
-    const openaiTools = buildOpenAITools(tools);
 
-    const systemPrompt = (agent.system_prompt as string | null) ??
+    // Load MCP connections (ready) — expose their tools with mcp__<connId>__<toolName> prefix
+    const { data: mcpConns } = await supabase
+      .from("agent_mcp_connections")
+      .select("*")
+      .eq("tenant_id", run.tenant_id)
+      .eq("state", "ready")
+      .or(`agent_id.eq.${run.agent_id},agent_id.is.null`);
+    const mcpTools: ToolRow[] = [];
+    for (const c of mcpConns ?? []) {
+      const list = Array.isArray(c.available_tools) ? c.available_tools : [];
+      for (const t of list) {
+        mcpTools.push({
+          id: `mcp_${c.id}_${t.name}`,
+          name: `mcp__${c.id.replace(/-/g, "")}__${t.name}`.slice(0, 64),
+          display_name: `${c.name} • ${t.name}`,
+          description: t.description ?? `MCP tool from ${c.name}`,
+          input_schema: t.inputSchema ?? { type: "object", properties: {} },
+          handler_kind: "mcp",
+          handler_ref: `${c.id}::${t.name}`,
+          requires_approval: false,
+          enabled: true,
+        });
+      }
+    }
+    const allTools = [...tools, ...mcpTools];
+    const toolsByName = new Map(allTools.map((t) => [t.name, t]));
+    const openaiTools = buildOpenAITools(allTools);
       "אתה סוכן AI אוטונומי. עבוד בלולאת ReAct: חשוב על הצעד הבא, השתמש בכלים זמינים, צפה בתוצאות, והמשך עד שתשיג את המטרה. ענה בקצרה ובעברית.";
 
     let messages = isResume
