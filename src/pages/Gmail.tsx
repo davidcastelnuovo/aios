@@ -799,7 +799,7 @@ export default function Gmail() {
             <div
               className="border rounded p-4 bg-muted/30 prose prose-sm max-w-none overflow-auto"
               dir="auto"
-              dangerouslySetInnerHTML={{ __html: selectedMessage.body || selectedMessage.snippet }}
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedMessage.body || selectedMessage.snippet || "", { FORBID_TAGS: ["script", "style", "iframe", "object", "embed"], FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover", "onfocus", "onblur"] }) }}
             />
           </CardContent>
         </Card>
