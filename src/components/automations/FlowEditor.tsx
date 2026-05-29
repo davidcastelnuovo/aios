@@ -653,6 +653,12 @@ export default function FlowEditor() {
 
         <div className="flex-1" />
 
+        {!isReadOnlyMirror && (
+          <Button variant="outline" size="sm" onClick={addTrigger} title="הוסף טריגר נוסף (OR)">
+            <Zap className="h-4 w-4 ml-1 text-amber-500" />
+            + טריגר
+          </Button>
+        )}
         {!isReadOnlyMirror && <AddStepMenu onAdd={addStep} />}
         {!isReadOnlyMirror && insertBetween && (
           <AddStepMenu onAdd={(stepType) => doInsertBetween(stepType)} label="הוסף באמצע" />
