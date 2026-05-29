@@ -932,6 +932,14 @@ export default function FacebookSettings() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <ManageIntegrationPermissionsDialog
+        open={!!sharingIntegrationId}
+        onOpenChange={(open) => { if (!open) setSharingIntegrationId(null); }}
+        integrationId={sharingIntegrationId || ''}
+        integrationName={`Facebook - ${sharingIntegrationName}`}
+        integrationOwnerId={sharingOwnerId}
+      />
     </div>
   );
 }
