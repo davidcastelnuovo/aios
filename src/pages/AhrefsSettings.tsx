@@ -655,7 +655,7 @@ export default function AhrefsSettings() {
                           [&_.header]:bg-gradient-to-l [&_.header]:from-primary/80 [&_.header]:to-primary [&_.header]:text-primary-foreground [&_.header]:p-6 [&_.header]:rounded-lg [&_.header]:mb-6
                         "
                         dir="rtl"
-                        dangerouslySetInnerHTML={{ __html: htmlContent }}
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(htmlContent || "", { FORBID_TAGS: ["script", "style", "iframe", "object", "embed"], FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover", "onfocus", "onblur"] }) }}
                       />
                     )}
                   </div>
