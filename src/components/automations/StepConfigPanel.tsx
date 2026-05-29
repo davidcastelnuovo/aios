@@ -99,6 +99,7 @@ export const TRIGGER_CATEGORIES = [
       { value: "typeform_submitted",       label: "Typeform נשלח" },
       { value: "stripe_payment",           label: "תשלום Stripe" },
       { value: "integration_disconnected", label: "⚠️ חיבור התנתק / דורש חיבור מחדש" },
+      { value: "ad_account_blocked",       label: "🚫 חשבון מודעות נחסם (אשראי / מדיניות)" },
     ],
   },
   {
