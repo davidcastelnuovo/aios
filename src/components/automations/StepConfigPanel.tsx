@@ -208,6 +208,24 @@ function getAvailableFields(triggerType: string | undefined, triggerConfig?: Rec
         { key: "connection_user_id", label: "מזהה חיבור" },
       ];
       break;
+    case "integration_disconnected":
+    case "integration_reconnected":
+    case "ad_account_blocked":
+      fields = [
+        { key: "provider", label: "ספק (קוד)" },
+        { key: "provider_label", label: "שם הספק (עברית)" },
+        { key: "reason", label: "סיבה (קוד)" },
+        { key: "reason_he", label: "סיבה (עברית)" },
+        { key: "account_id", label: "מזהה חשבון" },
+        { key: "account_name", label: "שם חשבון" },
+        { key: "client_name", label: "שם לקוח" },
+        { key: "client_id", label: "מזהה לקוח" },
+        { key: "tenant_name", label: "שם ארגון" },
+        { key: "account_link", label: "קישור לחשבון בספק" },
+        { key: "internal_link", label: "קישור פנימי (אינטגרציות)" },
+        { key: "occurred_at", label: "מועד התרחשות" },
+      ];
+      break;
     default:
       fields = [
         { key: "contact_name", label: "שם איש קשר" },
@@ -216,6 +234,7 @@ function getAvailableFields(triggerType: string | undefined, triggerConfig?: Rec
       ];
       break;
   }
+
 
   // Add Facebook form fields if trigger is lead_created with facebook_form source
   if (triggerType === "lead_created" && triggerConfig?.lead_source === "facebook_form") {

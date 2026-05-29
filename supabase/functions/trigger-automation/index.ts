@@ -184,6 +184,12 @@ Deno.serve(async (req) => {
 
     const requestBody = await req.json()
 
+    // Backward-compat alias: old name → new name
+    if (requestBody.trigger_type === 'ad_account_billing_issue') {
+      requestBody.trigger_type = 'ad_account_blocked'
+    }
+
+
     // ===== AUTOMATION SAFETY GUARDS =====
     const MAX_EXECUTION_DEPTH = 10
     const MAX_ACTIONS_PER_RUN = 50

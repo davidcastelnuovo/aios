@@ -3925,6 +3925,39 @@ export type Database = {
           },
         ]
       }
+      integration_alerts_log: {
+        Row: {
+          account_id: string | null
+          alert_type: string
+          fired_at: string
+          id: string
+          payload: Json
+          provider: string
+          reason: string | null
+          tenant_id: string
+        }
+        Insert: {
+          account_id?: string | null
+          alert_type: string
+          fired_at?: string
+          id?: string
+          payload?: Json
+          provider: string
+          reason?: string | null
+          tenant_id: string
+        }
+        Update: {
+          account_id?: string | null
+          alert_type?: string
+          fired_at?: string
+          id?: string
+          payload?: Json
+          provider?: string
+          reason?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
       integration_health: {
         Row: {
           consecutive_failures: number
