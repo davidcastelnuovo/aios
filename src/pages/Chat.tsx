@@ -416,13 +416,26 @@ export default function Chat() {
     // Filter out blocked contacts
     allContacts = allContacts.filter(contact => !contact.is_blocked);
 
-    // Apply platform filter
-    if (platformFilter === 'whatsapp') {
-      allContacts = allContacts.filter(c => c.active_chat_provider === 'green_api' || (!c.active_chat_provider && c.contact_type !== 'telegram'));
-    } else if (platformFilter === 'telegram') {
-      allContacts = allContacts.filter(c => c.contact_type === 'telegram' || c.active_chat_provider === 'telegram');
-    } else if (platformFilter === 'manychat') {
-      allContacts = allContacts.filter(c => c.active_chat_provider === 'manychat');
+    // Apply platform / connection filter
+    if (chatFilter.kind === 'platform') {
+      if (chatFilter.platform === 'whatsapp') {
+        allContacts = allContacts.filter(c => c.active_chat_provider === 'green_api' || (!c.active_chat_provider && c.contact_type !== 'telegram'));
+      } else if (chatFilter.platform === 'telegram') {
+        allContacts = allContacts.filter(c => c.contact_type === 'telegram' || c.active_chat_provider === 'telegram');
+      } else if (chatFilter.platform === 'manychat') {
+        allContacts = allContacts.filter(c => c.active_chat_provider === 'manychat');
+      }
+    } else if (chatFilter.kind === 'connection') {
+      const conn = chatConnections.find(c => c.id === chatFilter.integrationId);
+      if (conn) {
+        if (conn.platform === 'telegram') {
+          allContacts = allContacts.filter(c => c.contact_type === 'telegram' || c.active_chat_provider === 'telegram');
+        } else if (conn.platform === 'manychat') {
+          allContacts = allContacts.filter(c => c.active_chat_provider === 'manychat');
+        } else {
+          allContacts = allContacts.filter(c => c.active_chat_provider === 'green_api' || (!c.active_chat_provider && c.contact_type !== 'telegram'));
+        }
+      }
     }
 
     // Apply contact type filter
