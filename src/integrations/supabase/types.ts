@@ -514,39 +514,57 @@ export type Database = {
       ai_agents: {
         Row: {
           active: boolean | null
+          allowed_tools: string[]
           created_at: string | null
           engine: string
           id: string
+          language: string
+          max_tool_rounds: number
           name: string
           personality: string | null
+          response_length: string | null
           soul: string | null
+          system_prompt: string | null
           talent: string | null
           tenant_id: string
           updated_at: string | null
+          writing_style: string | null
         }
         Insert: {
           active?: boolean | null
+          allowed_tools?: string[]
           created_at?: string | null
           engine?: string
           id?: string
+          language?: string
+          max_tool_rounds?: number
           name: string
           personality?: string | null
+          response_length?: string | null
           soul?: string | null
+          system_prompt?: string | null
           talent?: string | null
           tenant_id: string
           updated_at?: string | null
+          writing_style?: string | null
         }
         Update: {
           active?: boolean | null
+          allowed_tools?: string[]
           created_at?: string | null
           engine?: string
           id?: string
+          language?: string
+          max_tool_rounds?: number
           name?: string
           personality?: string | null
+          response_length?: string | null
           soul?: string | null
+          system_prompt?: string | null
           talent?: string | null
           tenant_id?: string
           updated_at?: string | null
+          writing_style?: string | null
         }
         Relationships: [
           {
