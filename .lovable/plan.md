@@ -1,39 +1,43 @@
 
-# Manus WhatsApp Gateway Integration
+## סטטוס בדיקה
 
-מטרה: לאפשר לכרמן ליצור instances של WhatsApp דרך Manus Gateway, לקבל QR לחיבור, לבדוק סטטוס ולשלוח הודעות — בלי לגעת בקוד קיים.
+### ✅ מה תקין בקוד
 
-## שינויים
+**`supabase/functions/manage-manus-wa/index.ts`** — מוטמע נכון:
+- משתמש ב-`MANUS_GATEWAY_URL` ו-`MANUS_GATEWAY_WORKER_SECRET` מ-env
+- שולח `X-Worker-Secret` ל-Admin endpoints (`/api/admin/instances`, `/qr-token`, `/status`)
+- שולח `X-Api-Key` per-instance ל-REST (`/api/v1/instances/:id/send/text`)
+- 4 actions: `create_instance`, `get_qr_link`, `get_status`, `send_message`
+- שגיאה ברורה אם `WORKER_SECRET` חסר
 
-### 1. קובץ חדש: `supabase/functions/manage-manus-wa/index.ts`
-Edge Function חדשה המשמשת כ-proxy מאובטח בין כרמן ל-Gateway.
-תומכת ב-5 פעולות:
-- `create_instance` — יצירת instance חדש
-- `get_qr_link` — קבלת קישור QR לחיבור
-- `get_status` — בדיקת סטטוס חיבור
-- `connect` — חיבור instance
-- `send_message` — שליחת הודעה דרך ה-Gateway
+**`supabase/functions/run-ai-agent/index.ts`** — 4 כלים של כרמן מחוברים:
+- `create_whatsapp_instance` (שורה 140)
+- `get_whatsapp_qr_link` (שורה 141)
+- `get_whatsapp_status` (שורה 142)
+- `send_whatsapp_via_gateway` (שורה 143)
+- כל ה-cases ב-`executeTool` קוראים ל-`manage-manus-wa` עם service-role key
 
-### 2. עריכה: `supabase/functions/run-ai-agent/index.ts` (הוספה בלבד)
-- שורה ~138: הוספת 4 tool definitions ל-`ALL_TOOLS`
-- שורה ~1291: הוספת 4 `case` חדשים ב-switch של `executeTool` לפני `default:`
+### ❌ מה חסר — secrets לא הוגדרו
 
-כלים חדשים לכרמן:
-- `create_whatsapp_instance`
-- `get_whatsapp_qr_link`
-- `get_whatsapp_status`
-- `send_whatsapp_via_gateway`
+בדקתי את רשימת ה-secrets בפרויקט. **שניהם חסרים:**
 
-### 3. עריכה: `supabase/functions/agent-heartbeat/index.ts` (הוספה בלבד)
-14 שורות לפני ה-return הסופי — שליחת ping ל-`run-ai-agent` בכל ריצת heartbeat כדי למנוע cold start.
+| Secret | סטטוס |
+|--------|--------|
+| `MANUS_GATEWAY_URL` | ❌ לא קיים |
+| `MANUS_GATEWAY_WORKER_SECRET` | ❌ לא קיים |
 
-## Secret נדרש לאחר הדחיפה
-```
-GATEWAY_SESSION_TOKEN = <session token מה-Gateway>
-```
-נדרש כדי ש-`create_instance` ו-`get_qr_link` יעבדו. אבקש אותו דרך טופס מאובטח אחרי המעבר ל-build.
+בלעדיהם, הפונקציה תחזיר מיד שגיאה:
+> `MANUS_GATEWAY_WORKER_SECRET is not configured.`
 
-## הערות
-- כל השינויים הם הוספות בלבד, אין שינוי בקוד קיים.
-- לא נוגעים ב-`src/integrations/supabase/client.ts` ולא ב-`types.ts`.
-- אחרי build אבדוק deploy של 3 ה-functions ואוודא שאין שגיאות.
+(הקוד נופל ל-fallback `https://whatsappgw-pzpyrrww.manus.space` אם `MANUS_GATEWAY_URL` חסר, אז זה לא קריטי — אבל עדיף להגדיר אותו במפורש.)
+
+## שלב הבא (לאחר אישור Build)
+
+1. אקרא ל-`add_secret` עבור שני ה-secrets. תקבל טופס מאובטח להזנת:
+   - `MANUS_GATEWAY_URL` = `https://whatsappgw-pzpyrrww.manus.space`
+   - `MANUS_GATEWAY_WORKER_SECRET` = הערך של `WORKER_SECRET` מה-Gateway ב-Manus
+2. אבדוק `cloud_status` ואדפלוי מחדש את `manage-manus-wa` אם צריך.
+3. אריץ test call ל-`manage-manus-wa` עם `action: create_instance` (test tenant) כדי לוודא שה-Gateway מגיב 200 OK.
+4. אבדוק logs ב-`manage-manus-wa` אחרי הקריאה.
+
+**לא נדרשים שינויי קוד.** רק הגדרת secrets ובדיקת deploy.
