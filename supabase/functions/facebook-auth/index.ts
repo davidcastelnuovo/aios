@@ -226,13 +226,21 @@ serve(async (req) => {
       }
 
 
-      // Check if integration already exists
-      const { data: existingInt } = await supabase
+      // Check if integration already exists — scope by user_id so each
+      // user can have their own per-user Facebook connection without
+      // overwriting a shared/mirror record owned by someone else.
+      let existingIntQuery = supabase
         .from('tenant_integrations')
         .select('id')
         .eq('tenant_id', tenantId)
         .eq('integration_type', integration_type)
-        .maybeSingle();
+        .is('shared_from_integration_id', null);
+      if (user_id) {
+        existingIntQuery = existingIntQuery.eq('user_id', user_id);
+      } else {
+        existingIntQuery = existingIntQuery.is('user_id', null);
+      }
+      const { data: existingInt } = await existingIntQuery.maybeSingle();
 
       // Store or update integration
       const integrationData = {
@@ -363,13 +371,19 @@ serve(async (req) => {
       const pagesData = await pagesResponse.json();
 
 
-      // Check if integration already exists
-      const { data: existingInt } = await supabase
+      // Check if integration already exists — scope by user_id (per-user model)
+      let existingIntQuery = supabase
         .from('tenant_integrations')
         .select('id')
         .eq('tenant_id', tenantId)
         .eq('integration_type', integration_type)
-        .maybeSingle();
+        .is('shared_from_integration_id', null);
+      if (user_id) {
+        existingIntQuery = existingIntQuery.eq('user_id', user_id);
+      } else {
+        existingIntQuery = existingIntQuery.is('user_id', null);
+      }
+      const { data: existingInt } = await existingIntQuery.maybeSingle();
 
       // Store or update integration
       const integrationData = {

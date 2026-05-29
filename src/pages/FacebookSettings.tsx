@@ -12,12 +12,14 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Facebook, Unlink, RefreshCw, CheckCircle2, AlertCircle, Copy, Webhook, Target, ArrowLeft, Loader2, TestTube, Download, Search, ListTree } from "lucide-react";
+import { Facebook, Unlink, RefreshCw, CheckCircle2, AlertCircle, Copy, Webhook, Target, ArrowLeft, Loader2, TestTube, Download, Search, ListTree, Share2, Plus, User as UserIcon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
+import { useUserIntegrations } from "@/hooks/useUserIntegrations";
 import { FacebookFormMappingSection } from "@/components/forms/FacebookFormMappingSection";
 import { ShareFacebookConnectionSection } from "@/components/forms/ShareFacebookConnectionSection";
 import { SharedFacebookConnectionBanner } from "@/components/forms/SharedFacebookConnectionBanner";
+import { ManageIntegrationPermissionsDialog } from "@/components/forms/ManageIntegrationPermissionsDialog";
 
 interface FacebookPage {
   id: string;
@@ -37,43 +39,42 @@ export default function FacebookSettings() {
   const [testEventCode, setTestEventCode] = useState<string>("");
   const [manualToken, setManualToken] = useState<string>("");
   const [pageSearchQuery, setPageSearchQuery] = useState<string>("");
+  const [selectedLeadAdsId, setSelectedLeadAdsId] = useState<string>("");
+  const [sharingIntegrationId, setSharingIntegrationId] = useState<string | null>(null);
+  const [sharingIntegrationName, setSharingIntegrationName] = useState<string>("");
+  const [sharingOwnerId, setSharingOwnerId] = useState<string | null>(null);
 
   const projectUrl = import.meta.env.VITE_SUPABASE_URL || '';
   const webhookUrl = `${projectUrl}/functions/v1/facebook-lead-webhook`;
 
-  // Fetch Lead Ads integration
-  const { data: leadAdsIntegration, isLoading: loadingLeadAds } = useQuery({
-    queryKey: ['facebook-lead-ads-integration', currentTenant?.id],
-    queryFn: async () => {
-      if (!currentTenant?.id) return null;
-      const { data, error } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', currentTenant.id)
-        .eq('integration_type', 'facebook_lead_ads')
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!currentTenant?.id,
-  });
+  // Fetch ALL Lead Ads integrations visible to this user in this tenant
+  // (own + permission-shared). Each user can have their own per-user FB
+  // connection alongside any shared/mirror connection from the agency owner.
+  const { data: leadAdsList = [], isLoading: loadingLeadAds } = useUserIntegrations(
+    currentTenant?.id,
+    'facebook_lead_ads'
+  );
+  const { data: capiList = [], isLoading: loadingCapi } = useUserIntegrations(
+    currentTenant?.id,
+    'facebook_capi'
+  );
 
-  // Fetch CAPI integration
-  const { data: capiIntegration, isLoading: loadingCapi } = useQuery({
-    queryKey: ['facebook-capi-integration', currentTenant?.id],
-    queryFn: async () => {
-      if (!currentTenant?.id) return null;
-      const { data, error } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', currentTenant.id)
-        .eq('integration_type', 'facebook_capi')
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!currentTenant?.id,
-  });
+  // Auto-select first integration when list changes (prefer own connections)
+  useEffect(() => {
+    if (leadAdsList.length === 0) {
+      if (selectedLeadAdsId) setSelectedLeadAdsId("");
+      return;
+    }
+    const stillExists = leadAdsList.some((i: any) => i.id === selectedLeadAdsId);
+    if (!stillExists) {
+      const ownFirst = leadAdsList.find((i: any) => i._isOwn) || leadAdsList[0];
+      setSelectedLeadAdsId(ownFirst.id);
+    }
+  }, [leadAdsList, selectedLeadAdsId]);
+
+  const leadAdsIntegration: any = leadAdsList.find((i: any) => i.id === selectedLeadAdsId) || leadAdsList[0] || null;
+  const capiIntegration: any = capiList[0] || null;
+
 
   // Fetch agencies for form mapping
   const { data: agencies } = useQuery({
@@ -170,8 +171,8 @@ export default function FacebookSettings() {
     },
     onSuccess: () => {
       toast.success('החיבור לפייסבוק נותק בהצלחה');
-      queryClient.invalidateQueries({ queryKey: ['facebook-lead-ads-integration'] });
-      queryClient.invalidateQueries({ queryKey: ['facebook-capi-integration'] });
+      queryClient.invalidateQueries({ queryKey: ['user-integrations'] });
+      queryClient.invalidateQueries({ queryKey: ['user-integrations'] });
     },
     onError: (error) => {
       toast.error('שגיאה בניתוק: ' + (error as Error).message);
@@ -192,7 +193,7 @@ export default function FacebookSettings() {
     },
     onSuccess: () => {
       toast.success('העמוד נרשם בהצלחה לקבלת לידים');
-      queryClient.invalidateQueries({ queryKey: ['facebook-lead-ads-integration'] });
+      queryClient.invalidateQueries({ queryKey: ['user-integrations'] });
     },
     onError: (error) => {
       toast.error('שגיאה ברישום העמוד: ' + (error as Error).message);
@@ -230,7 +231,7 @@ export default function FacebookSettings() {
     },
     onSuccess: () => {
       toast.success('הגדרות CAPI נשמרו בהצלחה');
-      queryClient.invalidateQueries({ queryKey: ['facebook-capi-integration'] });
+      queryClient.invalidateQueries({ queryKey: ['user-integrations'] });
     },
     onError: (error) => {
       toast.error('שגיאה בשמירת ההגדרות: ' + (error as Error).message);
@@ -257,7 +258,7 @@ export default function FacebookSettings() {
     onSuccess: () => {
       toast.success('Token נשמר בהצלחה');
       setManualToken('');
-      queryClient.invalidateQueries({ queryKey: ['facebook-lead-ads-integration'] });
+      queryClient.invalidateQueries({ queryKey: ['user-integrations'] });
     },
     onError: (error) => {
       toast.error('שגיאה בשמירת Token: ' + (error as Error).message);
@@ -373,7 +374,64 @@ export default function FacebookSettings() {
         </div>
       </div>
 
+      {/* Per-user connection picker — appears when more than one connection is visible */}
+      {leadAdsList.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-right text-base">חיבורי Facebook זמינים</CardTitle>
+            <CardDescription className="text-right text-xs">
+              חיבור משותף + חיבור אישי שלך. ניתן להוסיף חשבון Facebook נוסף ולשתף עם משתמשים אחרים בארגון.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {leadAdsList.length > 1 && (
+              <Select value={selectedLeadAdsId} onValueChange={setSelectedLeadAdsId}>
+                <SelectTrigger><SelectValue placeholder="בחר חיבור" /></SelectTrigger>
+                <SelectContent>
+                  {leadAdsList.map((i: any) => {
+                    const settings = i.settings as any;
+                    const label = settings?.page_name || settings?.fb_user_name || `חיבור ${i.id.slice(0, 6)}`;
+                    return (
+                      <SelectItem key={i.id} value={i.id}>
+                        {i._isOwn ? `${label} (שלך)` : `${label}${i._sharedByName ? ` (משותף ע"י ${i._sharedByName})` : ' (משותף)'}`}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            )}
+            <div className="flex gap-2 flex-wrap">
+              {leadAdsIntegration?._isOwn && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    const settings = leadAdsIntegration.settings as any;
+                    setSharingIntegrationName(settings?.page_name || 'Facebook');
+                    setSharingOwnerId(leadAdsIntegration.user_id);
+                    setSharingIntegrationId(leadAdsIntegration.id);
+                  }}
+                >
+                  <Share2 className="h-4 w-4 ml-2" />
+                  נהל גישה למשתמשים
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => connectMutation.mutate('facebook_lead_ads')}
+                disabled={connectMutation.isPending}
+              >
+                <Plus className="h-4 w-4 ml-2" />
+                חבר את הפייסבוק שלי
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Tabs defaultValue="lead-ads" className="w-full">
+
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="lead-ads" className="gap-2">
             <Target className="h-4 w-4" />
@@ -874,6 +932,14 @@ export default function FacebookSettings() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <ManageIntegrationPermissionsDialog
+        open={!!sharingIntegrationId}
+        onOpenChange={(open) => { if (!open) setSharingIntegrationId(null); }}
+        integrationId={sharingIntegrationId || ''}
+        integrationName={`Facebook - ${sharingIntegrationName}`}
+        integrationOwnerId={sharingOwnerId}
+      />
     </div>
   );
 }
