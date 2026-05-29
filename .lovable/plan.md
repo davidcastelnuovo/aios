@@ -1,81 +1,69 @@
-# המשך Phase A — אישורים גנריים + שכבות זיכרון
 
-## #2 — טאב "אישורים" גנרי + התראה גלובלית
+# התראות אינטגרציה — `integration_disconnected` + `ad_account_blocked`
 
-### רכיבים חדשים
-1. **`src/components/agents/tabs/ApprovalsTab.tsx`**
-   - Query על `agent_approval_queue` עם `agent_id` + `status='pending'` + `expires_at > now()`
-   - כרטיסים פר בקשה: `tool_name`, `tool_input` (JSON viewer), `run_id`, זמן יצירה, TTL
-   - כפתורי **אשר / דחה** → UPDATE ל-`status` (`approved`/`rejected`) + `decided_at` + `decided_by=auth.uid()`
-   - אחרי אישור — קריאה ל-edge function `resume-agent-run` (חדש, ראה למטה) עם `run_id`
-   - מצב ריק: "אין בקשות ממתינות"
-   - טאב נוסף "היסטוריה" — אישורים אחרונים (approved/rejected/expired) ב-30 יום
+מטרה: לאפשר אוטומציה עם שני טריגרים (OR) שמשגרת הודעת WhatsApp עם פירוט מלא — איזו אינטגרציה/חשבון, איזה לקוח, וקישור ישיר לחשבון.
 
-2. **`src/components/agents/GlobalApprovalsBell.tsx`**
-   - איקון פעמון ב-`AppHeader` (ליד הפעמון הקיים אם יש, אחרת חדש)
-   - Query גלובלי על כל ה-pending approvals של ה-tenant
-   - Realtime subscription על `agent_approval_queue` (INSERT/UPDATE)
-   - Badge אדום עם מספר; קליק פותח Popover עם רשימה מקוצרת + לינק לסוכן הרלוונטי (`/agents/:agentId?tab=approvals`)
+## 1. מיגרציה — `integration_alerts_log`
+טבלה למניעת ספאם (throttle 6 שעות):
+- `tenant_id`, `provider`, `account_id` (nullable), `alert_type` (`disconnected` | `blocked`), `fired_at`
+- אינדקס על (tenant_id, provider, account_id, alert_type, fired_at)
+- RLS: רק service_role כותב; tenant יכול לקרוא
+- GRANTs מלאים
 
-3. **`supabase/functions/resume-agent-run/index.ts`**
-   - מקבל `{ approval_id, decision }`
-   - אם approved — מבצע את ה-tool שב-`tool_input` ומחזיר את התוצאה ל-`agent_runs` (מעדכן `status`/`output`)
-   - אם rejected — מסמן את ה-run כ-`cancelled`
-   - מתועד ב-`agent_action_log`
-
-### עדכונים
-- **`AgentEditor.tsx`** — להוסיף `<TabsContent value="approvals">` עם `ApprovalsTab`
-- **`AppHeader.tsx`** (או הלייאאוט) — להציג `GlobalApprovalsBell` למשתמשים עם הרשאה
-
----
-
-## #3 — סינון שכבות זיכרון + עריכת user-model
-
-### עדכונים ל-`MemoryTab.tsx` (קיים)
-1. **טאבי-משנה / סלקטור** עליון: `working` | `episodic` | `semantic` | `user_model` | `הכל`
-2. **חיפוש FTS** — שדה חיפוש שמשתמש ב-`agent_memory.fts` (טריגר כבר קיים מ-Phase A)
-3. **סינון לפי `contact_phone`** — דרופדאון אנשי קשר (מ-`leads`/`clients`)
-4. כל פריט זיכרון מציג: `memory_type` (Badge צבעוני), `content`, `contact_phone`, `created_at`
-
-### רכיב חדש: `src/components/agents/UserModelEditor.tsx`
-- בטאב נפרד "פרופילי משתמשים" בתוך AgentEditor
-- רשימת `agent_user_profiles` פר `contact_phone`
-- עריכה inline: `traits` (JSON), `preferences` (JSON), `communication_style`, `notes`
-- כפתור "צור פרופיל חדש" — בוחר contact מ-CRM, פותח דיאלוג
-
-### עדכונים ל-`AgentEditor.tsx`
-- טאב חדש: `<TabsContent value="user-profiles">`
-
----
-
-## פרטים טכניים
-
-### קבצים שייווצרו
-- `src/components/agents/tabs/ApprovalsTab.tsx`
-- `src/components/agents/tabs/UserProfilesTab.tsx`
-- `src/components/agents/GlobalApprovalsBell.tsx`
-- `supabase/functions/resume-agent-run/index.ts`
-
-### קבצים שיעודכנו
-- `src/components/agents/AgentEditor.tsx` — 2 טאבים חדשים
-- `src/components/agents/tabs/MemoryTab.tsx` — סלקטור + FTS + סינון contact
-- `src/components/layout/AppHeader.tsx` (או הקובץ הרלוונטי) — Bell
-
-### Realtime
-```sql
-ALTER PUBLICATION supabase_realtime ADD TABLE public.agent_approval_queue;
+## 2. Shared helper — `supabase/functions/_shared/fireIntegrationAlert.ts`
+פונקציה אחת שכל cron/webhook קורא לה:
 ```
-(מיגרציה קטנה במידת הצורך)
+fireIntegrationAlert({
+  tenant_id, provider, alert_type: 'disconnected'|'blocked',
+  account_id?, account_name?, client_id?, client_name?, reason
+})
+```
+תפקידיה:
+- בדיקת throttle מול `integration_alerts_log` (6h)
+- העשרת payload: `provider_label` (עברית), `reason_he`, `tenant_name`, `account_link` (deep-link לפי provider), `internal_link` (לכרטיס הלקוח/אינטגרציות), `occurred_at`
+- קריאה ל-`trigger-automation` עם הטריגר המתאים
+- רישום ב-log
 
-### עיצוב
-- Badge צבעוני פר `memory_type`: working=blue, episodic=green, semantic=purple, user_model=amber
-- Approvals: pending=yellow border, approved=green, rejected=red
+מיפוי `account_link`:
+- Meta/FB Ads: `https://business.facebook.com/adsmanager/manage/accounts?act={id}`
+- Google Ads: `https://ads.google.com/aw/overview?ocid={id}`
+- GA4: `https://analytics.google.com/analytics/web/#/p{id}`
+- GSC: `https://search.google.com/search-console?resource_id={encoded}`
+- Gmail/Telegram/Green API/ManyChat/Unified.to: קישור פנימי לעמוד האינטגרציה
 
----
+## 3. שילוב במקורות הקיימים
+**`ad_account_blocked`**:
+- `cron-sync-facebook-insights`: שינוי שם הטריגר מ-`ad_account_billing_issue` → `ad_account_blocked` + שימוש ב-helper
+- `cron-sync-google-ads`: יירוט `CUSTOMER_NOT_ENABLED`/`ACCOUNT_SUSPENDED`/`BILLING` → `ad_account_blocked`
+- ב-`trigger-automation`: alias `ad_account_billing_issue` → `ad_account_blocked` לתאימות לאחור
 
-## מה לא נכלל (יישאר ל-Phase B)
-- ReAct loop אמיתי בתוך `run-ai-agent` שמייצר `agent_runs` + מחייב approval לפני tool execution (התשתית מוכנה, ההפעלה בשלב הבא)
-- Tool registry UI לעריכת `agent_tools.requires_approval`
-- שיפור עצמי / לולאות לימוד — Phase C
+**`integration_disconnected`**:
+- כשל refresh-token / 401 / `invalid_grant` בכל הקרונים:
+  `cron-sync-google-ads`, `cron-sync-google-analytics`, `cron-sync-google-search-console`, `gmail-sync`
+- כשל webhook/auth ב-`green-api-webhook`, `telegram-poll`, `manychat-webhook`
+- `unified-to-*` callbacks כשהחיבור נכשל
 
-מאשר?
+## 4. UI — `StepConfigPanel`
+הוספת פאנל "משתנים זמינים" מתחת לשדה הטקסט של הודעת WhatsApp, מבוסס על סוג הטריגר שנבחר. לחיצה על משתנה מזריקה `{{var_name}}` לעמדת הסמן.
+
+משתנים לשני הטריגרים החדשים:
+`{{provider}}`, `{{provider_label}}`, `{{reason}}`, `{{reason_he}}`, `{{account_id}}`, `{{account_name}}`, `{{client_name}}`, `{{client_id}}`, `{{tenant_name}}`, `{{account_link}}`, `{{internal_link}}`, `{{occurred_at}}`
+
+## 5. תבנית ברירת מחדל
+כשמשתמש מוסיף step מסוג WhatsApp לאוטומציה עם אחד הטריגרים האלה ושדה ההודעה ריק — להציע:
+```
+🚨 התראת אינטגרציה
+ספק: {{provider_label}}
+לקוח: {{client_name}}
+חשבון: {{account_name}}
+סיבה: {{reason_he}}
+קישור: {{account_link}}
+```
+
+## קבצים
+**חדשים:** מיגרציה ל-`integration_alerts_log`, `supabase/functions/_shared/fireIntegrationAlert.ts`
+**עריכה:** `trigger-automation/index.ts`, `cron-sync-facebook-insights/index.ts`, `cron-sync-google-ads/index.ts`, `cron-sync-google-analytics/index.ts`, `cron-sync-google-search-console/index.ts`, `gmail-sync/index.ts`, `green-api-webhook/index.ts`, `telegram-poll/index.ts`, `manychat-webhook/index.ts`, `src/components/automations/StepConfigPanel.tsx`
+
+## פתוח לאישור
+1. Throttle של 6 שעות מתאים? (אפשר 1h/24h)
+2. להוסיף גם טריגר `integration_reconnected` (החזרה לפעולה)?
