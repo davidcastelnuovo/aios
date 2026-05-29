@@ -302,7 +302,7 @@ export function PublicSeoView({ tableName, reports, gscData = [], gscMultiPeriod
           <CardContent className="p-4">
             <div
               className="prose prose-sm dark:prose-invert max-w-none text-right"
-              dangerouslySetInnerHTML={{ __html: reportData.html }}
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(reportData.html || "", { FORBID_TAGS: ["script", "style", "iframe", "object", "embed"], FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover", "onfocus", "onblur"] }) }}
             />
           </CardContent>
         </Card>
