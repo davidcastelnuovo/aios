@@ -10,6 +10,21 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Require shared secret header or query param
+  const expectedSecret = Deno.env.get("PAYCALL_WEBHOOK_SECRET");
+  if (!expectedSecret) {
+    return new Response(JSON.stringify({ error: "Server misconfigured" }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  const provided = req.headers.get("x-webhook-secret")
+    ?? new URL(req.url).searchParams.get("secret");
+  if (provided !== expectedSecret) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   try {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,

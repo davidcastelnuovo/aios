@@ -580,14 +580,15 @@ function ManageTeamMembersDialog({ tenantId }: { tenantId: string }) {
       const filePath = `user-avatars/${editingUser.id}-${Date.now()}-${safeName}`;
       const { error: uploadError } = await supabase.storage.from("team-chat-files").upload(filePath, file);
       if (uploadError) throw uploadError;
-      const { data: urlData } = supabase.storage.from("team-chat-files").getPublicUrl(filePath);
+      const { data: urlData, error: urlError } = await supabase.storage.from("team-chat-files").createSignedUrl(filePath, 60 * 60 * 24 * 365 * 10);
+      if (urlError || !urlData) throw urlError ?? new Error("Failed to sign URL");
 
-      const { error } = await supabase.from("profiles").update({ avatar_url: urlData.publicUrl }).eq("id", editingUser.id);
+      const { error } = await supabase.from("profiles").update({ avatar_url: urlData.signedUrl }).eq("id", editingUser.id);
       if (error) throw error;
 
       toast.success("התמונה עודכנה");
       refetchMembers();
-      setEditingUser({ ...editingUser, avatar_url: urlData.publicUrl });
+      setEditingUser({ ...editingUser, avatar_url: urlData.signedUrl });
     } catch (err: any) {
       toast.error("שגיאה בהעלאה: " + err.message);
     } finally {
@@ -1306,12 +1307,13 @@ function TeamMessageInput({ channelId, tenantId, onSent, onFilesUploaded }: { ch
           console.error("Storage upload error:", uploadError);
           throw uploadError;
         }
-        const { data: urlData } = supabase.storage.from("team-chat-files").getPublicUrl(filePath);
+        const { data: urlData, error: urlError } = await supabase.storage.from("team-chat-files").createSignedUrl(filePath, 60 * 60 * 24 * 365 * 10);
+        if (urlError || !urlData) throw urlError ?? new Error("Failed to sign URL");
         const isImage = file.type.startsWith("image/");
         
         newAttachments.push({
           name: file.name,
-          url: urlData.publicUrl,
+          url: urlData.signedUrl,
           type: isImage ? 'image' : 'file',
           size: file.size,
         });
@@ -1322,7 +1324,7 @@ function TeamMessageInput({ channelId, tenantId, onSent, onFilesUploaded }: { ch
           channel_id: channelId,
           uploaded_by: userId,
           file_name: file.name,
-          file_url: urlData.publicUrl,
+          file_url: urlData.signedUrl,
           file_type: isImage ? 'image' : 'file',
           file_size: file.size,
         }).select("id, file_name, file_url").single();
@@ -2101,9 +2103,10 @@ function ChannelAvatarDialog({ channel, tenantId, onUpdated }: { channel: TeamCh
       const filePath = `avatars/${channel.id}-${Date.now()}-${safeName}`;
       const { error: uploadError } = await supabase.storage.from("team-chat-files").upload(filePath, file);
       if (uploadError) throw uploadError;
-      const { data: urlData } = supabase.storage.from("team-chat-files").getPublicUrl(filePath);
+      const { data: urlData, error: urlError } = await supabase.storage.from("team-chat-files").createSignedUrl(filePath, 60 * 60 * 24 * 365 * 10);
+      if (urlError || !urlData) throw urlError ?? new Error("Failed to sign URL");
       
-      const { error } = await supabase.from("team_channels").update({ avatar_url: urlData.publicUrl }).eq("id", channel.id);
+      const { error } = await supabase.from("team_channels").update({ avatar_url: urlData.signedUrl }).eq("id", channel.id);
       if (error) throw error;
       
       toast.success("האווטר עודכן בהצלחה");

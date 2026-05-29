@@ -112,8 +112,9 @@ export function SupplierInvoicesDialog({ supplier, open, onOpenChange }: Supplie
           .from("supplier-invoices")
           .upload(path, file);
         if (uploadError) throw uploadError;
-        const { data: urlData } = supabase.storage.from("supplier-invoices").getPublicUrl(path);
-        fileUrl = urlData.publicUrl;
+        const { data: urlData, error: urlError } = await supabase.storage.from("supplier-invoices").createSignedUrl(path, 60 * 60 * 24 * 365 * 10);
+        if (urlError || !urlData) throw urlError ?? new Error("Failed to sign URL");
+        fileUrl = urlData.signedUrl;
         fileName = file.name;
       }
 

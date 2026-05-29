@@ -171,9 +171,10 @@ ${transcript}${focusPrompt}
       throw new Error("שגיאה בשמירת הקובץ: " + uploadError.message);
     }
 
-    // Get public URL
-    const { data: urlData } = admin.storage.from("recordings").getPublicUrl(fileName);
-    const fileUrl = urlData.publicUrl;
+    // Get signed URL (bucket is private)
+    const { data: urlData, error: urlError } = await admin.storage.from("recordings").createSignedUrl(fileName, 60 * 60 * 24 * 365 * 10);
+    if (urlError || !urlData) throw new Error("Failed to sign recording URL: " + (urlError?.message ?? ""));
+    const fileUrl = urlData.signedUrl;
 
     // Add to client/lead attachments
     const table = target_type === "client" ? "clients" : "leads";

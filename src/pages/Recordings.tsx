@@ -638,8 +638,9 @@ export default function Recordings() {
                             </Button>
                           ) : rec.file_path ? (
                             <Button variant="ghost" size="icon" onClick={async () => {
-                              const { data } = supabase.storage.from('recordings').getPublicUrl(rec.file_path);
-                              window.open(data.publicUrl, '_blank');
+                              const { data, error } = await supabase.storage.from('recordings').createSignedUrl(rec.file_path, 3600);
+                              if (error || !data) { toast({ title: 'שגיאה בפתיחת הקובץ', variant: 'destructive' }); return; }
+                              window.open(data.signedUrl, '_blank');
                             }}>
                               <ExternalLink className="h-4 w-4" />
                             </Button>

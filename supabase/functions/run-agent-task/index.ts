@@ -11,9 +11,18 @@ const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!
 
 const MAX_EXECUTION_TIME_MS = 240_000 // 240s, leave 60s buffer before 300s wall clock
 
+import { requireAuth } from "../_shared/security.ts";
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
+  }
+
+  const auth = await requireAuth(req)
+  if (!auth) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
   }
 
   const startTime = Date.now()

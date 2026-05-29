@@ -48,15 +48,32 @@ serve(async (req) => {
 
     // Handle POST - Lead notification from Facebook
     if (req.method === 'POST') {
-      const body = await req.json();
+      const rawBody = await req.text();
 
       // Verify Facebook signature if app secret is configured
       if (facebookAppSecret) {
-        const signature = req.headers.get('x-hub-signature-256');
-        if (signature) {
-          // In production, verify the signature
+        const signature = req.headers.get('x-hub-signature-256') ?? '';
+        const encoder = new TextEncoder();
+        const key = await crypto.subtle.importKey(
+          'raw', encoder.encode(facebookAppSecret),
+          { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+        );
+        const mac = await crypto.subtle.sign('HMAC', key, encoder.encode(rawBody));
+        const expected = 'sha256=' + Array.from(new Uint8Array(mac))
+          .map(b => b.toString(16).padStart(2, '0')).join('');
+        if (signature.length !== expected.length) {
+          return new Response('Invalid signature', { status: 403 });
+        }
+        let diff = 0;
+        for (let i = 0; i < expected.length; i++) diff |= signature.charCodeAt(i) ^ expected.charCodeAt(i);
+        if (diff !== 0) {
+          return new Response('Invalid signature', { status: 403 });
         }
       }
+
+      const body = JSON.parse(rawBody);
+
+
 
       // Process leadgen events
       if (body.object === 'page') {

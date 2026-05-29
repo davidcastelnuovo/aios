@@ -43,7 +43,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    const body = await req.json();
+    const rawBody = await req.text();
+    const body = JSON.parse(rawBody);
     const { event, payload } = body;
 
     // Create Supabase client with service role
@@ -82,6 +83,25 @@ Deno.serve(async (req) => {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
+    }
+
+    // Verify Zoom HMAC signature for non-validation events
+    if (!webhookSecretToken) {
+      return new Response(JSON.stringify({ error: 'Webhook secret not configured' }), {
+        status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    const sig = req.headers.get('x-zm-signature') ?? '';
+    const ts = req.headers.get('x-zm-request-timestamp') ?? '';
+    const message = `v0:${ts}:${rawBody}`;
+    const expected = 'v0=' + (await hmacSha256Hex(webhookSecretToken, message));
+    if (sig.length !== expected.length) {
+      return new Response('Invalid signature', { status: 403 });
+    }
+    let diff = 0;
+    for (let i = 0; i < expected.length; i++) diff |= sig.charCodeAt(i) ^ expected.charCodeAt(i);
+    if (diff !== 0) {
+      return new Response('Invalid signature', { status: 403 });
     }
 
     // Handle recording.completed event

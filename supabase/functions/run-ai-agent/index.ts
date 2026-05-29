@@ -1298,8 +1298,17 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
 // ===========================
 // MAIN HANDLER
 // ===========================
+import { requireAuth } from "../_shared/security.ts";
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
+
+  const auth = await requireAuth(req)
+  if (!auth) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
 
   try {
     const { agent_id, command_text, temperature, automation_id, user_name, lead_data, tenant_id, user_id, task_skills, task_mode, conversation_history } = await req.json()
