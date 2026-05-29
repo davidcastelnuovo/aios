@@ -9,6 +9,7 @@ import { ToolsTab } from "./tabs/ToolsTab";
 import { KnowledgeTab } from "./tabs/KnowledgeTab";
 import { MemoryTab } from "./tabs/MemoryTab";
 import { TasksTab } from "./tabs/TasksTab";
+import { CostTab } from "./tabs/CostTab";
 import { Crown, Bot } from "lucide-react";
 import { toast } from "sonner";
 
