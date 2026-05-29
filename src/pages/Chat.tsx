@@ -388,7 +388,7 @@ export default function Chat() {
     // Apply platform / connection filter
     if (chatFilter.kind === 'platform') {
       if (chatFilter.platform === 'whatsapp') {
-        allContacts = allContacts.filter(c => c.active_chat_provider === 'green_api' || (!c.active_chat_provider && c.contact_type !== 'telegram'));
+        allContacts = allContacts.filter(c => c.active_chat_provider === 'green_api' || c.active_chat_provider === 'manus_wa' || (!c.active_chat_provider && c.contact_type !== 'telegram'));
       } else if (chatFilter.platform === 'telegram') {
         allContacts = allContacts.filter(c => c.contact_type === 'telegram' || c.active_chat_provider === 'telegram');
       } else if (chatFilter.platform === 'manychat') {
@@ -402,7 +402,7 @@ export default function Chat() {
         } else if (conn.platform === 'manychat') {
           allContacts = allContacts.filter(c => c.active_chat_provider === 'manychat');
         } else {
-          allContacts = allContacts.filter(c => c.active_chat_provider === 'green_api' || (!c.active_chat_provider && c.contact_type !== 'telegram'));
+          allContacts = allContacts.filter(c => c.active_chat_provider === conn.active_chat_provider);
         }
       }
     }
@@ -790,6 +790,7 @@ export default function Chat() {
                             senderPhone: contact.sender_phone,
                             name: contact.name,
                             telegramChatId: (contact as any).telegram_chat_id,
+                            activeChatProvider: contact.active_chat_provider,
                           });
                         }
                       }}
@@ -887,6 +888,7 @@ export default function Chat() {
             senderPhone={selectedContact.senderPhone}
             contactName={selectedContact.name}
             telegramChatId={selectedContact.telegramChatId}
+            activeChatProvider={selectedContact.activeChatProvider}
             onBack={isMobile ? () => setSelectedContact(null) : undefined}
           />
         ) : (
