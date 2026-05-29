@@ -4630,6 +4630,27 @@ export type Database = {
           },
         ]
       }
+      processed_webhook_messages: {
+        Row: {
+          external_message_id: string
+          processed_at: string
+          provider: string
+          tenant_id: string
+        }
+        Insert: {
+          external_message_id: string
+          processed_at?: string
+          provider: string
+          tenant_id: string
+        }
+        Update: {
+          external_message_id?: string
+          processed_at?: string
+          provider?: string
+          tenant_id?: string
+        }
+        Relationships: []
+      }
       products: {
         Row: {
           active: boolean
