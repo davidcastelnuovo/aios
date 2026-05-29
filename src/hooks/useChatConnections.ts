@@ -111,7 +111,7 @@ export function useChatConnections(tenantId: string | undefined) {
             : baseLabel;
 
         const active_chat_provider: ChatConnection["active_chat_provider"] =
-          type === "manus_wa" || type === "green_api" ? "green_api" : (type as any);
+          type === "manus_wa" ? "manus_wa" : type === "green_api" ? "green_api" : (type as any);
         const platform: ChatConnection["platform"] =
           type === "telegram" ? "telegram" : type === "manychat" ? "manychat" : "whatsapp";
 
