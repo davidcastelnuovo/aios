@@ -73,20 +73,37 @@ export default function Automations() {
   const { tenantId, isActiveTenantSynced } = useCurrentTenant();
   const { buildPath } = useTenantPath();
 
-  // Fetch automations
+  // Fetch automations (own + shared mirrors from other tenants)
   const { data: automations, isLoading } = useQuery({
     queryKey: ["automations", tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
-      
-      const { data, error } = await supabase
+
+      const { data: own, error: ownErr } = await supabase
         .from("automations")
         .select("*")
         .eq("tenant_id", tenantId)
         .order("created_at", { ascending: false });
-      
-      if (error) throw error;
-      return data;
+      if (ownErr) throw ownErr;
+
+      const { data: shareRows, error: shareErr } = await supabase
+        .from("automation_shared_tenants")
+        .select("automation_id")
+        .eq("tenant_id", tenantId);
+      if (shareErr) throw shareErr;
+
+      const sharedIds = (shareRows || []).map((r: any) => r.automation_id);
+      let shared: any[] = [];
+      if (sharedIds.length > 0) {
+        const { data: sharedAutos, error: sharedErr } = await supabase
+          .from("automations")
+          .select("*")
+          .in("id", sharedIds);
+        if (sharedErr) throw sharedErr;
+        shared = (sharedAutos || []).map((a: any) => ({ ...a, _isSharedMirror: true }));
+      }
+
+      return [...(own || []), ...shared];
     },
     enabled: !!tenantId && isActiveTenantSynced,
   });
