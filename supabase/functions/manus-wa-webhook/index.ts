@@ -210,8 +210,13 @@ Deno.serve(async (req) => {
         .order('created_at', { ascending: false })
         .limit(1);
       if (ownOutbound && ownOutbound.length > 0) {
-        console.log('[manus-wa] echo dropped — matches our own outbound', { provider: ownOutbound[0].provider, messageId, bodyPreview: messageText.slice(0, 60) });
-        return ok({ received: true, ignored: 'self_echo' });
+        const allowGreenApiCarmenKickoff =
+          ownOutbound[0].provider === 'green_api' && /כרמן|carmen/i.test(messageText);
+        if (!allowGreenApiCarmenKickoff) {
+          console.log('[manus-wa] echo dropped — matches our own outbound', { provider: ownOutbound[0].provider, messageId, bodyPreview: messageText.slice(0, 60) });
+          return ok({ received: true, ignored: 'self_echo' });
+        }
+        console.log('[manus-wa] keeping Green API Carmen kickoff mirrored by Manus', { messageId, bodyPreview: messageText.slice(0, 60) });
       }
     }
 
