@@ -610,18 +610,11 @@ export default function Chat() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <MessageCircle className="h-5 w-5" />
-              <Select value={platformFilter} onValueChange={(v: any) => setPlatformFilter(v)}>
-                <SelectTrigger className="h-8 w-auto gap-1 border-none shadow-none text-lg font-semibold px-1 hover:bg-accent">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-background z-50">
-                  <SelectItem value="all">צ'אט</SelectItem>
-                  <SelectItem value="whatsapp">וואטסאפ</SelectItem>
-                  <SelectItem value="telegram">טלגרם</SelectItem>
-                  <SelectItem value="manychat">ManyChat</SelectItem>
-                  <SelectItem value="agents">סוכני AI 🤖</SelectItem>
-                </SelectContent>
-              </Select>
+              <ChatConnectionSelector
+                value={chatFilter}
+                onChange={setChatFilter}
+                connections={chatConnections}
+              />
             </div>
             <div className="flex items-center gap-1">
               <Button 
