@@ -24,7 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Save, History, TestTube, MessageSquare, ZoomIn, ZoomOut, ArrowRight } from "lucide-react";
+import { Save, History, TestTube, MessageSquare, ZoomIn, ZoomOut, ArrowRight, Zap } from "lucide-react";
 import { FlowNodeRF, FlowNodeData } from "./FlowNode";
 import { AddStepMenu } from "./AddStepMenu";
 import { InsertableEdge } from "./InsertableEdge";
