@@ -106,9 +106,3 @@ function AgentTabsWithUrl({ agent }: { agent: any }) {
   );
 }
 
-function _OldClose() {
-  return (
-    <div>
-    </div>
-  );
-}
