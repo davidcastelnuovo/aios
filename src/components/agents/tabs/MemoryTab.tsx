@@ -22,6 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow, format } from "date-fns";
 import { he } from "date-fns/locale";
+import { MemoryLayersPanel } from "../MemoryLayersPanel";
 
 const CATEGORY_META: Record<string, { icon: any; label: string }> = {
   clients: { icon: Users, label: "לקוחות" },
@@ -49,9 +50,14 @@ function isCarmenName(name: string) {
 }
 
 export function MemoryTab({ agent }: { agent: any }) {
-  return isCarmenName(agent.name)
-    ? <CarmenMemoryLibrary />
-    : <AgentMemoryLibrary agentId={agent.id} />;
+  return (
+    <div className="space-y-3">
+      <MemoryLayersPanel agentId={agent.id} />
+      {isCarmenName(agent.name)
+        ? <CarmenMemoryLibrary />
+        : <AgentMemoryLibrary agentId={agent.id} />}
+    </div>
+  );
 }
 
 // =========================================================================

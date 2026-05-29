@@ -3,6 +3,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { LogOut, Building2 } from "lucide-react";
 import { AIOSDialog } from "@/components/AIOSDialog";
+import { GlobalApprovalsBell } from "@/components/agents/GlobalApprovalsBell";
 import logo from "@/assets/logo.png";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -209,6 +210,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                     </Select>
                   </div>
                 )}
+                <GlobalApprovalsBell />
                 {/* Carmen button in header */}
                 <button
                   onClick={() => setCarmenOpen(true)}
