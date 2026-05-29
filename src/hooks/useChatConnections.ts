@@ -18,8 +18,8 @@ export interface ChatConnection {
   display_name: string;
   is_own: boolean;
   shared_by_name: string | null;
-  /** Maps to chat_messages.provider / contacts.active_chat_provider */
-  active_chat_provider: "green_api" | "telegram" | "manychat";
+  /** Maps to chat_messages.provider — kept distinct so Manus vs Green API filter separately */
+  active_chat_provider: "green_api" | "manus_wa" | "telegram" | "manychat";
   /** UI grouping bucket */
   platform: "whatsapp" | "telegram" | "manychat";
 }
