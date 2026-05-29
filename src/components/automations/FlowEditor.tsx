@@ -137,17 +137,20 @@ export default function FlowEditor() {
     queryKey: ["automation", automationId],
     queryFn: async () => {
       if (!automationId || !tenantId) return null;
+      // No tenant filter — automations from other tenants may be visible as shared mirrors
       const { data, error } = await supabase
         .from("automations")
         .select("*")
         .eq("id", automationId)
-        .eq("tenant_id", tenantId)
         .single();
       if (error) throw error;
       return data;
     },
     enabled: !!automationId && !!tenantId && isActiveTenantSynced,
   });
+
+  // Read-only when viewing a shared mirror (automation belongs to a different tenant)
+  const isReadOnlyMirror = !!automation && !!tenantId && automation.tenant_id !== tenantId;
 
   const { data: steps } = useQuery({
     queryKey: ["automation-flow-steps", automationId],
@@ -157,7 +160,6 @@ export default function FlowEditor() {
         .from("automation_flow_steps" as any)
         .select("*")
         .eq("automation_id", automationId)
-        .eq("tenant_id", tenantId)
         .order("sort_order", { ascending: true });
       if (error) throw error;
       return data as any[];
