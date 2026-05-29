@@ -85,15 +85,53 @@ export default function FlowEditor() {
   // ── Callbacks ──────────────────────────────────────────────────────────────
 
   const handleDeleteNode = useCallback((id: string) => {
+    let blocked = false;
     setNodeDataMap((prev) => {
+      const target = prev[id];
+      if (target?.step_type === "trigger") {
+        const triggerCount = Object.values(prev).filter((n) => n.step_type === "trigger").length;
+        if (triggerCount <= 1) {
+          blocked = true;
+          toast({ title: "לא ניתן למחוק את הטריגר היחיד", description: "אוטומציה חייבת לפחות טריגר אחד", variant: "destructive" });
+          return prev;
+        }
+      }
       const next = { ...prev };
       delete next[id];
       return next;
     });
+    if (blocked) return;
     setRfNodes((nds) => nds.filter((n) => n.id !== id));
     setRfEdges((eds) => eds.filter((e) => e.source !== id && e.target !== id));
     setSelectedNodeId((cur) => (cur === id ? null : cur));
-  }, [setRfNodes, setRfEdges]);
+  }, [setRfNodes, setRfEdges, toast]);
+
+  // Add an extra trigger node (OR semantics — multiple entry points to the same flow)
+  const addTrigger = useCallback(() => {
+    setNodeDataMap((prev) => {
+      const triggers = Object.values(prev).filter((n) => n.step_type === "trigger");
+      const rightmost = triggers.sort((a, b) => b.position_x - a.position_x)[0];
+      const baseX = rightmost ? rightmost.position_x : 400;
+      const baseY = rightmost ? rightmost.position_y : 80;
+      const newId = crypto.randomUUID();
+      const newTrigger: FlowNodeData = {
+        id: newId,
+        step_type: "trigger",
+        action_type: undefined,
+        label: undefined,
+        configuration: {},
+        position_x: baseX + 260,
+        position_y: baseY,
+        sort_order: Object.values(prev).length,
+        parent_step_id: null,
+        condition_branch: null,
+      };
+      const next = { ...prev, [newId]: newTrigger };
+      syncRFNodes(next);
+      setSelectedNodeId(newId);
+      return next;
+    });
+  }, [syncRFNodes]);
 
   const handleDisconnectNode = useCallback((id: string) => {
     // Remove the edge coming into this node and clear parent_step_id
