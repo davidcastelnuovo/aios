@@ -485,25 +485,15 @@ Deno.serve(async (req) => {
               });
             }
 
-            await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/trigger-automation`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-              },
-              body: JSON.stringify({
-                trigger_type: 'ad_account_billing_issue',
-                tenant_id: table.tenant_id,
-                data: {
-                  provider: 'facebook',
-                  table_name: table.name,
-                  ad_account_id: adAccountId,
-                  account_status: accountStatus,
-                  disable_reason: accountDisableReason,
-                  status_label: statusLabel,
-                },
-              }),
-            }).catch(() => {});
+            await fireIntegrationAlert({
+              tenant_id: table.tenant_id,
+              provider: 'facebook',
+              alert_type: 'blocked',
+              account_id: adAccountId,
+              account_name: table.name,
+              reason: accountDisableReason || statusLabel,
+            });
+
 
             // Direct WhatsApp fallback so the alert always reaches the team
             await notifyCampaignerWA(`🚨 ${taskTitle}\n${statusLabel}${accountDisableReason ? ` — ${accountDisableReason}` : ''}\nחשבון: ${adAccountId}`);
