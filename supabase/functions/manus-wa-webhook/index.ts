@@ -196,6 +196,31 @@ Deno.serve(async (req) => {
     const messageText = payload.body || (payload.hasMedia ? '[מדיה]' : '');
     const messageId = String(payload.id || '');
 
+    // ===== ATOMIC DEDUP =====
+    // Manus occasionally delivers the same webhook twice. Without this guard
+    // Carmen would run twice and reply twice (esp. in groups, which had no
+    // chat_messages-based dedup). We atomically claim the messageId here,
+    // BEFORE any branching (group vs private), so duplicates exit immediately.
+    if (messageId) {
+      const { error: claimErr } = await supabase
+        .from('processed_webhook_messages')
+        .insert({
+          provider: 'manus_wa',
+          tenant_id: tenantId,
+          external_message_id: messageId,
+        });
+      if (claimErr) {
+        // 23505 = unique_violation → another invocation already processing this msg
+        if ((claimErr as any).code === '23505') {
+          console.log('[manus-wa] duplicate webhook dropped', { messageId, bodyPreview: String(messageText).slice(0, 60) });
+          return ok({ received: true, duplicate: true });
+        }
+        // Any other error: log but continue (don't lose messages on transient DB issues)
+        console.error('[manus-wa] dedup insert failed (continuing):', claimErr);
+      }
+    }
+
+
     // ECHO GUARD: Manus mirrors EVERY message (in and out) as inbound @lid events.
     // If we just sent this exact text via Manus or Green API in the last 2 minutes, drop it.
     if (!isOutgoingFromPhone && fromRaw.endsWith('@lid') && messageText.trim()) {
