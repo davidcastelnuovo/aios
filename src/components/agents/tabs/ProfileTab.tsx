@@ -145,6 +145,20 @@ export function ProfileTab({ agent }: { agent: any }) {
           title="הנחיות מערכת (System Prompt)"
           subtitle="טקסט שדורס את הבנייה האוטומטית מהשדות לעיל"
         />
+
+        {/* Built-in baseline instructions (read-only, expandable) */}
+        <BuiltInInstructions
+          carmen={carmen}
+          agentName={agent.name}
+          onAppend={(text) => {
+            const current = form.system_prompt?.trim() || "";
+            update({
+              system_prompt: current ? `${current}\n\n${text}` : text,
+            });
+            toast.success("ההנחיות המובנות הועתקו לעריכה");
+          }}
+        />
+
         <Field
           label={
             <span className="flex items-center gap-2">
@@ -154,23 +168,24 @@ export function ProfileTab({ agent }: { agent: any }) {
               </span>
             </span>
           }
-          hint="השאר ריק כדי שהמערכת תבנה אוטומטית מהזהות, האישיות, הנשמה, המטרות והידע"
+          hint="השאר ריק כדי שהמערכת תבנה אוטומטית מהזהות, האישיות, הנשמה, המטרות והידע. הוסף כאן הנחיות נוספות מעבר למובנות."
         >
           <Textarea
             rows={12}
             value={form.system_prompt}
             onChange={e => update({ system_prompt: e.target.value })}
-            placeholder="ריק = בנייה אוטומטית. מלא = שימוש בטקסט הזה בדיוק כפי שהוא."
+            placeholder="ריק = שימוש בהנחיות המובנות. מלא = החלפת ההנחיות המובנות בטקסט הזה (או הוספה אם תעתיק את המובנות לעיל ותוסיף בסוף)."
             className="font-mono text-xs"
           />
         </Field>
         {form.system_prompt && (
           <div className="mt-2 flex items-start gap-2 text-xs text-amber-600 dark:text-amber-400">
             <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-            <span>שדה זה דורס את כל ההגדרות לעיל (אישיות/נשמה/סגנון). מחק אותו כדי לחזור לבנייה אוטומטית.</span>
+            <span>שדה זה דורס את ההנחיות המובנות. אם רוצים להוסיף עליהן — לחצי "העתק לעריכה" למעלה.</span>
           </div>
         )}
       </Card>
+
 
       {/* ===== Capabilities summary ===== */}
       <CapabilitiesCard agent={agent} carmen={carmen} />
