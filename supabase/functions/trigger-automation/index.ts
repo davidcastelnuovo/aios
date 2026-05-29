@@ -662,7 +662,14 @@ Deno.serve(async (req) => {
             // we bypass trigger filter validation so the test always runs end-to-end
             // and shows up in the run history.
             const isTestRun = Boolean(requestBody.automationId) && Boolean(payloadData?.test)
-            const triggerStep = flowSteps?.find((s: any) => s.step_type === 'trigger')
+            const triggerSteps = (flowSteps || []).filter((s: any) => s.step_type === 'trigger')
+            const incomingTriggerTypeForMatch = (requestBody as any).trigger_type || (requestBody as any).triggerType
+            // Support multiple triggers per automation (OR semantics):
+            // pick the trigger step whose action_type matches the incoming event.
+            const triggerStep =
+              triggerSteps.find((s: any) => s.action_type === incomingTriggerTypeForMatch) ||
+              triggerSteps.find((s: any) => s.action_type === 'carmen_whatsapp_session' && incomingTriggerTypeForMatch === 'whatsapp_message_received') ||
+              triggerSteps[0]
             if (triggerStep && !isTestRun) {
               // Check action_type match (e.g. whatsapp_message_received vs lead_created)
               const triggerActionType = triggerStep.action_type
