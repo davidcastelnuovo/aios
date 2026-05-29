@@ -125,6 +125,148 @@ export type Database = {
           },
         ]
       }
+      agent_action_log: {
+        Row: {
+          action_details: Json
+          action_type: string
+          agent_id: string | null
+          conversation_id: string | null
+          cost_usd: number | null
+          created_at: string
+          duration_ms: number | null
+          error_message: string | null
+          id: string
+          model: string | null
+          run_id: string | null
+          status: string
+          tenant_id: string
+          tokens_in: number | null
+          tokens_out: number | null
+          tool_calls: number | null
+          user_id: string | null
+        }
+        Insert: {
+          action_details?: Json
+          action_type: string
+          agent_id?: string | null
+          conversation_id?: string | null
+          cost_usd?: number | null
+          created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
+          id?: string
+          model?: string | null
+          run_id?: string | null
+          status?: string
+          tenant_id: string
+          tokens_in?: number | null
+          tokens_out?: number | null
+          tool_calls?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          action_details?: Json
+          action_type?: string
+          agent_id?: string | null
+          conversation_id?: string | null
+          cost_usd?: number | null
+          created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
+          id?: string
+          model?: string | null
+          run_id?: string | null
+          status?: string
+          tenant_id?: string
+          tokens_in?: number | null
+          tokens_out?: number | null
+          tool_calls?: number | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_action_log_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_approval_queue: {
+        Row: {
+          action_type: string
+          agent_id: string | null
+          approved_at: string | null
+          approved_by: string | null
+          context: Json | null
+          created_at: string
+          description: string | null
+          executed_at: string | null
+          execution_result: Json | null
+          expires_at: string | null
+          id: string
+          proposed_changes: Json | null
+          requested_by: string | null
+          run_id: string | null
+          status: string
+          tenant_id: string
+          title: string
+          tool_input: Json | null
+          tool_name: string | null
+        }
+        Insert: {
+          action_type: string
+          agent_id?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          context?: Json | null
+          created_at?: string
+          description?: string | null
+          executed_at?: string | null
+          execution_result?: Json | null
+          expires_at?: string | null
+          id?: string
+          proposed_changes?: Json | null
+          requested_by?: string | null
+          run_id?: string | null
+          status?: string
+          tenant_id: string
+          title: string
+          tool_input?: Json | null
+          tool_name?: string | null
+        }
+        Update: {
+          action_type?: string
+          agent_id?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          context?: Json | null
+          created_at?: string
+          description?: string | null
+          executed_at?: string | null
+          execution_result?: Json | null
+          expires_at?: string | null
+          id?: string
+          proposed_changes?: Json | null
+          requested_by?: string | null
+          run_id?: string | null
+          status?: string
+          tenant_id?: string
+          title?: string
+          tool_input?: Json | null
+          tool_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_approval_queue_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_goals: {
         Row: {
           agent_id: string
@@ -287,11 +429,14 @@ export type Database = {
         Row: {
           agent_id: string
           category: string
+          contact_phone: string | null
           created_at: string
           entity_id: string | null
           entity_type: string | null
+          fts: unknown
           id: string
           importance: number
+          memory_type: Database["public"]["Enums"]["agent_memory_layer"]
           metadata: Json
           path: string | null
           ref_date: string | null
@@ -306,11 +451,14 @@ export type Database = {
         Insert: {
           agent_id: string
           category?: string
+          contact_phone?: string | null
           created_at?: string
           entity_id?: string | null
           entity_type?: string | null
+          fts?: unknown
           id?: string
           importance?: number
+          memory_type?: Database["public"]["Enums"]["agent_memory_layer"]
           metadata?: Json
           path?: string | null
           ref_date?: string | null
@@ -325,11 +473,14 @@ export type Database = {
         Update: {
           agent_id?: string
           category?: string
+          contact_phone?: string | null
           created_at?: string
           entity_id?: string | null
           entity_type?: string | null
+          fts?: unknown
           id?: string
           importance?: number
+          memory_type?: Database["public"]["Enums"]["agent_memory_layer"]
           metadata?: Json
           path?: string | null
           ref_date?: string | null
@@ -440,6 +591,101 @@ export type Database = {
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_tools: {
+        Row: {
+          category: string
+          created_at: string
+          description: string | null
+          display_name: string
+          enabled: boolean
+          handler_kind: string
+          handler_ref: string | null
+          id: string
+          input_schema: Json
+          metadata: Json
+          name: string
+          requires_approval: boolean
+          tenant_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          display_name: string
+          enabled?: boolean
+          handler_kind?: string
+          handler_ref?: string | null
+          id?: string
+          input_schema?: Json
+          metadata?: Json
+          name: string
+          requires_approval?: boolean
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          display_name?: string
+          enabled?: boolean
+          handler_kind?: string
+          handler_ref?: string | null
+          id?: string
+          input_schema?: Json
+          metadata?: Json
+          name?: string
+          requires_approval?: boolean
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      agent_user_profiles: {
+        Row: {
+          agent_id: string | null
+          contact_phone: string
+          created_at: string
+          display_name: string | null
+          id: string
+          last_interaction_at: string | null
+          profile: Json
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          agent_id?: string | null
+          contact_phone: string
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          last_interaction_at?: string | null
+          profile?: Json
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string | null
+          contact_phone?: string
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          last_interaction_at?: string | null
+          profile?: Json
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_user_profiles_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
             referencedColumns: ["id"]
           },
         ]
@@ -9204,6 +9450,7 @@ export type Database = {
     }
     Enums: {
       agency_status: "active" | "paused" | "former"
+      agent_memory_layer: "working" | "episodic" | "semantic" | "user_model"
       app_role:
         | "owner"
         | "agency_owner"
@@ -9442,6 +9689,7 @@ export const Constants = {
   public: {
     Enums: {
       agency_status: ["active", "paused", "former"],
+      agent_memory_layer: ["working", "episodic", "semantic", "user_model"],
       app_role: [
         "owner",
         "agency_owner",
