@@ -35,15 +35,15 @@ export function ShareAutomationDialog({ automation, open, onOpenChange }: ShareA
   const [search, setSearch] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Existing clones of this automation, to mark "already shared"
+  // Existing share targets for this automation
   const { data: existingClones } = useQuery({
-    queryKey: ["automation-clones", automation?.id],
+    queryKey: ["automation-shares", automation?.id],
     queryFn: async () => {
       if (!automation?.id) return [] as any[];
       const { data, error } = await supabase
-        .from("automations")
-        .select("id, tenant_id")
-        .eq("source_automation_id", automation.id);
+        .from("automation_shared_tenants")
+        .select("tenant_id")
+        .eq("automation_id", automation.id);
       if (error) throw error;
       return data || [];
     },
