@@ -1,47 +1,52 @@
-## מטרה
-בסלקטור הצ׳אט (כיום: "צ׳אט / וואטסאפ / טלגרם / ManyChat / סוכני AI") — להוסיף אפשרות לבחור **חיבור ספציפי בשם שלו** (לדוגמה: "Manus – Carmen", "Green API – שיווק", "טלגרם – ראשי") במקום רק סוג הפלטפורמה.
+# תיקון בעיית הצ'אט אחרי בחירת חיבור ספציפי
 
-## איך זה ייראה
-דרופדאון מקובץ עם כותרות:
+## הבעיה
+1. בלוג הדפדפן רואים שגיאה חוזרת:
+   `invalid UNION/INTERSECT/EXCEPT ORDER BY clause — Only result column names can be used`.
+   ה-RPC `get_chat_contacts` נכשל בכל קריאה אחרי המיגרציה האחרונה. לכן הרשימה לא מתרעננת לפי החיבור הנבחר ומציגה צ'אטים מקאש ישן/שונים מקרמן.
+2. גם כשנתקן את השגיאה — סינון לפי "חיבור ספציפי" מסתמך רק על `connection_user_id` של בעל החיבור. אם לאותו משתמש קיימים מספר חיבורים מאותו סוג (למשל יותר מחיבור Manus אחד) — הרשימה תכלול את כולם, ולא רק את החיבור שנבחר.
 
-```text
-✓ הכל
-── וואטסאפ ──
-   כל הוואטסאפ
-   Manus · Carmen
-   Manus · משרד
-   Green API · שיווק
-── טלגרם ──
-   כל הטלגרם
-   טלגרם · בוט ראשי
-── ManyChat ──
-   כל ה-ManyChat
-── סוכני AI 🤖 ──
+## מה לתקן
+
+### 1. מיגרציה: שכתוב `get_chat_contacts`
+- לעטוף את שלושת ה-`SELECT` (clients / leads / groups) ב-CTE או ב-`SELECT * FROM (... UNION ALL ...) sub` ולעשות `ORDER BY sub.last_message_at DESC NULLS LAST` בחוץ — כך שלא נסמך על שם עמודה משתנה אחרי UNION.
+- להוסיף פרמטר אופציונלי חדש `p_provider chat_provider DEFAULT NULL` ולסנן בכל אחד מ-EXISTS/COUNT/MAX לפי `cm.provider = p_provider` כשהוא לא NULL. ככה כשבוחרים חיבור ספציפי נוכל להגביל גם לפי הספק של אותו חיבור.
+- שמירה על שמות עמודות, סדר, וכל שאר ההתנהגות (החסימות, agency join, אווטאר וכו') בדיוק כמו היום.
+
+### 2. עדכון `src/pages/Chat.tsx`
+- כש-`chatFilter.kind === "connection"`: למצוא את האובייקט של החיבור הנבחר ב-`chatConnections`, ולהעביר ל-RPC גם את `p_provider` שמתאים ל-`provider` של אותו חיבור (ממופה ל-enum `chat_provider`: `green_api`/`manus_wa`/`telegram`/`manychat`).
+- בשאר המקרים (all / platform) — לא להעביר `p_provider`, להשאיר את ההתנהגות הקיימת.
+- להוסיף את ה-provider ל-`queryKey` כדי שהקאש יתרענן בצורה נכונה בין חיבורים.
+
+### 3. בלי שינויים אחרים
+- אין לגעת ב-`useChatConnections`, ב-`ChatConnectionSelector`, ב-RLS, או בלוגיקת השליחה. רק תיקון ה-RPC + העברת הפרמטר.
+
+## פירוט טכני (ל-AI שמיישם)
+
+מיגרציה חדשה — `CREATE OR REPLACE FUNCTION public.get_chat_contacts(p_tenant_id uuid DEFAULT NULL, p_connection_user_ids uuid[] DEFAULT NULL, p_provider chat_provider DEFAULT NULL)` עם אותה החתימה של `RETURNS TABLE`. מבנה:
+
+```sql
+RETURN QUERY
+SELECT * FROM (
+  -- clients SELECT ... (כל ה-EXISTS / COUNT / MAX מוסיפים: AND (p_provider IS NULL OR cm.provider = p_provider))
+  UNION ALL
+  -- leads SELECT ... (אותו דבר)
+  UNION ALL
+  -- groups SELECT ... (אותו דבר)
+) sub
+ORDER BY sub.last_message_at DESC NULLS LAST;
 ```
 
-חיבורים ללא `display_name` יקבלו שם דיפולטיבי (לדוגמה "Manus WA"/"Green API" + 4 ספרות אחרונות של מספר/טוקן).
+ב-`Chat.tsx` ליד `connectionUserIds`:
+```ts
+const selectedConnection = chatFilter.kind === "connection"
+  ? chatConnections.find(c => c.id === chatFilter.integrationId)
+  : null;
+const providerFilter = selectedConnection?.provider ?? null;
+```
+ולהעביר ב-RPC `p_provider: providerFilter ?? undefined`, ולהוסיף את `providerFilter` ל-`queryKey`.
 
-## איך זה יעבוד טכנית
-1. **שליפת חיבורים זמינים**: hook חדש `useChatConnections()` ש-שולף מ-`tenant_integrations` את כל הרשומות מסוג `green_api`, `manus_wa`, `telegram`, `manychat` שהמשתמש רשאי לראות (own + shared דרך `integration_user_permissions`, בדיוק כמו `useUserIntegrations`).
-2. **State בעמוד `Chat.tsx`**: להחליף את `platformFilter: "all" | "whatsapp" | ...` ב:
-   ```ts
-   type ChatFilter =
-     | { kind: 'all' }
-     | { kind: 'platform', platform: 'whatsapp' | 'telegram' | 'manychat' | 'agents' }
-     | { kind: 'connection', integrationId: string, ownerUserId: string, provider: string }
-   ```
-3. **לוגיקת סינון** ב-`filteredContacts`:
-   - `platform` — כמו היום (לפי `active_chat_provider`/`contact_type`).
-   - `connection` — סינון כפול: `active_chat_provider === provider` **וגם** `connection_user_id === ownerUserId` של החיבור. (כיום ב-`chat_messages` יש `connection_user_id` אבל אין `integration_id`; השדות `provider + connection_user_id` מספיקים כדי לזהות חיבור ספציפי לכל מקרה ריאלי שראיתי בנתונים.)
-   - ה-RPC `get_chat_contacts` כבר מסנן לפי `connection_user_id = auth.uid()`, אז כדי לראות צ׳אטים של חיבור משותף (בבעלות מישהו אחר) — נשנה את ה-RPC לקבל פרמטר אופציונלי `p_connection_user_id` ו-להשתמש בו במקום `auth.uid()`. רק אם המשתמש בעצם רשאי על אותו integration (נוודא RLS-style ב-function עצמה).
-4. **UI**: רכיב חדש `ChatConnectionSelector` שמחליף את ה-`Select` הקיים בשתי הקריאות (שורות 559 ו-585 ב-`Chat.tsx`). שימוש ב-`Select` עם `SelectGroup`/`SelectLabel` קיימים מ-shadcn לכותרות לפי פלטפורמה.
-
-## קבצים שישתנו
-- חדש: `src/hooks/useChatConnections.ts`
-- חדש: `src/components/chat/ChatConnectionSelector.tsx`
-- ערכת מיגרציה: עדכון `get_chat_contacts` להוסיף `p_connection_user_id` אופציונלי.
-- `src/pages/Chat.tsx`: state חדש, שימוש בסלקטור החדש, סינון לפי connection, העברת `p_connection_user_id` ל-RPC.
-
-## מה לא משתנה
-- עמודי הצ׳אט הספציפיים (`ChatView`, התראות) — ממשיכים לעבוד עם הקשר הנוכחי. רק רשימת הקונטקטים נחתכת.
-- הסלקטור עדיין תומך באופציות הגנריות הקיימות ("כל הוואטסאפ", "טלגרם", "ManyChat", "סוכני AI") כברירות מחדל.
+## אימות אחרי היישום
+- לבחור "All chats" → לראות שהרשימה נטענת בלי שגיאה ב-console.
+- לבחור חיבור ספציפי (קרמן) → לראות רק אנשי קשר שיש להם הודעות דרך אותו חיבור בלבד.
+- לעבור בין חיבורים → הרשימה מתחלפת מיד ולא נשארת מהחיבור הקודם.
