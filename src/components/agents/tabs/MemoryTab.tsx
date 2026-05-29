@@ -49,9 +49,14 @@ function isCarmenName(name: string) {
 }
 
 export function MemoryTab({ agent }: { agent: any }) {
-  return isCarmenName(agent.name)
-    ? <CarmenMemoryLibrary />
-    : <AgentMemoryLibrary agentId={agent.id} />;
+  return (
+    <div className="space-y-3">
+      <MemoryLayersPanel agentId={agent.id} />
+      {isCarmenName(agent.name)
+        ? <CarmenMemoryLibrary />
+        : <AgentMemoryLibrary agentId={agent.id} />}
+    </div>
+  );
 }
 
 // =========================================================================
