@@ -290,7 +290,11 @@ Deno.serve(async (req) => {
             return { matches: false, reason: 'carmen_scope_no_phones_configured' }
           }
           const senderPhone = String(safeData.sender_phone || safeData.phone || '').trim()
-          if (!senderPhone || !allowedPhones.includes(senderPhone)) {
+          const normalizePhone = (p: string) => String(p || '').replace(/\D/g, '').slice(-9)
+          const senderNorm = normalizePhone(senderPhone)
+          const allowedNorm = allowedPhones.map(normalizePhone).filter(Boolean)
+          if (!senderNorm || !allowedNorm.includes(senderNorm)) {
+            console.warn('[CARMEN SCOPE] phone not in whitelist', { senderPhone, senderNorm, allowedNorm })
             return { matches: false, reason: 'carmen_scope_phone_not_allowed' }
           }
         } else if (scopeMode === 'private_only') {
@@ -387,7 +391,11 @@ Deno.serve(async (req) => {
           return { matches: false, reason: 'specific_phones_none_configured' }
         }
         const senderPhone = String(safeData.sender_phone || safeData.phone || '').trim()
-        if (!senderPhone || !allowedPhones.includes(senderPhone)) {
+        const normalizePhone = (p: string) => String(p || '').replace(/\D/g, '').slice(-9)
+        const senderNorm = normalizePhone(senderPhone)
+        const allowedNorm = allowedPhones.map(normalizePhone).filter(Boolean)
+        if (!senderNorm || !allowedNorm.includes(senderNorm)) {
+          console.warn('[TRIGGER] phone not in whitelist', { senderPhone, senderNorm, allowedNorm })
           return { matches: false, reason: 'specific_phones_not_allowed' }
         }
       }
