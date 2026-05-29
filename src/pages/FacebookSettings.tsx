@@ -374,7 +374,64 @@ export default function FacebookSettings() {
         </div>
       </div>
 
+      {/* Per-user connection picker — appears when more than one connection is visible */}
+      {leadAdsList.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-right text-base">חיבורי Facebook זמינים</CardTitle>
+            <CardDescription className="text-right text-xs">
+              חיבור משותף + חיבור אישי שלך. ניתן להוסיף חשבון Facebook נוסף ולשתף עם משתמשים אחרים בארגון.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {leadAdsList.length > 1 && (
+              <Select value={selectedLeadAdsId} onValueChange={setSelectedLeadAdsId}>
+                <SelectTrigger><SelectValue placeholder="בחר חיבור" /></SelectTrigger>
+                <SelectContent>
+                  {leadAdsList.map((i: any) => {
+                    const settings = i.settings as any;
+                    const label = settings?.page_name || settings?.fb_user_name || `חיבור ${i.id.slice(0, 6)}`;
+                    return (
+                      <SelectItem key={i.id} value={i.id}>
+                        {i._isOwn ? `${label} (שלך)` : `${label}${i._sharedByName ? ` (משותף ע"י ${i._sharedByName})` : ' (משותף)'}`}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            )}
+            <div className="flex gap-2 flex-wrap">
+              {leadAdsIntegration?._isOwn && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    const settings = leadAdsIntegration.settings as any;
+                    setSharingIntegrationName(settings?.page_name || 'Facebook');
+                    setSharingOwnerId(leadAdsIntegration.user_id);
+                    setSharingIntegrationId(leadAdsIntegration.id);
+                  }}
+                >
+                  <Share2 className="h-4 w-4 ml-2" />
+                  נהל גישה למשתמשים
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => connectMutation.mutate('facebook_lead_ads')}
+                disabled={connectMutation.isPending}
+              >
+                <Plus className="h-4 w-4 ml-2" />
+                חבר את הפייסבוק שלי
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Tabs defaultValue="lead-ads" className="w-full">
+
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="lead-ads" className="gap-2">
             <Target className="h-4 w-4" />
