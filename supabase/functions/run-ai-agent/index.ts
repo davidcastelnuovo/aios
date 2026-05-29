@@ -1,4 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
+import { resolveModelId } from '../_shared/models.ts'
+import { summarizeAndStoreAgentMemory, recallAgentMemory } from '../_shared/agent-memory.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,22 +13,7 @@ const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')
 const AI_GATEWAY_URL = 'https://ai.gateway.lovable.dev/v1/chat/completions'
 
 function resolveModel(engine: string): string {
-  const map: Record<string, string> = {
-    // Gemini models
-    'gemini-2.5-flash': 'google/gemini-2.5-flash',
-    'gemini-2.5-pro': 'google/gemini-2.5-pro',
-    'gemini-3-flash': 'google/gemini-3-flash-preview',
-    'gemini-3-pro': 'google/gemini-3-pro-image-preview',
-    'gemini-1.5-flash': 'google/gemini-2.5-flash',
-    // OpenAI models
-    'gpt-5': 'openai/gpt-5',
-    'gpt-5-mini': 'openai/gpt-5-mini',
-    // Legacy manus mappings -> redirect to gemini
-    'manus-1.6': 'google/gemini-3-flash-preview',
-    'manus-1.6-max': 'google/gemini-2.5-pro',
-    'manus-1.6-lite': 'google/gemini-2.5-flash-lite',
-  }
-  return map[engine] || 'google/gemini-3-flash-preview'
+  return resolveModelId(engine)
 }
 
 // ===========================
