@@ -1307,12 +1307,13 @@ function TeamMessageInput({ channelId, tenantId, onSent, onFilesUploaded }: { ch
           console.error("Storage upload error:", uploadError);
           throw uploadError;
         }
-        const { data: urlData } = supabase.storage.from("team-chat-files").getPublicUrl(filePath);
+        const { data: urlData, error: urlError } = await supabase.storage.from("team-chat-files").createSignedUrl(filePath, 60 * 60 * 24 * 365 * 10);
+        if (urlError || !urlData) throw urlError ?? new Error("Failed to sign URL");
         const isImage = file.type.startsWith("image/");
         
         newAttachments.push({
           name: file.name,
-          url: urlData.publicUrl,
+          url: urlData.signedUrl,
           type: isImage ? 'image' : 'file',
           size: file.size,
         });
