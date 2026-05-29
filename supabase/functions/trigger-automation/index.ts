@@ -416,18 +416,34 @@ Deno.serve(async (req) => {
       payloadData = payload.data
       tenantId = payload.tenant_id!
 
-      // 1. Find non-flow automations by trigger_type in automations table
-      const { data: foundAutomations, error: fetchError } = await supabase
+      // Resolve automation_ids visible to this tenant: own + shared mirrors
+      const { data: sharedRows } = await supabase
+        .from('automation_shared_tenants')
+        .select('automation_id')
+        .eq('tenant_id', payload.tenant_id)
+      const sharedAutomationIds: string[] = (sharedRows || []).map((r: any) => r.automation_id)
+
+      // 1. Find non-flow automations by trigger_type — own OR shared into this tenant
+      const ownOrSharedFilter = sharedAutomationIds.length > 0
+        ? `tenant_id.eq.${payload.tenant_id},id.in.(${sharedAutomationIds.join(',')})`
+        : null
+
+      let foundQuery = supabase
         .from('automations')
         .select('*')
         .eq('trigger_type', payload.trigger_type)
-        .eq('tenant_id', payload.tenant_id)
         .eq('active', true)
+      foundQuery = ownOrSharedFilter
+        ? foundQuery.or(ownOrSharedFilter)
+        : foundQuery.eq('tenant_id', payload.tenant_id)
+
+      const { data: foundAutomations, error: fetchError } = await foundQuery
 
       if (fetchError) {
         console.error('Error fetching automations:', fetchError)
         throw fetchError
       }
+
 
       // CRITICAL: Exclude flow automations from generic trigger_type lookup.
       // Flow automations must ONLY be matched via trigger step configuration
