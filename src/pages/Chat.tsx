@@ -466,7 +466,7 @@ export default function Chat() {
     }
 
     return allContacts;
-  }, [allContactsBeforeTypeFilter, contactFilter, platformFilter, showTodayOnly, showUnreadOnly, todayParts, selectedTagFilter, getContactTagIds, debouncedSearch]);
+  }, [allContactsBeforeTypeFilter, contactFilter, chatFilter, chatConnections, showTodayOnly, showUnreadOnly, todayParts, selectedTagFilter, getContactTagIds, debouncedSearch]);
 
   const clientsCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'client').length;
   const leadsCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'lead').length;
