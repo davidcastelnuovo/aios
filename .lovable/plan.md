@@ -1,39 +1,48 @@
-## אבחון
-האוטומציה (`1c7e4bb7...`) שמורה עם:
+# תוכנית: שיתוף אוטומציות כ-Mirror אמיתי
+
+## הבעיה היום
+ה-`clone-automation-to-tenant` יוצר **עותק עצמאי** של האוטומציה בכל טננט יעד (`source_automation_id` רק מצביע לאב). כל clone הוא רשומה נפרדת ב-`automations` עם trigger משלו, ולכן:
+- אוטומציית "התרעה לקמפיינר על משימה" רצה פעם ב-MC ופעם ב-DMM
+- קמפיינר משותף (דרך `campaigner_agencies`) מקבל **שתי הודעות** על אותה משימה לוגית
+- כל עריכה צריכה להיעשות N פעמים בטננטים השונים
+
+## הפתרון: Reference אמיתי
+אוטומציה אחת בלבד (במקור), טריגר אחד, ביצוע אחד. שאר הטננטים מקבלים **שיקוף read-only** ברשימה שלהם.
+
+---
+
+## שלב 1: סכמת DB
+
+**טבלה חדשה: `automation_shared_tenants`**
 ```
-carmen_scope_mode: "specific_group"
-carmen_allowed_groups: ["120363425732219862@g.us"]
+automation_id  uuid  → automations.id (CASCADE delete)
+tenant_id      uuid  → tenants.id (טננט שהאוטומציה משותפת איתו)
+shared_by      uuid  → המשתמש ששיתף
+shared_at      timestamptz
+PRIMARY KEY (automation_id, tenant_id)
 ```
-הקבוצה שאתה כותב בה כרגע (`120363406768318497@g.us`) **לא נמצאת ברשימה** → ה-webhook חוסם עם `reason: scope_group`.
+- GRANTs לפי הסטנדרט; RLS: SELECT לחברי הטננט/המקור, INSERT/DELETE רק לבעלים/אדמין של טננט המקור.
+- אינדקס על `tenant_id` לשליפות מהירות בצד הטננט-היעד.
 
-המערך אכן תומך בקבוצות מרובות, אבל בפועל נשמרה רק אחת.
+**שינוי קיים:** משאירים את העמודות `source_automation_id` ו-`source_tenant_id` ב-`automations` רק עד שמיגרציית הנתונים תרוץ — בסיומה הן יוסרו או יוותרו ריקות (clones יומרו).
 
-## תוכנית
+---
 
-### שלב 1 — תיקון מיידי (DB)
-להוסיף את הקבוצה החדשה ל-`carmen_allowed_groups` (מבלי למחוק את הקיימת):
-```
-carmen_allowed_groups: [
-  "120363425732219862@g.us",   // קיים
-  "120363406768318497@g.us"    // חדש — הקבוצה שאתה כותב בה
-]
-```
-אחרי זה כרמן תענה מיד בשתי הקבוצות.
+## שלב 2: מיגרציית נתונים (לפי בחירת המשתמש - אוטומטי)
 
-### שלב 2 — בדיקת UI של בורר הקבוצות בטריגר Carmen
-לבדוק ב-`FlowEditor` / `FlowNode` / רכיב הקונפיג של טריגר `carmen_whatsapp_session` (כנראה משתמש ב-`WhatsAppGroupSelect` במצב multi):
-- האם בחירה מרובה אכן מוסיפה ל-`configuration.carmen_allowed_groups` ולא מחליפה?
-- האם ה-Save שולח את המערך המלא?
-- האם יש Race: טעינה ראשונית מאפסת את הבחירה?
+לכל שורה ב-`automations` עם `source_automation_id IS NOT NULL`:
+1. אם האב (`source_automation_id`) עדיין קיים → INSERT ל-`automation_shared_tenants(automation_id=source, tenant_id=clone.tenant_id)`.
+2. מחיקת ה-clone (מחיקת `automation_flow_steps` שלו כתוצאה מ-CASCADE).
+3. אם האב נמחק בעבר → log אזהרה, להשאיר את ה-clone כעצמאי (לא לאבד את האוטומציה של המשתמש).
 
-אם נמצא באג, לתקן את ה-handler כך שיעשה append/merge ולא replace, ולוודא ש-save מעביר את המערך כולו.
+הכל ב-migration אחד עם transaction.
 
-### שלב 3 — בדיקה חיה
-לכתוב "כרמן שומעת" בקבוצה החדשה ולוודא בלוגים של `manus-wa-webhook`:
-- אין `blocked by scope_group`
-- מופיע `[carmen-group] handled: true`
+---
 
-## פרטים טכניים
-- DB: `automations.configuration` (JSONB), שדה `carmen_allowed_groups` (text[]/json array)
-- אין צורך ב-redeploy של edge functions לשלב 1
-- שלב 2 דורש שינוי קוד פרונט בלבד אם יימצא באג שמירה
+## שלב 3: שינוי `clone-automation-to-tenant`
+
+לשנות שם פונקציונלי ל-`share-automation-to-tenant`:
+- במקום לעשות `insert` של אוטומציה + steps, רק `insert` ל-`automation_shared_tenants`.
+- בדיקות הרשאה נשארות זהות (owner/admin/super_admin של טננט המקור + חברות בטננט יעד).
+- מחזיר רשימת tenants ששותפו בהצלחה.
+- ההסבר ב-UI: "האוטומציה תרוץ בטננט המקור ותהיה צפייה בלבד בטננטים א
