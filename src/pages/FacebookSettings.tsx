@@ -171,8 +171,8 @@ export default function FacebookSettings() {
     },
     onSuccess: () => {
       toast.success('החיבור לפייסבוק נותק בהצלחה');
-      queryClient.invalidateQueries({ queryKey: ['facebook-lead-ads-integration'] });
-      queryClient.invalidateQueries({ queryKey: ['facebook-capi-integration'] });
+      queryClient.invalidateQueries({ queryKey: ['user-integrations'] });
+      queryClient.invalidateQueries({ queryKey: ['user-integrations'] });
     },
     onError: (error) => {
       toast.error('שגיאה בניתוק: ' + (error as Error).message);
@@ -193,7 +193,7 @@ export default function FacebookSettings() {
     },
     onSuccess: () => {
       toast.success('העמוד נרשם בהצלחה לקבלת לידים');
-      queryClient.invalidateQueries({ queryKey: ['facebook-lead-ads-integration'] });
+      queryClient.invalidateQueries({ queryKey: ['user-integrations'] });
     },
     onError: (error) => {
       toast.error('שגיאה ברישום העמוד: ' + (error as Error).message);
@@ -231,7 +231,7 @@ export default function FacebookSettings() {
     },
     onSuccess: () => {
       toast.success('הגדרות CAPI נשמרו בהצלחה');
-      queryClient.invalidateQueries({ queryKey: ['facebook-capi-integration'] });
+      queryClient.invalidateQueries({ queryKey: ['user-integrations'] });
     },
     onError: (error) => {
       toast.error('שגיאה בשמירת ההגדרות: ' + (error as Error).message);
@@ -258,7 +258,7 @@ export default function FacebookSettings() {
     onSuccess: () => {
       toast.success('Token נשמר בהצלחה');
       setManualToken('');
-      queryClient.invalidateQueries({ queryKey: ['facebook-lead-ads-integration'] });
+      queryClient.invalidateQueries({ queryKey: ['user-integrations'] });
     },
     onError: (error) => {
       toast.error('שגיאה בשמירת Token: ' + (error as Error).message);
