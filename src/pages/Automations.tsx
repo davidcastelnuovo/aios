@@ -492,6 +492,16 @@ export default function Automations() {
                     </Button>
                     <Button
                       size="sm"
+                      variant="outline"
+                      onClick={(e) => { e.stopPropagation(); duplicateMutation.mutate(automation.id); }}
+                      disabled={duplicateMutation.isPending}
+                      title="שכפל אוטומציה"
+                    >
+                      <Copy className="h-3 w-3 ml-1" />
+                      שכפל
+                    </Button>
+                    <Button
+                      size="sm"
                       variant="destructive"
                       onClick={(e) => {
                         e.stopPropagation();
