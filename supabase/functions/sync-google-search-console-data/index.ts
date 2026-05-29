@@ -84,7 +84,19 @@ serve(async (req) => {
             settings: { ...integrationSettings, expires_at: newExpiresAt },
           })
           .eq('id', integration.id);
+      } else {
+        // Token refresh failed → fire integration_disconnected
+        await fireIntegrationAlert({
+          tenant_id: integration.tenant_id,
+          provider: 'gsc',
+          alert_type: 'disconnected',
+          account_id: siteUrl,
+          account_name: siteUrl,
+          reason: refreshData.error || 'invalid_grant',
+        });
+        throw new Error(`Failed to refresh GSC token: ${refreshData.error || 'unknown'}`);
       }
+
     }
 
     // Fetch Search Console data - Query Performance
