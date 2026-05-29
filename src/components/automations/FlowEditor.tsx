@@ -461,6 +461,7 @@ export default function FlowEditor() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!automationId || !tenantId) throw new Error("Missing data");
+      if (isReadOnlyMirror) throw new Error("אוטומציה זו משותפת מארגון אחר וניתנת לצפייה בלבד");
 
       const allNodes = Object.values(nodeDataMap);
       const triggerNode = allNodes.find((n) => n.step_type === "trigger");
