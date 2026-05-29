@@ -152,12 +152,31 @@ export default function Chat() {
   }, [allContactTags]);
 
   // Fetch active chats (default mode - no search)
+  const { data: chatConnections = [] } = useChatConnections(tenantId);
+
+  // Build the list of owner user_ids whose chats we want to include in the contact list.
+  // For specific connection → just that connection's owner.
+  // Otherwise → all owners the current user has access to (own + shared).
+  const connectionUserIds = useMemo(() => {
+    if (chatFilter.kind === "connection") {
+      const c = chatConnections.find((c) => c.id === chatFilter.integrationId);
+      return c?.user_id ? [c.user_id] : null;
+    }
+    const ids = Array.from(
+      new Set(chatConnections.map((c) => c.user_id).filter((id): id is string => !!id))
+    );
+    return ids.length > 0 ? ids : null;
+  }, [chatConnections, chatFilter]);
+
   const { data: activeChats, isLoading: activeChatsLoading } = useQuery({
-    queryKey: ['active-chats', tenantId, userAgencyIds, selectedAgency],
+    queryKey: ['active-chats', tenantId, userAgencyIds, selectedAgency, connectionUserIds?.join(',') ?? 'self'],
     queryFn: async () => {
       if (!tenantId) return [];
 
-      const { data, error } = await supabase.rpc('get_chat_contacts', { p_tenant_id: tenantId });
+      const { data, error } = await supabase.rpc('get_chat_contacts', {
+        p_tenant_id: tenantId,
+        p_connection_user_ids: connectionUserIds ?? undefined,
+      } as any);
 
       if (error) {
         console.error('Error fetching active chats:', error);
