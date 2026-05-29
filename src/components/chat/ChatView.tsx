@@ -392,7 +392,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
 
   // Fetch chat messages
   const { data: messagesData, isLoading: isLoadingMessages } = useQuery({
-    queryKey: ["chat-messages", contactId, contactType, senderPhone, connectionUserId, messagePeriod, telegramChatId],
+    queryKey: ["chat-messages", contactId, contactType, senderPhone, connectionUserId, activeProvider, messagePeriod, telegramChatId],
     queryFn: async () => {
       const dateFilter = getDateFilter();
       
@@ -431,6 +431,9 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
         if (connectionUserId) {
           query = query.eq("connection_user_id", connectionUserId);
         }
+        if (activeProvider) {
+          query = query.eq("provider", activeProvider);
+        }
         if (dateFilter) {
           query = query.gte("created_at", dateFilter);
         }
@@ -460,6 +463,9 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
 
       if (connectionUserId) {
         query = query.eq("connection_user_id", connectionUserId);
+      }
+      if (activeProvider) {
+        query = query.eq("provider", activeProvider);
       }
       if (dateFilter) {
         query = query.gte("created_at", dateFilter);
