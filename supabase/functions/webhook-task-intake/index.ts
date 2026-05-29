@@ -79,7 +79,27 @@ Deno.serve(async (req) => {
         )
       }
 
-      
+      // Resolve tenant scope for the update (prevents cross-tenant modification)
+      let updateTenantId: string | null = payload.tenant_id || null
+      if (!updateTenantId && payload.tenant_slug) {
+        const { data: tenantRow } = await supabase
+          .from('tenants').select('id').eq('slug', payload.tenant_slug).maybeSingle()
+        updateTenantId = tenantRow?.id ?? null
+      }
+      if (!updateTenantId) {
+        // Look up the task's tenant first; require caller to confirm by providing matching tenant
+        const { data: existing } = await supabase
+          .from('tasks').select('tenant_id').eq('id', payload.task_id).maybeSingle()
+        if (!existing) {
+          return new Response(JSON.stringify({ success: false, error: 'Task not found' }),
+            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+        }
+        return new Response(JSON.stringify({
+          success: false,
+          error: 'Missing tenant identification. Provide tenant_slug or tenant_id matching the task tenant.',
+        }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      }
+
       // Build update object with only provided fields
       const updateData: Record<string, any> = {}
       if (payload.status !== undefined) updateData.status = payload.status
@@ -111,6 +131,7 @@ Deno.serve(async (req) => {
         .from('tasks')
         .update(updateData)
         .eq('id', payload.task_id)
+        .eq('tenant_id', updateTenantId)
         .select()
         .single()
 
