@@ -1324,7 +1324,7 @@ function TeamMessageInput({ channelId, tenantId, onSent, onFilesUploaded }: { ch
           channel_id: channelId,
           uploaded_by: userId,
           file_name: file.name,
-          file_url: urlData.publicUrl,
+          file_url: urlData.signedUrl,
           file_type: isImage ? 'image' : 'file',
           file_size: file.size,
         }).select("id, file_name, file_url").single();
