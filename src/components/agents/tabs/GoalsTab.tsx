@@ -39,7 +39,7 @@ export function GoalsTab({ agentId }: { agentId: string }) {
         </Select>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button size="sm"><Plus className="h-4 w-4 mr-1" /> מטרה חדשה</Button>
+            <Button size="sm"><Plus className="h-4 w-4 me-1" /> מטרה חדשה</Button>
           </DialogTrigger>
           <GoalDialog
             onSubmit={async (input) => { await create.mutateAsync(input); setOpen(false); }}

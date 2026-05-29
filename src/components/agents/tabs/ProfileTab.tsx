@@ -227,7 +227,7 @@ export function ProfileTab({ agent }: { agent: any }) {
             ביטול
           </Button>
           <Button size="sm" onClick={() => save.mutate()} disabled={save.isPending}>
-            <Save className="h-4 w-4 mr-1" />
+            <Save className="h-4 w-4 me-1" />
             {save.isPending ? "שומר..." : "שמור פרופיל"}
           </Button>
         </Card>

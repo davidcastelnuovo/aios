@@ -35,7 +35,7 @@ export function KnowledgeTab({ agentId }: { agentId: string }) {
         <div className="flex-1" />
         <Dialog open={newFolderOpen} onOpenChange={setNewFolderOpen}>
           <DialogTrigger asChild>
-            <Button size="sm" variant="outline"><FolderPlus className="h-4 w-4 mr-1" /> תיקייה</Button>
+            <Button size="sm" variant="outline"><FolderPlus className="h-4 w-4 me-1" /> תיקייה</Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>תיקייה חדשה</DialogTitle></DialogHeader>
@@ -51,7 +51,7 @@ export function KnowledgeTab({ agentId }: { agentId: string }) {
         </Dialog>
         <Dialog open={newItemOpen} onOpenChange={setNewItemOpen}>
           <DialogTrigger asChild>
-            <Button size="sm"><FilePlus className="h-4 w-4 mr-1" /> פריט ידע</Button>
+            <Button size="sm"><FilePlus className="h-4 w-4 me-1" /> פריט ידע</Button>
           </DialogTrigger>
           <ItemDialog
             folderId={selectedFolderId}

@@ -38,7 +38,7 @@ export function AgentSidebar({ agents, selectedId, onSelect, onCreate }: Props) 
     <aside className="w-64 shrink-0 border-l bg-card flex flex-col h-full">
       <div className="p-3 border-b">
         <Button onClick={onCreate} className="w-full" size="sm">
-          <Plus className="h-4 w-4 mr-1" /> סוכן חדש
+          <Plus className="h-4 w-4 me-1" /> סוכן חדש
         </Button>
       </div>
       <ScrollArea className="flex-1">

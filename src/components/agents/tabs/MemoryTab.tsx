@@ -356,7 +356,7 @@ function ItemsPanel({
                         ★ {m.importance}
                       </Badge>
                     )}
-                    <span className="text-[10px] text-muted-foreground mr-auto whitespace-nowrap">
+                    <span className="text-[10px] text-muted-foreground ms-auto whitespace-nowrap">
                       {m.ref_date
                         ? format(new Date(m.ref_date), "dd/MM/yy")
                         : formatDistanceToNow(new Date(m.created_at), { locale: he, addSuffix: true })}
