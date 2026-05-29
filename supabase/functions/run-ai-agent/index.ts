@@ -1,4 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
+import { resolveModelId } from '../_shared/models.ts'
+import { summarizeAndStoreAgentMemory, recallAgentMemory } from '../_shared/agent-memory.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,22 +13,7 @@ const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')
 const AI_GATEWAY_URL = 'https://ai.gateway.lovable.dev/v1/chat/completions'
 
 function resolveModel(engine: string): string {
-  const map: Record<string, string> = {
-    // Gemini models
-    'gemini-2.5-flash': 'google/gemini-2.5-flash',
-    'gemini-2.5-pro': 'google/gemini-2.5-pro',
-    'gemini-3-flash': 'google/gemini-3-flash-preview',
-    'gemini-3-pro': 'google/gemini-3-pro-image-preview',
-    'gemini-1.5-flash': 'google/gemini-2.5-flash',
-    // OpenAI models
-    'gpt-5': 'openai/gpt-5',
-    'gpt-5-mini': 'openai/gpt-5-mini',
-    // Legacy manus mappings -> redirect to gemini
-    'manus-1.6': 'google/gemini-3-flash-preview',
-    'manus-1.6-max': 'google/gemini-2.5-pro',
-    'manus-1.6-lite': 'google/gemini-2.5-flash-lite',
-  }
-  return map[engine] || 'google/gemini-3-flash-preview'
+  return resolveModelId(engine)
 }
 
 // ===========================
@@ -1695,6 +1682,19 @@ Deno.serve(async (req) => {
       systemPrompt += `\n\n🧠 === זיכרון מתמשך ===\n${memoryContext}`
     }
 
+    // Per-agent memory recall (non-Carmen agents): pull relevant past episodes by similarity.
+    if (!isCarmen) {
+      try {
+        const recalled = await recallAgentMemory(supabase, agent_id, command_text, 6)
+        if (recalled.length > 0) {
+          const block = recalled.map((m: any) => `• [${m.category}] ${m.title}: ${m.summary}`).join('\n')
+          systemPrompt += `\n\n🧠 === זיכרון רלוונטי מאינטראקציות קודמות ===\n${block}`
+        }
+      } catch (e) {
+        console.error('[AGENT] recall memory failed:', (e as any)?.message)
+      }
+    }
+
     // Inject lead context
     if (lead_data) {
       const leadParts = Object.entries(lead_data)
@@ -1825,6 +1825,25 @@ Deno.serve(async (req) => {
         response: { agent_output: finalOutput, model, execution_time_ms: executionTime, tools_used: toolLog.map(t => t.tool) },
         execution_time_ms: executionTime,
       })
+    }
+
+    // 7. Auto-memory for non-Carmen agents (fire and forget, doesn't block response).
+    if (!isCarmen && resolvedTenantId && finalOutput) {
+      const memPromise = summarizeAndStoreAgentMemory({
+        supabase,
+        tenant_id: resolvedTenantId,
+        agent_id,
+        user_message: command_text,
+        assistant_output: finalOutput,
+        tools_used: toolLog.map(t => t.tool),
+      })
+      // @ts-ignore EdgeRuntime is available in Supabase edge functions
+      if (typeof EdgeRuntime !== 'undefined' && (EdgeRuntime as any).waitUntil) {
+        // @ts-ignore
+        EdgeRuntime.waitUntil(memPromise)
+      } else {
+        memPromise.catch(() => {})
+      }
     }
 
     return new Response(JSON.stringify({

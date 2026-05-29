@@ -1,43 +1,108 @@
 
-## סטטוס בדיקה
+## מאושר ✅ — מוסיף זיכרון אוטומטי גם לסוכנים האחרים
 
-### ✅ מה תקין בקוד
+---
 
-**`supabase/functions/manage-manus-wa/index.ts`** — מוטמע נכון:
-- משתמש ב-`MANUS_GATEWAY_URL` ו-`MANUS_GATEWAY_WORKER_SECRET` מ-env
-- שולח `X-Worker-Secret` ל-Admin endpoints (`/api/admin/instances`, `/qr-token`, `/status`)
-- שולח `X-Api-Key` per-instance ל-REST (`/api/v1/instances/:id/send/text`)
-- 4 actions: `create_instance`, `get_qr_link`, `get_status`, `send_message`
-- שגיאה ברורה אם `WORKER_SECRET` חסר
+## מה נבנה (סדר ביצוע)
 
-**`supabase/functions/run-ai-agent/index.ts`** — 4 כלים של כרמן מחוברים:
-- `create_whatsapp_instance` (שורה 140)
-- `get_whatsapp_qr_link` (שורה 141)
-- `get_whatsapp_status` (שורה 142)
-- `send_whatsapp_via_gateway` (שורה 143)
-- כל ה-cases ב-`executeTool` קוראים ל-`manage-manus-wa` עם service-role key
+### 1. סכימה — מיגרציה אחת
 
-### ❌ מה חסר — secrets לא הוגדרו
+**`agent_goals`** (פר-סוכן):
+`id, tenant_id, agent_id → ai_agents, title, description, priority (high/medium/low), status (active/paused/done), target_date, metadata, created_at, updated_at`
 
-בדקתי את רשימת ה-secrets בפרויקט. **שניהם חסרים:**
+**`agent_knowledge_folders`** (תיקיות, היררכיה):
+`id, tenant_id, agent_id, parent_folder_id → self, name, icon, position, created_at`
 
-| Secret | סטטוס |
-|--------|--------|
-| `MANUS_GATEWAY_URL` | ❌ לא קיים |
-| `MANUS_GATEWAY_WORKER_SECRET` | ❌ לא קיים |
+**`agent_knowledge_items`** (פריטי ידע):
+`id, tenant_id, agent_id, folder_id → agent_knowledge_folders, title, content (text), kind (note/document/link/snippet), url, tags[], embedding vector(1536), created_at, updated_at`
 
-בלעדיהם, הפונקציה תחזיר מיד שגיאה:
-> `MANUS_GATEWAY_WORKER_SECRET is not configured.`
+**`agent_memory`** (זיכרון פר-סוכן — אנלוגי ל-`carmen_memory_pointers`):
+`id, tenant_id, agent_id, category, subcategory, path, entity_type, entity_id, title, summary, summary_embedding vector(1536), importance, ref_date, valid_until, metadata, created_at, updated_at`
++ אינדקסים: tenant+agent+path, tenant+agent+category, hnsw על summary_embedding.
 
-(הקוד נופל ל-fallback `https://whatsappgw-pzpyrrww.manus.space` אם `MANUS_GATEWAY_URL` חסר, אז זה לא קריטי — אבל עדיף להגדיר אותו במפורש.)
+**RLS** לכולן: `tenant_id = get_user_tenant_id(auth.uid()) OR is_super_admin()`.
+**GRANT**: `SELECT,INSERT,UPDATE,DELETE` ל-`authenticated`, `ALL` ל-`service_role`.
 
-## שלב הבא (לאחר אישור Build)
+### 2. זיכרון אוטומטי לכל הסוכנים
 
-1. אקרא ל-`add_secret` עבור שני ה-secrets. תקבל טופס מאובטח להזנת:
-   - `MANUS_GATEWAY_URL` = `https://whatsappgw-pzpyrrww.manus.space`
-   - `MANUS_GATEWAY_WORKER_SECRET` = הערך של `WORKER_SECRET` מה-Gateway ב-Manus
-2. אבדוק `cloud_status` ואדפלוי מחדש את `manage-manus-wa` אם צריך.
-3. אריץ test call ל-`manage-manus-wa` עם `action: create_instance` (test tenant) כדי לוודא שה-Gateway מגיב 200 OK.
-4. אבדוק logs ב-`manage-manus-wa` אחרי הקריאה.
+**שינוי ב-`run-ai-agent/index.ts`:**
+בסוף כל ריצת סוכן (אחרי שהמודל החזיר תשובה סופית), אם `agent_id != carmen_id`:
+- קוראים לפונקציה חדשה `summarizeAndStoreAgentMemory({ agent_id, tenant_id, conversation, tool_calls })`.
+- היא קוראת ל-Lovable Gateway (`gemini-2.5-flash-lite` — זול) עם prompt קצר: "סכם את האינטראקציה ב-2-3 משפטים, החזר JSON: { title, summary, category, importance (1-100), entity_type?, entity_id? }".
+- מחשבת embedding ל-summary דרך `google/gemini-embedding-001` (כמו `carmen-memory.ts` הקיים).
+- שומרת ב-`agent_memory`.
+- כל זה ב-`EdgeRuntime.waitUntil(...)` כדי לא לעכב את התשובה למשתמש.
 
-**לא נדרשים שינויי קוד.** רק הגדרת secrets ובדיקת deploy.
+**כרמן ממשיכה ב-`carmen_memory_pointers/episodes`** הקיימים — לא נוגעים.
+
+**אחזור זיכרון:** ב-build-prompt של סוכן לא-כרמן, מוסיפים שליפה של 5-10 הזיכרונות הרלוונטיים ביותר (cosine similarity על embedding של ההודעה הנכנסת) ומזריקים ל-system prompt תחת הכותרת "זיכרון רלוונטי מאינטראקציות קודמות".
+
+### 3. בורר מודלים דינמי — "המוח"
+
+**Edge fn חדשה: `list-ai-models`**
+- מנסה `GET https://ai.gateway.lovable.dev/v1/models` עם `Lovable-API-Key`.
+- אם הגייטוויי תומך → מחזירה את הרשימה החיה (כולל מודלים חדשים שלוברל מוסיפים).
+- Fallback: רשימה אצורה מ-`_shared/models.ts` (מקור יחיד שגם `run-ai-agent` משתמש בו).
+- Cache: 1 שעה edge + 30 דקות React Query.
+
+**`_shared/models.ts`** חדש — `MODEL_CATALOG` אחד עם: id, label, family, context_window, capabilities (text/image/vision). מחליף את ה-hardcoded ב-`resolveModel()`.
+
+**`run-ai-agent` `resolveModel()`** — אם `agent.engine` הוא מזהה תקין מהקטלוג → משתמש כמו שהוא, בלי לתרגם. כך בחירת מודל חדש מהדרופדאון "פשוט עובדת" בלי שינוי קוד.
+
+### 4. UI חדש — `AgentHub.tsx` רהיט מחדש
+
+```text
+┌─────────────────────────────────────────────────────────┐
+│ AgentHub                                                │
+├──────────────┬──────────────────────────────────────────┤
+│ Sidebar      │  [Avatar] שם הסוכן          [● פעיל]    │
+│              │  ┌─────────────────────────────┐         │
+│ ★ כרמן       │  │ 🧠 מוח: [Gemini 3 Flash ▼] │ ← live  │
+│ ───────────  │  └─────────────────────────────┘         │
+│ • סוכן 1     │                                          │
+│ • סוכן 2     │  [פרופיל][מטרות][כלים][ידע][זיכרון]    │
+│ + סוכן חדש   │                                          │
+│              │  ‹ תוכן הטאב הנבחר ›                    │
+└──────────────┴──────────────────────────────────────────┘
+```
+
+**טאבים:**
+| טאב | תוכן |
+|---|---|
+| ⚙️ פרופיל | שם, אישיות, talent, סגנון כתיבה, שפה, אורך תשובות, system_prompt |
+| 🎯 מטרות | CRUD על `agent_goals` עם סינון לפי סטטוס |
+| 🛠️ כלים | ALL_TOOLS עם checkboxes לפי קבוצה (קיים — מועבר לטאב) |
+| 📚 ידע | עץ תיקיות (drag-drop) + פאנל פריטים. יצירת note/link/snippet |
+| 🧠 זיכרון | לכרמן: `carmen_memory_pointers` + `carmen_memory_episodes`. אחר: `agent_memory`. פילטר category/path + מחיקה ידנית |
+
+**רכיבים חדשים:**
+```
+src/components/agents/
+  AgentSidebar.tsx
+  AgentEditor.tsx          # מעטפת + Brain selector + טאבים
+  BrainSelector.tsx
+  tabs/{Profile,Goals,Tools,Knowledge,Memory}Tab.tsx
+src/hooks/
+  useAiModels.ts           # קריאה ל-list-ai-models
+  useAgentGoals.ts
+  useAgentKnowledge.ts
+  useAgentMemory.ts
+```
+
+`AgentHub.tsx` יצומצם ל-grid דק (sidebar + editor). הדיאלוג הישן הענק נמחק.
+
+---
+
+## מה לא משתנה
+
+- ❌ `carmen_memory_pointers/episodes` הקיימים — קוראים מהם בלבד בטאב זיכרון של כרמן.
+- ❌ ה-tools של `run-ai-agent` (`list_goals`, וכו') — נוסיף רק חדשים בעתיד אם נחוץ; הסבב הזה מתמקד ב-UI + סכימה + זיכרון אוטומטי + בורר מודלים.
+- ❌ **הקלקולטור עלויות** — לא נבנה עכשיו, הסבב הבא אחרי שזה יציב.
+
+---
+
+## טריגרים ידועים (יטופלו תוך כדי)
+- `update-updated_at` triggers על 4 הטבלאות החדשות.
+- מחיקת סוכן → CASCADE על goals/knowledge/memory (FK עם `on delete cascade`).
+
+מתחיל בבנייה?

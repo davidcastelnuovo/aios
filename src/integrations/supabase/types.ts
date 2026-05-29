@@ -125,6 +125,232 @@ export type Database = {
           },
         ]
       }
+      agent_goals: {
+        Row: {
+          agent_id: string
+          created_at: string
+          description: string | null
+          id: string
+          metadata: Json
+          priority: string
+          status: string
+          target_date: string | null
+          tenant_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata?: Json
+          priority?: string
+          status?: string
+          target_date?: string | null
+          tenant_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata?: Json
+          priority?: string
+          status?: string
+          target_date?: string | null
+          tenant_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_goals_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_knowledge_folders: {
+        Row: {
+          agent_id: string
+          created_at: string
+          icon: string | null
+          id: string
+          name: string
+          parent_folder_id: string | null
+          position: number
+          tenant_id: string
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          icon?: string | null
+          id?: string
+          name: string
+          parent_folder_id?: string | null
+          position?: number
+          tenant_id: string
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          icon?: string | null
+          id?: string
+          name?: string
+          parent_folder_id?: string | null
+          position?: number
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_knowledge_folders_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_knowledge_folders_parent_folder_id_fkey"
+            columns: ["parent_folder_id"]
+            isOneToOne: false
+            referencedRelation: "agent_knowledge_folders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_knowledge_items: {
+        Row: {
+          agent_id: string
+          content: string | null
+          created_at: string
+          embedding: string | null
+          folder_id: string | null
+          id: string
+          kind: string
+          tags: string[]
+          tenant_id: string
+          title: string
+          updated_at: string
+          url: string | null
+        }
+        Insert: {
+          agent_id: string
+          content?: string | null
+          created_at?: string
+          embedding?: string | null
+          folder_id?: string | null
+          id?: string
+          kind?: string
+          tags?: string[]
+          tenant_id: string
+          title: string
+          updated_at?: string
+          url?: string | null
+        }
+        Update: {
+          agent_id?: string
+          content?: string | null
+          created_at?: string
+          embedding?: string | null
+          folder_id?: string | null
+          id?: string
+          kind?: string
+          tags?: string[]
+          tenant_id?: string
+          title?: string
+          updated_at?: string
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_knowledge_items_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_knowledge_items_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "agent_knowledge_folders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_memory: {
+        Row: {
+          agent_id: string
+          category: string
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          id: string
+          importance: number
+          metadata: Json
+          path: string | null
+          ref_date: string | null
+          subcategory: string | null
+          summary: string | null
+          summary_embedding: string | null
+          tenant_id: string
+          title: string
+          updated_at: string
+          valid_until: string | null
+        }
+        Insert: {
+          agent_id: string
+          category?: string
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          importance?: number
+          metadata?: Json
+          path?: string | null
+          ref_date?: string | null
+          subcategory?: string | null
+          summary?: string | null
+          summary_embedding?: string | null
+          tenant_id: string
+          title: string
+          updated_at?: string
+          valid_until?: string | null
+        }
+        Update: {
+          agent_id?: string
+          category?: string
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          importance?: number
+          metadata?: Json
+          path?: string | null
+          ref_date?: string | null
+          subcategory?: string | null
+          summary?: string | null
+          summary_embedding?: string | null
+          tenant_id?: string
+          title?: string
+          updated_at?: string
+          valid_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_memory_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_tasks: {
         Row: {
           agent_id: string
@@ -288,39 +514,57 @@ export type Database = {
       ai_agents: {
         Row: {
           active: boolean | null
+          allowed_tools: string[]
           created_at: string | null
           engine: string
           id: string
+          language: string
+          max_tool_rounds: number
           name: string
           personality: string | null
+          response_length: string | null
           soul: string | null
+          system_prompt: string | null
           talent: string | null
           tenant_id: string
           updated_at: string | null
+          writing_style: string | null
         }
         Insert: {
           active?: boolean | null
+          allowed_tools?: string[]
           created_at?: string | null
           engine?: string
           id?: string
+          language?: string
+          max_tool_rounds?: number
           name: string
           personality?: string | null
+          response_length?: string | null
           soul?: string | null
+          system_prompt?: string | null
           talent?: string | null
           tenant_id: string
           updated_at?: string | null
+          writing_style?: string | null
         }
         Update: {
           active?: boolean | null
+          allowed_tools?: string[]
           created_at?: string | null
           engine?: string
           id?: string
+          language?: string
+          max_tool_rounds?: number
           name?: string
           personality?: string | null
+          response_length?: string | null
           soul?: string | null
+          system_prompt?: string | null
           talent?: string | null
           tenant_id?: string
           updated_at?: string | null
+          writing_style?: string | null
         }
         Relationships: [
           {
@@ -8811,6 +9055,21 @@ export type Database = {
         Returns: string
       }
       mark_all_chats_read: { Args: { p_tenant_id: string }; Returns: number }
+      match_agent_memory: {
+        Args: {
+          p_agent_id: string
+          p_limit?: number
+          p_query_embedding: string
+        }
+        Returns: {
+          category: string
+          id: string
+          importance: number
+          similarity: number
+          summary: string
+          title: string
+        }[]
+      }
       record_integration_failure: {
         Args: { p_provider: string; p_tenant_id: string }
         Returns: undefined
