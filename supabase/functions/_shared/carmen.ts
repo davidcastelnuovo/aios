@@ -231,18 +231,22 @@ export async function findCarmenSessionAutomation(
   const isGroup = !!ctx?.isGroup;
   const chatId = ctx?.chatId || '';
   const phoneDigits = (ctx?.phoneNumber || '').replace(/\D/g, '');
+  const chatIdBare = chatId ? chatId.split('@')[0] : '';
   const scoreStep = (s: any): number => {
     const cfg = s?.configuration || {};
     const mode = cfg.carmen_scope_mode || 'all';
-    const allowedGroups: string[] = Array.isArray(cfg.carmen_allowed_group_ids)
+    const allowedGroups: string[] = Array.isArray(cfg.carmen_allowed_group_ids) && cfg.carmen_allowed_group_ids.length > 0
       ? cfg.carmen_allowed_group_ids
-      : (cfg.carmen_allowed_group_id ? [cfg.carmen_allowed_group_id] : []);
+      : (cfg.carmen_allowed_group_id ? [cfg.carmen_allowed_group_id]
+        : (Array.isArray(cfg.carmen_allowed_groups) ? cfg.carmen_allowed_groups : []));
     const allowedPhones: string[] = Array.isArray(cfg.carmen_allowed_phones)
       ? cfg.carmen_allowed_phones.map((p: any) => String(p).replace(/\D/g, ''))
       : [];
 
+    const groupMatch = allowedGroups.some((g: string) => g === chatId || (chatIdBare && g === chatIdBare));
+
     if (isGroup) {
-      if (mode === 'specific_group' && chatId && allowedGroups.includes(chatId)) return 100;
+      if (mode === 'specific_group' && groupMatch) return 100;
       if (mode === 'specific_group') return 40; // group-mode but this chat isn't listed
       if (mode === 'all') return 20;
       // specific_phone in a group context → unusable

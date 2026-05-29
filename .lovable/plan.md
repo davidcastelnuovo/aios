@@ -1,32 +1,14 @@
-## הבעיה האמיתית
+נראה שהבעיה חזרה בגלל שני מסלולי הפעלה שונים:
 
-באמת יש שתי אוטומציות נפרדות וזה עבד עד שמשהו שבר את האוטומציה של הקבוצות. מצאתי את הבאג:
+1. `handleCarmenMessage` כבר תוקן לקרוא את `carmen_allowed_group_ids`, אבל דירוג האוטומציות עדיין מזהה קבוצה רק לפי `GROUPID@g.us` ולא לפי ה-ID העירום. אם ההגדרה שמורה בלי `@g.us`, הוא עלול לבחור בטעות אוטומציה של טלפונים במקום אוטומציה של קבוצות.
 
-**`supabase/functions/_shared/carmen.ts` שורה 743:**
-```ts
-const allowedGroups = carmenAutomation.configuration?.carmen_allowed_groups || [];
-```
+2. במקביל, `green-api-webhook` עדיין מפעיל גם את `trigger-automation` להודעות קבוצה. במסלול הזה הוולידציה של `trigger-automation` בודקת גם אוטומציות של טלפון ולכן מופיע בלוג `phone not in whitelist`, למרות שמדובר בקבוצה.
 
-זה מפתח שגוי. ה-UI (ב-`StepConfigPanel.tsx`) ו-`trigger-automation` שומרים/קוראים תחת `carmen_allowed_group_ids` (עם `_ids`). לכן `allowedGroups` תמיד חוזר ריק, ה-check בשורה 757 (`!allowedGroups.includes(chatId)`) תמיד נכשל, וכל הודעה בקבוצה נחסמת עם `scope_group`.
+התיקון המוצע:
 
-בנוסף שורה 757 משווה רק ל-`chatId` המלא (פורמט `GROUPID@g.us`), בעוד שב-UI נשמרים לפעמים רק ה-IDs המספריים, אז צריך לאפשר שני הפורמטים (כמו ב-`trigger-automation`).
+- לעדכן את `findCarmenSessionAutomation` ב-`supabase/functions/_shared/carmen.ts` כך שבקבוצות הוא ידרג התאמה לפי שני פורמטים: `GROUPID@g.us` וגם `GROUPID`.
+- להרחיב את fallback של `allowedGroups` גם בדירוג, לא רק באכיפה הסופית, כדי לתמוך במפתח legacy אם קיים.
+- ב-`trigger-automation`, כאשר מדובר ב-`contact_type: 'group'` או קיימים `group_id/group_chat_id`, לדלג על אוטומציות כרמן שמוגדרות כ-`specific_phone`, כדי שלא יפילו הודעות קבוצתיות על whitelist של טלפונים.
+- לוודא שהלוגים החדשים כבר לא מציגים `phone not in whitelist` עבור הודעת קבוצה, אלא או שכרמן מטפלת ישירות או שאוטומציית הקבוצה תואמת.
 
-## תיקון
-
-ב-`supabase/functions/_shared/carmen.ts`:
-
-1. החלפת `carmen_allowed_groups` ב-`carmen_allowed_group_ids` (עם נפילה ל-`carmen_allowed_group_id` היחיד, בדיוק כמו ב-`trigger-automation`).
-2. הרחבת הבדיקה כך שתשווה גם מול `chatId` המלא וגם מול ה-ID המספרי (`chatId.split('@')[0]`).
-
-## ביטול השינוי הקודם
-
-השינוי שעשיתי קודם ב-`green-api-webhook` (שינוי `sender_phone` למשתתף בפועל בקבוצות) כבר לא דרוש לפתרון הבאג הזה, אבל הוא לא מזיק — להפך, הוא נכון לכשעצמו. ארצה לאשר אם להשאיר אותו או לשחזר.
-
-## עדכון memory
-
-עדכון `mem://features/automations/carmen-trigger-keyword-enforcement` (או יצירת זיכרון חדש) שמתעד את שם המפתח הקנוני `carmen_allowed_group_ids` כדי שלא נדרוס אותו שוב בעתיד.
-
-## טאסקים
-- ערוך `supabase/functions/_shared/carmen.ts` (שורות 743 + 757)
-- פרוס מחדש את `green-api-webhook` (משתמש ב-shared helper)
-- עדכן memory
+לא אשנה את מבנה האוטומציות שלך ולא אערבב בין שתי האוטומציות: קבוצות יישארו לפי קבוצות מורשות, ופרטי יישאר לפי טלפונים מורשים.
