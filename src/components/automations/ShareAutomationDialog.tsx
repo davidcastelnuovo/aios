@@ -90,10 +90,10 @@ export function ShareAutomationDialog({ automation, open, onOpenChange }: ShareA
       const ok = results.filter((r: any) => r.success).length;
       const failed = results.filter((r: any) => !r.success);
       toast({
-        title: ok > 0 ? `שותף ל-${ok} ארגונים` : "השכפול נכשל",
+        title: ok > 0 ? `שותף ל-${ok} ארגונים` : "השיתוף נכשל",
         description: failed.length > 0
           ? `נכשל ב-${failed.length}: ${failed.map((f: any) => f.error).join(", ")}`
-          : "האוטומציה נוצרה כמושבתת בארגונים היעד - יש להפעיל ולהשלים חיבורי אינטגרציה שם",
+          : "הארגונים החדשים רואים את האוטומציה כצפייה בלבד (read-only). היא תמשיך לרוץ פעם אחת מהארגון הנוכחי.",
         variant: ok === 0 ? "destructive" : "default",
       });
       if (ok > 0) {
