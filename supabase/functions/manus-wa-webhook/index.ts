@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-import { handleCarmenMessage } from '../_shared/carmen.ts';
+import { findCarmenSessionAutomation, handleCarmenMessage } from '../_shared/carmen.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -247,6 +247,67 @@ Deno.serve(async (req) => {
         ).split('@')[0].replace(/[^0-9]/g, '');
         pairedFromGreenApi = true;
         console.log('[manus-wa] paired LID event with Green API outbound', { messageId, counterpartPhone, sourcePhoneNumber });
+      }
+    }
+
+    // Manus can emit phone-app messages as opaque @lid IDs instead of the real phone.
+    // For a direct Carmen flow pinned to this Manus integration and scoped to exactly
+    // one phone, resolve the LID to that configured phone so the Carmen trigger/session
+    // can match instead of being blocked by the random LID number.
+    if (!isGroup && !pairedFromGreenApi && fromRaw.endsWith('@lid')) {
+      try {
+        const carmenAutomation = await findCarmenSessionAutomation(supabase, tenantId, integ.id, {
+          isGroup: false,
+          chatId: `${counterpartPhone}@c.us`,
+          phoneNumber: counterpartPhone,
+        });
+        const cfg = carmenAutomation?.configuration || {};
+        const allowedPhones = Array.isArray(cfg.carmen_allowed_phones)
+          ? [...new Set(cfg.carmen_allowed_phones.map((p: any) => String(p).replace(/\D/g, '')).filter(Boolean))]
+          : [];
+
+        if ((cfg.carmen_scope_mode || 'all') === 'specific_phone' && allowedPhones.length === 1) {
+          const aliasPhone = allowedPhones[0] as string;
+          const idleMinutes = Number(cfg.session_timeout_minutes) > 0 ? Number(cfg.session_timeout_minutes) : 5;
+          const aliasChatId = `${aliasPhone}@c.us`;
+          const { data: activeAliasSession } = await supabase
+            .from('carmen_whatsapp_sessions')
+            .select('id, last_message_at, created_at')
+            .eq('tenant_id', tenantId)
+            .eq('status', 'active')
+            .eq('connection_user_id', connectionUserId)
+            .eq('chat_id', aliasChatId)
+            .eq('phone', aliasPhone)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          const lastActivity = activeAliasSession
+            ? new Date(activeAliasSession.last_message_at || activeAliasSession.created_at).getTime()
+            : 0;
+          const hasFreshAliasSession = !!activeAliasSession && (Date.now() - lastActivity) <= idleMinutes * 60 * 1000;
+          const triggerKeyword = String(cfg.trigger_keyword || 'כרמן').toLowerCase();
+          const hasTriggerKeyword = String(messageText || '').toLowerCase().includes(triggerKeyword);
+
+          counterpartPhone = aliasPhone;
+          counterpartRaw = aliasChatId;
+          normalized = normalizePhone(aliasPhone);
+
+          if (hasFreshAliasSession || hasTriggerKeyword) {
+            isOutgoingFromPhone = true;
+            sourcePhoneNumber = aliasPhone;
+          }
+
+          console.log('[manus-wa] resolved LID for Carmen direct flow', {
+            fromRaw,
+            aliasPhone,
+            manualLike: isOutgoingFromPhone,
+            hasFreshAliasSession,
+            hasTriggerKeyword,
+          });
+        }
+      } catch (err) {
+        console.error('[manus-wa] LID Carmen resolution failed:', err);
       }
     }
 
