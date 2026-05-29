@@ -99,16 +99,24 @@ export function RunsTab({ agent }: { agent: any }) {
                     selectedRunId === r.id ? "bg-accent" : ""
                   }`}
                 >
-                  <div className="flex items-center gap-1.5 mb-1">
+                  <div className="flex items-center gap-1.5 mb-1 flex-wrap">
                     <Icon className="h-3 w-3" />
                     <Badge className={meta.color} variant="outline">{meta.label}</Badge>
+                    {r.parent_run_id && <Badge variant="secondary" className="text-[9px] px-1"><GitBranch className="h-2.5 w-2.5 me-0.5" />sub</Badge>}
+                    {r.replay_of_run_id && <Badge variant="secondary" className="text-[9px] px-1"><RotateCw className="h-2.5 w-2.5 me-0.5" />replay</Badge>}
                     <span className="text-muted-foreground text-[10px] mr-auto">
                       {formatDistanceToNow(new Date(r.started_at), { addSuffix: true, locale: he })}
                     </span>
                   </div>
                   <div className="line-clamp-2 text-right">{r.goal}</div>
-                  <div className="text-[10px] text-muted-foreground mt-1">
-                    {r.current_step}/{r.max_steps} צעדים · {r.total_tokens_in + r.total_tokens_out} tokens
+                  <div className="text-[10px] text-muted-foreground mt-1 flex items-center justify-between">
+                    <span>{r.current_step}/{r.max_steps} צעדים · {r.total_tokens_in + r.total_tokens_out} tokens</span>
+                    {(r.status === "completed" || r.status === "failed") && (
+                      <Button size="sm" variant="ghost" className="h-5 px-1 text-[10px]"
+                        onClick={(e) => { e.stopPropagation(); replay.mutate(r.id); }}>
+                        <RotateCw className="h-3 w-3" />
+                      </Button>
+                    )}
                   </div>
                 </button>
               );
