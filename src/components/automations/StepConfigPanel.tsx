@@ -2059,31 +2059,78 @@ function CarmenSessionConfig({
         {/* מספר טלפון ספציפי */}
         {scopeMode === "specific_phone" && (
           <div className="space-y-2">
-            <Label className="text-right block">מספרי טלפון מורשים (972501234567)</Label>
-            <textarea
-              className="w-full border rounded-md p-2 text-sm text-right bg-background resize-none"
-              rows={3}
-              value={(configuration?.carmen_allowed_phones || []).join("\n")}
-              onChange={(e) => {
-                const phones = e.target.value
-                  .split("\n")
-                  .map((p: string) => p.trim())
-                  .filter(Boolean);
-                onConfigChange("carmen_allowed_phones", phones);
-              }}
-              placeholder={"972501234567\n972521234567"}
-              dir="ltr"
-            />
-            <p className="text-xs text-muted-foreground text-right">
-              שורה נפרדת לכל מספר. הסוכן יגיב אך ורק למספרים אלו.
-            </p>
-            {(configuration?.carmen_allowed_phones?.length || 0) > 0 && (
-              <div className="flex items-center gap-1 bg-green-500/10 border border-green-500/30 rounded p-2">
-                <span className="text-xs text-green-600 text-right flex-1">
-                  ✅ {configuration.carmen_allowed_phones.length} מספרים מורשים
-                </span>
-              </div>
-            )}
+            <Label className="text-right block">מספרי טלפון מורשים</Label>
+            {(() => {
+              const phones: string[] = configuration?.carmen_allowed_phones || [];
+              const updatePhones = (next: string[]) =>
+                onConfigChange("carmen_allowed_phones", next);
+              const addFromInput = () => {
+                const input = document.getElementById(
+                  "carmen-phone-input"
+                ) as HTMLInputElement | null;
+                const val = input?.value.trim();
+                if (val && !phones.includes(val)) {
+                  updatePhones([...phones, val]);
+                  if (input) input.value = "";
+                }
+              };
+              return (
+                <>
+                  {phones.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {phones.map((p, i) => (
+                        <Badge
+                          key={`${p}-${i}`}
+                          variant="secondary"
+                          className="flex items-center gap-1 pr-1"
+                          dir="ltr"
+                        >
+                          <button
+                            type="button"
+                            onClick={() =>
+                              updatePhones(phones.filter((_, idx) => idx !== i))
+                            }
+                            className="text-red-500 hover:text-red-700 px-1"
+                            aria-label="הסר מספר"
+                          >
+                            ×
+                          </button>
+                          <span>{p}</span>
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <Input
+                      id="carmen-phone-input"
+                      type="tel"
+                      placeholder="972501234567"
+                      dir="ltr"
+                      className="flex-1"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addFromInput();
+                        }
+                      }}
+                    />
+                    <Button type="button" variant="outline" onClick={addFromInput}>
+                      הוסף
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground text-right">
+                    הקלד מספר ולחץ Enter או "הוסף". ניתן להוסיף מספרים רבים.
+                  </p>
+                  {phones.length > 0 && (
+                    <div className="flex items-center gap-1 bg-green-500/10 border border-green-500/30 rounded p-2">
+                      <span className="text-xs text-green-600 text-right flex-1">
+                        ✅ {phones.length} מספרים מורשים
+                      </span>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
 
