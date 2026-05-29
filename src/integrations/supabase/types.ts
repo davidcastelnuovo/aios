@@ -894,6 +894,42 @@ export type Database = {
           },
         ]
       }
+      automation_shared_tenants: {
+        Row: {
+          automation_id: string
+          shared_at: string
+          shared_by: string | null
+          tenant_id: string
+        }
+        Insert: {
+          automation_id: string
+          shared_at?: string
+          shared_by?: string | null
+          tenant_id: string
+        }
+        Update: {
+          automation_id?: string
+          shared_at?: string
+          shared_by?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_shared_tenants_automation_id_fkey"
+            columns: ["automation_id"]
+            isOneToOne: false
+            referencedRelation: "automations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_shared_tenants_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       automations: {
         Row: {
           action_type: Database["public"]["Enums"]["automation_action"]
