@@ -1,12 +1,15 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Activity, Brain, Wrench, Eye, CheckCircle2, AlertCircle, Clock, Shield } from "lucide-react";
+import { Activity, Brain, Wrench, Eye, CheckCircle2, AlertCircle, Clock, Shield, RotateCw, GitBranch } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { he } from "date-fns/locale";
+import { toast } from "sonner";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 const STATUS_META: Record<string, { label: string; color: string; icon: any }> = {
   running: { label: "רץ", color: "bg-blue-500/10 text-blue-700", icon: Activity },
@@ -27,6 +30,20 @@ const STEP_ICON: Record<string, any> = {
 
 export function RunsTab({ agent }: { agent: any }) {
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const qc = useQueryClient();
+  const { tenantId } = useCurrentTenant();
+
+  const replay = useMutation({
+    mutationFn: async (run_id: string) => {
+      const { data, error } = await supabase.functions.invoke("replay-agent-run", {
+        body: { run_id, tenant_id: tenantId },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => { toast.success("Replay החל"); qc.invalidateQueries({ queryKey: ["agent-runs", agent.id] }); },
+    onError: (e: any) => toast.error(e.message),
+  });
 
   const { data: runs = [] } = useQuery({
     queryKey: ["agent-runs", agent.id],
@@ -82,16 +99,24 @@ export function RunsTab({ agent }: { agent: any }) {
                     selectedRunId === r.id ? "bg-accent" : ""
                   }`}
                 >
-                  <div className="flex items-center gap-1.5 mb-1">
+                  <div className="flex items-center gap-1.5 mb-1 flex-wrap">
                     <Icon className="h-3 w-3" />
                     <Badge className={meta.color} variant="outline">{meta.label}</Badge>
+                    {r.parent_run_id && <Badge variant="secondary" className="text-[9px] px-1"><GitBranch className="h-2.5 w-2.5 me-0.5" />sub</Badge>}
+                    {r.replay_of_run_id && <Badge variant="secondary" className="text-[9px] px-1"><RotateCw className="h-2.5 w-2.5 me-0.5" />replay</Badge>}
                     <span className="text-muted-foreground text-[10px] mr-auto">
                       {formatDistanceToNow(new Date(r.started_at), { addSuffix: true, locale: he })}
                     </span>
                   </div>
                   <div className="line-clamp-2 text-right">{r.goal}</div>
-                  <div className="text-[10px] text-muted-foreground mt-1">
-                    {r.current_step}/{r.max_steps} צעדים · {r.total_tokens_in + r.total_tokens_out} tokens
+                  <div className="text-[10px] text-muted-foreground mt-1 flex items-center justify-between">
+                    <span>{r.current_step}/{r.max_steps} צעדים · {r.total_tokens_in + r.total_tokens_out} tokens</span>
+                    {(r.status === "completed" || r.status === "failed") && (
+                      <Button size="sm" variant="ghost" className="h-5 px-1 text-[10px]"
+                        onClick={(e) => { e.stopPropagation(); replay.mutate(r.id); }}>
+                        <RotateCw className="h-3 w-3" />
+                      </Button>
+                    )}
                   </div>
                 </button>
               );

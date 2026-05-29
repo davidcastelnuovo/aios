@@ -191,6 +191,40 @@ async function executeTool(
     if (error) throw error;
     return data ?? { ok: true };
   }
+  if (tool.handler_kind === "mcp" && tool.handler_ref) {
+    const [connId, toolName] = tool.handler_ref.split("::");
+    const { data: conn } = await supabase
+      .from("agent_mcp_connections").select("*").eq("id", connId).single();
+    if (!conn) return { ok: false, error: "mcp connection missing" };
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "Accept": "application/json, text/event-stream",
+    };
+    const bearer = conn.oauth_tokens?.bearer;
+    if (bearer) headers["Authorization"] = `Bearer ${bearer}`;
+    const resp = await fetch(conn.url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        jsonrpc: "2.0", id: Date.now(),
+        method: "tools/call",
+        params: { name: toolName, arguments: input },
+      }),
+    });
+    const text = await resp.text();
+    if (!resp.ok) return { ok: false, error: `MCP ${resp.status}: ${text.slice(0, 300)}` };
+    try {
+      const ct = resp.headers.get("content-type") ?? "";
+      let parsed: any;
+      if (ct.includes("text/event-stream")) {
+        const m = text.match(/data:\s*(\{[^\n]+\})/);
+        parsed = m ? JSON.parse(m[1]) : { result: text };
+      } else parsed = JSON.parse(text);
+      return parsed.result ?? parsed;
+    } catch {
+      return { ok: true, raw: text.slice(0, 500) };
+    }
+  }
   if (tool.handler_kind === "internal") {
     return { ok: true, note: `internal tool ${tool.name} — no executor configured` };
   }
@@ -296,6 +330,8 @@ Deno.serve(async (req) => {
           max_steps: body.max_steps ?? 12,
           conversation_id: body.conversation_id ?? null,
           trigger_source: body.trigger_source ?? "manual",
+          parent_run_id: body.parent_run_id ?? null,
+          replay_of_run_id: body.replay_of_run_id ?? null,
         })
         .select()
         .single();
@@ -315,8 +351,34 @@ Deno.serve(async (req) => {
     }
 
     const tools = await loadTools(supabase, run.tenant_id);
-    const toolsByName = new Map(tools.map((t) => [t.name, t]));
-    const openaiTools = buildOpenAITools(tools);
+
+    // Load MCP connections (ready) — expose their tools with mcp__<connId>__<toolName> prefix
+    const { data: mcpConns } = await supabase
+      .from("agent_mcp_connections")
+      .select("*")
+      .eq("tenant_id", run.tenant_id)
+      .eq("state", "ready")
+      .or(`agent_id.eq.${run.agent_id},agent_id.is.null`);
+    const mcpTools: ToolRow[] = [];
+    for (const c of mcpConns ?? []) {
+      const list = Array.isArray(c.available_tools) ? c.available_tools : [];
+      for (const t of list) {
+        mcpTools.push({
+          id: `mcp_${c.id}_${t.name}`,
+          name: `mcp__${c.id.replace(/-/g, "")}__${t.name}`.slice(0, 64),
+          display_name: `${c.name} • ${t.name}`,
+          description: t.description ?? `MCP tool from ${c.name}`,
+          input_schema: t.inputSchema ?? { type: "object", properties: {} },
+          handler_kind: "mcp",
+          handler_ref: `${c.id}::${t.name}`,
+          requires_approval: false,
+          enabled: true,
+        });
+      }
+    }
+    const allTools = [...tools, ...mcpTools];
+    const toolsByName = new Map(allTools.map((t) => [t.name, t]));
+    const openaiTools = buildOpenAITools(allTools);
 
     const systemPrompt = (agent.system_prompt as string | null) ??
       "אתה סוכן AI אוטונומי. עבוד בלולאת ReAct: חשוב על הצעד הבא, השתמש בכלים זמינים, צפה בתוצאות, והמשך עד שתשיג את המטרה. ענה בקצרה ובעברית.";

@@ -279,6 +279,107 @@ export type Database = {
           },
         ]
       }
+      agent_eval_runs: {
+        Row: {
+          agent_id: string
+          avg_score: number | null
+          completed_at: string | null
+          eval_id: string
+          id: string
+          passed_cases: number
+          results: Json | null
+          started_at: string
+          status: string
+          tenant_id: string
+          total_cases: number
+        }
+        Insert: {
+          agent_id: string
+          avg_score?: number | null
+          completed_at?: string | null
+          eval_id: string
+          id?: string
+          passed_cases?: number
+          results?: Json | null
+          started_at?: string
+          status?: string
+          tenant_id: string
+          total_cases?: number
+        }
+        Update: {
+          agent_id?: string
+          avg_score?: number | null
+          completed_at?: string | null
+          eval_id?: string
+          id?: string
+          passed_cases?: number
+          results?: Json | null
+          started_at?: string
+          status?: string
+          tenant_id?: string
+          total_cases?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_eval_runs_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_eval_runs_eval_id_fkey"
+            columns: ["eval_id"]
+            isOneToOne: false
+            referencedRelation: "agent_evals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_evals: {
+        Row: {
+          agent_id: string
+          created_at: string
+          dataset: Json
+          description: string | null
+          id: string
+          name: string
+          pass_threshold: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          dataset?: Json
+          description?: string | null
+          id?: string
+          name: string
+          pass_threshold?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          dataset?: Json
+          description?: string | null
+          id?: string
+          name?: string
+          pass_threshold?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_evals_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_goals: {
         Row: {
           agent_id: string
@@ -437,6 +538,65 @@ export type Database = {
           },
         ]
       }
+      agent_mcp_connections: {
+        Row: {
+          agent_id: string | null
+          auth_url: string | null
+          available_tools: Json | null
+          client_metadata: Json | null
+          created_at: string
+          id: string
+          last_error: string | null
+          name: string
+          oauth_tokens: Json | null
+          state: string
+          tenant_id: string
+          transport: string
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          agent_id?: string | null
+          auth_url?: string | null
+          available_tools?: Json | null
+          client_metadata?: Json | null
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          name: string
+          oauth_tokens?: Json | null
+          state?: string
+          tenant_id: string
+          transport?: string
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          agent_id?: string | null
+          auth_url?: string | null
+          available_tools?: Json | null
+          client_metadata?: Json | null
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          name?: string
+          oauth_tokens?: Json | null
+          state?: string
+          tenant_id?: string
+          transport?: string
+          updated_at?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_mcp_connections_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_memory: {
         Row: {
           agent_id: string
@@ -522,6 +682,7 @@ export type Database = {
           conversation_id: string | null
           created_at: string
           current_step: number
+          delegated_to_agent_id: string | null
           duration_ms: number | null
           error_message: string | null
           final_answer: string | null
@@ -529,7 +690,9 @@ export type Database = {
           id: string
           max_steps: number
           model: string | null
+          parent_run_id: string | null
           pending_approval_id: string | null
+          replay_of_run_id: string | null
           started_at: string
           status: string
           tenant_id: string
@@ -547,6 +710,7 @@ export type Database = {
           conversation_id?: string | null
           created_at?: string
           current_step?: number
+          delegated_to_agent_id?: string | null
           duration_ms?: number | null
           error_message?: string | null
           final_answer?: string | null
@@ -554,7 +718,9 @@ export type Database = {
           id?: string
           max_steps?: number
           model?: string | null
+          parent_run_id?: string | null
           pending_approval_id?: string | null
+          replay_of_run_id?: string | null
           started_at?: string
           status?: string
           tenant_id: string
@@ -572,6 +738,7 @@ export type Database = {
           conversation_id?: string | null
           created_at?: string
           current_step?: number
+          delegated_to_agent_id?: string | null
           duration_ms?: number | null
           error_message?: string | null
           final_answer?: string | null
@@ -579,7 +746,9 @@ export type Database = {
           id?: string
           max_steps?: number
           model?: string | null
+          parent_run_id?: string | null
           pending_approval_id?: string | null
+          replay_of_run_id?: string | null
           started_at?: string
           status?: string
           tenant_id?: string
@@ -590,7 +759,77 @@ export type Database = {
           updated_at?: string
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "agent_runs_delegated_to_agent_id_fkey"
+            columns: ["delegated_to_agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_runs_parent_run_id_fkey"
+            columns: ["parent_run_id"]
+            isOneToOne: false
+            referencedRelation: "agent_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_runs_replay_of_run_id_fkey"
+            columns: ["replay_of_run_id"]
+            isOneToOne: false
+            referencedRelation: "agent_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_supervisors: {
+        Row: {
+          child_agent_id: string
+          created_at: string
+          enabled: boolean
+          id: string
+          priority: number
+          routing_hint: string | null
+          supervisor_agent_id: string
+          tenant_id: string
+        }
+        Insert: {
+          child_agent_id: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          priority?: number
+          routing_hint?: string | null
+          supervisor_agent_id: string
+          tenant_id: string
+        }
+        Update: {
+          child_agent_id?: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          priority?: number
+          routing_hint?: string | null
+          supervisor_agent_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_supervisors_child_agent_id_fkey"
+            columns: ["child_agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_supervisors_supervisor_agent_id_fkey"
+            columns: ["supervisor_agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       agent_tasks: {
         Row: {

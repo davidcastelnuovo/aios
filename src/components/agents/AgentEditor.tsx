@@ -14,6 +14,9 @@ import { ApprovalsTab } from "./tabs/ApprovalsTab";
 import { UserProfilesTab } from "./tabs/UserProfilesTab";
 import { ToolRegistryTab } from "./tabs/ToolRegistryTab";
 import { RunsTab } from "./tabs/RunsTab";
+import { SupervisorTab } from "./tabs/SupervisorTab";
+import { McpConnectionsTab } from "./tabs/McpConnectionsTab";
+import { EvalsTab } from "./tabs/EvalsTab";
 
 import { Crown, Bot } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
@@ -89,7 +92,10 @@ function AgentTabsWithUrl({ agent }: { agent: any }) {
         <TabsTrigger value="tasks">📋 משימות</TabsTrigger>
         <TabsTrigger value="tools">🛠️ כלים</TabsTrigger>
         <TabsTrigger value="registry">📚 מאגר כלים</TabsTrigger>
+        <TabsTrigger value="mcp">🔌 MCP</TabsTrigger>
+        <TabsTrigger value="supervisor">👑 Supervisor</TabsTrigger>
         <TabsTrigger value="runs">🔁 ריצות</TabsTrigger>
+        <TabsTrigger value="evals">✅ Evals</TabsTrigger>
         <TabsTrigger value="knowledge">📖 ידע</TabsTrigger>
         <TabsTrigger value="memory">🧠 זיכרון</TabsTrigger>
         <TabsTrigger value="approvals">🛡️ אישורים</TabsTrigger>
@@ -102,7 +108,10 @@ function AgentTabsWithUrl({ agent }: { agent: any }) {
         <TabsContent value="tasks" className="mt-0"><TasksTab agent={agent} /></TabsContent>
         <TabsContent value="tools" className="mt-0"><ToolsTab agent={agent} /></TabsContent>
         <TabsContent value="registry" className="mt-0"><ToolRegistryTab /></TabsContent>
+        <TabsContent value="mcp" className="mt-0"><McpConnectionsTab agent={agent} /></TabsContent>
+        <TabsContent value="supervisor" className="mt-0"><SupervisorTab agent={agent} /></TabsContent>
         <TabsContent value="runs" className="mt-0"><RunsTab agent={agent} /></TabsContent>
+        <TabsContent value="evals" className="mt-0"><EvalsTab agent={agent} /></TabsContent>
         <TabsContent value="knowledge" className="mt-0"><KnowledgeTab agentId={agent.id} /></TabsContent>
         <TabsContent value="memory" className="mt-0"><MemoryTab agent={agent} /></TabsContent>
         <TabsContent value="approvals" className="mt-0"><ApprovalsTab agent={agent} /></TabsContent>
