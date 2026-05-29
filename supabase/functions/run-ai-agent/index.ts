@@ -1827,6 +1827,25 @@ Deno.serve(async (req) => {
       })
     }
 
+    // 7. Auto-memory for non-Carmen agents (fire and forget, doesn't block response).
+    if (!isCarmen && resolvedTenantId && finalOutput) {
+      const memPromise = summarizeAndStoreAgentMemory({
+        supabase,
+        tenant_id: resolvedTenantId,
+        agent_id,
+        user_message: command_text,
+        assistant_output: finalOutput,
+        tools_used: toolLog.map(t => t.tool),
+      })
+      // @ts-ignore EdgeRuntime is available in Supabase edge functions
+      if (typeof EdgeRuntime !== 'undefined' && (EdgeRuntime as any).waitUntil) {
+        // @ts-ignore
+        EdgeRuntime.waitUntil(memPromise)
+      } else {
+        memPromise.catch(() => {})
+      }
+    }
+
     return new Response(JSON.stringify({
       success: true,
       output: finalOutput,
