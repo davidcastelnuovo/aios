@@ -18,8 +18,8 @@ export interface ChatConnection {
   display_name: string;
   is_own: boolean;
   shared_by_name: string | null;
-  /** Maps to chat_messages.provider / contacts.active_chat_provider */
-  active_chat_provider: "green_api" | "telegram" | "manychat";
+  /** Maps to chat_messages.provider — kept distinct so Manus vs Green API filter separately */
+  active_chat_provider: "green_api" | "manus_wa" | "telegram" | "manychat";
   /** UI grouping bucket */
   platform: "whatsapp" | "telegram" | "manychat";
 }
@@ -111,7 +111,7 @@ export function useChatConnections(tenantId: string | undefined) {
             : baseLabel;
 
         const active_chat_provider: ChatConnection["active_chat_provider"] =
-          type === "manus_wa" || type === "green_api" ? "green_api" : (type as any);
+          type === "manus_wa" ? "manus_wa" : type === "green_api" ? "green_api" : (type as any);
         const platform: ChatConnection["platform"] =
           type === "telegram" ? "telegram" : type === "manychat" ? "manychat" : "whatsapp";
 
