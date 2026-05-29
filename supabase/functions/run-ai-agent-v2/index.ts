@@ -345,6 +345,8 @@ Deno.serve(async (req) => {
     const allTools = [...tools, ...mcpTools];
     const toolsByName = new Map(allTools.map((t) => [t.name, t]));
     const openaiTools = buildOpenAITools(allTools);
+
+    const systemPrompt = (agent.system_prompt as string | null) ??
       "אתה סוכן AI אוטונומי. עבוד בלולאת ReAct: חשוב על הצעד הבא, השתמש בכלים זמינים, צפה בתוצאות, והמשך עד שתשיג את המטרה. ענה בקצרה ובעברית.";
 
     let messages = isResume
