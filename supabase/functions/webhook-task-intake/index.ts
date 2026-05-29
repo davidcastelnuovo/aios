@@ -38,6 +38,21 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders })
   }
 
+  // Require shared secret for this webhook (header or query string)
+  const expectedSecret = Deno.env.get('WEBHOOK_TASK_INTAKE_SECRET')
+  if (!expectedSecret) {
+    return new Response(JSON.stringify({ error: 'Server misconfigured: missing webhook secret' }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+  const providedSecret = req.headers.get('x-webhook-secret')
+    ?? new URL(req.url).searchParams.get('secret')
+  if (providedSecret !== expectedSecret) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+
   try {
     
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
