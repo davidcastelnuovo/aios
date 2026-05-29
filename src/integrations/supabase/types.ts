@@ -8482,6 +8482,7 @@ export type Database = {
         }
         Returns: string
       }
+      decline_signature_by_token: { Args: { _token: string }; Returns: Json }
       enqueue_job: {
         Args: {
           p_job_type: string
@@ -8493,6 +8494,7 @@ export type Database = {
         Returns: string
       }
       generate_tracking_id: { Args: never; Returns: string }
+      get_channel_invite_by_token: { Args: { _token: string }; Returns: Json }
       get_chat_contacts: {
         Args: { p_tenant_id?: string }
         Returns: {
@@ -8618,6 +8620,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_signature_by_token: { Args: { _token: string }; Returns: Json }
       get_unknown_chat_contacts:
         | {
             Args: never
@@ -8793,6 +8796,10 @@ export type Database = {
               whatsapp_avatar_url: string
             }[]
           }
+      submit_signature_by_token: {
+        Args: { _ip?: string; _signature_data: string; _token: string }
+        Returns: Json
+      }
       user_can_access_client: {
         Args: { _client_id: string; _user_id: string }
         Returns: boolean

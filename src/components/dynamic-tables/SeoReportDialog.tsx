@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import DOMPurify from "dompurify";
 import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -518,7 +519,7 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
                       <CardContent className="p-4">
                         <div 
                           className="prose prose-sm dark:prose-invert max-w-none text-right"
-                          dangerouslySetInnerHTML={{ __html: reportData.html }}
+                          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(reportData.html || "", { FORBID_TAGS: ["script", "style", "iframe", "object", "embed"], FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover", "onfocus", "onblur"] }) }}
                         />
                       </CardContent>
                     </Card>

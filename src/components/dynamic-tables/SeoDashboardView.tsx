@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import DOMPurify from "dompurify";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -685,7 +686,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
           <CardContent className="p-4">
             <div 
               className="prose prose-sm dark:prose-invert max-w-none text-right"
-              dangerouslySetInnerHTML={{ __html: reportData.html }}
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(reportData.html || "", { FORBID_TAGS: ["script", "style", "iframe", "object", "embed"], FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover", "onfocus", "onblur"] }) }}
             />
           </CardContent>
         </Card>

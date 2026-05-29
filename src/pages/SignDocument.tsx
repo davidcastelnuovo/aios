@@ -25,18 +25,14 @@ export default function SignDocument() {
   const [hasSignature, setHasSignature] = useState(false);
   const [signed, setSigned] = useState(false);
 
-  // Fetch recipient by token
+  // Fetch recipient by token via secured RPC (no direct table access)
   const { data: recipient, isLoading: loadingRecipient } = useQuery({
     queryKey: ["sign-recipient", token],
     queryFn: async () => {
       if (!token) return null;
-      const { data, error } = await supabase
-        .from("signature_recipients")
-        .select("*, signature_documents(*)")
-        .eq("sign_token", token)
-        .single();
+      const { data, error } = await supabase.rpc("get_signature_by_token", { _token: token });
       if (error) throw error;
-      return data;
+      return data as any;
     },
     enabled: !!token,
   });
@@ -124,39 +120,18 @@ export default function SignDocument() {
     setHasSignature(false);
   };
 
-  // Sign mutation
+  // Sign mutation - via secured RPC
   const signMutation = useMutation({
     mutationFn: async () => {
       const canvas = getActiveCanvas();
-      if (!canvas || !recipient) throw new Error("Missing data");
+      if (!canvas || !recipient || !token) throw new Error("Missing data");
       const signatureData = canvas.toDataURL("image/png");
-      
-      const { error: recError } = await supabase
-        .from("signature_recipients")
-        .update({
-          status: "signed",
-          signature_data: signatureData,
-          signed_at: new Date().toISOString(),
-          ip_address: "client-side",
-        })
-        .eq("id", recipient.id);
-      if (recError) throw recError;
-
-      const { data: allRecipients } = await supabase
-        .from("signature_recipients")
-        .select("status")
-        .eq("document_id", recipient.document_id);
-
-      const unsignedCount = (allRecipients || []).filter(r => r.status === "pending").length;
-      const newStatus = unsignedCount <= 1 ? "completed" : "partially_signed";
-
-      await supabase
-        .from("signature_documents")
-        .update({ 
-          status: newStatus,
-          ...(newStatus === "completed" ? { completed_at: new Date().toISOString() } : {}),
-        })
-        .eq("id", recipient.document_id);
+      const { error } = await supabase.rpc("submit_signature_by_token", {
+        _token: token,
+        _signature_data: signatureData,
+        _ip: null,
+      });
+      if (error) throw error;
     },
     onSuccess: () => {
       setSigned(true);
@@ -167,11 +142,9 @@ export default function SignDocument() {
 
   const declineMutation = useMutation({
     mutationFn: async () => {
-      if (!recipient) throw new Error("Missing data");
-      await supabase
-        .from("signature_recipients")
-        .update({ status: "declined" })
-        .eq("id", recipient.id);
+      if (!token) throw new Error("Missing data");
+      const { error } = await supabase.rpc("decline_signature_by_token", { _token: token });
+      if (error) throw error;
     },
     onSuccess: () => {
       setSigned(true);

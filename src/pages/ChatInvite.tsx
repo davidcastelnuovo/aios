@@ -34,12 +34,7 @@ export default function ChatInvite() {
         return;
       }
 
-      const { data, error: fetchError } = await supabase
-        .from("team_channel_invites")
-        .select("*, team_channels(name, color)")
-        .eq("token", token)
-        .eq("is_active", true)
-        .single();
+      const { data, error: fetchError } = await supabase.rpc("get_channel_invite_by_token", { _token: token });
 
       if (fetchError || !data) {
         setError("קישור ההזמנה לא תקף או שפג תוקפו");
