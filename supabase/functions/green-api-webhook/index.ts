@@ -1140,12 +1140,20 @@ Deno.serve(async (req) => {
             }
           }
 
+          // For group messages, sender_phone must be the actual participant's phone,
+          // NOT the group chat ID. For outgoing messages the participant is the instance owner (selfWid),
+          // for incoming messages it's senderData.sender (the participant wid).
+          const participantWid = isOutgoing ? (selfWid || senderWid) : (senderWid || selfWid);
+          const participantPhone = participantWid
+            ? String(participantWid).split('@')[0]
+            : phoneNumber;
+
           const automationPayload = {
             trigger_type: 'whatsapp_message_received',
             tenant_id: tenantId,
             data: {
               sender_name: senderData.senderName || null,
-              sender_phone: phoneNumber,
+              sender_phone: participantPhone,
               message_text: messageText,
               group_id: groupId,
               group_name: groupRecord?.group_name || null,
