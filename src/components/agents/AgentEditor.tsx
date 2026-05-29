@@ -10,7 +10,10 @@ import { KnowledgeTab } from "./tabs/KnowledgeTab";
 import { MemoryTab } from "./tabs/MemoryTab";
 import { TasksTab } from "./tabs/TasksTab";
 import { CostTab } from "./tabs/CostTab";
+import { ApprovalsTab } from "./tabs/ApprovalsTab";
+import { UserProfilesTab } from "./tabs/UserProfilesTab";
 import { Crown, Bot } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
 const CARMEN_AVATAR = "https://d2xsxph8kpxj0f.cloudfront.net/310419663030948028/XGJWpzb5zh76ZdoV37Q3K8/carmen-agents-avatar_17945787.png";
