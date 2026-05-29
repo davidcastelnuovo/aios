@@ -145,6 +145,20 @@ export function ProfileTab({ agent }: { agent: any }) {
           title="הנחיות מערכת (System Prompt)"
           subtitle="טקסט שדורס את הבנייה האוטומטית מהשדות לעיל"
         />
+
+        {/* Built-in baseline instructions (read-only, expandable) */}
+        <BuiltInInstructions
+          carmen={carmen}
+          agentName={agent.name}
+          onAppend={(text) => {
+            const current = form.system_prompt?.trim() || "";
+            update({
+              system_prompt: current ? `${current}\n\n${text}` : text,
+            });
+            toast.success("ההנחיות המובנות הועתקו לעריכה");
+          }}
+        />
+
         <Field
           label={
             <span className="flex items-center gap-2">
@@ -154,23 +168,24 @@ export function ProfileTab({ agent }: { agent: any }) {
               </span>
             </span>
           }
-          hint="השאר ריק כדי שהמערכת תבנה אוטומטית מהזהות, האישיות, הנשמה, המטרות והידע"
+          hint="השאר ריק כדי שהמערכת תבנה אוטומטית מהזהות, האישיות, הנשמה, המטרות והידע. הוסף כאן הנחיות נוספות מעבר למובנות."
         >
           <Textarea
             rows={12}
             value={form.system_prompt}
             onChange={e => update({ system_prompt: e.target.value })}
-            placeholder="ריק = בנייה אוטומטית. מלא = שימוש בטקסט הזה בדיוק כפי שהוא."
+            placeholder="ריק = שימוש בהנחיות המובנות. מלא = החלפת ההנחיות המובנות בטקסט הזה (או הוספה אם תעתיק את המובנות לעיל ותוסיף בסוף)."
             className="font-mono text-xs"
           />
         </Field>
         {form.system_prompt && (
           <div className="mt-2 flex items-start gap-2 text-xs text-amber-600 dark:text-amber-400">
             <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-            <span>שדה זה דורס את כל ההגדרות לעיל (אישיות/נשמה/סגנון). מחק אותו כדי לחזור לבנייה אוטומטית.</span>
+            <span>שדה זה דורס את ההנחיות המובנות. אם רוצים להוסיף עליהן — לחצי "העתק לעריכה" למעלה.</span>
           </div>
         )}
       </Card>
+
 
       {/* ===== Capabilities summary ===== */}
       <CapabilitiesCard agent={agent} carmen={carmen} />
@@ -270,6 +285,69 @@ function StatTile({ icon: Icon, label, value, hint }: { icon: any; label: string
       </div>
       <p className="text-2xl font-bold leading-none">{value.toLocaleString()}</p>
       {hint && <p className="text-[10px] text-muted-foreground mt-1">{hint}</p>}
+    </div>
+  );
+}
+
+// =========================================================================
+// Built-in (hardcoded) Carmen baseline instructions — mirrored from
+// supabase/functions/run-ai-agent/index.ts so users can see & extend them.
+// =========================================================================
+const CARMEN_BUILTIN_INSTRUCTIONS = [
+  'אתה כרמן, מנהלת AI ראשית של הארגון. את עוזרת אישית חכמה, יעילה ומקצועית.',
+  'יש לך גישה מלאה לכל מודולי המערכת: לידים, לקוחות, משימות, קמפיינרים, אנשי מכירות, סוכנויות, ספקים, מוצרים, אוטומציות, ועוד.',
+  'את יכולה לבצע כל פעולה שמשתמש יכול לבצע ידנית במערכת.',
+  'חשוב מאוד: לפני יצירת משימה חדשה, תמיד חפשי קודם עם search_tasks כדי לוודא שהמשימה לא קיימת כבר. אם היא קיימת - עדכני אותה במקום ליצור חדשה.',
+  'הבדל בין סוגי משימות: create_task = משימה לצוות (קמפיינרים). create_agent_task = משימה לכרמן עצמה. כשמבקשים ממך ליצור משימה לעצמך, סריקה תקופתית, או משימה חוזרת — השתמשי ב-create_agent_task.',
+  'ענה בעברית. היי תמציתית, מקצועית, ויעילה. כשמבצעים פעולה — אשרי את הביצוע בקצרה (2-3 משפטים מקסימום).',
+  'כשמדברים על "דשבורד CRM" — הכוונה לדשבורד CRM הסוכנות שמציג Health Score, דגלים, סטטוס תקשורת. השתמשי ב-update_client_health כדי לעדכן את המצב.',
+  'כלל למידה עצמית: כשמשתמש מסביר/מתקן/מלמד אותך — שמרי מיד בזיכרון עם save_memory בקטגוריה instructions עם מפתח תיאורי. בתחילת כל עבודה בדקי עם recall_memory אם יש הנחיות רלוונטיות שנשמרו.',
+  '🚫 איסור בלוף מוחלט: אסור לכתוב "נוצרה/עודכנה/בוצע" אלא אם באמת קראת לכלי המתאים והוא החזיר success. כל אישור פעולה ללא קריאת כלי = שקר חמור.',
+  'כשמתבקשת לשייך/לעדכן/למחוק משימה קיימת: קודם search_tasks למצוא אותה, ואז update_task עם ה-id.',
+].join('\n\n');
+
+function BuiltInInstructions({
+  carmen,
+  agentName,
+  onAppend,
+}: {
+  carmen: boolean;
+  agentName: string;
+  onAppend: (text: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const text = carmen
+    ? CARMEN_BUILTIN_INSTRUCTIONS
+    : `אתה ${agentName}. ענה בעברית. היה תמציתי ומקצועי. כשמבצע פעולה — קרא לכלי המתאים, אל תכריז על ביצוע ללא קריאת כלי.`;
+
+  return (
+    <div className="mb-4 border rounded-lg bg-muted/30">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between gap-2 px-3 py-2 text-sm hover:bg-muted/50 transition"
+      >
+        <span className="flex items-center gap-2 font-medium">
+          <BookOpen className="h-4 w-4 text-primary" />
+          הנחיות מובנות {carmen ? "של כרמן" : "ברירת מחדל"} ({text.length.toLocaleString()} תווים)
+        </span>
+        <span className="text-xs text-muted-foreground">{open ? "הסתר" : "הצג"}</span>
+      </button>
+      {open && (
+        <div className="border-t p-3 space-y-2">
+          <pre className="whitespace-pre-wrap text-[11px] font-mono bg-background border rounded p-2 max-h-72 overflow-auto text-right" dir="rtl">
+            {text}
+          </pre>
+          <div className="flex items-center gap-2 justify-end">
+            <Button size="sm" variant="outline" onClick={() => onAppend(text)}>
+              העתק לעריכה והוסף הנחיות
+            </Button>
+          </div>
+          <p className="text-[11px] text-muted-foreground text-right">
+            ההנחיות הללו מוטמעות במנוע ופעילות תמיד גם אם השדה למטה ריק. לעריכה — העתיקי לעריכה והוסיפי את ההנחיות שלך בהמשך הטקסט.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
