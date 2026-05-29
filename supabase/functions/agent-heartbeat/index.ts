@@ -170,6 +170,20 @@ Deno.serve(async (req) => {
       results.push({ tenant_id: tenantId, tasks_reviewed: tasksReviewed, actions: actionsLog.length, summary })
     }
 
+
+    // ── Warm-up run-ai-agent to reduce cold start latency ──────────────────
+    // A lightweight ping keeps the Edge Function warm so Carmen responds faster.
+    try {
+      const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
+      const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      await fetch(`${SUPABASE_URL}/functions/v1/run-ai-agent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+        body: JSON.stringify({ __warmup: true }),
+        signal: AbortSignal.timeout(4000),
+      }).catch(() => {/* ignore warmup errors */})
+    } catch { /* ignore */ }
+
     return new Response(JSON.stringify({ success: true, tenants_processed: results.length, results }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
