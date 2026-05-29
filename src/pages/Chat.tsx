@@ -39,6 +39,8 @@ import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
 import { ChatTagsManager } from "@/components/chat/ChatTagsManager";
 import { ChatTagSelector, ContactTagBadges } from "@/components/chat/ChatTagSelector";
 import { ChatMultiSelectToolbar } from "@/components/chat/ChatMultiSelectToolbar";
+import { useChatConnections } from "@/hooks/useChatConnections";
+import { ChatConnectionSelector, type ChatFilter } from "@/components/chat/ChatConnectionSelector";
 
 interface Contact {
   id: string;
@@ -80,7 +82,7 @@ export default function Chat() {
   const [searchTerm, setSearchTerm] = useState("");
   const debouncedSearch = useDebouncedValue(searchTerm, 300);
   const [contactFilter, setContactFilter] = useState<"all" | "clients" | "leads" | "groups" | "unknown" | "telegram">("all");
-  const [platformFilter, setPlatformFilter] = useState<"all" | "whatsapp" | "telegram" | "manychat" | "agents">("all");
+  const [chatFilter, setChatFilter] = useState<ChatFilter>({ kind: "all" });
   const [showTodayOnly, setShowTodayOnly] = useState(false);
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
   const [selectedContact, setSelectedContact] = useState<{ id: string; type: 'client' | 'lead' | 'group' | 'unknown' | 'telegram'; senderPhone?: string; name?: string; telegramChatId?: string } | null>(
@@ -150,12 +152,31 @@ export default function Chat() {
   }, [allContactTags]);
 
   // Fetch active chats (default mode - no search)
+  const { data: chatConnections = [] } = useChatConnections(tenantId);
+
+  // Build the list of owner user_ids whose chats we want to include in the contact list.
+  // For specific connection → just that connection's owner.
+  // Otherwise → all owners the current user has access to (own + shared).
+  const connectionUserIds = useMemo(() => {
+    if (chatFilter.kind === "connection") {
+      const c = chatConnections.find((c) => c.id === chatFilter.integrationId);
+      return c?.user_id ? [c.user_id] : null;
+    }
+    const ids = Array.from(
+      new Set(chatConnections.map((c) => c.user_id).filter((id): id is string => !!id))
+    );
+    return ids.length > 0 ? ids : null;
+  }, [chatConnections, chatFilter]);
+
   const { data: activeChats, isLoading: activeChatsLoading } = useQuery({
-    queryKey: ['active-chats', tenantId, userAgencyIds, selectedAgency],
+    queryKey: ['active-chats', tenantId, userAgencyIds, selectedAgency, connectionUserIds?.join(',') ?? 'self'],
     queryFn: async () => {
       if (!tenantId) return [];
 
-      const { data, error } = await supabase.rpc('get_chat_contacts', { p_tenant_id: tenantId });
+      const { data, error } = await supabase.rpc('get_chat_contacts', {
+        p_tenant_id: tenantId,
+        p_connection_user_ids: connectionUserIds ?? undefined,
+      } as any);
 
       if (error) {
         console.error('Error fetching active chats:', error);
@@ -395,13 +416,26 @@ export default function Chat() {
     // Filter out blocked contacts
     allContacts = allContacts.filter(contact => !contact.is_blocked);
 
-    // Apply platform filter
-    if (platformFilter === 'whatsapp') {
-      allContacts = allContacts.filter(c => c.active_chat_provider === 'green_api' || (!c.active_chat_provider && c.contact_type !== 'telegram'));
-    } else if (platformFilter === 'telegram') {
-      allContacts = allContacts.filter(c => c.contact_type === 'telegram' || c.active_chat_provider === 'telegram');
-    } else if (platformFilter === 'manychat') {
-      allContacts = allContacts.filter(c => c.active_chat_provider === 'manychat');
+    // Apply platform / connection filter
+    if (chatFilter.kind === 'platform') {
+      if (chatFilter.platform === 'whatsapp') {
+        allContacts = allContacts.filter(c => c.active_chat_provider === 'green_api' || (!c.active_chat_provider && c.contact_type !== 'telegram'));
+      } else if (chatFilter.platform === 'telegram') {
+        allContacts = allContacts.filter(c => c.contact_type === 'telegram' || c.active_chat_provider === 'telegram');
+      } else if (chatFilter.platform === 'manychat') {
+        allContacts = allContacts.filter(c => c.active_chat_provider === 'manychat');
+      }
+    } else if (chatFilter.kind === 'connection') {
+      const conn = chatConnections.find(c => c.id === chatFilter.integrationId);
+      if (conn) {
+        if (conn.platform === 'telegram') {
+          allContacts = allContacts.filter(c => c.contact_type === 'telegram' || c.active_chat_provider === 'telegram');
+        } else if (conn.platform === 'manychat') {
+          allContacts = allContacts.filter(c => c.active_chat_provider === 'manychat');
+        } else {
+          allContacts = allContacts.filter(c => c.active_chat_provider === 'green_api' || (!c.active_chat_provider && c.contact_type !== 'telegram'));
+        }
+      }
     }
 
     // Apply contact type filter
@@ -432,7 +466,7 @@ export default function Chat() {
     }
 
     return allContacts;
-  }, [allContactsBeforeTypeFilter, contactFilter, platformFilter, showTodayOnly, showUnreadOnly, todayParts, selectedTagFilter, getContactTagIds, debouncedSearch]);
+  }, [allContactsBeforeTypeFilter, contactFilter, chatFilter, chatConnections, showTodayOnly, showUnreadOnly, todayParts, selectedTagFilter, getContactTagIds, debouncedSearch]);
 
   const clientsCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'client').length;
   const leadsCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'lead').length;
@@ -552,22 +586,16 @@ export default function Chat() {
     );
   }
 
-  if (platformFilter === "agents") {
+  if (chatFilter.kind === "platform" && chatFilter.platform === "agents") {
     return (
       <div className="flex h-screen overflow-hidden gap-4 p-2" dir="rtl">
         <Card className="flex flex-col w-auto h-auto p-2 shrink-0">
-          <Select value={platformFilter} onValueChange={(v: any) => setPlatformFilter(v)}>
-            <SelectTrigger className="h-8 w-auto gap-1 border-none shadow-none text-base font-semibold px-2 hover:bg-accent">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="bg-background z-50">
-              <SelectItem value="all">צ'אט</SelectItem>
-              <SelectItem value="whatsapp">וואטסאפ</SelectItem>
-              <SelectItem value="telegram">טלגרם</SelectItem>
-              <SelectItem value="manychat">ManyChat</SelectItem>
-              <SelectItem value="agents">סוכני AI 🤖</SelectItem>
-            </SelectContent>
-          </Select>
+          <ChatConnectionSelector
+            value={chatFilter}
+            onChange={setChatFilter}
+            connections={chatConnections}
+            triggerClassName="h-8 w-auto gap-1 border-none shadow-none text-base font-semibold px-2 hover:bg-accent"
+          />
         </Card>
         <AgentSessionsPanel />
       </div>
@@ -582,18 +610,11 @@ export default function Chat() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <MessageCircle className="h-5 w-5" />
-              <Select value={platformFilter} onValueChange={(v: any) => setPlatformFilter(v)}>
-                <SelectTrigger className="h-8 w-auto gap-1 border-none shadow-none text-lg font-semibold px-1 hover:bg-accent">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-background z-50">
-                  <SelectItem value="all">צ'אט</SelectItem>
-                  <SelectItem value="whatsapp">וואטסאפ</SelectItem>
-                  <SelectItem value="telegram">טלגרם</SelectItem>
-                  <SelectItem value="manychat">ManyChat</SelectItem>
-                  <SelectItem value="agents">סוכני AI 🤖</SelectItem>
-                </SelectContent>
-              </Select>
+              <ChatConnectionSelector
+                value={chatFilter}
+                onChange={setChatFilter}
+                connections={chatConnections}
+              />
             </div>
             <div className="flex items-center gap-1">
               <Button 
