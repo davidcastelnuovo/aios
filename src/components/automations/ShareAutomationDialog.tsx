@@ -35,15 +35,15 @@ export function ShareAutomationDialog({ automation, open, onOpenChange }: ShareA
   const [search, setSearch] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Existing clones of this automation, to mark "already shared"
+  // Existing share targets for this automation
   const { data: existingClones } = useQuery({
-    queryKey: ["automation-clones", automation?.id],
+    queryKey: ["automation-shares", automation?.id],
     queryFn: async () => {
       if (!automation?.id) return [] as any[];
       const { data, error } = await supabase
-        .from("automations")
-        .select("id, tenant_id")
-        .eq("source_automation_id", automation.id);
+        .from("automation_shared_tenants")
+        .select("tenant_id")
+        .eq("automation_id", automation.id);
       if (error) throw error;
       return data || [];
     },
@@ -90,10 +90,10 @@ export function ShareAutomationDialog({ automation, open, onOpenChange }: ShareA
       const ok = results.filter((r: any) => r.success).length;
       const failed = results.filter((r: any) => !r.success);
       toast({
-        title: ok > 0 ? `שותף ל-${ok} ארגונים` : "השכפול נכשל",
+        title: ok > 0 ? `שותף ל-${ok} ארגונים` : "השיתוף נכשל",
         description: failed.length > 0
           ? `נכשל ב-${failed.length}: ${failed.map((f: any) => f.error).join(", ")}`
-          : "האוטומציה נוצרה כמושבתת בארגונים היעד - יש להפעיל ולהשלים חיבורי אינטגרציה שם",
+          : "הארגונים החדשים רואים את האוטומציה כצפייה בלבד (read-only). היא תמשיך לרוץ פעם אחת מהארגון הנוכחי.",
         variant: ok === 0 ? "destructive" : "default",
       });
       if (ok > 0) {
@@ -113,8 +113,8 @@ export function ShareAutomationDialog({ automation, open, onOpenChange }: ShareA
         <DialogHeader>
           <DialogTitle>שתף אוטומציה עם ארגון אחר</DialogTitle>
           <DialogDescription>
-            שכפול של "{automation?.name}" לארגונים נבחרים. האוטומציה החדשה תפעל אך ורק על הנתונים של הארגון היעד
-            (קמפיינרים, לקוחות, אינטגרציות). היא תיווצר במצב מושבת עד שתשלימו את חיבורי האינטגרציה שם.
+            שיתוף "{automation?.name}" כמראה (Mirror) לארגונים נבחרים. האוטומציה עצמה תמשיך לרוץ פעם אחת בלבד מהארגון
+            הנוכחי — הארגונים האחרים יראו אותה כצפייה בלבד (read-only) ולא יקבלו טריגר נפרד, כך שלא נוצרות הפעלות כפולות.
           </DialogDescription>
         </DialogHeader>
 
