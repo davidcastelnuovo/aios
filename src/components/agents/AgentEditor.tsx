@@ -12,6 +12,9 @@ import { TasksTab } from "./tabs/TasksTab";
 import { CostTab } from "./tabs/CostTab";
 import { ApprovalsTab } from "./tabs/ApprovalsTab";
 import { UserProfilesTab } from "./tabs/UserProfilesTab";
+import { ToolRegistryTab } from "./tabs/ToolRegistryTab";
+import { RunsTab } from "./tabs/RunsTab";
+
 import { Crown, Bot } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
