@@ -210,6 +210,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                     </Select>
                   </div>
                 )}
+                <GlobalApprovalsBell />
                 {/* Carmen button in header */}
                 <button
                   onClick={() => setCarmenOpen(true)}
