@@ -62,6 +62,15 @@ interface Contact {
   telegram_chat_id?: string;
 }
 
+type SelectedContact = {
+  id: string;
+  type: 'client' | 'lead' | 'group' | 'unknown' | 'telegram';
+  senderPhone?: string;
+  name?: string;
+  telegramChatId?: string;
+  activeChatProvider?: string | null;
+};
+
 const normalizePhone = (phone?: string | null) => {
   if (!phone) return '';
   const digits = (phone.match(/\d+/g) || []).join('');
@@ -85,7 +94,7 @@ export default function Chat() {
   const [chatFilter, setChatFilter] = useState<ChatFilter>({ kind: "all" });
   const [showTodayOnly, setShowTodayOnly] = useState(false);
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
-  const [selectedContact, setSelectedContact] = useState<{ id: string; type: 'client' | 'lead' | 'group' | 'unknown' | 'telegram'; senderPhone?: string; name?: string; telegramChatId?: string } | null>(
+  const [selectedContact, setSelectedContact] = useState<SelectedContact | null>(
     clientId ? { id: clientId, type: 'client' } : null
   );
   const [editingContact, setEditingContact] = useState<{ id: string; type: 'client' | 'lead'; data: any } | null>(null);
@@ -183,8 +192,8 @@ export default function Chat() {
 
       const { data, error } = await supabase.rpc('get_chat_contacts', {
         p_tenant_id: tenantId,
-        p_connection_user_ids: connectionUserIds ?? undefined,
-        p_provider: providerFilter ?? undefined,
+        p_connection_user_ids: connectionUserIds ?? null,
+        p_provider: providerFilter ?? null,
       } as any);
 
       if (error) {
