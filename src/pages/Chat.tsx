@@ -168,14 +168,23 @@ export default function Chat() {
     return ids.length > 0 ? ids : null;
   }, [chatConnections, chatFilter]);
 
+  // When filtering by a specific connection, also constrain by its provider
+  // (helps disambiguate e.g. Green API vs Telegram owned by the same user).
+  const providerFilter = useMemo<string | null>(() => {
+    if (chatFilter.kind !== "connection") return null;
+    const c = chatConnections.find((c) => c.id === chatFilter.integrationId);
+    return c?.active_chat_provider ?? null;
+  }, [chatConnections, chatFilter]);
+
   const { data: activeChats, isLoading: activeChatsLoading } = useQuery({
-    queryKey: ['active-chats', tenantId, userAgencyIds, selectedAgency, connectionUserIds?.join(',') ?? 'self'],
+    queryKey: ['active-chats', tenantId, userAgencyIds, selectedAgency, connectionUserIds?.join(',') ?? 'self', providerFilter ?? 'any'],
     queryFn: async () => {
       if (!tenantId) return [];
 
       const { data, error } = await supabase.rpc('get_chat_contacts', {
         p_tenant_id: tenantId,
         p_connection_user_ids: connectionUserIds ?? undefined,
+        p_provider: providerFilter ?? undefined,
       } as any);
 
       if (error) {
