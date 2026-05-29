@@ -8757,6 +8757,10 @@ export type Database = {
         Args: { _preset_id: string; _tenant_id: string }
         Returns: undefined
       }
+      is_automation_shared_to_tenant: {
+        Args: { _automation_id: string; _tenant_id: string }
+        Returns: boolean
+      }
       is_channel_member: {
         Args: { p_channel_id: string; p_user_id: string }
         Returns: boolean
@@ -8764,6 +8768,14 @@ export type Database = {
       is_root_tenant: { Args: { tenant_id: string }; Returns: boolean }
       is_seo_staff: { Args: { _user_id: string }; Returns: boolean }
       is_super_admin: { Args: { _user_id: string }; Returns: boolean }
+      is_user_admin_of_automation_source_tenant: {
+        Args: { _automation_id: string; _user_id: string }
+        Returns: boolean
+      }
+      is_user_in_automation_source_tenant: {
+        Args: { _automation_id: string; _user_id: string }
+        Returns: boolean
+      }
       kb_match_pointers: {
         Args: {
           p_category?: string

@@ -1,48 +1,42 @@
-# תוכנית: שיתוף אוטומציות כ-Mirror אמיתי
+## תוכנית תיקון: להחזיר את כל האוטומציות בלי לפגוע באבטחה
 
-## הבעיה היום
-ה-`clone-automation-to-tenant` יוצר **עותק עצמאי** של האוטומציה בכל טננט יעד (`source_automation_id` רק מצביע לאב). כל clone הוא רשומה נפרדת ב-`automations` עם trigger משלו, ולכן:
-- אוטומציית "התרעה לקמפיינר על משימה" רצה פעם ב-MC ופעם ב-DMM
-- קמפיינר משותף (דרך `campaigner_agencies`) מקבל **שתי הודעות** על אותה משימה לוגית
-- כל עריכה צריכה להיעשות N פעמים בטננטים השונים
+### מה מצאתי
+- ה-backend תקין וזמין.
+- הנתונים לא נמחקו: ב-`MarketingCaptain` קיימות 11 אוטומציות, וב-`DMM` קיימות 3 אוטומציות מקומיות + 3 שיתופים מ-MarketingCaptain.
+- ההרשאות הטכניות לטבלאות קיימות, כלומר זו לא בעיית GRANT בסיסית.
+- הבעיה היא ב-RLS שנוסף עבור Mirror automations: המדיניות של `automations`, `automation_flow_steps`, ו-`automation_shared_tenants` עדיין מפנה אחת לשנייה דרך שאילתות פנימיות. זה יכול לגרום לחסימה/ריקון תוצאות אצל משתמש רגיל, גם אם service/admin רואה את הנתונים.
+- בנוסף, המדיניות משתמשת ב-`get_user_tenant_id()` במקום פונקציית tenant פעיל אחידה, וזה עלול לא להתאים תמיד ל-tenant שב-URL.
 
-## הפתרון: Reference אמיתי
-אוטומציה אחת בלבד (במקור), טריגר אחד, ביצוע אחד. שאר הטננטים מקבלים **שיקוף read-only** ברשימה שלהם.
+### שלב 1 — תיקון RLS לשיתוף Mirror
+אוסיף מיגרציה שמחליפה את המדיניות הבעייתית בפונקציות `SECURITY DEFINER` ייעודיות, כדי למנוע תלות מעגלית בין הטבלאות:
 
----
+- `is_automation_shared_to_tenant(automation_id, tenant_id)` — בודקת אם אוטומציה משותפת לטננט מסוים בלי להפעיל RLS של הטבלה שוב.
+- `is_user_in_automation_source_tenant(automation_id, user_id)` — בודקת אם המשתמש שייך לטננט המקור של האוטומציה.
+- `is_user_admin_of_automation_source_tenant(automation_id, user_id)` — עבור ניהול/מחיקת שיתופים רק על ידי בעלים/מנהלים של טננט המקור.
 
-## שלב 1: סכמת DB
+### שלב 2 — עדכון מדיניות הגישה
+אחליף את המדיניות כך ש:
+- משתמש יראה אוטומציות של הטננט הפעיל שלו.
+- משתמש יראה Mirror read-only של אוטומציות ששותפו לטננט הפעיל שלו.
+- צעדי Flow של אוטומציית Mirror יהיו ניתנים לצפייה בלבד.
+- טבלת השיתופים תהיה ניתנת לצפייה גם לטננט המקור וגם לטננט היעד, בלי רקורסיה.
+- יצירה/מחיקה של שיתוף תישאר רק למנהלים/בעלים של טננט המקור או super admin.
 
-**טבלה חדשה: `automation_shared_tenants`**
-```
-automation_id  uuid  → automations.id (CASCADE delete)
-tenant_id      uuid  → tenants.id (טננט שהאוטומציה משותפת איתו)
-shared_by      uuid  → המשתמש ששיתף
-shared_at      timestamptz
-PRIMARY KEY (automation_id, tenant_id)
-```
-- GRANTs לפי הסטנדרט; RLS: SELECT לחברי הטננט/המקור, INSERT/DELETE רק לבעלים/אדמין של טננט המקור.
-- אינדקס על `tenant_id` לשליפות מהירות בצד הטננט-היעד.
+### שלב 3 — התאמה קטנה בצד ה-UI
+בדף האוטומציות אעדכן את השליפה כך שתישען על אותה לוגיקה:
+- קודם אוטומציות בבעלות הטננט הנוכחי.
+- אחר כך Mirror automations ששותפו לטננט הנוכחי.
+- אם יש שגיאת גישה, יוצג toast ברור במקום מסך ריק.
 
-**שינוי קיים:** משאירים את העמודות `source_automation_id` ו-`source_tenant_id` ב-`automations` רק עד שמיגרציית הנתונים תרוץ — בסיומה הן יוסרו או יוותרו ריקות (clones יומרו).
+### שלב 4 — אימות אחרי התיקון
+אבדוק:
+- ש-MarketingCaptain מחזיר 11 אוטומציות.
+- ש-DMM מחזיר את האוטומציות המקומיות + ה-Mirrors כ-read-only.
+- שאין כפילות טריגרים: השיתופים נשארים Reference בלבד ולא clones.
+- שאין שגיאות RLS/permission בלוגים.
 
----
-
-## שלב 2: מיגרציית נתונים (לפי בחירת המשתמש - אוטומטי)
-
-לכל שורה ב-`automations` עם `source_automation_id IS NOT NULL`:
-1. אם האב (`source_automation_id`) עדיין קיים → INSERT ל-`automation_shared_tenants(automation_id=source, tenant_id=clone.tenant_id)`.
-2. מחיקת ה-clone (מחיקת `automation_flow_steps` שלו כתוצאה מ-CASCADE).
-3. אם האב נמחק בעבר → log אזהרה, להשאיר את ה-clone כעצמאי (לא לאבד את האוטומציה של המשתמש).
-
-הכל ב-migration אחד עם transaction.
-
----
-
-## שלב 3: שינוי `clone-automation-to-tenant`
-
-לשנות שם פונקציונלי ל-`share-automation-to-tenant`:
-- במקום לעשות `insert` של אוטומציה + steps, רק `insert` ל-`automation_shared_tenants`.
-- בדיקות הרשאה נשארות זהות (owner/admin/super_admin של טננט המקור + חברות בטננט יעד).
-- מחזיר רשימת tenants ששותפו בהצלחה.
-- ההסבר ב-UI: "האוטומציה תרוץ בטננט המקור ותהיה צפייה בלבד בטננטים א
+### מה לא משתנה
+- לא מוחקים נתונים.
+- לא משנים את מבנה האוטומציות עצמן.
+- לא מחזירים cloning ישן.
+- לא מאפשרים עריכה של Mirror מטננט יעד.
