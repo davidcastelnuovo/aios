@@ -64,7 +64,7 @@ export function ProfileTab({ agent }: { agent: any }) {
           <Field label="שם הסוכן">
             <Input value={form.name} onChange={e => update({ name: e.target.value })} />
           </Field>
-          <Field label="תפקיד / מומחיות (talent)" hint="משפט קצר שמסביר במה הסוכן מתמחה">
+          <Field label="תפקיד / מומחיות (talent)">
             <Input
               value={form.talent}
               onChange={e => update({ talent: e.target.value })}
