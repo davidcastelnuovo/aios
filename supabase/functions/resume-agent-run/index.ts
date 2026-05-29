@@ -1,3 +1,5 @@
+// resume-agent-run — apply approval decision, log the outcome on the action trace,
+// and re-invoke run-ai-agent-v2 to continue the ReAct loop from the next step.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
@@ -9,9 +11,9 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { approval_id, decision } = await req.json();
-    if (!approval_id || !decision) {
-      return new Response(JSON.stringify({ error: "missing params" }), {
+    const { approval_id, decision, reviewer_id } = await req.json();
+    if (!approval_id || !decision || !["approved", "rejected"].includes(decision)) {
+      return new Response(JSON.stringify({ error: "missing/invalid params" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -29,6 +31,13 @@ Deno.serve(async (req) => {
       .single();
     if (aErr || !approval) throw aErr ?? new Error("not found");
 
+    if (approval.status !== "pending") {
+      return new Response(JSON.stringify({ ok: false, error: "approval already decided", status: approval.status }), {
+        status: 409,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     let executionResult: any = null;
 
     if (decision === "approved" && approval.tool_name) {
@@ -43,41 +52,92 @@ Deno.serve(async (req) => {
       if (tool?.handler_kind === "edge" && tool.handler_ref) {
         try {
           const { data, error } = await supabase.functions.invoke(tool.handler_ref, {
-            body: { ...(approval.tool_input ?? {}), _approval_id: approval_id, _run_id: approval.run_id },
+            body: {
+              ...(approval.tool_input ?? {}),
+              _approval_id: approval_id,
+              _run_id: approval.run_id,
+              _tenant_id: approval.tenant_id,
+              _agent_id: approval.agent_id,
+            },
           });
           if (error) throw error;
-          executionResult = { ok: true, data };
+          executionResult = data ?? { ok: true };
         } catch (e: any) {
           executionResult = { ok: false, error: String(e?.message ?? e) };
         }
       } else {
         executionResult = { ok: true, note: "no handler — manual or internal tool" };
       }
-
-      await supabase
-        .from("agent_approval_queue")
-        .update({
-          status: "executed",
-          executed_at: new Date().toISOString(),
-          execution_result: executionResult,
-        })
-        .eq("id", approval_id);
+    } else if (decision === "rejected") {
+      executionResult = { ok: false, rejected: true, reason: "Rejected by reviewer" };
     }
 
-    // Log
+    // Persist the approval decision
+    await supabase
+      .from("agent_approval_queue")
+      .update({
+        status: decision === "approved" ? "executed" : "rejected",
+        approved_by: reviewer_id ?? null,
+        approved_at: new Date().toISOString(),
+        executed_at: decision === "approved" ? new Date().toISOString() : null,
+        execution_result: executionResult,
+      })
+      .eq("id", approval_id);
+
+    // If the approval belongs to a run, attach the observation to the pending step
+    // so the run can be reconstructed cleanly when v2 resumes.
+    if (approval.run_id) {
+      const { data: pendingLog } = await supabase
+        .from("agent_action_log")
+        .select("id, step_index")
+        .eq("run_id", approval.run_id)
+        .eq("step_kind", "approval_pending")
+        .order("step_index", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (pendingLog) {
+        // Promote the pending step to a regular tool step with the execution result
+        await supabase
+          .from("agent_action_log")
+          .update({
+            step_kind: "tool",
+            observation: executionResult,
+            status: executionResult?.ok === false ? "error" : "success",
+            action_type: "tool",
+          })
+          .eq("id", pendingLog.id);
+      }
+
+      // Continue the ReAct loop
+      const { data: continueResult, error: contErr } = await supabase.functions.invoke(
+        "run-ai-agent-v2",
+        { body: { run_id: approval.run_id, tenant_id: approval.tenant_id } },
+      );
+      if (contErr) {
+        await supabase.from("agent_runs")
+          .update({ status: "failed", error_message: `resume failed: ${contErr.message}` })
+          .eq("id", approval.run_id);
+      }
+      return new Response(JSON.stringify({ ok: true, executionResult, continued: continueResult }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Log standalone (legacy approval without run)
     await supabase.from("agent_action_log").insert({
       tenant_id: approval.tenant_id,
       agent_id: approval.agent_id,
       action_type: `approval_${decision}`,
-      action_details: { tool_name: approval.tool_name, run_id: approval.run_id, result: executionResult },
+      action_details: { tool_name: approval.tool_name, result: executionResult },
       status: executionResult?.ok === false ? "error" : "success",
-      run_id: approval.run_id,
     });
 
     return new Response(JSON.stringify({ ok: true, executionResult }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e: any) {
+    console.error("[resume-agent-run] error:", e?.message);
     return new Response(JSON.stringify({ error: String(e?.message ?? e) }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

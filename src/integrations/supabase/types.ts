@@ -137,9 +137,13 @@ export type Database = {
           error_message: string | null
           id: string
           model: string | null
+          observation: Json | null
           run_id: string | null
           status: string
+          step_index: number | null
+          step_kind: string | null
           tenant_id: string
+          thought: string | null
           tokens_in: number | null
           tokens_out: number | null
           tool_calls: number | null
@@ -156,9 +160,13 @@ export type Database = {
           error_message?: string | null
           id?: string
           model?: string | null
+          observation?: Json | null
           run_id?: string | null
           status?: string
+          step_index?: number | null
+          step_kind?: string | null
           tenant_id: string
+          thought?: string | null
           tokens_in?: number | null
           tokens_out?: number | null
           tool_calls?: number | null
@@ -175,9 +183,13 @@ export type Database = {
           error_message?: string | null
           id?: string
           model?: string | null
+          observation?: Json | null
           run_id?: string | null
           status?: string
+          step_index?: number | null
+          step_kind?: string | null
           tenant_id?: string
+          thought?: string | null
           tokens_in?: number | null
           tokens_out?: number | null
           tool_calls?: number | null
@@ -501,6 +513,84 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      agent_runs: {
+        Row: {
+          agent_id: string
+          completed_at: string | null
+          context: Json
+          conversation_id: string | null
+          created_at: string
+          current_step: number
+          duration_ms: number | null
+          error_message: string | null
+          final_answer: string | null
+          goal: string
+          id: string
+          max_steps: number
+          model: string | null
+          pending_approval_id: string | null
+          started_at: string
+          status: string
+          tenant_id: string
+          total_cost_usd: number
+          total_tokens_in: number
+          total_tokens_out: number
+          trigger_source: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          agent_id: string
+          completed_at?: string | null
+          context?: Json
+          conversation_id?: string | null
+          created_at?: string
+          current_step?: number
+          duration_ms?: number | null
+          error_message?: string | null
+          final_answer?: string | null
+          goal: string
+          id?: string
+          max_steps?: number
+          model?: string | null
+          pending_approval_id?: string | null
+          started_at?: string
+          status?: string
+          tenant_id: string
+          total_cost_usd?: number
+          total_tokens_in?: number
+          total_tokens_out?: number
+          trigger_source?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          agent_id?: string
+          completed_at?: string | null
+          context?: Json
+          conversation_id?: string | null
+          created_at?: string
+          current_step?: number
+          duration_ms?: number | null
+          error_message?: string | null
+          final_answer?: string | null
+          goal?: string
+          id?: string
+          max_steps?: number
+          model?: string | null
+          pending_approval_id?: string | null
+          started_at?: string
+          status?: string
+          tenant_id?: string
+          total_cost_usd?: number
+          total_tokens_in?: number
+          total_tokens_out?: number
+          trigger_source?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
       }
       agent_tasks: {
         Row: {

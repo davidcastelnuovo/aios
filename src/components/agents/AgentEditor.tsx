@@ -12,6 +12,9 @@ import { TasksTab } from "./tabs/TasksTab";
 import { CostTab } from "./tabs/CostTab";
 import { ApprovalsTab } from "./tabs/ApprovalsTab";
 import { UserProfilesTab } from "./tabs/UserProfilesTab";
+import { ToolRegistryTab } from "./tabs/ToolRegistryTab";
+import { RunsTab } from "./tabs/RunsTab";
+
 import { Crown, Bot } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -80,12 +83,14 @@ function AgentTabsWithUrl({ agent }: { agent: any }) {
       onValueChange={(v) => { params.set("tab", v); setParams(params, { replace: true }); }}
       className="flex-1 flex flex-col overflow-hidden"
     >
-      <TabsList className="mx-4 mt-3 self-start">
+      <TabsList className="mx-4 mt-3 self-start flex-wrap h-auto">
         <TabsTrigger value="profile">⚙️ פרופיל</TabsTrigger>
         <TabsTrigger value="goals">🎯 מטרות</TabsTrigger>
         <TabsTrigger value="tasks">📋 משימות</TabsTrigger>
         <TabsTrigger value="tools">🛠️ כלים</TabsTrigger>
-        <TabsTrigger value="knowledge">📚 ידע</TabsTrigger>
+        <TabsTrigger value="registry">📚 מאגר כלים</TabsTrigger>
+        <TabsTrigger value="runs">🔁 ריצות</TabsTrigger>
+        <TabsTrigger value="knowledge">📖 ידע</TabsTrigger>
         <TabsTrigger value="memory">🧠 זיכרון</TabsTrigger>
         <TabsTrigger value="approvals">🛡️ אישורים</TabsTrigger>
         <TabsTrigger value="user-profiles">👥 פרופילי משתמשים</TabsTrigger>
@@ -96,6 +101,8 @@ function AgentTabsWithUrl({ agent }: { agent: any }) {
         <TabsContent value="goals" className="mt-0"><GoalsTab agentId={agent.id} /></TabsContent>
         <TabsContent value="tasks" className="mt-0"><TasksTab agent={agent} /></TabsContent>
         <TabsContent value="tools" className="mt-0"><ToolsTab agent={agent} /></TabsContent>
+        <TabsContent value="registry" className="mt-0"><ToolRegistryTab /></TabsContent>
+        <TabsContent value="runs" className="mt-0"><RunsTab agent={agent} /></TabsContent>
         <TabsContent value="knowledge" className="mt-0"><KnowledgeTab agentId={agent.id} /></TabsContent>
         <TabsContent value="memory" className="mt-0"><MemoryTab agent={agent} /></TabsContent>
         <TabsContent value="approvals" className="mt-0"><ApprovalsTab agent={agent} /></TabsContent>
@@ -105,4 +112,5 @@ function AgentTabsWithUrl({ agent }: { agent: any }) {
     </Tabs>
   );
 }
+
 
