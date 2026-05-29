@@ -1,4 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
+import { fireIntegrationAlert } from '../_shared/fireIntegrationAlert.ts';
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
