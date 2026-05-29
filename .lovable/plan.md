@@ -1,29 +1,81 @@
-## מטרה
-לאפשר באוטומציה אחת כמה טריגרים שמפעילים את אותו הזרם (לוגיקת OR). למשל: "ליד נוצר" **או** "הודעת WhatsApp התקבלה" → אותן פעולות.
+# המשך Phase A — אישורים גנריים + שכבות זיכרון
 
-## איך זה ייראה למשתמש
-- בעורך הזרם, בראש הקנבס, יופיע כפתור **"+ הוסף טריגר"** ליד נוד הטריגר הקיים.
-- כל לחיצה מוסיפה נוד טריגר נוסף לצד הטריגר הראשון (שורה אופקית של טריגרים).
-- כל נוד טריגר מוגדר בנפרד (סוג טריגר + הגדרות ספציפיות) דרך אותו `StepConfigPanel` הקיים.
-- כל הטריגרים מתחברים באוטומטית לפעולה הראשונה בזרם (entry node).
-- אפשר למחוק טריגר נוסף עם כפתור ה-X של הנוד — נשאר מינימום טריגר אחד.
+## #2 — טאב "אישורים" גנרי + התראה גלובלית
 
-## איך זה יעבוד מאחורי הקלעים
-1. **סכמה — בלי שינוי**: כבר היום `automation_steps` תומך בריבוי שורות עם `step_type='trigger'`. אין צורך במיגרציה.
-2. **שדה `automations.trigger_type`** יישאר ויעודכן לטריגר ה"ראשי" (הראשון) לתאימות לאחור עם תצוגות רשימה ופילטרים. הריצה עצמה תזהה את הטריגר המתאים מתוך שורות הטריגרים.
-3. **חיבור גרף**: נוד ה"פעולה הראשונה" יחזיק `parent_step_id` של אחד הטריגרים (הראשי). שאר הטריגרים יסומנו בעמודת `configuration` (`{ is_extra_trigger: true }`) ולא יוצרים שרשרת ילדים — הם רק נקודות כניסה.
-4. **Edge function `trigger-automation`**: כבר היום מאתר `triggerStep` לפי `action_type` בתוך שלבי האוטומציה (`.in('action_type', ...)`) — לכן מספר טריגרים יתפסו אוטומטית. הריצה תמשיך תמיד מהפעולה הראשונה (הילד של הטריגר הראשי). שינוי נדרש: לאחר התאמת `triggerStep`, להתחיל את ה-traversal מ-`first action where parent_step_id IN (all trigger ids)` במקום מהטריגר הספציפי שנמצא.
+### רכיבים חדשים
+1. **`src/components/agents/tabs/ApprovalsTab.tsx`**
+   - Query על `agent_approval_queue` עם `agent_id` + `status='pending'` + `expires_at > now()`
+   - כרטיסים פר בקשה: `tool_name`, `tool_input` (JSON viewer), `run_id`, זמן יצירה, TTL
+   - כפתורי **אשר / דחה** → UPDATE ל-`status` (`approved`/`rejected`) + `decided_at` + `decided_by=auth.uid()`
+   - אחרי אישור — קריאה ל-edge function `resume-agent-run` (חדש, ראה למטה) עם `run_id`
+   - מצב ריק: "אין בקשות ממתינות"
+   - טאב נוסף "היסטוריה" — אישורים אחרונים (approved/rejected/expired) ב-30 יום
 
-## קבצים שיתעדכנו
-- `src/components/automations/FlowEditor.tsx` — כפתור "+ הוסף טריגר", פריסה אופקית של נודי טריגרים, יצירת edges מכל הטריגרים אל ה-entry node, מחיקת טריגר נוסף.
-- `src/components/automations/FlowNode.tsx` — כפתור מחיקה לטריגר נוסף בלבד (לא לראשי).
-- `src/components/automations/StepConfigPanel.tsx` — תמיכה בעריכת כל טריגר בנפרד (כבר עובד פר-node, רק לוודא שלא נשענים על "טריגר יחיד").
-- `supabase/functions/trigger-automation/index.ts` — בלולאת ההפעלה: אחרי התאמת `triggerStep`, מציאת ה-entry action לפי `parent_step_id IN [כל ה-trigger ids בזרם]`, וממנו ממשיכים כרגיל.
+2. **`src/components/agents/GlobalApprovalsBell.tsx`**
+   - איקון פעמון ב-`AppHeader` (ליד הפעמון הקיים אם יש, אחרת חדש)
+   - Query גלובלי על כל ה-pending approvals של ה-tenant
+   - Realtime subscription על `agent_approval_queue` (INSERT/UPDATE)
+   - Badge אדום עם מספר; קליק פותח Popover עם רשימה מקוצרת + לינק לסוכן הרלוונטי (`/agents/:agentId?tab=approvals`)
 
-## מה לא נכלל
-- AND בין טריגרים (לא נדרש).
-- זרמים שונים לטריגרים שונים (כל הטריגרים מובילים לאותו זרם).
-- עדכון מיגרציה לסכמה.
+3. **`supabase/functions/resume-agent-run/index.ts`**
+   - מקבל `{ approval_id, decision }`
+   - אם approved — מבצע את ה-tool שב-`tool_input` ומחזיר את התוצאה ל-`agent_runs` (מעדכן `status`/`output`)
+   - אם rejected — מסמן את ה-run כ-`cancelled`
+   - מתועד ב-`agent_action_log`
 
-## בדיקות אחרי המימוש
-- יצירת אוטומציה חדשה עם שני טריגרים (ליד נוצר + WhatsApp הת
+### עדכונים
+- **`AgentEditor.tsx`** — להוסיף `<TabsContent value="approvals">` עם `ApprovalsTab`
+- **`AppHeader.tsx`** (או הלייאאוט) — להציג `GlobalApprovalsBell` למשתמשים עם הרשאה
+
+---
+
+## #3 — סינון שכבות זיכרון + עריכת user-model
+
+### עדכונים ל-`MemoryTab.tsx` (קיים)
+1. **טאבי-משנה / סלקטור** עליון: `working` | `episodic` | `semantic` | `user_model` | `הכל`
+2. **חיפוש FTS** — שדה חיפוש שמשתמש ב-`agent_memory.fts` (טריגר כבר קיים מ-Phase A)
+3. **סינון לפי `contact_phone`** — דרופדאון אנשי קשר (מ-`leads`/`clients`)
+4. כל פריט זיכרון מציג: `memory_type` (Badge צבעוני), `content`, `contact_phone`, `created_at`
+
+### רכיב חדש: `src/components/agents/UserModelEditor.tsx`
+- בטאב נפרד "פרופילי משתמשים" בתוך AgentEditor
+- רשימת `agent_user_profiles` פר `contact_phone`
+- עריכה inline: `traits` (JSON), `preferences` (JSON), `communication_style`, `notes`
+- כפתור "צור פרופיל חדש" — בוחר contact מ-CRM, פותח דיאלוג
+
+### עדכונים ל-`AgentEditor.tsx`
+- טאב חדש: `<TabsContent value="user-profiles">`
+
+---
+
+## פרטים טכניים
+
+### קבצים שייווצרו
+- `src/components/agents/tabs/ApprovalsTab.tsx`
+- `src/components/agents/tabs/UserProfilesTab.tsx`
+- `src/components/agents/GlobalApprovalsBell.tsx`
+- `supabase/functions/resume-agent-run/index.ts`
+
+### קבצים שיעודכנו
+- `src/components/agents/AgentEditor.tsx` — 2 טאבים חדשים
+- `src/components/agents/tabs/MemoryTab.tsx` — סלקטור + FTS + סינון contact
+- `src/components/layout/AppHeader.tsx` (או הקובץ הרלוונטי) — Bell
+
+### Realtime
+```sql
+ALTER PUBLICATION supabase_realtime ADD TABLE public.agent_approval_queue;
+```
+(מיגרציה קטנה במידת הצורך)
+
+### עיצוב
+- Badge צבעוני פר `memory_type`: working=blue, episodic=green, semantic=purple, user_model=amber
+- Approvals: pending=yellow border, approved=green, rejected=red
+
+---
+
+## מה לא נכלל (יישאר ל-Phase B)
+- ReAct loop אמיתי בתוך `run-ai-agent` שמייצר `agent_runs` + מחייב approval לפני tool execution (התשתית מוכנה, ההפעלה בשלב הבא)
+- Tool registry UI לעריכת `agent_tools.requires_approval`
+- שיפור עצמי / לולאות לימוד — Phase C
+
+מאשר?
