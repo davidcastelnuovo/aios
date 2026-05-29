@@ -837,15 +837,39 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     await routedSend(chatId, carmenResponse);
     await syncCarmenToAIConversation(supabase, newSession, history);
   } else {
-    const greeting = `היי, ${agentName} כאן. מה תרצה לבדוק? (לסיום: "${endKeywordConfig}")`;
+    // Context-aware opener: load recent chat history so Carmen doesn't reintroduce
+    // herself on every new session. If there's prior conversation, she picks up
+    // naturally; otherwise she sends a normal first-time greeting.
+    const recentContext = await fetchRecentChatContext(
+      supabase, tenantId, chatId, isGroup, phoneNumber,
+    );
+    const mergedHistory = buildCarmenMergedHistory(recentContext, []);
+    const hasPriorContext = recentContext.length > 0;
+
+    const openerPrompt = hasPriorContext
+      ? `המשתמש פתח שיחה חדשה במילת הטריגר "${triggerKeyword}" בלי שאלה ספציפית. כבר היה איתו דיאלוג קודם (ראי בהיסטוריה). הגיבי בקצרה וטבעית בהמשך להקשר — אל תציגי את עצמך מחדש ואל תכתבי "היי, כרמן כאן". אם יש משהו פתוח מהשיחות הקודמות שכדאי לסגור — שאלי עליו ישירות. אחרת שאלי במשפט קצר במה לעזור. אל תזכירי את מילת הסיום אלא אם נשאלת.`
+      : `המשתמש פתח שיחה חדשה במילת הטריגר "${triggerKeyword}" בלי שאלה ספציפית. אין היסטוריית שיחה איתו. ברכי אותו במשפט קצר וטבעי ושאלי במה לעזור. ציין את מילת הסיום "${endKeywordConfig}" פעם אחת בלבד.`;
+
+    let opener: string;
+    try {
+      opener = await runCarmenAI(
+        supabase, agentId, tenantId, openerPrompt, mergedHistory, phoneNumber, senderName,
+      );
+    } catch (err) {
+      console.error('[CARMEN] contextual opener failed, falling back:', err);
+      opener = hasPriorContext
+        ? 'כאן, מה צריך?'
+        : `היי, ${agentName} כאן. מה תרצה לבדוק? (לסיום: "${endKeywordConfig}")`;
+    }
+
     const history = [
-      { role: 'assistant', content: greeting, timestamp: new Date().toISOString() },
+      { role: 'assistant', content: opener, timestamp: new Date().toISOString() },
     ];
     await supabase
       .from('carmen_whatsapp_sessions')
       .update({ conversation_history: history, last_message_at: new Date().toISOString() })
       .eq('id', newSession.id);
-    await routedSend(chatId, greeting);
+    await routedSend(chatId, opener);
     await syncCarmenToAIConversation(supabase, newSession, history);
   }
 
