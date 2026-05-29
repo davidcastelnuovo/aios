@@ -740,7 +740,13 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
   // Scope enforcement
   const scopeMode = carmenAutomation.configuration?.carmen_scope_mode || 'all';
   const allowedPhones = carmenAutomation.configuration?.carmen_allowed_phones || [];
-  const allowedGroups = carmenAutomation.configuration?.carmen_allowed_groups || [];
+  // Canonical key is `carmen_allowed_group_ids` (matches the UI in StepConfigPanel
+  // and trigger-automation). Fall back to legacy singular key for older configs.
+  const cfgForGroups = carmenAutomation.configuration || {};
+  const allowedGroups: string[] = Array.isArray(cfgForGroups.carmen_allowed_group_ids) && cfgForGroups.carmen_allowed_group_ids.length > 0
+    ? cfgForGroups.carmen_allowed_group_ids
+    : (cfgForGroups.carmen_allowed_group_id ? [cfgForGroups.carmen_allowed_group_id]
+      : (Array.isArray(cfgForGroups.carmen_allowed_groups) ? cfgForGroups.carmen_allowed_groups : []));
   if (scopeMode === 'specific_phone' && !isGroup) {
     const phoneCandidates = [phoneNumber, sourcePhoneNumber, chatId?.split('@')?.[0]]
       .map((p: string | null | undefined) => (p || '').replace(/[^0-9]/g, ''))
