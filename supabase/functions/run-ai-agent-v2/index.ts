@@ -191,6 +191,40 @@ async function executeTool(
     if (error) throw error;
     return data ?? { ok: true };
   }
+  if (tool.handler_kind === "mcp" && tool.handler_ref) {
+    const [connId, toolName] = tool.handler_ref.split("::");
+    const { data: conn } = await supabase
+      .from("agent_mcp_connections").select("*").eq("id", connId).single();
+    if (!conn) return { ok: false, error: "mcp connection missing" };
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "Accept": "application/json, text/event-stream",
+    };
+    const bearer = conn.oauth_tokens?.bearer;
+    if (bearer) headers["Authorization"] = `Bearer ${bearer}`;
+    const resp = await fetch(conn.url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        jsonrpc: "2.0", id: Date.now(),
+        method: "tools/call",
+        params: { name: toolName, arguments: input },
+      }),
+    });
+    const text = await resp.text();
+    if (!resp.ok) return { ok: false, error: `MCP ${resp.status}: ${text.slice(0, 300)}` };
+    try {
+      const ct = resp.headers.get("content-type") ?? "";
+      let parsed: any;
+      if (ct.includes("text/event-stream")) {
+        const m = text.match(/data:\s*(\{[^\n]+\})/);
+        parsed = m ? JSON.parse(m[1]) : { result: text };
+      } else parsed = JSON.parse(text);
+      return parsed.result ?? parsed;
+    } catch {
+      return { ok: true, raw: text.slice(0, 500) };
+    }
+  }
   if (tool.handler_kind === "internal") {
     return { ok: true, note: `internal tool ${tool.name} — no executor configured` };
   }
