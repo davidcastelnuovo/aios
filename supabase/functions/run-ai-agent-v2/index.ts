@@ -296,6 +296,8 @@ Deno.serve(async (req) => {
           max_steps: body.max_steps ?? 12,
           conversation_id: body.conversation_id ?? null,
           trigger_source: body.trigger_source ?? "manual",
+          parent_run_id: body.parent_run_id ?? null,
+          replay_of_run_id: body.replay_of_run_id ?? null,
         })
         .select()
         .single();
