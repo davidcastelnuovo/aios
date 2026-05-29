@@ -284,6 +284,11 @@ Deno.serve(async (req) => {
             return { matches: false, reason: 'carmen_scope_group_mismatch' }
           }
         } else if (scopeMode === 'specific_phone') {
+          // Group messages must NOT be validated against a phone whitelist —
+          // group scoping is a separate automation. Silently skip this automation.
+          if (safeData.group_id || safeData.group_chat_id || safeData.contact_type === 'group') {
+            return { matches: false, reason: 'carmen_scope_phone_ignored_in_group' }
+          }
           const allowedPhones: string[] = safeConfig.carmen_allowed_phones || []
           if (allowedPhones.length === 0) {
             console.warn('[CARMEN SCOPE] specific_phone configured but no phones listed — blocking')
