@@ -1,12 +1,15 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Activity, Brain, Wrench, Eye, CheckCircle2, AlertCircle, Clock, Shield } from "lucide-react";
+import { Activity, Brain, Wrench, Eye, CheckCircle2, AlertCircle, Clock, Shield, RotateCw, GitBranch } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { he } from "date-fns/locale";
+import { toast } from "sonner";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 const STATUS_META: Record<string, { label: string; color: string; icon: any }> = {
   running: { label: "רץ", color: "bg-blue-500/10 text-blue-700", icon: Activity },
