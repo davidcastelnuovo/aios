@@ -8591,6 +8591,29 @@ export type Database = {
               whatsapp_avatar_url: string
             }[]
           }
+        | {
+            Args: {
+              p_connection_user_ids?: string[]
+              p_provider?: Database["public"]["Enums"]["chat_provider"]
+              p_tenant_id?: string
+            }
+            Returns: {
+              active_chat_provider: Database["public"]["Enums"]["chat_provider"]
+              agency_id: string
+              agency_name: string
+              contact_id: string
+              contact_name: string
+              contact_type: string
+              email: string
+              is_blocked: boolean
+              last_message_at: string
+              manychat_subscriber_id: string
+              name: string
+              phone: string
+              unread_count: number
+              whatsapp_avatar_url: string
+            }[]
+          }
       get_client_tenant_id: { Args: { _client_id: string }; Returns: string }
       get_cross_tenant_campaigner_ids: {
         Args: { p_user_id: string }
