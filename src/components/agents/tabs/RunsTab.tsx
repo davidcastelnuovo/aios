@@ -30,6 +30,20 @@ const STEP_ICON: Record<string, any> = {
 
 export function RunsTab({ agent }: { agent: any }) {
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const qc = useQueryClient();
+  const { tenantId } = useCurrentTenant();
+
+  const replay = useMutation({
+    mutationFn: async (run_id: string) => {
+      const { data, error } = await supabase.functions.invoke("replay-agent-run", {
+        body: { run_id, tenant_id: tenantId },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => { toast.success("Replay החל"); qc.invalidateQueries({ queryKey: ["agent-runs", agent.id] }); },
+    onError: (e: any) => toast.error(e.message),
+  });
 
   const { data: runs = [] } = useQuery({
     queryKey: ["agent-runs", agent.id],
