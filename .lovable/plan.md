@@ -1,69 +1,92 @@
+# Phase C — Hermes Agent System: Supervisor, MCP, Eval
 
-# התראות אינטגרציה — `integration_disconnected` + `ad_account_blocked`
+המשך בנייה אחרי ReAct loop. שלוש יכולות מרכזיות:
 
-מטרה: לאפשר אוטומציה עם שני טריגרים (OR) שמשגרת הודעת WhatsApp עם פירוט מלא — איזו אינטגרציה/חשבון, איזה לקוח, וקישור ישיר לחשבון.
+## 1. Multi-Agent Supervisor (האב סוכן)
 
-## 1. מיגרציה — `integration_alerts_log`
-טבלה למניעת ספאם (throttle 6 שעות):
-- `tenant_id`, `provider`, `account_id` (nullable), `alert_type` (`disconnected` | `blocked`), `fired_at`
-- אינדקס על (tenant_id, provider, account_id, alert_type, fired_at)
-- RLS: רק service_role כותב; tenant יכול לקרוא
-- GRANTs מלאים
+סוכן ראשי שמנתב משימות לסוכנים מומחים (Carmen, SEO Analyst, Finance Agent וכו') במקום שכל סוכן ירוץ בנפרד.
 
-## 2. Shared helper — `supabase/functions/_shared/fireIntegrationAlert.ts`
-פונקציה אחת שכל cron/webhook קורא לה:
-```
-fireIntegrationAlert({
-  tenant_id, provider, alert_type: 'disconnected'|'blocked',
-  account_id?, account_name?, client_id?, client_name?, reason
-})
-```
-תפקידיה:
-- בדיקת throttle מול `integration_alerts_log` (6h)
-- העשרת payload: `provider_label` (עברית), `reason_he`, `tenant_name`, `account_link` (deep-link לפי provider), `internal_link` (לכרטיס הלקוח/אינטגרציות), `occurred_at`
-- קריאה ל-`trigger-automation` עם הטריגר המתאים
-- רישום ב-log
+**DB:**
+- `agent_supervisors` — הגדרת supervisor עם רשימת `child_agent_ids`
+- `agent_runs.parent_run_id` — קישור hierarchical בין runs
+- `agent_runs.delegated_to` — איזה sub-agent טיפל
 
-מיפוי `account_link`:
-- Meta/FB Ads: `https://business.facebook.com/adsmanager/manage/accounts?act={id}`
-- Google Ads: `https://ads.google.com/aw/overview?ocid={id}`
-- GA4: `https://analytics.google.com/analytics/web/#/p{id}`
-- GSC: `https://search.google.com/search-console?resource_id={encoded}`
-- Gmail/Telegram/Green API/ManyChat/Unified.to: קישור פנימי לעמוד האינטגרציה
+**Edge function:**
+- `run-agent-supervisor` — מקבל goal, בוחר sub-agent מתאים (LLM routing), קורא ל-`run-ai-agent-v2` עם הסוכן הנבחר, אוסף תוצאות, יכול לקרוא לכמה sub-agents במקביל
+- Handoff tool: `delegate_to_agent(agent_id, sub_goal)` — sub-agent יכול להחזיר ל-supervisor
 
-## 3. שילוב במקורות הקיימים
-**`ad_account_blocked`**:
-- `cron-sync-facebook-insights`: שינוי שם הטריגר מ-`ad_account_billing_issue` → `ad_account_blocked` + שימוש ב-helper
-- `cron-sync-google-ads`: יירוט `CUSTOMER_NOT_ENABLED`/`ACCOUNT_SUSPENDED`/`BILLING` → `ad_account_blocked`
-- ב-`trigger-automation`: alias `ad_account_billing_issue` → `ad_account_blocked` לתאימות לאחור
+**UI:**
+- טאב `Supervisor` ב-AgentEditor — בחירת sub-agents, routing strategy (LLM/rules)
+- RunsTab מציג עץ runs hierarchical (parent → children)
 
-**`integration_disconnected`**:
-- כשל refresh-token / 401 / `invalid_grant` בכל הקרונים:
-  `cron-sync-google-ads`, `cron-sync-google-analytics`, `cron-sync-google-search-console`, `gmail-sync`
-- כשל webhook/auth ב-`green-api-webhook`, `telegram-poll`, `manychat-webhook`
-- `unified-to-*` callbacks כשהחיבור נכשל
+## 2. MCP Server Connections
 
-## 4. UI — `StepConfigPanel`
-הוספת פאנל "משתנים זמינים" מתחת לשדה הטקסט של הודעת WhatsApp, מבוסס על סוג הטריגר שנבחר. לחיצה על משתנה מזריקה `{{var_name}}` לעמדת הסמן.
+חיבור MCP servers חיצוניים כך שכלים שלהם יהיו זמינים לסוכן בזמן ריצה.
 
-משתנים לשני הטריגרים החדשים:
-`{{provider}}`, `{{provider_label}}`, `{{reason}}`, `{{reason_he}}`, `{{account_id}}`, `{{account_name}}`, `{{client_name}}`, `{{client_id}}`, `{{tenant_name}}`, `{{account_link}}`, `{{internal_link}}`, `{{occurred_at}}`
+**DB:**
+- `agent_mcp_connections` — `tenant_id`, `agent_id`, `name`, `url`, `transport (http/sse)`, `state (ready/authenticating/failed)`, `auth_url`, `oauth_tokens` (encrypted), `client_metadata`
 
-## 5. תבנית ברירת מחדל
-כשמשתמש מוסיף step מסוג WhatsApp לאוטומציה עם אחד הטריגרים האלה ושדה ההודעה ריק — להציע:
-```
-🚨 התראת אינטגרציה
-ספק: {{provider_label}}
-לקוח: {{client_name}}
-חשבון: {{account_name}}
-סיבה: {{reason_he}}
-קישור: {{account_link}}
-```
+**Edge functions:**
+- `mcp-connect` — יוצר connection, מנסה `client.tools()`, מחזיר ready/authUrl
+- `mcp-oauth-callback` — משלים OAuth flow, שומר tokens
+- `mcp-disconnect` — מוחק connection ו-tokens
+- `/.well-known/oauth-client` — client metadata
+- שינוי ב-`run-ai-agent-v2`: לפני loop, טוען MCP connections של הסוכן, פותח clients, ממזג tools (עם namespace prefix), סוגר clients בסוף
 
-## קבצים
-**חדשים:** מיגרציה ל-`integration_alerts_log`, `supabase/functions/_shared/fireIntegrationAlert.ts`
-**עריכה:** `trigger-automation/index.ts`, `cron-sync-facebook-insights/index.ts`, `cron-sync-google-ads/index.ts`, `cron-sync-google-analytics/index.ts`, `cron-sync-google-search-console/index.ts`, `gmail-sync/index.ts`, `green-api-webhook/index.ts`, `telegram-poll/index.ts`, `manychat-webhook/index.ts`, `src/components/automations/StepConfigPanel.tsx`
+**UI:**
+- טאב `MCP Connections` ב-AgentEditor — רשימת חיבורים, כפתור Connect (פותח OAuth popup), סטטוס, רשימת tools חשופים
+- שימוש ב-AI SDK MCP client (`@ai-sdk/mcp` עם `createMCPClient`)
 
-## פתוח לאישור
-1. Throttle של 6 שעות מתאים? (אפשר 1h/24h)
-2. להוסיף גם טריגר `integration_reconnected` (החזרה לפעולה)?
+## 3. Eval & Replay
+
+יכולת להריץ סוכן על dataset של דוגמאות ולראות תוצאות, ולהריץ run שוב מ-checkpoint.
+
+**DB:**
+- `agent_evals` — `name`, `agent_id`, `dataset` (jsonb array of {input, expected})
+- `agent_eval_runs` — `eval_id`, `run_id`, `score`, `passed`, `notes`
+- שדה `agent_runs.replay_of_run_id` — מצביע על ה-run המקורי
+
+**Edge functions:**
+- `run-agent-eval` — מריץ את הסוכן על כל פריט ב-dataset, מבקש מ-LLM Judge להעריך, שומר תוצאות
+- `replay-agent-run` — לוקח run קיים, יוצר חדש עם same goal, רץ שוב (ללא checkpoint reuse בגרסה ראשונה)
+
+**UI:**
+- טאב `Evals` ב-AgentEditor — יצירת eval, הוספת test cases, כפתור Run, טבלת תוצאות עם score
+- ב-RunsTab כפתור `Replay` ליד כל run
+
+## Tech Details
+
+- Supervisor routing: `gemini-2.5-flash` (זול, מהיר)
+- MCP transport ברירת מחדל: HTTP עם `redirect: "error"`
+- OAuth tokens מוצפנים ב-DB דרך pgcrypto (משתמש ב-secret חדש `MCP_TOKEN_ENCRYPTION_KEY`)
+- LLM Judge: `gemini-2.5-pro` עם structured output (`Output.object` עם score 0-100 + reasoning)
+- כל הטבלאות החדשות עם RLS לפי `tenant_id` + GRANTs
+
+## Files
+
+**New:**
+- migration: `agent_supervisors`, `agent_mcp_connections`, `agent_evals`, `agent_eval_runs`, columns על `agent_runs`
+- `supabase/functions/run-agent-supervisor/index.ts`
+- `supabase/functions/mcp-connect/index.ts`
+- `supabase/functions/mcp-oauth-callback/index.ts`
+- `supabase/functions/mcp-disconnect/index.ts`
+- `supabase/functions/run-agent-eval/index.ts`
+- `supabase/functions/replay-agent-run/index.ts`
+- `src/components/agents/tabs/SupervisorTab.tsx`
+- `src/components/agents/tabs/McpConnectionsTab.tsx`
+- `src/components/agents/tabs/EvalsTab.tsx`
+
+**Edit:**
+- `supabase/functions/run-ai-agent-v2/index.ts` — MCP tool loading + parent_run_id support
+- `src/components/agents/AgentEditor.tsx` — 3 טאבים חדשים
+- `src/components/agents/tabs/RunsTab.tsx` — תצוגת עץ hierarchical + כפתור Replay
+
+## Secret נדרש
+`MCP_TOKEN_ENCRYPTION_KEY` (אבקש אחרי אישור)
+
+## סדר ביצוע
+1. Multi-Agent Supervisor (הכי משפיע על Carmen)
+2. MCP Connections (פותח את הסוכן לעולם)
+3. Eval & Replay (איכות + debugging)
+
+לאשר ואתחיל ב-1?
