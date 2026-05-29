@@ -12,12 +12,14 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Facebook, Unlink, RefreshCw, CheckCircle2, AlertCircle, Copy, Webhook, Target, ArrowLeft, Loader2, TestTube, Download, Search, ListTree } from "lucide-react";
+import { Facebook, Unlink, RefreshCw, CheckCircle2, AlertCircle, Copy, Webhook, Target, ArrowLeft, Loader2, TestTube, Download, Search, ListTree, Share2, Plus, User as UserIcon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
+import { useUserIntegrations } from "@/hooks/useUserIntegrations";
 import { FacebookFormMappingSection } from "@/components/forms/FacebookFormMappingSection";
 import { ShareFacebookConnectionSection } from "@/components/forms/ShareFacebookConnectionSection";
 import { SharedFacebookConnectionBanner } from "@/components/forms/SharedFacebookConnectionBanner";
+import { ManageIntegrationPermissionsDialog } from "@/components/forms/ManageIntegrationPermissionsDialog";
 
 interface FacebookPage {
   id: string;
