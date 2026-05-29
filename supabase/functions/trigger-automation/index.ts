@@ -574,12 +574,21 @@ Deno.serve(async (req) => {
           ? ['whatsapp_message_received', 'carmen_whatsapp_session']
           : [payload.trigger_type]
 
-        const { data: flowTriggerSteps, error: flowError } = await supabase
+        // Include flow steps from own tenant OR from automations shared into this tenant
+        const flowStepFilter = sharedAutomationIds.length > 0
+          ? `tenant_id.eq.${payload.tenant_id},automation_id.in.(${sharedAutomationIds.join(',')})`
+          : null
+
+        let flowStepsQuery = supabase
           .from('automation_flow_steps')
-          .select('automation_id, configuration')
-          .eq('tenant_id', payload.tenant_id)
+          .select('automation_id, configuration, tenant_id')
           .eq('step_type', 'trigger')
           .in('action_type', triggerTypesToMatch)
+        flowStepsQuery = flowStepFilter
+          ? flowStepsQuery.or(flowStepFilter)
+          : flowStepsQuery.eq('tenant_id', payload.tenant_id)
+
+        const { data: flowTriggerSteps, error: flowError } = await flowStepsQuery
 
         if (flowError) {
           console.error('Error fetching flow trigger steps:', flowError)
