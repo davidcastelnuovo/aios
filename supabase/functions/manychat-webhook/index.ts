@@ -49,7 +49,28 @@ Deno.serve(async (req) => {
 
     // Get raw body text first
     const bodyText = await req.text();
-    
+
+    // Optional HMAC signature verification (header: x-manychat-signature, secret: MANYCHAT_WEBHOOK_SECRET)
+    const manychatSecret = Deno.env.get('MANYCHAT_WEBHOOK_SECRET');
+    if (manychatSecret) {
+      const signature = req.headers.get('x-manychat-signature') ?? '';
+      const enc = new TextEncoder();
+      const key = await crypto.subtle.importKey('raw', enc.encode(manychatSecret),
+        { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+      const mac = await crypto.subtle.sign('HMAC', key, enc.encode(bodyText));
+      const expected = Array.from(new Uint8Array(mac))
+        .map(b => b.toString(16).padStart(2, '0')).join('');
+      // Allow either raw hex or sha256= prefix
+      const norm = signature.replace(/^sha256=/, '');
+      let ok = norm.length === expected.length;
+      let diff = 0;
+      if (ok) for (let i = 0; i < expected.length; i++) diff |= norm.charCodeAt(i) ^ expected.charCodeAt(i);
+      if (!ok || diff !== 0) {
+        return new Response(JSON.stringify({ error: 'Invalid signature' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+    }
+
     // Try to parse as JSON
     let payload;
     try {
