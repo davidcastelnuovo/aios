@@ -1,108 +1,70 @@
+## מטרה
+להפוך את `AgentHub` להציג את **ממלכת הזיכרון של כרמן** כספריית תיקיות מלאה (כפי שבנינו אתמול), ולהעשיר את טאב הפרופיל כך שיציג את כל המאפיינים שהוגדרו ולא רק שורת תיאור.
 
-## מאושר ✅ — מוסיף זיכרון אוטומטי גם לסוכנים האחרים
+## המצב היום
+- **טאב זיכרון לכרמן** — מציג כרגע רק רשימה שטוחה של `carmen_memory_pointers` (תצוגה בלבד, ללא ניווט בתיקיות).
+- **טאב פרופיל** — קומפקטי מדי: `personality` / `soul` עם `rows=2`, אין הפרדה ויזואלית בין זהות/אישיות/סגנון, אין הצגת `allowed_tools` או summary של מה הסוכן הוא.
+- מה שיש בפועל בזיכרון של כרמן (לפי DB):
+  - `clients/` — 371 פריטים + תת-תיקייה `updates/` (25)
+  - `conversations/2025-11..2026-05/` — סיכומי שיחות לפי חודש (181)
+  - `team/` — `assigned_clients/` (256), `tasks/` (32), ושורש (36)
+  - `system_map/` — 156 פריטים
+  - + טבלת `carmen_memory_episodes` — אפיזודי שיחה ארוכים עם topic/tags
 
----
+## מה ייבנה
 
-## מה נבנה (סדר ביצוע)
+### 1. `MemoryTab` חדש — ספריית תיקיות
+תצוגה דו־טורית כמו `KnowledgeTab`:
 
-### 1. סכימה — מיגרציה אחת
-
-**`agent_goals`** (פר-סוכן):
-`id, tenant_id, agent_id → ai_agents, title, description, priority (high/medium/low), status (active/paused/done), target_date, metadata, created_at, updated_at`
-
-**`agent_knowledge_folders`** (תיקיות, היררכיה):
-`id, tenant_id, agent_id, parent_folder_id → self, name, icon, position, created_at`
-
-**`agent_knowledge_items`** (פריטי ידע):
-`id, tenant_id, agent_id, folder_id → agent_knowledge_folders, title, content (text), kind (note/document/link/snippet), url, tags[], embedding vector(1536), created_at, updated_at`
-
-**`agent_memory`** (זיכרון פר-סוכן — אנלוגי ל-`carmen_memory_pointers`):
-`id, tenant_id, agent_id, category, subcategory, path, entity_type, entity_id, title, summary, summary_embedding vector(1536), importance, ref_date, valid_until, metadata, created_at, updated_at`
-+ אינדקסים: tenant+agent+path, tenant+agent+category, hnsw על summary_embedding.
-
-**RLS** לכולן: `tenant_id = get_user_tenant_id(auth.uid()) OR is_super_admin()`.
-**GRANT**: `SELECT,INSERT,UPDATE,DELETE` ל-`authenticated`, `ALL` ל-`service_role`.
-
-### 2. זיכרון אוטומטי לכל הסוכנים
-
-**שינוי ב-`run-ai-agent/index.ts`:**
-בסוף כל ריצת סוכן (אחרי שהמודל החזיר תשובה סופית), אם `agent_id != carmen_id`:
-- קוראים לפונקציה חדשה `summarizeAndStoreAgentMemory({ agent_id, tenant_id, conversation, tool_calls })`.
-- היא קוראת ל-Lovable Gateway (`gemini-2.5-flash-lite` — זול) עם prompt קצר: "סכם את האינטראקציה ב-2-3 משפטים, החזר JSON: { title, summary, category, importance (1-100), entity_type?, entity_id? }".
-- מחשבת embedding ל-summary דרך `google/gemini-embedding-001` (כמו `carmen-memory.ts` הקיים).
-- שומרת ב-`agent_memory`.
-- כל זה ב-`EdgeRuntime.waitUntil(...)` כדי לא לעכב את התשובה למשתמש.
-
-**כרמן ממשיכה ב-`carmen_memory_pointers/episodes`** הקיימים — לא נוגעים.
-
-**אחזור זיכרון:** ב-build-prompt של סוכן לא-כרמן, מוסיפים שליפה של 5-10 הזיכרונות הרלוונטיים ביותר (cosine similarity על embedding של ההודעה הנכנסת) ומזריקים ל-system prompt תחת הכותרת "זיכרון רלוונטי מאינטראקציות קודמות".
-
-### 3. בורר מודלים דינמי — "המוח"
-
-**Edge fn חדשה: `list-ai-models`**
-- מנסה `GET https://ai.gateway.lovable.dev/v1/models` עם `Lovable-API-Key`.
-- אם הגייטוויי תומך → מחזירה את הרשימה החיה (כולל מודלים חדשים שלוברל מוסיפים).
-- Fallback: רשימה אצורה מ-`_shared/models.ts` (מקור יחיד שגם `run-ai-agent` משתמש בו).
-- Cache: 1 שעה edge + 30 דקות React Query.
-
-**`_shared/models.ts`** חדש — `MODEL_CATALOG` אחד עם: id, label, family, context_window, capabilities (text/image/vision). מחליף את ה-hardcoded ב-`resolveModel()`.
-
-**`run-ai-agent` `resolveModel()`** — אם `agent.engine` הוא מזהה תקין מהקטלוג → משתמש כמו שהוא, בלי לתרגם. כך בחירת מודל חדש מהדרופדאון "פשוט עובדת" בלי שינוי קוד.
-
-### 4. UI חדש — `AgentHub.tsx` רהיט מחדש
-
+**עץ תיקיות (טור שמאלי):**
 ```text
-┌─────────────────────────────────────────────────────────┐
-│ AgentHub                                                │
-├──────────────┬──────────────────────────────────────────┤
-│ Sidebar      │  [Avatar] שם הסוכן          [● פעיל]    │
-│              │  ┌─────────────────────────────┐         │
-│ ★ כרמן       │  │ 🧠 מוח: [Gemini 3 Flash ▼] │ ← live  │
-│ ───────────  │  └─────────────────────────────┘         │
-│ • סוכן 1     │                                          │
-│ • סוכן 2     │  [פרופיל][מטרות][כלים][ידע][זיכרון]    │
-│ + סוכן חדש   │                                          │
-│              │  ‹ תוכן הטאב הנבחר ›                    │
-└──────────────┴──────────────────────────────────────────┘
+🧠 ממלכת הזיכרון
+├── 👥 clients (371)
+│    └── 📝 updates (25)
+├── 💬 conversations (181)
+│    ├── 📅 2026-05 (76)
+│    ├── 📅 2026-04 (43)
+│    ├── 📅 2026-03 (51)
+│    ├── 📅 2025-12 (6)
+│    └── 📅 2025-11 (5)
+├── 👨‍💼 team (324)
+│    ├── 🎯 assigned_clients (256)
+│    └── ✅ tasks (32)
+├── 🗺️ system_map (156)
+└── 📚 episodes (סיכומי שיחות מ-carmen_memory_episodes)
 ```
+- נבנה דינמית מ-`group by category, subcategory` בטעינה.
+- מספרים מוצגים כ-Badge ליד כל תיקייה.
+- שורש "ממלכת הזיכרון" מציג סיכום כללי (X פריטים, Y קטגוריות, Z אפיזודים).
 
-**טאבים:**
-| טאב | תוכן |
-|---|---|
-| ⚙️ פרופיל | שם, אישיות, talent, סגנון כתיבה, שפה, אורך תשובות, system_prompt |
-| 🎯 מטרות | CRUD על `agent_goals` עם סינון לפי סטטוס |
-| 🛠️ כלים | ALL_TOOLS עם checkboxes לפי קבוצה (קיים — מועבר לטאב) |
-| 📚 ידע | עץ תיקיות (drag-drop) + פאנל פריטים. יצירת note/link/snippet |
-| 🧠 זיכרון | לכרמן: `carmen_memory_pointers` + `carmen_memory_episodes`. אחר: `agent_memory`. פילטר category/path + מחיקה ידנית |
+**פאנל ימני:**
+- כותרת התיקייה + סרגל חיפוש מקומי + מיון (לפי `importance` או `ref_date`).
+- כל פריט: `title`, `summary`, `path`, `importance`, `ref_date` כ-Card קומפקטי.
+- לחיצה על פריט פותחת Dialog עם הפרטים המלאים (כולל `entity_type/entity_id`, `metadata`, `valid_until`).
+- פעולת מחיקה ידנית רק על פריטים שאינם משויכים לישות חיה (clients/team) — אחרת כפתור מושבת עם tooltip.
 
-**רכיבים חדשים:**
-```
-src/components/agents/
-  AgentSidebar.tsx
-  AgentEditor.tsx          # מעטפת + Brain selector + טאבים
-  BrainSelector.tsx
-  tabs/{Profile,Goals,Tools,Knowledge,Memory}Tab.tsx
-src/hooks/
-  useAiModels.ts           # קריאה ל-list-ai-models
-  useAgentGoals.ts
-  useAgentKnowledge.ts
-  useAgentMemory.ts
-```
+**עבור סוכנים שאינם כרמן:** אותה תצוגה אבל מעל `agent_memory` (כשייווצרו פריטים) — קטגוריות מובנות: conversation / instruction / fact / task / preference, ותתי־קטגוריות מ-`subcategory` או `path` אם קיים.
 
-`AgentHub.tsx` יצומצם ל-grid דק (sidebar + editor). הדיאלוג הישן הענק נמחק.
+### 2. `ProfileTab` מורחב
+מבנה חדש בכרטיסים נפרדים:
 
----
+- **🪪 זהות** — `name`, `talent` (תפקיד/מומחיות), `active` toggle, צבע/אווטאר.
+- **💭 אישיות ונשמה** — `personality` (textarea rows=5), `soul` / מטרת קיום (rows=4), `writing_style`, `response_length`, `language`.
+- **⚙️ הנחיות מערכת** — `system_prompt` (rows=10 + מונה תווים), הסבר שזה דורס את הבנייה האוטומטית, אזור preview של ה-system prompt שבאמת ייבנה אם השדה ריק.
+- **🛠️ סיכום יכולות** (read-only) — מספר כלים שמופעלים (`allowed_tools.length`), מספר מטרות פעילות, מספר תיקיות ידע, מספר פריטי זיכרון, המוח הנוכחי (model). קישורי "ערוך" שמנווטים לטאבים המתאימים.
+- **🔧 הגדרות ריצה** — `max_tool_rounds`, בורר מוח (BrainSelector מוטמע גם כאן לנוחות).
 
-## מה לא משתנה
+כפתור "שמור" sticky בתחתית, או שמירה אוטומטית on-blur לכל שדה.
 
-- ❌ `carmen_memory_pointers/episodes` הקיימים — קוראים מהם בלבד בטאב זיכרון של כרמן.
-- ❌ ה-tools של `run-ai-agent` (`list_goals`, וכו') — נוסיף רק חדשים בעתיד אם נחוץ; הסבב הזה מתמקד ב-UI + סכימה + זיכרון אוטומטי + בורר מודלים.
-- ❌ **הקלקולטור עלויות** — לא נבנה עכשיו, הסבב הבא אחרי שזה יציב.
+## טכני
+- `useCarmenMemoryPointers` יקבל פרמטרים `category?` ו-`subcategory?` ופונקציית עזר `useCarmenMemoryTree()` שמחזירה את מבנה התיקיות (count by category/subcategory).
+- `useCarmenMemoryEpisodes` חדש לטעינת `carmen_memory_episodes` (תיקיית "episodes").
+- אין מיגרציות. אין שינויים ב-edge functions.
+- אין שינוי בלוגיקת `run-ai-agent` או ב-`carmen-memory-worker`.
 
----
+## מה לא נכלל בשלב הזה
+- עריכת פריטי זיכרון של כרמן (קיים רק delete לפריטים שאינם חיים).
+- קלקולטור עלויות — נשאר לפאזה הבאה.
 
-## טריגרים ידועים (יטופלו תוך כדי)
-- `update-updated_at` triggers על 4 הטבלאות החדשות.
-- מחיקת סוכן → CASCADE על goals/knowledge/memory (FK עם `on delete cascade`).
-
-מתחיל בבנייה?
+## שאלה אחת
+האם רוצה שכל פריט בעץ יציג גם **5 הפריטים האחרונים בפריוויו** מתחת לשם התיקייה (לתחושת חיים), או רק ספירה ופתיחה בלחיצה?
