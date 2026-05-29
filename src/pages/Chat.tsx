@@ -82,7 +82,7 @@ export default function Chat() {
   const [searchTerm, setSearchTerm] = useState("");
   const debouncedSearch = useDebouncedValue(searchTerm, 300);
   const [contactFilter, setContactFilter] = useState<"all" | "clients" | "leads" | "groups" | "unknown" | "telegram">("all");
-  const [platformFilter, setPlatformFilter] = useState<"all" | "whatsapp" | "telegram" | "manychat" | "agents">("all");
+  const [chatFilter, setChatFilter] = useState<ChatFilter>({ kind: "all" });
   const [showTodayOnly, setShowTodayOnly] = useState(false);
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
   const [selectedContact, setSelectedContact] = useState<{ id: string; type: 'client' | 'lead' | 'group' | 'unknown' | 'telegram'; senderPhone?: string; name?: string; telegramChatId?: string } | null>(
