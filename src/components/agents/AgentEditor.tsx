@@ -14,6 +14,9 @@ import { ApprovalsTab } from "./tabs/ApprovalsTab";
 import { UserProfilesTab } from "./tabs/UserProfilesTab";
 import { ToolRegistryTab } from "./tabs/ToolRegistryTab";
 import { RunsTab } from "./tabs/RunsTab";
+import { SupervisorTab } from "./tabs/SupervisorTab";
+import { McpConnectionsTab } from "./tabs/McpConnectionsTab";
+import { EvalsTab } from "./tabs/EvalsTab";
 
 import { Crown, Bot } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
