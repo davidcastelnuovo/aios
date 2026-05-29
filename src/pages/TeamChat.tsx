@@ -580,9 +580,10 @@ function ManageTeamMembersDialog({ tenantId }: { tenantId: string }) {
       const filePath = `user-avatars/${editingUser.id}-${Date.now()}-${safeName}`;
       const { error: uploadError } = await supabase.storage.from("team-chat-files").upload(filePath, file);
       if (uploadError) throw uploadError;
-      const { data: urlData } = supabase.storage.from("team-chat-files").getPublicUrl(filePath);
+      const { data: urlData, error: urlError } = await supabase.storage.from("team-chat-files").createSignedUrl(filePath, 60 * 60 * 24 * 365 * 10);
+      if (urlError || !urlData) throw urlError ?? new Error("Failed to sign URL");
 
-      const { error } = await supabase.from("profiles").update({ avatar_url: urlData.publicUrl }).eq("id", editingUser.id);
+      const { error } = await supabase.from("profiles").update({ avatar_url: urlData.signedUrl }).eq("id", editingUser.id);
       if (error) throw error;
 
       toast.success("התמונה עודכנה");
