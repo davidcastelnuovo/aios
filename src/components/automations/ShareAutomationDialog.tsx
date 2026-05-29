@@ -113,8 +113,8 @@ export function ShareAutomationDialog({ automation, open, onOpenChange }: ShareA
         <DialogHeader>
           <DialogTitle>שתף אוטומציה עם ארגון אחר</DialogTitle>
           <DialogDescription>
-            שכפול של "{automation?.name}" לארגונים נבחרים. האוטומציה החדשה תפעל אך ורק על הנתונים של הארגון היעד
-            (קמפיינרים, לקוחות, אינטגרציות). היא תיווצר במצב מושבת עד שתשלימו את חיבורי האינטגרציה שם.
+            שיתוף "{automation?.name}" כמראה (Mirror) לארגונים נבחרים. האוטומציה עצמה תמשיך לרוץ פעם אחת בלבד מהארגון
+            הנוכחי — הארגונים האחרים יראו אותה כצפייה בלבד (read-only) ולא יקבלו טריגר נפרד, כך שלא נוצרות הפעלות כפולות.
           </DialogDescription>
         </DialogHeader>
 
