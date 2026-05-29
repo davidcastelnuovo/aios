@@ -62,6 +62,15 @@ interface Contact {
   telegram_chat_id?: string;
 }
 
+type SelectedContact = {
+  id: string;
+  type: 'client' | 'lead' | 'group' | 'unknown' | 'telegram';
+  senderPhone?: string;
+  name?: string;
+  telegramChatId?: string;
+  activeChatProvider?: string | null;
+};
+
 const normalizePhone = (phone?: string | null) => {
   if (!phone) return '';
   const digits = (phone.match(/\d+/g) || []).join('');
@@ -85,7 +94,7 @@ export default function Chat() {
   const [chatFilter, setChatFilter] = useState<ChatFilter>({ kind: "all" });
   const [showTodayOnly, setShowTodayOnly] = useState(false);
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
-  const [selectedContact, setSelectedContact] = useState<{ id: string; type: 'client' | 'lead' | 'group' | 'unknown' | 'telegram'; senderPhone?: string; name?: string; telegramChatId?: string } | null>(
+  const [selectedContact, setSelectedContact] = useState<SelectedContact | null>(
     clientId ? { id: clientId, type: 'client' } : null
   );
   const [editingContact, setEditingContact] = useState<{ id: string; type: 'client' | 'lead'; data: any } | null>(null);
@@ -183,8 +192,8 @@ export default function Chat() {
 
       const { data, error } = await supabase.rpc('get_chat_contacts', {
         p_tenant_id: tenantId,
-        p_connection_user_ids: connectionUserIds ?? undefined,
-        p_provider: providerFilter ?? undefined,
+        p_connection_user_ids: connectionUserIds ?? null,
+        p_provider: providerFilter ?? null,
       } as any);
 
       if (error) {
@@ -279,32 +288,6 @@ export default function Chat() {
   const contacts = debouncedSearch ? searchResults : activeChats;
   const isLoading = debouncedSearch ? searchLoading : activeChatsLoading;
 
-  // Fetch unknown contacts
-  const { data: unknownContacts = [] } = useQuery({
-    queryKey: ['unknown-contacts', tenantId],
-    queryFn: async () => {
-      if (!tenantId) return [];
-      const { data, error } = await supabase.rpc('get_unknown_chat_contacts', { p_tenant_id: tenantId });
-      if (error) return [];
-
-      return (data || []).map((contact: any) => ({
-        id: contact.id,
-        name: contact.name,
-        sender_phone: contact.sender_phone,
-        active_chat_provider: 'green_api',
-        last_message_at: contact.last_message_at,
-        unread_count: contact.unread_count || 0,
-        is_blocked: contact.is_blocked || false,
-        contact_type: contact.contact_type as 'unknown',
-        agency_id: contact.agency_id,
-        agency_name: contact.agency_name,
-        whatsapp_avatar_url: contact.whatsapp_avatar_url,
-      }));
-    },
-    enabled: !!tenantId && !debouncedSearch,
-    refetchInterval: 30000,
-  });
-
   // Fetch Telegram contacts
   const { data: telegramContacts = [] } = useQuery({
     queryKey: ['telegram-contacts', tenantId],
@@ -349,29 +332,6 @@ export default function Chat() {
   // Combine all contacts
   const allContactsBeforeTypeFilter = useMemo(() => {
     let base = contacts || [];
-    
-    if (!debouncedSearch && unknownContacts && unknownContacts.length > 0) {
-      const normalizedUnknown = unknownContacts.map(uc => ({
-        id: `unknown-${uc.sender_phone || uc.id}`,
-        name: uc.name,
-        contact_name: null,
-        phone: uc.sender_phone,
-        email: null,
-        agency_id: uc.agency_id || null,
-        agency_name: uc.agency_name || null,
-        manychat_subscriber_id: null,
-        active_chat_provider: uc.active_chat_provider,
-        contact_type: 'unknown' as const,
-        unread_count: uc.unread_count || 0,
-        last_message_at: uc.last_message_at,
-        sender_phone: uc.sender_phone,
-        is_blocked: uc.is_blocked || false,
-        has_messages: true,
-        whatsapp_avatar_url: uc.whatsapp_avatar_url || null,
-      }));
-      
-      base = [...base, ...normalizedUnknown];
-    }
 
     // Add Telegram contacts
     if (!debouncedSearch && telegramContacts && telegramContacts.length > 0) {
@@ -404,7 +364,7 @@ export default function Chat() {
       const bTime = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
       return bTime - aTime;
     });
-  }, [contacts, unknownContacts, telegramContacts, debouncedSearch]);
+  }, [contacts, telegramContacts, debouncedSearch]);
 
   const todayParts = useMemo(() => {
     const t = new Date();
@@ -428,7 +388,7 @@ export default function Chat() {
     // Apply platform / connection filter
     if (chatFilter.kind === 'platform') {
       if (chatFilter.platform === 'whatsapp') {
-        allContacts = allContacts.filter(c => c.active_chat_provider === 'green_api' || (!c.active_chat_provider && c.contact_type !== 'telegram'));
+        allContacts = allContacts.filter(c => c.active_chat_provider === 'green_api' || c.active_chat_provider === 'manus_wa' || (!c.active_chat_provider && c.contact_type !== 'telegram'));
       } else if (chatFilter.platform === 'telegram') {
         allContacts = allContacts.filter(c => c.contact_type === 'telegram' || c.active_chat_provider === 'telegram');
       } else if (chatFilter.platform === 'manychat') {
@@ -442,7 +402,7 @@ export default function Chat() {
         } else if (conn.platform === 'manychat') {
           allContacts = allContacts.filter(c => c.active_chat_provider === 'manychat');
         } else {
-          allContacts = allContacts.filter(c => c.active_chat_provider === 'green_api' || (!c.active_chat_provider && c.contact_type !== 'telegram'));
+          allContacts = allContacts.filter(c => c.active_chat_provider === conn.active_chat_provider);
         }
       }
     }
@@ -830,6 +790,7 @@ export default function Chat() {
                             senderPhone: contact.sender_phone,
                             name: contact.name,
                             telegramChatId: (contact as any).telegram_chat_id,
+                            activeChatProvider: contact.active_chat_provider,
                           });
                         }
                       }}
@@ -927,6 +888,7 @@ export default function Chat() {
             senderPhone={selectedContact.senderPhone}
             contactName={selectedContact.name}
             telegramChatId={selectedContact.telegramChatId}
+            activeChatProvider={selectedContact.activeChatProvider}
             onBack={isMobile ? () => setSelectedContact(null) : undefined}
           />
         ) : (

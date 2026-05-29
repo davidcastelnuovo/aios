@@ -48,10 +48,11 @@ interface ChatViewProps {
   senderPhone?: string;
   contactName?: string;
   telegramChatId?: string;
+  activeChatProvider?: string | null;
   onBack?: () => void;
 }
 
-export default function ChatView({ contactId, contactType, senderPhone, contactName, telegramChatId, onBack }: ChatViewProps) {
+export default function ChatView({ contactId, contactType, senderPhone, contactName, telegramChatId, activeChatProvider, onBack }: ChatViewProps) {
   const queryClient = useQueryClient();
   const { tenant: currentTenant, tenantId } = useCurrentTenant();
   const { userId } = useCurrentUser();
@@ -93,7 +94,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
           agency_id: null,
           tenant_id: null,
           manychat_subscriber_id: null,
-          active_chat_provider: null,
+          active_chat_provider: activeChatProvider || null,
         };
       }
       
@@ -126,7 +127,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
           phone: null,
           email: null,
           manychat_subscriber_id: null,
-          active_chat_provider: 'green_api' as const
+          active_chat_provider: (activeChatProvider || 'green_api') as any
         };
       }
     },
@@ -391,7 +392,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
 
   // Fetch chat messages
   const { data: messagesData, isLoading: isLoadingMessages } = useQuery({
-    queryKey: ["chat-messages", contactId, contactType, senderPhone, connectionUserId, messagePeriod, telegramChatId],
+    queryKey: ["chat-messages", contactId, contactType, senderPhone, connectionUserId, activeProvider, messagePeriod, telegramChatId],
     queryFn: async () => {
       const dateFilter = getDateFilter();
       
@@ -430,6 +431,9 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
         if (connectionUserId) {
           query = query.eq("connection_user_id", connectionUserId);
         }
+        if (activeProvider) {
+          query = query.eq("provider", activeProvider);
+        }
         if (dateFilter) {
           query = query.gte("created_at", dateFilter);
         }
@@ -459,6 +463,9 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
 
       if (connectionUserId) {
         query = query.eq("connection_user_id", connectionUserId);
+      }
+      if (activeProvider) {
+        query = query.eq("provider", activeProvider);
       }
       if (dateFilter) {
         query = query.gte("created_at", dateFilter);

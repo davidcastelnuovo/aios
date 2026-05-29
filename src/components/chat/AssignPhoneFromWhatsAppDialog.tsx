@@ -56,9 +56,13 @@ export function AssignPhoneFromWhatsAppDialog({
     queryKey: ["known-chat-contacts-for-assign", tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return [];
       const { data, error } = await supabase.rpc("get_chat_contacts", {
         p_tenant_id: tenantId,
-      });
+        p_connection_user_ids: [userData.user.id],
+        p_provider: "green_api",
+      } as any);
       if (error) {
         console.error("Error fetching known contacts:", error);
         return [];
