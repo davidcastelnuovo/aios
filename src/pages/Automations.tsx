@@ -309,13 +309,16 @@ export default function Automations() {
 
       {/* Automations Grid */}
       <div className="grid gap-3 md:gap-4 grid-cols-1 lg:grid-cols-2">
-        {automations?.map((automation) => (
+        {automations?.map((automation) => {
+          const isMirror = (automation as any)._isSharedMirror === true;
+          return (
           <Card
             key={automation.id}
             className={cn(
               automation.active ? "" : "opacity-60",
               (automation as any).is_flow && "cursor-pointer hover:border-primary/50 transition-colors",
-                          (automation as any).configuration?.carmen_session_mode === true && "border-purple-500/40 bg-purple-500/5"
+              (automation as any).configuration?.carmen_session_mode === true && "border-purple-500/40 bg-purple-500/5",
+              isMirror && "border-dashed border-amber-500/40 bg-amber-500/5"
             )}
             onClick={() => (automation as any).is_flow && navigate(buildPath(`automations/flow/${automation.id}`))}
           >
@@ -329,6 +332,11 @@ export default function Automations() {
                       <Workflow className="h-4 w-4 shrink-0 text-primary" />
                     ) : null}
                     {automation.name}
+                    {isMirror && (
+                      <Badge variant="outline" className="text-[10px] border-amber-500/50 text-amber-600 dark:text-amber-400">
+                        מראה משותפת (צפייה בלבד)
+                      </Badge>
+                    )}
                   </CardTitle>
                   {automation.description && (
                     <CardDescription className="text-xs mt-1 line-clamp-2">
@@ -338,8 +346,9 @@ export default function Automations() {
                 </div>
                 <Switch
                   checked={automation.active}
+                  disabled={isMirror}
                   onCheckedChange={(checked) =>
-                    toggleActiveMutation.mutate({ id: automation.id, active: checked })
+                    !isMirror && toggleActiveMutation.mutate({ id: automation.id, active: checked })
                   }
                 />
               </div>
@@ -366,6 +375,12 @@ export default function Automations() {
                 </p>
               )}
 
+              {isMirror && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  אוטומציה זו שייכת לארגון אחר. היא רצה פעם אחת בלבד, ולא ניתן לערוך אותה כאן.
+                </p>
+              )}
+
               <div className="flex flex-wrap gap-2 pt-2">
                 <Button
                   size="sm"
@@ -376,51 +391,56 @@ export default function Automations() {
                   <Activity className="h-3 w-3 ml-1" />
                   לוגים
                 </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={(e) => { e.stopPropagation(); handleTest(automation); }}
-                >
-                  <TestTube className="h-3 w-3 ml-1" />
-                  בדיקה
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={(e) => { e.stopPropagation(); handleEdit(automation); }}
-                >
-                  <Edit className="h-3 w-3 ml-1" />
-                  עריכה
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedAutomation(automation);
-                    setShareDialogOpen(true);
-                  }}
-                  title="שתף עם ארגון אחר"
-                >
-                  <Share2 className="h-3 w-3 ml-1" />
-                  שתף
-                </Button>
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (confirm("האם למחוק אוטומציה זו?")) {
-                      deleteMutation.mutate(automation.id);
-                    }
-                  }}
-                >
-                  <Trash2 className="h-3 w-3" />
-                </Button>
+                {!isMirror && (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={(e) => { e.stopPropagation(); handleTest(automation); }}
+                    >
+                      <TestTube className="h-3 w-3 ml-1" />
+                      בדיקה
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={(e) => { e.stopPropagation(); handleEdit(automation); }}
+                    >
+                      <Edit className="h-3 w-3 ml-1" />
+                      עריכה
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedAutomation(automation);
+                        setShareDialogOpen(true);
+                      }}
+                      title="שתף עם ארגון אחר"
+                    >
+                      <Share2 className="h-3 w-3 ml-1" />
+                      שתף
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm("האם למחוק אוטומציה זו?")) {
+                          deleteMutation.mutate(automation.id);
+                        }
+                      }}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </>
+                )}
               </div>
             </CardContent>
           </Card>
-        ))}
+          );
+        })}
       </div>
 
       {automations?.length === 0 && (
