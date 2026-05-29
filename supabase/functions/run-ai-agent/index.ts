@@ -1682,6 +1682,19 @@ Deno.serve(async (req) => {
       systemPrompt += `\n\n🧠 === זיכרון מתמשך ===\n${memoryContext}`
     }
 
+    // Per-agent memory recall (non-Carmen agents): pull relevant past episodes by similarity.
+    if (!isCarmen) {
+      try {
+        const recalled = await recallAgentMemory(supabase, agent_id, command_text, 6)
+        if (recalled.length > 0) {
+          const block = recalled.map((m: any) => `• [${m.category}] ${m.title}: ${m.summary}`).join('\n')
+          systemPrompt += `\n\n🧠 === זיכרון רלוונטי מאינטראקציות קודמות ===\n${block}`
+        }
+      } catch (e) {
+        console.error('[AGENT] recall memory failed:', (e as any)?.message)
+      }
+    }
+
     // Inject lead context
     if (lead_data) {
       const leadParts = Object.entries(lead_data)
