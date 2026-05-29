@@ -760,7 +760,9 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
       return { handled: false, reason: 'scope_phone' };
     }
   } else if (scopeMode === 'specific_group') {
-    if (!isGroup || !allowedGroups.includes(chatId)) {
+    const groupIdBare = chatId ? chatId.split('@')[0] : null;
+    const groupMatches = isGroup && allowedGroups.some((g: string) => g === chatId || (groupIdBare && g === groupIdBare));
+    if (!groupMatches) {
       console.log('[carmen] blocked by scope_group', { chatId, isGroup, allowedGroups });
       return { handled: false, reason: 'scope_group' };
     }
