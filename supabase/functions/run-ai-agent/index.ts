@@ -135,6 +135,13 @@ const ALL_TOOLS = [
   { name: 'create_agent', description: 'יצירת סוכן AI חדש תחת כרמן. השתמש כשהמשתמש מבקש לבנות סוכן חדש לתפקיד ספציפי.', parameters: { type: 'object', properties: { name: { type: 'string' }, talent: { type: 'string', description: 'תיאור התפקיד והמומחיות' }, personality: { type: 'string' }, soul: { type: 'string', description: 'מטרה/ייעוד' }, engine: { type: 'string', description: 'מודל (gemini-3-flash וכו׳)' } }, required: ['name', 'talent'] } },
   { name: 'update_agent', description: 'עדכון פרטי סוכן קיים.', parameters: { type: 'object', properties: { agent_id: { type: 'string' }, name: { type: 'string' }, talent: { type: 'string' }, personality: { type: 'string' }, soul: { type: 'string' }, engine: { type: 'string' }, active: { type: 'boolean' } }, required: ['agent_id'] } },
   // GITHUB AGENT DELEGATION (system self-repair)
+
+  // WHATSAPP GATEWAY MANAGEMENT (Manus Gateway)
+  { name: 'create_whatsapp_instance', description: 'יצירת instance חדש של WhatsApp ב-Gateway עבור לקוח. מחזיר integrationId ו-instanceId. לאחר יצירה, השתמש ב-get_whatsapp_qr_link כדי לקבל קישור סריקה.', parameters: { type: 'object', properties: { displayName: { type: 'string', description: 'שם תצוגה לחיבור (לדוגמה: "יוסי - עסק")' }, countryCode: { type: 'string', description: 'קידומת מדינה (ברירת מחדל: 972 לישראל)' } }, required: ['displayName'] } },
+  { name: 'get_whatsapp_qr_link', description: 'קבלת קישור ציבורי לסריקת QR לחיבור WhatsApp. שלח את הקישור ללקוח. הקישור תקף ל-2 שעות.', parameters: { type: 'object', properties: { integrationId: { type: 'string', description: 'מזהה האינטגרציה (מ-create_whatsapp_instance או מ-list_integrations)' } }, required: ['integrationId'] } },
+  { name: 'get_whatsapp_status', description: 'בדיקת סטטוס חיבור WhatsApp של instance. מחזיר CONNECTED/DISCONNECTED/QR_READY ומספר הטלפון אם מחובר.', parameters: { type: 'object', properties: { integrationId: { type: 'string', description: 'מזהה האינטגרציה' } }, required: ['integrationId'] } },
+  { name: 'send_whatsapp_via_gateway', description: 'שליחת הודעת WhatsApp דרך instance ספציפי של ה-Gateway. עדיף על send_message כשרוצים לשלוח מחיבור מסוים.', parameters: { type: 'object', properties: { integrationId: { type: 'string', description: 'מזהה האינטגרציה' }, phone: { type: 'string', description: 'מספר טלפון (עם או בלי קידומת)' }, message: { type: 'string', description: 'תוכן ההודעה' } }, required: ['integrationId', 'phone', 'message'] } },
+]
   { name: 'delegate_to_github_agent', description: 'האצלת בעיה טכנית/באג במערכת לסוכן הגיטהאב לאבחון או תיקון. השתמש כשמדווחים על תקלה במערכת או באג בקוד.', parameters: { type: 'object', properties: { message: { type: 'string', description: 'תיאור הבעיה/הבקשה הטכנית' }, action: { type: 'string', enum: ['chat_support', 'analyze_error', 'fix_code', 'check_permissions'], description: 'ברירת מחדל: chat_support' } }, required: ['message'] } },
 ]
 
@@ -1289,6 +1296,46 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const txt = await res.text()
       if (!res.ok) return { error: `github-agent failed [${res.status}]: ${txt}` }
       try { return JSON.parse(txt) } catch { return { response: txt } }
+    }
+    case 'create_whatsapp_instance': {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/manage-manus-wa`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+        body: JSON.stringify({ action: 'create_instance', tenantId, displayName: args.displayName, countryCode: args.countryCode }),
+      })
+      const data = await res.json()
+      if (!res.ok) return { error: data.error || `create_instance failed [${res.status}]` }
+      return data
+    }
+    case 'get_whatsapp_qr_link': {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/manage-manus-wa`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+        body: JSON.stringify({ action: 'get_qr_link', integrationId: args.integrationId }),
+      })
+      const data = await res.json()
+      if (!res.ok) return { error: data.error || `get_qr_link failed [${res.status}]` }
+      return data
+    }
+    case 'get_whatsapp_status': {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/manage-manus-wa`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+        body: JSON.stringify({ action: 'get_status', integrationId: args.integrationId }),
+      })
+      const data = await res.json()
+      if (!res.ok) return { error: data.error || `get_status failed [${res.status}]` }
+      return data
+    }
+    case 'send_whatsapp_via_gateway': {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/manage-manus-wa`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+        body: JSON.stringify({ action: 'send_message', integrationId: args.integrationId, phone: args.phone, message: args.message }),
+      })
+      const data = await res.json()
+      if (!res.ok) return { error: data.error || `send_whatsapp_via_gateway failed [${res.status}]` }
+      return data
     }
     default:
       throw new Error(`Unknown tool: ${name}`)
