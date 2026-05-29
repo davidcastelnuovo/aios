@@ -35,7 +35,7 @@ export function TasksTab({ agent }: { agent: any }) {
   const { tenantId } = useCurrentTenant();
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const tenantPath = useTenantPath();
+  const { buildPath } = useTenantPath();
   const [filter, setFilter] = useState<string>("all");
   const [open, setOpen] = useState(false);
 
@@ -104,7 +104,7 @@ export function TasksTab({ agent }: { agent: any }) {
             <SelectItem value="recurring">חוזרות</SelectItem>
           </SelectContent>
         </Select>
-        <Button size="sm" variant="outline" onClick={() => navigate(tenantPath("/agent-tasks"))}>
+        <Button size="sm" variant="outline" onClick={() => navigate(buildPath("/agent-tasks"))}>
           תצוגה מלאה
         </Button>
         <Dialog open={open} onOpenChange={setOpen}>
