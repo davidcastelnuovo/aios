@@ -588,7 +588,7 @@ function ManageTeamMembersDialog({ tenantId }: { tenantId: string }) {
 
       toast.success("התמונה עודכנה");
       refetchMembers();
-      setEditingUser({ ...editingUser, avatar_url: urlData.publicUrl });
+      setEditingUser({ ...editingUser, avatar_url: urlData.signedUrl });
     } catch (err: any) {
       toast.error("שגיאה בהעלאה: " + err.message);
     } finally {
