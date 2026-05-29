@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Zap, Activity, Trash2, Edit, TestTube, Workflow, MessageCircle, Bot, Share2 } from "lucide-react";
+import { Plus, Zap, Activity, Trash2, Edit, TestTube, Workflow, MessageCircle, Bot, Share2, Copy } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AddAutomationForm } from "@/components/forms/AddAutomationForm";
 import { EditAutomationDialog } from "@/components/forms/EditAutomationDialog";
@@ -176,6 +176,74 @@ export default function Automations() {
         description: error.message,
         variant: "destructive",
       });
+    },
+  });
+
+  // Duplicate automation (including flow steps)
+  const duplicateMutation = useMutation({
+    mutationFn: async (id: string) => {
+      if (!tenantId) throw new Error("No tenant");
+
+      // 1. Load source automation
+      const { data: src, error: srcErr } = await supabase
+        .from("automations")
+        .select("*")
+        .eq("id", id)
+        .single();
+      if (srcErr) throw srcErr;
+
+      // 2. Insert clone
+      const { id: _id, created_at, updated_at, source_automation_id, source_tenant_id, ...rest } = src as any;
+      const { data: clone, error: insErr } = await supabase
+        .from("automations")
+        .insert({
+          ...rest,
+          tenant_id: tenantId,
+          name: `${src.name} (העתק)`,
+          active: false,
+        })
+        .select()
+        .single();
+      if (insErr) throw insErr;
+
+      // 3. Clone flow steps if any (preserving parent_step_id mapping)
+      const { data: steps, error: stepsErr } = await supabase
+        .from("automation_flow_steps")
+        .select("*")
+        .eq("automation_id", id);
+      if (stepsErr) throw stepsErr;
+
+      if (steps && steps.length > 0) {
+        const idMap = new Map<string, string>();
+        steps.forEach((s: any) => idMap.set(s.id, crypto.randomUUID()));
+
+        const newSteps = steps.map((s: any) => ({
+          id: idMap.get(s.id)!,
+          automation_id: clone.id,
+          tenant_id: tenantId,
+          parent_step_id: s.parent_step_id ? idMap.get(s.parent_step_id) ?? null : null,
+          step_type: s.step_type,
+          action_type: s.action_type,
+          condition_branch: s.condition_branch,
+          configuration: s.configuration,
+          label: s.label,
+          position_x: s.position_x,
+          position_y: s.position_y,
+          sort_order: s.sort_order,
+        }));
+
+        const { error: stepInsErr } = await supabase.from("automation_flow_steps").insert(newSteps);
+        if (stepInsErr) throw stepInsErr;
+      }
+
+      return clone;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["automations"] });
+      toast({ title: "האוטומציה שוכפלה", description: "נוצר עותק כבוי. הפעל אותו לאחר העריכה." });
+    },
+    onError: (error: any) => {
+      toast({ title: "שגיאה בשכפול", description: error.message, variant: "destructive" });
     },
   });
 
@@ -421,6 +489,16 @@ export default function Automations() {
                     >
                       <Share2 className="h-3 w-3 ml-1" />
                       שתף
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={(e) => { e.stopPropagation(); duplicateMutation.mutate(automation.id); }}
+                      disabled={duplicateMutation.isPending}
+                      title="שכפל אוטומציה"
+                    >
+                      <Copy className="h-3 w-3 ml-1" />
+                      שכפל
                     </Button>
                     <Button
                       size="sm"
