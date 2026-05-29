@@ -39,6 +39,8 @@ import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
 import { ChatTagsManager } from "@/components/chat/ChatTagsManager";
 import { ChatTagSelector, ContactTagBadges } from "@/components/chat/ChatTagSelector";
 import { ChatMultiSelectToolbar } from "@/components/chat/ChatMultiSelectToolbar";
+import { useChatConnections } from "@/hooks/useChatConnections";
+import { ChatConnectionSelector, type ChatFilter } from "@/components/chat/ChatConnectionSelector";
 
 interface Contact {
   id: string;
