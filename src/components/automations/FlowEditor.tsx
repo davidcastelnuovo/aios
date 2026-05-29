@@ -106,32 +106,6 @@ export default function FlowEditor() {
     setSelectedNodeId((cur) => (cur === id ? null : cur));
   }, [setRfNodes, setRfEdges, toast]);
 
-  // Add an extra trigger node (OR semantics — multiple entry points to the same flow)
-  const addTrigger = useCallback(() => {
-    setNodeDataMap((prev) => {
-      const triggers = Object.values(prev).filter((n) => n.step_type === "trigger");
-      const rightmost = triggers.sort((a, b) => b.position_x - a.position_x)[0];
-      const baseX = rightmost ? rightmost.position_x : 400;
-      const baseY = rightmost ? rightmost.position_y : 80;
-      const newId = crypto.randomUUID();
-      const newTrigger: FlowNodeData = {
-        id: newId,
-        step_type: "trigger",
-        action_type: undefined,
-        label: undefined,
-        configuration: {},
-        position_x: baseX + 260,
-        position_y: baseY,
-        sort_order: Object.values(prev).length,
-        parent_step_id: null,
-        condition_branch: null,
-      };
-      const next = { ...prev, [newId]: newTrigger };
-      syncRFNodes(next);
-      setSelectedNodeId(newId);
-      return next;
-    });
-  }, [syncRFNodes]);
 
   const handleDisconnectNode = useCallback((id: string) => {
     // Remove the edge coming into this node and clear parent_step_id
