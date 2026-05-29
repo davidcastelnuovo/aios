@@ -22,6 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow, format } from "date-fns";
 import { he } from "date-fns/locale";
+import { MemoryLayersPanel } from "../MemoryLayersPanel";
 
 const CATEGORY_META: Record<string, { icon: any; label: string }> = {
   clients: { icon: Users, label: "לקוחות" },
