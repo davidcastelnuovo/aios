@@ -265,37 +265,66 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return data
     }
     case 'list_clients': {
-      // Resolve campaigner filter if provided
+      // --- Scoping rules ---
+      // 1. agency_id / agency_name → resolve to agency UUIDs (must be in accessible tenants)
+      let agencyIdsFilter: string[] | null = null
+      if (args.agency_id) {
+        agencyIdsFilter = [args.agency_id]
+      } else if (args.agency_name) {
+        const { data: ags } = await supabase
+          .from('agencies').select('id, name')
+          .in('tenant_id', accessibleTenantIds)
+          .ilike('name', `%${args.agency_name}%`)
+        agencyIdsFilter = (ags || []).map((a: any) => a.id)
+        if (agencyIdsFilter.length === 0) {
+          return { count: 0, clients: [], note: `no agency matched "${args.agency_name}"` }
+        }
+      }
+
+      // 2. campaigner filter (explicit OR auto-scope to caller)
       let campaignerIds: string[] | null = null
+      const explicitCampaigner = !!(args.campaigner_id || args.campaigner_name)
       if (args.campaigner_id) {
         campaignerIds = [args.campaigner_id]
       } else if (args.campaigner_name) {
         const { data: camps } = await supabase
-          .from('campaigners')
-          .select('id, full_name')
+          .from('campaigners').select('id, full_name')
           .in('tenant_id', accessibleTenantIds)
           .ilike('full_name', `%${args.campaigner_name}%`)
         campaignerIds = (camps || []).map((c: any) => c.id)
         if (campaignerIds.length === 0) {
           return { count: 0, clients: [], note: `no campaigner matched "${args.campaigner_name}"` }
         }
+      } else if (callerCampaignerId && !args.all_scopes && !agencyIdsFilter) {
+        // Auto-scope: a campaigner asking via WhatsApp should only see their own clients
+        campaignerIds = [callerCampaignerId]
       }
 
       let clientIdsFilter: string[] | null = null
       if (campaignerIds) {
         const { data: links, error: linkErr } = await supabase
-          .from('client_team')
-          .select('client_id')
+          .from('client_team').select('client_id')
           .in('campaigner_id', campaignerIds)
         if (linkErr) throw linkErr
         clientIdsFilter = Array.from(new Set((links || []).map((l: any) => l.client_id)))
         if (clientIdsFilter.length === 0) {
-          return { count: 0, clients: [], note: 'no clients assigned to this campaigner' }
+          const who = explicitCampaigner ? 'this campaigner' : 'you'
+          return { count: 0, clients: [], note: `no clients assigned to ${who}` }
         }
       }
 
-      let query = supabase.from('clients').select('id, name, contact_name, phone, status').in('tenant_id', accessibleTenantIds).order('name').limit(args.limit || 50)
-      if (args.status) query = query.eq('status', args.status)
+      let query = supabase.from('clients')
+        .select('id, name, contact_name, phone, status, agency_id, agencies(name)')
+        .in('tenant_id', accessibleTenantIds).order('name').limit(args.limit || 50)
+
+      // Default status for auto-scoped campaigner queries: active + onboarding only
+      if (args.status) {
+        query = query.eq('status', args.status)
+      } else if (callerCampaignerId && !args.all_scopes && !explicitCampaigner) {
+        query = query.in('status', ['active', 'onboarding'])
+      }
+
+      if (agencyIdsFilter) query = query.in('agency_id', agencyIdsFilter)
       if (clientIdsFilter) query = query.in('id', clientIdsFilter)
       if (args.name_search) {
         const term = String(args.name_search).trim().replace(/[%_]/g, '')
@@ -303,7 +332,14 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       }
       const { data, error } = await query
       if (error) throw error
-      return { count: data.length, clients: data }
+      const enriched = (data || []).map((c: any) => ({
+        id: c.id, name: c.name, contact_name: c.contact_name, phone: c.phone,
+        status: c.status, agency_id: c.agency_id, agency_name: c.agencies?.name ?? null,
+      }))
+      const scope_note = (callerCampaignerId && !args.all_scopes && !explicitCampaigner && !agencyIdsFilter)
+        ? 'auto-scoped to caller campaigner (active+onboarding only). pass all_scopes=true or explicit campaigner_name/agency_name to widen.'
+        : undefined
+      return { count: enriched.length, clients: enriched, scope_note }
     }
     case 'get_client_info': {
       const { data, error } = await supabase.from('clients').select('*, agencies(name)').eq('id', args.client_id).in('tenant_id', accessibleTenantIds).single()
