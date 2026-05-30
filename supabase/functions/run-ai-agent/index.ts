@@ -301,9 +301,12 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         if (campaignerIds.length === 0) {
           return { count: 0, clients: [], note: `no campaigner matched "${args.campaigner_name}"` }
         }
-      } else if (callerCampaignerId && !args.all_scopes && !agencyIdsFilter) {
+      } else if (callerCampaignerId && !args.all_scopes && !agencyIdsFilter && !bypassCampaignerScope) {
         // Auto-scope: a campaigner asking via WhatsApp should only see their own clients
         campaignerIds = [callerCampaignerId]
+      } else if (isTeamManager && !args.all_scopes && !agencyIdsFilter && managedAgencyIds.length > 0) {
+        // Team manager scope: limit to clients within agencies they manage
+        agencyIdsFilter = managedAgencyIds
       }
 
       let clientIdsFilter: string[] | null = null
