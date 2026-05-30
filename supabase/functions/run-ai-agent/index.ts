@@ -1778,11 +1778,19 @@ Deno.serve(async (req) => {
     systemPrompt += `\n\n=== תאריך ושעה נוכחיים ===\nהיום: ${currentDate}, שעה: ${currentTime}\nתאריך ISO של היום: ${todayISO}\nתאריך ISO של מחר: ${tomorrowDate}\nחשוב: כשמבקשים "למחר" השתמש ב-${tomorrowDate}, כש"היום" השתמש ב-${todayISO}.`
     systemPrompt += `\n\n=== הקשר ארגוני ===\n${tenantContext}`
 
-    // Inject memory context
+    // Inject memory context — instructions get top priority and a strict directive
     const memoryItems = memoryRes.data || []
     if (memoryItems.length > 0) {
-      const memoryContext = memoryItems.map((m: any) => `[${m.category}] ${m.key}: ${m.content}`).join('\n')
-      systemPrompt += `\n\n🧠 === זיכרון מתמשך ===\n${memoryContext}`
+      const instructionItems = memoryItems.filter((m: any) => m.category === 'instructions')
+      const otherItems = memoryItems.filter((m: any) => m.category !== 'instructions')
+      if (instructionItems.length > 0) {
+        const block = instructionItems.map((m: any) => `• ${m.key}: ${m.content}`).join('\n')
+        systemPrompt += `\n\n📌 === הנחיות קבועות שנשמרו (חובה לפעול לפיהן) ===\n${block}\n⚠️ אלה הנחיות שהמשתמש ביקש שתזכרי. חובה לכבד אותן בכל תשובה. אם תשובה חדשה סותרת אותן — ההנחיות גוברות, אלא אם המשתמש ביקש לעדכן/למחוק (אז קראי ל-save_memory עם אותו key, או delete_memory).`
+      }
+      if (otherItems.length > 0) {
+        const memoryContext = otherItems.map((m: any) => `[${m.category}] ${m.key}: ${m.content}`).join('\n')
+        systemPrompt += `\n\n🧠 === זיכרון מתמשך ===\n${memoryContext}`
+      }
     }
 
     // Per-agent memory recall (non-Carmen agents): pull relevant past episodes by similarity.
