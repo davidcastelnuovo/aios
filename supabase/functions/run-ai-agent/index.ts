@@ -344,6 +344,15 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     case 'get_client_info': {
       const { data, error } = await supabase.from('clients').select('*, agencies(name)').eq('id', args.client_id).in('tenant_id', accessibleTenantIds).single()
       if (error) throw error
+      // Enforce caller-campaigner scope: a campaigner can only see clients assigned to them
+      if (callerCampaignerId && !args.all_scopes) {
+        const { data: link } = await supabase
+          .from('client_team').select('client_id')
+          .eq('client_id', args.client_id).eq('campaigner_id', callerCampaignerId).maybeSingle()
+        if (!link) {
+          return { error: 'access_denied', note: 'הלקוח הזה לא משוייך אליך. אם נדרשת גישה — בקש מהמנהל לשייך אותך לצוות הלקוח.' }
+        }
+      }
       return data
     }
     case 'add_client_update': {
