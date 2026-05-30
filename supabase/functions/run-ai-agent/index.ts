@@ -33,13 +33,13 @@ const ALL_TOOLS = [
   { name: 'list_tasks', description: 'רשימת משימות', parameters: { type: 'object', properties: { status: { type: 'string' }, client_id: { type: 'string' }, limit: { type: 'integer' } } } },
   { name: 'update_task_status', description: 'עדכון סטטוס משימה', parameters: { type: 'object', properties: { task_id: { type: 'string' }, status: { type: 'string', enum: ['open', 'in_progress', 'completed', 'cancelled'] } }, required: ['task_id', 'status'] } },
   // CLIENTS
-  { name: 'list_clients', description: 'רשימת/חיפוש לקוחות. אפשר לסנן לפי סטטוס, קמפיינר, או name_search (חיפוש חופשי בשם הלקוח או איש הקשר — חובה להשתמש בזה כשהמשתמש שואל על לקוח ספציפי בשם, גם אם לא הופיע ברשימה קודמת. החיפוש מתעלם מאותיות גדולות/קטנות ומאיתור חלקי). אל תאמר "לא נמצא" לפני שניסית name_search.', parameters: { type: 'object', properties: { status: { type: 'string' }, limit: { type: 'integer' }, name_search: { type: 'string', description: 'חיפוש חלקי בשם הלקוח או איש הקשר (case-insensitive). דוגמה: "genesis" יחזיר "GENESIS TOURS". נסה גם תעתיק אנגלי לשם עברי ולהפך.' }, campaigner_id: { type: 'string', description: 'סינון ללקוחות המשוייכים לקמפיינר זה (דרך client_team)' }, campaigner_name: { type: 'string', description: 'סינון לפי שם קמפיינר (חיפוש חופשי בשם המלא)' } } } },
+  { name: 'list_clients', description: 'רשימת/חיפוש לקוחות. אפשר לסנן לפי סטטוס, קמפיינר, סוכנות (agency_id/agency_name — חובה לסנן כשהמשתמש שואל על "לקוחות בסוכנות X"), או name_search. הערה: כשהקורא הוא קמפיינר (WhatsApp), ברירת המחדל היא הצגת לקוחות שמשוייכים אליו בלבד בסטטוס active/onboarding — אלא אם סופק campaigner_name/agency_name אחר במפורש. החיפוש case-insensitive. אל תאמר "לא נמצא" לפני שניסית name_search.', parameters: { type: 'object', properties: { status: { type: 'string', description: 'active / onboarding / inactive. ברירת מחדל עבור קמפיינר WhatsApp: active+onboarding בלבד.' }, limit: { type: 'integer' }, name_search: { type: 'string', description: 'חיפוש חלקי בשם הלקוח או איש הקשר (case-insensitive). נסה גם תעתיק אנגלי לעברית ולהפך.' }, campaigner_id: { type: 'string', description: 'סינון ללקוחות המשוייכים לקמפיינר זה (דרך client_team)' }, campaigner_name: { type: 'string', description: 'סינון לפי שם קמפיינר (חיפוש חופשי בשם המלא)' }, agency_id: { type: 'string', description: 'סינון ללקוחות בסוכנות זו בלבד' }, agency_name: { type: 'string', description: 'סינון לפי שם סוכנות (חיפוש חלקי, case-insensitive). חובה להשתמש כשהמשתמש מציין סוכנות בשם.' }, all_scopes: { type: 'boolean', description: 'דרוס את הסקופ האוטומטי של הקמפיינר והחזר את כל הלקוחות בארגון (לשימוש רק אם המשתמש ביקש זאת מפורשות).' } } } },
   { name: 'get_client_info', description: 'מידע על לקוח', parameters: { type: 'object', properties: { client_id: { type: 'string' } }, required: ['client_id'] } },
   { name: 'add_client_update', description: 'הוספת עדכון ללקוח', parameters: { type: 'object', properties: { client_id: { type: 'string' }, content: { type: 'string' } }, required: ['client_id', 'content'] } },
   // MESSAGES
   { name: 'send_message', description: 'שליחת הודעת WhatsApp ללקוח או ליד', parameters: { type: 'object', properties: { contact_type: { type: 'string', enum: ['lead', 'client'] }, contact_id: { type: 'string' }, message_text: { type: 'string' } }, required: ['contact_type', 'contact_id', 'message_text'] } },
   // SEARCH
-  { name: 'search_entities', description: 'חיפוש סוכנויות, לקוחות, קמפיינרים או לידים לפי שם', parameters: { type: 'object', properties: { entity_type: { type: 'string', enum: ['agency', 'client', 'campaigner', 'lead'] }, search_term: { type: 'string' } }, required: ['entity_type', 'search_term'] } },
+  { name: 'search_entities', description: 'חיפוש סוכנויות, לקוחות, קמפיינרים או לידים לפי שם. עבור client: אם הקורא הוא קמפיינר WhatsApp, התוצאות מוגבלות אוטומטית ללקוחות שלו אלא אם הועבר all_scopes=true. ניתן לסנן clients/leads לפי agency_id.', parameters: { type: 'object', properties: { entity_type: { type: 'string', enum: ['agency', 'client', 'campaigner', 'lead'] }, search_term: { type: 'string' }, agency_id: { type: 'string', description: 'הגבלה לסוכנות מסוימת (רלוונטי ל-client/lead)' }, all_scopes: { type: 'boolean', description: 'דרוס את סקופ הקמפיינר והחזר תוצאות מכל הארגון.' } }, required: ['entity_type', 'search_term'] } },
   // MANUS AI - Complex task delegation
   { name: 'delegate_to_manus', description: 'שליחת משימה מורכבת ל-Manus AI לביצוע ברקע (מחקר שוק, ניתוח קמפיינים, יצירת תוכן, ניתוח נתונים). המשימה רצה ברקע ועשויה לקחת דקות עד שעות.', parameters: { type: 'object', properties: { prompt: { type: 'string', description: 'תיאור מפורט של המשימה לביצוע' }, context_data: { type: 'string', description: 'נתוני הקשר רלוונטיים (למשל נתוני קמפיינים)' } }, required: ['prompt'] } },
   { name: 'get_facebook_campaign_data', description: 'שליפת נתוני קמפיינים מפייסבוק לצורך ניתוח', parameters: { type: 'object', properties: { client_id: { type: 'string' }, days: { type: 'integer', description: 'מספר ימים אחורה (ברירת מחדל 30)' } } } },
@@ -265,37 +265,66 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return data
     }
     case 'list_clients': {
-      // Resolve campaigner filter if provided
+      // --- Scoping rules ---
+      // 1. agency_id / agency_name → resolve to agency UUIDs (must be in accessible tenants)
+      let agencyIdsFilter: string[] | null = null
+      if (args.agency_id) {
+        agencyIdsFilter = [args.agency_id]
+      } else if (args.agency_name) {
+        const { data: ags } = await supabase
+          .from('agencies').select('id, name')
+          .in('tenant_id', accessibleTenantIds)
+          .ilike('name', `%${args.agency_name}%`)
+        agencyIdsFilter = (ags || []).map((a: any) => a.id)
+        if (agencyIdsFilter.length === 0) {
+          return { count: 0, clients: [], note: `no agency matched "${args.agency_name}"` }
+        }
+      }
+
+      // 2. campaigner filter (explicit OR auto-scope to caller)
       let campaignerIds: string[] | null = null
+      const explicitCampaigner = !!(args.campaigner_id || args.campaigner_name)
       if (args.campaigner_id) {
         campaignerIds = [args.campaigner_id]
       } else if (args.campaigner_name) {
         const { data: camps } = await supabase
-          .from('campaigners')
-          .select('id, full_name')
+          .from('campaigners').select('id, full_name')
           .in('tenant_id', accessibleTenantIds)
           .ilike('full_name', `%${args.campaigner_name}%`)
         campaignerIds = (camps || []).map((c: any) => c.id)
         if (campaignerIds.length === 0) {
           return { count: 0, clients: [], note: `no campaigner matched "${args.campaigner_name}"` }
         }
+      } else if (callerCampaignerId && !args.all_scopes && !agencyIdsFilter) {
+        // Auto-scope: a campaigner asking via WhatsApp should only see their own clients
+        campaignerIds = [callerCampaignerId]
       }
 
       let clientIdsFilter: string[] | null = null
       if (campaignerIds) {
         const { data: links, error: linkErr } = await supabase
-          .from('client_team')
-          .select('client_id')
+          .from('client_team').select('client_id')
           .in('campaigner_id', campaignerIds)
         if (linkErr) throw linkErr
         clientIdsFilter = Array.from(new Set((links || []).map((l: any) => l.client_id)))
         if (clientIdsFilter.length === 0) {
-          return { count: 0, clients: [], note: 'no clients assigned to this campaigner' }
+          const who = explicitCampaigner ? 'this campaigner' : 'you'
+          return { count: 0, clients: [], note: `no clients assigned to ${who}` }
         }
       }
 
-      let query = supabase.from('clients').select('id, name, contact_name, phone, status').in('tenant_id', accessibleTenantIds).order('name').limit(args.limit || 50)
-      if (args.status) query = query.eq('status', args.status)
+      let query = supabase.from('clients')
+        .select('id, name, contact_name, phone, status, agency_id, agencies(name)')
+        .in('tenant_id', accessibleTenantIds).order('name').limit(args.limit || 50)
+
+      // Default status for auto-scoped campaigner queries: active + onboarding only
+      if (args.status) {
+        query = query.eq('status', args.status)
+      } else if (callerCampaignerId && !args.all_scopes && !explicitCampaigner) {
+        query = query.in('status', ['active', 'onboarding'])
+      }
+
+      if (agencyIdsFilter) query = query.in('agency_id', agencyIdsFilter)
       if (clientIdsFilter) query = query.in('id', clientIdsFilter)
       if (args.name_search) {
         const term = String(args.name_search).trim().replace(/[%_]/g, '')
@@ -303,11 +332,27 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       }
       const { data, error } = await query
       if (error) throw error
-      return { count: data.length, clients: data }
+      const enriched = (data || []).map((c: any) => ({
+        id: c.id, name: c.name, contact_name: c.contact_name, phone: c.phone,
+        status: c.status, agency_id: c.agency_id, agency_name: c.agencies?.name ?? null,
+      }))
+      const scope_note = (callerCampaignerId && !args.all_scopes && !explicitCampaigner && !agencyIdsFilter)
+        ? 'auto-scoped to caller campaigner (active+onboarding only). pass all_scopes=true or explicit campaigner_name/agency_name to widen.'
+        : undefined
+      return { count: enriched.length, clients: enriched, scope_note }
     }
     case 'get_client_info': {
       const { data, error } = await supabase.from('clients').select('*, agencies(name)').eq('id', args.client_id).in('tenant_id', accessibleTenantIds).single()
       if (error) throw error
+      // Enforce caller-campaigner scope: a campaigner can only see clients assigned to them
+      if (callerCampaignerId && !args.all_scopes) {
+        const { data: link } = await supabase
+          .from('client_team').select('client_id')
+          .eq('client_id', args.client_id).eq('campaigner_id', callerCampaignerId).maybeSingle()
+        if (!link) {
+          return { error: 'access_denied', note: 'הלקוח הזה לא משוייך אליך. אם נדרשת גישה — בקש מהמנהל לשייך אותך לצוות הלקוח.' }
+        }
+      }
       return data
     }
     case 'add_client_update': {
@@ -339,7 +384,21 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const nameMap: Record<string, string> = { agency: 'name', client: 'name', campaigner: 'full_name', lead: 'company_name' }
       const table = tableMap[args.entity_type]
       const nameField = nameMap[args.entity_type]
-      const { data, error } = await supabase.from(table).select('id, ' + nameField).in('tenant_id', accessibleTenantIds).ilike(nameField, `%${args.search_term}%`).limit(10)
+      const selectCols = args.entity_type === 'client' || args.entity_type === 'lead'
+        ? `id, ${nameField}, agency_id`
+        : `id, ${nameField}`
+      let q = supabase.from(table).select(selectCols).in('tenant_id', accessibleTenantIds).ilike(nameField, `%${args.search_term}%`).limit(20)
+      if ((args.entity_type === 'client' || args.entity_type === 'lead') && args.agency_id) {
+        q = q.eq('agency_id', args.agency_id)
+      }
+      // Auto-scope clients to caller campaigner unless overridden
+      if (args.entity_type === 'client' && callerCampaignerId && !args.all_scopes) {
+        const { data: links } = await supabase.from('client_team').select('client_id').eq('campaigner_id', callerCampaignerId)
+        const ids = (links || []).map((l: any) => l.client_id)
+        if (ids.length === 0) return { count: 0, results: [], note: 'no clients assigned to you' }
+        q = q.in('id', ids)
+      }
+      const { data, error } = await q
       if (error) throw error
       return { count: data.length, results: data }
     }
@@ -1721,6 +1780,8 @@ Deno.serve(async (req) => {
       if (callerCampaignerId && callerName) {
         systemPrompt += `\n\n👤 **זהות המשתמש הנוכחי:** ${callerName} (campaigner_id: ${callerCampaignerId}). כשיוצרים משימה, שייך אותה אוטומטית ל-${callerName} אלא אם המשתמש מבקש במפורש לשייך למישהו אחר.`
         systemPrompt += `\n\n📋 **שיוך לקוחות לקמפיינר:** לשאלות כמו "אילו לקוחות משוייכים ל-X" השתמש תמיד ב-list_clients עם campaigner_name (או campaigner_id), שמסתכל על טבלת client_team. אל תשתמש ב-list_tasks או בחיפוש משימות לשם כך — שיוך לקוח לקמפיינר נקבע בכרטיסיית הלקוח/הקמפיינר, לא לפי משימות.`
+        systemPrompt += `\n\n🔒 **סקופ אישי לקמפיינר (חובה):** ${callerName} הוא קמפיינר. כשהוא שואל על לקוחות (לדוגמה "מה הלקוחות שלי", "מי הלקוחות שלי", "תני לי רשימה") — החזירי אך ורק לקוחות שמשוייכים אליו בסטטוס active או onboarding. השרת אוכף זאת אוטומטית ב-list_clients/get_client_info/search_entities (auto-scope לפי callerCampaignerId), אבל אסור לך להזכיר או לחשוף לקוחות של קמפיינרים אחרים — גם לא בסיכום, גם לא במניין כללי, גם לא ב-name_search שיחזיר רשומות מחוץ לסקופ. רק אם הוא ביקש מפורשות "כל הלקוחות בארגון" / "לקוחות של [שם קמפיינר אחר]" / "לקוחות בסוכנות X" — תעבירי all_scopes=true או campaigner_name/agency_name בהתאם.`
+        systemPrompt += `\n\n🏢 **הבדל בין ארגון (tenant) לסוכנות (agency):** "ארגון" = ה-tenant כולו (כל הלקוחות וכל הסוכנויות שמתחתיו). "סוכנות" = יחידה משנה בתוך הארגון. כשמשתמש שואל על "לקוחות בסוכנות X" — חובה לסנן לפי agency_id/agency_name של אותה סוכנות בלבד. בצעי קודם search_entities entity_type=agency כדי לאמת את ה-id, ואז קראי ל-list_clients עם agency_id המתאים. אסור להחזיר לקוחות מכל הארגון כשהמשתמש הגביל לסוכנות מסוימת.`
         systemPrompt += `\n\n🔓 **גישה מלאה למערכת (מנהלת ראשית):** יש לך גישה לכל המודולים — צוות (list_campaigners, list_sales_people), לקוחות וסוכנויות, אוטומציות (list_automations, toggle_automation), אינטגרציות (list_integrations, toggle_integration), דוחות (get_dashboard_stats, analyze_campaign_performance, get_finance_summary), ניהול סוכנים (list_agents, create_agent, update_agent — תוכלי לבנות סוכנים תחתייך ולהפעיל אותם), וסוכן הגיטהאב לתיקון המערכת (delegate_to_github_agent). אל תאמרי "אין לי גישה" — תמיד נסי את הכלי המתאים קודם.`
       }
     }
