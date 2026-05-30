@@ -1464,6 +1464,35 @@ Deno.serve(async (req) => {
       }
     }
 
+    // 2.6. Resolve caller role + managed agencies (drives role-based scoping)
+    let callerRole: string | null = null
+    let callerUserId: string | null = null
+    let callerManagedAgencyIds: string[] = []
+    if (callerCampaignerId) {
+      const { data: prof } = await supabase
+        .from('profiles').select('id').eq('campaigner_id', callerCampaignerId).maybeSingle()
+      callerUserId = prof?.id || null
+    }
+    if (!callerUserId && resolvedUserId && resolvedUserId !== 'system') {
+      callerUserId = resolvedUserId
+    }
+    if (callerUserId) {
+      const { data: roles } = await supabase
+        .from('user_roles').select('role').eq('user_id', callerUserId)
+      const roleList = (roles || []).map((r: any) => r.role)
+      // Priority order
+      const order = ['super_admin','owner','agency_owner','agency_manager','team_manager','campaigner','sales_person','seo','viewer']
+      for (const r of order) { if (roleList.includes(r)) { callerRole = r; break } }
+      if (callerRole === 'team_manager' || callerRole === 'agency_manager') {
+        const { data: mng } = await supabase
+          .from('user_managed_agencies').select('agency_id').eq('user_id', callerUserId)
+        callerManagedAgencyIds = (mng || []).map((m: any) => m.agency_id)
+      }
+      console.log(`[AGENT] Caller role: ${callerRole} (user_id=${callerUserId}, managed_agencies=${callerManagedAgencyIds.length})`)
+    }
+    const isManagerRoleCaller = !!callerRole && ['owner','agency_owner','agency_manager','super_admin'].includes(callerRole)
+    const isTeamManagerCaller = callerRole === 'team_manager'
+
     // 3. Build system prompt with full tenant context
     // Fetch tenant context, memory for Carmen and all agents
     const [tenantRes, agenciesRes, statsRes, memoryRes] = await Promise.all([
