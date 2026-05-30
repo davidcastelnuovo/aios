@@ -147,8 +147,14 @@ async function getAccessibleTenantIds(supabase: any, tenantId: string): Promise<
   }
 }
 
-async function executeTool(name: string, args: Record<string, any>, supabase: any, tenantId: string, userId: string, callerCampaignerId?: string | null, agentId?: string | null): Promise<any> {
+async function executeTool(name: string, args: Record<string, any>, supabase: any, tenantId: string, userId: string, callerCampaignerId?: string | null, agentId?: string | null, callerRole?: string | null, callerManagedAgencyIds?: string[] | null): Promise<any> {
   const accessibleTenantIds = await getAccessibleTenantIds(supabase, tenantId)
+  // Role-based scope: managers (owner/agency_owner/agency_manager/super_admin) bypass the campaigner narrow-scope.
+  const isManagerRole = !!callerRole && ['owner','agency_owner','agency_manager','super_admin'].includes(callerRole)
+  const isTeamManager = callerRole === 'team_manager'
+  const managedAgencyIds = Array.isArray(callerManagedAgencyIds) ? callerManagedAgencyIds : []
+  // Effective scope flag — true means "do not narrow to a single caller campaigner"
+  const bypassCampaignerScope = isManagerRole || (isTeamManager && managedAgencyIds.length > 0)
   switch (name) {
     case 'create_lead': {
       const { data: agency } = await supabase.from('agencies').select('id').in('tenant_id', accessibleTenantIds).limit(1).single()
