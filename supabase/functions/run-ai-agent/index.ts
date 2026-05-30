@@ -147,8 +147,14 @@ async function getAccessibleTenantIds(supabase: any, tenantId: string): Promise<
   }
 }
 
-async function executeTool(name: string, args: Record<string, any>, supabase: any, tenantId: string, userId: string, callerCampaignerId?: string | null, agentId?: string | null): Promise<any> {
+async function executeTool(name: string, args: Record<string, any>, supabase: any, tenantId: string, userId: string, callerCampaignerId?: string | null, agentId?: string | null, callerRole?: string | null, callerManagedAgencyIds?: string[] | null): Promise<any> {
   const accessibleTenantIds = await getAccessibleTenantIds(supabase, tenantId)
+  // Role-based scope: managers (owner/agency_owner/agency_manager/super_admin) bypass the campaigner narrow-scope.
+  const isManagerRole = !!callerRole && ['owner','agency_owner','agency_manager','super_admin'].includes(callerRole)
+  const isTeamManager = callerRole === 'team_manager'
+  const managedAgencyIds = Array.isArray(callerManagedAgencyIds) ? callerManagedAgencyIds : []
+  // Effective scope flag — true means "do not narrow to a single caller campaigner"
+  const bypassCampaignerScope = isManagerRole || (isTeamManager && managedAgencyIds.length > 0)
   switch (name) {
     case 'create_lead': {
       const { data: agency } = await supabase.from('agencies').select('id').in('tenant_id', accessibleTenantIds).limit(1).single()
@@ -295,9 +301,12 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         if (campaignerIds.length === 0) {
           return { count: 0, clients: [], note: `no campaigner matched "${args.campaigner_name}"` }
         }
-      } else if (callerCampaignerId && !args.all_scopes && !agencyIdsFilter) {
+      } else if (callerCampaignerId && !args.all_scopes && !agencyIdsFilter && !bypassCampaignerScope) {
         // Auto-scope: a campaigner asking via WhatsApp should only see their own clients
         campaignerIds = [callerCampaignerId]
+      } else if (isTeamManager && !args.all_scopes && !agencyIdsFilter && managedAgencyIds.length > 0) {
+        // Team manager scope: limit to clients within agencies they manage
+        agencyIdsFilter = managedAgencyIds
       }
 
       let clientIdsFilter: string[] | null = null
@@ -344,13 +353,17 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     case 'get_client_info': {
       const { data, error } = await supabase.from('clients').select('*, agencies(name)').eq('id', args.client_id).in('tenant_id', accessibleTenantIds).single()
       if (error) throw error
-      // Enforce caller-campaigner scope: a campaigner can only see clients assigned to them
-      if (callerCampaignerId && !args.all_scopes) {
+      // Enforce caller-campaigner scope: campaigner only; managers bypass.
+      if (callerCampaignerId && !args.all_scopes && !bypassCampaignerScope) {
         const { data: link } = await supabase
           .from('client_team').select('client_id')
           .eq('client_id', args.client_id).eq('campaigner_id', callerCampaignerId).maybeSingle()
         if (!link) {
           return { error: 'access_denied', note: 'הלקוח הזה לא משוייך אליך. אם נדרשת גישה — בקש מהמנהל לשייך אותך לצוות הלקוח.' }
+        }
+      } else if (isTeamManager && !args.all_scopes && managedAgencyIds.length > 0) {
+        if (!data?.agency_id || !managedAgencyIds.includes(data.agency_id)) {
+          return { error: 'access_denied', note: 'הלקוח לא בסוכנויות שאת מנהלת.' }
         }
       }
       return data
@@ -391,12 +404,14 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if ((args.entity_type === 'client' || args.entity_type === 'lead') && args.agency_id) {
         q = q.eq('agency_id', args.agency_id)
       }
-      // Auto-scope clients to caller campaigner unless overridden
-      if (args.entity_type === 'client' && callerCampaignerId && !args.all_scopes) {
+      // Auto-scope clients to caller campaigner unless overridden; managers bypass.
+      if (args.entity_type === 'client' && callerCampaignerId && !args.all_scopes && !bypassCampaignerScope) {
         const { data: links } = await supabase.from('client_team').select('client_id').eq('campaigner_id', callerCampaignerId)
         const ids = (links || []).map((l: any) => l.client_id)
         if (ids.length === 0) return { count: 0, results: [], note: 'no clients assigned to you' }
         q = q.in('id', ids)
+      } else if (args.entity_type === 'client' && isTeamManager && !args.all_scopes && managedAgencyIds.length > 0) {
+        q = q.in('agency_id', managedAgencyIds)
       }
       const { data, error } = await q
       if (error) throw error
@@ -1449,6 +1464,35 @@ Deno.serve(async (req) => {
       }
     }
 
+    // 2.6. Resolve caller role + managed agencies (drives role-based scoping)
+    let callerRole: string | null = null
+    let callerUserId: string | null = null
+    let callerManagedAgencyIds: string[] = []
+    if (callerCampaignerId) {
+      const { data: prof } = await supabase
+        .from('profiles').select('id').eq('campaigner_id', callerCampaignerId).maybeSingle()
+      callerUserId = prof?.id || null
+    }
+    if (!callerUserId && resolvedUserId && resolvedUserId !== 'system') {
+      callerUserId = resolvedUserId
+    }
+    if (callerUserId) {
+      const { data: roles } = await supabase
+        .from('user_roles').select('role').eq('user_id', callerUserId)
+      const roleList = (roles || []).map((r: any) => r.role)
+      // Priority order
+      const order = ['super_admin','owner','agency_owner','agency_manager','team_manager','campaigner','sales_person','seo','viewer']
+      for (const r of order) { if (roleList.includes(r)) { callerRole = r; break } }
+      if (callerRole === 'team_manager' || callerRole === 'agency_manager') {
+        const { data: mng } = await supabase
+          .from('user_managed_agencies').select('agency_id').eq('user_id', callerUserId)
+        callerManagedAgencyIds = (mng || []).map((m: any) => m.agency_id)
+      }
+      console.log(`[AGENT] Caller role: ${callerRole} (user_id=${callerUserId}, managed_agencies=${callerManagedAgencyIds.length})`)
+    }
+    const isManagerRoleCaller = !!callerRole && ['owner','agency_owner','agency_manager','super_admin'].includes(callerRole)
+    const isTeamManagerCaller = callerRole === 'team_manager'
+
     // 3. Build system prompt with full tenant context
     // Fetch tenant context, memory for Carmen and all agents
     const [tenantRes, agenciesRes, statsRes, memoryRes] = await Promise.all([
@@ -1734,11 +1778,19 @@ Deno.serve(async (req) => {
     systemPrompt += `\n\n=== תאריך ושעה נוכחיים ===\nהיום: ${currentDate}, שעה: ${currentTime}\nתאריך ISO של היום: ${todayISO}\nתאריך ISO של מחר: ${tomorrowDate}\nחשוב: כשמבקשים "למחר" השתמש ב-${tomorrowDate}, כש"היום" השתמש ב-${todayISO}.`
     systemPrompt += `\n\n=== הקשר ארגוני ===\n${tenantContext}`
 
-    // Inject memory context
+    // Inject memory context — instructions get top priority and a strict directive
     const memoryItems = memoryRes.data || []
     if (memoryItems.length > 0) {
-      const memoryContext = memoryItems.map((m: any) => `[${m.category}] ${m.key}: ${m.content}`).join('\n')
-      systemPrompt += `\n\n🧠 === זיכרון מתמשך ===\n${memoryContext}`
+      const instructionItems = memoryItems.filter((m: any) => m.category === 'instructions')
+      const otherItems = memoryItems.filter((m: any) => m.category !== 'instructions')
+      if (instructionItems.length > 0) {
+        const block = instructionItems.map((m: any) => `• ${m.key}: ${m.content}`).join('\n')
+        systemPrompt += `\n\n📌 === הנחיות קבועות שנשמרו (חובה לפעול לפיהן) ===\n${block}\n⚠️ אלה הנחיות שהמשתמש ביקש שתזכרי. חובה לכבד אותן בכל תשובה. אם תשובה חדשה סותרת אותן — ההנחיות גוברות, אלא אם המשתמש ביקש לעדכן/למחוק (אז קראי ל-save_memory עם אותו key, או delete_memory).`
+      }
+      if (otherItems.length > 0) {
+        const memoryContext = otherItems.map((m: any) => `[${m.category}] ${m.key}: ${m.content}`).join('\n')
+        systemPrompt += `\n\n🧠 === זיכרון מתמשך ===\n${memoryContext}`
+      }
     }
 
     // Per-agent memory recall (non-Carmen agents): pull relevant past episodes by similarity.
@@ -1776,13 +1828,25 @@ Deno.serve(async (req) => {
 - kb_recall_conversation — שליפת סיכומי שיחות עבר לפי נושא.
 - kb_learn — שמירת לקח/סיכום חשוב לטווח ארוך עם embedding.
 **עיקרון:** ה-pointers הם מפה — התוכן עצמו תמיד חי ב-DB. השתמשי ב-kb_search לפני שאת אומרת "לא מצאתי" על נושא ישן או שיחה קודמת.`
-      // Inject caller identity for task assignment
+      // Inject caller identity + role-based scoping rules
       if (callerCampaignerId && callerName) {
-        systemPrompt += `\n\n👤 **זהות המשתמש הנוכחי:** ${callerName} (campaigner_id: ${callerCampaignerId}). כשיוצרים משימה, שייך אותה אוטומטית ל-${callerName} אלא אם המשתמש מבקש במפורש לשייך למישהו אחר.`
-        systemPrompt += `\n\n📋 **שיוך לקוחות לקמפיינר:** לשאלות כמו "אילו לקוחות משוייכים ל-X" השתמש תמיד ב-list_clients עם campaigner_name (או campaigner_id), שמסתכל על טבלת client_team. אל תשתמש ב-list_tasks או בחיפוש משימות לשם כך — שיוך לקוח לקמפיינר נקבע בכרטיסיית הלקוח/הקמפיינר, לא לפי משימות.`
-        systemPrompt += `\n\n🔒 **סקופ אישי לקמפיינר (חובה):** ${callerName} הוא קמפיינר. כשהוא שואל על לקוחות (לדוגמה "מה הלקוחות שלי", "מי הלקוחות שלי", "תני לי רשימה") — החזירי אך ורק לקוחות שמשוייכים אליו בסטטוס active או onboarding. השרת אוכף זאת אוטומטית ב-list_clients/get_client_info/search_entities (auto-scope לפי callerCampaignerId), אבל אסור לך להזכיר או לחשוף לקוחות של קמפיינרים אחרים — גם לא בסיכום, גם לא במניין כללי, גם לא ב-name_search שיחזיר רשומות מחוץ לסקופ. רק אם הוא ביקש מפורשות "כל הלקוחות בארגון" / "לקוחות של [שם קמפיינר אחר]" / "לקוחות בסוכנות X" — תעבירי all_scopes=true או campaigner_name/agency_name בהתאם.`
-        systemPrompt += `\n\n🏢 **הבדל בין ארגון (tenant) לסוכנות (agency):** "ארגון" = ה-tenant כולו (כל הלקוחות וכל הסוכנויות שמתחתיו). "סוכנות" = יחידה משנה בתוך הארגון. כשמשתמש שואל על "לקוחות בסוכנות X" — חובה לסנן לפי agency_id/agency_name של אותה סוכנות בלבד. בצעי קודם search_entities entity_type=agency כדי לאמת את ה-id, ואז קראי ל-list_clients עם agency_id המתאים. אסור להחזיר לקוחות מכל הארגון כשהמשתמש הגביל לסוכנות מסוימת.`
-        systemPrompt += `\n\n🔓 **גישה מלאה למערכת (מנהלת ראשית):** יש לך גישה לכל המודולים — צוות (list_campaigners, list_sales_people), לקוחות וסוכנויות, אוטומציות (list_automations, toggle_automation), אינטגרציות (list_integrations, toggle_integration), דוחות (get_dashboard_stats, analyze_campaign_performance, get_finance_summary), ניהול סוכנים (list_agents, create_agent, update_agent — תוכלי לבנות סוכנים תחתייך ולהפעיל אותם), וסוכן הגיטהאב לתיקון המערכת (delegate_to_github_agent). אל תאמרי "אין לי גישה" — תמיד נסי את הכלי המתאים קודם.`
+        const roleLabel: Record<string,string> = {
+          super_admin: 'סופר־אדמין', owner: 'בעלים', agency_owner: 'בעלים של סוכנות',
+          agency_manager: 'מנהל סוכנות', team_manager: 'מנהל צוות', campaigner: 'קמפיינר',
+          sales_person: 'איש מכירות', seo: 'SEO', viewer: 'צופה',
+        }
+        const roleHe = callerRole ? (roleLabel[callerRole] || callerRole) : 'קמפיינר'
+        systemPrompt += `\n\n👤 **זהות המשתמש הנוכחי:** ${callerName} — תפקיד: ${roleHe} (campaigner_id: ${callerCampaignerId}${callerRole ? `, role: ${callerRole}` : ''}). כשיוצרים משימה, שייך אותה אוטומטית ל-${callerName} אלא אם המשתמש מבקש במפורש לשייך למישהו אחר.`
+        systemPrompt += `\n\n📋 **שיוך לקוחות לקמפיינר:** לשאלות "אילו לקוחות משוייכים ל-X" השתמשי תמיד ב-list_clients עם campaigner_name/campaigner_id (טבלת client_team) — לא ב-list_tasks.`
+        if (isManagerRoleCaller) {
+          systemPrompt += `\n\n🛡️ **הרשאות מנהל (${roleHe}):** יש לך גישה מלאה לכל הלקוחות, הסוכנויות, הצוות, הכספים והאוטומציות בארגון. השרת לא מצמצם את התוצאות שלך אוטומטית. אם המשתמש שואל "מה הלקוחות שלי" — הצג את כל הלקוחות בארגון אלא אם ציין סוכנות/קמפיינר ספציפי. כשמדובר ב"לקוחות בסוכנות X" — חובה לסנן לפי agency_name/agency_id.`
+        } else if (isTeamManagerCaller) {
+          systemPrompt += `\n\n👥 **הרשאות מנהל צוות:** ${callerName} מנהל/ת ${callerManagedAgencyIds.length} סוכנויות. השרת מצמצם את list_clients/get_client_info/search_entities לסוכנויות המנוהלות בלבד. אסור להזכיר לקוחות מסוכנויות אחרות. אם נשאלת על סוכנות מחוץ לטווח — ענה: "אין לך הרשאה לסוכנות הזו". להרחבה: all_scopes=true (רק אם המשתמש ביקש מפורשות ויש לו סמכות).`
+        } else {
+          systemPrompt += `\n\n🔒 **סקופ אישי לקמפיינר (חובה):** ${callerName} הוא קמפיינר. כשהוא שואל על לקוחות — החזירי אך ורק לקוחות שמשוייכים אליו בסטטוס active/onboarding. השרת אוכף זאת אוטומטית. אסור לחשוף לקוחות של קמפיינרים אחרים (גם לא בסיכום או מניין). רק אם המשתמש ביקש מפורשות "כל הלקוחות בארגון" / "לקוחות של [שם קמפיינר אחר]" / "לקוחות בסוכנות X" — תעבירי all_scopes=true או campaigner_name/agency_name.`
+        }
+        systemPrompt += `\n\n🏢 **הבדל בין ארגון (tenant) לסוכנות (agency):** "ארגון" = כל ה-tenant. "סוכנות" = יחידה בתוך הארגון. כשהמשתמש מציין סוכנות בשם — חובה לסנן לפי agency_id/agency_name של אותה סוכנות בלבד; בצעי קודם search_entities entity_type=agency לאימות.`
+        systemPrompt += `\n\n🧠 **למידה עצמית פעילה (חובה):** אם המשתמש כתב אחת מהמילים: "תזכרי", "זכרי", "תזכור", "שמרי", "תרשמי", "מעכשיו", "מהיום והלאה", "תמיד", "אל תעשי", "remember", "from now on" — *לפני* שאת עונה, חייבת לקרוא ל-save_memory עם category='instructions' ומפתח תיאורי באנגלית (snake_case), כדי שההנחיה תיטען לכל סשן עתידי. אם ההנחיה מתקנת הנחיה קיימת — השתמשי באותו key (upsert). אחרי השמירה אשרי קצרות ("נרשם"). אם לא קראת ל-save_memory עבור בקשת זיכרון — נכשלת.`
       }
     }
 
@@ -1861,7 +1925,7 @@ Deno.serve(async (req) => {
         console.log(`[AGENT] Tool call: ${toolName}`)
         let result: any
         try {
-          result = await executeTool(toolName, toolArgs, supabase, resolvedTenantId, resolvedUserId, callerCampaignerId, agent_id)
+          result = await executeTool(toolName, toolArgs, supabase, resolvedTenantId, resolvedUserId, callerCampaignerId, agent_id, callerRole, callerManagedAgencyIds)
           console.log(`[AGENT] Tool ${toolName} OK`)
         } catch (e: any) {
           result = { error: e.message }
