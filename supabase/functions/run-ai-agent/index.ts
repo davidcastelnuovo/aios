@@ -384,7 +384,21 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const nameMap: Record<string, string> = { agency: 'name', client: 'name', campaigner: 'full_name', lead: 'company_name' }
       const table = tableMap[args.entity_type]
       const nameField = nameMap[args.entity_type]
-      const { data, error } = await supabase.from(table).select('id, ' + nameField).in('tenant_id', accessibleTenantIds).ilike(nameField, `%${args.search_term}%`).limit(10)
+      const selectCols = args.entity_type === 'client' || args.entity_type === 'lead'
+        ? `id, ${nameField}, agency_id`
+        : `id, ${nameField}`
+      let q = supabase.from(table).select(selectCols).in('tenant_id', accessibleTenantIds).ilike(nameField, `%${args.search_term}%`).limit(20)
+      if ((args.entity_type === 'client' || args.entity_type === 'lead') && args.agency_id) {
+        q = q.eq('agency_id', args.agency_id)
+      }
+      // Auto-scope clients to caller campaigner unless overridden
+      if (args.entity_type === 'client' && callerCampaignerId && !args.all_scopes) {
+        const { data: links } = await supabase.from('client_team').select('client_id').eq('campaigner_id', callerCampaignerId)
+        const ids = (links || []).map((l: any) => l.client_id)
+        if (ids.length === 0) return { count: 0, results: [], note: 'no clients assigned to you' }
+        q = q.in('id', ids)
+      }
+      const { data, error } = await q
       if (error) throw error
       return { count: data.length, results: data }
     }
