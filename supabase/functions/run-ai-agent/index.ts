@@ -404,12 +404,14 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if ((args.entity_type === 'client' || args.entity_type === 'lead') && args.agency_id) {
         q = q.eq('agency_id', args.agency_id)
       }
-      // Auto-scope clients to caller campaigner unless overridden
-      if (args.entity_type === 'client' && callerCampaignerId && !args.all_scopes) {
+      // Auto-scope clients to caller campaigner unless overridden; managers bypass.
+      if (args.entity_type === 'client' && callerCampaignerId && !args.all_scopes && !bypassCampaignerScope) {
         const { data: links } = await supabase.from('client_team').select('client_id').eq('campaigner_id', callerCampaignerId)
         const ids = (links || []).map((l: any) => l.client_id)
         if (ids.length === 0) return { count: 0, results: [], note: 'no clients assigned to you' }
         q = q.in('id', ids)
+      } else if (args.entity_type === 'client' && isTeamManager && !args.all_scopes && managedAgencyIds.length > 0) {
+        q = q.in('agency_id', managedAgencyIds)
       }
       const { data, error } = await q
       if (error) throw error
