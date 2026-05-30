@@ -1820,14 +1820,27 @@ Deno.serve(async (req) => {
 - kb_recall_conversation — שליפת סיכומי שיחות עבר לפי נושא.
 - kb_learn — שמירת לקח/סיכום חשוב לטווח ארוך עם embedding.
 **עיקרון:** ה-pointers הם מפה — התוכן עצמו תמיד חי ב-DB. השתמשי ב-kb_search לפני שאת אומרת "לא מצאתי" על נושא ישן או שיחה קודמת.`
-      // Inject caller identity for task assignment
+      // Inject caller identity + role-based scoping rules
       if (callerCampaignerId && callerName) {
-        systemPrompt += `\n\n👤 **זהות המשתמש הנוכחי:** ${callerName} (campaigner_id: ${callerCampaignerId}). כשיוצרים משימה, שייך אותה אוטומטית ל-${callerName} אלא אם המשתמש מבקש במפורש לשייך למישהו אחר.`
-        systemPrompt += `\n\n📋 **שיוך לקוחות לקמפיינר:** לשאלות כמו "אילו לקוחות משוייכים ל-X" השתמש תמיד ב-list_clients עם campaigner_name (או campaigner_id), שמסתכל על טבלת client_team. אל תשתמש ב-list_tasks או בחיפוש משימות לשם כך — שיוך לקוח לקמפיינר נקבע בכרטיסיית הלקוח/הקמפיינר, לא לפי משימות.`
-        systemPrompt += `\n\n🔒 **סקופ אישי לקמפיינר (חובה):** ${callerName} הוא קמפיינר. כשהוא שואל על לקוחות (לדוגמה "מה הלקוחות שלי", "מי הלקוחות שלי", "תני לי רשימה") — החזירי אך ורק לקוחות שמשוייכים אליו בסטטוס active או onboarding. השרת אוכף זאת אוטומטית ב-list_clients/get_client_info/search_entities (auto-scope לפי callerCampaignerId), אבל אסור לך להזכיר או לחשוף לקוחות של קמפיינרים אחרים — גם לא בסיכום, גם לא במניין כללי, גם לא ב-name_search שיחזיר רשומות מחוץ לסקופ. רק אם הוא ביקש מפורשות "כל הלקוחות בארגון" / "לקוחות של [שם קמפיינר אחר]" / "לקוחות בסוכנות X" — תעבירי all_scopes=true או campaigner_name/agency_name בהתאם.`
-        systemPrompt += `\n\n🏢 **הבדל בין ארגון (tenant) לסוכנות (agency):** "ארגון" = ה-tenant כולו (כל הלקוחות וכל הסוכנויות שמתחתיו). "סוכנות" = יחידה משנה בתוך הארגון. כשמשתמש שואל על "לקוחות בסוכנות X" — חובה לסנן לפי agency_id/agency_name של אותה סוכנות בלבד. בצעי קודם search_entities entity_type=agency כדי לאמת את ה-id, ואז קראי ל-list_clients עם agency_id המתאים. אסור להחזיר לקוחות מכל הארגון כשהמשתמש הגביל לסוכנות מסוימת.`
-        systemPrompt += `\n\n🔓 **גישה מלאה למערכת (מנהלת ראשית):** יש לך גישה לכל המודולים — צוות (list_campaigners, list_sales_people), לקוחות וסוכנויות, אוטומציות (list_automations, toggle_automation), אינטגרציות (list_integrations, toggle_integration), דוחות (get_dashboard_stats, analyze_campaign_performance, get_finance_summary), ניהול סוכנים (list_agents, create_agent, update_agent — תוכלי לבנות סוכנים תחתייך ולהפעיל אותם), וסוכן הגיטהאב לתיקון המערכת (delegate_to_github_agent). אל תאמרי "אין לי גישה" — תמיד נסי את הכלי המתאים קודם.`
+        const roleLabel: Record<string,string> = {
+          super_admin: 'סופר־אדמין', owner: 'בעלים', agency_owner: 'בעלים של סוכנות',
+          agency_manager: 'מנהל סוכנות', team_manager: 'מנהל צוות', campaigner: 'קמפיינר',
+          sales_person: 'איש מכירות', seo: 'SEO', viewer: 'צופה',
+        }
+        const roleHe = callerRole ? (roleLabel[callerRole] || callerRole) : 'קמפיינר'
+        systemPrompt += `\n\n👤 **זהות המשתמש הנוכחי:** ${callerName} — תפקיד: ${roleHe} (campaigner_id: ${callerCampaignerId}${callerRole ? `, role: ${callerRole}` : ''}). כשיוצרים משימה, שייך אותה אוטומטית ל-${callerName} אלא אם המשתמש מבקש במפורש לשייך למישהו אחר.`
+        systemPrompt += `\n\n📋 **שיוך לקוחות לקמפיינר:** לשאלות "אילו לקוחות משוייכים ל-X" השתמשי תמיד ב-list_clients עם campaigner_name/campaigner_id (טבלת client_team) — לא ב-list_tasks.`
+        if (isManagerRoleCaller) {
+          systemPrompt += `\n\n🛡️ **הרשאות מנהל (${roleHe}):** יש לך גישה מלאה לכל הלקוחות, הסוכנויות, הצוות, הכספים והאוטומציות בארגון. השרת לא מצמצם את התוצאות שלך אוטומטית. אם המשתמש שואל "מה הלקוחות שלי" — הצג את כל הלקוחות בארגון אלא אם ציין סוכנות/קמפיינר ספציפי. כשמדובר ב"לקוחות בסוכנות X" — חובה לסנן לפי agency_name/agency_id.`
+        } else if (isTeamManagerCaller) {
+          systemPrompt += `\n\n👥 **הרשאות מנהל צוות:** ${callerName} מנהל/ת ${callerManagedAgencyIds.length} סוכנויות. השרת מצמצם את list_clients/get_client_info/search_entities לסוכנויות המנוהלות בלבד. אסור להזכיר לקוחות מסוכנויות אחרות. אם נשאלת על סוכנות מחוץ לטווח — ענה: "אין לך הרשאה לסוכנות הזו". להרחבה: all_scopes=true (רק אם המשתמש ביקש מפורשות ויש לו סמכות).`
+        } else {
+          systemPrompt += `\n\n🔒 **סקופ אישי לקמפיינר (חובה):** ${callerName} הוא קמפיינר. כשהוא שואל על לקוחות — החזירי אך ורק לקוחות שמשוייכים אליו בסטטוס active/onboarding. השרת אוכף זאת אוטומטית. אסור לחשוף לקוחות של קמפיינרים אחרים (גם לא בסיכום או מניין). רק אם המשתמש ביקש מפורשות "כל הלקוחות בארגון" / "לקוחות של [שם קמפיינר אחר]" / "לקוחות בסוכנות X" — תעבירי all_scopes=true או campaigner_name/agency_name.`
+        }
+        systemPrompt += `\n\n🏢 **הבדל בין ארגון (tenant) לסוכנות (agency):** "ארגון" = כל ה-tenant. "סוכנות" = יחידה בתוך הארגון. כשהמשתמש מציין סוכנות בשם — חובה לסנן לפי agency_id/agency_name של אותה סוכנות בלבד; בצעי קודם search_entities entity_type=agency לאימות.`
+        systemPrompt += `\n\n🧠 **למידה עצמית פעילה (חובה):** אם המשתמש כתב אחת מהמילים: "תזכרי", "זכרי", "תזכור", "שמרי", "תרשמי", "מעכשיו", "מהיום והלאה", "תמיד", "אל תעשי", "remember", "from now on" — *לפני* שאת עונה, חייבת לקרוא ל-save_memory עם category='instructions' ומפתח תיאורי באנגלית (snake_case), כדי שההנחיה תיטען לכל סשן עתידי. אם ההנחיה מתקנת הנחיה קיימת — השתמשי באותו key (upsert). אחרי השמירה אשרי קצרות ("נרשם"). אם לא קראת ל-save_memory עבור בקשת זיכרון — נכשלת.`
       }
+    }
     }
 
     // 4. Filter tools
