@@ -1,32 +1,27 @@
 ## הבעיה
 
-כרמן ענתה פעמיים על "את עדיין מחוברת?". הסיבה היא בצד שלנו, ב-edge function `send-manus-wa-message`:
+לכרמן יש שתי דליפות סקופ:
 
-```
-[send-manus-wa] POST .../send/text to=972507677613  (attempt 1)
-[send-manus-wa] attempt 1 aborted (timeout) { elapsedMs: 25011 }
-[send-manus-wa] attempt 2 response { status: 200, ok: true, body: '{"success":true,"messageId":"3EB0E00B428B5E7F5A0272"}' }
-```
+1. **אין הגבלת קמפיינר** — כש`callerCampaignerId` מזוהה (קמפיינר ששלח הודעה בקבוצה), הכלי `list_clients` עדיין מחזיר את כל הלקוחות בטננט אלא אם המודל בוחר להעביר `campaigner_id`. אין שום אכיפה בצד-שרת ואין הוראה בפרומפט.
+2. **בלבול ארגון/סוכנות** — `list_clients` ו-`search_entities` לא מקבלים `agency_id` כפילטר. כשמשתמש שואל "לקוחות בסוכנות מרקטינג קפטן", המודל מחזיר לקוחות מכל הטננט.
 
-ה-timeout שלנו (25s) בוטל את הבקשה לפני שהשרת של Manus החזיר תשובה — אבל Manus כן שלח בפועל את ההודעה ל-WhatsApp. ה-retry שלח את אותה הודעה שוב, ולכן המשתמש קיבל אותה פעמיים. ה-dedup הקיים ב-`manus-wa-webhook` הוא לפי `messageId` של הודעות נכנסות בלבד, אז הוא לא מגן על שליחה יוצאת.
+בנוסף, ה-system prompt של כרמן הוא **hard-coded** ב-`run-ai-agent/index.ts` (השדה `ai_agents.system_prompt` ריק). המשתמש מבקש שההנחיות יישמרו גם ב**מרכז הידע** וגם ב**זיכרון** של כרמן, לא רק בקוד.
 
 ## הפתרון
 
-**1. `supabase/functions/send-manus-wa-message/index.ts`**
-- להאריך את ה-timeout של ניסיון השליחה ל-Manus מ-25s ל-45-60s (Manus לפעמים איטי, וההודעה כבר נשלחה ל-WhatsApp לפני שהתשובה חוזרת).
-- להוסיף **idempotency**: לפני ביצוע retry אחרי timeout/abort, לבצע `GET` קצר על סטטוס ההודעה האחרונה לאותו chat דרך Manus (אם נתמך), או — אם לא — פשוט **לוותר על retry במקרה של timeout/abort בלבד**, ולסמן את הניסיון כ-"unknown delivery" ולוג בהתאם. retry יבוצע רק על שגיאות רשת ודאיות (ECONNREFUSED, status 5xx, וכו') ולא על abort של AbortController.
-- להוסיף מפתח idempotency פנימי (למשל `idempotencyKey = ${automationId}:${runId}:${stepIndex}` או hash של ה-payload+chatId+נסיון) ולשמור אותו ב-cache קצר בטבלת `automation_send_attempts` חדשה (או reuse של טבלה קיימת), כך ש-retry על אותו key יחזיר את התוצאה הקודמת במקום לשלוח שוב.
+### 1. אכיפה בצד-שרת ב-`supabase/functions/run-ai-agent/index.ts`
 
-**2. הגנה נוספת ברמת הקריאה (`_shared/carmen.ts` או הראוטר שמפעיל send-manus-wa-message)**
-- לוודא שכרמן לא קוראת ל-send פעמיים בריצה אחת. לבדוק את הלולאה של ה-agent runner ולוודא שיש גרד יחיד של "כבר נשלחה הודעה ל-chat X ב-run הזה".
+**`list_clients`** — אם `callerCampaignerId` קיים והקורא הוא קמפיינר (לא admin/owner):
+- ברירת מחדל: לסנן ל-clients המשוייכים אליו דרך `client_team` (קיים כבר הלוגיקה — רק להפעיל אוטומטית כש-`campaigner_id`/`campaigner_name` לא סופקו).
+- ברירת מחדל: `status in ('active','onboarding')` אלא אם המשתמש ביקש מפורשות סטטוס אחר.
+- להוסיף פרמטר `agency_id` ולהעביר ל-query.
 
-## פרטים טכניים
+**`get_client_info`** — לחסום אם הלקוח לא מופיע ב-`client_team` של הקורא (כש-callerCampaignerId קיים והוא לא admin).
 
-- הקובץ הראשי לטיפול: `supabase/functions/send-manus-wa-message/index.ts`.
-- שינוי קונפיגורציה: קבועי `TIMEOUT_MS` ו-`MAX_RETRIES`, וטיפול נפרד ב-`error.name === 'AbortError'` (לא לרטריי) לעומת שגיאות רשת אחרות.
-- אופציונלית: טבלת `manus_send_attempts(idempotency_key text primary key, sent_at, message_id, response jsonb)` עם TTL של שעה כדי לחסום שליחה כפולה גם בין invocations שונים.
+**`search_entities`** — כשהקורא הוא קמפיינר ו-`entity_type='client'`: לסנן דרך client_team. להוסיף `agency_id` אופציונלי.
 
-## מה לא משתנה
+**זיהוי תפקיד הקורא** — לקרוא `user_roles` של ה-user המקושר לקמפיינר; אם `admin`/`owner`/`super_admin` — לא לחסום.
 
-- שום שינוי באוטומציות עצמן, ב-whitelist קבוצות, או בכרמן הלוגיקה.
-- שינוי רק בשכבת המסירה ל-Manus.
+### 2. עדכון ה-System Prompt של כרמן
+
+להוסיף 2 כללי-זה
