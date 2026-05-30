@@ -148,13 +148,17 @@ Deno.serve(async (req) => {
       : { to, body: message };
     console.log('[send-manus-wa] POST', url, 'to=', to, 'instanceId=', instanceId, 'messageLen=', message.length);
 
-    // Retry on timeout/network errors (Manus gateway is sometimes slow on groups).
+    // IMPORTANT: Do NOT retry on client-side AbortError/timeout. When our fetch times out,
+    // the request often already reached Manus and a message was actually delivered to WhatsApp.
+    // A naive retry then results in the recipient getting the same message twice.
+    // We only retry on: explicit Manus-internal timeout reported in response body, or 5xx responses.
     const MAX_ATTEMPTS = 2;
-    const FETCH_TIMEOUT_MS = 25000;
+    const FETCH_TIMEOUT_MS = 60000; // was 25s — too short; Manus can take 30-40s on slow paths
     let res: Response | null = null;
     let respText = '';
     let respData: any = null;
     let lastErr: any = null;
+    let abortedOnce = false;
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       const started = Date.now();
@@ -173,7 +177,7 @@ Deno.serve(async (req) => {
         const elapsed = Date.now() - started;
         console.log('[send-manus-wa] attempt', attempt, 'response', { status: res.status, ok: res.ok, elapsedMs: elapsed, body: respText.slice(0, 500) });
 
-        // Manus-internal timeout in body (e.g. "timeout of 8000ms exceeded") => retry.
+        // Manus-internal timeout in body (e.g. "timeout of 8000ms exceeded") => Manus itself reports failure, retry is safer.
         const isManusTimeout = typeof respData?.error === 'string' && /timeout of \d+ms exceeded/i.test(respData.error);
         if (res.ok && respData?.success !== false) break;
         if (!isManusTimeout && res.status < 500) {
@@ -185,13 +189,32 @@ Deno.serve(async (req) => {
         clearTimeout(timer);
         const elapsed = Date.now() - started;
         const isAbort = err?.name === 'AbortError';
-        console.error('[send-manus-wa] attempt', attempt, isAbort ? 'aborted (timeout)' : 'fetch error', { elapsedMs: elapsed, msg: err?.message });
+        console.error('[send-manus-wa] attempt', attempt, isAbort ? 'aborted (timeout) — NOT retrying to avoid duplicate delivery' : 'fetch error', { elapsedMs: elapsed, msg: err?.message });
         lastErr = err;
+        if (isAbort) {
+          abortedOnce = true;
+          // Stop the loop: we cannot know if Manus delivered the message or not, and a retry would risk a duplicate.
+          break;
+        }
       }
 
       if (attempt < MAX_ATTEMPTS) {
         await new Promise(r => setTimeout(r, 2000));
       }
+    }
+
+    if (abortedOnce && (!res || !res.ok)) {
+      // Return a soft-failure: we don't know if the message was delivered. Caller should treat as "in-flight"
+      // and must NOT retry, otherwise the recipient may receive duplicates.
+      console.warn('[send-manus-wa] aborted without confirmation — returning 202 to signal "delivery unknown, do not retry"');
+      return new Response(JSON.stringify({
+        success: false,
+        delivered: 'unknown',
+        error: 'Manus gateway did not respond within timeout; message may or may not have been delivered. Not retried to avoid duplicate sends.',
+      }), {
+        status: 202,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     if (!res || !res.ok || respData?.success === false) {
