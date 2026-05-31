@@ -84,6 +84,7 @@ export default function Clients() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCampaigner, setSelectedCampaigner] = useState<string>("all");
   const [selectedMoodStatus, setSelectedMoodStatus] = useState<string>("all");
+  const [selectedService, setSelectedService] = useState<string>("all");
   const [deletingClient, setDeletingClient] = useState<any>(null);
   const [duplicatingClient, setDuplicatingClient] = useState<{ id: string; name: string } | null>(null);
   const [editingFolderLink, setEditingFolderLink] = useState<{ clientId: string; link: string } | null>(null);
@@ -99,6 +100,7 @@ export default function Clients() {
   const activeFilterCount = [
     selectedCampaigner !== "all" ? 1 : 0,
     selectedMoodStatus !== "all" ? 1 : 0,
+    selectedService !== "all" ? 1 : 0,
     hideInactive ? 1 : 0,
     statusFilter !== "all" ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
@@ -452,11 +454,22 @@ export default function Clients() {
     ? campaignerFilteredClients?.filter(client => client.mood_status === selectedMoodStatus)
     : campaignerFilteredClients;
 
+  // Filter by product/service tag
+  const serviceFilteredClients = selectedService && selectedService !== "all"
+    ? moodFilteredClients?.filter((client: any) => {
+        const services: string[] = Array.isArray(client.services) ? client.services : [];
+        if (selectedService === "seo") {
+          return client.is_seo_client === true || services.includes("seo");
+        }
+        return services.includes(selectedService);
+      })
+    : moodFilteredClients;
+
   const searchedClients = searchTerm 
-    ? moodFilteredClients?.filter(client => 
+    ? serviceFilteredClients?.filter(client => 
         client.name.toLowerCase().includes(searchTerm.toLowerCase())
       )
-    : moodFilteredClients;
+    : serviceFilteredClients;
 
   const hideInactiveFiltered = hideInactive 
     ? searchedClients?.filter(client => client.status === "active" || client.status === "onboarding")
@@ -691,6 +704,26 @@ export default function Clients() {
               </Select>
             </div>
 
+            {/* Product / Service filter */}
+            <div className="space-y-2">
+              <Label>מוצר / שירות</Label>
+              <Select value={selectedService} onValueChange={setSelectedService}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-background">
+                  <SelectItem value="all">כל המוצרים</SelectItem>
+                  <SelectItem value="seo">SEO</SelectItem>
+                  <SelectItem value="ppc_google">PPC Google</SelectItem>
+                  <SelectItem value="ppc_meta">PPC Meta</SelectItem>
+                  <SelectItem value="social">Social</SelectItem>
+                  <SelectItem value="full_social">Full Social</SelectItem>
+                  <SelectItem value="social_meta">Social Meta</SelectItem>
+                  <SelectItem value="automation">Automation</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Status filter */}
             <div className="space-y-2">
               <Label>סטטוס לקוח</Label>
@@ -728,6 +761,7 @@ export default function Clients() {
                 onClick={() => {
                   setSelectedCampaigner("all");
                   setSelectedMoodStatus("all");
+                  setSelectedService("all");
                   setHideInactive(false);
                   setStatusFilter("all");
                 }}

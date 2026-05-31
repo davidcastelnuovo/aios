@@ -207,9 +207,9 @@ export default function WordPressSettings() {
     : undefined;
 
   // Fetch clients - scoped to selected agency's tenant (if agency picked)
-  // Otherwise to chosen tenant_id (super-admin) or current tenant
+  // Otherwise to chosen tenant_id (super-admin) or current tenant + cross-tenant shared agencies
   const { data: clients = [] } = useQuery<Client[]>({
-    queryKey: ["clients-for-wp", selectedAgencyTenantId, form.tenant_id, tenantId, form.agency_id, isSuperAdmin],
+    queryKey: ["clients-for-wp", selectedAgencyTenantId, form.tenant_id, tenantId, form.agency_id, isSuperAdmin, crossTenantAgencyIds],
     queryFn: async () => {
       const effTenant = selectedAgencyTenantId || form.tenant_id || tenantId;
       if (!effTenant && !form.agency_id && !isSuperAdmin) return [];
@@ -222,7 +222,12 @@ export default function WordPressSettings() {
       if (form.agency_id) {
         q = q.eq("agency_id", form.agency_id);
       } else if (effTenant) {
-        q = q.eq("tenant_id", effTenant);
+        // Include current tenant's clients PLUS clients in cross-tenant shared agencies
+        if (!isSuperAdmin && effTenant === tenantId && crossTenantAgencyIds.length > 0) {
+          q = q.or(`tenant_id.eq.${effTenant},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+        } else {
+          q = q.eq("tenant_id", effTenant);
+        }
       } else {
         return [];
       }
