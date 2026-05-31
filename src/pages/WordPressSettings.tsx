@@ -1316,27 +1316,73 @@ export default function WordPressSettings() {
 
             <div>
               <Label>לקוח</Label>
-              <Select
-                value={linkClient || "none"}
-                onValueChange={(v) => setLinkClient(v === "none" ? "" : v)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={
-                    linkClients.length === 0
-                      ? (linkAgency ? "אין לקוחות לסוכנות זו" : "אין לקוחות בארגון")
-                      : "בחר לקוח..."
-                  } />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">ללא</SelectItem>
-                  {linkClients.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}{c.tenant_name && c.tenant_id !== linkSite?.tenant_id ? ` (${c.tenant_name})` : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {(() => {
+                const selected = linkClients.find((c) => c.id === linkClient);
+                const labelFor = (c: Client) =>
+                  `${c.name}${c.tenant_name && c.tenant_id !== linkSite?.tenant_id ? ` (${c.tenant_name})` : ""}`;
+                const normalize = (s: string) => s.replace(/[\s.\-_'"]/g, "").toLowerCase();
+                return (
+                  <Popover open={linkClientOpen} onOpenChange={setLinkClientOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        className="w-full justify-between font-normal"
+                      >
+                        <span className="truncate">
+                          {selected
+                            ? labelFor(selected)
+                            : linkClient === ""
+                              ? (linkClients.length === 0
+                                  ? (linkAgency ? "אין לקוחות לסוכנות זו" : "אין לקוחות בארגון")
+                                  : "בחר לקוח...")
+                              : "בחר לקוח..."}
+                        </span>
+                        <ChevronsUpDown className="h-4 w-4 opacity-50 shrink-0" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start" dir="rtl">
+                      <Command
+                        filter={(value, search) => {
+                          if (!search) return 1;
+                          return normalize(value).includes(normalize(search)) ? 1 : 0;
+                        }}
+                      >
+                        <CommandInput placeholder="חפש לקוח לפי שם..." />
+                        <CommandList>
+                          <CommandEmpty>לא נמצאו לקוחות</CommandEmpty>
+                          <CommandGroup>
+                            <CommandItem
+                              value="ללא"
+                              onSelect={() => { setLinkClient(""); setLinkClientOpen(false); }}
+                            >
+                              <Check className={cn("ml-2 h-4 w-4", linkClient === "" ? "opacity-100" : "opacity-0")} />
+                              ללא
+                            </CommandItem>
+                            {linkClients.map((c) => (
+                              <CommandItem
+                                key={c.id}
+                                value={labelFor(c)}
+                                onSelect={() => { setLinkClient(c.id); setLinkClientOpen(false); }}
+                              >
+                                <Check className={cn("ml-2 h-4 w-4", linkClient === c.id ? "opacity-100" : "opacity-0")} />
+                                {labelFor(c)}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                );
+              })()}
+              {linkAgency && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  מציג לקוחות הסוכנות + לקוחות ללא סוכנות בארגון.
+                </p>
+              )}
             </div>
+
 
             {/* Cross-tenant warning when selected agency belongs to another org */}
             {linkSelectedAgency && linkSite && linkSelectedAgency.tenant_id !== linkSite.tenant_id && (
