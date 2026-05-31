@@ -87,6 +87,7 @@ type CRMClientFields = {
   tier?: string | null;
   services?: string[] | null;
   mood_status?: string | null;
+  is_seo_client?: boolean | null;
 };
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -101,6 +102,10 @@ function mapMoodToCommStatus(mood: string | null): 'normal' | 'sensitive' | 'com
     case 'churn_risk': return 'complaint';
     default: return null;
   }
+}
+
+function isSeoTaggedClient(client: { is_seo_client?: boolean | null; services?: string[] | null }) {
+  return client.is_seo_client === true || (Array.isArray(client.services) && client.services.includes("seo"));
 }
 
 function StatusDot({ status }: { status: OverallStatus }) {
@@ -169,7 +174,7 @@ export default function DMMDashboard() {
 
   // ── Fetch clients (base: always-safe fields) ──────────────────────────────
   const { data: rawClients = [], isLoading: clientsLoading, refetch } = useQuery({
-    queryKey: ["dmm-clients", tenantId, selectedAgency, userAgencyIds, crossTenantAgencyIds],
+    queryKey: ["dmm-clients", tenantId, selectedAgency, userAgencyIds, crossTenantAgencyIds, isSeo],
     queryFn: async () => {
       if (!tenantId) return [];
 
@@ -182,7 +187,7 @@ export default function DMMDashboard() {
       let query = supabase
         .from("clients")
         .select(`
-          id, name, status, agency_id,
+          id, name, status, agency_id, is_seo_client, services,
           client_team (
             campaigner_id,
             campaigners ( full_name )
@@ -196,6 +201,13 @@ export default function DMMDashboard() {
         query = query.eq("agency_id", selectedAgency);
       } else if (isOwner || isSuperAdmin) {
         // Owners/super admins: show own tenant + cross-tenant agencies
+        if (crossTenantAgencyIds.length > 0) {
+          query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+        } else {
+          query = query.eq("tenant_id", tenantId);
+        }
+      } else if (isSeo) {
+        // SEO users must see all SEO-tagged clients in their tenant even without direct assignment.
         if (crossTenantAgencyIds.length > 0) {
           query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
         } else {
@@ -217,7 +229,7 @@ export default function DMMDashboard() {
   });
 
   // ── Campaigner client filtering ───────────────────────────────────────────
-  const needsCampaignerFilter = (isCampaigner || isSeo) && !isOwner && !isTeamManager && !isSuperAdmin;
+  const needsCampaignerFilter = isCampaigner && !isSeo && !isOwner && !isTeamManager && !isSuperAdmin;
   
   const campaignerClientIds = useMemo(() => {
     if (!needsCampaignerFilter || !campaignerId) return null;
@@ -233,24 +245,29 @@ export default function DMMDashboard() {
   }, [rawClients, needsCampaignerFilter, campaignerId]);
 
   const filteredByRole = useMemo(() => {
+    if (isSeo && !isOwner && !isTeamManager && !isSuperAdmin) {
+      return rawClients.filter((c: any) => isSeoTaggedClient(c));
+    }
     if (!needsCampaignerFilter || !campaignerClientIds) return rawClients;
     return rawClients.filter((c: any) => campaignerClientIds.has(c.id));
-  }, [rawClients, needsCampaignerFilter, campaignerClientIds]);
+  }, [rawClients, isSeo, isOwner, isTeamManager, isSuperAdmin, needsCampaignerFilter, campaignerClientIds]);
 
   // ── Fetch CRM extended fields (tier, services, mood_status) ────────────────
   // These columns are added by migration 20260407_dmm_crm_adaptation.sql
   // If migration hasn't run yet, errors are silently ignored — fields stay null/empty
   const { data: crmFields = [] } = useQuery({
-    queryKey: ["dmm-clients-crm-fields", tenantId, crossTenantAgencyIds],
+    queryKey: ["dmm-clients-crm-fields", tenantId, selectedAgency, crossTenantAgencyIds],
     queryFn: async () => {
       if (!tenantId) return [];
       try {
         let query = supabase
           .from("clients")
-          .select("id, tier, services, mood_status")
+          .select("id, tier, services, mood_status, is_seo_client")
           .in("status", ["active", "onboarding"]);
         
-        if (crossTenantAgencyIds.length > 0) {
+        if (selectedAgency && selectedAgency !== "all") {
+          query = query.eq("agency_id", selectedAgency);
+        } else if (crossTenantAgencyIds.length > 0) {
           query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
         } else {
           query = query.eq("tenant_id", tenantId);
@@ -380,7 +397,10 @@ export default function DMMDashboard() {
       // Falls back to null/empty if migration hasn't run yet
       const ext = (crmFields.find((f: any) => f.id === c.id) ?? {}) as CRMClientFields;
       const tier: string | null = ext.tier ?? null;
-      const services: string[] = ext.services ?? [];
+      const services: string[] = ext.services ?? c.services ?? [];
+      if ((ext.is_seo_client ?? c.is_seo_client) === true && !services.includes("seo")) {
+        services.push("seo");
+      }
       const mood_status: string | null = ext.mood_status ?? null;
 
       // Latest comm log
