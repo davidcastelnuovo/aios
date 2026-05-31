@@ -1,42 +1,104 @@
-## הבעיה
+## TikTok Integration — תוכנית עבודה
 
-באוטומציה "פבליקו לידים פייסבוק" בחרת בטופס `דודי | 21/05/25` (form_id `714859200896732`). אבל:
+### הבהרה חשובה לפני שמתחילים
+ה-TikTok Connector של Lovable (Gateway) נותן גישה לתוכן **אורגני** של חשבון TikTok:
+- פרופיל (followers, display_name)
+- רשימת סרטונים + סטטיסטיקות (views, likes, comments, shares, watch time)
 
-1. הטופס הזה לא רשום ב-`tenant_integrations.settings.form_mappings` של אינטגרציית פייסבוק `1d250a3d…`.
-2. הפונקציה `sync-facebook-leads` רצה רק על טפסים שיש להם רשומה ב-`form_mappings` - לכן הלידים של הטופס הזה לא נמשכו אף פעם.
-3. הדיאלוג "בדוק עם ליד" (`TestFlowWithLeadDialog`) שואל רק את טבלת `leads` המקומית, ומסנן לפי `notes ILIKE '%form_id%'`. אם לא סונכרנו לידים - אין מה להציג, גם ב"כל הלידים".
-4. `last_sync_at` של האינטגרציה: 11/3/2026 - האינטגרציה כמעט לא רצה.
+**TikTok Ads (קמפיינים בתשלום)** משתמש ב-**Marketing API נפרד** שלא נכלל בקונקטור. אם רוצים בעתיד נתוני Ads — צריך אינטגרציה נפרדת (App Review של TikTok for Business + Marketing API). התוכנית הזו מתמקדת בדוחות אורגניים.
 
-בנוסף, `trigger_config.sync_since_date = 2026-05-31` שמור ב-step אבל אף פונקציית סנכרון לא קוראת אותו.
+לכן הטבלה החדשה תיקרא **"TikTok Content"** (לא "TikTok Ads") — ניתוח ביצועי סרטונים.
 
-## הפתרון
+---
 
-### 1. רישום אוטומטי של הטופס ב-`form_mappings` בעת שמירת ה-trigger
-ב-`StepConfigPanel.tsx` (או היכן ש-trigger של Facebook נשמר), כשמשתמש בוחר `facebook_form_id` + `facebook_integration_id`, להוסיף upsert ל-`tenant_integrations.settings.form_mappings[form_id]` עם ברירות מחדל:
+### 1. חיבור הקונקטור (פעם אחת)
+- חיבור TikTok Connector של Lovable (`connector_id: tiktok`) ל-Project. זה ייתן את `TIKTOK_API_KEY` כ-secret אוטומטי לכל edge functions.
+- אנחנו לא צריכים App Review של TikTok בעצמנו — הקונקטור עוקף את זה.
+
+### 2. דף Integrations — כרטיס TikTok
+הוספת כרטיס TikTok ב-`src/pages/Integrations.tsx` שמוביל למסך `tiktok-settings` חדש.
+
+`is_connected` ייקבע לפי רשומה ב-`tenant_integrations` עם `integration_type='tiktok'`.
+
+### 3. מסך TikTokSettings חדש
+דף הגדרות (`src/pages/TikTokSettings.tsx`) שמאפשר:
+- כפתור "Connect TikTok Account" → קורא ל-edge function `tiktok-connect` שמושך פרטי חשבון מהקונקטור (`/user/info/?fields=open_id,display_name,avatar_url,follower_count`) ושומר ב-`tenant_integrations`.
+- תצוגה של החשבון המחובר (שם, אווטאר, עוקבים).
+- כפתור Disconnect.
+- (אם בעתיד יהיו multiple accounts — נוסיף בחירה. כרגע חשבון אחד לכל tenant, כמו Facebook.)
+
+### 4. Edge Functions חדשות
+| פונקציה | תפקיד |
+|---|---|
+| `tiktok-connect` | מושך פרטי חשבון מ-TikTok Gateway ושומר ב-`tenant_integrations` (integration_type='tiktok') |
+| `tiktok-disconnect` | מוחק את החיבור |
+| `sync-tiktok-content` | On-demand: מושך רשימת סרטונים + stats → כותב ל-`crm_records` עבור `table_id` נתון (integration_type='tiktok_content') |
+| `cron-sync-tiktok-content` | סקדיולר יומי: רץ על כל `crm_tables` עם integration_type='tiktok_content' |
+
+כולן יקראו דרך Gateway:
 ```
+GET  https://connector-gateway.lovable.dev/tiktok/user/info/?fields=...
+POST https://connector-gateway.lovable.dev/tiktok/video/list/
+```
+עם headers `Authorization: Bearer ${LOVABLE_API_KEY}` + `X-Connection-Api-Key: ${TIKTOK_API_KEY}`.
+
+### 5. דף Dynamic Tables — אפשרות יצירת טבלת TikTok
+ב-`src/pages/DynamicTables.tsx`:
+- הוספת אפשרות חדשה לדיאלוג יצירת טבלה: **"TikTok Content"** (ליד "Facebook Ecommerce").
+- דיאלוג חדש `TikTokTableDialog.tsx` (במודל של `FacebookTableDialog`) — שואל שם טבלה, בוחר חשבון מחובר, יוצר רשומה ב-`crm_tables` עם:
+  ```
+  integration_type: 'tiktok_content'
+  integration_settings: { account_open_id, date_range, sync_frequency }
+  ```
+- אחרי יצירה — מפעיל `sync-tiktok-content` פעם ראשונה.
+- ב-`getIntegrationIcon` מוסיפים case ל-`tiktok_content` עם אייקון TikTok.
+- בכרטיס הטבלה — כפתור Sync שמפעיל מחדש את `sync-tiktok-content`.
+
+### 6. שדות (crm_fields) של טבלת TikTok Content
+ייווצרו אוטומטית בסנכרון ראשון:
+- `video_id`, `title`, `create_time`, `cover_image_url`, `share_url`
+- `view_count`, `like_count`, `comment_count`, `share_count`
+- `duration_sec`, `embed_link`
+
+---
+
+### פרטים טכניים
+
+**שמירה ב-tenant_integrations** (אותו pattern כמו Facebook):
+```json
 {
-  agency_id: null,
-  sales_person_ids: [],
-  fields: {},   // mapping ריק - הפונקציה תיפול חזרה לברירות מחדל
+  "tenant_id": "...",
+  "integration_type": "tiktok",
+  "is_active": true,
+  "settings": {
+    "open_id": "...",
+    "display_name": "...",
+    "avatar_url": "...",
+    "follower_count": 1234,
+    "connected_at": "2026-05-31T..."
+  }
 }
 ```
-זה מבטיח שהקרון הקיים ימשוך לידים מהטופס.
 
-### 2. כפתור "סנכרן עכשיו" בדיאלוג הבדיקה
-ב-`TestFlowWithLeadDialog.tsx`, כש-`facebookFormId` קיים ולא נמצאו לידים בטווח, להוסיף כפתור "משוך לידים מפייסבוק עכשיו" שקורא ל-`sync-facebook-leads` עם `integration_id` + `tenant_id`, ואז מרענן את ה-query. כך המשתמש לא צריך לחכות לקרון.
+**אבטחה (RLS):**
+- אותן מדיניות RLS שכבר קיימות על `tenant_integrations` ו-`crm_tables` (סינון לפי `tenant_id` + cross-tenant agency access).
+- אין שינויי סכימה נדרשים — הכל משתמש במבנה הגנרי הקיים.
 
-### 3. תמיכה ב-`sync_since_date` ב-sync-facebook-leads (אופציונלי, אם נרצה להתאים את חלון הזמן)
-כעת הפונקציה קבועה על 30 ימים אחורה. נשנה כך שאם הקריאה כוללת `since_date` (מ-trigger config) נשתמש בו במקום.
+**Routing:**
+- הוספת route `/t/:tenantSlug/integrations/tiktok-settings` ב-`App.tsx`.
 
-### 4. הרצת סנכרון ראשוני מיידית
-אחרי שמירת trigger Facebook (סעיף 1), להריץ סנכרון פעם אחת כדי שהלידים יהיו זמינים לבדיקה ולטיגור.
+---
 
-## קבצים שיתעדכנו
-- `supabase/functions/sync-facebook-leads/index.ts` - תמיכה ב-`since_date` ובקריאה לפי `form_id` ספציפי.
-- `src/components/automations/StepConfigPanel.tsx` (או רכיב הטריגר של Facebook) - upsert של form_mapping + טריגור סנכרון.
-- `src/components/automations/TestFlowWithLeadDialog.tsx` - כפתור "סנכרן עכשיו" ו-refetch.
+### מה לא נכלל בתוכנית הזו (יבוא בעתיד אם תרצה)
+- TikTok Ads (קמפיינים בתשלום) — דורש Marketing API נפרד.
+- פרסום סרטונים מתוך המערכת (`post/publish/video/init/`).
+- ניהול תגובות על סרטונים.
 
-## אימות
-- אחרי שמירה: לראות שהטופס `714859200896732` קיים תחת `form_mappings`.
-- ללחוץ "סנכרן עכשיו" בדיאלוג ולוודא שעולים הלידים מהשבוע האחרון.
-- "כל הלידים" / "שבוע אחרון" / סינון לפי form_id מציגים את ה-8 לידים שמופיעים בפייסבוק.
+### שלבי ביצוע
+1. חיבור הקונקטור (פעולה אינטראקטיבית — תאשר חיבור TikTok)
+2. יצירת 4 edge functions
+3. הוספת דף Integrations card + TikTokSettings page + route
+4. הוספת TikTokTableDialog + שינויים ב-DynamicTables.tsx + integrationIcons
+5. בדיקה: חיבור → יצירת טבלה → סנכרון ראשון → תצוגת נתונים
+
+לאחר אישור התוכנית — אעבור ל-Build, אבקש לחבר את הקונקטור, ואז אכתוב את הקוד.
