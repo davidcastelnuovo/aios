@@ -461,11 +461,16 @@ export default function WordPressSettings() {
         .from("clients")
         .select("id, name, tenant_id, tenants(name)")
         .order("name");
-      if (linkAgency) {
+      if (linkAgency && linkEffectiveTenantId) {
+        // Show clients in the chosen agency + unassigned clients in the same tenant,
+        // so a client without agency (e.g. א.י זוהר עץ) is still findable.
+        q = q.or(`agency_id.eq.${linkAgency},and(agency_id.is.null,tenant_id.eq.${linkEffectiveTenantId})`);
+      } else if (linkAgency) {
         q = q.eq("agency_id", linkAgency);
       } else if (linkEffectiveTenantId) {
         q = q.eq("tenant_id", linkEffectiveTenantId);
       }
+
       const { data, error } = await q;
       if (error) throw error;
       return (data || []).map((c: any) => ({
