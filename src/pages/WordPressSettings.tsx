@@ -239,9 +239,12 @@ export default function WordPressSettings() {
     enabled: !!(form.agency_id || form.tenant_id || tenantId || isSuperAdmin),
   });
 
-  // Fetch all WordPress sites (super admin sees all, others see own tenant)
+  // Fetch all WordPress sites:
+  // - super admin: all (or filtered by chosen tenant)
+  // - others: own tenant + sites linked to agencies shared with their tenant
+  //   (campaigners in a shared DMM agency should see DMM's WP sites).
   const { data: sites = [], isLoading } = useQuery<WordPressSite[]>({
-    queryKey: ["wordpress-sites-admin", tenantId, filterTenant],
+    queryKey: ["wordpress-sites-admin", tenantId, filterTenant, crossTenantAgencyIds.join(",")],
     queryFn: async () => {
       let query = supabase
         .from("social_media_wordpress_sites" as any)
@@ -249,7 +252,13 @@ export default function WordPressSettings() {
         .order("created_at", { ascending: false });
 
       if (!isSuperAdmin) {
-        query = query.eq("tenant_id", tenantId);
+        if (crossTenantAgencyIds.length > 0) {
+          query = query.or(
+            `tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`
+          );
+        } else {
+          query = query.eq("tenant_id", tenantId);
+        }
       } else if (filterTenant !== "all") {
         query = query.eq("tenant_id", filterTenant);
       }
@@ -260,6 +269,7 @@ export default function WordPressSettings() {
     },
     enabled: !!tenantId,
   });
+
 
   // Create site
   const createMutation = useMutation({
