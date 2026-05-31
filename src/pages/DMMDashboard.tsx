@@ -397,7 +397,10 @@ export default function DMMDashboard() {
       // Falls back to null/empty if migration hasn't run yet
       const ext = (crmFields.find((f: any) => f.id === c.id) ?? {}) as CRMClientFields;
       const tier: string | null = ext.tier ?? null;
-      const services: string[] = ext.services ?? [];
+      const services: string[] = ext.services ?? c.services ?? [];
+      if ((ext.is_seo_client ?? c.is_seo_client) === true && !services.includes("seo")) {
+        services.push("seo");
+      }
       const mood_status: string | null = ext.mood_status ?? null;
 
       // Latest comm log
