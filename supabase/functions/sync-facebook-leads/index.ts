@@ -16,7 +16,7 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { tenant_id, integration_id } = await req.json();
+    const { tenant_id, integration_id, form_id, since_date, days } = await req.json();
 
     if (!tenant_id) {
       return new Response(
@@ -60,6 +60,16 @@ serve(async (req) => {
     let totalSkipped = 0;
     const errors: string[] = [];
 
+    // Compute since timestamp (unix seconds)
+    let sinceSec: number;
+    if (since_date) {
+      sinceSec = Math.floor(new Date(since_date).getTime() / 1000);
+    } else if (days && Number.isFinite(days)) {
+      sinceSec = Math.floor((Date.now() - Number(days) * 24 * 60 * 60 * 1000) / 1000);
+    } else {
+      sinceSec = Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000);
+    }
+
     for (const integration of integrations) {
       let accessToken = integration.api_key;
       const settings = integration.settings as any;
@@ -83,20 +93,25 @@ serve(async (req) => {
       }
 
       const formMappings = settings?.form_mappings || {};
-      
-      if (Object.keys(formMappings).length === 0) {
-        continue;
+
+      // Build the list of forms to sync.
+      // If form_id explicitly provided, sync only it (even if not in mappings — use empty mapping).
+      let formsToProcess: Array<[string, any]>;
+      if (form_id) {
+        formsToProcess = [[form_id, formMappings[form_id] || {}]];
+      } else {
+        formsToProcess = Object.entries(formMappings);
+        if (formsToProcess.length === 0) continue;
       }
 
-      // Process each mapped form
-      for (const [formId, mapping] of Object.entries(formMappings)) {
+      // Process each form
+      for (const [formId, mapping] of formsToProcess) {
         const formMapping = mapping as any;
         
         try {
           
-          // Fetch leads from Facebook - get last 30 days
-          const since = Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000);
-          const leadsUrl = `https://graph.facebook.com/v21.0/${formId}/leads?access_token=${accessToken}&filtering=[{"field":"time_created","operator":"GREATER_THAN","value":${since}}]&limit=500`;
+          // Fetch leads from Facebook using computed since
+          const leadsUrl = `https://graph.facebook.com/v21.0/${formId}/leads?access_token=${accessToken}&filtering=[{"field":"time_created","operator":"GREATER_THAN","value":${sinceSec}}]&limit=500`;
           
           const leadsResponse = await fetch(leadsUrl);
           const leadsData = await leadsResponse.json();

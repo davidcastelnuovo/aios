@@ -2532,6 +2532,7 @@ function LeadSourceConfig({
     
     try {
       const formId = configuration.facebook_form_id;
+      const integrationId = configuration.facebook_integration_id;
       const now = new Date();
       let fromDate: string | undefined;
       
@@ -2545,6 +2546,21 @@ function LeadSourceConfig({
         const w = new Date(now);
         w.setDate(w.getDate() - 7);
         fromDate = new Date(w.getFullYear(), w.getMonth(), w.getDate()).toISOString();
+      }
+
+      // First, trigger a sync from Facebook for this specific form so the local DB is up to date.
+      try {
+        await supabase.functions.invoke("sync-facebook-leads", {
+          body: {
+            tenant_id: tenantId,
+            integration_id: integrationId,
+            form_id: formId,
+            since_date: fromDate || configuration.sync_since_date || undefined,
+            days: pullDateRange === "all" ? 90 : undefined,
+          },
+        });
+      } catch (syncErr) {
+        console.warn("sync-facebook-leads invoke failed (continuing with local query):", syncErr);
       }
 
       let query = supabase
@@ -2821,7 +2837,7 @@ function LeadSourceConfig({
         onClose={() => setShowFbDialog(false)}
         tenantId={tenantId}
         configuration={configuration}
-        onSave={(selected) => {
+        onSave={async (selected) => {
           onBulkConfigChange({
             facebook_integration_id: selected.integrationId,
             facebook_page_id: selected.pageId,
@@ -2831,6 +2847,45 @@ function LeadSourceConfig({
             facebook_form_fields: selected.formFields || [],
           });
           setShowFbDialog(false);
+
+          // Register form in tenant_integrations.settings.form_mappings so cron + sync include it,
+          // then trigger an initial sync.
+          try {
+            const { data: integ } = await supabase
+              .from("tenant_integrations")
+              .select("id, settings")
+              .eq("id", selected.integrationId)
+              .maybeSingle();
+            if (integ) {
+              const currentSettings = (integ.settings as any) || {};
+              const formMappings = { ...(currentSettings.form_mappings || {}) };
+              if (!formMappings[selected.formId]) {
+                formMappings[selected.formId] = {
+                  form_name: selected.formName,
+                  page_id: selected.pageId,
+                  page_name: selected.pageName,
+                  agency_id: null,
+                  sales_person_ids: [],
+                  fields: {},
+                };
+                await supabase
+                  .from("tenant_integrations")
+                  .update({ settings: { ...currentSettings, form_mappings: formMappings } })
+                  .eq("id", selected.integrationId);
+              }
+            }
+            // Kick off an initial sync (fire-and-forget)
+            supabase.functions.invoke("sync-facebook-leads", {
+              body: {
+                tenant_id: tenantId,
+                integration_id: selected.integrationId,
+                form_id: selected.formId,
+                days: 30,
+              },
+            }).catch((e) => console.warn("Initial FB sync failed:", e));
+          } catch (e) {
+            console.warn("Failed to register form mapping:", e);
+          }
         }}
       />
     </>
