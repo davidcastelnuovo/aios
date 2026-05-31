@@ -141,6 +141,38 @@ export function TestFlowWithLeadDialog({
 
   // Extract facebook_form_id from trigger config for filtering
   const facebookFormId = triggerConfig?.facebook_form_id || null;
+  const facebookIntegrationId = triggerConfig?.facebook_integration_id || null;
+  const [isSyncingFb, setIsSyncingFb] = useState(false);
+
+  const handleSyncFacebookNow = async () => {
+    if (!tenantId || !facebookFormId || !facebookIntegrationId) {
+      toast({ title: "חסרים נתונים", description: "לא נמצא טופס פייסבוק ב-trigger", variant: "destructive" });
+      return;
+    }
+    setIsSyncingFb(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("sync-facebook-leads", {
+        body: {
+          tenant_id: tenantId,
+          integration_id: facebookIntegrationId,
+          form_id: facebookFormId,
+          since_date: dateFilter.from,
+          days: dateRange === "last_week" ? 7 : undefined,
+        },
+      });
+      if (error) throw error;
+      const synced = (data as any)?.synced ?? 0;
+      const skipped = (data as any)?.skipped ?? 0;
+      toast({ title: "סנכרון הושלם", description: `${synced} לידים חדשים, ${skipped} כפולים` });
+      await queryClient.invalidateQueries({ queryKey: ["leads-for-flow-test"] });
+    } catch (e: any) {
+      console.error(e);
+      toast({ title: "שגיאת סנכרון", description: e?.message || "כשל בסנכרון מפייסבוק", variant: "destructive" });
+    } finally {
+      setIsSyncingFb(false);
+    }
+  };
+
 
   // Fetch leads with date filtering and optional form ID filtering
   const { data: leads = [], isLoading: leadsLoading } = useQuery({
