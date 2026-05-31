@@ -624,6 +624,19 @@ export default function Integrations() {
       route: "unified-settings",
       gradient: "bg-gradient-to-r from-fuchsia-600 to-purple-700",
     },
+    {
+      icon: <Music2 className="h-6 w-6" />,
+      title: "TikTok",
+      description: "סנכרון נתוני סרטונים אורגניים מחשבון TikTok לדוחות",
+      features: [
+        "פרופיל ועוקבים",
+        "סרטונים: צפיות, לייקים, תגובות, שיתופים",
+        "שיעור מעורבות לכל סרטון",
+      ],
+      isConnected: !!tiktokIntegration,
+      route: "tiktok-settings",
+      gradient: "bg-gradient-to-r from-fuchsia-500 to-cyan-400",
+    },
   ];
 
   return (
