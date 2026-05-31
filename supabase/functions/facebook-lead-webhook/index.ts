@@ -87,6 +87,25 @@ serve(async (req) => {
               const formId = change.value.form_id;
               const pageId = change.value.page_id;
 
+              // Stamp last_webhook_at on integrations that own this page (best-effort)
+              try {
+                const { data: pageInts } = await supabase
+                  .from('tenant_integrations')
+                  .select('id, settings')
+                  .eq('integration_type', 'facebook_lead_ads')
+                  .eq('is_active', true);
+                for (const pi of pageInts ?? []) {
+                  const s = (pi.settings as any) ?? {};
+                  if (s?.page_subscriptions?.[pageId]) {
+                    await supabase
+                      .from('tenant_integrations')
+                      .update({ settings: { ...s, last_webhook_at: new Date().toISOString() } })
+                      .eq('id', pi.id);
+                  }
+                }
+              } catch (e) { console.warn('last_webhook_at stamp failed', e); }
+
+
 
               // Find the integration for this page/form
               const { data: integrations, error: intError } = await supabase
