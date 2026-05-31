@@ -622,6 +622,10 @@ export default function DynamicTables() {
                   <TrendingUp className="ml-2 h-4 w-4" />
                   דוח SEO
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setShowTikTokDialog(true)}>
+                  <Music2 className="ml-2 h-4 w-4" />
+                  דוח TikTok (תוכן)
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           ) : canManageTables && mainTab === 'dashboards' ? (
