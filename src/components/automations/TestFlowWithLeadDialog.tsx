@@ -599,6 +599,22 @@ export function TestFlowWithLeadDialog({
                   )}
                 </div>
 
+                {/* Sync from Facebook button (only when trigger has a FB form) */}
+                {facebookFormId && facebookIntegrationId && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full gap-2"
+                    onClick={handleSyncFacebookNow}
+                    disabled={isSyncingFb}
+                  >
+                    {isSyncingFb ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                    משוך לידים מפייסבוק עכשיו
+                  </Button>
+                )}
+
+
+
                 {/* Search + Select All */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
