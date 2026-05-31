@@ -101,6 +101,8 @@ const emptyForm = {
 export default function WordPressSettings() {
   const { tenant: currentTenant, tenantId } = useCurrentTenant();
   const { isSuperAdmin } = useUserRole();
+  const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
+
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
   const queryClient = useQueryClient();
