@@ -410,13 +410,18 @@ export default function Clients() {
 
   if (!isOwner && !isSuperAdmin) {
     if (isRestrictedClientViewer) {
-      // Pure campaigners / SEO see only their assigned clients
-      // If campaignerId not yet loaded or no assignments, return empty (don't leak all clients)
+      // Pure campaigners see only their assigned clients
       const ids = Array.isArray(campaignerClientIds) ? campaignerClientIds : [];
       accessibleClients = clients?.filter(client => ids.includes(client.id));
+    } else if (isSeoOnlyViewer) {
+      // SEO users see all SEO-tagged clients (RLS already enforces tenant scope)
+      accessibleClients = clients?.filter((client: any) =>
+        client.is_seo_client === true ||
+        (Array.isArray(client.services) && client.services.includes("seo"))
+      );
     } else if (isTeamManager && userAgencyIds && userAgencyIds.length > 0) {
       // Team managers see all clients in their agencies
-      accessibleClients = clients?.filter(client => 
+      accessibleClients = clients?.filter(client =>
         userAgencyIds.includes(client.agency_id)
       );
     }
