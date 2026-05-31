@@ -174,7 +174,7 @@ export default function DMMDashboard() {
 
   // ── Fetch clients (base: always-safe fields) ──────────────────────────────
   const { data: rawClients = [], isLoading: clientsLoading, refetch } = useQuery({
-    queryKey: ["dmm-clients", tenantId, selectedAgency, userAgencyIds, crossTenantAgencyIds],
+    queryKey: ["dmm-clients", tenantId, selectedAgency, userAgencyIds, crossTenantAgencyIds, isSeo],
     queryFn: async () => {
       if (!tenantId) return [];
 
@@ -187,7 +187,7 @@ export default function DMMDashboard() {
       let query = supabase
         .from("clients")
         .select(`
-          id, name, status, agency_id,
+          id, name, status, agency_id, is_seo_client, services,
           client_team (
             campaigner_id,
             campaigners ( full_name )
@@ -201,6 +201,13 @@ export default function DMMDashboard() {
         query = query.eq("agency_id", selectedAgency);
       } else if (isOwner || isSuperAdmin) {
         // Owners/super admins: show own tenant + cross-tenant agencies
+        if (crossTenantAgencyIds.length > 0) {
+          query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+        } else {
+          query = query.eq("tenant_id", tenantId);
+        }
+      } else if (isSeo) {
+        // SEO users must see all SEO-tagged clients in their tenant even without direct assignment.
         if (crossTenantAgencyIds.length > 0) {
           query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
         } else {
@@ -222,7 +229,7 @@ export default function DMMDashboard() {
   });
 
   // ── Campaigner client filtering ───────────────────────────────────────────
-  const needsCampaignerFilter = (isCampaigner || isSeo) && !isOwner && !isTeamManager && !isSuperAdmin;
+  const needsCampaignerFilter = isCampaigner && !isSeo && !isOwner && !isTeamManager && !isSuperAdmin;
   
   const campaignerClientIds = useMemo(() => {
     if (!needsCampaignerFilter || !campaignerId) return null;
