@@ -1,27 +1,33 @@
-# תיקון "בדיקת חיבור" של Google Ads
-
 ## הבעיה
-החיבור הישיר ל-Google Ads בפועל **תקין** — ב-DB יש `is_active=true`, `api_key` קיים, `refresh_token` קיים, וה-token רוענן אוטומטית היום ב-08:58. אבל כשלוחצים על "בדיקת סטטוס" מקבלים את ההודעה "החיבור ל-Google Ads לא פעיל".
 
-הסיבה: חוסר התאמה בין השדות שמחזירה הפונקציה לבין השדות שהפרונט בודק.
+בדיאלוג "שיוך אתר ללקוח" (`src/pages/WordPressSettings.tsx`, סביב שורות 1242–1330) הבחירה של הלקוח היא `<Select>` רגיל ללא חיפוש, והרשימה מסוננת רק ללקוחות של הסוכנות שנבחרה (`linkAgency` → `clients.agency_id = linkAgency`).
 
-| מקום | שדה |
-|---|---|
-| Backend `checkConnectionStatus` מחזיר | `is_connected`, `is_expired`, `expires_at`, `integration_count` |
-| Frontend `checkStatusMutation.onSuccess` בודק | `data.connected` ומציג `data.message` |
+לכן "א.י זוהר עץ" לא מופיע ב-DMM-LTD — או שהוא משויך לסוכנות אחרת בארגון DMM, או שאין לו `agency_id` בכלל. בנוסף אין שדה חיפוש, אז גם כשהרשימה ארוכה אי אפשר למצוא לפי שם.
 
-`data.connected` תמיד `undefined` → ההודעה תמיד שלילית.
+## הפתרון
 
-## התיקון
-ב-`src/pages/GoogleAdsSettings.tsx`, ב-`onSuccess` של `checkStatusMutation`:
+### 1. רשימת לקוחות מורחבת (שאילתה)
+ב-`linkClients` query (שורות 452–475):
+- כשנבחרה סוכנות — להביא גם לקוחות עם `agency_id = linkAgency` וגם לקוחות באותו `tenant_id` עם `agency_id IS NULL` (כך שלקוחות לא משויכים לסוכנות יופיעו ולא ייעלמו).
+- להוסיף הודעת עזרה קטנה כשמסומנת סוכנות: "מציג לקוחות הסוכנות + לקוחות ללא סוכנות בארגון".
+- כשלא נבחרה סוכנות אך יש `linkEffectiveTenantId` — להמשיך להביא את כל לקוחות הארגון (כבר עובד).
 
-1. להחליף את הבדיקה ל-`data?.is_connected && !data?.is_expired`.
-2. הודעת ה-success להציג את `integration_count` ואת `expires_at` בעברית.
-3. הודעת ה-warning להבחין בין שני מקרים:
-   - אין חיבור (`is_connected === false`) → "לא נמצא חיבור פעיל ל-Google Ads".
-   - יש חיבור אבל פג תוקף (`is_expired === true`) → "הטוקן פג תוקף, נדרש חיבור מחדש".
+### 2. Combobox עם חיפוש במקום Select
+להחליף את ה-`<Select>` של הלקוח (שורות ~1307–1326) ב-Combobox מבוסס `Popover` + `Command` (כמו ב-`src/components/ui/command.tsx`, דפוס שכבר בשימוש בפרויקט):
+- שדה חיפוש בעברית "חפש לקוח לפי שם…"
+- סינון client-side על `c.name` (כולל normalize לרווחים/נקודות כדי ש-"אי זוהר" ימצא "א.י זוהר עץ").
+- הצגת שם הארגון בסוגריים כשהלקוח חוצה-ארגוני (כמו היום).
+- אופציית "ללא" בראש הרשימה.
+- הצגת state ריק: "לא נמצאו לקוחות" / "אין לקוחות בארגון".
 
-## קבצים שישתנו
-- `src/pages/GoogleAdsSettings.tsx` — תיקון `checkStatusMutation.onSuccess` (כ-6 שורות).
+### 3. ללא שינויים נוספים
+- שמירה (`save_link` mutation), RLS, ועמודת ה-`Select` של ה-tenant/agency נשארים כפי שהם.
+- לא נוגעים בטופס "הוסף/ערוך אתר" הגדול (שורות 700–818) — רק בדיאלוג השיוך המהיר.
 
-ללא שינויים ב-edge function, ללא שינויי DB, ללא נגיעה ב-GA/GSC.
+## פרטים טכניים
+
+- קובץ יחיד שמשתנה: `src/pages/WordPressSettings.tsx`.
+- שאילתה: שינוי `q = q.eq("agency_id", linkAgency)` ל-`q = q.or(\`agency_id.eq.${linkAgency},and(agency_id.is.null,tenant_id.eq.${linkEffectiveTenantId})\`)` (עם `linkEffectiveTenantId` ידוע).
+- Combobox: `Popover` + `Command`/`CommandInput`/`CommandList`/`CommandItem` (קומפוננטות קיימות ב-`@/components/ui`).
+- שמירה על `dir="rtl"` בתוך ה-Popover.
+- אין שינוי DB / edge functions / RLS.
