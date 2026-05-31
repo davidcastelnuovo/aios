@@ -1,27 +1,31 @@
-## הבעיה
+# תיקון כפילות בהתראות על משימה חדשה
 
-לכרמן יש שתי דליפות סקופ:
+## הסיבה לכפילות
 
-1. **אין הגבלת קמפיינר** — כש`callerCampaignerId` מזוהה (קמפיינר ששלח הודעה בקבוצה), הכלי `list_clients` עדיין מחזיר את כל הלקוחות בטננט אלא אם המודל בוחר להעביר `campaigner_id`. אין שום אכיפה בצד-שרת ואין הוראה בפרומפט.
-2. **בלבול ארגון/סוכנות** — `list_clients` ו-`search_entities` לא מקבלים `agency_id` כפילטר. כשמשתמש שואל "לקוחות בסוכנות מרקטינג קפטן", המודל מחזיר לקוחות מכל הטננט.
+כשפליקס יוצר משימה, האוטומציה `task_assigned` נורית **פעמיים**:
 
-בנוסף, ה-system prompt של כרמן הוא **hard-coded** ב-`run-ai-agent/index.ts` (השדה `ai_agents.system_prompt` ריק). המשתמש מבקש שההנחיות יישמרו גם ב**מרכז הידע** וגם ב**זיכרון** של כרמן, לא רק בקוד.
+1. **טריגר DB** — `trg_notify_task_assigned` על טבלת `tasks` (AFTER INSERT OR UPDATE OF campaigner_id) קורא ל-`trigger-automation` עם `trigger_type='task_assigned'`.
+   (מיגרציה `20260527143514_*.sql`)
+
+2. **קריאה מהפרונט** — `src/components/forms/AddTaskForm.tsx` (שורות 354-371) קורא ל-`trigger-automation` עם אותו `trigger_type='task_assigned'` מיד אחרי ה-insert.
+
+בנוסף, `supabase/functions/webhook-task-intake/index.ts` (שורות 448-480) קורא ל-`task_assigned` אחרי insert של משימה דרך webhook — גם זה כפול מול ה-DB trigger.
 
 ## הפתרון
 
-### 1. אכיפה בצד-שרת ב-`supabase/functions/run-ai-agent/index.ts`
+נשאיר את **טריגר ה-DB כמקור יחיד** ל-`task_assigned`, כי הוא תופס כל מסלול יצירה (טופס, AI agent כרמן, webhook, אוטומציות אחרות, סנכרון), ונסיר את הקריאות הכפולות מהקוד.
 
-**`list_clients`** — אם `callerCampaignerId` קיים והקורא הוא קמפיינר (לא admin/owner):
-- ברירת מחדל: לסנן ל-clients המשוייכים אליו דרך `client_team` (קיים כבר הלוגיקה — רק להפעיל אוטומטית כש-`campaigner_id`/`campaigner_name` לא סופקו).
-- ברירת מחדל: `status in ('active','onboarding')` אלא אם המשתמש ביקש מפורשות סטטוס אחר.
-- להוסיף פרמטר `agency_id` ולהעביר ל-query.
+### שינויים
 
-**`get_client_info`** — לחסום אם הלקוח לא מופיע ב-`client_team` של הקורא (כש-callerCampaignerId קיים והוא לא admin).
+1. **`src/components/forms/AddTaskForm.tsx`** — להסיר את הבלוק `await supabase.functions.invoke('trigger-automation', { body: { trigger_type: 'task_assigned', ... } })` (שורות 353-371). ה-DB trigger ידאג לזה.
 
-**`search_entities`** — כשהקורא הוא קמפיינר ו-`entity_type='client'`: לסנן דרך client_team. להוסיף `agency_id` אופציונלי.
+2. **`supabase/functions/webhook-task-intake/index.ts`** — להסיר את הבלוק "Also trigger task_assigned automation if campaigner was assigned" (שורות 448-480). ה-DB trigger יטפל בזה אוטומטית כשה-task נכנס עם `campaigner_id`.
 
-**זיהוי תפקיד הקורא** — לקרוא `user_roles` של ה-user המקושר לקמפיינר; אם `admin`/`owner`/`super_admin` — לא לחסום.
+3. ללא שינויים ב:
+   - `EditTaskDialog.tsx` — שולח `task_calendar_created` (לא קשור).
+   - `trigger-automation` — נשאר כפי שהוא; ה-deduplication נעשה במקור.
+   - שאר הטריגרים (`task_overdue`, `task_status_changed`) — לא משפיעים.
 
-### 2. עדכון ה-System Prompt של כרמן
+## בדיקה אחרי
 
-להוסיף 2 כללי-זה
+יצירת משימה ידנית דרך הטופס וצפייה בלוגים של `trigger-automation` — צריך להופיע ריצה אחת בלבד של `task_assigned` במקום שתיים.
