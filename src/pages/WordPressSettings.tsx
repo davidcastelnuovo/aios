@@ -470,21 +470,26 @@ export default function WordPressSettings() {
   const linkEffectiveTenantId = linkSelectedAgency?.tenant_id || linkTenantId || linkSite?.tenant_id;
 
   const { data: linkClients = [] } = useQuery<Client[]>({
-    queryKey: ["clients-for-link", linkEffectiveTenantId, linkAgency],
+    queryKey: ["clients-for-link", linkEffectiveTenantId, linkAgency, tenantId],
     queryFn: async () => {
-      if (!linkEffectiveTenantId && !linkAgency) return [];
+      // Allow finding the client across: the chosen agency, the site's/agency's tenant,
+      // AND the user's own tenant (e.g. site sits in DMM but client lives in DMM-MC).
+      const tenantIds = Array.from(
+        new Set([linkEffectiveTenantId, tenantId].filter(Boolean) as string[])
+      );
+      if (tenantIds.length === 0 && !linkAgency) return [];
+
       let q = supabase
         .from("clients")
         .select("id, name, tenant_id, tenants(name)")
         .order("name");
-      if (linkAgency && linkEffectiveTenantId) {
-        // Show clients in the chosen agency + unassigned clients in the same tenant,
-        // so a client without agency (e.g. א.י זוהר עץ) is still findable.
-        q = q.or(`agency_id.eq.${linkAgency},and(agency_id.is.null,tenant_id.eq.${linkEffectiveTenantId})`);
+
+      if (linkAgency && tenantIds.length > 0) {
+        q = q.or(`agency_id.eq.${linkAgency},tenant_id.in.(${tenantIds.join(",")})`);
       } else if (linkAgency) {
         q = q.eq("agency_id", linkAgency);
-      } else if (linkEffectiveTenantId) {
-        q = q.eq("tenant_id", linkEffectiveTenantId);
+      } else {
+        q = q.in("tenant_id", tenantIds);
       }
 
       const { data, error } = await q;
@@ -496,8 +501,9 @@ export default function WordPressSettings() {
         tenant_name: c.tenants?.name,
       }));
     },
-    enabled: !!(linkEffectiveTenantId || linkAgency),
+    enabled: !!(linkEffectiveTenantId || linkAgency || tenantId),
   });
+
 
   const openLink = (site: WordPressSite) => {
     setLinkSite(site);
