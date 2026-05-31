@@ -245,9 +245,12 @@ export default function DMMDashboard() {
   }, [rawClients, needsCampaignerFilter, campaignerId]);
 
   const filteredByRole = useMemo(() => {
+    if (isSeo && !isOwner && !isTeamManager && !isSuperAdmin) {
+      return rawClients.filter((c: any) => isSeoTaggedClient(c));
+    }
     if (!needsCampaignerFilter || !campaignerClientIds) return rawClients;
     return rawClients.filter((c: any) => campaignerClientIds.has(c.id));
-  }, [rawClients, needsCampaignerFilter, campaignerClientIds]);
+  }, [rawClients, isSeo, isOwner, isTeamManager, isSuperAdmin, needsCampaignerFilter, campaignerClientIds]);
 
   // ── Fetch CRM extended fields (tier, services, mood_status) ────────────────
   // These columns are added by migration 20260407_dmm_crm_adaptation.sql
