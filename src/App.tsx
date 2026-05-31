@@ -64,6 +64,7 @@ const GoogleAnalyticsSettings = lazy(() => import("./pages/GoogleAnalyticsSettin
 const MakeSettings = lazy(() => import("./pages/MakeSettings"));
 const GoogleSearchConsoleSettings = lazy(() => import("./pages/GoogleSearchConsoleSettings"));
 const AhrefsSettings = lazy(() => import("./pages/AhrefsSettings"));
+const TikTokSettings = lazy(() => import("./pages/TikTokSettings"));
 const Integrations = lazy(() => import("./pages/Integrations"));
 const SiteAnalytics = lazy(() => import("./pages/SiteAnalytics"));
 const RankTracking = lazy(() => import("./pages/RankTracking"));
@@ -205,6 +206,7 @@ const App = () => (
                   <Route path="/t/:tenantSlug/google-analytics-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><GoogleAnalyticsSettings /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/google-search-console-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><GoogleSearchConsoleSettings /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/ahrefs-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><AhrefsSettings /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/tiktok-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><TikTokSettings /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/make-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><MakeSettings /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/site-analytics" element={<ProtectedRoute requiredPermission="site_analytics"><AppLayout><SiteAnalytics /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/rank-tracking" element={<ProtectedRoute requiredPermission="rank_tracking"><AppLayout><RankTracking /></AppLayout></ProtectedRoute>} />

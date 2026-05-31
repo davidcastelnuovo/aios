@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Webhook, Facebook, MessageCircle, ArrowLeft, Settings, TrendingUp, Calculator, Zap, Search, Video, Mail, Brain, Phone, Globe, ShoppingCart, Link2, Send } from "lucide-react";
+import { Webhook, Facebook, MessageCircle, ArrowLeft, Settings, TrendingUp, Calculator, Zap, Search, Video, Mail, Brain, Phone, Globe, ShoppingCart, Link2, Send, Music2 } from "lucide-react";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -326,6 +326,22 @@ export default function Integrations() {
     },
     enabled: !!currentTenantId,
   });
+  // Check TikTok integration status
+  const { data: tiktokIntegration } = useQuery({
+    queryKey: ['tiktok-integration', currentTenantId],
+    queryFn: async () => {
+      if (!currentTenantId) return null;
+      const { data } = await supabase
+        .from('tenant_integrations')
+        .select('*')
+        .eq('tenant_id', currentTenantId)
+        .eq('integration_type', 'tiktok')
+        .eq('is_active', true)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!currentTenantId,
+  });
 
   const integrations: IntegrationCardProps[] = [
     {
@@ -607,6 +623,19 @@ export default function Integrations() {
       isConnected: (unifiedConnections?.length || 0) > 0,
       route: "unified-settings",
       gradient: "bg-gradient-to-r from-fuchsia-600 to-purple-700",
+    },
+    {
+      icon: <Music2 className="h-6 w-6" />,
+      title: "TikTok",
+      description: "סנכרון נתוני סרטונים אורגניים מחשבון TikTok לדוחות",
+      features: [
+        "פרופיל ועוקבים",
+        "סרטונים: צפיות, לייקים, תגובות, שיתופים",
+        "שיעור מעורבות לכל סרטון",
+      ],
+      isConnected: !!tiktokIntegration,
+      route: "tiktok-settings",
+      gradient: "bg-gradient-to-r from-fuchsia-500 to-cyan-400",
     },
   ];
 

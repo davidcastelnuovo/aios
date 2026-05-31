@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Table2, FileSpreadsheet, Pencil, Trash2, ChevronDown, ChevronRight, Facebook, Building2, User, X, Check, ChevronsUpDown, TrendingUp, AlertTriangle, ShoppingCart, LayoutDashboard } from "lucide-react";
+import { Plus, Table2, FileSpreadsheet, Pencil, Trash2, ChevronDown, ChevronRight, Facebook, Building2, User, X, Check, ChevronsUpDown, TrendingUp, AlertTriangle, ShoppingCart, LayoutDashboard, Music2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
@@ -23,6 +23,7 @@ import { GoogleAnalyticsTableDialog } from "@/components/dynamic-tables/GoogleAn
 import { GoogleSearchConsoleTableDialog } from "@/components/dynamic-tables/GoogleSearchConsoleTableDialog";
 import { AhrefsTableDialog } from "@/components/dynamic-tables/AhrefsTableDialog";
 import { SeoReportDialog } from "@/components/dynamic-tables/SeoReportDialog";
+import { TikTokTableDialog } from "@/components/dynamic-tables/TikTokTableDialog";
 import { TableCardAlerts } from "@/components/dynamic-tables/TableCardAlerts";
 import { CategorySyncControl } from "@/components/dynamic-tables/CategorySyncControl";
 
@@ -96,6 +97,7 @@ export default function DynamicTables() {
   const [showGSCDialog, setShowGSCDialog] = useState(false);
   const [showAhrefsDialog, setShowAhrefsDialog] = useState(false);
   const [showSeoReportDialog, setShowSeoReportDialog] = useState(false);
+  const [showTikTokDialog, setShowTikTokDialog] = useState(false);
   const [editingTable, setEditingTable] = useState<CrmTable | null>(null);
   const [deletingTable, setDeletingTable] = useState<CrmTable | null>(null);
   const [editingDashboard, setEditingDashboard] = useState<{ id: string; name: string } | null>(null);
@@ -620,6 +622,10 @@ export default function DynamicTables() {
                   <TrendingUp className="ml-2 h-4 w-4" />
                   דוח SEO
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setShowTikTokDialog(true)}>
+                  <Music2 className="ml-2 h-4 w-4" />
+                  דוח TikTok (תוכן)
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           ) : canManageTables && mainTab === 'dashboards' ? (
@@ -792,6 +798,8 @@ export default function DynamicTables() {
                           <svg className="h-5 w-5 flex-shrink-0" viewBox="0 0 24 24" fill="none">
                             <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" fill="#4285F4"/>
                           </svg>
+                        ) : table.integration_type === 'tiktok_content' ? (
+                          <Music2 className="h-5 w-5 text-fuchsia-500 flex-shrink-0" />
                         ) : (
                           <FileSpreadsheet className="h-5 w-5 flex-shrink-0" />
                         )}
@@ -1332,6 +1340,12 @@ export default function DynamicTables() {
       <SeoReportDialog
         open={showSeoReportDialog}
         onOpenChange={setShowSeoReportDialog}
+        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
+      />
+
+      <TikTokTableDialog
+        open={showTikTokDialog}
+        onOpenChange={setShowTikTokDialog}
         assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
       />
     </div>
