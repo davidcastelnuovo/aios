@@ -23,6 +23,7 @@ import { GoogleAnalyticsTableDialog } from "@/components/dynamic-tables/GoogleAn
 import { GoogleSearchConsoleTableDialog } from "@/components/dynamic-tables/GoogleSearchConsoleTableDialog";
 import { AhrefsTableDialog } from "@/components/dynamic-tables/AhrefsTableDialog";
 import { SeoReportDialog } from "@/components/dynamic-tables/SeoReportDialog";
+import { TikTokTableDialog } from "@/components/dynamic-tables/TikTokTableDialog";
 import { TableCardAlerts } from "@/components/dynamic-tables/TableCardAlerts";
 import { CategorySyncControl } from "@/components/dynamic-tables/CategorySyncControl";
 
