@@ -466,10 +466,10 @@ export default function Clients() {
     : moodFilteredClients;
 
   const searchedClients = searchTerm 
-    ? moodFilteredClients?.filter(client => 
+    ? serviceFilteredClients?.filter(client => 
         client.name.toLowerCase().includes(searchTerm.toLowerCase())
       )
-    : moodFilteredClients;
+    : serviceFilteredClients;
 
   const hideInactiveFiltered = hideInactive 
     ? searchedClients?.filter(client => client.status === "active" || client.status === "onboarding")
