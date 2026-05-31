@@ -68,8 +68,10 @@ export default function Clients() {
   const { userAgencyIds } = useUserAgencies();
   const { canViewFinance } = useUserPermissions();
   const { campaignerId, isCampaigner, isSeo, isTeamManager, isOwner, isSuperAdmin } = useUserRole();
-  // Restricted viewer: campaigner OR seo (no team_manager / owner / super_admin)
-  const isRestrictedClientViewer = (isCampaigner || isSeo) && !isTeamManager && !isOwner && !isSuperAdmin;
+  // Restricted viewer: pure campaigner only (no team_manager / owner / super_admin / seo-only)
+  const isRestrictedClientViewer = isCampaigner && !isTeamManager && !isOwner && !isSuperAdmin;
+  // SEO-only viewer: sees all SEO-tagged clients in tenant (RLS enforces scope)
+  const isSeoOnlyViewer = isSeo && !isCampaigner && !isTeamManager && !isOwner && !isSuperAdmin;
   // Deep-link support: ?clientId=xxx&tab=updates (from DMMDashboard navigation)
   const [searchParams] = useSearchParams();
   const deepLinkClientId = searchParams.get("clientId") ?? undefined;
