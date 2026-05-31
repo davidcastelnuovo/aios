@@ -87,6 +87,7 @@ type CRMClientFields = {
   tier?: string | null;
   services?: string[] | null;
   mood_status?: string | null;
+  is_seo_client?: boolean | null;
 };
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -101,6 +102,10 @@ function mapMoodToCommStatus(mood: string | null): 'normal' | 'sensitive' | 'com
     case 'churn_risk': return 'complaint';
     default: return null;
   }
+}
+
+function isSeoTaggedClient(client: { is_seo_client?: boolean | null; services?: string[] | null }) {
+  return client.is_seo_client === true || (Array.isArray(client.services) && client.services.includes("seo"));
 }
 
 function StatusDot({ status }: { status: OverallStatus }) {
