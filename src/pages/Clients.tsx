@@ -454,6 +454,17 @@ export default function Clients() {
     ? campaignerFilteredClients?.filter(client => client.mood_status === selectedMoodStatus)
     : campaignerFilteredClients;
 
+  // Filter by product/service tag
+  const serviceFilteredClients = selectedService && selectedService !== "all"
+    ? moodFilteredClients?.filter((client: any) => {
+        const services: string[] = Array.isArray(client.services) ? client.services : [];
+        if (selectedService === "seo") {
+          return client.is_seo_client === true || services.includes("seo");
+        }
+        return services.includes(selectedService);
+      })
+    : moodFilteredClients;
+
   const searchedClients = searchTerm 
     ? moodFilteredClients?.filter(client => 
         client.name.toLowerCase().includes(searchTerm.toLowerCase())
