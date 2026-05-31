@@ -1,33 +1,38 @@
 ## הבעיה
+משתמשים עם תפקיד `seo` (כמו עופר חייק) לא רואים שום לקוח. שתי סיבות:
 
-בדיאלוג "שיוך אתר ללקוח" (`src/pages/WordPressSettings.tsx`, סביב שורות 1242–1330) הבחירה של הלקוח היא `<Select>` רגיל ללא חיפוש, והרשימה מסוננת רק ללקוחות של הסוכנות שנבחרה (`linkAgency` → `clients.agency_id = linkAgency`).
+1. **אין RLS policy** על `clients` שמתירה לתפקיד `seo` לקרוא — קיימות policies רק ל-owner, team_manager, campaigner, sales_person, super_admin.
+2. **בפרונט (`Clients.tsx`)** משתמש SEO מסווג כ-`isRestrictedClientViewer` ורואה רק לקוחות שהוקצו אליו ב-`client_team` (אותה התנהגות כמו campaigner).
 
-לכן "א.י זוהר עץ" לא מופיע ב-DMM-LTD — או שהוא משויך לסוכנות אחרת בארגון DMM, או שאין לו `agency_id` בכלל. בנוסף אין שדה חיפוש, אז גם כשהרשימה ארוכה אי אפשר למצוא לפי שם.
+לקוח מסומן כ-"SEO" באמצעות `clients.services` (מערך הכולל `'seo'`) או `clients.is_seo_client = true`.
 
 ## הפתרון
+משתמש SEO צריך לראות את **כל הלקוחות המתויגים SEO** ב-tenant הנוכחי (וב-cross-tenant agencies משותפות, בעקבות הדפוס הקיים), ולא רק כאלה שהוקצו אישית.
 
-### 1. רשימת לקוחות מורחבת (שאילתה)
-ב-`linkClients` query (שורות 452–475):
-- כשנבחרה סוכנות — להביא גם לקוחות עם `agency_id = linkAgency` וגם לקוחות באותו `tenant_id` עם `agency_id IS NULL` (כך שלקוחות לא משויכים לסוכנות יופיעו ולא ייעלמו).
-- להוסיף הודעת עזרה קטנה כשמסומנת סוכנות: "מציג לקוחות הסוכנות + לקוחות ללא סוכנות בארגון".
-- כשלא נבחרה סוכנות אך יש `linkEffectiveTenantId` — להמשיך להביא את כל לקוחות הארגון (כבר עובד).
+### 1. Migration — RLS policy חדשה על `public.clients`
+```sql
+CREATE POLICY "SEO users view SEO-tagged clients"
+ON public.clients FOR SELECT
+USING (
+  has_role(auth.uid(), 'seo'::app_role)
+  AND (
+    is_seo_client = true
+    OR services @> ARRAY['seo']::text[]
+  )
+  AND (
+    tenant_id = get_user_tenant_id(auth.uid())
+    OR user_has_cross_tenant_agency_access(auth.uid(), agency_id)
+  )
+);
+```
 
-### 2. Combobox עם חיפוש במקום Select
-להחליף את ה-`<Select>` של הלקוח (שורות ~1307–1326) ב-Combobox מבוסס `Popover` + `Command` (כמו ב-`src/components/ui/command.tsx`, דפוס שכבר בשימוש בפרויקט):
-- שדה חיפוש בעברית "חפש לקוח לפי שם…"
-- סינון client-side על `c.name` (כולל normalize לרווחים/נקודות כדי ש-"אי זוהר" ימצא "א.י זוהר עץ").
-- הצגת שם הארגון בסוגריים כשהלקוח חוצה-ארגוני (כמו היום).
-- אופציית "ללא" בראש הרשימה.
-- הצגת state ריק: "לא נמצאו לקוחות" / "אין לקוחות בארגון".
+### 2. עדכון `src/pages/Clients.tsx`
+- להפריד בין `isCampaigner` ל-`isSeo` ב-`isRestrictedClientViewer` — לקמפיינר משאירים את ההתנהגות הקיימת (assigned only); ל-SEO משנים לסינון לפי תיוג.
+- במקום שבו מסננים כעת `accessibleClients` ל-restricted viewer, להוסיף ענף חדש: אם `isSeo && !isOwner && !isSuperAdmin && !isTeamManager`, להציג את כל הלקוחות ש-`is_seo_client === true || services?.includes('seo')` (RLS כבר תבטיח שזה רק ה-tenant/שיתופים).
 
-### 3. ללא שינויים נוספים
-- שמירה (`save_link` mutation), RLS, ועמודת ה-`Select` של ה-tenant/agency נשארים כפי שהם.
-- לא נוגעים בטופס "הוסף/ערוך אתר" הגדול (שורות 700–818) — רק בדיאלוג השיוך המהיר.
+### 3. הערות
+- הסינון בפרונט נשאר רשת ביטחון; ה-RLS היא ההגנה האמיתית.
+- אם קיים גם תפריט/דף אחר בו SEO צריך לראות לקוחות אלה (לדוגמה דשבורד SEO), אטפל בו רק אם תבקש — כרגע התלונה היא על מסך הלקוחות.
 
-## פרטים טכניים
-
-- קובץ יחיד שמשתנה: `src/pages/WordPressSettings.tsx`.
-- שאילתה: שינוי `q = q.eq("agency_id", linkAgency)` ל-`q = q.or(\`agency_id.eq.${linkAgency},and(agency_id.is.null,tenant_id.eq.${linkEffectiveTenantId})\`)` (עם `linkEffectiveTenantId` ידוע).
-- Combobox: `Popover` + `Command`/`CommandInput`/`CommandList`/`CommandItem` (קומפוננטות קיימות ב-`@/components/ui`).
-- שמירה על `dir="rtl"` בתוך ה-Popover.
-- אין שינוי DB / edge functions / RLS.
+## שאלת הבהרה
+האם משתמשי SEO צריכים גם **לערוך** את הלקוחות המתויגים SEO (UPDATE), או רק לצפות? כרגע התוכנית מוסיפה הרשאת צפייה (SELECT) בלבד.

@@ -68,8 +68,10 @@ export default function Clients() {
   const { userAgencyIds } = useUserAgencies();
   const { canViewFinance } = useUserPermissions();
   const { campaignerId, isCampaigner, isSeo, isTeamManager, isOwner, isSuperAdmin } = useUserRole();
-  // Restricted viewer: campaigner OR seo (no team_manager / owner / super_admin)
-  const isRestrictedClientViewer = (isCampaigner || isSeo) && !isTeamManager && !isOwner && !isSuperAdmin;
+  // Restricted viewer: pure campaigner only (no team_manager / owner / super_admin / seo-only)
+  const isRestrictedClientViewer = isCampaigner && !isTeamManager && !isOwner && !isSuperAdmin;
+  // SEO-only viewer: sees all SEO-tagged clients in tenant (RLS enforces scope)
+  const isSeoOnlyViewer = isSeo && !isCampaigner && !isTeamManager && !isOwner && !isSuperAdmin;
   // Deep-link support: ?clientId=xxx&tab=updates (from DMMDashboard navigation)
   const [searchParams] = useSearchParams();
   const deepLinkClientId = searchParams.get("clientId") ?? undefined;
@@ -408,13 +410,18 @@ export default function Clients() {
 
   if (!isOwner && !isSuperAdmin) {
     if (isRestrictedClientViewer) {
-      // Pure campaigners / SEO see only their assigned clients
-      // If campaignerId not yet loaded or no assignments, return empty (don't leak all clients)
+      // Pure campaigners see only their assigned clients
       const ids = Array.isArray(campaignerClientIds) ? campaignerClientIds : [];
       accessibleClients = clients?.filter(client => ids.includes(client.id));
+    } else if (isSeoOnlyViewer) {
+      // SEO users see all SEO-tagged clients (RLS already enforces tenant scope)
+      accessibleClients = clients?.filter((client: any) =>
+        client.is_seo_client === true ||
+        (Array.isArray(client.services) && client.services.includes("seo"))
+      );
     } else if (isTeamManager && userAgencyIds && userAgencyIds.length > 0) {
       // Team managers see all clients in their agencies
-      accessibleClients = clients?.filter(client => 
+      accessibleClients = clients?.filter(client =>
         userAgencyIds.includes(client.agency_id)
       );
     }
