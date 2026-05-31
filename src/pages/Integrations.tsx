@@ -326,6 +326,22 @@ export default function Integrations() {
     },
     enabled: !!currentTenantId,
   });
+  // Check TikTok integration status
+  const { data: tiktokIntegration } = useQuery({
+    queryKey: ['tiktok-integration', currentTenantId],
+    queryFn: async () => {
+      if (!currentTenantId) return null;
+      const { data } = await supabase
+        .from('tenant_integrations')
+        .select('*')
+        .eq('tenant_id', currentTenantId)
+        .eq('integration_type', 'tiktok')
+        .eq('is_active', true)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!currentTenantId,
+  });
 
   const integrations: IntegrationCardProps[] = [
     {
