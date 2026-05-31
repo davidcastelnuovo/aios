@@ -40,20 +40,25 @@ serve(async (req) => {
         const { data: tenantId } = await supabase
           .rpc('get_user_tenant_id', { _user_id: user.id });
 
-        // Get shared agency IDs for this tenant
+        // Foreign agencies shared into our tenant
         const { data: sharedAgencies } = await supabase
           .from('agency_tenant_access')
           .select('agency_id')
           .eq('accessing_tenant_id', tenantId);
-        
         const sharedAgencyIds = sharedAgencies?.map(sa => sa.agency_id) || [];
 
-        // Build query to get:
-        // 1. Tables from user's tenant
-        // 2. Tables from shared agencies (regardless of their tenant)
+        // Agencies OWNED by our tenant (to catch tables created in another tenant
+        // but linked to one of our agencies — e.g. cross-tenant user added a table
+        // from their own tenant context but assigned it to our agency).
+        const { data: ownedAgencies } = await supabase
+          .from('agencies')
+          .select('id')
+          .eq('tenant_id', tenantId);
+        const ownedAgencyIds = ownedAgencies?.map(a => a.id) || [];
+
         let allTables: any[] = [];
 
-        // First, get tables from user's own tenant
+        // 1) Tables from user's own tenant
         let ownQuery = supabase
           .from('crm_tables')
           .select('*')
@@ -69,7 +74,7 @@ serve(async (req) => {
         if (ownError) throw ownError;
         allTables = ownTables || [];
 
-        // Then, get tables from shared agencies (that are NOT in user's tenant)
+        // 2) Tables in foreign tenants from shared agencies
         if (sharedAgencyIds.length > 0) {
           let sharedQuery = supabase
             .from('crm_tables')
@@ -91,6 +96,35 @@ serve(async (req) => {
           }
         }
 
+        // 3) Tables in foreign tenants linked to agencies WE own
+        if (ownedAgencyIds.length > 0) {
+          let ownedForeignQuery = supabase
+            .from('crm_tables')
+            .select('*')
+            .neq('tenant_id', tenantId)
+            .in('agency_id', ownedAgencyIds)
+            .order('category', { ascending: true, nullsFirst: false })
+            .order('created_at', { ascending: false });
+
+          if (agencyIdFilter && agencyIdFilter !== 'all') {
+            ownedForeignQuery = ownedForeignQuery.eq('agency_id', agencyIdFilter);
+          }
+
+          const { data: ownedForeignTables, error: ownedForeignError } = await ownedForeignQuery;
+          if (ownedForeignError) {
+            console.error('Error fetching owned-agency foreign tables:', ownedForeignError);
+          } else if (ownedForeignTables) {
+            allTables = [...allTables, ...ownedForeignTables];
+          }
+        }
+
+        // Dedupe by id
+        const seen = new Set<string>();
+        allTables = allTables.filter(t => {
+          if (seen.has(t.id)) return false;
+          seen.add(t.id);
+          return true;
+        });
 
         return new Response(JSON.stringify(allTables), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
