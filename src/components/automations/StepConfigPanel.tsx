@@ -2707,6 +2707,14 @@ function LeadSourceConfig({
             </div>
           )}
 
+          {/* Delivery mode: Pull (default) vs Webhook */}
+          <FacebookDeliveryModeSection
+            integrationId={configuration?.facebook_integration_id}
+            pageId={configuration?.facebook_page_id}
+            pageName={configuration?.facebook_page_name}
+            tenantId={tenantId}
+          />
+
           {/* Sync since date */}
           <div className="space-y-1">
             <Label className="text-right block text-xs">משוך לידים החל מתאריך (אופציונלי)</Label>
