@@ -142,18 +142,31 @@ serve(async (req) => {
           });
         }
 
-        // Use RPC function to get tenant_id (handles user_active_tenant fallback)
-        const { data: tenantId, error: tenantError } = await supabase
-          .rpc('get_user_tenant_id', { _user_id: user.id });
-
-        if (tenantError || !tenantId) {
-          console.error('Tenant lookup error:', tenantError);
-          return new Response(JSON.stringify({ 
-            error: 'User tenant not found. Please ensure you are assigned to a tenant.' 
-          }), {
-            status: 400,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
+        // Resolve tenant_id: prefer the owning tenant of the selected agency, so a table
+        // created by a cross-tenant user lives under the agency's tenant (and shows up
+        // there without relying on cross-tenant lookups).
+        let tenantId: string | null = null;
+        if (agency_id) {
+          const { data: agencyRow } = await supabase
+            .from('agencies')
+            .select('tenant_id')
+            .eq('id', agency_id)
+            .maybeSingle();
+          tenantId = agencyRow?.tenant_id ?? null;
+        }
+        if (!tenantId) {
+          const { data: fallbackTenantId, error: tenantError } = await supabase
+            .rpc('get_user_tenant_id', { _user_id: user.id });
+          if (tenantError || !fallbackTenantId) {
+            console.error('Tenant lookup error:', tenantError);
+            return new Response(JSON.stringify({
+              error: 'User tenant not found. Please ensure you are assigned to a tenant.'
+            }), {
+              status: 400,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          }
+          tenantId = fallbackTenantId;
         }
 
         const { data: table, error } = await supabase
