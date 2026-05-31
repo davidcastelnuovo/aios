@@ -32,9 +32,13 @@ import { toast } from "sonner";
 import {
   Globe, Plus, Trash2, Loader2, ExternalLink, RefreshCw,
   ShoppingCart, ArrowLeft, Settings, CheckCircle2, AlertCircle,
-  Edit, Key, Link2, UserPlus, MapPin,
+  Edit, Key, Link2, UserPlus, MapPin, Check, ChevronsUpDown,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { cn } from "@/lib/utils";
+
 
 interface WordPressSite {
   id: string;
