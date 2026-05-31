@@ -243,7 +243,6 @@ export default function WordPressSettings() {
     },
     enabled: !!(form.agency_id || form.tenant_id || tenantId || isSuperAdmin),
   });
-  });
 
   // Fetch all WordPress sites:
   // - super admin: all (or filtered by chosen tenant)
