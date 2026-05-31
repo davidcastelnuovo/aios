@@ -704,6 +704,26 @@ export default function Clients() {
               </Select>
             </div>
 
+            {/* Product / Service filter */}
+            <div className="space-y-2">
+              <Label>מוצר / שירות</Label>
+              <Select value={selectedService} onValueChange={setSelectedService}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-background">
+                  <SelectItem value="all">כל המוצרים</SelectItem>
+                  <SelectItem value="seo">SEO</SelectItem>
+                  <SelectItem value="ppc_google">PPC Google</SelectItem>
+                  <SelectItem value="ppc_meta">PPC Meta</SelectItem>
+                  <SelectItem value="social">Social</SelectItem>
+                  <SelectItem value="full_social">Full Social</SelectItem>
+                  <SelectItem value="social_meta">Social Meta</SelectItem>
+                  <SelectItem value="automation">Automation</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Status filter */}
             <div className="space-y-2">
               <Label>סטטוס לקוח</Label>
@@ -741,6 +761,7 @@ export default function Clients() {
                 onClick={() => {
                   setSelectedCampaigner("all");
                   setSelectedMoodStatus("all");
+                  setSelectedService("all");
                   setHideInactive(false);
                   setStatusFilter("all");
                 }}
