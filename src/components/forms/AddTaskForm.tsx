@@ -350,25 +350,9 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
       }]);
       if (error) throw error;
 
-      // Trigger automation
-      await supabase.functions.invoke('trigger-automation', {
-        body: {
-          trigger_type: 'task_assigned',
-          tenant_id: tenantId,
-          data: {
-            task_title: values.title,
-            task_notes: values.notes || '',
-            campaigner_id: finalCampaignerId || '',
-            campaigner_name: selectedCampaigner?.full_name || '',
-            campaigner_phone: selectedCampaigner?.phone || '',
-            campaigner_whatsapp_group_id: selectedCampaigner?.whatsapp_group_id || '',
-            client_name: entityName,
-            priority: values.priority,
-            status: values.status,
-            due_date: values.due_date || '',
-          }
-        }
-      });
+      // Note: task_assigned automation is fired by DB trigger trg_notify_task_assigned
+      // (AFTER INSERT OR UPDATE OF campaigner_id ON public.tasks). Do not invoke it
+      // from the client to avoid duplicate notifications.
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });

@@ -444,42 +444,11 @@ Deno.serve(async (req) => {
         console.error('⚠️ Error triggering inbound_webhook_task automation:', automationError);
       }
     }
-    
-    // Also trigger task_assigned automation if campaigner was assigned
-    if (campaignerId && tenantId) {
-      try {
-        const automationResponse = await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseKey}`,
-          },
-          body: JSON.stringify({
-            trigger_type: 'task_assigned',
-            data: {
-              id: task.id,
-              task_id: task.id,
-              title: task.title,
-              notes: task.notes,
-              due_date: task.due_date,
-              due_time: task.due_time,
-              priority: task.priority,
-              status: task.status,
-              campaigner_id: campaignerId,
-              client_id: clientId,
-            },
-            tenant_id: tenantId,
-          }),
-        });
-        
-        if (automationResponse.ok) {
-        } else {
-          console.error('⚠️ Failed to trigger task_assigned automation:', await automationResponse.text());
-        }
-      } catch (automationError) {
-        console.error('⚠️ Error triggering task_assigned automation:', automationError);
-      }
-    }
+
+    // Note: task_assigned automation is fired by DB trigger trg_notify_task_assigned
+    // on public.tasks (AFTER INSERT OR UPDATE OF campaigner_id). Do not invoke it
+    // from here to avoid duplicate notifications.
+
 
     return new Response(
       JSON.stringify({ 
