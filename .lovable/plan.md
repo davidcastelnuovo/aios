@@ -1,31 +1,60 @@
-# תיקון כפילות בהתראות על משימה חדשה
+# תיקון הצגת טבלאות חוצות-ארגון ב-Dynamic Tables
 
-## הסיבה לכפילות
+## הבעיה
+טבלת Google Ads חדשה ("פ.ד פסגות") נוצרה היום, שויכה לסוכנות MarketingCaptain וללקוח, אך לא מופיעה ברשימה.
 
-כשפליקס יוצר משימה, האוטומציה `task_assigned` נורית **פעמיים**:
+**שורש הבעיה:** הטבלה נשמרה עם `tenant_id` = `Promo` (ה-tenant הפעיל בעת היצירה), אך הסוכנות `MarketingCaptain` שייכת ל-tenant `marketingcaptain`. ב-`supabase/functions/crm-tables/index.ts` GET מחזיר רק:
+1. טבלאות עם `tenant_id` של המשתמש
+2. טבלאות מסוכנויות זרות ב-`agency_tenant_access`
 
-1. **טריגר DB** — `trg_notify_task_assigned` על טבלת `tasks` (AFTER INSERT OR UPDATE OF campaigner_id) קורא ל-`trigger-automation` עם `trigger_type='task_assigned'`.
-   (מיגרציה `20260527143514_*.sql`)
-
-2. **קריאה מהפרונט** — `src/components/forms/AddTaskForm.tsx` (שורות 354-371) קורא ל-`trigger-automation` עם אותו `trigger_type='task_assigned'` מיד אחרי ה-insert.
-
-בנוסף, `supabase/functions/webhook-task-intake/index.ts` (שורות 448-480) קורא ל-`task_assigned` אחרי insert של משימה דרך webhook — גם זה כפול מול ה-DB trigger.
+אין טיפול במקרה ההפוך — טבלה שנוצרה ב-tenant אחר אך משויכת ל**סוכנות שבבעלות ה-tenant הנוכחי**.
 
 ## הפתרון
 
-נשאיר את **טריגר ה-DB כמקור יחיד** ל-`task_assigned`, כי הוא תופס כל מסלול יצירה (טופס, AI agent כרמן, webhook, אוטומציות אחרות, סנכרון), ונסיר את הקריאות הכפולות מהקוד.
+### 1. `supabase/functions/crm-tables/index.ts` (GET)
+להוסיף שאילתה שלישית: למשוך את כל ה-`agency.id` של הסוכנויות בבעלות ה-tenant הנוכחי, ולהביא טבלאות עם `tenant_id != currentTenant AND agency_id IN (ownedAgencyIds)`. למזג עם התוצאות הקיימות תוך הימנעות מכפילויות (Set לפי id).
 
-### שינויים
+```text
+ownTenantTables  ∪  sharedAgencyTables  ∪  ownedAgencyForeignTables
+```
 
-1. **`src/components/forms/AddTaskForm.tsx`** — להסיר את הבלוק `await supabase.functions.invoke('trigger-automation', { body: { trigger_type: 'task_assigned', ... } })` (שורות 353-371). ה-DB trigger ידאג לזה.
+מבנה:
+- שאילתה 1 (קיימת): `tenant_id = currentTenant`
+- שאילתה 2 (קיימת): `tenant_id != currentTenant AND agency_id IN sharedAgencyIds`
+- שאילתה 3 (חדשה): `tenant_id != currentTenant AND agency_id IN ownedAgencyIds`
+  (`ownedAgencyIds` = `SELECT id FROM agencies WHERE tenant_id = currentTenant`)
 
-2. **`supabase/functions/webhook-task-intake/index.ts`** — להסיר את הבלוק "Also trigger task_assigned automation if campaigner was assigned" (שורות 448-480). ה-DB trigger יטפל בזה אוטומטית כשה-task נכנס עם `campaigner_id`.
+לאחר השינוי לדפלוי את הפונקציה (אוטומטי).
 
-3. ללא שינויים ב:
-   - `EditTaskDialog.tsx` — שולח `task_calendar_created` (לא קשור).
-   - `trigger-automation` — נשאר כפי שהוא; ה-deduplication נעשה במקור.
-   - שאר הטריגרים (`task_overdue`, `task_status_changed`) — לא משפיעים.
+### 2. ולידציה ב-POST (מניעת הישנות)
+לוודא ב-POST שגם אם המשתמש שולח `agency_id` ששייך ל-tenant אחר, ה-`tenant_id` של הטבלה יישמר כ-`tenant_id` של **הסוכנות** (אם קיימת), ולא של היוצר. זה ימנע כפילויות עתידיות ויבטיח שכל טבלה "שייכת" לארגון של הסוכנות שלה.
 
-## בדיקה אחרי
+לוגיקה:
+```
+if (agency_id) {
+  const ownerTenantId = SELECT tenant_id FROM agencies WHERE id = agency_id
+  insert with tenant_id = ownerTenantId
+} else {
+  insert with tenant_id = creatorTenantId (קיים)
+}
+```
 
-יצירת משימה ידנית דרך הטופס וצפייה בלוגים של `trigger-automation` — צריך להופיע ריצה אחת בלבד של `task_assigned` במקום שתיים.
+### 3. תיקון נתונים קיים (מיגרציה חד-פעמית)
+לעדכן את כל הטבלאות הקיימות שבהן `crm_tables.tenant_id` שונה מ-`agencies.tenant_id` של הסוכנות המשויכת, כך שיתאימו:
+
+```sql
+UPDATE crm_tables ct
+SET tenant_id = a.tenant_id
+FROM agencies a
+WHERE ct.agency_id = a.id
+  AND ct.tenant_id IS DISTINCT FROM a.tenant_id;
+```
+
+זה יחזיר מיידית את הטבלה "פ.ד פסגות" ל-tenant הנכון (marketingcaptain), ואת המשתמש יראה אותה ללא תלות בתיקוני ה-GET.
+
+### 4. RLS
+הטבלה `crm_tables` כבר מאפשרת קריאה לפי tenant_id ולפי גישה לסוכנות. לוודא שה-policies תומכות בקריאה גם דרך owned agency (אם לא — להוסיף policy).
+
+## קבצים שיושפעו
+- `supabase/functions/crm-tables/index.ts` (GET + POST)
+- מיגרציה חדשה לתיקון נתונים קיימים + בדיקת/הוספת RLS policy
