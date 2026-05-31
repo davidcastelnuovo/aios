@@ -1340,6 +1340,12 @@ export default function DynamicTables() {
         onOpenChange={setShowSeoReportDialog}
         assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
       />
+
+      <TikTokTableDialog
+        open={showTikTokDialog}
+        onOpenChange={setShowTikTokDialog}
+        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
+      />
     </div>
   );
 }
