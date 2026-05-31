@@ -64,6 +64,7 @@ const GoogleAnalyticsSettings = lazy(() => import("./pages/GoogleAnalyticsSettin
 const MakeSettings = lazy(() => import("./pages/MakeSettings"));
 const GoogleSearchConsoleSettings = lazy(() => import("./pages/GoogleSearchConsoleSettings"));
 const AhrefsSettings = lazy(() => import("./pages/AhrefsSettings"));
+const TikTokSettings = lazy(() => import("./pages/TikTokSettings"));
 const Integrations = lazy(() => import("./pages/Integrations"));
 const SiteAnalytics = lazy(() => import("./pages/SiteAnalytics"));
 const RankTracking = lazy(() => import("./pages/RankTracking"));
