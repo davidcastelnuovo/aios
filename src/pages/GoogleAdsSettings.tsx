@@ -380,10 +380,17 @@ export default function GoogleAdsSettings() {
       return data;
     },
     onSuccess: (data) => {
-      if (data?.connected) {
-        toast.success('החיבור ל-Google Ads פעיל');
+      if (data?.is_connected && !data?.is_expired) {
+        const count = data?.integration_count ?? 1;
+        const expiresAt = data?.expires_at ? new Date(data.expires_at).toLocaleString('he-IL') : null;
+        toast.success(
+          `החיבור ל-Google Ads פעיל${count > 1 ? ` (${count} חיבורים)` : ''}` +
+            (expiresAt ? ` — תוקף הטוקן: ${expiresAt}` : '')
+        );
+      } else if (data?.is_connected && data?.is_expired) {
+        toast.warning('הטוקן של Google Ads פג תוקף — נדרש חיבור מחדש');
       } else {
-        toast.warning('החיבור ל-Google Ads לא פעיל: ' + (data?.message || ''));
+        toast.warning('לא נמצא חיבור פעיל ל-Google Ads');
       }
       queryClient.invalidateQueries({ queryKey: ['google-ads-integration'] });
     },
