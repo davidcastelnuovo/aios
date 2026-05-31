@@ -20,7 +20,9 @@ serve(async (req) => {
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-  const facebookAppSecret = Deno.env.get('FACEBOOK_APP_SECRET');
+  // Prefer META_APP_SECRET (new), fall back to FACEBOOK_APP_SECRET (legacy)
+  const facebookAppSecret = Deno.env.get('META_APP_SECRET') ?? Deno.env.get('FACEBOOK_APP_SECRET');
+  const verifyToken = Deno.env.get('META_WEBHOOK_VERIFY_TOKEN');
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -33,11 +35,12 @@ serve(async (req) => {
       const token = url.searchParams.get('hub.verify_token');
       const challenge = url.searchParams.get('hub.challenge');
 
-
-      // The verify_token should be stored in tenant_integrations settings
-      // For now, we accept any verification with mode = 'subscribe'
+      // If a verify token is configured, enforce it; otherwise accept any subscribe handshake (legacy).
       if (mode === 'subscribe' && challenge) {
-        return new Response(challenge, { 
+        if (verifyToken && token !== verifyToken) {
+          return new Response('Forbidden', { status: 403 });
+        }
+        return new Response(challenge, {
           status: 200,
           headers: { 'Content-Type': 'text/plain' }
         });
@@ -83,6 +86,25 @@ serve(async (req) => {
               const leadgenId = change.value.leadgen_id;
               const formId = change.value.form_id;
               const pageId = change.value.page_id;
+
+              // Stamp last_webhook_at on integrations that own this page (best-effort)
+              try {
+                const { data: pageInts } = await supabase
+                  .from('tenant_integrations')
+                  .select('id, settings')
+                  .eq('integration_type', 'facebook_lead_ads')
+                  .eq('is_active', true);
+                for (const pi of pageInts ?? []) {
+                  const s = (pi.settings as any) ?? {};
+                  if (s?.page_subscriptions?.[pageId]) {
+                    await supabase
+                      .from('tenant_integrations')
+                      .update({ settings: { ...s, last_webhook_at: new Date().toISOString() } })
+                      .eq('id', pi.id);
+                  }
+                }
+              } catch (e) { console.warn('last_webhook_at stamp failed', e); }
+
 
 
               // Find the integration for this page/form

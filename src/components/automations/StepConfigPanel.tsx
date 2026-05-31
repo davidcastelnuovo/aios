@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import { FacebookDeliveryModeSection } from "@/components/automations/FacebookDeliveryModeSection";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -2706,6 +2707,14 @@ function LeadSourceConfig({
               </Popover>
             </div>
           )}
+
+          {/* Delivery mode: Pull (default) vs Webhook */}
+          <FacebookDeliveryModeSection
+            integrationId={configuration?.facebook_integration_id}
+            pageId={configuration?.facebook_page_id}
+            pageName={configuration?.facebook_page_name}
+            tenantId={tenantId}
+          />
 
           {/* Sync since date */}
           <div className="space-y-1">

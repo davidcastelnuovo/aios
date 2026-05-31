@@ -79,6 +79,18 @@ serve(async (req) => {
       const formMappings = settings?.form_mappings || {};
       const formEntries = Object.entries(formMappings);
 
+      // Skip integrations that opted into webhook delivery (with stale fallback: 15 min)
+      const deliveryMode = (settings as any)?.delivery_mode as string | undefined;
+      if (deliveryMode === 'webhook') {
+        const lastWebhookAt = (settings as any)?.last_webhook_at as string | undefined;
+        const ageMs = lastWebhookAt ? Date.now() - new Date(lastWebhookAt).getTime() : Infinity;
+        if (lastWebhookAt && ageMs < 15 * 60 * 1000) {
+          totalSkipped += formEntries.length;
+          continue;
+        }
+        // else: webhook is stale or never fired — fall through to polling this round
+      }
+
       if (formEntries.length === 0) {
         continue;
       }
