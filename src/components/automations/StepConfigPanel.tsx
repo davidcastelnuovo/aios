@@ -2532,6 +2532,7 @@ function LeadSourceConfig({
     
     try {
       const formId = configuration.facebook_form_id;
+      const integrationId = configuration.facebook_integration_id;
       const now = new Date();
       let fromDate: string | undefined;
       
@@ -2545,6 +2546,21 @@ function LeadSourceConfig({
         const w = new Date(now);
         w.setDate(w.getDate() - 7);
         fromDate = new Date(w.getFullYear(), w.getMonth(), w.getDate()).toISOString();
+      }
+
+      // First, trigger a sync from Facebook for this specific form so the local DB is up to date.
+      try {
+        await supabase.functions.invoke("sync-facebook-leads", {
+          body: {
+            tenant_id: tenantId,
+            integration_id: integrationId,
+            form_id: formId,
+            since_date: fromDate || configuration.sync_since_date || undefined,
+            days: pullDateRange === "all" ? 90 : undefined,
+          },
+        });
+      } catch (syncErr) {
+        console.warn("sync-facebook-leads invoke failed (continuing with local query):", syncErr);
       }
 
       let query = supabase
