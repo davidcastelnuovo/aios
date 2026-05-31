@@ -84,6 +84,7 @@ export default function Clients() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCampaigner, setSelectedCampaigner] = useState<string>("all");
   const [selectedMoodStatus, setSelectedMoodStatus] = useState<string>("all");
+  const [selectedService, setSelectedService] = useState<string>("all");
   const [deletingClient, setDeletingClient] = useState<any>(null);
   const [duplicatingClient, setDuplicatingClient] = useState<{ id: string; name: string } | null>(null);
   const [editingFolderLink, setEditingFolderLink] = useState<{ clientId: string; link: string } | null>(null);
@@ -99,6 +100,7 @@ export default function Clients() {
   const activeFilterCount = [
     selectedCampaigner !== "all" ? 1 : 0,
     selectedMoodStatus !== "all" ? 1 : 0,
+    selectedService !== "all" ? 1 : 0,
     hideInactive ? 1 : 0,
     statusFilter !== "all" ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
