@@ -1,104 +1,53 @@
-## TikTok Integration — תוכנית עבודה
 
-### הבהרה חשובה לפני שמתחילים
-ה-TikTok Connector של Lovable (Gateway) נותן גישה לתוכן **אורגני** של חשבון TikTok:
-- פרופיל (followers, display_name)
-- רשימת סרטונים + סטטיסטיקות (views, likes, comments, shares, watch time)
+## הבעיה
 
-**TikTok Ads (קמפיינים בתשלום)** משתמש ב-**Marketing API נפרד** שלא נכלל בקונקטור. אם רוצים בעתיד נתוני Ads — צריך אינטגרציה נפרדת (App Review של TikTok for Business + Marketing API). התוכנית הזו מתמקדת בדוחות אורגניים.
+בדוח SEO של eco.co.il (וגם בכל שאר הלקוחות שבדקתי בבסיס הנתונים) ה-`snapshot` של Ahrefs שמור עם **רק שני שדות**:
 
-לכן הטבלה החדשה תיקרא **"TikTok Content"** (לא "TikTok Ads") — ניתוח ביצועי סרטונים.
-
----
-
-### 1. חיבור הקונקטור (פעם אחת)
-- חיבור TikTok Connector של Lovable (`connector_id: tiktok`) ל-Project. זה ייתן את `TIKTOK_API_KEY` כ-secret אוטומטי לכל edge functions.
-- אנחנו לא צריכים App Review של TikTok בעצמנו — הקונקטור עוקף את זה.
-
-### 2. דף Integrations — כרטיס TikTok
-הוספת כרטיס TikTok ב-`src/pages/Integrations.tsx` שמוביל למסך `tiktok-settings` חדש.
-
-`is_connected` ייקבע לפי רשומה ב-`tenant_integrations` עם `integration_type='tiktok'`.
-
-### 3. מסך TikTokSettings חדש
-דף הגדרות (`src/pages/TikTokSettings.tsx`) שמאפשר:
-- כפתור "Connect TikTok Account" → קורא ל-edge function `tiktok-connect` שמושך פרטי חשבון מהקונקטור (`/user/info/?fields=open_id,display_name,avatar_url,follower_count`) ושומר ב-`tenant_integrations`.
-- תצוגה של החשבון המחובר (שם, אווטאר, עוקבים).
-- כפתור Disconnect.
-- (אם בעתיד יהיו multiple accounts — נוסיף בחירה. כרגע חשבון אחד לכל tenant, כמו Facebook.)
-
-### 4. Edge Functions חדשות
-| פונקציה | תפקיד |
-|---|---|
-| `tiktok-connect` | מושך פרטי חשבון מ-TikTok Gateway ושומר ב-`tenant_integrations` (integration_type='tiktok') |
-| `tiktok-disconnect` | מוחק את החיבור |
-| `sync-tiktok-content` | On-demand: מושך רשימת סרטונים + stats → כותב ל-`crm_records` עבור `table_id` נתון (integration_type='tiktok_content') |
-| `cron-sync-tiktok-content` | סקדיולר יומי: רץ על כל `crm_tables` עם integration_type='tiktok_content' |
-
-כולן יקראו דרך Gateway:
-```
-GET  https://connector-gateway.lovable.dev/tiktok/user/info/?fields=...
-POST https://connector-gateway.lovable.dev/tiktok/video/list/
-```
-עם headers `Authorization: Bearer ${LOVABLE_API_KEY}` + `X-Connection-Api-Key: ${TIKTOK_API_KEY}`.
-
-### 5. דף Dynamic Tables — אפשרות יצירת טבלת TikTok
-ב-`src/pages/DynamicTables.tsx`:
-- הוספת אפשרות חדשה לדיאלוג יצירת טבלה: **"TikTok Content"** (ליד "Facebook Ecommerce").
-- דיאלוג חדש `TikTokTableDialog.tsx` (במודל של `FacebookTableDialog`) — שואל שם טבלה, בוחר חשבון מחובר, יוצר רשומה ב-`crm_tables` עם:
-  ```
-  integration_type: 'tiktok_content'
-  integration_settings: { account_open_id, date_range, sync_frequency }
-  ```
-- אחרי יצירה — מפעיל `sync-tiktok-content` פעם ראשונה.
-- ב-`getIntegrationIcon` מוסיפים case ל-`tiktok_content` עם אייקון TikTok.
-- בכרטיס הטבלה — כפתור Sync שמפעיל מחדש את `sync-tiktok-content`.
-
-### 6. שדות (crm_fields) של טבלת TikTok Content
-ייווצרו אוטומטית בסנכרון ראשון:
-- `video_id`, `title`, `create_time`, `cover_image_url`, `share_url`
-- `view_count`, `like_count`, `comment_count`, `share_count`
-- `duration_sec`, `embed_link`
-
----
-
-### פרטים טכניים
-
-**שמירה ב-tenant_integrations** (אותו pattern כמו Facebook):
 ```json
-{
-  "tenant_id": "...",
-  "integration_type": "tiktok",
-  "is_active": true,
-  "settings": {
-    "open_id": "...",
-    "display_name": "...",
-    "avatar_url": "...",
-    "follower_count": 1234,
-    "connected_at": "2026-05-31T..."
-  }
-}
+{ "org_traffic": 6627, "org_keywords_total": 478 }
 ```
 
-**אבטחה (RLS):**
-- אותן מדיניות RLS שכבר קיימות על `tenant_integrations` ו-`crm_tables` (סינון לפי `tenant_id` + cross-tenant agency access).
-- אין שינויי סכימה נדרשים — הכל משתמש במבנה הגנרי הקיים.
+הקומפוננטה `SeoSnapshotCards` מציגה עד 8 קוביות, אבל מסננת כל מטריקה שערכה `undefined`. לכן מוצגות רק **תנועה אורגנית** ו-**סה״כ מילות מפתח**.
 
-**Routing:**
-- הוספת route `/t/:tenantSlug/integrations/tiktok-settings` ב-`App.tsx`.
+הקוביות החסרות שצריכות להופיע:
+- 🏆 דירוג דומיין (DR)
+- 🥇 מילות מפתח (Top 3)
+- 🔟 מילות מפתח (Top 10)
+- 🔗 דומיינים מפנים (referring domains)
+- 🌐 קישורים נכנסים פעילים (backlinks live)
+- 📊 קישורים נכנסים כולל (backlinks all time)
 
----
+## שורש הבעיה ב-`supabase/functions/fetch-ahrefs-snapshot/index.ts`
 
-### מה לא נכלל בתוכנית הזו (יבוא בעתיד אם תרצה)
-- TikTok Ads (קמפיינים בתשלום) — דורש Marketing API נפרד.
-- פרסום סרטונים מתוך המערכת (`post/publish/video/init/`).
-- ניהול תגובות על סרטונים.
+1. הקריאה ל-`/v3/site-explorer/metrics` נשלחת **בלי פרמטר `select=`**. בלעדיו, ה-API של Ahrefs מחזיר רק `org_traffic` ו-`org_keywords` (זה מה שמוסבר על ידי הנתונים השמורים). זו הסיבה שכל שאר השדות (`domain_rating`, `backlinks`, `refdomains`) חוזרים `undefined` ולכן לא נשמרים ב-snapshot.
+2. השדות `org_keywords_top3`, `org_keywords_top10`, ו-`backlinks_all_time` **בכלל לא נבנים** בקוד — ה-snapshot שנכתב כולל רק 5 שדות (`dr`, `org_traffic`, `org_keywords_total`, `backlinks_live`, `referring_domains`).
 
-### שלבי ביצוע
-1. חיבור הקונקטור (פעולה אינטראקטיבית — תאשר חיבור TikTok)
-2. יצירת 4 edge functions
-3. הוספת דף Integrations card + TikTokSettings page + route
-4. הוספת TikTokTableDialog + שינויים ב-DynamicTables.tsx + integrationIcons
-5. בדיקה: חיבור → יצירת טבלה → סנכרון ראשון → תצוגת נתונים
+## תיקון מוצע
 
-לאחר אישור התוכנית — אעבור ל-Build, אבקש לחבר את הקונקטור, ואז אכתוב את הקוד.
+**קובץ:** `supabase/functions/fetch-ahrefs-snapshot/index.ts`
+
+1. להוסיף `&select=domain_rating,org_traffic,org_keywords,backlinks,refdomains` לכל קריאה ל-`/site-explorer/metrics` (הן ה-overview הנוכחי והן ההשוואות ההיסטוריות 3m/12m).
+2. להוסיף קריאה אחת ל-`/v3/site-explorer/backlinks-stats` (או להישאר עם metrics) כדי להביא `backlinks_all_time` (`backlinks` היסטוריים), אם זמין בתוכנית — אחרת להשאיר את השדה ריק (זה ינטרל את הקוביה הזו בלבד).
+3. לחשב **Top 3 / Top 10** מתוך רשימת ה-`organic-keywords` שכבר נשלפת (יש שם שדה `position`):
+
+   ```ts
+   const top3  = keywords.filter(k => k.position >= 1 && k.position <= 3 ).length;
+   const top10 = keywords.filter(k => k.position >= 1 && k.position <= 10).length;
+   ```
+
+   ולשמור ל-`snapshot` כ-`org_keywords_top3` / `org_keywords_top10`.
+   
+   הערה: ה-API שולף `limit=500` מילות מפתח, כך שהמספרים יהיו מדויקים עד 500 בכל שכבה — מספיק לרוב הדומיינים. אם נדרש דיוק מלא, נוסיף קריאה נפרדת עם `position_to=10`.
+
+4. להעדכן את ה-snapshot שנכתב להכיל גם את שלושת השדות החדשים (`org_keywords_top3`, `org_keywords_top10`, ו-`backlinks_all_time` אם נשלף).
+5. אותו טיפול ב-`fetchHistoricalMetrics` כדי שההשוואות לחודש קודם/קמפיין יציגו גם הן את כל הקוביות.
+
+**שום שינוי בקומפוננטות UI** — הן כבר תומכות בכל 8 הקוביות; ברגע שהשדות יגיעו ל-`snapshot` הן יוצגו אוטומטית.
+
+## אחרי הפריסה
+
+- לרוץ ידנית "סנכרן מדוחות SEO" על eco.co.il (ועל כל לקוח אחר שבו רואים את אותה בעיה) — הסנכרון יעדכן את `ahrefs_reports.report_data` ויוסיף את שאר הקוביות לדשבורד.
+
+## למה הסקרין מציג את eco ולא את eko
+
+מצאתי בבסיס הנתונים רק דומיין אחד שמתאים (`eco.co.il`) ולא קיים `eko`. נראה שזו אותה ישות שאתה קורא לה "eko" בדיבור. אם בכל זאת התכוונת ללקוח אחר עם דומיין שונה — תגיד לי איזה ואני אבדוק נקודתית, אבל התיקון לעיל פותר את הבעיה לכל הלקוחות בבת אחת.
