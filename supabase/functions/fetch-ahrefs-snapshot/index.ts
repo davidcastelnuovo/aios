@@ -205,23 +205,27 @@ Deno.serve(async (req) => {
 
     // Build report payload mirroring the webhook contract
     // Ahrefs v3 returns metrics with these keys: domain_rating, ahrefs_rank, org_traffic, org_keywords, backlinks, refdomains, org_cost
+    // Compute Top 3 / Top 10 keyword counts from the organic keywords list (up to limit=500)
+    const top3Count = organic_keywords.filter((k: any) => typeof k.position === "number" && k.position >= 1 && k.position <= 3).length;
+    const top10Count = organic_keywords.filter((k: any) => typeof k.position === "number" && k.position >= 1 && k.position <= 10).length;
+
     const snapshot = {
       dr: m.domain_rating,
       org_traffic: m.org_traffic ?? m.organic_traffic,
       org_keywords_total: m.org_keywords ?? m.organic_keywords,
+      org_keywords_top3: top3Count,
+      org_keywords_top10: top10Count,
       backlinks_live: m.backlinks,
       referring_domains: m.refdomains ?? m.referring_domains,
     };
 
     // 3) Historical comparisons — pull metrics for ~3 months ago and ~12 months ago.
-    // Ahrefs may not have a snapshot exactly on the target date, so we walk back up
-    // to 14 days from each anchor until we find one (using the same mode/protocol).
     const fetchHistoricalMetrics = async (anchor: Date) => {
       for (let i = 0; i <= 14; i++) {
         const d = new Date(anchor);
         d.setUTCDate(d.getUTCDate() - i);
         const ds = d.toISOString().split("T")[0];
-        const url = `https://api.ahrefs.com/v3/site-explorer/metrics?target=${encodeURIComponent(domain)}&date=${ds}&protocol=${usedProtocol}&mode=${usedMode}&output=json&volume_mode=monthly`;
+        const url = `https://api.ahrefs.com/v3/site-explorer/metrics?target=${encodeURIComponent(domain)}&date=${ds}&protocol=${usedProtocol}&mode=${usedMode}&output=json&volume_mode=monthly&select=${METRICS_SELECT}`;
         const r = await fetch(url, {
           headers: { Authorization: `Bearer ${ahrefsApiKey}`, Accept: "application/json" },
         });
