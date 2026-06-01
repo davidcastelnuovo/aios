@@ -138,9 +138,11 @@ Deno.serve(async (req) => {
     let lastErr = "";
     let lastStatus = 0;
 
+    const METRICS_SELECT = "domain_rating,org_traffic,org_keywords,backlinks,refdomains";
+
     outer: for (const { mode, protocol } of tryModes) {
       for (const d of tryDates) {
-        const overviewUrl = `https://api.ahrefs.com/v3/site-explorer/metrics?target=${encodeURIComponent(domain)}&date=${d}&protocol=${protocol}&mode=${mode}&output=json&volume_mode=monthly`;
+        const overviewUrl = `https://api.ahrefs.com/v3/site-explorer/metrics?target=${encodeURIComponent(domain)}&date=${d}&protocol=${protocol}&mode=${mode}&output=json&volume_mode=monthly&select=${METRICS_SELECT}`;
         const overviewRes = await fetch(overviewUrl, {
           headers: { Authorization: `Bearer ${ahrefsApiKey}`, Accept: "application/json" },
         });
@@ -155,7 +157,6 @@ Deno.serve(async (req) => {
         lastErr = await overviewRes.text();
         lastStatus = overviewRes.status;
         console.warn(`Ahrefs overview failed: domain=${domain} date=${d} mode=${mode} protocol=${protocol} status=${overviewRes.status} body=${lastErr.slice(0, 200)}`);
-        // 401/403 = auth issue, no point continuing
         if (overviewRes.status === 401 || overviewRes.status === 403) {
           break outer;
         }
