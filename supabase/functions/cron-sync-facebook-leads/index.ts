@@ -170,7 +170,7 @@ serve(async (req) => {
               company_name: 'ליד מפייסבוק', // Default
             };
 
-            // Apply field mappings
+            // Apply field mappings (if configured)
             const fieldMappings = mapping.field_mappings || {};
             for (const [fbFieldName, systemField] of Object.entries(fieldMappings)) {
               if (systemField && systemField !== 'skip' && fieldData[fbFieldName]) {
@@ -182,9 +182,20 @@ serve(async (req) => {
               }
             }
 
+            // Heuristic fallback: extract name/phone/email from common FB field names if not already set
+            const heurName = fieldData['full_name'] || fieldData['full name'] || fieldData['name'] || fieldData['first_name']
+              || (Object.entries(fieldData).find(([k]) => /שם|name/i.test(k))?.[1] ?? null);
+            const heurPhone = fieldData['phone_number'] || fieldData['phone']
+              || (Object.entries(fieldData).find(([k]) => /טלפון|נייד|phone/i.test(k))?.[1] ?? null);
+            const heurEmail = fieldData['email'] || fieldData['email_address']
+              || (Object.entries(fieldData).find(([k]) => /אימייל|דוא|email|mail/i.test(k))?.[1] ?? null);
+            if (!leadRecord.contact_name && heurName) leadRecord.contact_name = heurName;
+            if (!leadRecord.phone && heurPhone) leadRecord.phone = heurPhone;
+            if (!leadRecord.email && heurEmail) leadRecord.email = heurEmail;
+
             // Ensure company_name is set
             if (!leadRecord.company_name || leadRecord.company_name === 'ליד מפייסבוק') {
-              leadRecord.company_name = leadRecord.contact_name || fieldData['full_name'] || fieldData['name'] || 'ליד מפייסבוק';
+              leadRecord.company_name = leadRecord.contact_name || heurName || 'ליד מפייסבוק';
             }
 
             // Insert the lead
@@ -219,6 +230,12 @@ serve(async (req) => {
               }
             }
 
+            // Build fb_ fields for trigger payload (so templates like {{fb_full name}} work)
+            const fbFields: Record<string, string> = {};
+            for (const [k, v] of Object.entries(fieldData)) {
+              fbFields[`fb_${k}`] = v;
+            }
+
             // Trigger lead_created automation
             try {
               const automationResponse = await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
@@ -239,6 +256,9 @@ serve(async (req) => {
                     status: newLead.status,
                     source: newLead.source,
                     agency_id: newLead.agency_id,
+                    facebook_form_id: formId,
+                    facebook_leadgen_id: leadgenId,
+                    ...fbFields,
                   },
                   tenant_id: integration.tenant_id,
                 }),
