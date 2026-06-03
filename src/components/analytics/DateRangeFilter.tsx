@@ -20,7 +20,9 @@ export type DatePreset =
   | "this_month" 
   | "last_month" 
   | "3_months" 
+  | "3_months_calendar"
   | "year" 
+  | "all_time"
   | "custom";
 
 export interface DateRange {
@@ -44,7 +46,9 @@ const presets: { key: DatePreset; label: string }[] = [
   { key: "this_month", label: "החודש הנוכחי" },
   { key: "last_month", label: "חודש שעבר" },
   { key: "3_months", label: "3 חודשים אחרונים" },
+  { key: "3_months_calendar", label: "3 חודשים קלנדריים" },
   { key: "year", label: "שנה אחרונה" },
+  { key: "all_time", label: "כל הזמן" },
 ];
 
 function getDateRangeFromPreset(preset: DatePreset): DateRange {
@@ -71,8 +75,12 @@ function getDateRangeFromPreset(preset: DatePreset): DateRange {
       return { start: startOfMonth(lastMonth), end: endOfMonth(lastMonth) };
     case "3_months":
       return { start: startOfDay(subDays(now, 89)), end: endOfDay(now) };
+    case "3_months_calendar":
+      return { start: startOfMonth(subMonths(now, 2)), end: endOfDay(now) };
     case "year":
       return { start: startOfDay(subYears(now, 1)), end: endOfDay(now) };
+    case "all_time":
+      return { start: startOfDay(new Date(2000, 0, 1)), end: endOfDay(now) };
     default:
       return { start: startOfDay(subDays(now, 6)), end: endOfDay(now) };
   }
