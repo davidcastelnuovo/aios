@@ -252,7 +252,23 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
               Analytics
             </TabsTrigger>
           )}
+          <TabsTrigger value="maskyoo" className="gap-1.5">
+            <Phone className="h-4 w-4" />
+            שיחות מסקיו
+          </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="maskyoo">
+          <MaskyooSiblingCard
+            table={{
+              id: "",
+              tenant_id: reportTenantId,
+              client_id: clientId,
+              integration_type: "ahrefs",
+              integration_settings: {},
+            }}
+          />
+        </TabsContent>
 
         <TabsContent value="seo">
           <SeoDashboardView
