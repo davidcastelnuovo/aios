@@ -228,24 +228,9 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
     !!savedGscTableId ||
     !!savedGscSiteUrl;
 
-  // If no related integrations at all, just render SEO dashboard directly
-  if (!hasGsc && !hasGa) {
-    return (
-      <SeoDashboardView
-        tenantId={reportTenantId}
-        clientId={clientId}
-        accessibleTenantIds={accessibleTenantIds}
-        initialGscSiteUrl={savedGscSiteUrl}
-        onGscSiteSelected={(siteUrl) => {
-          if (siteUrl && siteUrl !== savedGscSiteUrl) {
-            saveLinkMutation.mutate({ key: 'linkedGscSiteUrl', value: siteUrl });
-          }
-        }}
-        initialLangFilter={savedGscLangFilter}
-        onLangFilterChange={(v) => saveLinkMutation.mutate({ key: 'linkedGscLangFilter', value: v })}
-      />
-    );
-  }
+  // Always render tabs so the Maskyoo (calls) tab is available even when no
+  // GSC/GA integrations are linked.
+
 
   return (
     <div className="space-y-4" dir="rtl">
