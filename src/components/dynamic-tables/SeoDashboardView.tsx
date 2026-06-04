@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { SeoSnapshotCards } from "./seo/SeoSnapshotCards";
-import { MaskyooSiblingCard } from "./MaskyooSiblingCard";
+// MaskyooSiblingCard moved to SeoReportTabs as a separate tab
 import { SeoKeywordsTable } from "./seo/SeoKeywordsTable";
 import { GscIntegration, type GscKeywordData, type GscMultiPeriodData } from "./seo/GscIntegration";
 import { useAhrefsEnrichment, type AhrefsKeyword } from "@/hooks/useAhrefsEnrichment";
