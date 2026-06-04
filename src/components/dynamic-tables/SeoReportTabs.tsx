@@ -10,7 +10,9 @@ import { SearchConsoleDashboard } from "./SearchConsoleDashboard";
 import { GoogleAnalyticsDashboard } from "./GoogleAnalyticsDashboard";
 import { GoogleAnalyticsTableDialog } from "./GoogleAnalyticsTableDialog";
 import { GscIntegration } from "./seo/GscIntegration";
-import { TrendingUp, Search, BarChart3, Settings2, RefreshCw, Plus } from "lucide-react";
+import { TrendingUp, Search, BarChart3, Settings2, RefreshCw, Plus, Phone } from "lucide-react";
+import { MaskyooSiblingCard } from "./MaskyooSiblingCard";
+
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { useUserIntegrations } from "@/hooks/useUserIntegrations";
