@@ -640,6 +640,8 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
         campaignStart={snapshotCampaignStart}
         gaOrganicSessions={gaOrganicCurrentMonth}
         gaOrganicSessionsPrev={gaOrganicPrevMonth}
+        trackedKeywords={trackedKeywords}
+        organicKeywords={organicKeywords}
       />
 
       {/* Maskyoo calls (replaces removed Ahrefs traffic chart per request) */}

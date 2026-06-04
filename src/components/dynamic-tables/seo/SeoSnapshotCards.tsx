@@ -9,6 +9,10 @@ interface SeoSnapshotCardsProps {
   gaOrganicSessions?: number | null;
   /** Previous month GA organic sessions */
   gaOrganicSessionsPrev?: number | null;
+  /** Live tracked-keyword list — used as fallback for Top 3/Top 10 counts */
+  trackedKeywords?: Array<any>;
+  /** Live organic-keyword list — used as additional fallback for Top 3/Top 10 counts */
+  organicKeywords?: Array<any>;
 }
 
 function ChangeIndicator({ current, previous, label, inverse }: { current?: number; previous?: number; label: string; inverse?: boolean }) {
@@ -32,31 +36,59 @@ function getVal(obj: Record<string, any>, ...keys: string[]): number | undefined
   return undefined;
 }
 
-export function SeoSnapshotCards({ snapshot, prevMonth, campaignStart, gaOrganicSessions, gaOrganicSessionsPrev }: SeoSnapshotCardsProps) {
+function countAtOrBelow(kws: Array<any> | undefined, maxPos: number): number {
+  if (!Array.isArray(kws)) return 0;
+  let n = 0;
+  for (const kw of kws) {
+    const p = kw?.position ?? kw?.best_position;
+    if (typeof p === "number" && p >= 1 && p <= maxPos) n++;
+  }
+  return n;
+}
+
+export function SeoSnapshotCards({ snapshot, prevMonth, campaignStart, gaOrganicSessions, gaOrganicSessionsPrev, trackedKeywords, organicKeywords }: SeoSnapshotCardsProps) {
+  // Live fallback counts (merge tracked + organic, dedup by keyword)
+  const mergedByKw = new Map<string, any>();
+  for (const kw of trackedKeywords || []) {
+    const name = String(kw?.keyword || "").toLowerCase().trim();
+    if (name) mergedByKw.set(name, kw);
+  }
+  for (const kw of organicKeywords || []) {
+    const name = String(kw?.keyword || "").toLowerCase().trim();
+    if (name && !mergedByKw.has(name)) mergedByKw.set(name, kw);
+  }
+  const liveList = Array.from(mergedByKw.values());
+  const liveTop3 = countAtOrBelow(liveList, 3);
+  const liveTop10 = countAtOrBelow(liveList, 10);
+
+  const snapTop3 = getVal(snapshot, "org_keywords_top3");
+  const snapTop10 = getVal(snapshot, "org_keywords_top10");
+  const effectiveTop3 = liveTop3 > (snapTop3 ?? 0) ? liveTop3 : snapTop3;
+  const effectiveTop10 = liveTop10 > (snapTop10 ?? 0) ? liveTop10 : snapTop10;
+
   const metrics = [
-    { keys: ['domain_rating', 'dr'], label: 'דירוג דומיין (DR)', icon: '🏆', isOrganic: false },
-    { keys: ['org_traffic'], label: 'תנועה אורגנית', icon: '📈', isOrganic: true },
-    
-    { keys: ['org_keywords_top3'], label: 'מילות מפתח (Top 3)', icon: '🥇', isOrganic: false },
-    { keys: ['org_keywords_top10'], label: 'מילות מפתח (Top 10)', icon: '🔟', isOrganic: false },
-    { keys: ['org_keywords_total'], label: 'סה״כ מילות מפתח', icon: '🔑', isOrganic: false },
-    { keys: ['referring_domains', 'referring_domains_all_time'], label: 'דומיינים מפנים', icon: '🔗', isOrganic: false },
-    { keys: ['backlinks_live'], label: 'קישורים נכנסים (פעילים)', icon: '🌐', isOrganic: false },
-    { keys: ['backlinks_all_time'], label: 'קישורים נכנסים (כולל)', icon: '📊', isOrganic: false },
+    { keys: ['domain_rating', 'dr'], label: 'דירוג דומיין (DR)', icon: '🏆', isOrganic: false, override: undefined as number | undefined },
+    { keys: ['org_traffic'], label: 'תנועה אורגנית', icon: '📈', isOrganic: true, override: undefined as number | undefined },
+
+    { keys: ['org_keywords_top3'], label: 'מילות מפתח (Top 3)', icon: '🥇', isOrganic: false, override: effectiveTop3 },
+    { keys: ['org_keywords_top10'], label: 'מילות מפתח (Top 10)', icon: '🔟', isOrganic: false, override: effectiveTop10 },
+    { keys: ['org_keywords_total'], label: 'סה״כ מילות מפתח', icon: '🔑', isOrganic: false, override: undefined as number | undefined },
+    { keys: ['referring_domains', 'referring_domains_all_time'], label: 'דומיינים מפנים', icon: '🔗', isOrganic: false, override: undefined as number | undefined },
+    { keys: ['backlinks_live'], label: 'קישורים נכנסים (פעילים)', icon: '🌐', isOrganic: false, override: undefined as number | undefined },
+    { keys: ['backlinks_all_time'], label: 'קישורים נכנסים (כולל)', icon: '📊', isOrganic: false, override: undefined as number | undefined },
   ].map(m => {
-    // For organic traffic: use GA sessions if available, otherwise Ahrefs
     if (m.isOrganic && gaOrganicSessions != null) {
       return {
         ...m,
         value: gaOrganicSessions,
         prevValue: gaOrganicSessionsPrev ?? undefined,
-        campaignValue: undefined, // no campaign comparison for GA organic
+        campaignValue: undefined,
         gaSource: true,
       };
     }
     return {
       ...m,
-      value: getVal(snapshot, ...m.keys),
+      value: m.override !== undefined ? m.override : getVal(snapshot, ...m.keys),
       prevValue: getVal(prevMonth, ...m.keys),
       campaignValue: getVal(campaignStart, ...m.keys),
       gaSource: false,
