@@ -644,16 +644,8 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
         organicKeywords={organicKeywords}
       />
 
-      {/* Maskyoo calls (replaces removed Ahrefs traffic chart per request) */}
-      <MaskyooSiblingCard
-        table={{
-          id: selectedReport?.id || "",
-          tenant_id: tenantId,
-          client_id: clientId,
-          integration_type: "ahrefs",
-          integration_settings: {},
-        }}
-      />
+      {/* Maskyoo calls moved to a separate tab in SeoReportTabs */}
+
 
       {/* Google Search Console Integration — enriches keyword rows silently, no raw table shown here */}
       <GscIntegration
