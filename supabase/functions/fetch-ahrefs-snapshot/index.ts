@@ -183,7 +183,8 @@ Deno.serve(async (req) => {
     const reportDate = usedDate;
 
     // 2) Organic keywords (top ~500) — use the same mode/protocol that worked
-    const kwUrl = `https://api.ahrefs.com/v3/site-explorer/organic-keywords?target=${encodeURIComponent(domain)}&date=${reportDate}&country=${country}&protocol=${usedProtocol}&mode=${usedMode}&output=json&limit=500&select=keyword,volume,keyword_difficulty,cpc,traffic,position,url`;
+    // NOTE: Ahrefs v3 organic-keywords returns best_position / sum_traffic (not position / traffic).
+    const kwUrl = `https://api.ahrefs.com/v3/site-explorer/organic-keywords?target=${encodeURIComponent(domain)}&date=${reportDate}&country=${country}&protocol=${usedProtocol}&mode=${usedMode}&output=json&limit=500&select=keyword,volume,keyword_difficulty,cpc,sum_traffic,best_position,best_position_url`;
     const kwRes = await fetch(kwUrl, {
       headers: { Authorization: `Bearer ${ahrefsApiKey}`, Accept: "application/json" },
     });
@@ -192,12 +193,12 @@ Deno.serve(async (req) => {
       const kwJson = await kwRes.json();
       organic_keywords = (kwJson?.keywords || []).map((k: any) => ({
         keyword: k.keyword,
-        position: k.position,
-        traffic: k.traffic,
+        position: k.best_position ?? k.position ?? null,
+        traffic: k.sum_traffic ?? k.traffic ?? 0,
         volume: k.volume,
         kd: k.keyword_difficulty,
         cpc: k.cpc,
-        url: k.url,
+        url: k.best_position_url ?? k.url ?? "",
       }));
     } else {
       console.warn("Ahrefs organic-keywords fetch failed:", await kwRes.text());
@@ -205,11 +206,12 @@ Deno.serve(async (req) => {
 
     // Build report payload mirroring the webhook contract
     // Ahrefs v3 returns metrics with these keys: domain_rating, ahrefs_rank, org_traffic, org_keywords, backlinks, refdomains, org_cost
-    // Compute Top 3 / Top 10 keyword counts from the organic keywords list (up to limit=500)
-    const top3Count = organic_keywords.filter((k: any) => typeof k.position === "number" && k.position >= 1 && k.position <= 3).length;
-    const top10Count = organic_keywords.filter((k: any) => typeof k.position === "number" && k.position >= 1 && k.position <= 10).length;
+    // Compute Top 3 / Top 10 keyword counts from the organic keywords list (up to limit=500).
+    // Fallback to tracked_keywords (rank tracker) when organic is empty so the snapshot stays useful.
+    let top3Count = organic_keywords.filter((k: any) => typeof k.position === "number" && k.position >= 1 && k.position <= 3).length;
+    let top10Count = organic_keywords.filter((k: any) => typeof k.position === "number" && k.position >= 1 && k.position <= 10).length;
 
-    const snapshot = {
+    const snapshot: Record<string, any> = {
       dr: m.domain_rating,
       org_traffic: m.org_traffic ?? m.organic_traffic,
       org_keywords_total: m.org_keywords ?? m.organic_keywords,
