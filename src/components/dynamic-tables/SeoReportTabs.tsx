@@ -10,7 +10,9 @@ import { SearchConsoleDashboard } from "./SearchConsoleDashboard";
 import { GoogleAnalyticsDashboard } from "./GoogleAnalyticsDashboard";
 import { GoogleAnalyticsTableDialog } from "./GoogleAnalyticsTableDialog";
 import { GscIntegration } from "./seo/GscIntegration";
-import { TrendingUp, Search, BarChart3, Settings2, RefreshCw, Plus } from "lucide-react";
+import { TrendingUp, Search, BarChart3, Settings2, RefreshCw, Plus, Phone } from "lucide-react";
+import { MaskyooSiblingCard } from "./MaskyooSiblingCard";
+
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { useUserIntegrations } from "@/hooks/useUserIntegrations";
@@ -226,24 +228,9 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
     !!savedGscTableId ||
     !!savedGscSiteUrl;
 
-  // If no related integrations at all, just render SEO dashboard directly
-  if (!hasGsc && !hasGa) {
-    return (
-      <SeoDashboardView
-        tenantId={reportTenantId}
-        clientId={clientId}
-        accessibleTenantIds={accessibleTenantIds}
-        initialGscSiteUrl={savedGscSiteUrl}
-        onGscSiteSelected={(siteUrl) => {
-          if (siteUrl && siteUrl !== savedGscSiteUrl) {
-            saveLinkMutation.mutate({ key: 'linkedGscSiteUrl', value: siteUrl });
-          }
-        }}
-        initialLangFilter={savedGscLangFilter}
-        onLangFilterChange={(v) => saveLinkMutation.mutate({ key: 'linkedGscLangFilter', value: v })}
-      />
-    );
-  }
+  // Always render tabs so the Maskyoo (calls) tab is available even when no
+  // GSC/GA integrations are linked.
+
 
   return (
     <div className="space-y-4" dir="rtl">
@@ -265,7 +252,23 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
               Analytics
             </TabsTrigger>
           )}
+          <TabsTrigger value="maskyoo" className="gap-1.5">
+            <Phone className="h-4 w-4" />
+            שיחות מסקיו
+          </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="maskyoo">
+          <MaskyooSiblingCard
+            table={{
+              id: "",
+              tenant_id: reportTenantId,
+              client_id: clientId,
+              integration_type: "ahrefs",
+              integration_settings: {},
+            }}
+          />
+        </TabsContent>
 
         <TabsContent value="seo">
           <SeoDashboardView
