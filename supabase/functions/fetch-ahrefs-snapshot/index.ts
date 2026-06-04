@@ -380,6 +380,25 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Fallback: if organic-keywords returned nothing (e.g. API field changes, plan limits),
+    // compute Top 3 / Top 10 from tracked keywords so the SEO snapshot cards aren't zeroed out.
+    if ((organic_keywords?.length ?? 0) === 0 && Array.isArray(tracked_keywords) && tracked_keywords.length > 0) {
+      const posOf = (k: any) => {
+        const p = k?.position ?? k?.best_position;
+        return typeof p === "number" ? p : null;
+      };
+      const trackedTop3 = tracked_keywords.filter((k) => {
+        const p = posOf(k); return p != null && p >= 1 && p <= 3;
+      }).length;
+      const trackedTop10 = tracked_keywords.filter((k) => {
+        const p = posOf(k); return p != null && p >= 1 && p <= 10;
+      }).length;
+      if (!snapshot.org_keywords_top3) snapshot.org_keywords_top3 = trackedTop3;
+      if (!snapshot.org_keywords_top10) snapshot.org_keywords_top10 = trackedTop10;
+    }
+
+
+
     const reportPayload = {
       tenant_id: client.tenant_id,
       client_id: client.id,
