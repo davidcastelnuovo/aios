@@ -54,6 +54,7 @@ Deno.serve(async (req) => {
       mode: hintMode,
       protocol: hintProtocol,
       projectId,
+      gsc_keywords: gscKeywordsRaw,
     } = body as {
       clientId?: string;
       domain?: string;
@@ -61,7 +62,17 @@ Deno.serve(async (req) => {
       mode?: string;
       protocol?: string;
       projectId?: string | number;
+      gsc_keywords?: string[];
     };
+
+    const gscKeywords: string[] = Array.isArray(gscKeywordsRaw)
+      ? Array.from(new Set(
+          gscKeywordsRaw
+            .filter((k): k is string => typeof k === "string")
+            .map((k) => k.toLowerCase().trim())
+            .filter((k) => k.length > 0)
+        ))
+      : [];
 
     if (!clientId) {
       return new Response(JSON.stringify({ error: "Missing clientId" }), {
