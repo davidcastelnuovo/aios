@@ -1750,10 +1750,10 @@ export default function DashboardView() {
                             <TableHead className="text-right">פלטפורמה</TableHead>
                             <TableHead className="text-right">הוצאה</TableHead>
                             <TableHead className="text-right">חשיפות</TableHead>
-                            <TableHead className="text-right">סשנים</TableHead>
-                            <TableHead className="text-right">סשנים יחודיים</TableHead>
                             {dashboardCampaignType === 'ecommerce' ? (
                               <>
+                                <TableHead className="text-right">סשנים</TableHead>
+                                <TableHead className="text-right">סשנים יחודיים</TableHead>
                                 <TableHead className="text-right">הוספה לעגלה</TableHead>
                                 <TableHead className="text-right">רכישות</TableHead>
                                 <TableHead className="text-right">הכנסות</TableHead>
@@ -1761,6 +1761,8 @@ export default function DashboardView() {
                               </>
                             ) : (
                               <>
+                                <TableHead className="text-right">קליקים</TableHead>
+                                <TableHead className="text-right">CPC</TableHead>
                                 <TableHead className="text-right">לידים</TableHead>
                                 <TableHead className="text-right">עלות לליד</TableHead>
                               </>
