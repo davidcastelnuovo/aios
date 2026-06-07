@@ -284,7 +284,14 @@ Deno.serve(async (req) => {
         .limit(200);
 
       if (targetClientId) reportsQuery = reportsQuery.eq("client_id", targetClientId);
-      if (targetDomain) reportsQuery = reportsQuery.eq("domain", targetDomain);
+      if (targetDomain) {
+        // Accept both www/non-www variants — saved targetDomain may have
+        // "www." while the actual ahrefs_reports row may not (or vice versa).
+        // Matching the internal report which doesn't filter by domain at all.
+        const bare = String(targetDomain).replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/+$/, "");
+        const variants = Array.from(new Set([targetDomain, bare, `www.${bare}`]));
+        reportsQuery = reportsQuery.in("domain", variants);
+      }
 
       const { data: ahrefsReports, error: reportsErr } = await reportsQuery;
       if (reportsErr) console.error("Error fetching ahrefs reports:", reportsErr);
