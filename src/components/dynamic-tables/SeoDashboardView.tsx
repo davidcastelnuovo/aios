@@ -418,6 +418,8 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
     for (const kw of trackedKeywords) {
       ahrefsNames.add(String(kw.keyword || '').toLowerCase().trim());
     }
+    const gscMetrics: Record<string, { volume: number | null; kd: number | null; cpc: number | null }> =
+      (reportData?.gsc_keyword_metrics as any) || {};
     return gscData
       .filter(g => g.keyword && !ahrefsNames.has(g.keyword.toLowerCase().trim()))
       .map(g => {
@@ -425,13 +427,14 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
         const prev = gscPrevMonthMap.get(k)?.position ?? null;
         const m3 = gscThreeMonthMap.get(k)?.position ?? null;
         const y1 = gscYearlyMap.get(k)?.position ?? null;
+        const metrics = gscMetrics[k];
         return {
           keyword: g.keyword,
           position: g.position ?? null,
           traffic: null,
-          volume: null,
-          kd: null,
-          cpc: null,
+          volume: metrics?.volume ?? null,
+          kd: metrics?.kd ?? null,
+          cpc: metrics?.cpc ?? null,
           url: null,
           position_prev_month: prev,
           position_3month: m3,
@@ -444,7 +447,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
           _source: 'gsc' as const,
         };
       });
-  }, [gscData, organicKeywords, trackedKeywords, gscPrevMonthMap, gscThreeMonthMap, gscYearlyMap]);
+  }, [gscData, organicKeywords, trackedKeywords, gscPrevMonthMap, gscThreeMonthMap, gscYearlyMap, reportData]);
 
   const domain = reportData?.domain || selectedReport?.domain;
 
@@ -473,8 +476,11 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
     }
     setIsFetchingSnapshot(true);
     try {
+      const gscKws = Array.from(new Set(
+        gscData.map(g => (g.keyword || '').toLowerCase().trim()).filter(k => k.length > 0)
+      ));
       const { data, error } = await supabase.functions.invoke('fetch-ahrefs-snapshot', {
-        body: { clientId, domain, projectId },
+        body: { clientId, domain, projectId, gsc_keywords: gscKws },
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
@@ -486,7 +492,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
     } finally {
       setIsFetchingSnapshot(false);
     }
-  }, [clientId, domain, selectedReport, queryClient]);
+  }, [clientId, domain, selectedReport, queryClient, gscData]);
 
   if (isLoading) {
     return (

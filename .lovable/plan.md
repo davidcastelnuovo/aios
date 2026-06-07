@@ -1,18 +1,30 @@
-## הבעיה
-בטבלת "פירוט לפי פלטפורמה" בדשבורד לקוח של קמפיין לידים מוצגות עמודות **סשנים** ו**סשנים יחודיים** (מ-Analytics). עבור קמפיין לידים הן לא רלוונטיות — צריך במקום זה **קליקים** ו**עלות לקליק (CPC)**.
+## מה המשתמש רוצה
 
-## השינוי
-ב-`src/pages/DashboardView.tsx`, בלוק הטבלה ב-`פירוט לפי פלטפורמה` (סביב שורות 1742–1845), כאשר `dashboardCampaignType !== 'ecommerce'` (כלומר קמפיין לידים):
+נפח חיפוש (volume) לכל הביטויים:
+1. **כל הביטויים במעקב** (tracked keywords מ-Rank Tracker)
+2. **כל הביטויים המאונדקסים ב-GSC** (לא רק top 10) — כל מה שמופיע בדוח Search Console
 
-1. **להסיר** את עמודות `סשנים` ו-`סשנים יחודיים` מה-Header, משורות הפלטפורמות ומשורת הסה"כ.
-2. **להוסיף** שתי עמודות חדשות אחרי `חשיפות`:
-   - `קליקים` — `metrics.clicks` / `totalSummary.clicks` (`'-'` עבור Analytics).
-   - `עלות לקליק (CPC)` — `metrics.spend / metrics.clicks` כשיש קליקים, אחרת `'-'`.
-3. הסדר הסופי לקמפיין לידים: פלטפורמה · הוצאה · חשיפות · קליקים · CPC · לידים · עלות לליד.
-4. בקמפיין `ecommerce` להשאיר את הטבלה כמו שהיא (סשנים שם רלוונטיים לרכישות).
-5. להתאים את הערת הכוכבית מתחת לטבלה במידת הצורך (להסיר אזכור Analytics אם לא רלוונטי לקמפיין לידים).
+## הבעיה היום
 
-## אזורים שלא משתנים
-- כרטיסי הסיכום העליונים (הוצאה / לידים / קליקים / CPL) נשארים כמו שהם.
-- טבלת "פירוט לפי מקור הגעה (Analytics)" נשארת.
-- שום שינוי ב-business logic / שאילתות — רק תצוגה.
+- Tracked keywords מ-Rank Tracker של Ahrefs **לא כוללים** `volume` כברירת מחדל — צריך לבקש את השדה.
+- GSC keywords שלא נמצאים ב-organic_keywords (500 הראשונים) מציגים `—` כי אין להם נתון מ-Ahrefs.
+
+## התוכנית
+
+### 1. `fetch-ahrefs-snapshot/index.ts`
+- **Tracked keywords**: ודא ש-`volume`, `keyword_difficulty`, `cpc` נכללים ב-`select` של קריאת Rank Tracker. אם ה-endpoint לא מחזיר volume, להעשיר אותם דרך `keywords-explorer/overview` באותה קריאה (batch 100, country=il).
+- **GSC keywords**: לקבל פרמטר חדש `gsc_keywords: string[]` (כל הביטויים מ-GSC, לא רק top 10). לסנן רק את אלה שאינם כבר ב-organic_keywords + tracked_keywords (כי שם כבר יש volume). על היתר — קריאה ל-`keywords-explorer/overview` ב-batches של 100, country=il.
+- שמירת תוצאות ב-`report_data.gsc_keyword_metrics` כ-map: `{ keywordLower: { volume, kd, cpc } }`.
+
+### 2. `SeoDashboardView.tsx`
+- בעת sync דרך ה-Dialog: לשלוח את **כל** ה-GSC keywords (לא רק top 10) כ-`gsc_keywords`.
+- ב-`gscOnlyKeywords` (שורות 412-447): למלא `volume/kd/cpc` מ-`reportData.gsc_keyword_metrics`.
+- בטבלת tracked: למשוך volume מ-`tracked_keywords` (שכבר יכלול volume אחרי שינוי 1).
+
+## עלות קרדיטים (Ahrefs)
+
+- **Tracked keywords**: אם ה-Rank Tracker endpoint תומך ב-volume בלי תוספת — חינם. אם לא — `keywords-explorer/overview` ל-N tracked (בדרך כלל 20-100 ביטויים = קריאה אחת).
+- **GSC keywords**: GSC מחזיר לרוב 100-1000 ביטויים ייחודיים. בקיזוז כפילויות עם organic — נשארים ~50-500 שצריכים enrichment = 1-5 קריאות overview.
+- **סה"כ צפוי לסנכרון**: 2-7 קריאות נוספות. `keywords-explorer/overview` בתוכנית Standard של Ahrefs זול יחסית (1 row credit לכל ביטוי).
+
+**שאלה לפני הביצוע**: אם GSC מחזיר מאות ביטויים עם traffic זניח (impressions<10), האם להגביל ל-impressions מינימליים (למשל >5) כדי לחסוך קרדיטים, או להעשיר את **הכל** בלי סינון?
