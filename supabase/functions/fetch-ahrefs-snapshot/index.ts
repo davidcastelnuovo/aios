@@ -410,6 +410,110 @@ Deno.serve(async (req) => {
 
 
 
+
+
+    // 5) Enrichment via keywords-explorer/overview:
+    //    Pull volume/kd/cpc for (a) tracked keywords missing volume,
+    //    and (b) every GSC keyword passed in that's not already in organic/tracked.
+    //    These are the same data the user sees in the GSC tab and the
+    //    "ביטויים במעקב" tab, so they need volume to be useful.
+    const gsc_keyword_metrics: Record<string, { volume: number | null; kd: number | null; cpc: number | null }> = {};
+    try {
+      const norm = (s: any) => String(s || "").toLowerCase().trim();
+
+      const haveVolume = new Map<string, { volume: number | null; kd: number | null; cpc: number | null }>();
+      for (const k of organic_keywords) {
+        const key = norm(k.keyword);
+        if (!key) continue;
+        if (k.volume != null) {
+          haveVolume.set(key, { volume: k.volume ?? null, kd: k.kd ?? null, cpc: k.cpc ?? null });
+        }
+      }
+
+      const needSet = new Set<string>();
+      // Tracked keywords without a usable volume
+      for (const t of tracked_keywords) {
+        const key = norm(t.keyword);
+        if (!key) continue;
+        if (haveVolume.has(key)) continue;
+        if (t.volume == null || t.volume === 0) needSet.add(key);
+      }
+      // GSC keywords
+      for (const key of gscKeywords) {
+        if (!haveVolume.has(key)) needSet.add(key);
+      }
+
+      const needList = Array.from(needSet);
+      console.log(`Ahrefs enrichment: organic_with_volume=${haveVolume.size} tracked=${tracked_keywords.length} gsc_in=${gscKeywords.length} to_enrich=${needList.length}`);
+
+      if (needList.length > 0) {
+        const BATCH = 100;
+        for (let i = 0; i < needList.length; i += BATCH) {
+          const batch = needList.slice(i, i + BATCH);
+          // Ahrefs v3 keywords-explorer/overview — POST with keywords array
+          const url = `https://api.ahrefs.com/v3/keywords-explorer/overview?country=${encodeURIComponent(country)}&select=${encodeURIComponent("keyword,volume,difficulty,cpc")}`;
+          const res = await fetch(url, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${ahrefsApiKey}`,
+              "Content-Type": "application/json",
+              Accept: "application/json",
+            },
+            body: JSON.stringify({ keywords: batch }),
+          });
+          if (!res.ok) {
+            const errTxt = await res.text();
+            console.warn(`keywords-explorer/overview failed: status=${res.status} body=${errTxt.slice(0, 300)}`);
+            // Try GET fallback with comma-separated keywords
+            const getUrl = `https://api.ahrefs.com/v3/keywords-explorer/overview?country=${encodeURIComponent(country)}&select=${encodeURIComponent("keyword,volume,difficulty,cpc")}&keywords=${encodeURIComponent(batch.join(","))}`;
+            const res2 = await fetch(getUrl, {
+              headers: { Authorization: `Bearer ${ahrefsApiKey}`, Accept: "application/json" },
+            });
+            if (!res2.ok) {
+              console.warn(`keywords-explorer/overview GET also failed: status=${res2.status}`);
+              continue;
+            }
+            const j2 = await res2.json();
+            const rows2 = Array.isArray(j2?.keywords) ? j2.keywords : (Array.isArray(j2?.metrics) ? j2.metrics : []);
+            for (const r of rows2) {
+              const key = norm(r.keyword);
+              if (!key) continue;
+              gsc_keyword_metrics[key] = {
+                volume: r.volume ?? null,
+                kd: r.difficulty ?? r.keyword_difficulty ?? null,
+                cpc: r.cpc ?? null,
+              };
+            }
+            continue;
+          }
+          const j = await res.json();
+          const rows = Array.isArray(j?.keywords) ? j.keywords : (Array.isArray(j?.metrics) ? j.metrics : []);
+          for (const r of rows) {
+            const key = norm(r.keyword);
+            if (!key) continue;
+            gsc_keyword_metrics[key] = {
+              volume: r.volume ?? null,
+              kd: r.difficulty ?? r.keyword_difficulty ?? null,
+              cpc: r.cpc ?? null,
+            };
+          }
+        }
+      }
+
+      // Backfill tracked_keywords in-place so the "ביטויים במעקב" table shows volume
+      for (const t of tracked_keywords) {
+        const key = norm(t.keyword);
+        const m = gsc_keyword_metrics[key];
+        if (m) {
+          if (t.volume == null || t.volume === 0) t.volume = m.volume ?? t.volume;
+          if (t.kd == null) t.kd = m.kd;
+          if (t.cpc == null) t.cpc = m.cpc;
+        }
+      }
+    } catch (e) {
+      console.warn("keywords-explorer enrichment threw:", e instanceof Error ? e.message : String(e));
+    }
+
     const reportPayload = {
       tenant_id: client.tenant_id,
       client_id: client.id,
@@ -422,6 +526,7 @@ Deno.serve(async (req) => {
         snapshot,
         organic_keywords,
         tracked_keywords,
+        gsc_keyword_metrics,
       },
       comparison_data,
       metadata: {
