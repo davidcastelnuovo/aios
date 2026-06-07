@@ -1783,10 +1783,10 @@ export default function DashboardView() {
                                 </TableCell>
                                 <TableCell>{isAnalytics ? '-' : formatCurrency(metrics.spend)}</TableCell>
                                 <TableCell>{isAnalytics ? '-' : formatNumber(metrics.impressions)}</TableCell>
-                                <TableCell>{isAnalytics ? formatNumber(metrics.sessions) : '-'}</TableCell>
-                                <TableCell>{isAnalytics ? formatNumber(metrics.users) : '-'}</TableCell>
                                 {dashboardCampaignType === 'ecommerce' ? (
                                   <>
+                                    <TableCell>{isAnalytics ? formatNumber(metrics.sessions) : '-'}</TableCell>
+                                    <TableCell>{isAnalytics ? formatNumber(metrics.users) : '-'}</TableCell>
                                     <TableCell>{formatNumber(metrics.addToCart)}</TableCell>
                                     <TableCell>{formatNumber(metrics.results)}</TableCell>
                                     <TableCell>{formatCurrency(metrics.revenue)}</TableCell>
@@ -1800,6 +1800,8 @@ export default function DashboardView() {
                                   </>
                                 ) : (
                                   <>
+                                    <TableCell>{isAnalytics ? '-' : formatNumber(metrics.clicks)}</TableCell>
+                                    <TableCell>{isAnalytics || !metrics.clicks ? '-' : formatCurrency(metrics.spend / metrics.clicks)}</TableCell>
                                     <TableCell>{formatNumber(metrics.results)}</TableCell>
                                     <TableCell>{isAnalytics ? '-' : formatCurrency(metrics.cpl)}</TableCell>
                                   </>
