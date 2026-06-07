@@ -273,13 +273,15 @@ Deno.serve(async (req) => {
       const tenantIdList = Array.from(accessibleTenantIds);
 
       // Ahrefs reports — search across all accessible tenants
+      // Order MUST match SeoDashboardView (received_at DESC, then report_date DESC)
+      // so the "first/latest" report shown publicly is the same one the user sees internally.
       let reportsQuery = supabase
         .from("ahrefs_reports")
         .select("id, domain, report_type, report_date, received_at, report_data, comparison_data, metadata")
         .in("tenant_id", tenantIdList)
-        .order("report_date", { ascending: false, nullsFirst: false })
         .order("received_at", { ascending: false })
-        .limit(50);
+        .order("report_date", { ascending: false, nullsFirst: false })
+        .limit(200);
 
       if (targetClientId) reportsQuery = reportsQuery.eq("client_id", targetClientId);
       if (targetDomain) reportsQuery = reportsQuery.eq("domain", targetDomain);
@@ -424,12 +426,12 @@ Deno.serve(async (req) => {
               }
 
               const end = new Date().toISOString().split("T")[0];
-              const start = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+              const start = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
               const encodedSiteUrl = encodeURIComponent(linkedGscSiteUrl);
               const gscApiUrl = `https://www.googleapis.com/webmasters/v3/sites/${encodedSiteUrl}/searchAnalytics/query`;
 
               const collected: any[] = [];
-              for (let page = 0; page < 5; page++) {
+              for (let page = 0; page < 25; page++) {
                 const resp = await fetch(gscApiUrl, {
                   method: "POST",
                   headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
