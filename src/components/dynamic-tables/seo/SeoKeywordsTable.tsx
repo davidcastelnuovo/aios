@@ -56,6 +56,9 @@ function KeywordRow({ kw, show3Month, showYearly, showPrevMonth, showGsc }: { kw
     ? kw.position_3month - kw.position : null;
   const posChangeYear = kw.position_yearly != null && kw.position != null
     ? kw.position_yearly - kw.position : null;
+  const gscClicks = kw.gsc_clicks != null ? Number(kw.gsc_clicks) : null;
+  const ahrefsTraffic = kw.traffic != null ? Number(kw.traffic) : null;
+  const displayClicks = gscClicks && gscClicks > 0 ? gscClicks : (ahrefsTraffic && ahrefsTraffic > 0 ? ahrefsTraffic : gscClicks);
 
   return (
     <tr className="border-b last:border-0 hover:bg-muted/30">
@@ -90,8 +93,8 @@ function KeywordRow({ kw, show3Month, showYearly, showPrevMonth, showGsc }: { kw
       )}
       {showGsc && (
         <>
-          <td className="p-3 text-center text-xs">
-            {kw.gsc_clicks != null ? Number(kw.gsc_clicks).toLocaleString() : <span className="text-muted-foreground">—</span>}
+          <td className="p-3 text-center text-xs" title={displayClicks === ahrefsTraffic && (!gscClicks || gscClicks === 0) ? "הערכת תנועה מ-Ahrefs" : undefined}>
+            {displayClicks != null ? displayClicks.toLocaleString() : <span className="text-muted-foreground">—</span>}
           </td>
           <td className="p-3 text-center text-xs">
             {kw.gsc_impressions != null ? Number(kw.gsc_impressions).toLocaleString() : <span className="text-muted-foreground">—</span>}
