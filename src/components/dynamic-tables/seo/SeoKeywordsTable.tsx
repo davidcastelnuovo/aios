@@ -103,8 +103,7 @@ function KeywordRow({ kw, show3Month, showYearly, showPrevMonth, showGsc }: { kw
       )}
       <td className="p-3 text-center">{kw.traffic != null ? Number(kw.traffic).toLocaleString() : '—'}</td>
       <td className="p-3 text-center">{kw.volume != null ? Number(kw.volume).toLocaleString() : '—'}</td>
-      <td className="p-3 text-center">{kw.kd != null ? kw.kd : '—'}</td>
-      <td className="p-3 text-center">{kw.cpc != null ? `$${kw.cpc}` : '—'}</td>
+
       <td className="p-3 text-right text-xs max-w-[200px] truncate text-muted-foreground" title={kw.url}>
         {kw.url ? new URL(kw.url).pathname : '—'}
       </td>
