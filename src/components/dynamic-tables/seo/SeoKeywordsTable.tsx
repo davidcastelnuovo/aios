@@ -181,8 +181,7 @@ function KeywordTable({ keywords, title, icon, show3Month, showYearly, showPrevM
                 )}
                 <th className="text-center p-3 font-medium">תנועה</th>
                 <th className="text-center p-3 font-medium">נפח חיפוש</th>
-                <th className="text-center p-3 font-medium">KD</th>
-                <th className="text-center p-3 font-medium">CPC</th>
+
                 <th className="text-right p-3 font-medium">URL</th>
               </tr>
             </thead>
