@@ -1,30 +1,26 @@
-## מה המשתמש רוצה
+## מה מצאתי
 
-נפח חיפוש (volume) לכל הביטויים:
-1. **כל הביטויים במעקב** (tracked keywords מ-Rank Tracker)
-2. **כל הביטויים המאונדקסים ב-GSC** (לא רק top 10) — כל מה שמופיע בדוח Search Console
+הבעיה לא בפרסום של הפרונט. קישור השיתוף מחזיר כרגע את הדוח הישן של `www.dl-cpa.co.il` מאפריל, שיש בו 25 ביטויים במעקב. הדוח הפנימי מציג את הדוח החדש יותר של `dl-cpa.co.il` מיוני, שיש בו 46 ביטויים במעקב.
 
-## הבעיה היום
+הסיבה: בטבלת השיתוף מוגדר `targetDomain: www.dl-cpa.co.il`, והפונקציה הציבורית מסננת דוחות לפי דומיין מדויק. לכן היא מפספסת את הדוח החדש שנשמר בלי `www`.
 
-- Tracked keywords מ-Rank Tracker של Ahrefs **לא כוללים** `volume` כברירת מחדל — צריך לבקש את השדה.
-- GSC keywords שלא נמצאים ב-organic_keywords (500 הראשונים) מציגים `—` כי אין להם נתון מ-Ahrefs.
+## תוכנית תיקון
 
-## התוכנית
+1. לעדכן את פונקציית `public-table` כך שבדוחות SEO היא לא תיפול על הבדל טכני בין דומיין עם `www` ובלי `www`.
+   - אם מוגדר `targetDomain`, נחפש גם את הדומיין המקורי וגם את הגרסה המקבילה עם/בלי `www`.
+   - עדיין נשמור סינון לפי `client_id`, כדי לא לערבב לקוחות.
 
-### 1. `fetch-ahrefs-snapshot/index.ts`
-- **Tracked keywords**: ודא ש-`volume`, `keyword_difficulty`, `cpc` נכללים ב-`select` של קריאת Rank Tracker. אם ה-endpoint לא מחזיר volume, להעשיר אותם דרך `keywords-explorer/overview` באותה קריאה (batch 100, country=il).
-- **GSC keywords**: לקבל פרמטר חדש `gsc_keywords: string[]` (כל הביטויים מ-GSC, לא רק top 10). לסנן רק את אלה שאינם כבר ב-organic_keywords + tracked_keywords (כי שם כבר יש volume). על היתר — קריאה ל-`keywords-explorer/overview` ב-batches של 100, country=il.
-- שמירת תוצאות ב-`report_data.gsc_keyword_metrics` כ-map: `{ keywordLower: { volume, kd, cpc } }`.
+2. להשאיר את סדר הדוחות כמו בדוח הפנימי:
+   - קודם `received_at` החדש ביותר
+   - אחר כך `report_date`
+   כך שקישור השיתוף יבחר את אותו דוח שהפנימי בוחר.
 
-### 2. `SeoDashboardView.tsx`
-- בעת sync דרך ה-Dialog: לשלוח את **כל** ה-GSC keywords (לא רק top 10) כ-`gsc_keywords`.
-- ב-`gscOnlyKeywords` (שורות 412-447): למלא `volume/kd/cpc` מ-`reportData.gsc_keyword_metrics`.
-- בטבלת tracked: למשוך volume מ-`tracked_keywords` (שכבר יכלול volume אחרי שינוי 1).
+3. לוודא שגם ה-UI הציבורי ממשיך להשתמש באותו רכיב טבלת ביטויים, ולכן אחרי שהפונקציה תחזיר את הדוח הנכון הוא יציג את אותם ביטויים במעקב.
 
-## עלות קרדיטים (Ahrefs)
+4. לפרוס מחדש את פונקציית `public-table` ולבדוק ישירות את קישור השיתוף `dvrvn-7r67` כדי לוודא שהוא מחזיר את הדוח החדש עם 46 ביטויים במעקב במקום 25.
 
-- **Tracked keywords**: אם ה-Rank Tracker endpoint תומך ב-volume בלי תוספת — חינם. אם לא — `keywords-explorer/overview` ל-N tracked (בדרך כלל 20-100 ביטויים = קריאה אחת).
-- **GSC keywords**: GSC מחזיר לרוב 100-1000 ביטויים ייחודיים. בקיזוז כפילויות עם organic — נשארים ~50-500 שצריכים enrichment = 1-5 קריאות overview.
-- **סה"כ צפוי לסנכרון**: 2-7 קריאות נוספות. `keywords-explorer/overview` בתוכנית Standard של Ahrefs זול יחסית (1 row credit לכל ביטוי).
+## קבצים שישתנו
 
-**שאלה לפני הביצוע**: אם GSC מחזיר מאות ביטויים עם traffic זניח (impressions<10), האם להגביל ל-impressions מינימליים (למשל >5) כדי לחסוך קרדיטים, או להעשיר את **הכל** בלי סינון?
+- `supabase/functions/public-table/index.ts`
+
+לא צפוי שינוי נוסף בפרונט, כי הבעיה היא בבחירת הדוח שמוחזר לקישור השיתוף.
