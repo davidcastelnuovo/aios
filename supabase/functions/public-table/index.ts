@@ -431,7 +431,7 @@ Deno.serve(async (req) => {
               const gscApiUrl = `https://www.googleapis.com/webmasters/v3/sites/${encodedSiteUrl}/searchAnalytics/query`;
 
               const collected: any[] = [];
-              for (let page = 0; page < 5; page++) {
+              for (let page = 0; page < 25; page++) {
                 const resp = await fetch(gscApiUrl, {
                   method: "POST",
                   headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
