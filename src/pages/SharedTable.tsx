@@ -19,7 +19,7 @@ import { Label } from "@/components/ui/label";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { cn } from "@/lib/utils";
-import { FileSpreadsheet, Facebook, TrendingUp, TrendingDown, Minus, Globe, Search, BarChart3, CalendarIcon, ChevronDown } from "lucide-react";
+import { FileSpreadsheet, Facebook, TrendingUp, TrendingDown, Minus, Globe, Search, BarChart3, CalendarIcon, ChevronDown, Phone } from "lucide-react";
 import { PublicSeoView } from "@/components/dynamic-tables/PublicSeoView";
 import { PublicMaskyooCallsCard } from "@/components/dynamic-tables/PublicMaskyooCallsCard";
 import { PublicGscView } from "@/components/dynamic-tables/PublicGscView";
