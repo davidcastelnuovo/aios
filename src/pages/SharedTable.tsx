@@ -304,7 +304,7 @@ export default function SharedTable() {
     const hasGa = gaRecords.length > 0;
     const hasGsc = gscRecords.length > 0;
     const hasMaskyoo = maskyooSnapshots.length > 0;
-    const showTabs = hasGa || hasGsc;
+    const showTabs = true;
 
     // Derive monthly NON-PAID GA sessions for the SEO traffic chart — using the
     // shared helper so the public viewer matches the internal SeoDashboardView 1:1.
