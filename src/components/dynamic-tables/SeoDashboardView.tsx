@@ -473,8 +473,11 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
     }
     setIsFetchingSnapshot(true);
     try {
+      const gscKws = Array.from(new Set(
+        gscData.map(g => (g.keyword || '').toLowerCase().trim()).filter(k => k.length > 0)
+      ));
       const { data, error } = await supabase.functions.invoke('fetch-ahrefs-snapshot', {
-        body: { clientId, domain, projectId },
+        body: { clientId, domain, projectId, gsc_keywords: gscKws },
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
@@ -486,7 +489,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
     } finally {
       setIsFetchingSnapshot(false);
     }
-  }, [clientId, domain, selectedReport, queryClient]);
+  }, [clientId, domain, selectedReport, queryClient, gscData]);
 
   if (isLoading) {
     return (
