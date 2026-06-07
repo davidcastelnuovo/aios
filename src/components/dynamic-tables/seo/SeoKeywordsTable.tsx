@@ -103,8 +103,7 @@ function KeywordRow({ kw, show3Month, showYearly, showPrevMonth, showGsc }: { kw
       )}
       <td className="p-3 text-center">{kw.traffic != null ? Number(kw.traffic).toLocaleString() : '—'}</td>
       <td className="p-3 text-center">{kw.volume != null ? Number(kw.volume).toLocaleString() : '—'}</td>
-      <td className="p-3 text-center">{kw.kd != null ? kw.kd : '—'}</td>
-      <td className="p-3 text-center">{kw.cpc != null ? `$${kw.cpc}` : '—'}</td>
+
       <td className="p-3 text-right text-xs max-w-[200px] truncate text-muted-foreground" title={kw.url}>
         {kw.url ? new URL(kw.url).pathname : '—'}
       </td>
@@ -182,8 +181,7 @@ function KeywordTable({ keywords, title, icon, show3Month, showYearly, showPrevM
                 )}
                 <th className="text-center p-3 font-medium">תנועה</th>
                 <th className="text-center p-3 font-medium">נפח חיפוש</th>
-                <th className="text-center p-3 font-medium">KD</th>
-                <th className="text-center p-3 font-medium">CPC</th>
+
                 <th className="text-right p-3 font-medium">URL</th>
               </tr>
             </thead>
