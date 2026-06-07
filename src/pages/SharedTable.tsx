@@ -346,54 +346,31 @@ export default function SharedTable() {
             </div>
           </div>
 
-          {showTabs ? (
-            <Tabs defaultValue="seo" className="w-full">
-              <TabsList className="w-full justify-start gap-1">
-                <TabsTrigger value="seo" className="gap-1.5">
-                  <TrendingUp className="h-4 w-4" />
-                  SEO
-                </TabsTrigger>
-                {hasGsc && (
-                  <TabsTrigger value="gsc" className="gap-1.5">
-                    <Search className="h-4 w-4" />
-                    Search Console
-                  </TabsTrigger>
-                )}
-                {hasGa && (
-                  <TabsTrigger value="ga" className="gap-1.5">
-                    <BarChart3 className="h-4 w-4" />
-                    Analytics
-                  </TabsTrigger>
-                )}
-              </TabsList>
-
-              <TabsContent value="seo" className="space-y-4">
-                <PublicMaskyooCallsCard snapshots={maskyooSnapshots} periodLabel={periodLabel} />
-                <PublicSeoView
-                  tableName={data.table.name}
-                  reports={data.ahrefs_reports || []}
-                  gscData={gscAggregated}
-                  gscMultiPeriod={data.gsc_multi_period || null}
-                  gaOrganicByMonth={gaOrganicByMonth}
-                  initialLangFilter={(data.table.integration_settings as any)?.linkedGscLangFilter || 'all'}
-                />
-              </TabsContent>
-
+          <Tabs defaultValue="seo" className="w-full">
+            <TabsList className="w-full justify-start gap-1">
+              <TabsTrigger value="seo" className="gap-1.5">
+                <TrendingUp className="h-4 w-4" />
+                SEO
+              </TabsTrigger>
               {hasGsc && (
-                <TabsContent value="gsc">
-                  <PublicGscView records={gscRecords} />
-                </TabsContent>
+                <TabsTrigger value="gsc" className="gap-1.5">
+                  <Search className="h-4 w-4" />
+                  Search Console
+                </TabsTrigger>
               )}
-
               {hasGa && (
-                <TabsContent value="ga">
-                  <GoogleAnalyticsDashboard records={gaRecords} />
-                </TabsContent>
+                <TabsTrigger value="ga" className="gap-1.5">
+                  <BarChart3 className="h-4 w-4" />
+                  Analytics
+                </TabsTrigger>
               )}
-            </Tabs>
-          ) : (
-            <div className="space-y-4">
-              <PublicMaskyooCallsCard snapshots={maskyooSnapshots} periodLabel={periodLabel} />
+              <TabsTrigger value="maskyoo" className="gap-1.5">
+                <Phone className="h-4 w-4" />
+                שיחות מסקיו
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="seo" className="space-y-4">
               <PublicSeoView
                 tableName={data.table.name}
                 reports={data.ahrefs_reports || []}
@@ -402,8 +379,25 @@ export default function SharedTable() {
                 gaOrganicByMonth={gaOrganicByMonth}
                 initialLangFilter={(data.table.integration_settings as any)?.linkedGscLangFilter || 'all'}
               />
-            </div>
-          )}
+            </TabsContent>
+
+            {hasGsc && (
+              <TabsContent value="gsc">
+                <PublicGscView records={gscRecords} />
+              </TabsContent>
+            )}
+
+            {hasGa && (
+              <TabsContent value="ga">
+                <GoogleAnalyticsDashboard records={gaRecords} />
+              </TabsContent>
+            )}
+
+            <TabsContent value="maskyoo">
+              <PublicMaskyooCallsCard snapshots={maskyooSnapshots} periodLabel={periodLabel} />
+            </TabsContent>
+          </Tabs>
+
 
         </div>
       </div>
