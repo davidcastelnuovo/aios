@@ -273,13 +273,15 @@ Deno.serve(async (req) => {
       const tenantIdList = Array.from(accessibleTenantIds);
 
       // Ahrefs reports — search across all accessible tenants
+      // Order MUST match SeoDashboardView (received_at DESC, then report_date DESC)
+      // so the "first/latest" report shown publicly is the same one the user sees internally.
       let reportsQuery = supabase
         .from("ahrefs_reports")
         .select("id, domain, report_type, report_date, received_at, report_data, comparison_data, metadata")
         .in("tenant_id", tenantIdList)
-        .order("report_date", { ascending: false, nullsFirst: false })
         .order("received_at", { ascending: false })
-        .limit(50);
+        .order("report_date", { ascending: false, nullsFirst: false })
+        .limit(200);
 
       if (targetClientId) reportsQuery = reportsQuery.eq("client_id", targetClientId);
       if (targetDomain) reportsQuery = reportsQuery.eq("domain", targetDomain);
