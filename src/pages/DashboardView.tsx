@@ -1818,10 +1818,10 @@ export default function DashboardView() {
                             </TableCell>
                             <TableCell>{formatCurrency(totalSummary.spend)}</TableCell>
                             <TableCell>{formatNumber(totalSummary.impressions)}</TableCell>
-                            <TableCell>{formatNumber(totalSummary.analyticsSessions)}</TableCell>
-                            <TableCell>{formatNumber(totalSummary.analyticsUsers)}</TableCell>
                             {dashboardCampaignType === 'ecommerce' ? (
                               <>
+                                <TableCell>{formatNumber(totalSummary.analyticsSessions)}</TableCell>
+                                <TableCell>{formatNumber(totalSummary.analyticsUsers)}</TableCell>
                                 <TableCell>{formatNumber(totalSummary.analyticsAddToCart)}</TableCell>
                                 <TableCell>{formatNumber(totalSummary.analyticsPurchases || totalSummary.results)}</TableCell>
                                 <TableCell>{formatCurrency(totalSummary.revenue)}</TableCell>
@@ -1833,6 +1833,8 @@ export default function DashboardView() {
                               </>
                             ) : (
                               <>
+                                <TableCell>{formatNumber(totalSummary.clicks)}</TableCell>
+                                <TableCell>{totalSummary.clicks > 0 ? formatCurrency(totalSummary.spend / totalSummary.clicks) : '-'}</TableCell>
                                 <TableCell>{formatNumber(totalSummary.results)}</TableCell>
                                 <TableCell>{formatCurrency(combinedCpl)}</TableCell>
                               </>
