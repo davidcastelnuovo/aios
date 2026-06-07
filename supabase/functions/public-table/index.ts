@@ -426,7 +426,7 @@ Deno.serve(async (req) => {
               }
 
               const end = new Date().toISOString().split("T")[0];
-              const start = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+              const start = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
               const encodedSiteUrl = encodeURIComponent(linkedGscSiteUrl);
               const gscApiUrl = `https://www.googleapis.com/webmasters/v3/sites/${encodedSiteUrl}/searchAnalytics/query`;
 
