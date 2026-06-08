@@ -344,7 +344,7 @@ export function CashFlowTab() {
   const markExpense = useMutation({
     mutationFn: async ({ expenseType, expenseId, amount, name }: { expenseType: string; expenseId: string; amount: number; name: string }) => {
       const { error } = await supabase.from("expense_payments").insert({
-        tenant_id: tenantId,
+        tenant_id: tenantId!,
         expense_type: expenseType,
         expense_id: expenseId,
         expense_name: name,
