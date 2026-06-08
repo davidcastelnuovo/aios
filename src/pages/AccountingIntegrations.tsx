@@ -514,8 +514,13 @@ export default function AccountingIntegrations() {
       <Tabs defaultValue="overview" className="w-full" dir="rtl">
         <TabsList>
           <TabsTrigger value="overview">סקירה</TabsTrigger>
+          <TabsTrigger value="cashflow">ניהול תזרים</TabsTrigger>
           <TabsTrigger value="invoices">קליטת חשבוניות</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="cashflow" className="mt-4">
+          <CashFlowTab />
+        </TabsContent>
 
         <TabsContent value="invoices" className="mt-4">
           <InvoiceIntakeTab />
