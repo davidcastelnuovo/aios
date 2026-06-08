@@ -17,6 +17,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { InvoiceIntakeTab } from "@/components/accounting/InvoiceIntakeTab";
+import { CashFlowTab } from "@/components/accounting/CashFlowTab";
 import { Filter } from "lucide-react";
 import { toast } from "sonner";
 import { 
