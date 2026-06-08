@@ -315,9 +315,11 @@ export function CashFlowTab() {
   // --- Mutations: mark paid / collected ---
   const markIncome = useMutation({
     mutationFn: async ({ clientId, amount }: { clientId: string; amount: number }) => {
+      const clientName = clientById[clientId]?.name || "—";
       const { error } = await supabase.from("income_payments").insert({
-        tenant_id: tenantId,
+        tenant_id: tenantId!,
         client_id: clientId,
+        client_name: clientName,
         amount,
         payment_month: selectedMonth,
         received_at: new Date().toISOString(),
