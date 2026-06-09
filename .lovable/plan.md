@@ -1,58 +1,34 @@
 
-## טאב חדש: ניהול תזרים (Cash Flow)
+## הבעיה
 
-טאב שלישי במודול הנהלת חשבונות (`AccountingIntegrations.tsx`), ליד "סקירה" ו"קליטת חשבוניות", שמרכז הכנסות והוצאות **לפי סוכנות** (DMM, Promo, Marketing Captain וכו') לניהול תזרים — צפוי מול בפועל, כולל תחזית קדימה וגרף יתרה מצטברת.
+הדוח `periodontics.co.il` נוצר בארגון **DMM** אבל משויך ללקוח בסוכנות **DMM-MC**, שהיא סוכנות בבעלות **MarketingCaptain** (משותפת ל-DMM דרך `agency_tenant_access`). למרות זאת הדוח לא מופיע ב-MarketingCaptain.
 
-### 1. בורר חודש + KPI
-- Selector חודש (default: חודש נוכחי) + ניווט חודש קודם/הבא.
-- 4 קלפי KPI בראש: סך הכנסות צפויות / בפועל, סך הוצאות צפויות / בפועל, לחודש הנבחר.
-- אם הוצאות צפויות > הכנסות צפויות → באנר אזהרה אדום.
+שתי תקלות מצטרפות:
 
-### 2. טבלה ראשית — סיכום לפי סוכנות
+1. **`agency_id` של הדוח הוא `NULL`** — בדיאלוג `SeoReportDialog` הקליינט שולח שדות בשמות camelCase (`agencyId`, `clientId`) אבל ה-edge function `crm-tables` (POST) קורא רק שמות snake_case (`agency_id`, `client_id`). לכן `agency_id` נשמר כ-NULL בעת יצירת הדוח.
+2. **לוגיקת ה-GET ב-`crm-tables` מסננת חוצה-ארגונים רק לפי `agency_id`** — היא לא מביאה דוחות זרים שמשויכים ללקוח ששייך לסוכנות שלנו (own/shared) כשה-`agency_id` של הטבלה ריק.
 
-| סוכנות | הכנסות צפויות | הכנסות בפועל | הוצאות צפויות | הוצאות בפועל | תזרים נטו צפוי | תזרים נטו בפועל | פער |
-|---|---|---|---|---|---|---|---|
+## התיקון
 
-- **הכנסות צפויות** = `retainer` של לקוחות active בסוכנות + `one_time_incomes` של החודש.
-- **הכנסות בפועל** = `income_payments` של החודש.
-- **הוצאות צפויות** = `monthly_fixed_expense` של לקוחות + תשלומי ספקים (`suppliers.payment_1/2/3` לפי `agency_id_1/2/3`).
-- **הוצאות בפועל** = `expense_payments` של החודש.
-- שורת **TOTAL** מצטברת בתחתית.
+### 1. `supabase/functions/crm-tables/index.ts` — POST
+לקבל גם camelCase: `const agency_id = body.agency_id ?? body.agencyId; const client_id = body.client_id ?? body.clientId;`. אם `agency_id` ריק אבל יש `client_id` — להשלים אוטומטית `agency_id` מתוך הלקוח.
 
-### 3. Drill-down (לחיצה על שורת סוכנות)
-דיאלוג עם פירוט רטיינרים, הכנסות חד-פעמיות, הוצאות קבועות ותשלומי ספקים — עם toggle "נגבה / שולם" שיוצר רשומה ב-`income_payments` / `expense_payments` (עדכון "בפועל" ישירות מהטאב).
+### 2. `supabase/functions/crm-tables/index.ts` — GET
+להוסיף שאילתת איסוף רביעית: דוחות בארגונים זרים שה-`client_id` שלהם שייך לקליינט בסוכנות own/shared (גם כש-`agency_id` ריק).
 
-### 4. תחזית 3 חודשים קדימה (המלצה #1)
-טבלה משנית מתחת לראשית, עם 3 עמודות חודש קדימה:
+```text
+ownedClientIds  = clients where agency_id IN (owned ∪ shared)  AND tenant_id != ours
+foreignByClient = crm_tables where tenant_id != ours AND client_id IN ownedClientIds
+allTables       = own ∪ sharedByAgency ∪ ownedForeignByAgency ∪ foreignByClient  (dedupe)
+```
 
-| סוכנות | חודש הבא | בעוד חודשיים | בעוד 3 חודשים |
-|---|---|---|---|
+### 3. Backfill — מיגרציה חד פעמית
+לעדכן `crm_tables.agency_id` בכל הרשומות שבהן הוא NULL לפי `clients.agency_id` של ה-`client_id` המקושר. כך הדוח הקיים יופיע מיידית גם ב-MC, וגם פתרונות אחרים שמסתמכים על `agency_id` יעבדו נכון.
 
-- מבוסס על retainers + monthly_fixed_expense + תשלומי ספקים חוזרים (מניח שכל הקבועים ממשיכים).
-- תא הופך אדום אם תזרים נטו צפוי שלילי.
-- שורת TOTAL לכל חודש.
+### 4. PATCH
+לקבל גם camelCase (לעקביות) — `agencyId`/`clientId`.
 
-### 5. גרף יתרה מצטברת — Running Balance (המלצה #2)
-מתחת לתחזית: גרף Recharts (LineChart) שמראה את יתרת התזרים המצטברת לאורך החודש הנבחר:
-- ציר X: ימי החודש (1..31).
-- ציר Y: יתרה מצטברת (יתרת פתיחה + הכנסות בפועל עד התאריך − הוצאות בפועל עד התאריך).
-- שני קווים: **בפועל** (קו מלא) ו**צפוי** (קו מקווקו, על בסיס תאריכי `payment_month` של רטיינרים והוצאות קבועות).
-- אפשרות סינון לפי סוכנות (dropdown מעל הגרף — "כל הסוכנויות" / סוכנות ספציפית).
-- קו אופקי ב-0 לזיהוי מתי היתרה נכנסת למינוס.
+## אימות
 
-### 6. יצוא
-כפתור "ייצוא ל-CSV" של הטבלה הראשית + טבלת התחזית לחודש הנבחר.
-
-### למה זה עונה על הצורך
-- ההפרדה לסוכנויות (DMM/Promo/MC) מתקבלת מ-`agency_id` הקיים — אין צורך בשינוי schema.
-- "צפוי vs בפועל" + תחזית 3 חודשים + גרף יתרה = הסטנדרט של דוח Cash Flow Forecast מקצועי.
-- אין פירוט לקוח-לקוח ברמת התזרים — רק סכומים מצרפיים, כפי שביקשת.
-
-### קבצים שיושפעו
-- חדש: `src/components/accounting/CashFlowTab.tsx` — כל הלוגיקה והתצוגה (טבלה, תחזית, גרף).
-- עריכה: `src/pages/AccountingIntegrations.tsx` — הוספת `TabsTrigger value="cashflow"` ותוכן הטאב.
-
-### הערות טכניות
-- כל ה-queries במקביל: clients (retainer + monthly_fixed_expense + agency_id), one_time_incomes, income_payments, expense_payments, suppliers — מסוננים `tenant_id` + טווח חודשים (חודש נוכחי + 3 קדימה).
-- Aggregation בצד הלקוח לפי `agency_id`.
-- אין שינוי DB schema.
+- לאחר הפריסה לרענן את `/t/marketing-captain/dynamic-tables` ולוודא שהדוח `periodontics.co.il` מופיע תחת הסוכנות DMM-MC.
+- ליצור דוח SEO חדש מ-MC ולוודא ש-`agency_id` נשמר ב-DB וזה גם נראה ב-DMM (וגם להפך).
