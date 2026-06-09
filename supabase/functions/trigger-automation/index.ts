@@ -2627,31 +2627,61 @@ function replaceTemplateVariables(template: string, data: any, tenantSlug?: stri
     group_invite_link: data.group_invite_link || '',
   }
   
-  // Add all fb_ fields and any other dynamic fields from data
-  for (const [key, value] of Object.entries(data)) {
-    if (key.startsWith('fb_') && typeof value === 'string') {
-      if (!(key in variables)) variables[key] = value
-      // Also register underscore-normalized variant (FB field names often contain spaces)
-      const normalized = key.replace(/\s+/g, '_')
-      if (normalized !== key && !(normalized in variables)) {
-        variables[normalized] = value
-      }
-      // And space-normalized variant (in case template uses spaces)
-      const spaced = key.replace(/_/g, ' ')
-      if (spaced !== key && !(spaced in variables)) {
-        variables[spaced] = value
-      }
+  const stringifyVariable = (value: unknown): string => {
+    if (value === undefined || value === null) return ''
+    if (typeof value === 'string') return value
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+    try { return JSON.stringify(value) } catch { return String(value) }
+  }
+
+  const registerVariable = (key: string, value: unknown, override = false) => {
+    if (!key || value === undefined || value === null) return
+    const textValue = stringifyVariable(value)
+    if (override || !(key in variables)) variables[key] = textValue
+
+    // Register common spacing variants so {{fb_phone_number}}, {{fb phone number}}
+    // and {{fb_phone number}} can all resolve to the same value.
+    const underscore = key.replace(/\s+/g, '_')
+    if (!(underscore in variables)) variables[underscore] = textValue
+    const spaced = key.replace(/_/g, ' ')
+    if (!(spaced in variables)) variables[spaced] = textValue
+  }
+
+  // Add all primitive dynamic fields from data, including fb_ fields from Facebook.
+  for (const [key, value] of Object.entries(data || {})) {
+    if (['string', 'number', 'boolean'].includes(typeof value)) {
+      registerVariable(key, value)
     }
   }
-  
-  let result = template
+
+  // Backward-compatible aliases for older Facebook templates that used Hebrew labels
+  // instead of the real Facebook field keys (for example {{fb_שם_מלא}}).
+  const fbFullName = data?.fb_full_name || data?.fb_name || data?.['fb_full name'] || data?.contact_name || data?.company_name
+  const fbPhone = data?.fb_phone_number || data?.fb_phone || data?.['fb_phone number'] || data?.phone || data?.sender_phone
+  const fbEmail = data?.fb_email || data?.email
+  registerVariable('fb_שם_מלא', fbFullName)
+  registerVariable('fb_שם מלא', fbFullName)
+  registerVariable('fb_שם', fbFullName)
+  registerVariable('fb_מספר_טלפון', fbPhone)
+  registerVariable('fb_מספר טלפון', fbPhone)
+  registerVariable('fb_טלפון', fbPhone)
+  registerVariable('fb_אימייל', fbEmail)
+  registerVariable('fb_מייל', fbEmail)
+
+  const normalizeTemplateKey = (key: string) =>
+    key.trim().toLowerCase().replace(/[\s_\-־״"'`]+/g, '')
+  const normalizedVariables = new Map<string, string>()
   for (const [key, value] of Object.entries(variables)) {
-    // Escape special regex characters in key (Hebrew chars, ?, etc.)
-    const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    result = result.replace(new RegExp(`\\{\\{${escapedKey}\\}\\}`, 'g'), value)
+    normalizedVariables.set(normalizeTemplateKey(key), value)
   }
-  
-  return result
+
+  return template.replace(/\{\{([^}]+)\}\}/g, (match: string, rawKey: string) => {
+    const key = rawKey.trim()
+    if (variables[key] !== undefined) return variables[key]
+    const normalizedValue = normalizedVariables.get(normalizeTemplateKey(key))
+    if (normalizedValue !== undefined) return normalizedValue
+    return match
+  })
 }
 
 // ---------- Multi-recipient helpers ----------
