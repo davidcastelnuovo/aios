@@ -1,34 +1,56 @@
 
-## הבעיה
+## הבעיה — אישור מנתוני DB
 
-הדוח `periodontics.co.il` נוצר בארגון **DMM** אבל משויך ללקוח בסוכנות **DMM-MC**, שהיא סוכנות בבעלות **MarketingCaptain** (משותפת ל-DMM דרך `agency_tenant_access`). למרות זאת הדוח לא מופיע ב-MarketingCaptain.
+ב-`ahrefs_reports`: **כל הסנכרונים האחרונים** (מהיום, 09/06) נשמרו עם `tracked_count = 0` ו-`metadata.ahrefs_project_id = null`. בסנכרונים קודמים (לפני זה) הערכים אכן היו מאוכלסים (לדוגמה `ahrefs_project_id: 8732546`, `tracked_source: rank-tracker-overview`). אז המשיכה אכן נכשלה — זו לא בעיית UI.
 
-שתי תקלות מצטרפות:
+## שורש הבעיה
 
-1. **`agency_id` של הדוח הוא `NULL`** — בדיאלוג `SeoReportDialog` הקליינט שולח שדות בשמות camelCase (`agencyId`, `clientId`) אבל ה-edge function `crm-tables` (POST) קורא רק שמות snake_case (`agency_id`, `client_id`). לכן `agency_id` נשמר כ-NULL בעת יצירת הדוח.
-2. **לוגיקת ה-GET ב-`crm-tables` מסננת חוצה-ארגונים רק לפי `agency_id`** — היא לא מביאה דוחות זרים שמשויכים ללקוח ששייך לסוכנות שלנו (own/shared) כשה-`agency_id` של הטבלה ריק.
+`fetch-ahrefs-snapshot` מושך את `tracked_keywords` מ-Ahrefs Rank Tracker **רק כאשר מועבר `projectId` בגוף הבקשה** (ראה `supabase/functions/fetch-ahrefs-snapshot/index.ts:280` — `if (projectId) { ... }`).
+
+הסנכרון הקבוצתי ("סנכרון מדוחות SEO") עובר ב-`src/components/dynamic-tables/CategorySyncControl.tsx:52` וקורא:
+
+```ts
+supabase.functions.invoke("fetch-ahrefs-snapshot", {
+  body: { clientId, domain, country: settings.country || "il" },
+});
+```
+
+**ללא** `projectId` — לכן כל הסנכרון הזה דורס את הדוחות ב-snapshot חדש בלי tracked_keywords. במסך הפנימי של דוח בודד (`SeoDashboardView.tsx:482`) זה כן עובד כי שם מועבר `projectId: selectedReport.metadata.ahrefs_project_id`.
 
 ## התיקון
 
-### 1. `supabase/functions/crm-tables/index.ts` — POST
-לקבל גם camelCase: `const agency_id = body.agency_id ?? body.agencyId; const client_id = body.client_id ?? body.clientId;`. אם `agency_id` ריק אבל יש `client_id` — להשלים אוטומטית `agency_id` מתוך הלקוח.
+### 1. `src/components/dynamic-tables/CategorySyncControl.tsx`
+לפני קריאת `fetch-ahrefs-snapshot`, לטעון את ה-`ahrefs_project_id` של הלקוח/דומיין מהדוח האחרון שיש לו אחד שמור:
 
-### 2. `supabase/functions/crm-tables/index.ts` — GET
-להוסיף שאילתת איסוף רביעית: דוחות בארגונים זרים שה-`client_id` שלהם שייך לקליינט בסוכנות own/shared (גם כש-`agency_id` ריק).
+```ts
+const { data: lastWithProject } = await supabase
+  .from("ahrefs_reports")
+  .select("metadata")
+  .eq("tenant_id", t.tenant_id)
+  .eq("client_id", clientId)
+  .eq("domain", normalizedDomain)     // normalize like target above
+  .not("metadata->ahrefs_project_id", "is", null)
+  .order("report_date", { ascending: false })
+  .limit(1)
+  .maybeSingle();
 
-```text
-ownedClientIds  = clients where agency_id IN (owned ∪ shared)  AND tenant_id != ours
-foreignByClient = crm_tables where tenant_id != ours AND client_id IN ownedClientIds
-allTables       = own ∪ sharedByAgency ∪ ownedForeignByAgency ∪ foreignByClient  (dedupe)
+const projectId = lastWithProject?.metadata?.ahrefs_project_id ?? settings.ahrefs_project_id ?? null;
 ```
 
-### 3. Backfill — מיגרציה חד פעמית
-לעדכן `crm_tables.agency_id` בכל הרשומות שבהן הוא NULL לפי `clients.agency_id` של ה-`client_id` המקושר. כך הדוח הקיים יופיע מיידית גם ב-MC, וגם פתרונות אחרים שמסתמכים על `agency_id` יעבדו נכון.
+ולהעביר אותו ל-body של ה-invoke (כולל `mode`/`protocol` אם נשמרו ב-`integration_settings`).
 
-### 4. PATCH
-לקבל גם camelCase (לעקביות) — `agencyId`/`clientId`.
+### 2. `src/components/dynamic-tables/SeoReportDialog.tsx` (תיקון "מקור")
+כשמשתמש בוחר פרויקט Ahrefs ב-`AhrefsProjectPicker`, לשמור את `ahrefs_project_id` גם ב-`integration_settings` של ה-CRM table (לא רק ב-metadata של הדוח). כך לסנכרונים עתידיים יש מקור אמין גם כשאין דוח קודם עם projectId.
+
+### 3. Backfill חד-פעמי — שחזור הדוחות שנדרסו
+לכל דוח שנשמר היום עם `tracked_count = 0` אבל היה לו `ahrefs_project_id` בסנכרון הקודם — לא חייבים backfill SQL: אחרי שהתיקון נפרס, סנכרון חוזר אחד יחזיר את כל ה-tracked_keywords כי `fetch-ahrefs-snapshot` ימשוך מ-Rank Tracker שוב.
+
+לכן אין צורך במיגרציה. רק:
+- לפרוס `CategorySyncControl` (frontend, יתפוס מעצמו)
+- ללחוץ "סנכרן הכל" מהקטגוריה SEO — הדוחות יתעדכנו עם tracked_keywords תקינים.
 
 ## אימות
 
-- לאחר הפריסה לרענן את `/t/marketing-captain/dynamic-tables` ולוודא שהדוח `periodontics.co.il` מופיע תחת הסוכנות DMM-MC.
-- ליצור דוח SEO חדש מ-MC ולוודא ש-`agency_id` נשמר ב-DB וזה גם נראה ב-DMM (וגם להפך).
+1. אחרי הפריסה, להריץ סנכרון של קטגוריית SEO.
+2. לוודא בלוגים של `fetch-ahrefs-snapshot`: `tracked_count > 0` ו-`source=rank-tracker-overview`.
+3. ב-UI: לשונית "ביטויים במעקב" צריכה להציג מספר תואם בכל הדוחות.

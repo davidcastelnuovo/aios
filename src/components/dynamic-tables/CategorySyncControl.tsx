@@ -47,16 +47,52 @@ async function syncStoredAhrefsReportTable(t: CategoryTable) {
   const clientId = settings.clientId || settings.client_id || t.client_id;
   if (!clientId || !t.tenant_id) throw new Error("Missing SEO report scope");
 
-  // Step 1: Fetch fresh Ahrefs snapshot from API (persists into ahrefs_reports via webhook)
+  const normalizeDomain = (value?: string) =>
+    String(value || "").replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
   const domain = settings.targetDomain || settings.target || settings.domain;
+  const normalizedDomain = normalizeDomain(domain);
+
+  // Look up the most recent ahrefs_project_id for this client+domain so the
+  // fetch can pull tracked_keywords from Rank Tracker. Without this, the
+  // snapshot is rebuilt without "ביטויים במעקב".
+  let projectId: string | number | null = settings.ahrefs_project_id ?? null;
+  let usedMode: string | null = settings.ahrefs_mode ?? null;
+  let usedProtocol: string | null = settings.ahrefs_protocol ?? null;
+  if (!projectId) {
+    const { data: lastWithProject } = await supabase
+      .from("ahrefs_reports" as any)
+      .select("metadata, domain")
+      .eq("tenant_id", t.tenant_id)
+      .eq("client_id", clientId)
+      .not("metadata->ahrefs_project_id", "is", null)
+      .order("report_date", { ascending: false })
+      .limit(20);
+    const rows = (lastWithProject as any[]) || [];
+    const match = rows.find((r: any) =>
+      !normalizedDomain || normalizeDomain(r.domain) === normalizedDomain
+    ) || rows[0];
+    const meta = match?.metadata as any;
+    if (meta) {
+      projectId = meta.ahrefs_project_id ?? null;
+      usedMode = usedMode ?? meta.used_mode ?? null;
+      usedProtocol = usedProtocol ?? meta.used_protocol ?? null;
+    }
+  }
+
+
+  // Step 1: Fetch fresh Ahrefs snapshot from API (persists into ahrefs_reports via webhook)
   const { error: fetchError } = await supabase.functions.invoke("fetch-ahrefs-snapshot", {
     body: {
       clientId,
       domain,
       country: settings.country || "il",
+      ...(projectId ? { projectId } : {}),
+      ...(usedMode ? { mode: usedMode } : {}),
+      ...(usedProtocol ? { protocol: usedProtocol } : {}),
     },
   });
   if (fetchError) throw fetchError;
+
 
   // Step 2: Read freshly stored reports and rebuild crm_records
   const { data: reports, error } = await supabase
@@ -69,9 +105,8 @@ async function syncStoredAhrefsReportTable(t: CategoryTable) {
   if (error) throw error;
   if (!reports || reports.length === 0) throw new Error("לא נמצאו דוחות Ahrefs שמורים");
 
-  const normalizeDomain = (value?: string) =>
-    String(value || "").replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
-  const target = normalizeDomain(settings.targetDomain || settings.target || settings.domain);
+  const target = normalizedDomain;
+
   const reportsToUse = target
     ? reports.filter((report: any) => normalizeDomain(report.domain) === target)
     : reports;
