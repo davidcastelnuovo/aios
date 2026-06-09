@@ -729,8 +729,7 @@ Deno.serve(async (req) => {
             }
 
             // === FB ENRICHMENT: Parse fb_ fields from notes (saved during sync) ===
-            const hasFbFields = Object.keys(payloadData).some(k => k.startsWith('fb_'))
-            if (payloadData.test && !hasFbFields && payloadData.notes) {
+            if (payloadData.test && payloadData.notes) {
               const lines = String(payloadData.notes).split('\n')
               let inFbSection = false
               // Meta lines from cron-sync-facebook-leads header (skip these)
@@ -746,7 +745,7 @@ Deno.serve(async (req) => {
                 // New explicit format: fb_key: value
                 const fbMatch = line.match(/^(fb_[^:]+):\s*(.+)$/)
                 if (fbMatch) {
-                  payloadData[fbMatch[1]] = fbMatch[2].trim()
+                  if (!(fbMatch[1] in payloadData)) payloadData[fbMatch[1]] = fbMatch[2].trim()
                   continue
                 }
                 // Generic key: value — register as fb_key unless it's a known meta line
@@ -2670,7 +2669,7 @@ function replaceTemplateVariables(template: string, data: any, tenantSlug?: stri
   registerVariable('fb_מייל', fbEmail)
 
   const normalizeTemplateKey = (key: string) =>
-    key.trim().toLowerCase().replace(/[\s_\-־״"'`]+/g, '')
+    key.trim().toLowerCase().replace(/[\s_\-־״"'`.,:;!?؟،()[\]{}<>/\\|]+/g, '')
   const normalizedVariables = new Map<string, string>()
   for (const [key, value] of Object.entries(variables)) {
     normalizedVariables.set(normalizeTemplateKey(key), value)
