@@ -362,7 +362,7 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywor
                 English ({formatNumber(langCounts.en)})
               </button>
             </div>
-            <Badge variant={trackedKeywords.length > 0 ? "default" : "outline"} className="text-xs">🎯 {trackedKeywords.length} במעקב</Badge>
+            <Badge variant={dedupedTrackedKeywords.length > 0 ? "default" : "outline"} className="text-xs">🎯 {dedupedTrackedKeywords.length} במעקב</Badge>
             <Badge variant="outline" className="text-xs">{keywords.length} אורגניות</Badge>
             {gscOnlyKeywords.length > 0 && (
               <Badge variant="outline" className="text-xs border-blue-300 text-blue-600">🔍 {gscOnlyKeywords.length} GSC בלבד</Badge>
