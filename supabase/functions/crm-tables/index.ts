@@ -165,7 +165,19 @@ serve(async (req) => {
 
       case 'POST': {
         const body = await req.json();
-        const { name, slug, description, icon, category, integration_type, integration_settings, agency_id, client_id } = body;
+        const { name, slug, description, icon, category, integration_type, integration_settings } = body;
+        let agency_id = body.agency_id ?? body.agencyId ?? null;
+        let client_id = body.client_id ?? body.clientId ?? null;
+
+        // If client provided but agency missing, derive agency from client
+        if (!agency_id && client_id) {
+          const { data: clientRow } = await supabase
+            .from('clients')
+            .select('agency_id')
+            .eq('id', client_id)
+            .maybeSingle();
+          agency_id = clientRow?.agency_id ?? null;
+        }
 
         if (!name || !slug) {
           return new Response(JSON.stringify({ error: 'Name and slug are required' }), {
