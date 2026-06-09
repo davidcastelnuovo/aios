@@ -1,56 +1,31 @@
+מצאתי שהסנכרון האחרון באמת לא משך ביטויים במעקב: בדוח `ggds.co.il` מהיום `tracked_keywords` ריק, וגם בלוגים של `fetch-ahrefs-snapshot` מופיע שוב ושוב `tracked=0`. בנוסף, בטבלת הדוח לא נשמר `ahrefs_project_id`, למרות שברשימת הפרויקטים של Ahrefs קיים פרויקט מתאים ל־`ggds.co.il` עם `project_id=4174619` ו־41 מילות מעקב.
 
-## הבעיה — אישור מנתוני DB
+## תכנית תיקון
 
-ב-`ahrefs_reports`: **כל הסנכרונים האחרונים** (מהיום, 09/06) נשמרו עם `tracked_count = 0` ו-`metadata.ahrefs_project_id = null`. בסנכרונים קודמים (לפני זה) הערכים אכן היו מאוכלסים (לדוגמה `ahrefs_project_id: 8732546`, `tracked_source: rank-tracker-overview`). אז המשיכה אכן נכשלה — זו לא בעיית UI.
+1. **להוסיף זיהוי אוטומטי של פרויקט Ahrefs לפי דומיין**
+   - אם אין `ahrefs_project_id` שמור בדוח/טבלה, הפונקציה תחפש בפרויקטים של Ahrefs פרויקט עם דומיין תואם.
+   - כך סנכרון קטגוריה לא יהיה תלוי בזה שהמשתמש בחר ידנית פרויקט בעבר.
 
-## שורש הבעיה
+2. **להוסיף מצב `tracked_only` ל־`fetch-ahrefs-snapshot`**
+   - במצב הזה הפונקציה תדלג על Site Explorer / Organic Keywords / Historical Metrics.
+   - היא תמשוך רק Rank Tracker / Project Keywords, שהם endpoints חינמיים לפי ההערות הקיימות בקוד.
+   - היא תמזג את `tracked_keywords` לתוך הדוח האחרון הקיים בלי למחוק את הנתונים האורגניים, GSC, snapshot או comparisons.
 
-`fetch-ahrefs-snapshot` מושך את `tracked_keywords` מ-Ahrefs Rank Tracker **רק כאשר מועבר `projectId` בגוף הבקשה** (ראה `supabase/functions/fetch-ahrefs-snapshot/index.ts:280` — `if (projectId) { ... }`).
+3. **להוסיף כפתור UI לסנכרון tracked בלבד**
+   - ב־`CategorySyncControl` עבור קטגוריית SEO / Ahrefs יתווסף כפתור: “משוך ביטויים במעקב בלבד”.
+   - הכפתור ירוץ על כל דוחות ה־Ahrefs בקטגוריה, יעדכן התקדמות, ויציג כמה הצליחו/נכשלו.
 
-הסנכרון הקבוצתי ("סנכרון מדוחות SEO") עובר ב-`src/components/dynamic-tables/CategorySyncControl.tsx:52` וקורא:
+4. **לשמור את מזהה הפרויקט לשימוש עתידי**
+   - כשסנכרון tracked-only מוצא פרויקט מתאים, נשמור `ahrefs_project_id`, `ahrefs_mode`, `ahrefs_protocol` בתוך `integration_settings` של הטבלה.
+   - בדוחות החדשים/מעודכנים נשמור גם metadata מתאים, כדי שהסנכרונים הבאים יעבדו בלי חיפוש מחדש.
 
-```ts
-supabase.functions.invoke("fetch-ahrefs-snapshot", {
-  body: { clientId, domain, country: settings.country || "il" },
-});
-```
+5. **אימות אחרי יישום**
+   - אפעיל בדיקה נקודתית על `ggds.co.il` במצב tracked-only.
+   - אוודא שבמסד הנתונים `report_data.tracked_keywords` כבר לא ריק ושה־UI יציג מספר גדול מ־0 בטאב “ביטויים במעקב”.
 
-**ללא** `projectId` — לכן כל הסנכרון הזה דורס את הדוחות ב-snapshot חדש בלי tracked_keywords. במסך הפנימי של דוח בודד (`SeoDashboardView.tsx:482`) זה כן עובד כי שם מועבר `projectId: selectedReport.metadata.ahrefs_project_id`.
+## קבצים שצפויים להשתנות
 
-## התיקון
+- `supabase/functions/fetch-ahrefs-snapshot/index.ts`
+- `src/components/dynamic-tables/CategorySyncControl.tsx`
 
-### 1. `src/components/dynamic-tables/CategorySyncControl.tsx`
-לפני קריאת `fetch-ahrefs-snapshot`, לטעון את ה-`ahrefs_project_id` של הלקוח/דומיין מהדוח האחרון שיש לו אחד שמור:
-
-```ts
-const { data: lastWithProject } = await supabase
-  .from("ahrefs_reports")
-  .select("metadata")
-  .eq("tenant_id", t.tenant_id)
-  .eq("client_id", clientId)
-  .eq("domain", normalizedDomain)     // normalize like target above
-  .not("metadata->ahrefs_project_id", "is", null)
-  .order("report_date", { ascending: false })
-  .limit(1)
-  .maybeSingle();
-
-const projectId = lastWithProject?.metadata?.ahrefs_project_id ?? settings.ahrefs_project_id ?? null;
-```
-
-ולהעביר אותו ל-body של ה-invoke (כולל `mode`/`protocol` אם נשמרו ב-`integration_settings`).
-
-### 2. `src/components/dynamic-tables/SeoReportDialog.tsx` (תיקון "מקור")
-כשמשתמש בוחר פרויקט Ahrefs ב-`AhrefsProjectPicker`, לשמור את `ahrefs_project_id` גם ב-`integration_settings` של ה-CRM table (לא רק ב-metadata של הדוח). כך לסנכרונים עתידיים יש מקור אמין גם כשאין דוח קודם עם projectId.
-
-### 3. Backfill חד-פעמי — שחזור הדוחות שנדרסו
-לכל דוח שנשמר היום עם `tracked_count = 0` אבל היה לו `ahrefs_project_id` בסנכרון הקודם — לא חייבים backfill SQL: אחרי שהתיקון נפרס, סנכרון חוזר אחד יחזיר את כל ה-tracked_keywords כי `fetch-ahrefs-snapshot` ימשוך מ-Rank Tracker שוב.
-
-לכן אין צורך במיגרציה. רק:
-- לפרוס `CategorySyncControl` (frontend, יתפוס מעצמו)
-- ללחוץ "סנכרן הכל" מהקטגוריה SEO — הדוחות יתעדכנו עם tracked_keywords תקינים.
-
-## אימות
-
-1. אחרי הפריסה, להריץ סנכרון של קטגוריית SEO.
-2. לוודא בלוגים של `fetch-ahrefs-snapshot`: `tracked_count > 0` ו-`source=rank-tracker-overview`.
-3. ב-UI: לשונית "ביטויים במעקב" צריכה להציג מספר תואם בכל הדוחות.
+לא צפויה מיגרציית DB.
