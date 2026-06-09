@@ -53,8 +53,9 @@ Deno.serve(async (req) => {
       country = "il",
       mode: hintMode,
       protocol: hintProtocol,
-      projectId,
+      projectId: projectIdFromBody,
       gsc_keywords: gscKeywordsRaw,
+      tracked_only: trackedOnlyFlag,
     } = body as {
       clientId?: string;
       domain?: string;
@@ -63,7 +64,9 @@ Deno.serve(async (req) => {
       protocol?: string;
       projectId?: string | number;
       gsc_keywords?: string[];
+      tracked_only?: boolean;
     };
+    let projectId: string | number | undefined = projectIdFromBody;
 
     const gscKeywords: string[] = Array.isArray(gscKeywordsRaw)
       ? Array.from(new Set(
@@ -110,6 +113,218 @@ Deno.serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // Helper: fetch all Ahrefs projects (FREE endpoint) and find one matching domain.
+    const resolveProjectIdByDomain = async (targetDomain: string): Promise<{ projectId: string; mode?: string; protocol?: string } | null> => {
+      try {
+        const res = await fetch("https://api.ahrefs.com/v3/management/projects?output=json", {
+          headers: { Authorization: `Bearer ${ahrefsApiKey}`, Accept: "application/json" },
+        });
+        if (!res.ok) {
+          console.warn(`projects list fetch failed: status=${res.status}`);
+          return null;
+        }
+        const json = await res.json();
+        const projects = Array.isArray(json?.projects) ? json.projects : [];
+        const target = normalizeDomain(targetDomain);
+        const match = projects.find((p: any) => normalizeDomain(p.url) === target)
+          || projects.find((p: any) => normalizeDomain(p.url).endsWith(target))
+          || projects.find((p: any) => target.endsWith(normalizeDomain(p.url)));
+        if (!match) return null;
+        return { projectId: String(match.project_id), mode: match.mode, protocol: match.protocol };
+      } catch (e) {
+        console.warn("resolveProjectIdByDomain threw:", e instanceof Error ? e.message : String(e));
+        return null;
+      }
+    };
+
+    // Helper: pull tracked keywords from Rank Tracker (FREE endpoints).
+    const fetchTrackedKeywords = async (pid: string | number): Promise<{ tracked: any[]; source: string | null }> => {
+      const trackedByKey = new Map<string, any>();
+      const normalizeTracked = (k: any, source: string, device?: string) => ({
+        keyword: String(k.keyword || "").trim(),
+        position: k.position ?? null,
+        position_prev_month: k.position_prev ?? null,
+        traffic: k.traffic ?? 0,
+        traffic_prev_month: k.traffic_prev ?? 0,
+        volume: k.volume ?? 0,
+        kd: k.keyword_difficulty ?? null,
+        cpc: k.cost_per_click ?? null,
+        url: k.url ?? "",
+        country: k.country ?? null,
+        location: k.location ?? null,
+        language: k.language ?? k.language_code ?? null,
+        tags: Array.isArray(k.tags) ? k.tags : [],
+        _source: source,
+        _device: device ?? null,
+      });
+      const addRows = (rows: any[], source: string, device?: string) => {
+        for (const row of rows) {
+          if (!row || typeof row.keyword !== "string" || !row.keyword.trim()) continue;
+          const n = normalizeTracked(row, source, device);
+          const key = [n.keyword.toLowerCase(), n.country, n.location, n.language].join("|");
+          if (!trackedByKey.has(key)) trackedByKey.set(key, n);
+        }
+      };
+      const selectFields = [
+        "keyword","position","position_prev","volume","keyword_difficulty",
+        "cost_per_click","traffic","traffic_prev","url","country","location","language","tags",
+      ].join(",");
+      const today = new Date().toISOString().split("T")[0];
+      const trackerDates: string[] = [];
+      for (let i = 0; i <= 14; i++) {
+        const d = new Date(`${today}T00:00:00Z`);
+        d.setUTCDate(d.getUTCDate() - i);
+        trackerDates.push(d.toISOString().split("T")[0]);
+      }
+      for (const trackerDate of trackerDates) {
+        const compared = new Date(`${trackerDate}T00:00:00Z`);
+        compared.setUTCDate(compared.getUTCDate() - 30);
+        const comparedDate = compared.toISOString().split("T")[0];
+        for (const device of ["desktop", "mobile"]) {
+          const url =
+            `https://api.ahrefs.com/v3/rank-tracker/overview` +
+            `?project_id=${encodeURIComponent(String(pid))}` +
+            `&device=${device}&date=${trackerDate}&date_compared=${comparedDate}` +
+            `&select=${encodeURIComponent(selectFields)}&limit=1000&volume_mode=monthly&output=json`;
+          const r = await fetch(url, { headers: { Authorization: `Bearer ${ahrefsApiKey}`, Accept: "application/json" } });
+          if (r.ok) {
+            const j = await r.json();
+            const overviews = Array.isArray(j?.overviews) ? j.overviews : [];
+            addRows(overviews, "rank-tracker-overview", device);
+            console.log(`tracked_only Rank Tracker: project=${pid} date=${trackerDate} device=${device} rows=${overviews.length}`);
+          } else {
+            const errTxt = await r.text();
+            console.warn(`tracked_only Rank Tracker failed: project=${pid} date=${trackerDate} device=${device} status=${r.status} body=${errTxt.slice(0, 200)}`);
+          }
+        }
+        if (trackedByKey.size > 0) break;
+      }
+      if (trackedByKey.size === 0) {
+        const url = `https://api.ahrefs.com/v3/management/project-keywords?project_id=${encodeURIComponent(String(pid))}&output=json`;
+        const r = await fetch(url, { headers: { Authorization: `Bearer ${ahrefsApiKey}`, Accept: "application/json" } });
+        if (r.ok) {
+          const j = await r.json();
+          const rows = Array.isArray(j?.keywords) ? j.keywords : [];
+          addRows(rows, "management-project-keywords");
+          console.log(`tracked_only Project Keywords fallback: project=${pid} rows=${rows.length}`);
+        }
+      }
+      const tracked = Array.from(trackedByKey.values());
+      return { tracked, source: tracked[0]?._source ?? null };
+    };
+
+    // ============ tracked_only mode ============
+    // Skip all paid Site Explorer calls and only refresh tracked_keywords.
+    // Merges into the latest existing ahrefs_report for client+domain (does not
+    // overwrite organic_keywords / snapshot / comparisons).
+    if (trackedOnlyFlag) {
+      // Resolve project: explicit > last saved metadata > auto-discover by domain
+      if (!projectId) {
+        const { data: lastWithProject } = await supabase
+          .from("ahrefs_reports")
+          .select("metadata, domain")
+          .eq("tenant_id", client.tenant_id)
+          .eq("client_id", client.id)
+          .not("metadata->ahrefs_project_id", "is", null)
+          .order("report_date", { ascending: false })
+          .limit(20);
+        const rows = (lastWithProject as any[]) || [];
+        const match = rows.find((r: any) => normalizeDomain(r.domain) === domain) || rows[0];
+        const pid = (match?.metadata as any)?.ahrefs_project_id;
+        if (pid) projectId = pid;
+      }
+      let resolvedMode: string | undefined;
+      let resolvedProtocol: string | undefined;
+      if (!projectId) {
+        const auto = await resolveProjectIdByDomain(domain);
+        if (auto) {
+          projectId = auto.projectId;
+          resolvedMode = auto.mode;
+          resolvedProtocol = auto.protocol;
+        }
+      }
+      if (!projectId) {
+        return new Response(
+          JSON.stringify({
+            error: "לא נמצא פרויקט Ahrefs Rank Tracker מתאים לדומיין",
+            domain,
+          }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const { tracked, source } = await fetchTrackedKeywords(projectId);
+
+      // Find latest existing report to merge into
+      const { data: latestReports } = await supabase
+        .from("ahrefs_reports")
+        .select("id, report_data, metadata, domain, report_date")
+        .eq("tenant_id", client.tenant_id)
+        .eq("client_id", client.id)
+        .order("report_date", { ascending: false })
+        .limit(20);
+      const latest = ((latestReports as any[]) || []).find((r: any) => normalizeDomain(r.domain) === domain)
+        || ((latestReports as any[]) || [])[0];
+
+      if (latest) {
+        const mergedReportData = { ...(latest.report_data || {}), tracked_keywords: tracked };
+        const mergedMetadata = {
+          ...(latest.metadata || {}),
+          ahrefs_project_id: String(projectId),
+          tracked_source: source,
+          tracked_only_synced_at: new Date().toISOString(),
+          ...(resolvedMode ? { used_mode: resolvedMode } : {}),
+          ...(resolvedProtocol ? { used_protocol: resolvedProtocol } : {}),
+        };
+        const { error: updErr } = await supabase
+          .from("ahrefs_reports")
+          .update({ report_data: mergedReportData, metadata: mergedMetadata })
+          .eq("id", latest.id);
+        if (updErr) {
+          console.error("tracked_only update failed:", updErr);
+          return new Response(
+            JSON.stringify({ error: "Failed to update report", details: updErr.message }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      } else {
+        // No existing report — create minimal one so the UI still shows tracked keywords
+        await supabase.from("ahrefs_reports").insert({
+          tenant_id: client.tenant_id,
+          client_id: client.id,
+          agency_id: client.agency_id,
+          domain,
+          report_type: "site_explorer",
+          report_date: new Date().toISOString().split("T")[0],
+          report_data: { domain, snapshot: {}, organic_keywords: [], tracked_keywords: tracked },
+          metadata: {
+            source: "fetch-ahrefs-snapshot:tracked_only",
+            triggered_by: user.id,
+            ahrefs_project_id: String(projectId),
+            tracked_source: source,
+            ...(resolvedMode ? { used_mode: resolvedMode } : {}),
+            ...(resolvedProtocol ? { used_protocol: resolvedProtocol } : {}),
+          },
+        });
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          mode: "tracked_only",
+          domain,
+          projectId: String(projectId),
+          tracked_count: tracked.length,
+          tracked_source: source,
+          merged_into_report_id: latest?.id ?? null,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    // ============ end tracked_only mode ============
+
+
 
     // Strategy: try multiple modes (subdomains/exact/domain) and dates.
     // For new Ahrefs projects there might be no historical snapshot for the
