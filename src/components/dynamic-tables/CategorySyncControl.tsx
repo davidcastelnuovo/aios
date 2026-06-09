@@ -102,9 +102,8 @@ async function syncStoredAhrefsReportTable(t: CategoryTable) {
   if (error) throw error;
   if (!reports || reports.length === 0) throw new Error("לא נמצאו דוחות Ahrefs שמורים");
 
-  const normalizeDomain = (value?: string) =>
-    String(value || "").replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
-  const target = normalizeDomain(settings.targetDomain || settings.target || settings.domain);
+  const target = normalizedDomain;
+
   const reportsToUse = target
     ? reports.filter((report: any) => normalizeDomain(report.domain) === target)
     : reports;
