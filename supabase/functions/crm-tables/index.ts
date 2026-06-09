@@ -241,7 +241,10 @@ serve(async (req) => {
 
       case 'PATCH': {
         const body = await req.json();
-        const { table_id, name, slug, description, icon, category, agency_id, client_id, integration_settings } = body;
+        const { name, slug, description, icon, category, integration_settings } = body;
+        const table_id = body.table_id ?? body.tableId;
+        const agency_id = body.agency_id ?? body.agencyId;
+        const client_id = body.client_id ?? body.clientId;
 
         if (!table_id) {
           return new Response(JSON.stringify({ error: 'Table ID required' }), {
