@@ -1,27 +1,59 @@
 ## הבעיה
 
-בתבנית של הוואטסאפ אתה משתמש במשתנים כמו `{{fb_שם_מלא}}` ו-`{{fb_מספר_טלפון}}` (בעברית RTL זה נראה כמו `{{שם_מלא_fb}}`), אבל ההודעה נשלחת עם הקוד הגולמי במקום הערך.
+בדיאלוג "בדיקת אוטומציה עם לידים" יש פילטר תאריך + פילטר לפי `facebook_form_id` של הטריגר. הפילטר מחפש את ה-ID בתוך השדה `notes` של הליד:
 
-## הסיבה
+```ts
+if (facebookFormId) query = query.ilike("notes", `%${facebookFormId}%`);
+```
 
-ב-`cron-sync-facebook-leads` השדות נשמרים תחת המפתח המקורי מפייסבוק — `fb_שם מלא` (עם **רווח**, כי כך פייסבוק מחזיר את שם השדה). בתבנית כתבת `fb_שם_מלא` עם **קו תחתון**, ולכן `replaceTemplateVariables` לא מוצא התאמה ולא מחליף את הביטוי.
+אבל הסנכרון השוטף (`cron-sync-facebook-leads`) כותב ל-`notes` רק את **שם** הטופס, לא את ה-ID:
 
-בנוסף, `replaceTemplateVariables` (ב-`trigger-automation/index.ts` שורה 2630–2635) משייך רק שדות שמתחילים ב-`fb_`, ולא מנרמל רווחים↔קווים תחתונים.
+```
+notes: `leadgen_id: ...\nFacebook Form: ${mapping.form_name || formId}\n...`
+```
 
-## התיקון
+לכן כל הלידים של היום עבור הטופס "טופס כללי" (ID `991164743666967`) נראים בטבלת `leads` (יש 9 כאלה מהיום), אבל הדיאלוג מסנן אותם החוצה כי ה-ID לא מופיע בהערות — רק "Facebook Form: טופס כללי".
 
-**קובץ:** `supabase/functions/trigger-automation/index.ts`
+זו הסיבה ש"היום" מציג 0 לידים וגם הסנכרון הידני מהדיאלוג מחזיר synced:0 (הם כבר קיימים).
 
-בלולאה שמוסיפה שדות דינמיים למפת `variables` (שורות 2630–2635), עבור כל שדה `fb_*` להוסיף גם וריאציה שבה רווחים מוחלפים ב-`_`. למשל:
-- `fb_שם מלא` → גם `fb_שם_מלא`
-- `fb_מספר טלפון` → גם `fb_מספר_טלפון`
+## הפתרון
 
-כך שתי הצורות יעבדו ותבניות קיימות (עם קו תחתון) יתחילו להתמלא נכון.
+### 1. `TestFlowWithLeadDialog.tsx` — להרחיב את הפילטר ל-form_id **או** form_name
 
-בנוסף, להפוך את ההחלפה לסובלנית גם בכיוון ההפוך: כשמתבצעת התאמת regex, להחליף בטמפלייט גם את הוריאציה עם הרווחים (ליתר ביטחון, למקרה שלקוחות עתידיים יכתבו עם רווח).
+לקרוא גם את `facebook_form_name` מ-`triggerConfig`, ולסנן את שאילתת הלידים באמצעות `.or()` שמכסה את שני המקרים (וגם פורמט legacy של "Form ID: <id>" שמופיע ב-`sync-facebook-leads`):
 
-## אימות
+```ts
+const facebookFormName = triggerConfig?.facebook_form_name || null;
 
-לאחר הפריסה, להפעיל ידנית את `cron-sync-facebook-leads` (או לחכות לליד חדש) ולוודא בלוגים של `trigger-automation` ש-`message_template` הסופי כבר לא מכיל `{{fb_...}}`.
+if (facebookFormId || facebookFormName) {
+  const orParts: string[] = [];
+  if (facebookFormId) {
+    orParts.push(`notes.ilike.%${facebookFormId}%`);
+  }
+  if (facebookFormName) {
+    orParts.push(`notes.ilike.%Facebook Form: ${facebookFormName}%`);
+  }
+  query = query.or(orParts.join(","));
+}
+```
 
-**ללא שינוי במסד נתונים** וללא צורך לערוך תבניות קיימות.
+(להוסיף `facebookFormName` ל-`queryKey` כדי לרענן נכון.)
+
+### 2. `cron-sync-facebook-leads/index.ts` — להוסיף `Form ID` ל-notes
+
+לעדכן את שני המקומות שכותבים `notes` (שורות 169 ו-327) כך שיכללו גם את ה-ID במפורש, לזיהוי וודאי קדימה:
+
+```
+notes: `leadgen_id: ${leadgenId}\nFacebook Form: ${mapping.form_name || formId}\nForm ID: ${formId}\nCreated: ${...}`
+```
+
+זה לא משנה לידים ישנים (הם ימשיכו להיתפס דרך פילטר ה-form_name), אבל מבטיח התאמה מדויקת לכל ליד חדש.
+
+### 3. אימות
+
+לאחר הדיפלוי, לפתוח את הדיאלוג של האוטומציה הנוכחית (`3110642c-…`), לבחור "היום" — אמורים להופיע 9 הלידים של "טופס כללי" מהיום.
+
+## הערות
+
+- אין צורך לגעת במיגרציות / סכמה.
+- אין שינוי בלוגיקת `trigger-automation` עצמה — רק בשכבת הבחירה של הלידים לטסט ובכתיבת ה-notes.
