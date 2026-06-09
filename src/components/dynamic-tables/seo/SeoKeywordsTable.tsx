@@ -294,13 +294,13 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywor
 
   // Tracked keywords filtered by language and sorted: keywords with position first (asc), then nulls
   const trackedFiltered = useMemo(() => {
-    const filtered = trackedKeywords.filter(kw => matchesLang(String(kw.keyword || ''), langFilter));
+    const filtered = dedupedTrackedKeywords.filter(kw => matchesLang(String(kw.keyword || ''), langFilter));
     return [...filtered].sort((a, b) => {
       const aPos = a.position ?? Number.POSITIVE_INFINITY;
       const bPos = b.position ?? Number.POSITIVE_INFINITY;
       return aPos - bPos;
     });
-  }, [trackedKeywords, langFilter]);
+  }, [dedupedTrackedKeywords, langFilter]);
 
   // Sort helper: keywords with valid position first (ascending), then null/undefined positions at the end
   const sortByPosition = (arr: any[]) =>
