@@ -721,33 +721,9 @@ export function TestFlowWithLeadDialog({
                   const selectedLead = leads.find((l: any) => l.id === selectedId);
                   if (!selectedLead) return null;
                   
-                  const fbParams: Array<{key: string; value: string}> = [];
                   const sysParams: Array<{key: string; value: string}> = [];
                   
-                  // Parse fb_ fields from notes (new + legacy format)
-                  if (selectedLead.notes) {
-                    const lines = String(selectedLead.notes).split('\n');
-                    let inFbSection = false;
-                    for (const line of lines) {
-                      // New format: fb_key: value
-                      const fbMatch = line.match(/^(fb_[^:]+):\s*(.+)$/);
-                      if (fbMatch) {
-                        fbParams.push({ key: fbMatch[1], value: fbMatch[2].trim() });
-                        continue;
-                      }
-                      // Legacy format: lines after "--- שדות טופס פייסבוק ---"
-                      if (line.includes('--- שדות טופס פייסבוק ---')) {
-                        inFbSection = true;
-                        continue;
-                      }
-                      if (inFbSection) {
-                        const legacyMatch = line.match(/^([^:]+):\s*(.+)$/);
-                        if (legacyMatch) {
-                          fbParams.push({ key: `fb_${legacyMatch[1].trim()}`, value: legacyMatch[2].trim() });
-                        }
-                      }
-                    }
-                  }
+                  const fbParams = parseFacebookParamsFromNotes(selectedLead.notes);
                   
                   // System fields
                   if (selectedLead.contact_name) sysParams.push({ key: 'contact_name', value: selectedLead.contact_name });
