@@ -141,6 +141,7 @@ export function TestFlowWithLeadDialog({
 
   // Extract facebook_form_id from trigger config for filtering
   const facebookFormId = triggerConfig?.facebook_form_id || null;
+  const facebookFormName = triggerConfig?.facebook_form_name || null;
   const facebookIntegrationId = triggerConfig?.facebook_integration_id || null;
   const [isSyncingFb, setIsSyncingFb] = useState(false);
 
