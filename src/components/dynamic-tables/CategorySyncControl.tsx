@@ -67,15 +67,18 @@ async function syncStoredAhrefsReportTable(t: CategoryTable) {
       .not("metadata->ahrefs_project_id", "is", null)
       .order("report_date", { ascending: false })
       .limit(20);
-    const match = (lastWithProject || []).find((r: any) =>
+    const rows = (lastWithProject as any[]) || [];
+    const match = rows.find((r: any) =>
       !normalizedDomain || normalizeDomain(r.domain) === normalizedDomain
-    ) || (lastWithProject || [])[0];
-    if (match?.metadata) {
-      projectId = match.metadata.ahrefs_project_id ?? null;
-      usedMode = usedMode ?? match.metadata.used_mode ?? null;
-      usedProtocol = usedProtocol ?? match.metadata.used_protocol ?? null;
+    ) || rows[0];
+    const meta = match?.metadata as any;
+    if (meta) {
+      projectId = meta.ahrefs_project_id ?? null;
+      usedMode = usedMode ?? meta.used_mode ?? null;
+      usedProtocol = usedProtocol ?? meta.used_protocol ?? null;
     }
   }
+
 
   // Step 1: Fetch fresh Ahrefs snapshot from API (persists into ahrefs_reports via webhook)
   const { error: fetchError } = await supabase.functions.invoke("fetch-ahrefs-snapshot", {
