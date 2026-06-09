@@ -216,10 +216,53 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywor
     onLangFilterChange?.(next);
   };
 
+  // Deduplicate by keyword name (case-insensitive). Ahrefs Rank Tracker returns
+  // the same keyword once per country/location/language/device combo. Pick the
+  // best row (lowest position, then highest traffic, then highest volume) and
+  // backfill missing fields from the other variants so no data is lost.
+  const dedupeByKeyword = (rows: any[]): any[] => {
+    const groups = new Map<string, any[]>();
+    for (const r of rows) {
+      const key = String(r?.keyword || '').trim().toLowerCase();
+      if (!key) continue;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(r);
+    }
+    const mergeFields = [
+      'position', 'position_prev_month', 'position_3month', 'position_yearly',
+      'traffic', 'volume', 'kd', 'cpc', 'url',
+      'gsc_clicks', 'gsc_impressions', 'gsc_ctr',
+      '_position_source', '_source',
+    ];
+    const out: any[] = [];
+    for (const [, variants] of groups) {
+      const sorted = [...variants].sort((a, b) => {
+        const ap = a.position ?? Number.POSITIVE_INFINITY;
+        const bp = b.position ?? Number.POSITIVE_INFINITY;
+        if (ap !== bp) return ap - bp;
+        const at = Number(a.traffic ?? 0), bt = Number(b.traffic ?? 0);
+        if (at !== bt) return bt - at;
+        return Number(b.volume ?? 0) - Number(a.volume ?? 0);
+      });
+      const best = { ...sorted[0] };
+      for (let i = 1; i < sorted.length; i++) {
+        for (const f of mergeFields) {
+          if ((best[f] == null || best[f] === '') && sorted[i][f] != null && sorted[i][f] !== '') {
+            best[f] = sorted[i][f];
+          }
+        }
+      }
+      out.push(best);
+    }
+    return out;
+  };
+
+  const dedupedTrackedKeywords = useMemo(() => dedupeByKeyword(trackedKeywords), [trackedKeywords]);
+
   // Merge all keywords (tracked + organic + gsc-only), deduplicate by keyword name
   const mergedKeywords = useMemo(() => {
-    const allKeywords = [...trackedKeywords];
-    const trackedNames = new Set(trackedKeywords.map((k: any) => String(k.keyword || '').toLowerCase()));
+    const allKeywords = [...dedupedTrackedKeywords];
+    const trackedNames = new Set(dedupedTrackedKeywords.map((k: any) => String(k.keyword || '').toLowerCase()));
     for (const kw of keywords) {
       if (!trackedNames.has(String(kw.keyword || '').toLowerCase())) {
         allKeywords.push(kw);
@@ -231,8 +274,8 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywor
         allKeywords.push(kw);
       }
     }
-    return allKeywords;
-  }, [keywords, trackedKeywords, gscOnlyKeywords]);
+    return dedupeByKeyword(allKeywords);
+  }, [keywords, dedupedTrackedKeywords, gscOnlyKeywords]);
 
   const langCounts = useMemo(() => {
     let he = 0, en = 0;
