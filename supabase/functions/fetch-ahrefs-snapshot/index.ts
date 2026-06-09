@@ -53,8 +53,9 @@ Deno.serve(async (req) => {
       country = "il",
       mode: hintMode,
       protocol: hintProtocol,
-      projectId,
+      projectId: projectIdFromBody,
       gsc_keywords: gscKeywordsRaw,
+      tracked_only: trackedOnlyFlag,
     } = body as {
       clientId?: string;
       domain?: string;
@@ -63,7 +64,9 @@ Deno.serve(async (req) => {
       protocol?: string;
       projectId?: string | number;
       gsc_keywords?: string[];
+      tracked_only?: boolean;
     };
+    let projectId: string | number | undefined = projectIdFromBody;
 
     const gscKeywords: string[] = Array.isArray(gscKeywordsRaw)
       ? Array.from(new Set(
