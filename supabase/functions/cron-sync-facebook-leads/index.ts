@@ -166,7 +166,7 @@ serve(async (req) => {
               sales_person_id: (mapping.sales_person_id && mapping.sales_person_id !== 'none') ? mapping.sales_person_id : null,
               source: 'paid_ads',
               status: 'new',
-              notes: `leadgen_id: ${leadgenId}\nFacebook Form: ${mapping.form_name || formId}\nCreated: ${fbLead.created_time || 'unknown'}`,
+              notes: `leadgen_id: ${leadgenId}\nFacebook Form: ${mapping.form_name || formId}\nForm ID: ${formId}\nCreated: ${fbLead.created_time || 'unknown'}`,
               company_name: 'ליד מפייסבוק', // Default
             };
 
