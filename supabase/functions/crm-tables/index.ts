@@ -118,6 +118,38 @@ serve(async (req) => {
           }
         }
 
+        // 4) Foreign-tenant tables linked (by client_id) to a client whose agency
+        // is owned-by or shared-with our tenant — covers rows where the table's
+        // own agency_id is NULL but the client clearly belongs to one of our agencies.
+        const accessibleAgencyIds = Array.from(new Set([...ownedAgencyIds, ...sharedAgencyIds]));
+        if (accessibleAgencyIds.length > 0) {
+          const { data: relevantClients, error: clientsErr } = await supabase
+            .from('clients')
+            .select('id')
+            .in('agency_id', accessibleAgencyIds);
+          if (clientsErr) {
+            console.error('Error fetching clients for foreign-by-client lookup:', clientsErr);
+          } else {
+            const clientIds = (relevantClients || []).map((c: any) => c.id);
+            if (clientIds.length > 0) {
+              let foreignByClientQuery = supabase
+                .from('crm_tables')
+                .select('*')
+                .neq('tenant_id', tenantId)
+                .in('client_id', clientIds)
+                .order('category', { ascending: true, nullsFirst: false })
+                .order('created_at', { ascending: false });
+
+              const { data: foreignByClient, error: foreignByClientErr } = await foreignByClientQuery;
+              if (foreignByClientErr) {
+                console.error('Error fetching foreign tables by client:', foreignByClientErr);
+              } else if (foreignByClient) {
+                allTables = [...allTables, ...foreignByClient];
+              }
+            }
+          }
+        }
+
         // Dedupe by id
         const seen = new Set<string>();
         allTables = allTables.filter(t => {
