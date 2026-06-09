@@ -1,31 +1,25 @@
-מצאתי שהסנכרון האחרון באמת לא משך ביטויים במעקב: בדוח `ggds.co.il` מהיום `tracked_keywords` ריק, וגם בלוגים של `fetch-ahrefs-snapshot` מופיע שוב ושוב `tracked=0`. בנוסף, בטבלת הדוח לא נשמר `ahrefs_project_id`, למרות שברשימת הפרויקטים של Ahrefs קיים פרויקט מתאים ל־`ggds.co.il` עם `project_id=4174619` ו־41 מילות מעקב.
+## הבעיה
 
-## תכנית תיקון
+בטאב "ביטויים במעקב" יש שורות כפולות (אותו ביטוי חוזר 5-6 פעמים). זה נובע מ-Ahrefs Rank Tracker שמחזיר את אותו ביטוי פעם נפרדת לכל שילוב של מדינה / מיקום / שפה / מכשיר (desktop+mobile), והדדופ הנוכחי ב-`fetch-ahrefs-snapshot` משתמש במפתח `keyword|country|location|language` — כך שכל וריאציה נשמרת כשורה נפרדת.
 
-1. **להוסיף זיהוי אוטומטי של פרויקט Ahrefs לפי דומיין**
-   - אם אין `ahrefs_project_id` שמור בדוח/טבלה, הפונקציה תחפש בפרויקטים של Ahrefs פרויקט עם דומיין תואם.
-   - כך סנכרון קטגוריה לא יהיה תלוי בזה שהמשתמש בחר ידנית פרויקט בעבר.
+## הפתרון
 
-2. **להוסיף מצב `tracked_only` ל־`fetch-ahrefs-snapshot`**
-   - במצב הזה הפונקציה תדלג על Site Explorer / Organic Keywords / Historical Metrics.
-   - היא תמשוך רק Rank Tracker / Project Keywords, שהם endpoints חינמיים לפי ההערות הקיימות בקוד.
-   - היא תמזג את `tracked_keywords` לתוך הדוח האחרון הקיים בלי למחוק את הנתונים האורגניים, GSC, snapshot או comparisons.
+דדופ לפי שם הביטוי בלבד (case-insensitive, trimmed) בצד ה-UI, כך שלא צריך לסנכרן מחדש.
 
-3. **להוסיף כפתור UI לסנכרון tracked בלבד**
-   - ב־`CategorySyncControl` עבור קטגוריית SEO / Ahrefs יתווסף כפתור: “משוך ביטויים במעקב בלבד”.
-   - הכפתור ירוץ על כל דוחות ה־Ahrefs בקטגוריה, יעדכן התקדמות, ויציג כמה הצליחו/נכשלו.
+### שינוי בקובץ `src/components/dynamic-tables/seo/SeoKeywordsTable.tsx`
 
-4. **לשמור את מזהה הפרויקט לשימוש עתידי**
-   - כשסנכרון tracked-only מוצא פרויקט מתאים, נשמור `ahrefs_project_id`, `ahrefs_mode`, `ahrefs_protocol` בתוך `integration_settings` של הטבלה.
-   - בדוחות החדשים/מעודכנים נשמור גם metadata מתאים, כדי שהסנכרונים הבאים יעבדו בלי חיפוש מחדש.
+ב-`trackedFiltered` (וגם ב-merge של `mergedKeywords`):
+1. לקבץ לפי `keyword.toLowerCase().trim()`.
+2. מכל קבוצה לבחור שורה אחת "טובה ביותר":
+   - position הנמוך ביותר (לא null) ראשון
+   - tie-break: traffic הגבוה ביותר, אחר כך volume
+3. למזג מהשורות האחרות שדות חסרים (position_prev_month, position_3month, position_yearly, gsc_clicks/impressions/ctr, url, volume, kd, cpc) אם הם null בשורה הנבחרת — כך לא מאבדים נתונים שהיו רק בווריאציה אחרת.
+4. להחיל את אותו דדופ גם על `top10`, `by3MonthChange`, `byYearlyChange`, `byMonthlyChange` ו-`allKeywords` כדי שכל הטאבים יהיו עקביים.
+5. ה-badge "🎯 X במעקב" יציג את הספירה אחרי הדדופ (במקום `trackedKeywords.length`).
 
-5. **אימות אחרי יישום**
-   - אפעיל בדיקה נקודתית על `ggds.co.il` במצב tracked-only.
-   - אוודא שבמסד הנתונים `report_data.tracked_keywords` כבר לא ריק ושה־UI יציג מספר גדול מ־0 בטאב “ביטויים במעקב”.
+זה שינוי frontend בלבד — אין צורך בסנכרון מחדש או בקריאות API נוספות. שום נתון לא נמחק מהדאטהבייס; הדדופ הוא רק לתצוגה.
 
-## קבצים שצפויים להשתנות
+### לא נכלל בשינוי
 
-- `supabase/functions/fetch-ahrefs-snapshot/index.ts`
-- `src/components/dynamic-tables/CategorySyncControl.tsx`
-
-לא צפויה מיגרציית DB.
+- לא נוגעים ב-`fetch-ahrefs-snapshot` (הדאטה הגולמית נשארת מלאה כדי שנוכל למזג שדות).
+- לא מוסיפים טוגל "הצג כפילויות" — לפי הבקשה פשוט מסתירים אותן.
