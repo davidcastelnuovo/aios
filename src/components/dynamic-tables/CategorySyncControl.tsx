@@ -179,13 +179,104 @@ async function syncStoredAhrefsReportTable(t: CategoryTable) {
   });
 }
 
+async function syncTrackedOnlyForTable(t: CategoryTable) {
+  const settings = t.integration_settings || {};
+  const clientId = settings.clientId || settings.client_id || t.client_id;
+  if (!clientId || !t.tenant_id) throw new Error("Missing SEO report scope");
+  const domain = settings.targetDomain || settings.target || settings.domain;
+
+  const { data, error } = await supabase.functions.invoke("fetch-ahrefs-snapshot", {
+    body: {
+      clientId,
+      domain,
+      tracked_only: true,
+      ...(settings.ahrefs_project_id ? { projectId: settings.ahrefs_project_id } : {}),
+    },
+  });
+  if (error) throw error;
+  if ((data as any)?.error) throw new Error((data as any).error);
+
+  // Persist project id on the table so future syncs (full + tracked) reuse it.
+  const persistedProjectId = (data as any)?.projectId;
+  if (persistedProjectId && !settings.ahrefs_project_id) {
+    await supabase.functions.invoke("crm-tables", {
+      method: "PATCH",
+      body: {
+        table_id: t.id,
+        integration_settings: { ...settings, ahrefs_project_id: persistedProjectId },
+      },
+    });
+  }
+
+  // Rebuild crm_records from the (now-merged) report so the table reflects tracked keywords.
+  const normalizeDomain = (value?: string) =>
+    String(value || "").replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
+  const target = normalizeDomain(domain);
+  const { data: reports } = await supabase
+    .from("ahrefs_reports" as any)
+    .select("*")
+    .eq("tenant_id", t.tenant_id)
+    .eq("client_id", clientId)
+    .order("report_date", { ascending: false });
+  const reportsToUse = target
+    ? ((reports as any[]) || []).filter((r: any) => normalizeDomain(r.domain) === target)
+    : ((reports as any[]) || []);
+  const recordsToInsert: any[] = [];
+  for (const report of (reportsToUse.length > 0 ? reportsToUse : ((reports as any[]) || []))) {
+    const rd = report.report_data || {};
+    const snapshot = rd.snapshot || {};
+    const reportDate = report.report_date || report.received_at;
+    const allKeywords = [
+      ...(Array.isArray(rd.organic_keywords) ? rd.organic_keywords : []),
+      ...(Array.isArray(rd.tracked_keywords) ? rd.tracked_keywords : []),
+    ];
+    if (allKeywords.length > 0) {
+      for (const kw of allKeywords) {
+        recordsToInsert.push({
+          table_id: t.id,
+          tenant_id: t.tenant_id,
+          data: {
+            keyword: String(kw.keyword || ""),
+            position: kw.position ?? null,
+            position_prev_month: kw.position_prev_month ?? null,
+            position_change: kw.position_prev_month != null && kw.position != null ? kw.position_prev_month - kw.position : null,
+            traffic: kw.traffic ?? 0,
+            traffic_prev_month: kw.traffic_prev_month ?? 0,
+            volume: kw.volume ?? 0,
+            kd: kw.kd ?? null,
+            cpc: kw.cpc ?? null,
+            url: kw.url ?? "",
+            domain: report.domain,
+            dr: snapshot.dr,
+            report_date: reportDate,
+          },
+        });
+      }
+    }
+  }
+  if (recordsToInsert.length > 0) {
+    await supabase.from("crm_records" as any).delete().eq("table_id", t.id);
+    for (let i = 0; i < recordsToInsert.length; i += 500) {
+      const { error: insertError } = await supabase.from("crm_records" as any).insert(recordsToInsert.slice(i, i + 500));
+      if (insertError) throw insertError;
+    }
+  }
+  return (data as any)?.tracked_count ?? 0;
+}
+
 export function CategorySyncControl({ category, tables }: Props) {
   const queryClient = useQueryClient();
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isTrackedSyncing, setIsTrackedSyncing] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
 
   const syncableTables = useMemo(
     () => tables.filter((t) => t.integration_type && FN_BY_TYPE[t.integration_type]),
+    [tables]
+  );
+
+  const ahrefsReportTables = useMemo(
+    () => tables.filter((t) => t.integration_type === "ahrefs" && t.integration_settings?.data_source === "ahrefs_reports"),
     [tables]
   );
 
@@ -262,6 +353,44 @@ export function CategorySyncControl({ category, tables }: Props) {
     queryClient.invalidateQueries({ queryKey: ["seo-dashboard-reports"] });
   };
 
+  const handleSyncTrackedOnly = async () => {
+    if (ahrefsReportTables.length === 0) {
+      toast.error("אין דוחות Ahrefs בקטגוריה זו");
+      return;
+    }
+    setIsTrackedSyncing(true);
+    setProgress({ done: 0, total: ahrefsReportTables.length });
+    let success = 0;
+    let failed = 0;
+    let totalTracked = 0;
+
+    await runWithConcurrency(ahrefsReportTables, 3, async (t) => {
+      try {
+        const count = await syncTrackedOnlyForTable(t);
+        totalTracked += count;
+        success++;
+      } catch (e: any) {
+        console.error(`[CategorySyncControl] tracked-only sync failed for ${t.name}:`, e);
+        failed++;
+      } finally {
+        setProgress((p) => ({ ...p, done: p.done + 1 }));
+      }
+    });
+
+    setIsTrackedSyncing(false);
+    if (failed === 0) {
+      toast.success(`סונכרנו ביטויים במעקב ב-${success} דוחות (${totalTracked} ביטויים סה״כ)`);
+    } else if (success === 0) {
+      toast.error(`סנכרון ביטויים במעקב נכשל בכל ${failed} הדוחות`);
+    } else {
+      toast.warning(`סונכרנו ${success} דוחות (${totalTracked} ביטויים), ${failed} נכשלו`);
+    }
+    queryClient.invalidateQueries({ queryKey: ["crm-tables"] });
+    queryClient.invalidateQueries({ queryKey: ["dynamic-tables"] });
+    queryClient.invalidateQueries({ queryKey: ["ahrefs-reports"] });
+    queryClient.invalidateQueries({ queryKey: ["seo-dashboard-reports"] });
+  };
+
   let lastSyncLabel: string;
   let lastSyncTone = "text-muted-foreground";
   if (syncableTables.length === 0) {
@@ -274,6 +403,8 @@ export function CategorySyncControl({ category, tables }: Props) {
   } else {
     lastSyncLabel = "לא סונכרן עדיין";
   }
+
+  const anySyncing = isSyncing || isTrackedSyncing;
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
@@ -293,11 +424,35 @@ export function CategorySyncControl({ category, tables }: Props) {
         </Tooltip>
       </TooltipProvider>
 
+      {ahrefsReportTables.length > 0 && (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handleSyncTrackedOnly}
+                disabled={anySyncing}
+                className="gap-1.5 h-8"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${isTrackedSyncing ? "animate-spin" : ""}`} />
+                {isTrackedSyncing
+                  ? `מסנכרן ביטויים במעקב… (${progress.done}/${progress.total})`
+                  : `ביטויים במעקב בלבד (${ahrefsReportTables.length})`}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              משיכת ביטויים במעקב בלבד מ-Ahrefs Rank Tracker. לא צורך קרדיטים של Site Explorer.
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
+
       <Button
         size="sm"
         variant="outline"
         onClick={handleSyncAll}
-        disabled={isSyncing || syncableTables.length === 0}
+        disabled={anySyncing || syncableTables.length === 0}
         className="gap-1.5 h-8"
       >
         <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? "animate-spin" : ""}`} />
