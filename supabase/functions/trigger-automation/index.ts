@@ -2629,8 +2629,18 @@ function replaceTemplateVariables(template: string, data: any, tenantSlug?: stri
   
   // Add all fb_ fields and any other dynamic fields from data
   for (const [key, value] of Object.entries(data)) {
-    if (key.startsWith('fb_') && typeof value === 'string' && !(key in variables)) {
-      variables[key] = value
+    if (key.startsWith('fb_') && typeof value === 'string') {
+      if (!(key in variables)) variables[key] = value
+      // Also register underscore-normalized variant (FB field names often contain spaces)
+      const normalized = key.replace(/\s+/g, '_')
+      if (normalized !== key && !(normalized in variables)) {
+        variables[normalized] = value
+      }
+      // And space-normalized variant (in case template uses spaces)
+      const spaced = key.replace(/_/g, ' ')
+      if (spaced !== key && !(spaced in variables)) {
+        variables[spaced] = value
+      }
     }
   }
   
