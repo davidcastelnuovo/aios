@@ -732,32 +732,33 @@ Deno.serve(async (req) => {
             const hasFbFields = Object.keys(payloadData).some(k => k.startsWith('fb_'))
             if (payloadData.test && !hasFbFields && payloadData.notes) {
               const lines = String(payloadData.notes).split('\n')
-              let enrichedCount = 0
               let inFbSection = false
+              // Meta lines from cron-sync-facebook-leads header (skip these)
+              const metaKeys = new Set([
+                'leadgen_id', 'facebook lead id', 'facebook form', 'form id', 'created',
+              ])
               for (const line of lines) {
-                // New format: fb_key: value
-                const fbMatch = line.match(/^(fb_[^:]+):\s*(.+)$/)
-                if (fbMatch) {
-                  payloadData[fbMatch[1]] = fbMatch[2].trim()
-                  enrichedCount++
-                  continue
-                }
-                // Legacy format: lines after "--- שדות טופס פייסבוק ---"
+                // Legacy section header
                 if (line.includes('--- שדות טופס פייסבוק ---')) {
                   inFbSection = true
                   continue
                 }
-                if (inFbSection) {
-                  const legacyMatch = line.match(/^([^:]+):\s*(.+)$/)
-                  if (legacyMatch) {
-                    const key = `fb_${legacyMatch[1].trim()}`
-                    payloadData[key] = legacyMatch[2].trim()
-                    enrichedCount++
-                  }
+                // New explicit format: fb_key: value
+                const fbMatch = line.match(/^(fb_[^:]+):\s*(.+)$/)
+                if (fbMatch) {
+                  payloadData[fbMatch[1]] = fbMatch[2].trim()
+                  continue
                 }
-              }
-              if (enrichedCount > 0) {
-              } else {
+                // Generic key: value — register as fb_key unless it's a known meta line
+                const kvMatch = line.match(/^([^:]+):\s*(.+)$/)
+                if (kvMatch) {
+                  const rawKey = kvMatch[1].trim()
+                  if (metaKeys.has(rawKey.toLowerCase())) continue
+                  const key = `fb_${rawKey}`
+                  if (!(key in payloadData)) payloadData[key] = kvMatch[2].trim()
+                  continue
+                }
+                if (inFbSection) continue
               }
             }
             // === END FB ENRICHMENT ===
