@@ -52,6 +52,45 @@ interface TestFlowWithLeadDialogProps {
 
 type DateRange = "today" | "yesterday" | "last_week" | "custom";
 
+const FACEBOOK_NOTE_META_KEYS = new Set([
+  "leadgen_id",
+  "facebook lead id",
+  "facebook form",
+  "form id",
+  "created",
+]);
+
+function parseFacebookParamsFromNotes(notes?: string | null) {
+  const params: Array<{ key: string; value: string }> = [];
+  if (!notes) return params;
+
+  let inFbSection = false;
+  for (const line of String(notes).split("\n")) {
+    if (line.includes("--- שדות טופס פייסבוק ---")) {
+      inFbSection = true;
+      continue;
+    }
+
+    const fbMatch = line.match(/^(fb_[^:]+):\s*(.+)$/);
+    if (fbMatch) {
+      params.push({ key: fbMatch[1].trim(), value: fbMatch[2].trim() });
+      continue;
+    }
+
+    const kvMatch = line.match(/^([^:]+):\s*(.+)$/);
+    if (kvMatch) {
+      const rawKey = kvMatch[1].trim();
+      if (FACEBOOK_NOTE_META_KEYS.has(rawKey.toLowerCase())) continue;
+      params.push({ key: `fb_${rawKey}`, value: kvMatch[2].trim() });
+      continue;
+    }
+
+    if (inFbSection) continue;
+  }
+
+  return params;
+}
+
 function getDateFilter(range: DateRange, customFrom?: Date, customTo?: Date) {
   const now = new Date();
   switch (range) {
@@ -406,28 +445,9 @@ export function TestFlowWithLeadDialog({
             timestamp: new Date().toISOString(),
           };
 
-          // Enrich testData with fb_ fields parsed from notes
-          if (lead.notes) {
-            const noteLines = String(lead.notes).split('\n');
-            let inFbSection = false;
-            for (const line of noteLines) {
-              const fbMatch = line.match(/^(fb_[^:]+):\s*(.+)$/);
-              if (fbMatch) {
-                testData[fbMatch[1]] = fbMatch[2].trim();
-                continue;
-              }
-              if (line.includes('--- שדות טופס פייסבוק ---')) {
-                inFbSection = true;
-                continue;
-              }
-              if (inFbSection) {
-                const legacyMatch = line.match(/^([^:]+):\s*(.+)$/);
-                if (legacyMatch) {
-                  testData[`fb_${legacyMatch[1].trim()}`] = legacyMatch[2].trim();
-                }
-              }
-            }
-          }
+          parseFacebookParamsFromNotes(lead.notes).forEach(({ key, value }) => {
+            if (!(key in testData)) testData[key] = value;
+          });
 
           const response = await supabase.functions.invoke("trigger-automation", {
             body: { automationId, tenant_id: tenantId, data: testData },
