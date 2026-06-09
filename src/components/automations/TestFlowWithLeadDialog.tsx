@@ -177,7 +177,7 @@ export function TestFlowWithLeadDialog({
 
   // Fetch leads with date filtering and optional form ID filtering
   const { data: leads = [], isLoading: leadsLoading } = useQuery({
-    queryKey: ["leads-for-flow-test", tenantId, dateFilter.from, dateFilter.to, facebookFormId],
+    queryKey: ["leads-for-flow-test", tenantId, dateFilter.from, dateFilter.to, facebookFormId, facebookFormName],
     queryFn: async () => {
       if (!tenantId) return [];
       let query = supabase
@@ -189,9 +189,12 @@ export function TestFlowWithLeadDialog({
       if (dateFilter.from) query = query.gte("created_at", dateFilter.from);
       if (dateFilter.to) query = query.lt("created_at", dateFilter.to);
 
-      // Filter by facebook form ID if configured in the flow trigger
-      if (facebookFormId) {
-        query = query.ilike("notes", `%${facebookFormId}%`);
+      // Filter by facebook form ID or form name if configured in the flow trigger
+      if (facebookFormId || facebookFormName) {
+        const orParts: string[] = [];
+        if (facebookFormId) orParts.push(`notes.ilike.%${facebookFormId}%`);
+        if (facebookFormName) orParts.push(`notes.ilike.%Facebook Form: ${facebookFormName}%`);
+        query = query.or(orParts.join(","));
       }
 
       const { data, error } = await query.limit(500);
