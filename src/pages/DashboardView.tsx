@@ -1770,7 +1770,7 @@ export default function DashboardView() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {Object.entries(summaryByPlatform).map(([platform, metrics]: [string, any]) => {
+                          {Object.entries(summaryByPlatform).filter(([platform]) => !isAnalyticsPlatform(platform)).map(([platform, metrics]: [string, any]) => {
                             const config = PLATFORM_CONFIG[platform] || { name: platform, color: 'text-muted-foreground' };
                             const isAnalytics = isAnalyticsPlatform(platform);
                             return (
