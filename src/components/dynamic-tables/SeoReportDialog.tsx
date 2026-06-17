@@ -252,6 +252,77 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClient, availableDomains.join('|'), clientPreferredDomain]);
 
+  // Selected GSC integration object + its available sites
+  const selectedGscIntegration = useMemo(
+    () => (gscIntegrations || []).find((i: any) => i.id === selectedGscIntegrationId),
+    [gscIntegrations, selectedGscIntegrationId]
+  );
+  const gscAvailableSites = useMemo(() => {
+    const list = (selectedGscIntegration as any)?.settings?.available_sites;
+    return Array.isArray(list) ? list : [];
+  }, [selectedGscIntegration]);
+
+  const selectedGaIntegration = useMemo(
+    () => (gaIntegrations || []).find((i: any) => i.id === selectedGaIntegrationId),
+    [gaIntegrations, selectedGaIntegrationId]
+  );
+  const gaAvailableProperties = useMemo(() => {
+    const s = (selectedGaIntegration as any)?.settings || {};
+    const list = s.available_properties || s.available_property_ids || s.properties;
+    return Array.isArray(list) ? list : [];
+  }, [selectedGaIntegration]);
+
+  // Reset the new-report form whenever the client changes / dialog reopens
+  useEffect(() => {
+    if (!selectedClient) {
+      setDomainInput("");
+      setSelectedAhrefsProject("none");
+      setSelectedGscIntegrationId("none");
+      setSelectedGscSite("");
+      setSelectedGaIntegrationId("none");
+      setSelectedGaProperty("");
+      return;
+    }
+    const prefill = clientPreferredDomain || "";
+    setDomainInput(prefill);
+    // Try to auto-pick Ahrefs project matching the client's domain
+    if (prefill && ahrefsProjects.length) {
+      const match = ahrefsProjects.find(p =>
+        p.domain && (p.domain.toLowerCase() === prefill || p.domain.toLowerCase().includes(prefill) || prefill.includes(p.domain.toLowerCase()))
+      );
+      if (match) setSelectedAhrefsProject(String(match.project_id));
+    }
+  }, [selectedClient, clientPreferredDomain, ahrefsProjects.length]);
+
+  // Auto-pick GSC site matching domain
+  useEffect(() => {
+    if (selectedGscIntegrationId === "none" || gscAvailableSites.length === 0) {
+      setSelectedGscSite("");
+      return;
+    }
+    const d = (domainInput || "").toLowerCase();
+    const norm = (s: string) => s.replace(/^sc-domain:/, "").replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/+$/, "").toLowerCase();
+    const match = d
+      ? gscAvailableSites.find((s: any) => {
+          const n = norm(String(s?.siteUrl || ""));
+          return n === d || n.includes(d) || d.includes(n);
+        })
+      : null;
+    setSelectedGscSite(match?.siteUrl || gscAvailableSites[0]?.siteUrl || "");
+  }, [selectedGscIntegrationId, gscAvailableSites, domainInput]);
+
+  // Default GA property to first
+  useEffect(() => {
+    if (selectedGaIntegrationId === "none" || gaAvailableProperties.length === 0) {
+      setSelectedGaProperty("");
+      return;
+    }
+    const first = gaAvailableProperties[0];
+    const id = typeof first === "string" ? first : (first?.propertyId || first?.id || first?.property_id || "");
+    setSelectedGaProperty(String(id || ""));
+  }, [selectedGaIntegrationId, gaAvailableProperties]);
+
+
   // Pick the latest report matching the selected domain
   const latestReport = useMemo(() => {
     if (!reports.length) return null;
