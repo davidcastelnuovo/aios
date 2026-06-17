@@ -434,6 +434,8 @@ export default function AgentTasksPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
+  const isMobile = useIsMobile();
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<any>(null);
   const [filterAgent, setFilterAgent] = useState<string>("all");
