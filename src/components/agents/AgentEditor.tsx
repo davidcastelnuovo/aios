@@ -57,17 +57,17 @@ export function AgentEditor({ agent }: { agent: any }) {
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden">
-      <div className="p-4 border-b flex items-center gap-3">
+      <div className="p-3 md:p-4 border-b flex items-center gap-2 md:gap-3 flex-wrap">
         {carmen ? (
-          <img src={CARMEN_AVATAR} alt={agent.name} className="h-12 w-12 rounded-full object-cover" />
+          <img src={CARMEN_AVATAR} alt={agent.name} className="h-10 w-10 md:h-12 md:w-12 rounded-full object-cover" />
         ) : (
-          <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-            <Bot className="h-6 w-6" />
+          <div className="h-10 w-10 md:h-12 md:w-12 rounded-full bg-muted flex items-center justify-center">
+            <Bot className="h-5 w-5 md:h-6 md:w-6" />
           </div>
         )}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h2 className="font-bold text-lg truncate">{agent.name}</h2>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="font-bold text-base md:text-lg truncate">{agent.name}</h2>
             {carmen && <Crown className="h-4 w-4 text-amber-500" />}
             {agent.active ? (
               <Badge className="bg-green-500/15 text-green-700 dark:text-green-300">● פעיל</Badge>
@@ -75,11 +75,12 @@ export function AgentEditor({ agent }: { agent: any }) {
               <Badge variant="secondary">כבוי</Badge>
             )}
           </div>
-          {agent.talent && <p className="text-sm text-muted-foreground truncate">{agent.talent}</p>}
+          {agent.talent && <p className="text-xs md:text-sm text-muted-foreground truncate">{agent.talent}</p>}
         </div>
-        <div className="w-72">
+        <div className="w-full md:w-72">
           <BrainSelector value={agent.engine} onChange={(v) => updateEngine.mutate(v)} />
         </div>
+
       </div>
 
       <AgentTabsWithUrl agent={agent} />
