@@ -12,7 +12,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
 const AI_GATEWAY_URL = 'https://ai.gateway.lovable.dev/v1/chat/completions';
-const AI_MODEL = 'google/gemini-3-flash-preview';
+const AI_MODEL_DEFAULT = 'google/gemini-3-flash-preview';
 
 function buildSystemPrompt(
   userName: string,
@@ -23,7 +23,9 @@ function buildSystemPrompt(
   campaignerName?: string,
   campaignerId?: string,
   uiMode?: string,
+  carmenAgent?: { talent?: string | null; personality?: string | null; system_prompt?: string | null } | null,
 ) {
+
   return `אתה **AIOS** - עוזר AI חכם ומרכזי של מערכת CRM לניהול סוכנויות שיווק.
 
 🕒 **תאריך/שעה נוכחיים (להתייחסות חובה):**
