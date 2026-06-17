@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import DOMPurify from "dompurify";
 import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -9,10 +9,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
 import { useToast } from "@/hooks/use-toast";
+import { useUserIntegrations } from "@/hooks/useUserIntegrations";
+import { useSeoScope } from "@/hooks/useSeoScope";
 import { TrendingUp, Globe, FileText, Calendar, ArrowUp, ArrowDown, Loader2, PlusCircle, Search, ChevronsUpDown, Check } from "lucide-react";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
@@ -93,6 +96,15 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
   const [selectedDomain, setSelectedDomain] = useState<string>("");
   const [isCreatingTable, setIsCreatingTable] = useState(false);
   const [isFetchingFromAhrefs, setIsFetchingFromAhrefs] = useState(false);
+
+  // New-report form state
+  const [domainInput, setDomainInput] = useState("");
+  const [selectedAhrefsProject, setSelectedAhrefsProject] = useState<string>("none");
+  const [selectedGscIntegrationId, setSelectedGscIntegrationId] = useState<string>("none");
+  const [selectedGscSite, setSelectedGscSite] = useState<string>("");
+  const [selectedGaIntegrationId, setSelectedGaIntegrationId] = useState<string>("none");
+  const [selectedGaProperty, setSelectedGaProperty] = useState<string>("");
+  const [isCreatingReport, setIsCreatingReport] = useState(false);
 
   const handleFetchFromAhrefs = async () => {
     if (!selectedClient) return;
@@ -185,6 +197,31 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
     enabled: !!currentTenantId && !!selectedClient,
   });
 
+  // SEO scope for cross-tenant integration lookups
+  const seoScope = useSeoScope(selectedClient || undefined);
+  const integrationTenantIds = useMemo(() => {
+    const set = new Set<string>();
+    if (currentTenantId) set.add(currentTenantId);
+    (seoScope.data?.accessibleTenantIds || []).forEach(t => set.add(t));
+    return Array.from(set);
+  }, [currentTenantId, seoScope.data?.accessibleTenantIds]);
+
+  // Ahrefs projects
+  const { data: ahrefsProjects = [], isLoading: ahrefsProjectsLoading } = useQuery({
+    queryKey: ['ahrefs-projects-picker'],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke('list-ahrefs-projects', { body: {} });
+      if (error) throw error;
+      return (data?.projects || []) as Array<{ project_id: string; project_name: string; domain: string; url: string }>;
+    },
+    enabled: open,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // GSC & GA integrations
+  const { data: gscIntegrations = [] } = useUserIntegrations(integrationTenantIds, 'google_search_console', { enabled: open && integrationTenantIds.length > 0 });
+  const { data: gaIntegrations = [] } = useUserIntegrations(integrationTenantIds, 'google_analytics', { enabled: open && integrationTenantIds.length > 0 });
+
   // Available domains for the selected client
   const availableDomains = useMemo(() => {
     const set = new Set<string>();
@@ -214,6 +251,77 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
     setSelectedDomain(preferred || availableDomains[0]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClient, availableDomains.join('|'), clientPreferredDomain]);
+
+  // Selected GSC integration object + its available sites
+  const selectedGscIntegration = useMemo(
+    () => (gscIntegrations || []).find((i: any) => i.id === selectedGscIntegrationId),
+    [gscIntegrations, selectedGscIntegrationId]
+  );
+  const gscAvailableSites = useMemo(() => {
+    const list = (selectedGscIntegration as any)?.settings?.available_sites;
+    return Array.isArray(list) ? list : [];
+  }, [selectedGscIntegration]);
+
+  const selectedGaIntegration = useMemo(
+    () => (gaIntegrations || []).find((i: any) => i.id === selectedGaIntegrationId),
+    [gaIntegrations, selectedGaIntegrationId]
+  );
+  const gaAvailableProperties = useMemo(() => {
+    const s = (selectedGaIntegration as any)?.settings || {};
+    const list = s.available_properties || s.available_property_ids || s.properties;
+    return Array.isArray(list) ? list : [];
+  }, [selectedGaIntegration]);
+
+  // Reset the new-report form whenever the client changes / dialog reopens
+  useEffect(() => {
+    if (!selectedClient) {
+      setDomainInput("");
+      setSelectedAhrefsProject("none");
+      setSelectedGscIntegrationId("none");
+      setSelectedGscSite("");
+      setSelectedGaIntegrationId("none");
+      setSelectedGaProperty("");
+      return;
+    }
+    const prefill = clientPreferredDomain || "";
+    setDomainInput(prefill);
+    // Try to auto-pick Ahrefs project matching the client's domain
+    if (prefill && ahrefsProjects.length) {
+      const match = ahrefsProjects.find(p =>
+        p.domain && (p.domain.toLowerCase() === prefill || p.domain.toLowerCase().includes(prefill) || prefill.includes(p.domain.toLowerCase()))
+      );
+      if (match) setSelectedAhrefsProject(String(match.project_id));
+    }
+  }, [selectedClient, clientPreferredDomain, ahrefsProjects.length]);
+
+  // Auto-pick GSC site matching domain
+  useEffect(() => {
+    if (selectedGscIntegrationId === "none" || gscAvailableSites.length === 0) {
+      setSelectedGscSite("");
+      return;
+    }
+    const d = (domainInput || "").toLowerCase();
+    const norm = (s: string) => s.replace(/^sc-domain:/, "").replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/+$/, "").toLowerCase();
+    const match = d
+      ? gscAvailableSites.find((s: any) => {
+          const n = norm(String(s?.siteUrl || ""));
+          return n === d || n.includes(d) || d.includes(n);
+        })
+      : null;
+    setSelectedGscSite(match?.siteUrl || gscAvailableSites[0]?.siteUrl || "");
+  }, [selectedGscIntegrationId, gscAvailableSites, domainInput]);
+
+  // Default GA property to first
+  useEffect(() => {
+    if (selectedGaIntegrationId === "none" || gaAvailableProperties.length === 0) {
+      setSelectedGaProperty("");
+      return;
+    }
+    const first = gaAvailableProperties[0];
+    const id = typeof first === "string" ? first : (first?.propertyId || first?.id || first?.property_id || "");
+    setSelectedGaProperty(String(id || ""));
+  }, [selectedGaIntegrationId, gaAvailableProperties]);
+
 
   // Pick the latest report matching the selected domain
   const latestReport = useMemo(() => {
@@ -295,6 +403,87 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
     }
   };
 
+  const hasAnySource =
+    !!domainInput.trim() ||
+    selectedAhrefsProject !== "none" ||
+    selectedGscIntegrationId !== "none" ||
+    selectedGaIntegrationId !== "none";
+
+  const canCreate = !!selectedClient && hasAnySource && !!(domainInput.trim() || selectedAhrefsProject !== "none");
+
+  const handleCreateReport = async () => {
+    if (!selectedClient || !canCreate) return;
+    setIsCreatingReport(true);
+    try {
+      const domain = normalizeDomain(domainInput) ||
+        (selectedAhrefsProject !== "none"
+          ? (ahrefsProjects.find(p => String(p.project_id) === selectedAhrefsProject)?.domain || "")
+          : "");
+
+      // 1) Pull an Ahrefs snapshot if we have a domain (Ahrefs uses the global key)
+      if (domain) {
+        try {
+          await supabase.functions.invoke('fetch-ahrefs-snapshot', {
+            body: { clientId: selectedClient, domain },
+          });
+        } catch (err) {
+          console.warn('[SeoReportDialog] fetch-ahrefs-snapshot failed (continuing):', err);
+        }
+      }
+
+      // 2) Create the unified CRM table
+      const clientName = selectedClientObj?.name || '';
+      const domainMatchesName = domain && clientName && domain.toLowerCase().includes(clientName.toLowerCase());
+      const tableName = domain && !domainMatchesName ? `${clientName} - ${domain}` : (clientName || `דוח SEO`);
+      const slug = `seo-report-${selectedClient}-${Date.now()}`;
+
+      const ahrefsProjectId = selectedAhrefsProject !== "none" ? selectedAhrefsProject : null;
+      const gscIntId = selectedGscIntegrationId !== "none" ? selectedGscIntegrationId : null;
+      const gaIntId = selectedGaIntegrationId !== "none" ? selectedGaIntegrationId : null;
+
+      const { error } = await supabase.functions.invoke('crm-tables', {
+        body: {
+          action: 'create',
+          tenantId: currentTenantId,
+          name: tableName,
+          slug,
+          description: `דוח SEO מאוחד עבור ${domain || clientName}`,
+          category: 'seo',
+          icon: 'TrendingUp',
+          agencyId: selectedClientObj?.agency_id || null,
+          clientId: selectedClient,
+          integration_type: 'ahrefs',
+          integration_settings: {
+            data_source: 'seo_unified',
+            clientId: selectedClient,
+            targetDomain: domain,
+            reportType: 'site_explorer',
+            ahrefs_project_id: ahrefsProjectId,
+            gsc_integration_id: gscIntId,
+            gsc_site_url: gscIntId ? (selectedGscSite || null) : null,
+            ga_integration_id: gaIntId,
+            ga_property_id: gaIntId ? (selectedGaProperty || null) : null,
+          },
+        },
+      });
+
+      if (error) throw error;
+
+      toast({ title: 'דוח ה-SEO נוצר בהצלחה' });
+      queryClient.invalidateQueries({ queryKey: ['seo-reports', currentTenantId, selectedClient] });
+      queryClient.invalidateQueries({ queryKey: ['ahrefs-reports'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      onOpenChange(false);
+      const tenantSlug = currentTenant?.slug || '';
+      if (tenantSlug) navigate(`/t/${tenantSlug}/table/${slug}`);
+    } catch (err: any) {
+      toast({ title: 'שגיאה ביצירת דוח SEO', description: err?.message || 'נסה שוב מאוחר יותר', variant: 'destructive' });
+    } finally {
+      setIsCreatingReport(false);
+    }
+  };
+
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto" dir="rtl">
@@ -332,33 +521,123 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
                   ))}
                 </div>
               ) : reports.length === 0 ? (
-                <Card className="p-8 text-center space-y-4">
-                  <FileText className="h-12 w-12 mx-auto text-muted-foreground" />
-                  <div>
-                    <h3 className="font-semibold text-lg mb-1">אין דוחות SEO</h3>
+                <Card className="p-6 space-y-5">
+                  <div className="text-center space-y-1">
+                    <FileText className="h-10 w-10 mx-auto text-muted-foreground" />
+                    <h3 className="font-semibold text-lg">צור דוח SEO חדש</h3>
                     <p className="text-muted-foreground text-sm">
-                      {selectedClientObj?.website ? (
-                        <>ניתן ליצור דוח חדש ישירות מ-Ahrefs לפי הדומיין של הלקוח: <span className="font-medium">{normalizeDomain(selectedClientObj.website)}</span></>
-                      ) : (
-                        'ללקוח זה אין אתר מוגדר. הגדר אתר לקוח ונסה שוב, או חבר את האינטגרציה.'
-                      )}
+                      בחר את המקורות שיתחברו ללקוח. ניתן לחבר Ahrefs, Google Search Console ו-Google Analytics יחד לטבלת דוח אחת.
                     </p>
                   </div>
-                  {selectedClientObj?.website && (
-                    <Button
-                      onClick={handleFetchFromAhrefs}
-                      disabled={isFetchingFromAhrefs}
-                      className="gap-2"
-                    >
-                      {isFetchingFromAhrefs ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <PlusCircle className="h-4 w-4" />
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {/* Domain */}
+                    <div className="space-y-1.5 md:col-span-2">
+                      <Label>דומיין / אתר הלקוח</Label>
+                      <Input
+                        value={domainInput}
+                        onChange={(e) => setDomainInput(e.target.value)}
+                        placeholder="example.co.il"
+                        dir="ltr"
+                      />
+                      {!selectedClientObj?.website && (
+                        <p className="text-xs text-muted-foreground">ללקוח אין אתר מוגדר במערכת — הזן ידנית.</p>
                       )}
-                      {isFetchingFromAhrefs ? 'מייצר דוח...' : 'צור דוח חדש מ-Ahrefs'}
+                    </div>
+
+                    {/* Ahrefs project */}
+                    <div className="space-y-1.5">
+                      <Label>פרויקט Ahrefs</Label>
+                      <Select value={selectedAhrefsProject} onValueChange={setSelectedAhrefsProject}>
+                        <SelectTrigger><SelectValue placeholder={ahrefsProjectsLoading ? "טוען..." : "ללא / לפי דומיין"} /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">ללא — לפי דומיין בלבד</SelectItem>
+                          {ahrefsProjects.map(p => (
+                            <SelectItem key={p.project_id} value={String(p.project_id)}>
+                              {p.project_name} {p.domain ? `· ${p.domain}` : ''}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* GSC integration */}
+                    <div className="space-y-1.5">
+                      <Label>חיבור Google Search Console</Label>
+                      <Select value={selectedGscIntegrationId} onValueChange={setSelectedGscIntegrationId}>
+                        <SelectTrigger><SelectValue placeholder={gscIntegrations.length ? "בחר חיבור" : "אין חיבורים זמינים"} /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">ללא</SelectItem>
+                          {gscIntegrations.map((i: any) => (
+                            <SelectItem key={i.id} value={i.id}>
+                              {i.settings?.google_email || i.name || 'GSC'} {i._isOwn ? '' : '· משותף'}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* GSC site picker */}
+                    {selectedGscIntegrationId !== "none" && gscAvailableSites.length > 0 && (
+                      <div className="space-y-1.5 md:col-span-2">
+                        <Label>בחר אתר ב-GSC</Label>
+                        <Select value={selectedGscSite} onValueChange={setSelectedGscSite}>
+                          <SelectTrigger><SelectValue placeholder="בחר site" /></SelectTrigger>
+                          <SelectContent>
+                            {gscAvailableSites.map((s: any) => (
+                              <SelectItem key={s.siteUrl} value={s.siteUrl} disabled={s.permissionLevel === 'siteUnverifiedUser'}>
+                                {s.siteUrl} {s.permissionLevel === 'siteUnverifiedUser' ? '· ללא הרשאה' : ''}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    {/* GA integration */}
+                    <div className="space-y-1.5">
+                      <Label>חיבור Google Analytics</Label>
+                      <Select value={selectedGaIntegrationId} onValueChange={setSelectedGaIntegrationId}>
+                        <SelectTrigger><SelectValue placeholder={gaIntegrations.length ? "בחר חיבור" : "אין חיבורים זמינים"} /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">ללא</SelectItem>
+                          {gaIntegrations.map((i: any) => (
+                            <SelectItem key={i.id} value={i.id}>
+                              {i.settings?.google_email || i.name || 'GA'} {i._isOwn ? '' : '· משותף'}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* GA property picker */}
+                    {selectedGaIntegrationId !== "none" && gaAvailableProperties.length > 0 && (
+                      <div className="space-y-1.5">
+                        <Label>בחר Property ב-GA</Label>
+                        <Select value={selectedGaProperty} onValueChange={setSelectedGaProperty}>
+                          <SelectTrigger><SelectValue placeholder="בחר property" /></SelectTrigger>
+                          <SelectContent>
+                            {gaAvailableProperties.map((p: any, idx: number) => {
+                              const id = String(typeof p === 'string' ? p : (p.propertyId || p.id || p.property_id || ''));
+                              const name = typeof p === 'string' ? p : (p.displayName || p.name || id);
+                              return (
+                                <SelectItem key={id || idx} value={id}>{name}</SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex justify-center">
+                    <Button onClick={handleCreateReport} disabled={!canCreate || isCreatingReport} className="gap-2">
+                      {isCreatingReport ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />}
+                      {isCreatingReport ? 'יוצר דוח...' : 'צור דוח SEO'}
                     </Button>
-                  )}
+                  </div>
                 </Card>
+
               ) : (
                 <>
                   {/* Report Header */}
