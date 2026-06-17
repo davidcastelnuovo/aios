@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { BrainSelector } from "./BrainSelector";
 import { ProfileTab } from "./tabs/ProfileTab";
@@ -18,8 +18,18 @@ import { SupervisorTab } from "./tabs/SupervisorTab";
 import { McpConnectionsTab } from "./tabs/McpConnectionsTab";
 import { EvalsTab } from "./tabs/EvalsTab";
 
-import { Crown, Bot } from "lucide-react";
-import { useSearchParams } from "react-router-dom";
+import { Crown, Bot, Settings, ListTodo, ChevronDown } from "lucide-react";
+import { useSearchParams, useNavigate } from "react-router-dom";
+import { useTenantPath } from "@/hooks/useTenantPath";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 
 const CARMEN_AVATAR = "https://d2xsxph8kpxj0f.cloudfront.net/310419663030948028/XGJWpzb5zh76ZdoV37Q3K8/carmen-agents-avatar_17945787.png";
@@ -79,29 +89,92 @@ export function AgentEditor({ agent }: { agent: any }) {
 
 function AgentTabsWithUrl({ agent }: { agent: any }) {
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
+  const { buildPath } = useTenantPath();
   const initial = params.get("tab") || "profile";
+
+  const groups: { label: string; items: { value: string; label: string }[] }[] = [
+    {
+      label: "תצורה",
+      items: [
+        { value: "profile", label: "⚙️ פרופיל" },
+        { value: "goals", label: "🎯 מטרות" },
+        { value: "tools", label: "🛠️ כלים" },
+        { value: "registry", label: "📚 מאגר כלים" },
+        { value: "mcp", label: "🔌 MCP" },
+        { value: "supervisor", label: "👑 Supervisor" },
+      ],
+    },
+    {
+      label: "תפעול וניטור",
+      items: [
+        { value: "tasks", label: "📋 משימות (סוכן זה)" },
+        { value: "runs", label: "🔁 ריצות" },
+        { value: "evals", label: "✅ Evals" },
+        { value: "approvals", label: "🛡️ אישורים" },
+        { value: "cost", label: "💰 עלות" },
+      ],
+    },
+    {
+      label: "ידע ופרסונליזציה",
+      items: [
+        { value: "knowledge", label: "📖 ידע" },
+        { value: "memory", label: "🧠 זיכרון" },
+        { value: "user-profiles", label: "👥 פרופילי משתמשים" },
+      ],
+    },
+  ];
+
+  const allItems = groups.flatMap((g) => g.items);
+  const activeLabel = allItems.find((i) => i.value === initial)?.label || "פרופיל";
+
   return (
     <Tabs
       value={initial}
       onValueChange={(v) => { params.set("tab", v); setParams(params, { replace: true }); }}
       className="flex-1 flex flex-col overflow-hidden"
     >
-      <TabsList className="mx-4 mt-3 self-start flex-wrap h-auto">
-        <TabsTrigger value="profile">⚙️ פרופיל</TabsTrigger>
-        <TabsTrigger value="goals">🎯 מטרות</TabsTrigger>
-        <TabsTrigger value="tasks">📋 משימות</TabsTrigger>
-        <TabsTrigger value="tools">🛠️ כלים</TabsTrigger>
-        <TabsTrigger value="registry">📚 מאגר כלים</TabsTrigger>
-        <TabsTrigger value="mcp">🔌 MCP</TabsTrigger>
-        <TabsTrigger value="supervisor">👑 Supervisor</TabsTrigger>
-        <TabsTrigger value="runs">🔁 ריצות</TabsTrigger>
-        <TabsTrigger value="evals">✅ Evals</TabsTrigger>
-        <TabsTrigger value="knowledge">📖 ידע</TabsTrigger>
-        <TabsTrigger value="memory">🧠 זיכרון</TabsTrigger>
-        <TabsTrigger value="approvals">🛡️ אישורים</TabsTrigger>
-        <TabsTrigger value="user-profiles">👥 פרופילי משתמשים</TabsTrigger>
-        <TabsTrigger value="cost">💰 עלות</TabsTrigger>
-      </TabsList>
+      <div className="mx-4 mt-3 flex items-center gap-2 flex-wrap">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-2">
+              <Settings className="h-4 w-4" />
+              <span>הגדרות סוכן · {activeLabel}</span>
+              <ChevronDown className="h-4 w-4 opacity-60" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-64 bg-popover z-[100]">
+            {groups.map((g, gi) => (
+              <div key={g.label}>
+                {gi > 0 && <DropdownMenuSeparator />}
+                <DropdownMenuLabel className="text-xs text-muted-foreground">{g.label}</DropdownMenuLabel>
+                {g.items.map((it) => (
+                  <DropdownMenuItem
+                    key={it.value}
+                    onSelect={() => {
+                      params.set("tab", it.value);
+                      setParams(params, { replace: true });
+                    }}
+                    className={it.value === initial ? "bg-accent font-medium" : ""}
+                  >
+                    {it.label}
+                  </DropdownMenuItem>
+                ))}
+              </div>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <Button
+          variant="default"
+          size="sm"
+          className="gap-2"
+          onClick={() => navigate(buildPath("/agent-tasks"))}
+        >
+          <ListTodo className="h-4 w-4" />
+          משימות סוכן
+        </Button>
+      </div>
       <div className="flex-1 overflow-auto p-4">
         <TabsContent value="profile" className="mt-0"><ProfileTab agent={agent} /></TabsContent>
         <TabsContent value="goals" className="mt-0"><GoalsTab agentId={agent.id} /></TabsContent>
