@@ -97,6 +97,15 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
   const [isCreatingTable, setIsCreatingTable] = useState(false);
   const [isFetchingFromAhrefs, setIsFetchingFromAhrefs] = useState(false);
 
+  // New-report form state
+  const [domainInput, setDomainInput] = useState("");
+  const [selectedAhrefsProject, setSelectedAhrefsProject] = useState<string>("none");
+  const [selectedGscIntegrationId, setSelectedGscIntegrationId] = useState<string>("none");
+  const [selectedGscSite, setSelectedGscSite] = useState<string>("");
+  const [selectedGaIntegrationId, setSelectedGaIntegrationId] = useState<string>("none");
+  const [selectedGaProperty, setSelectedGaProperty] = useState<string>("");
+  const [isCreatingReport, setIsCreatingReport] = useState(false);
+
   const handleFetchFromAhrefs = async () => {
     if (!selectedClient) return;
     const client = clients.find(c => c.id === selectedClient);
