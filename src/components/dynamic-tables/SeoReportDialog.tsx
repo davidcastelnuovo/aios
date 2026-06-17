@@ -521,33 +521,123 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
                   ))}
                 </div>
               ) : reports.length === 0 ? (
-                <Card className="p-8 text-center space-y-4">
-                  <FileText className="h-12 w-12 mx-auto text-muted-foreground" />
-                  <div>
-                    <h3 className="font-semibold text-lg mb-1">אין דוחות SEO</h3>
+                <Card className="p-6 space-y-5">
+                  <div className="text-center space-y-1">
+                    <FileText className="h-10 w-10 mx-auto text-muted-foreground" />
+                    <h3 className="font-semibold text-lg">צור דוח SEO חדש</h3>
                     <p className="text-muted-foreground text-sm">
-                      {selectedClientObj?.website ? (
-                        <>ניתן ליצור דוח חדש ישירות מ-Ahrefs לפי הדומיין של הלקוח: <span className="font-medium">{normalizeDomain(selectedClientObj.website)}</span></>
-                      ) : (
-                        'ללקוח זה אין אתר מוגדר. הגדר אתר לקוח ונסה שוב, או חבר את האינטגרציה.'
-                      )}
+                      בחר את המקורות שיתחברו ללקוח. ניתן לחבר Ahrefs, Google Search Console ו-Google Analytics יחד לטבלת דוח אחת.
                     </p>
                   </div>
-                  {selectedClientObj?.website && (
-                    <Button
-                      onClick={handleFetchFromAhrefs}
-                      disabled={isFetchingFromAhrefs}
-                      className="gap-2"
-                    >
-                      {isFetchingFromAhrefs ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <PlusCircle className="h-4 w-4" />
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {/* Domain */}
+                    <div className="space-y-1.5 md:col-span-2">
+                      <Label>דומיין / אתר הלקוח</Label>
+                      <Input
+                        value={domainInput}
+                        onChange={(e) => setDomainInput(e.target.value)}
+                        placeholder="example.co.il"
+                        dir="ltr"
+                      />
+                      {!selectedClientObj?.website && (
+                        <p className="text-xs text-muted-foreground">ללקוח אין אתר מוגדר במערכת — הזן ידנית.</p>
                       )}
-                      {isFetchingFromAhrefs ? 'מייצר דוח...' : 'צור דוח חדש מ-Ahrefs'}
+                    </div>
+
+                    {/* Ahrefs project */}
+                    <div className="space-y-1.5">
+                      <Label>פרויקט Ahrefs</Label>
+                      <Select value={selectedAhrefsProject} onValueChange={setSelectedAhrefsProject}>
+                        <SelectTrigger><SelectValue placeholder={ahrefsProjectsLoading ? "טוען..." : "ללא / לפי דומיין"} /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">ללא — לפי דומיין בלבד</SelectItem>
+                          {ahrefsProjects.map(p => (
+                            <SelectItem key={p.project_id} value={String(p.project_id)}>
+                              {p.project_name} {p.domain ? `· ${p.domain}` : ''}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* GSC integration */}
+                    <div className="space-y-1.5">
+                      <Label>חיבור Google Search Console</Label>
+                      <Select value={selectedGscIntegrationId} onValueChange={setSelectedGscIntegrationId}>
+                        <SelectTrigger><SelectValue placeholder={gscIntegrations.length ? "בחר חיבור" : "אין חיבורים זמינים"} /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">ללא</SelectItem>
+                          {gscIntegrations.map((i: any) => (
+                            <SelectItem key={i.id} value={i.id}>
+                              {i.settings?.google_email || i.name || 'GSC'} {i._isOwn ? '' : '· משותף'}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* GSC site picker */}
+                    {selectedGscIntegrationId !== "none" && gscAvailableSites.length > 0 && (
+                      <div className="space-y-1.5 md:col-span-2">
+                        <Label>בחר אתר ב-GSC</Label>
+                        <Select value={selectedGscSite} onValueChange={setSelectedGscSite}>
+                          <SelectTrigger><SelectValue placeholder="בחר site" /></SelectTrigger>
+                          <SelectContent>
+                            {gscAvailableSites.map((s: any) => (
+                              <SelectItem key={s.siteUrl} value={s.siteUrl} disabled={s.permissionLevel === 'siteUnverifiedUser'}>
+                                {s.siteUrl} {s.permissionLevel === 'siteUnverifiedUser' ? '· ללא הרשאה' : ''}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    {/* GA integration */}
+                    <div className="space-y-1.5">
+                      <Label>חיבור Google Analytics</Label>
+                      <Select value={selectedGaIntegrationId} onValueChange={setSelectedGaIntegrationId}>
+                        <SelectTrigger><SelectValue placeholder={gaIntegrations.length ? "בחר חיבור" : "אין חיבורים זמינים"} /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">ללא</SelectItem>
+                          {gaIntegrations.map((i: any) => (
+                            <SelectItem key={i.id} value={i.id}>
+                              {i.settings?.google_email || i.name || 'GA'} {i._isOwn ? '' : '· משותף'}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* GA property picker */}
+                    {selectedGaIntegrationId !== "none" && gaAvailableProperties.length > 0 && (
+                      <div className="space-y-1.5">
+                        <Label>בחר Property ב-GA</Label>
+                        <Select value={selectedGaProperty} onValueChange={setSelectedGaProperty}>
+                          <SelectTrigger><SelectValue placeholder="בחר property" /></SelectTrigger>
+                          <SelectContent>
+                            {gaAvailableProperties.map((p: any, idx: number) => {
+                              const id = String(typeof p === 'string' ? p : (p.propertyId || p.id || p.property_id || ''));
+                              const name = typeof p === 'string' ? p : (p.displayName || p.name || id);
+                              return (
+                                <SelectItem key={id || idx} value={id}>{name}</SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex justify-center">
+                    <Button onClick={handleCreateReport} disabled={!canCreate || isCreatingReport} className="gap-2">
+                      {isCreatingReport ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />}
+                      {isCreatingReport ? 'יוצר דוח...' : 'צור דוח SEO'}
                     </Button>
-                  )}
+                  </div>
                 </Card>
+
               ) : (
                 <>
                   {/* Report Header */}
