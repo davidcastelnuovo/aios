@@ -209,18 +209,31 @@ export async function findCarmenSessionAutomation(
 
   if (!flowSteps || flowSteps.length === 0) return null;
 
-  // Split into pinned-match vs unpinned (drop foreign-pinned entirely).
+  // Split into pinned-match vs unpinned. Foreign-pinned automations are normally
+  // dropped, BUT a `specific_phone` automation is allowed to fire on any inbound
+  // channel when the sender appears in its `carmen_allowed_phones` list — this
+  // lets allowed phones trigger Carmen via Green API even when the automation is
+  // pinned to a Manus integration.
+  const ctxIsGroup = !!ctx?.isGroup;
+  const ctxPhoneDigits = (ctx?.phoneNumber || '').replace(/\D/g, '');
   const pinnedMatches: any[] = [];
   const unpinned: any[] = [];
+  const foreignPhoneAllowed: any[] = [];
   for (const s of flowSteps) {
     const pinned = s.configuration?.carmen_integration_id;
     if (!pinned) {
       unpinned.push(s);
     } else if (integrationId && pinned === integrationId) {
       pinnedMatches.push(s);
+    } else if (!ctxIsGroup && ctxPhoneDigits && s.configuration?.carmen_scope_mode === 'specific_phone') {
+      const allowed: string[] = Array.isArray(s.configuration?.carmen_allowed_phones)
+        ? s.configuration.carmen_allowed_phones.map((p: any) => String(p).replace(/\D/g, '')).filter(Boolean)
+        : [];
+      const hit = allowed.some((p) => p === ctxPhoneDigits || ctxPhoneDigits.endsWith(p) || p.endsWith(ctxPhoneDigits));
+      if (hit) foreignPhoneAllowed.push(s);
     }
   }
-  const ranked = [...pinnedMatches, ...unpinned];
+  const ranked = [...pinnedMatches, ...unpinned, ...foreignPhoneAllowed];
   if (ranked.length === 0) return null;
 
   // Channel-aware ranking: when multiple Carmen automations are pinned to the same
