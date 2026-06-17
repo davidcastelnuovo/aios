@@ -18,8 +18,18 @@ import { SupervisorTab } from "./tabs/SupervisorTab";
 import { McpConnectionsTab } from "./tabs/McpConnectionsTab";
 import { EvalsTab } from "./tabs/EvalsTab";
 
-import { Crown, Bot } from "lucide-react";
-import { useSearchParams } from "react-router-dom";
+import { Crown, Bot, Settings, ListTodo, ChevronDown } from "lucide-react";
+import { useSearchParams, useNavigate } from "react-router-dom";
+import { useTenantPath } from "@/hooks/useTenantPath";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 
 const CARMEN_AVATAR = "https://d2xsxph8kpxj0f.cloudfront.net/310419663030948028/XGJWpzb5zh76ZdoV37Q3K8/carmen-agents-avatar_17945787.png";
