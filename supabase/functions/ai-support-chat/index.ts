@@ -12,7 +12,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
 const AI_GATEWAY_URL = 'https://ai.gateway.lovable.dev/v1/chat/completions';
-const AI_MODEL = 'google/gemini-3-flash-preview';
+const AI_MODEL_DEFAULT = 'google/gemini-3-flash-preview';
 
 function buildSystemPrompt(
   userName: string,
@@ -23,7 +23,9 @@ function buildSystemPrompt(
   campaignerName?: string,
   campaignerId?: string,
   uiMode?: string,
+  carmenAgent?: { talent?: string | null; personality?: string | null; system_prompt?: string | null } | null,
 ) {
+
   return `אתה **AIOS** - עוזר AI חכם ומרכזי של מערכת CRM לניהול סוכנויות שיווק.
 
 🕒 **תאריך/שעה נוכחיים (להתייחסות חובה):**
@@ -177,8 +179,13 @@ ${uiMode === 'aios' ? `📊 **חשוב לגבי תצוגת נתונים (display
 - מודלים זמינים: manus-1.6 (ברירת מחדל, מאוזן), manus-1.6-lite (מהיר וזול), manus-1.6-max (למשימות מורכבות במיוחד)
 - מצבי עבודה (mode): agent (ביצוע עצמאי — ברירת מחדל), chat (שיחה אינטראקטיבית), adaptive (בחירה אוטומטית)
 - כש-create_manus_task מצליח, הצג למשתמש את ה-task_id ואמור שהמשימה נשלחה לעיבוד
-- כשמשתמש שואל על סטטוס משימת Manus, השתמש ב-list_manus_tasks ואם סיימה — get_manus_task_result`;
+- כשמשתמש שואל על סטטוס משימת Manus, השתמש ב-list_manus_tasks ואם סיימה — get_manus_task_result
+
+${carmenAgent ? `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n🎭 **הגדרות הסוכנת (מתוך AgentEditor — כרמן):**\n${carmenAgent.talent ? `- **טלנט/מומחיות:** ${carmenAgent.talent}` : ''}
+${carmenAgent.personality ? `- **אישיות:** ${carmenAgent.personality}` : ''}
+${carmenAgent.system_prompt ? `\n**הנחיות מותאמות:**\n${carmenAgent.system_prompt}` : ''}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━` : ''}`;
 }
+
 
 interface ToolCall {
   name: string;
@@ -2550,6 +2557,20 @@ serve(async (req) => {
     }
     if (!tenantId) throw new Error('אין לך גישה למערכת');
 
+    // Load Carmen agent configuration (engine, talent, personality, system_prompt)
+    // — single source of truth shared with AgentEditor.
+    const { data: carmenAgent } = await supabaseClient
+      .from('ai_agents')
+      .select('id, engine, talent, personality, system_prompt, active')
+      .eq('tenant_id', tenantId)
+      .or('name.ilike.%carmen%,name.ilike.%כרמן%')
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    const activeModel = (carmenAgent?.active !== false && carmenAgent?.engine) || AI_MODEL_DEFAULT;
+
+
+
     // Get user profile
     const { data: profileData } = await supabaseClient.from('profiles').select('full_name, email, campaigner_id, ui_mode').eq('id', user.id).maybeSingle();
     let campaignerName: string | null = null;
@@ -2643,9 +2664,10 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: AI_MODEL,
+        model: activeModel,
         messages: [
-          { role: 'system', content: buildSystemPrompt(userName, userEmail, currentDateContext, memoryContext, skillsContext, campaignerName || undefined, campaignerId || undefined, profileData?.ui_mode || 'classic') },
+          { role: 'system', content: buildSystemPrompt(userName, userEmail, currentDateContext, memoryContext, skillsContext, campaignerName || undefined, campaignerId || undefined, profileData?.ui_mode || 'classic', carmenAgent) },
+
           ...aiMessages,
         ],
         tools,
@@ -2717,7 +2739,7 @@ serve(async (req) => {
 
           // Build running conversation for follow-ups
           let followUpMessages: any[] = [
-            { role: 'system', content: buildSystemPrompt(userName, userEmail, currentDateContext, memoryContext, skillsContext, campaignerName || undefined, campaignerId || undefined) },
+            { role: 'system', content: buildSystemPrompt(userName, userEmail, currentDateContext, memoryContext, skillsContext, campaignerName || undefined, campaignerId || undefined, profileData?.ui_mode || 'classic', carmenAgent) },
             ...aiMessages,
           ];
 
@@ -2763,7 +2785,7 @@ serve(async (req) => {
               method: 'POST',
               headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                model: AI_MODEL,
+                model: activeModel,
                 messages: followUpMessages,
                 tools,
                 stream: true,
