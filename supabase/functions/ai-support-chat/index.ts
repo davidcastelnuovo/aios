@@ -179,8 +179,13 @@ ${uiMode === 'aios' ? `📊 **חשוב לגבי תצוגת נתונים (display
 - מודלים זמינים: manus-1.6 (ברירת מחדל, מאוזן), manus-1.6-lite (מהיר וזול), manus-1.6-max (למשימות מורכבות במיוחד)
 - מצבי עבודה (mode): agent (ביצוע עצמאי — ברירת מחדל), chat (שיחה אינטראקטיבית), adaptive (בחירה אוטומטית)
 - כש-create_manus_task מצליח, הצג למשתמש את ה-task_id ואמור שהמשימה נשלחה לעיבוד
-- כשמשתמש שואל על סטטוס משימת Manus, השתמש ב-list_manus_tasks ואם סיימה — get_manus_task_result`;
+- כשמשתמש שואל על סטטוס משימת Manus, השתמש ב-list_manus_tasks ואם סיימה — get_manus_task_result
+
+${carmenAgent ? `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n🎭 **הגדרות הסוכנת (מתוך AgentEditor — כרמן):**\n${carmenAgent.talent ? `- **טלנט/מומחיות:** ${carmenAgent.talent}` : ''}
+${carmenAgent.personality ? `- **אישיות:** ${carmenAgent.personality}` : ''}
+${carmenAgent.system_prompt ? `\n**הנחיות מותאמות:**\n${carmenAgent.system_prompt}` : ''}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━` : ''}`;
 }
+
 
 interface ToolCall {
   name: string;
