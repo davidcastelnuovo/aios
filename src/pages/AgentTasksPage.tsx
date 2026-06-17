@@ -1053,9 +1053,10 @@ export default function AgentTasksPage() {
           <ResizableHandle withHandle />
 
           {/* Left panel – Agents in action */}
-          <ResizablePanel defaultSize={35} minSize={25}>
-            <div className="h-full flex flex-col p-4 bg-muted/30">
-              <h2 className="font-bold text-base mb-4">סוכנים בפעולה</h2>
+          <ResizablePanel defaultSize={isMobile ? 40 : 35} minSize={isMobile ? 20 : 25}>
+            <div className="h-full flex flex-col p-3 md:p-4 bg-muted/30">
+              <h2 className="font-bold text-sm md:text-base mb-3 md:mb-4">סוכנים בפעולה</h2>
+
               <ScrollArea className="flex-1">
                 <div className="space-y-3 pr-2">
                   {agentStats.map(agent => (
