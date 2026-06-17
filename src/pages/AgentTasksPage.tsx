@@ -24,6 +24,8 @@ import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
+import { useIsMobile } from "@/hooks/use-mobile";
+
 import { GoalTree } from "@/components/tasks/GoalTree";
 import { format } from "date-fns";
 import agentGeneral from "@/assets/agents/agent-general.png";
@@ -432,6 +434,8 @@ export default function AgentTasksPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
+  const isMobile = useIsMobile();
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<any>(null);
   const [filterAgent, setFilterAgent] = useState<string>("all");
@@ -712,27 +716,32 @@ export default function AgentTasksPage() {
   return (
     <div className="h-[calc(100vh-4rem)] flex flex-col" dir="rtl">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 pb-2 shrink-0">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between gap-2 p-3 md:p-4 pb-2 shrink-0 flex-wrap">
+        <div className="flex items-center gap-2 md:gap-3 min-w-0">
           <Button variant="ghost" size="sm" onClick={() => navigate(buildPath("agents"))}>
             <ArrowRight className="h-4 w-4" />
           </Button>
-          <h1 className="text-xl font-bold">ניהול משימות סוכנים</h1>
+          <h1 className="text-base md:text-xl font-bold truncate">ניהול משימות סוכנים</h1>
         </div>
-        <Button onClick={() => setDialogOpen(true)} className="gap-2 bg-[#36d399] hover:bg-[#2fbf87] text-black">
+        <Button onClick={() => setDialogOpen(true)} size="sm" className="gap-2 bg-[#36d399] hover:bg-[#2fbf87] text-black">
           <Plus className="h-4 w-4" />
-          משימה חדשה
+          <span className="hidden sm:inline">משימה חדשה</span>
+          <span className="sm:hidden">חדש</span>
         </Button>
       </div>
 
-      <div className="flex-1 min-h-0 px-4 pb-4">
-        <ResizablePanelGroup direction="horizontal" className="h-full rounded-xl border bg-background">
+      <div className="flex-1 min-h-0 px-2 md:px-4 pb-2 md:pb-4">
+        <ResizablePanelGroup
+          direction={isMobile ? "vertical" : "horizontal"}
+          className="h-full rounded-xl border bg-background"
+        >
           {/* Right panel – Tasks */}
-          <ResizablePanel defaultSize={65} minSize={40}>
-            <div className="h-full flex flex-col p-4">
+          <ResizablePanel defaultSize={isMobile ? 60 : 65} minSize={isMobile ? 30 : 40}>
+            <div className="h-full flex flex-col p-3 md:p-4">
               {/* Tabs */}
               <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-3">
-                <TabsList className="h-8">
+                <TabsList className="h-8 w-full md:w-auto justify-start overflow-x-auto flex-nowrap">
+
                   <TabsTrigger value="tasks" className="text-xs gap-1">
                     <ListTodo className="h-3 w-3" /> כל המשימות ({tasks.length})
                   </TabsTrigger>
@@ -754,7 +763,7 @@ export default function AgentTasksPage() {
               {/* Filters */}
               <div className="flex gap-2 mb-4 shrink-0 flex-wrap">
                 <Select value={filterAgent} onValueChange={setFilterAgent}>
-                  <SelectTrigger className="w-[160px] h-8 text-xs">
+                  <SelectTrigger className="w-[140px] md:w-[160px] h-8 text-xs">
                     <SelectValue placeholder="כל הסוכנים" />
                   </SelectTrigger>
                   <SelectContent>
@@ -765,7 +774,8 @@ export default function AgentTasksPage() {
                   </SelectContent>
                 </Select>
                 <Select value={filterStatus} onValueChange={setFilterStatus}>
-                  <SelectTrigger className="w-[130px] h-8 text-xs">
+                  <SelectTrigger className="w-[120px] md:w-[130px] h-8 text-xs">
+
                     <SelectValue placeholder="כל הסטטוסים" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1044,9 +1054,10 @@ export default function AgentTasksPage() {
           <ResizableHandle withHandle />
 
           {/* Left panel – Agents in action */}
-          <ResizablePanel defaultSize={35} minSize={25}>
-            <div className="h-full flex flex-col p-4 bg-muted/30">
-              <h2 className="font-bold text-base mb-4">סוכנים בפעולה</h2>
+          <ResizablePanel defaultSize={isMobile ? 40 : 35} minSize={isMobile ? 20 : 25}>
+            <div className="h-full flex flex-col p-3 md:p-4 bg-muted/30">
+              <h2 className="font-bold text-sm md:text-base mb-3 md:mb-4">סוכנים בפעולה</h2>
+
               <ScrollArea className="flex-1">
                 <div className="space-y-3 pr-2">
                   {agentStats.map(agent => (
