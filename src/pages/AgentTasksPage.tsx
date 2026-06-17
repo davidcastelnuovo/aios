@@ -716,27 +716,32 @@ export default function AgentTasksPage() {
   return (
     <div className="h-[calc(100vh-4rem)] flex flex-col" dir="rtl">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 pb-2 shrink-0">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between gap-2 p-3 md:p-4 pb-2 shrink-0 flex-wrap">
+        <div className="flex items-center gap-2 md:gap-3 min-w-0">
           <Button variant="ghost" size="sm" onClick={() => navigate(buildPath("agents"))}>
             <ArrowRight className="h-4 w-4" />
           </Button>
-          <h1 className="text-xl font-bold">ניהול משימות סוכנים</h1>
+          <h1 className="text-base md:text-xl font-bold truncate">ניהול משימות סוכנים</h1>
         </div>
-        <Button onClick={() => setDialogOpen(true)} className="gap-2 bg-[#36d399] hover:bg-[#2fbf87] text-black">
+        <Button onClick={() => setDialogOpen(true)} size="sm" className="gap-2 bg-[#36d399] hover:bg-[#2fbf87] text-black">
           <Plus className="h-4 w-4" />
-          משימה חדשה
+          <span className="hidden sm:inline">משימה חדשה</span>
+          <span className="sm:hidden">חדש</span>
         </Button>
       </div>
 
-      <div className="flex-1 min-h-0 px-4 pb-4">
-        <ResizablePanelGroup direction="horizontal" className="h-full rounded-xl border bg-background">
+      <div className="flex-1 min-h-0 px-2 md:px-4 pb-2 md:pb-4">
+        <ResizablePanelGroup
+          direction={isMobile ? "vertical" : "horizontal"}
+          className="h-full rounded-xl border bg-background"
+        >
           {/* Right panel – Tasks */}
-          <ResizablePanel defaultSize={65} minSize={40}>
-            <div className="h-full flex flex-col p-4">
+          <ResizablePanel defaultSize={isMobile ? 60 : 65} minSize={isMobile ? 30 : 40}>
+            <div className="h-full flex flex-col p-3 md:p-4">
               {/* Tabs */}
               <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-3">
-                <TabsList className="h-8">
+                <TabsList className="h-8 w-full md:w-auto justify-start overflow-x-auto flex-nowrap">
+
                   <TabsTrigger value="tasks" className="text-xs gap-1">
                     <ListTodo className="h-3 w-3" /> כל המשימות ({tasks.length})
                   </TabsTrigger>
