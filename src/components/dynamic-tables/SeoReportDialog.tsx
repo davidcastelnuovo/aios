@@ -403,6 +403,87 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
     }
   };
 
+  const hasAnySource =
+    !!domainInput.trim() ||
+    selectedAhrefsProject !== "none" ||
+    selectedGscIntegrationId !== "none" ||
+    selectedGaIntegrationId !== "none";
+
+  const canCreate = !!selectedClient && hasAnySource && !!(domainInput.trim() || selectedAhrefsProject !== "none");
+
+  const handleCreateReport = async () => {
+    if (!selectedClient || !canCreate) return;
+    setIsCreatingReport(true);
+    try {
+      const domain = normalizeDomain(domainInput) ||
+        (selectedAhrefsProject !== "none"
+          ? (ahrefsProjects.find(p => String(p.project_id) === selectedAhrefsProject)?.domain || "")
+          : "");
+
+      // 1) Pull an Ahrefs snapshot if we have a domain (Ahrefs uses the global key)
+      if (domain) {
+        try {
+          await supabase.functions.invoke('fetch-ahrefs-snapshot', {
+            body: { clientId: selectedClient, domain },
+          });
+        } catch (err) {
+          console.warn('[SeoReportDialog] fetch-ahrefs-snapshot failed (continuing):', err);
+        }
+      }
+
+      // 2) Create the unified CRM table
+      const clientName = selectedClientObj?.name || '';
+      const domainMatchesName = domain && clientName && domain.toLowerCase().includes(clientName.toLowerCase());
+      const tableName = domain && !domainMatchesName ? `${clientName} - ${domain}` : (clientName || `דוח SEO`);
+      const slug = `seo-report-${selectedClient}-${Date.now()}`;
+
+      const ahrefsProjectId = selectedAhrefsProject !== "none" ? selectedAhrefsProject : null;
+      const gscIntId = selectedGscIntegrationId !== "none" ? selectedGscIntegrationId : null;
+      const gaIntId = selectedGaIntegrationId !== "none" ? selectedGaIntegrationId : null;
+
+      const { error } = await supabase.functions.invoke('crm-tables', {
+        body: {
+          action: 'create',
+          tenantId: currentTenantId,
+          name: tableName,
+          slug,
+          description: `דוח SEO מאוחד עבור ${domain || clientName}`,
+          category: 'seo',
+          icon: 'TrendingUp',
+          agencyId: selectedClientObj?.agency_id || null,
+          clientId: selectedClient,
+          integration_type: 'ahrefs',
+          integration_settings: {
+            data_source: 'seo_unified',
+            clientId: selectedClient,
+            targetDomain: domain,
+            reportType: 'site_explorer',
+            ahrefs_project_id: ahrefsProjectId,
+            gsc_integration_id: gscIntId,
+            gsc_site_url: gscIntId ? (selectedGscSite || null) : null,
+            ga_integration_id: gaIntId,
+            ga_property_id: gaIntId ? (selectedGaProperty || null) : null,
+          },
+        },
+      });
+
+      if (error) throw error;
+
+      toast({ title: 'דוח ה-SEO נוצר בהצלחה' });
+      queryClient.invalidateQueries({ queryKey: ['seo-reports', currentTenantId, selectedClient] });
+      queryClient.invalidateQueries({ queryKey: ['ahrefs-reports'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      onOpenChange(false);
+      const tenantSlug = currentTenant?.slug || '';
+      if (tenantSlug) navigate(`/t/${tenantSlug}/table/${slug}`);
+    } catch (err: any) {
+      toast({ title: 'שגיאה ביצירת דוח SEO', description: err?.message || 'נסה שוב מאוחר יותר', variant: 'destructive' });
+    } finally {
+      setIsCreatingReport(false);
+    }
+  };
+
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto" dir="rtl">
