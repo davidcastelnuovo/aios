@@ -2557,6 +2557,20 @@ serve(async (req) => {
     }
     if (!tenantId) throw new Error('אין לך גישה למערכת');
 
+    // Load Carmen agent configuration (engine, talent, personality, system_prompt)
+    // — single source of truth shared with AgentEditor.
+    const { data: carmenAgent } = await supabaseClient
+      .from('ai_agents')
+      .select('id, engine, talent, personality, system_prompt, active')
+      .eq('tenant_id', tenantId)
+      .or('name.ilike.%carmen%,name.ilike.%כרמן%')
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    const activeModel = (carmenAgent?.active !== false && carmenAgent?.engine) || AI_MODEL_DEFAULT;
+
+
+
     // Get user profile
     const { data: profileData } = await supabaseClient.from('profiles').select('full_name, email, campaigner_id, ui_mode').eq('id', user.id).maybeSingle();
     let campaignerName: string | null = null;
