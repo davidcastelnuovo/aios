@@ -197,6 +197,31 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
     enabled: !!currentTenantId && !!selectedClient,
   });
 
+  // SEO scope for cross-tenant integration lookups
+  const seoScope = useSeoScope(selectedClient || undefined);
+  const integrationTenantIds = useMemo(() => {
+    const set = new Set<string>();
+    if (currentTenantId) set.add(currentTenantId);
+    (seoScope.data?.accessibleTenantIds || []).forEach(t => set.add(t));
+    return Array.from(set);
+  }, [currentTenantId, seoScope.data?.accessibleTenantIds]);
+
+  // Ahrefs projects
+  const { data: ahrefsProjects = [], isLoading: ahrefsProjectsLoading } = useQuery({
+    queryKey: ['ahrefs-projects-picker'],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke('list-ahrefs-projects', { body: {} });
+      if (error) throw error;
+      return (data?.projects || []) as Array<{ project_id: string; project_name: string; domain: string; url: string }>;
+    },
+    enabled: open,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // GSC & GA integrations
+  const { data: gscIntegrations = [] } = useUserIntegrations(integrationTenantIds, 'google_search_console', { enabled: open && integrationTenantIds.length > 0 });
+  const { data: gaIntegrations = [] } = useUserIntegrations(integrationTenantIds, 'google_analytics', { enabled: open && integrationTenantIds.length > 0 });
+
   // Available domains for the selected client
   const availableDomains = useMemo(() => {
     const set = new Set<string>();
