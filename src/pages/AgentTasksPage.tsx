@@ -763,7 +763,7 @@ export default function AgentTasksPage() {
               {/* Filters */}
               <div className="flex gap-2 mb-4 shrink-0 flex-wrap">
                 <Select value={filterAgent} onValueChange={setFilterAgent}>
-                  <SelectTrigger className="w-[160px] h-8 text-xs">
+                  <SelectTrigger className="w-[140px] md:w-[160px] h-8 text-xs">
                     <SelectValue placeholder="כל הסוכנים" />
                   </SelectTrigger>
                   <SelectContent>
@@ -774,7 +774,8 @@ export default function AgentTasksPage() {
                   </SelectContent>
                 </Select>
                 <Select value={filterStatus} onValueChange={setFilterStatus}>
-                  <SelectTrigger className="w-[130px] h-8 text-xs">
+                  <SelectTrigger className="w-[120px] md:w-[130px] h-8 text-xs">
+
                     <SelectValue placeholder="כל הסטטוסים" />
                   </SelectTrigger>
                   <SelectContent>
