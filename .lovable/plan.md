@@ -1,59 +1,35 @@
-## מה לשנות
-החלפת מסך "אין דוחות SEO" בדיאלוג יצירת דוח מלא, שמאפשר לבחור מקורות נתונים ולהרכיב טבלת CRM אחת מאוחדת לכל לקוח — גם כשאין website מוגדר.
+## הבעיה
 
-## זרימה חדשה ב-SeoReportDialog
+אוטומציית "כרמן / ישיר" מוצמדת ל-`carmen_integration_id` של Manus. כשמספר מותר (למשל 972507677613) שולח "כרמן" דרך WhatsApp שלו (Green API) למספר של Carmen ב-Manus:
 
-1. **בחירת לקוח** (כפי שיש היום).
-2. אם אין דוחות עדיין → לא להראות "אין דוחות". במקום זה לפתוח את **טופס יצירת דוח חדש**:
-   - **דומיין/אתר** — שדה טקסט (input). אם ל-`clients.website` יש ערך → ממולא אוטומטית וניתן לעריכה. אם אין → input ריק עם placeholder. הערך הזה חי רק בדיאלוג, **לא נשמר חזרה ל-clients**.
-   - **פרויקט Ahrefs** — Combobox עם רשימת פרויקטים מ-`list-ahrefs-projects`. אפשרות "ללא / לפי דומיין בלבד" כברירת מחדל אם אין התאמה.
-   - **חיבור Google Search Console** — Combobox מ-`useUserIntegrations(tenantIds, "google_search_console")`. לכל חיבור מציג את האימייל ואת רשימת ה-`available_sites`. אחרי בחירת חיבור → בורר site (מתוך `available_sites` של אותו חיבור, ברירת מחדל: site שמתאים ל-domain).
-   - **חיבור Google Analytics** — Combobox מ-`useUserIntegrations(tenantIds, "google_analytics")`. אחרי בחירת חיבור → בורר property (מתוך `available_properties`).
-   - כל ארבעת השדות אופציונליים, אבל חייב להיות לפחות אחד (דומיין + מקור אחד) כדי שכפתור "צור דוח" יופעל.
+- `green-api-webhook` קולט את ההודעה ומריץ `findCarmenSessionAutomation` עם ה-integrationId של Green API.
+- הפונקציה מסננת אוטומציות שמוצמדות לאינטגרציה אחרת (Manus) ומחזירה null.
+- לכן Carmen לא מופעלת — למרות שהמספר מופיע ב-`carmen_allowed_phones`.
 
-3. כפתור **"צור דוח SEO"**:
-   - אם נבחר פרויקט Ahrefs או יש דומיין → קורא ל-`fetch-ahrefs-snapshot` (כמו היום) להזרים נתוני Ahrefs.
-   - יוצר **טבלת CRM אחת מאוחדת** דרך `crm-tables` עם:
-     - `integration_type: 'seo_unified'` (חדש, או נשתמש ב-`ahrefs` הקיים עם כל ההגדרות מתחת)
-     - `client_id`, `agency_id`, `category: 'seo'`
-     - `integration_settings` מאוחד:
-       ```json
-       {
-         "data_source": "seo_unified",
-         "clientId": "...",
-         "targetDomain": "<domain>",
-         "ahrefs_project_id": "<id|null>",
-         "gsc_integration_id": "<id|null>",
-         "gsc_site_url": "<url|null>",
-         "ga_integration_id": "<id|null>",
-         "ga_property_id": "<id|null>"
-       }
-       ```
-   - בסיום: ניווט לטבלה החדשה (כמו `handleCreateTable` היום).
+## הפתרון
 
-4. אם **יש כבר דוחות**, נשאיר את תצוגת ה-snapshot הקיימת, אבל גם נוסיף בה כפתור "ערוך מקורות" (אופציה קטנה) שפותח שוב את אותו טופס בחירה כדי לעדכן את ה-integration_settings של הטבלה הקיימת — לא קריטי לאיטרציה הזו, יכול להישאר מחוץ לסקופ אם תרצה.
+לאפשר Override של ה-Pin על האינטגרציה כשהשולח נמצא ברשימת המספרים המותרים של אוטומציה במצב `specific_phone`.
 
-## קבצים שיעודכנו
+## שינוי קוד
 
-### `src/components/dynamic-tables/SeoReportDialog.tsx`
-- מוסיף state: `domainInput`, `selectedAhrefsProject`, `selectedGscIntegrationId`, `selectedGscSite`, `selectedGaIntegrationId`, `selectedGaProperty`.
-- מוסיף queries:
-  - `list-ahrefs-projects` (כבר קיים כ-edge function).
-  - `useUserIntegrations(tenantIds, "google_search_console")`.
-  - `useUserIntegrations(tenantIds, "google_analytics")`.
-- מחליף את ה-empty state ב-`<NewReportForm />` (קומפוננטה פנימית באותו קובץ).
-- `handleCreateReport` חדש שמחליף את `handleFetchFromAhrefs` + `handleCreateTable` ומבצע אותם בזה אחר זה.
+**קובץ:** `supabase/functions/_shared/carmen.ts` — פונקציה `findCarmenSessionAutomation`.
 
-### `src/components/dynamic-tables/SeoDashboardView.tsx` (קריאה בלבד, אם צריך)
-- אם הוא כבר תומך ב-`gsc_integration_id` / `ga_integration_id` ב-`integration_settings` — שום שינוי. נוודא בזמן הפיתוח (לפי הזיכרון "Unified SEO Report View" זה כבר התנהגות קיימת).
+שינוי הלוגיקה של דירוג האוטומציות (סביב שורה 213-224):
 
-### ללא שינויי DB
-- `clients.website` לא מתעדכן.
-- `crm_tables.integration_settings` הוא JSONB → אין שינוי סכמה.
+- כיום: אוטומציה מוצמדת לאינטגרציה זרה — נזרקת לחלוטין.
+- אחרי: אוטומציה מוצמדת לאינטגרציה זרה תיכלל גם כן, אם:
+  - `carmen_scope_mode === 'specific_phone'`
+  - וההודעה היא 1:1 (לא קבוצה)
+  - וה-`phoneNumber` הנכנס מופיע ב-`carmen_allowed_phones` (השוואת ספרות אחרונות, כמו ההשוואה הקיימת ב-`scoreStep`).
 
-## פרטים טכניים
+במקרה כזה האוטומציה תקבל ניקוד גבוה (100) ב-`scoreStep` ותענה. התשובה תישלח דרך ה-`sendMessage` של הערוץ שקיבל את ההודעה (Green API במקרה הזה) — כלומר התשובה חוזרת לאותו מספר ששלח.
 
-- `list-ahrefs-projects` כבר קיים כ-edge function ומחזיר את רשימת הפרויקטים מה-API של Ahrefs.
-- ה-GSC/GA integrations נטענים דרך ה-hook הקיים `useUserIntegrations` שמחזיר גם חיבורים אישיים וגם משותפים — בדיוק כפי שהזיכרון `per-user-google-connections` דורש.
-- בחירת GSC site / GA property נעשית מתוך `settings.available_sites` / `settings.available_properties` של החיבור הנבחר, ללא קריאת רשת נוספת.
-- ולידציה: כפתור "צור" disabled עד שיש (domain || ahrefs_project) + לפחות מקור אחד נבחר.
+## מה לא משתנה
+
+- קבוצות (`specific_group`) — נשאר כפי שהוא, ההצמדה ל-Manus עדיין הכרחית.
+- אוטומציה ללא Pin (`carmen_integration_id` ריק) — ממשיכה לעבוד בכל הערוצים.
+- ה-Echo Guard ב-`manus-wa-webhook` (שמונע תגובה כפולה כשמשתמש שולח דרך Green וגם Manus משקף את ההודעה) נשאר.
+
+## בדיקה
+
+לאחר הפריסה: שליחה של "כרמן" מ-972507677613 דרך ה-WhatsApp שלו → green-api-webhook יזהה את האוטומציה למרות ה-Pin → Carmen תענה דרך Green API.
