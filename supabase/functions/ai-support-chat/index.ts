@@ -2664,9 +2664,10 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: AI_MODEL,
+        model: activeModel,
         messages: [
-          { role: 'system', content: buildSystemPrompt(userName, userEmail, currentDateContext, memoryContext, skillsContext, campaignerName || undefined, campaignerId || undefined, profileData?.ui_mode || 'classic') },
+          { role: 'system', content: buildSystemPrompt(userName, userEmail, currentDateContext, memoryContext, skillsContext, campaignerName || undefined, campaignerId || undefined, profileData?.ui_mode || 'classic', carmenAgent) },
+
           ...aiMessages,
         ],
         tools,
