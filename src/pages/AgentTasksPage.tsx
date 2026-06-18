@@ -27,6 +27,8 @@ import { useTenantPath } from "@/hooks/useTenantPath";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 import { GoalTree } from "@/components/tasks/GoalTree";
+import { SystemCronJobsPanel } from "@/components/agents/SystemCronJobsPanel";
+import { Settings2 } from "lucide-react";
 import { format } from "date-fns";
 import agentGeneral from "@/assets/agents/agent-general.png";
 import agentCreative from "@/assets/agents/agent-creative.png";
@@ -756,6 +758,9 @@ export default function AgentTasksPage() {
                   </TabsTrigger>
                   <TabsTrigger value="heartbeat" className="text-xs gap-1">
                     <Heart className="h-3 w-3" /> Heartbeat
+                  </TabsTrigger>
+                  <TabsTrigger value="system" className="text-xs gap-1">
+                    <Settings2 className="h-3 w-3" /> אוטומציות מערכת
                   </TabsTrigger>
                 </TabsList>
               </Tabs>
