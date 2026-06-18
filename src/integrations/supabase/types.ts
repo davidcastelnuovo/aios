@@ -9429,6 +9429,17 @@ export type Database = {
         }[]
       }
       get_client_tenant_id: { Args: { _client_id: string }; Returns: string }
+      get_cron_job_history: {
+        Args: { p_jobid: number; p_limit?: number }
+        Returns: {
+          duration_ms: number
+          end_time: string
+          return_message: string
+          runid: number
+          start_time: string
+          status: string
+        }[]
+      }
       get_cross_tenant_campaigner_ids: {
         Args: { p_user_id: string }
         Returns: string[]
@@ -9662,6 +9673,22 @@ export type Database = {
         }
         Returns: string
       }
+      list_system_cron_jobs: {
+        Args: never
+        Returns: {
+          active: boolean
+          command: string
+          fail_count_7d: number
+          jobid: number
+          jobname: string
+          last_duration_ms: number
+          last_return_message: string
+          last_run_at: string
+          last_status: string
+          schedule: string
+          success_count_7d: number
+        }[]
+      }
       mark_all_chats_read: { Args: { p_tenant_id: string }; Returns: number }
       match_agent_memory: {
         Args: {
@@ -9696,6 +9723,7 @@ export type Database = {
         Args: { p_provider: string; p_tenant_id: string }
         Returns: undefined
       }
+      run_system_cron_job_now: { Args: { p_jobid: number }; Returns: string }
       search_contacts_for_chat:
         | {
             Args: { p_search_term: string }
@@ -9740,6 +9768,10 @@ export type Database = {
       submit_signature_by_token: {
         Args: { _ip?: string; _signature_data: string; _token: string }
         Returns: Json
+      }
+      update_system_cron_job: {
+        Args: { p_active?: boolean; p_jobid: number; p_schedule?: string }
+        Returns: undefined
       }
       user_can_access_client: {
         Args: { _client_id: string; _user_id: string }
