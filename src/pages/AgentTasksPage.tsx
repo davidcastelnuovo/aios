@@ -1049,6 +1049,9 @@ export default function AgentTasksPage() {
                           </div>
                         </div>
                       )}
+                      {activeTab === "system" && (
+                        <SystemCronJobsPanel />
+                      )}
                     </>
                   )}
                 </div>
