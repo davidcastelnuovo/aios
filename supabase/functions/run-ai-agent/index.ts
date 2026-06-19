@@ -2107,6 +2107,21 @@ Deno.serve(async (req) => {
 
     const toolsForAPI = filteredTools.map(t => ({ type: 'function', function: t }))
 
+    // 4b. Load MCP tools for this tenant + agent (Phase 3)
+    let mcpExecutors = new Map<string, (args: any) => Promise<any>>()
+    try {
+      const mcp = await loadMcpTools(supabase, resolvedTenantId, agent_id)
+      if (mcp.toolDefs.length > 0) {
+        for (const t of mcp.toolDefs) {
+          toolsForAPI.push({ type: 'function', function: t as any })
+        }
+        mcpExecutors = mcp.executors
+        console.log(`[AGENT] Loaded ${mcp.toolDefs.length} MCP tools from ${mcp.connectionsCount} connections`)
+      }
+    } catch (e: any) {
+      console.error('[AGENT] MCP load failed:', e?.message)
+    }
+
     // 5. Run agent with tool loop
     const model = resolveModel(agent.engine || 'gemini-3-flash')
     const maxRounds = agent.max_tool_rounds || 25
