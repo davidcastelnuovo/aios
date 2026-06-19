@@ -121,6 +121,7 @@ Deno.serve(async (req) => {
         command_text: commandText,
         user_id: userId,
         conversation_history: previousHistory,
+        surface: 'task',
       }),
     })
 
