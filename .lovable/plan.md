@@ -1,107 +1,50 @@
-להלן מפרט שאפשר לשלוח לצוות Manus. אני אכין אותו גם כקובץ מסמך אם תאשר.
 
----
+## אבחון - מה באמת קורה
 
-# Manus WA Webhook — מפרט payload נדרש
+זה לא קשור לזה שאתה מדבר עליה בצ'אטים אחרים. יש קונפליקט מבני בין שתי האינטגרציות.
 
-## הבעיה הנוכחית
-Webhook נכנס מ-Manus כולל היום רק:
-```json
-{
-  "instanceId": "YwIn7GY3Ul3OAxXG",
-  "from": "224686986293269",
-  "body": "כרמן שומעת",
-  "timestamp": 1781867346
-}
+הצ'אט "אתה ↔ כרמן" מעובד **פעמיים** במקביל:
+
+1. **Manus** (המספר של כרמן `972549696673`) - מקבל את ההודעה שלך כ-incoming. כאן יש session פעיל (`92c3c531...` מוצמדת ל-Manus integration `982f0092...`).
+2. **Green API** (הטלפון שלך `972507677613`) - מקבל את אותה הודעה כ-`outgoingMessageReceived`. כי המספר שלך מופיע ב-`carmen_allowed_phones`, ה-webhook הזה גם נכנס ל-`handleCarmenMessage` במסלול `foreignPhoneAllowed` ופותח/מעדכן **session שני** עם chatId שונה (`972549696673@c.us` במקום `972507677613@c.us`).
+
+מה שזה גורם:
+- **כל הודעה ↔ שתי כניסות**: אחת מ-Manus, אחת מ-Green API. אחת זוכה, השנייה נופלת ל-mirror/echo guard ושתיקה (זה ה-`Dropping manual-outbound mirror of recent API send` שראינו בלוגים).
+- **שני sessions חיים מקבילים** עם היסטוריות נפרדות → תשובות חצויות, חלק מההודעות נכנסות ל-session "הלא נכון" ונשתקות.
+- **session_timeout = 3 דקות** (מוגדר נמוך מדי). אם אתה עונה אחרי 3+ דקות ה-session נסגר בלי שום הודעה, וההודעה הבאה בלי "כרמן" נופלת כ-`no_session_inbound`. ראיתי בלוג `idle for 4.6 min (limit 3) — auto-expiring`.
+- ב-DB אני רואה את הדפוס במדויק: ה-session האחרונים יש להם 1-2 turns בלבד, בעוד session מוקדם יותר (08:40) הגיע ל-26-36 turns - לפני שהמספר השני נכנס לתמונה.
+
+לא משחק תפקיד: שיחה עליה בצ'אטים אחרים (חוץ מקבוצה ב-`carmen_allowed_group_ids`) - היא מסוננת ולא פותחת sessions.
+
+## תיקונים
+
+### 1. למנוע sessions כפולים על אותה שיחה (`supabase/functions/_shared/carmen.ts`)
+ב-`findCarmenSessionAutomation` כשמשולב `foreignPhoneAllowed`:
+- אם האוטומציה pinned ל-integration אחר (Manus) ו-`carmen_integration_id` שונה מה-integration שקרא, **לא** לפתוח/לעדכן session דרך הערוץ הזה. המסלול הזה כיום פותח שיחה מקבילה. נשאיר את `foreignPhoneAllowed` רלוונטי רק כש-**אין** session פעיל בערוץ ה-pinned.
+- חלופה פשוטה ובטוחה יותר: ב-`handleCarmenMessage` כש-`isManualOutgoing` ויש על אותו tenant `carmen_whatsapp_sessions` פעיל באותה שעה עם chatId אחר עבור אותו `phoneNumber`/`sourcePhoneNumber` - לרשום `last_message_at` (keepalive) ולחזור `handled: true` בלי לפתוח/לטפל. ההודעה כבר מטופלת על ה-Manus webhook.
+
+### 2. הקשחת mirror-guard
+ב-bloc `Dropping manual-outbound mirror` (שורות 700-720): גם להחיל אותו לוגיקה ל-**inbound** mirror על Green API (כשהודעה incoming שווה להודעה שיצאה ב-60 שניות האחרונות מ-Manus). זה מכסה את הצד השני של אותה תקלה.
+
+### 3. הארכת session_timeout ל-10 דקות
+לעדכן את ה-step הקיים:
+```sql
+UPDATE automation_flow_steps
+SET configuration = jsonb_set(configuration, '{session_timeout_minutes}', '10')
+WHERE id = '464c7119-e267-475c-8ca4-33de1bdcf16d';
 ```
+3 דקות זה אגרסיבי מדי לשיחה אנושית בוואטסאפ.
 
-`from` מכיל **WhatsApp LID** (Linked Identity, 15 ספרות, לא E.164), בלי מספר טלפון אמיתי. אין דרך לזהות מי השולח, לא ניתן להחיל whitelist/session/scoping, וההודעה נדחית כ-`no_session_inbound`.
+### 4. לוג ברור כשהודעה נופלת
+להוסיף `console.log('[CARMEN] Dropped: dual-channel duplicate', {...})` כשהמסלול החדש מסנן - כדי שבפעם הבאה נוכל לאבחן ב-30 שניות במקום לחפור.
 
-## מה אנחנו צריכים לקבל
-לכל אירוע הודעה (גם נכנסת וגם יוצאת), שדות אלה — חובה:
+## מה לא נשנה
+- whitelisting (העתק לעמודה לא ניגע - `carmen_allowed_phones` תקין).
+- כל ה-Manus/LID resolution - זה כבר עובד (`senderPhone` מגיע נכון).
+- echo/ack guards הקיימים - הם נחוצים נגד לולאות.
 
-| שדה | סוג | חובה | תיאור |
-|---|---|---|---|
-| `instanceId` | string | חובה | מזהה מכשיר Manus (כבר קיים) |
-| `messageId` | string | חובה | מזהה הודעה ייחודי לדדופ |
-| `timestamp` | number (epoch sec) | חובה | זמן ההודעה |
-| `direction` | `"inbound"` \| `"outbound"` | חובה | במקום `fromMe` בלבד — מפורש |
-| `chatId` | string | חובה | המזהה הגולמי של WhatsApp (LID או phone@c.us או group@g.us) |
-| `chatType` | `"private"` \| `"group"` | חובה | סוג השיחה |
-| `senderPhone` | string E.164 (ללא +) | **חובה כשניתן לפתור** | מספר הטלפון האמיתי של השולח (למשל `972549696673`). חובה לבצע resolve מ-LID לפני שליחה. |
-| `senderLid` | string | אופציונלי | ה-LID הגולמי, אם קיים |
-| `senderName` | string | מומלץ | שם תצוגה של השולח |
-| `recipientPhone` | string E.164 | **חובה כשניתן לפתור** | המספר אליו נשלחה ההודעה (במקרה שלנו: המספר של מכשיר ה-Manus) |
-| `groupId` | string | חובה לקבוצות | LID/phone של הקבוצה |
-| `groupName` | string | מומלץ | שם הקבוצה |
-| `body` | string | חובה | תוכן ההודעה |
-| `mediaUrl` / `mediaType` | string | אופציונלי | אם רלוונטי |
-
-### דוגמה — הודעה פרטית נכנסת
-```json
-{
-  "instanceId": "YwIn7GY3Ul3OAxXG",
-  "messageId": "3EB0XXXXXXXXXXXXXXXX",
-  "timestamp": 1781867346,
-  "direction": "inbound",
-  "chatType": "private",
-  "chatId": "972549696673@c.us",
-  "senderPhone": "972549696673",
-  "senderLid": "224686986293269",
-  "senderName": "Avi Cohen",
-  "recipientPhone": "972507677613",
-  "body": "כרמן שומעת"
-}
-```
-
-### דוגמה — הודעה בקבוצה
-```json
-{
-  "instanceId": "YwIn7GY3Ul3OAxXG",
-  "messageId": "3EB0YYYYYYYYYYYYYYYY",
-  "timestamp": 1781867400,
-  "direction": "inbound",
-  "chatType": "group",
-  "chatId": "120363012345678901@g.us",
-  "groupId": "120363012345678901@g.us",
-  "groupName": "צוות שיווק",
-  "senderPhone": "972549696673",
-  "senderLid": "224686986293269",
-  "senderName": "Avi Cohen",
-  "recipientPhone": "972507677613",
-  "body": "כרמן בדקי דופק"
-}
-```
-
-### דוגמה — הודעה יוצאת מהמכשיר
-```json
-{
-  "instanceId": "YwIn7GY3Ul3OAxXG",
-  "messageId": "3EB0ZZZZZZZZZZZZZZZZ",
-  "timestamp": 1781867500,
-  "direction": "outbound",
-  "chatType": "private",
-  "chatId": "972549696673@c.us",
-  "senderPhone": "972507677613",
-  "recipientPhone": "972549696673",
-  "body": "ההודעה ששלח המכשיר"
-}
-```
-
-## דרישות מפתח
-1. **LID resolution חובה** — לבצע lookup מ-LID למספר טלפון אמיתי לפני שליחת ה-webhook (WhatsApp Web/Multi-Device Protocol מאפשר זאת דרך contact sync). אם resolve נכשל — לשלוח את ה-LID ב-`senderLid` **וגם** לשלוח ניסיון כל-שהוא ב-`senderPhone` (או null מפורש), אבל לא להשמיט את השדה.
-2. **E.164 ללא `+`** — תמיד פורמט אחיד (`972549696673`), לא `+972...` ולא `0549696673`.
-3. **`direction` מפורש** במקום הסתמכות רק על `fromMe`.
-4. **שדות בקבוצה** — `groupId` ו-`senderPhone` חייבים להיות נפרדים. היום `from` מבלבל בין השניים.
-5. **`messageId` יציב** — אותו ID לאותה הודעה גם אם ה-webhook נשלח שוב (retry).
-6. **תאימות לאחור** — לשמור את `from`/`fromMe` הקיימים לתקופת מעבר, אך להוסיף את השדות החדשים מיידית.
-
-## מה זה פותר אצלנו
-- Carmen תזהה מי השולח האמיתי → תפעיל whitelist/scoping נכון.
-- שיוך משימות לקמפיינר לפי `senderPhone` יעבוד.
-- Dedup נקי לפי `messageId`.
-- תמיכה תקינה בקבוצות (להבדיל בין שולח לקבוצה).
-- אפשר לפצל בין מכשירים מרובים לפי `recipientPhone`.
-
-## אישור
-לאשר את המפרט, להוסיף/לגרוע שדות, או שאני אכין גרסת אנגלית של המסמך לשליחה לצוות Manus?
+## בדיקה אחרי הפריסה
+1. תשלח לכרמן "כרמן בדיקה" ותחכה לתשובה.
+2. תענה תוך פחות מ-10 דק' עם שאלה אמיתית - היא צריכה להמשיך.
+3. בלוגים של `green-api-webhook` נצפה לראות את ההודעה היוצאת שלך מסומנת `dual-channel duplicate, skipping` ולא יוצרת session שני.
+4. שאילתה ב-DB: לוודא ש-`carmen_whatsapp_sessions` מקבל רק חיבור אחד פעיל לכל chat_id, ושמספר ה-turns גדל יציב.
