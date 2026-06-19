@@ -18,6 +18,9 @@ const END_KEYWORD_VARIANTS = [
 const ACK_VARIANTS = [
   'תודה', 'תודה רבה', 'מעולה', 'מעולה תודה', 'סבבה', 'סבבה תודה',
   'אוקיי', 'אוקי', 'ok', 'okay', 'thanks', 'thank you', 'great', 'cool', '👍', '🙏',
+  // Carmen's own minimal acks — if mirrored back as inbound, never reply
+  'כן', 'כן.', 'כאן', 'כאן.', 'אני כאן', 'אני כאן.', 'נראה מצוין', 'נראה מצויין',
+  'הבנתי', 'הבנתי.', 'יאללה', 'בסדר', 'בסדר.',
 ];
 
 function normalize(msg: string): string {
