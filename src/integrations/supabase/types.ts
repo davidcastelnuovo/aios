@@ -6698,6 +6698,80 @@ export type Database = {
           },
         ]
       }
+      social_comments: {
+        Row: {
+          author_id: string | null
+          author_name: string | null
+          client_id: string | null
+          created_at: string
+          created_at_external: string | null
+          external_comment_id: string
+          external_post_id: string | null
+          hidden_at: string | null
+          id: string
+          is_from_page: boolean | null
+          message: string | null
+          page_id: string | null
+          parent_comment_id: string | null
+          platform: string
+          replied_at: string | null
+          reply_text: string | null
+          sentiment: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          author_id?: string | null
+          author_name?: string | null
+          client_id?: string | null
+          created_at?: string
+          created_at_external?: string | null
+          external_comment_id: string
+          external_post_id?: string | null
+          hidden_at?: string | null
+          id?: string
+          is_from_page?: boolean | null
+          message?: string | null
+          page_id?: string | null
+          parent_comment_id?: string | null
+          platform: string
+          replied_at?: string | null
+          reply_text?: string | null
+          sentiment?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          author_id?: string | null
+          author_name?: string | null
+          client_id?: string | null
+          created_at?: string
+          created_at_external?: string | null
+          external_comment_id?: string
+          external_post_id?: string | null
+          hidden_at?: string | null
+          id?: string
+          is_from_page?: boolean | null
+          message?: string | null
+          page_id?: string | null
+          parent_comment_id?: string | null
+          platform?: string
+          replied_at?: string | null
+          reply_text?: string | null
+          sentiment?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_comments_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "social_pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       social_gantt_posts: {
         Row: {
           copy_prompt: string | null
@@ -7013,6 +7087,122 @@ export type Database = {
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_pages: {
+        Row: {
+          category: string | null
+          client_id: string | null
+          created_at: string
+          id: string
+          ig_business_id: string | null
+          is_active: boolean | null
+          metadata: Json | null
+          page_access_token: string | null
+          page_id: string
+          page_name: string | null
+          picture_url: string | null
+          platform: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          ig_business_id?: string | null
+          is_active?: boolean | null
+          metadata?: Json | null
+          page_access_token?: string | null
+          page_id: string
+          page_name?: string | null
+          picture_url?: string | null
+          platform: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          ig_business_id?: string | null
+          is_active?: boolean | null
+          metadata?: Json | null
+          page_access_token?: string | null
+          page_id?: string
+          page_name?: string | null
+          picture_url?: string | null
+          platform?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      social_publications: {
+        Row: {
+          caption: string | null
+          client_id: string | null
+          created_at: string
+          error_message: string | null
+          external_id: string | null
+          id: string
+          media_url: string | null
+          page_id: string | null
+          permalink: string | null
+          platform: string
+          post_type: string
+          published_at: string | null
+          published_by: string | null
+          status: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          caption?: string | null
+          client_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          external_id?: string | null
+          id?: string
+          media_url?: string | null
+          page_id?: string | null
+          permalink?: string | null
+          platform: string
+          post_type: string
+          published_at?: string | null
+          published_by?: string | null
+          status?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          caption?: string | null
+          client_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          external_id?: string | null
+          id?: string
+          media_url?: string | null
+          page_id?: string | null
+          permalink?: string | null
+          platform?: string
+          post_type?: string
+          published_at?: string | null
+          published_by?: string | null
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_publications_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "social_pages"
             referencedColumns: ["id"]
           },
         ]
