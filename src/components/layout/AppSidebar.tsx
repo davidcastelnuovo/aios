@@ -237,6 +237,7 @@ const MENU_TABS: MenuTab[] = [
         items: [
           { key: "automations", label: "אוטומציות", route: "/automations", icon: Zap },
           { key: "campaign-alerts", label: "התראות קמפיינים", route: "/campaign-alerts", icon: AlertTriangle },
+          { key: "social-publisher", label: "רשתות חברתיות", route: "/social-publisher", icon: Send },
           { key: "agents", label: "סוכני AI", route: "/agents", icon: Bot },
         ],
       },
