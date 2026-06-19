@@ -2223,7 +2223,14 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
       if (!msg.tool_calls || msg.tool_calls.length === 0) {
         finalOutput = msg.content || ''
         console.log(`[AGENT] Done after ${round + 1} rounds, output length=${finalOutput.length}`)
+        // Stream the final assistant text in one chunk so AIOS frontends can render progressively.
+        if (emit && finalOutput) emit({ type: 'token', content: finalOutput })
         break
+      }
+
+      // Mid-loop assistant text (assistant decided to talk while also calling tools) — stream it too.
+      if (emit && typeof msg.content === 'string' && msg.content.length > 0) {
+        emit({ type: 'token', content: msg.content })
       }
 
       // Execute tool calls
@@ -2234,6 +2241,8 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
         try { toolArgs = JSON.parse(tc.function.arguments || '{}') } catch { /* ignore */ }
 
         console.log(`[AGENT] Tool call: ${toolName}`)
+        if (emit) emit({ type: 'tool_call', tool: toolName, args: toolArgs })
+
         let result: any
         try {
           if (mcpExecutors.has(toolName)) {
@@ -2253,6 +2262,7 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
 
       messages.push(...toolResults)
     }
+
 
     const executionTime = Date.now() - startTime
 
