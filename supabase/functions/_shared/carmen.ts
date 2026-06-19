@@ -6,6 +6,32 @@
 
 const CARMEN_SESSION_IDLE_MINUTES_DEFAULT = 5;
 
+// Log a Carmen turn to automation_logs so it surfaces in the per-automation
+// "היסטוריית ריצות" panel. Best-effort; failures are swallowed.
+async function logCarmenAutomationRun(
+  supabase: any,
+  automationId: string | null | undefined,
+  success: boolean,
+  payload: Record<string, any>,
+  responseText?: string | null,
+  errorMessage?: string | null,
+  startedAt?: number,
+): Promise<void> {
+  if (!automationId) return;
+  try {
+    await supabase.from('automation_logs').insert({
+      automation_id: automationId,
+      success,
+      payload,
+      response: responseText ? { message: responseText } : null,
+      error_message: errorMessage || null,
+      execution_time_ms: startedAt ? Math.max(0, Date.now() - startedAt) : null,
+    });
+  } catch (err) {
+    console.error('[carmen] logCarmenAutomationRun failed', String(err));
+  }
+}
+
 // Permissive end-keywords — any of these closes the session, even without "כרמן".
 const END_KEYWORD_VARIANTS = [
   'סיימנו', 'תודה סיימנו', 'תודה כרמן', 'תפסיקי', 'די כרמן', 'די תודה',
