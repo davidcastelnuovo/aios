@@ -277,7 +277,7 @@ async function resolveCarmenScope(
     .select('agency_id, source_tenant_id, accessing_tenant_id')
     .or(`accessing_tenant_id.eq.${tenantId},source_tenant_id.eq.${tenantId}`);
 
-  const sharedAgencyIds = Array.from(new Set((ata || []).map((r: any) => r.agency_id).filter(Boolean)));
+  const sharedAgencyIds: string[] = Array.from(new Set((ata || []).map((r: any) => r.agency_id).filter(Boolean) as string[]));
   const tenantSet = new Set<string>([tenantId]);
   for (const r of ata || []) {
     if (r.source_tenant_id) tenantSet.add(r.source_tenant_id);
