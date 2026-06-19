@@ -2160,10 +2160,19 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     //   so a subagent can't recursively spawn more subagents.
     const cmd = (command_text || '').toString()
     const userAskedBackground = /\b(ברקע|תמשיכ[יה]\s+לבד|background|אל\s+תחכ[יה]|תעדכנ[יה]\s+אחר[\s-]?כך|תרוצ[יה]\s+ברקע)\b/i.test(cmd)
+    const userAskedManus = /\b(manus|מנוס|מאנוס|מנואס)\b/i.test(cmd)
     if (surface === 'task') {
       filteredTools = filteredTools.filter(t => t.name !== 'delegate_to_subagent' && t.name !== 'delegate_to_manus' && t.name !== 'delegate_to_github_agent')
-    } else if (surface === 'aios' && !userAskedBackground) {
-      filteredTools = filteredTools.filter(t => t.name !== 'delegate_to_subagent')
+    } else if (surface === 'aios') {
+      if (!userAskedBackground) {
+        filteredTools = filteredTools.filter(t => t.name !== 'delegate_to_subagent')
+      }
+      if (!userAskedManus) {
+        // Manus is an external long-running agent that requires a working API key.
+        // Hide it by default on AIOS so Carmen uses internal tools (analyze_campaign_performance etc.)
+        // for ordinary requests like "בדיקת דופק" / "בדיקת דוח" instead of returning Unauthorized.
+        filteredTools = filteredTools.filter(t => t.name !== 'delegate_to_manus')
+      }
     }
 
     const toolsForAPI = filteredTools.map(t => ({ type: 'function', function: t }))
