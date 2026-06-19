@@ -103,8 +103,6 @@ export function ManualROICard({
   const profitColor = profit > 0 ? "text-green-600" : profit < 0 ? "text-red-600" : "text-muted-foreground";
   const roiColor = roi > 0 ? "text-green-600" : roi < 0 ? "text-red-600" : "text-muted-foreground";
 
-  return (
-    <Card className="mb-4 p-4" dir="rtl">
   const [open, setOpen] = useState(false);
 
   return (
