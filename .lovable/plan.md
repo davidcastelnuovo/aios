@@ -1,80 +1,77 @@
+# סקיל: בדיקת דופק ללקוחות (Pulse Check)
 
-# חשיפת כל האוטומציות הקבועות במודול משימות סוכנים
+## רקע — מה קיים היום
+- לכרמן יש כבר טבלת `ai_skills` עם הכלים `save_skill / list_skills / execute_skill`.
+- יש לה את הכלים: `analyze_campaign_performance`, `sync_meta_ads`, `batch_update_client_health`, `add_client_update`, `delegate_to_background`, וגישה ללקוחות/סוכנויות.
+- כיום אין סקיל שמור בשם "בדיקת דופק" — בכל בקשה כרמן ממציאה תהליך מחדש, ולכן לפעמים בודקת רק 5 לקוחות במקום 30, מחפפת בסיכום, או לא רושמת עדכון בכל לקוח.
+- מענה ב-WhatsApp עובד מעצם זה שכרמן רצה בסשן WhatsApp — התשובה הסופית שלה נשלחת חזרה כהודעה. אין `send_whatsapp` ייעודי.
 
-המטרה: לראות בפועל את כל המשימות החוזרות שרצות במערכת (כיום cron jobs במסד הנתונים, לא ב-`agent_tasks`), עם סטטוס בזמן אמת, היסטוריית הרצות, ויכולת לערוך/להפעיל/לכבות.
+## מטרת הסקיל
+לאכוף תהליך אחיד ושלם: לעבור **לקוח-לקוח** בכל הסוכנות (לא לדגום), לבדוק חיבור קמפיינים + תקלות אשראי + ביצועים מול שבוע קודם, לרשום עדכון פנימי בלקוח, ולהחזיר ב-WhatsApp רשימה תמציתית — שורה אחת לכל לקוח.
 
-## המצב היום
+---
 
-- ב-`agent_tasks` יש רק משימות `once` (אף `recurring`).
-- מה שרץ באמת קבוע נמצא ב-`cron.job` (14 ג'ובים): סנכרוני Facebook/GA/Google Ads, Telegram poll, Carmen memory worker/consolidate, check-overdue-tasks, ועוד.
-- אין שום דרך ב-UI לראות אותם, את ההיסטוריה שלהם, או לערוך אותם.
+## אפיון הסקיל שיישמר ב-`ai_skills`
 
-## מה ייבנה
+**name:** `בדיקת דופק`
 
-### 1. טאב חדש ב-`AgentTasksPage`: "אוטומציות מערכת"
+**description:** סריקה שיטתית של כל הלקוחות הפעילים בסוכנות — חיבור קמפיינים, תקלות חשבון, ביצועים מול שבוע קודם — עם עדכון בכל לקוח וסיכום WhatsApp.
 
-לצד הטאבים הקיימים (משימות / מטרות / וכו'), טאב חדש שמציג את כל ה-cron jobs ככרטיסי משימה חוזרת — באותו עיצוב של הכרטיסים הקיימים, כדי שיראו אחיד.
+**trigger_phrases:** `["בדיקת דופק", "דופק", "pulse", "pulse check", "תעשי דופק", "סריקת לקוחות"]`
 
-לכל ג'וב מוצג:
-- **שם ידידותי** ממופה מ-`jobname` (לדוגמה `sync-facebook-insights-twice-daily` → "סנכרון Facebook Insights — פעמיים ביום") + אייקון לפי קטגוריה (סנכרון נתונים / כרמן / תזכורות / טלגרם).
-- **תיאור** קצר של מה הג'וב עושה (מילון מובנה בקוד).
-- **לוח זמנים** מתורגם לעברית מ-cron (משתמש בפונקציה `describeCron` הקיימת, מורחב למקרי קצה).
-- **סטטוס פעיל/לא פעיל** עם Switch.
-- **הרצה אחרונה**: זמן + סטטוס (הצליח/נכשל) + משך זמן.
-- **סטטיסטיקת 7 ימים אחרונים**: כמה רצו, כמה הצליחו, כמה נכשלו.
-- **כפתורים**: "הפעל עכשיו" (קורא ל-edge function ידנית), "ערוך לוח זמנים", "צפה בהיסטוריה" (פותח Drawer).
+**steps (טקסט שמור בשדה steps):**
 
-### 2. Drawer "היסטוריית הרצות"
-
-פותח את 50 ההרצות האחרונות של הג'וב מ-`cron.job_run_details`:
-- זמן התחלה, משך, סטטוס (`succeeded`/`failed`), הודעת שגיאה אם נכשל.
-- אם ה-`return_message` מכיל request_id, ניתן להציג קישור ללוגי edge function (אופציונלי, לשלב ב').
-
-### 3. דיאלוג עריכת לוח זמנים
-
-מאפשר:
-- בחירת preset מתוך `CRON_PRESETS` הקיים, או cron expression מותאם אישית.
-- שינוי סטטוס פעיל/לא פעיל.
-- שמירה קוראת ל-RPC `update_system_cron_job`.
-
-### 4. צד שרת — RPCs חדשים (SECURITY DEFINER, super_admin בלבד)
-
-המיגרציה תיצור:
-
-- `list_system_cron_jobs()` — מחזיר `jobid, jobname, schedule, active, last_run_at, last_status, last_duration_ms, success_count_7d, fail_count_7d` (JOIN של `cron.job` + `cron.job_run_details`).
-- `get_cron_job_history(p_jobid bigint, p_limit int default 50)` — מחזיר את `cron.job_run_details` לג'וב נתון.
-- `update_system_cron_job(p_jobid bigint, p_schedule text, p_active boolean)` — קורא ל-`cron.alter_job`.
-- `run_system_cron_job_now(p_jobid bigint)` — מבצע את ה-command של הג'וב (`net.http_post` ל-edge function) פעם אחת מיידית.
-
-כל RPC מתחיל ב-`if not public.is_super_admin() then raise exception ...`.
-
-### 5. מילון השמות הידידותיים (frontend)
-
-קובץ `src/lib/cronJobsCatalog.ts` חדש:
-```ts
-export const CRON_JOB_CATALOG = {
-  "carmen-memory-worker-1m": { label: "כרמן — עיבוד זיכרון", category: "carmen", description: "מעבד outbox של זיכרון כל דקה" },
-  "carmen-memory-consolidate-daily": { label: "כרמן — איחוד זיכרונות יומי", category: "carmen", ... },
-  "sync-facebook-insights-twice-daily": { label: "סנכרון Facebook Insights", category: "sync", description: "מסנכרן ביצועי קמפיינים ויוצר התראות על ירידות הוצאה" },
-  // ...כל ה-14 ג'ובים
-};
 ```
-ג'וב שאינו במילון יוצג עם `jobname` גולמי + תגית "לא מוגדר".
+1. זיהוי היקף:
+   - אם המשתמש ציין סוכנות (למשל DMM) — סנן ללקוחות פעילים של אותה סוכנות בלבד.
+   - אחרת — כל הלקוחות הפעילים בארגון לפי כללי ה-scope של המשתמש (campaigner=שלו, manager=סוכנויות שלו, owner=כל ה-tenant).
+   - שלוף את הרשימה המלאה. אסור לדגום, אסור לעצור באמצע.
 
-## מה לא משתנה
+2. אם הרשימה גדולה מ-5 לקוחות — חובה להפעיל delegate_to_background עם
+   task_title="בדיקת דופק" ו-task_description שמכיל את כל הצעדים 3-7 למטה
+   ואת רשימת ה-client_id המדויקת. אל תנסה לבצע סדרתית בצ'אט.
 
-- טבלת `agent_tasks` ו-UI שלה נשארים בדיוק כמו שהם — היא נשארת לניהול משימות AI דינמיות שכרמן יוצרת/מקבלת מהמשתמש.
-- ה-cron jobs עצמם לא משוכפלים ל-`agent_tasks` (אין מקור-אמת כפול). המודול רק *משקף* אותם.
+3. לכל לקוח, בסדר הזה:
+   a. analyze_campaign_performance(client_id, range="last_7_days", compare_to="previous_7_days")
+   b. בדוק את התוצאה:
+      - status_account: active / disabled / payment_issue / disconnected
+      - campaigns_active_count
+      - spend_change_pct, leads_change_pct, cpl_change_pct מול השבוע הקודם
+   c. גזור mood_status:
+      - disconnected / payment_issue / 0 קמפיינים פעילים → churn_risk
+      - ירידה >30% בלידים או עלייה >40% ב-CPL → wavering
+      - אחרת → happy
+   d. נסח משפט סיכום אחד ללקוח (עברית, ללא חפירות):
+      "<שם לקוח>: <סטטוס חשבון בקצרה> | קמפיינים: X | לידים שבוע: N (Δ% מול קודם) | CPL: ₪ (Δ%) | <שורת תובנה אחת>"
 
-## פרטים טכניים
+4. רישום פר-לקוח:
+   a. add_client_update(client_id, content=המשפט מסעיף 3d, מתויג "בדיקת דופק <תאריך>")
+   b. batch_update_client_health באצווה אחת לכל הלקוחות עם mood_status + ה-note.
 
-- שאילתות מ-`cron.*` דורשות הרשאות מיוחדות → לכן כל הגישה דרך RPCs `SECURITY DEFINER`.
-- ה-RPC `run_system_cron_job_now` משתמש ב-`net.http_post` עם ה-URL וה-headers שכבר רשומים ב-`cron.job.command`, אבל מפעיל אותם פעם אחת בלי לשנות את הג'וב.
-- הטאב ב-UI חסום ל-super_admin בלבד (אחרת מציג הודעה "אין הרשאה").
-- React Query: `queryKey: ['system-cron-jobs']` עם `refetchInterval: 30000` להצגת סטטוס בזמן אמת.
+5. דוח סופי שמוחזר למשתמש (זה גם מה שיישלח ב-WhatsApp):
+   - שורת פתיח אחת: "בדיקת דופק <תאריך> — <N> לקוחות".
+   - אחר כך רשימה ממוספרת, **שורה אחת לכל לקוח**, בפורמט מסעיף 3d.
+   - ללא הקדמות, ללא "עברתי על כל הלקוחות", ללא הסברים, ללא אימוג'ים מיותרים.
+   - אסור להשמיט לקוחות. הספירה בשורת הפתיח חייבת להיות שווה למספר השורות ברשימה.
 
-## אישור לפני בנייה
+6. אם לקוח נכשל (אין נתונים / שגיאת API) — עדיין מופיע ברשימה עם:
+   "<שם>: לא נסרק — <סיבה קצרה>"
 
-לפני שאני יוצר את המיגרציה והקוד — שתי הבהרות קצרות:
-1. **גישה**: לחשוף את הטאב הזה רק ל-super_admin (מומלץ), או גם ל-owner של הטננט?
-2. **כפתור "הפעל עכשיו"**: רוצה אותו (מפעיל מיידית את הסנכרון)? או רק תצוגה/עריכה בלי הרצה ידנית?
+7. בסיום, אם מופעלת מ-WhatsApp — התשובה הסופית היא הדוח עצמו (היא נשלחת אוטומטית בסשן). אם רצה ברקע (delegate_to_background) — שמרי את הדוח כעדכון מסכם בסוכנות (add_client_update על "לקוח סוכנות" אם קיים, אחרת שלחי כסיכום סשן).
+```
+
+---
+
+## מה הסקיל נותן בפועל
+- **כיסוי מלא** — Carmen נדרשת מפורשות לעבור על כל הרשימה ולא לדגום, וחייבת `delegate_to_background` כשיש >5 לקוחות (מתאים לכלל הזיכרון "Carmen Long Tasks").
+- **3 הבדיקות שביקשת** — חיבור קמפיינים, תקלת חשבון/אשראי, השוואה לשבוע קודם — ממופות ישירות לפלט של `analyze_campaign_performance`.
+- **עדכון פר-לקוח** — נכתב ב-`client_updates` דרך `add_client_update`, וגם `mood_status` מתעדכן באצווה.
+- **פלט תמציתי ב-WhatsApp** — שורה אחת לכל לקוח, ספירה תואמת, בלי חפירות.
+
+## איך מוסיפים את זה (פעולה אחת בלבד)
+INSERT לשורה אחת ב-`ai_skills` עבור ה-tenant של marketingcaptain עם השדות לעיל (`name`, `description`, `steps`, `trigger_phrases`). זה מיידית ייטען ל-`skillsContext` של כרמן בכל הרצה (כבר קיים בקוד `ai-support-chat`).
+
+## נושאים שכדאי לאשר לפני ביצוע
+1. **תחום ברירת מחדל** — כשהמשתמש אומר "בדיקת דופק" בלי לציין סוכנות: לסרוק את כל הלקוחות הפעילים של ה-tenant, או לבקש ממנה לבחור סוכנות?
+2. **ספי ה-mood_status** (ירידה 30% / CPL 40%) — להישאר עליהם או שיש ערכים שאת מעדיפה?
+3. **שמירה גלובלית או למשתמש מסוים** — `ai_skills` הוא פר-tenant היום (`tenant_id`), אז יישמר לכל ה-tenant. מאשר?
