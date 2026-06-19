@@ -85,3 +85,79 @@ export async function recallAgentMemory(
     return Array.isArray(data) ? data : [];
   } catch { return []; }
 }
+
+/**
+ * Fast FTS-based recall over agent_memory.fts (Hebrew + English).
+ * Cheaper than embedding-based recall; ideal for Carmen run-start injection.
+ * Falls back to most-important recent memories when query has no tokens.
+ */
+export async function recallAgentMemoryFTS(
+  supabase: any,
+  opts: { tenant_id: string; agent_id?: string; query_text: string; limit?: number; min_importance?: number },
+): Promise<Array<{ id: string; title: string; summary: string; category: string; importance: number; created_at: string }>> {
+  try {
+    const limit = opts.limit ?? 5;
+    const minImp = opts.min_importance ?? 0;
+    const tokens = (opts.query_text || '')
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .split(/\s+/)
+      .filter((t: string) => t && t.length >= 2)
+      .slice(0, 12);
+
+    let query = supabase
+      .from('agent_memory')
+      .select('id, title, summary, category, importance, created_at, fts')
+      .eq('tenant_id', opts.tenant_id)
+      .gte('importance', minImp)
+      .order('importance', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(limit * 3);
+
+    if (opts.agent_id) query = query.eq('agent_id', opts.agent_id);
+    if (tokens.length > 0) {
+      const tsQuery = tokens.map((t: string) => `${t}:*`).join(' | ');
+      query = query.textSearch('fts', tsQuery, { config: 'simple' });
+    }
+
+    const { data, error } = await query;
+    if (error || !data) return [];
+    return data.slice(0, limit).map((m: any) => ({
+      id: m.id, title: m.title, summary: m.summary, category: m.category,
+      importance: m.importance, created_at: m.created_at,
+    }));
+  } catch (e) {
+    console.error('[agent-memory] FTS recall error:', (e as any)?.message);
+    return [];
+  }
+}
+
+/**
+ * Save a Carmen memory directly (used by save_memory tool to keep agent_memory in sync).
+ */
+export async function saveAgentMemory(opts: {
+  supabase: any;
+  tenant_id: string;
+  agent_id: string;
+  category: string;
+  title: string;
+  summary: string;
+  importance?: number;
+  metadata?: any;
+}) {
+  try {
+    if (!opts.summary?.trim()) return;
+    const emb = await embed(`${opts.title}\n${opts.summary}`);
+    await opts.supabase.from('agent_memory').insert({
+      tenant_id: opts.tenant_id,
+      agent_id: opts.agent_id,
+      category: opts.category || 'fact',
+      title: String(opts.title || opts.category).slice(0, 200),
+      summary: String(opts.summary).slice(0, 2000),
+      summary_embedding: emb,
+      importance: Math.min(100, Math.max(1, opts.importance ?? 70)),
+      metadata: opts.metadata || {},
+    });
+  } catch (e) {
+    console.error('[agent-memory] save error:', (e as any)?.message);
+  }
+}
