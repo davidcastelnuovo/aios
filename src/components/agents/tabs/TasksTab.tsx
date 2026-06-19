@@ -152,6 +152,19 @@ export function TasksTab({ agent }: { agent: any }) {
         {filtered.map(t => {
           const meta = STATUS_META[t.status] ?? STATUS_META.pending;
           const Icon = meta.icon;
+          const ilFmt = (iso: string | null) => iso
+            ? new Intl.DateTimeFormat("he-IL", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jerusalem" }).format(new Date(iso))
+            : null;
+          const scheduledIl = ilFmt(t.scheduled_at);
+          const lastRunIl = ilFmt(t.last_run);
+          const result = (t as any).result || {};
+          const lastOutput = result.last_output || result.output || result.error || null;
+          const toolLog: any[] = result.tool_log || result.tools || [];
+          const sentWa = Array.isArray(toolLog) && toolLog.some((x: any) => {
+            const n = String(x?.name || x?.tool || "");
+            return n === "send_whatsapp_via_gateway" || n === "send_message";
+          });
+          const sendStatus = t.last_run ? (sentWa ? "sent" : (lastOutput ? "no-send" : null)) : null;
           return (
             <Card key={t.id} className="p-3">
               <div className="flex items-start gap-3">
@@ -172,14 +185,42 @@ export function TasksTab({ agent }: { agent: any }) {
                     {typeof t.run_count === "number" && t.run_count > 0 && (
                       <span className="text-[10px] text-muted-foreground">רץ {t.run_count}×</span>
                     )}
+                    {sendStatus === "sent" && (
+                      <Badge className="text-[10px] h-4 gap-1 bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/30">
+                        <Send className="h-3 w-3" /> נשלח
+                      </Badge>
+                    )}
+                    {sendStatus === "no-send" && (
+                      <Badge className="text-[10px] h-4 gap-1 bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30">
+                        <AlertCircle className="h-3 w-3" /> לא נשלחה הודעה
+                      </Badge>
+                    )}
                   </div>
                   {t.description && (
                     <p className="text-xs text-muted-foreground line-clamp-2">{t.description}</p>
                   )}
-                  <div className="flex gap-3 mt-1 text-[10px] text-muted-foreground">
+                  <div className="flex gap-3 mt-1 text-[10px] text-muted-foreground flex-wrap">
+                    {scheduledIl && (
+                      <span className="font-medium text-foreground">
+                        <Calendar className="h-3 w-3 inline me-1" />
+                        מתוזמן ל-{scheduledIl} (שעון ישראל)
+                      </span>
+                    )}
                     <span>נוצר {formatDistanceToNow(new Date(t.created_at), { locale: he, addSuffix: true })}</span>
-                    {t.last_run && <span>הופעל לאחרונה {formatDistanceToNow(new Date(t.last_run), { locale: he, addSuffix: true })}</span>}
+                    {lastRunIl && <span>הופעל: {lastRunIl}</span>}
                   </div>
+                  {lastOutput && (
+                    <Collapsible className="mt-2">
+                      <CollapsibleTrigger className="text-[10px] text-primary hover:underline">
+                        הצג תוצאת ריצה אחרונה ▾
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <pre className="text-[10px] bg-muted p-2 rounded mt-1 whitespace-pre-wrap break-words max-h-40 overflow-auto">
+                          {String(lastOutput).slice(0, 800)}
+                        </pre>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  )}
                 </div>
                 <div className="flex gap-1 shrink-0">
                   <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => run.mutate(t.id)} disabled={run.isPending || t.status === "running"} title="הפעל">
