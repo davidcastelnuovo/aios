@@ -132,8 +132,12 @@ export default function AISupport() {
         throw new Error('Not authenticated');
       }
 
+      const conversationHistory = messages
+        .filter((m) => m.role === 'user' || m.role === 'assistant')
+        .map((m) => ({ role: m.role, content: m.content || '' }));
+
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-support-chat`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/run-ai-agent`,
         {
           method: 'POST',
           headers: {
@@ -141,12 +145,15 @@ export default function AISupport() {
             'Authorization': `Bearer ${session.access_token}`,
           },
           body: JSON.stringify({
-            message: input,
-            conversation_id: currentConversationId,
-            tenant_slug: tenantSlug,
+            command_text: input,
+            tenant_id: tenantId,
+            surface: 'aios',
+            stream: true,
+            conversation_history: conversationHistory,
           }),
         }
       );
+
 
       if (!response.ok) {
         if (response.status === 429) {
