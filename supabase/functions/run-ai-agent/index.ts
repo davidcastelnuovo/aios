@@ -2039,17 +2039,18 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Per-agent memory recall (non-Carmen agents): pull relevant past episodes by similarity.
-    if (!isCarmen) {
-      try {
-        const recalled = await recallAgentMemory(supabase, agent_id, command_text, 6)
-        if (recalled.length > 0) {
-          const block = recalled.map((m: any) => `• [${m.category}] ${m.title}: ${m.summary}`).join('\n')
-          systemPrompt += `\n\n🧠 === זיכרון רלוונטי מאינטראקציות קודמות ===\n${block}`
-        }
-      } catch (e) {
-        console.error('[AGENT] recall memory failed:', (e as any)?.message)
+    // Per-agent memory recall: pull relevant past episodes.
+    // Carmen uses fast FTS (cheap, indexed). Other agents use embedding similarity.
+    try {
+      const recalled = isCarmen
+        ? await recallAgentMemoryFTS(supabase, { tenant_id: resolvedTenantId, agent_id, query_text: command_text, limit: 5, min_importance: 30 })
+        : await recallAgentMemory(supabase, agent_id, command_text, 6)
+      if (recalled.length > 0) {
+        const block = recalled.map((m: any) => `• [${m.category}${m.importance ? ` · ${m.importance}` : ''}] ${m.title}: ${m.summary}`).join('\n')
+        systemPrompt += `\n\n🧠 === זיכרון רלוונטי מסשנים קודמים ===\n${block}`
       }
+    } catch (e) {
+      console.error('[AGENT] recall memory failed:', (e as any)?.message)
     }
 
     // Inject lead context
