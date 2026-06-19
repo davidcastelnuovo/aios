@@ -6,6 +6,32 @@
 
 const CARMEN_SESSION_IDLE_MINUTES_DEFAULT = 5;
 
+// Log a Carmen turn to automation_logs so it surfaces in the per-automation
+// "היסטוריית ריצות" panel. Best-effort; failures are swallowed.
+async function logCarmenAutomationRun(
+  supabase: any,
+  automationId: string | null | undefined,
+  success: boolean,
+  payload: Record<string, any>,
+  responseText?: string | null,
+  errorMessage?: string | null,
+  startedAt?: number,
+): Promise<void> {
+  if (!automationId) return;
+  try {
+    await supabase.from('automation_logs').insert({
+      automation_id: automationId,
+      success,
+      payload,
+      response: responseText ? { message: responseText } : null,
+      error_message: errorMessage || null,
+      execution_time_ms: startedAt ? Math.max(0, Date.now() - startedAt) : null,
+    });
+  } catch (err) {
+    console.error('[carmen] logCarmenAutomationRun failed', String(err));
+  }
+}
+
 // Permissive end-keywords — any of these closes the session, even without "כרמן".
 const END_KEYWORD_VARIANTS = [
   'סיימנו', 'תודה סיימנו', 'תודה כרמן', 'תפסיקי', 'די כרמן', 'די תודה',
@@ -563,6 +589,8 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     isIncoming, isManualOutgoing, isGroup, sendMessage,
   } = ctx;
 
+  const handlerStartedAt = Date.now();
+
   // Groups are supported — Carmen replies in the group chat.
   if (!isIncoming && !isManualOutgoing) return { handled: false, reason: 'not_user_message' };
 
@@ -797,6 +825,15 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
       .eq('id', activeSession.id);
     await routedSend(chatId, carmenResponse);
     await syncCarmenToAIConversation(supabase, activeSession, updatedHistory);
+    await logCarmenAutomationRun(
+      supabase,
+      activeSession.automation_id || earlyAutomation?.id,
+      true,
+      { source: 'carmen_session', mode: 'continue', chat_id: chatId, phone: phoneNumber, sender_name: senderName, message: messageText, is_group: isGroup },
+      carmenResponse,
+      null,
+      handlerStartedAt,
+    );
     return { handled: true, outcome: 'active' };
   }
 
@@ -966,6 +1003,16 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     await routedSend(chatId, opener);
     await syncCarmenToAIConversation(supabase, newSession, history);
   }
+
+  await logCarmenAutomationRun(
+    supabase,
+    carmenAutomation.id,
+    true,
+    { source: 'carmen_session', mode: 'started', chat_id: chatId, phone: phoneNumber, sender_name: senderName, message: messageText, is_group: isGroup },
+    null,
+    null,
+    handlerStartedAt,
+  );
 
   return { handled: true, outcome: 'started' };
 }
