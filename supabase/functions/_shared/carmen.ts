@@ -603,6 +603,27 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     ? Number(cfg.session_timeout_minutes)
     : CARMEN_SESSION_IDLE_MINUTES_DEFAULT;
 
+  // 🔁 DUAL-CHANNEL GUARD: if the matched automation is pinned to a DIFFERENT integration
+  // than the one currently invoking us (this happens when the operator's own Green API
+  // instance receives the same conversation that Carmen's pinned Manus integration is
+  // already handling — see foreignPhoneAllowed in findCarmenSessionAutomation), do NOT
+  // create or update a parallel session here. The pinned-integration webhook owns this
+  // conversation and will reply. Processing on both channels causes split histories,
+  // duplicate replies, and silent drops via the mirror/echo guards.
+  const pinnedIntegrationId = cfg.carmen_integration_id || null;
+  if (pinnedIntegrationId && integrationId && pinnedIntegrationId !== integrationId) {
+    console.log('[CARMEN] Dropped: dual-channel duplicate, skipping', {
+      tenantId,
+      chatId,
+      phoneNumber,
+      callerIntegrationId: integrationId,
+      pinnedIntegrationId,
+      isManualOutgoing,
+      isIncoming,
+    });
+    return { handled: true, outcome: 'active' };
+  }
+
   const activeSession = await findActiveCarmenSession(supabase, tenantId, chatId, connectionUserId, idleMinutes);
 
   // Outbound routing: prefer the automation's configured action step (send_manus_message /
