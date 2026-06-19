@@ -10,12 +10,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { ListTodo, Plus, Play, Trash2, Clock, CheckCircle2, XCircle, Loader2, Repeat, Calendar } from "lucide-react";
+import { ListTodo, Plus, Play, Trash2, Clock, CheckCircle2, XCircle, Loader2, Repeat, Calendar, Bell, Send, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
 import { he } from "date-fns/locale";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 const STATUS_META: Record<string, { label: string; icon: any; color: string }> = {
   pending: { label: "ממתין", icon: Clock, color: "text-muted-foreground" },
@@ -84,6 +85,29 @@ export function TasksTab({ agent }: { agent: any }) {
     },
     onError: (e: any) => toast.error(e.message),
   });
+  const testReminder = useMutation({
+    mutationFn: async () => {
+      const when = new Date(Date.now() + 2 * 60 * 1000).toISOString();
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error } = await supabase.from("agent_tasks").insert({
+        tenant_id: tenantId,
+        agent_id: agent.id,
+        title: "🧪 בדיקת תזכורת (2 דקות)",
+        description: "זוהי בדיקה אוטומטית של מנגנון התזכורות. שלחי הודעת WhatsApp למשתמש שיצר את הבדיקה: 'בדיקת תזכורת עובדת ✅'. השתמשי ב-send_whatsapp_via_gateway או send_message.",
+        schedule_type: "once",
+        status: "scheduled",
+        scheduled_at: when,
+        created_by: user?.id ?? null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["agent-tasks", agent.id] });
+      toast.success("בדיקה תוזמנה ל-2 דקות מעכשיו. בדקי את הוואטסאפ.");
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
 
   return (
     <div className="space-y-4">
@@ -107,6 +131,9 @@ export function TasksTab({ agent }: { agent: any }) {
         <Button size="sm" variant="outline" onClick={() => navigate(buildPath("/agent-tasks"))}>
           תצוגה מלאה
         </Button>
+        <Button size="sm" variant="outline" onClick={() => testReminder.mutate()} disabled={testReminder.isPending} title="בדיקה: יוצר תזכורת לעוד 2 דקות">
+          <Bell className="h-4 w-4 me-1" /> בדיקה (2 ד׳)
+        </Button>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button size="sm"><Plus className="h-4 w-4 me-1" /> משימה חדשה</Button>
@@ -125,6 +152,19 @@ export function TasksTab({ agent }: { agent: any }) {
         {filtered.map(t => {
           const meta = STATUS_META[t.status] ?? STATUS_META.pending;
           const Icon = meta.icon;
+          const ilFmt = (iso: string | null) => iso
+            ? new Intl.DateTimeFormat("he-IL", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jerusalem" }).format(new Date(iso))
+            : null;
+          const scheduledIl = ilFmt(t.scheduled_at);
+          const lastRunIl = ilFmt(t.last_run);
+          const result = (t as any).result || {};
+          const lastOutput = result.last_output || result.output || result.error || null;
+          const toolLog: any[] = result.tool_log || result.tools || [];
+          const sentWa = Array.isArray(toolLog) && toolLog.some((x: any) => {
+            const n = String(x?.name || x?.tool || "");
+            return n === "send_whatsapp_via_gateway" || n === "send_message";
+          });
+          const sendStatus = t.last_run ? (sentWa ? "sent" : (lastOutput ? "no-send" : null)) : null;
           return (
             <Card key={t.id} className="p-3">
               <div className="flex items-start gap-3">
@@ -145,14 +185,42 @@ export function TasksTab({ agent }: { agent: any }) {
                     {typeof t.run_count === "number" && t.run_count > 0 && (
                       <span className="text-[10px] text-muted-foreground">רץ {t.run_count}×</span>
                     )}
+                    {sendStatus === "sent" && (
+                      <Badge className="text-[10px] h-4 gap-1 bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/30">
+                        <Send className="h-3 w-3" /> נשלח
+                      </Badge>
+                    )}
+                    {sendStatus === "no-send" && (
+                      <Badge className="text-[10px] h-4 gap-1 bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30">
+                        <AlertCircle className="h-3 w-3" /> לא נשלחה הודעה
+                      </Badge>
+                    )}
                   </div>
                   {t.description && (
                     <p className="text-xs text-muted-foreground line-clamp-2">{t.description}</p>
                   )}
-                  <div className="flex gap-3 mt-1 text-[10px] text-muted-foreground">
+                  <div className="flex gap-3 mt-1 text-[10px] text-muted-foreground flex-wrap">
+                    {scheduledIl && (
+                      <span className="font-medium text-foreground">
+                        <Calendar className="h-3 w-3 inline me-1" />
+                        מתוזמן ל-{scheduledIl} (שעון ישראל)
+                      </span>
+                    )}
                     <span>נוצר {formatDistanceToNow(new Date(t.created_at), { locale: he, addSuffix: true })}</span>
-                    {t.last_run && <span>הופעל לאחרונה {formatDistanceToNow(new Date(t.last_run), { locale: he, addSuffix: true })}</span>}
+                    {lastRunIl && <span>הופעל: {lastRunIl}</span>}
                   </div>
+                  {lastOutput && (
+                    <Collapsible className="mt-2">
+                      <CollapsibleTrigger className="text-[10px] text-primary hover:underline">
+                        הצג תוצאת ריצה אחרונה ▾
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <pre className="text-[10px] bg-muted p-2 rounded mt-1 whitespace-pre-wrap break-words max-h-40 overflow-auto">
+                          {String(lastOutput).slice(0, 800)}
+                        </pre>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  )}
                 </div>
                 <div className="flex gap-1 shrink-0">
                   <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => run.mutate(t.id)} disabled={run.isPending || t.status === "running"} title="הפעל">
