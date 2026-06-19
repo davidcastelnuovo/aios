@@ -1914,6 +1914,7 @@ Deno.serve(async (req) => {
         systemPrompt += `\n\n🧠 **למידה עצמית פעילה (חובה):** אם המשתמש כתב אחת מהמילים: "תזכרי", "זכרי", "תזכור", "שמרי", "תרשמי", "מעכשיו", "מהיום והלאה", "תמיד", "אל תעשי", "remember", "from now on" — *לפני* שאת עונה, חייבת לקרוא ל-save_memory עם category='instructions' ומפתח תיאורי באנגלית (snake_case), כדי שההנחיה תיטען לכל סשן עתידי. אם ההנחיה מתקנת הנחיה קיימת — השתמשי באותו key (upsert). אחרי השמירה אשרי קצרות ("נרשם"). אם לא קראת ל-save_memory עבור בקשת זיכרון — נכשלת.`
       }
     }
+    } // ─── end V1 PROMPT BUILDING (else branch of shouldUseV2Prompt) ───
 
     // 4. Filter tools
     const allowedTools = (agent.allowed_tools || []) as string[]
