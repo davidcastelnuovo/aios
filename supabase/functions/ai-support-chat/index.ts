@@ -2567,7 +2567,11 @@ serve(async (req) => {
       .order('created_at', { ascending: true })
       .limit(1)
       .maybeSingle();
-    const activeModel = (carmenAgent?.active !== false && carmenAgent?.engine) || AI_MODEL_DEFAULT;
+    // Resolve agent.engine (alias like "gpt-5.4-pro" → full gateway id "openai/gpt-5.4-pro").
+    // Sending the bare alias makes the gateway return 400 ("invalid model: gpt-5.4-pro").
+    const { resolveModelId } = await import("../_shared/models.ts");
+    const rawEngine = (carmenAgent?.active !== false && carmenAgent?.engine) ? carmenAgent.engine : null;
+    const activeModel = rawEngine ? resolveModelId(rawEngine) : AI_MODEL_DEFAULT;
 
 
 
