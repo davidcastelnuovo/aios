@@ -1,77 +1,66 @@
-# סקיל: בדיקת דופק ללקוחות (Pulse Check)
+## הבעיה
 
-## רקע — מה קיים היום
-- לכרמן יש כבר טבלת `ai_skills` עם הכלים `save_skill / list_skills / execute_skill`.
-- יש לה את הכלים: `analyze_campaign_performance`, `sync_meta_ads`, `batch_update_client_health`, `add_client_update`, `delegate_to_background`, וגישה ללקוחות/סוכנויות.
-- כיום אין סקיל שמור בשם "בדיקת דופק" — בכל בקשה כרמן ממציאה תהליך מחדש, ולכן לפעמים בודקת רק 5 לקוחות במקום 30, מחפפת בסיכום, או לא רושמת עדכון בכל לקוח.
-- מענה ב-WhatsApp עובד מעצם זה שכרמן רצה בסשן WhatsApp — התשובה הסופית שלה נשלחת חזרה כהודעה. אין `send_whatsapp` ייעודי.
+מהצילום: כרמן מבצעת בדיקת דופק וכותבת "לא זוהה כרגע נתון קמפיינים" לכל לקוח. בדקתי את `ai-support-chat` ומצאתי שלושה כשלים שגורמים בדיוק לזה:
 
-## מטרת הסקיל
-לאכוף תהליך אחיד ושלם: לעבור **לקוח-לקוח** בכל הסוכנות (לא לדגום), לבדוק חיבור קמפיינים + תקלות אשראי + ביצועים מול שבוע קודם, לרשום עדכון פנימי בלקוח, ולהחזיר ב-WhatsApp רשימה תמציתית — שורה אחת לכל לקוח.
+### 1. `analyze_campaign_performance` — פילטר קמפיינים שגוי
+היום הקוד מחפש טבלאות עם:
+```ts
+.ilike('slug', '%facebook%')
+```
+זה מפספס:
+- `integration_type = 'google_ads'` (טבלאות Google Ads)
+- `integration_type = 'meta_ads'` (קמפיינים מ-Meta החדשים)
+- `facebook_ecommerce`
+- כל טבלה ש-slug שלה לא מכיל "facebook" (למשל "מטא-לקוח-X")
+
+לכן רוב הלקוחות חוזרים ללא רשומות → "לא זוהה נתון".
+
+### 2. אין תמיכה ב-cross-tenant
+גם `list_clients` וגם `analyze_campaign_performance` מסננים רק `eq('tenant_id', tenantId)`. לקוחות של סוכנות DMM שמשותפת בין tenants דרך `agency_tenant_access` — הקמפיינים שלהם יושבים ב-`crm_tables` של ה-tenant המקור (לרוב MarketingCaptain), והשאילתה מסתכלת רק על ה-tenant הפעיל. זה גם הסיבה שהיא "לא רואה" קמפיינים אצל לקוחות DMM.
+
+### 3. אין סקופינג לפי תפקיד
+ה-Memory של הפרויקט מגדיר: campaigner→לקוחות active/onboarding שלו בלבד; team_manager→סוכנויות מנוהלות; owner/super_admin→כל ה-tenant + cross-tenant. בפועל `list_clients` מחזיר את כל ה-tenant ללא הבחנה. כדי שכרמן "באמת תעבור על כל הלקוחות" ותדע להבדיל סוכנויות/הרשאות — צריך להחיל סקופינג מובנה.
 
 ---
 
-## אפיון הסקיל שיישמר ב-`ai_skills`
+## מה אתקן
 
-**name:** `בדיקת דופק`
+### A. `analyze_campaign_performance` (supabase/functions/ai-support-chat/index.ts ~1441)
+- להחליף את `.ilike('slug', '%facebook%')` ב:
+  ```ts
+  .in('integration_type', ['facebook_insights','facebook_ecommerce','meta_ads','google_ads'])
+  ```
+- להרחיב את שליפת הטבלאות לכל ה-tenants הנגישים (ה-tenant הפעיל + כל ה-`source_tenant_id` מ-`agency_tenant_access` עבור ה-tenant הזה).
+- בעת איסוף `crm_records`, לסנן לפי `table_id` (כבר מוגן ב-RLS), לא לפי `tenant_id`, כדי לתפוס נתונים cross-tenant.
+- לטפל בשמות שדות מנורמלים: לחלק מהאינטגרציות `spend`/`leads`, לאחרות `cost_micros`/`conversions` (Google Ads). למפות לשדה אחיד לפני החישוב.
 
-**description:** סריקה שיטתית של כל הלקוחות הפעילים בסוכנות — חיבור קמפיינים, תקלות חשבון, ביצועים מול שבוע קודם — עם עדכון בכל לקוח וסיכום WhatsApp.
+### B. `list_clients` (~750)
+- להוסיף resolve של רשימת agency_ids משותפים מ-`agency_tenant_access` (כפי שעושה `useCrossTenantAgencyIds`).
+- לבנות `OR` filter: `tenant_id.eq.${tenantId},agency_id.in.(${sharedAgencyIds})`.
+- כך DMM תופיע במלואה בכל בדיקת דופק.
 
-**trigger_phrases:** `["בדיקת דופק", "דופק", "pulse", "pulse check", "תעשי דופק", "סריקת לקוחות"]`
+### C. סקופינג לפי תפקיד (helper משותף)
+פונקציה `resolveCarmenScope(supabase, userId, tenantId)` שמחזירה:
+- `role`: super_admin / owner / agency_owner / agency_manager / team_manager / campaigner
+- `clientFilter`: או `null` (= כל ה-tenant + cross-tenant) או `{ campaigner_id }` או `{ agency_ids: [...] }`
+- שימוש ב-`user_managed_agencies` עבור team_manager ו-`campaigner_agencies` עבור campaigner.
 
-**steps (טקסט שמור בשדה steps):**
+`list_clients` ו-`analyze_campaign_performance` יקבלו את הסקופ אוטומטית. campaigner יראה רק לקוחות active/onboarding שלו (תואם ל-Memory).
 
-```
-1. זיהוי היקף:
-   - אם המשתמש ציין סוכנות (למשל DMM) — סנן ללקוחות פעילים של אותה סוכנות בלבד.
-   - אחרת — כל הלקוחות הפעילים בארגון לפי כללי ה-scope של המשתמש (campaigner=שלו, manager=סוכנויות שלו, owner=כל ה-tenant).
-   - שלוף את הרשימה המלאה. אסור לדגום, אסור לעצור באמצע.
-
-2. אם הרשימה גדולה מ-5 לקוחות — חובה להפעיל delegate_to_background עם
-   task_title="בדיקת דופק" ו-task_description שמכיל את כל הצעדים 3-7 למטה
-   ואת רשימת ה-client_id המדויקת. אל תנסה לבצע סדרתית בצ'אט.
-
-3. לכל לקוח, בסדר הזה:
-   a. analyze_campaign_performance(client_id, range="last_7_days", compare_to="previous_7_days")
-   b. בדוק את התוצאה:
-      - status_account: active / disabled / payment_issue / disconnected
-      - campaigns_active_count
-      - spend_change_pct, leads_change_pct, cpl_change_pct מול השבוע הקודם
-   c. גזור mood_status:
-      - disconnected / payment_issue / 0 קמפיינים פעילים → churn_risk
-      - ירידה >30% בלידים או עלייה >40% ב-CPL → wavering
-      - אחרת → happy
-   d. נסח משפט סיכום אחד ללקוח (עברית, ללא חפירות):
-      "<שם לקוח>: <סטטוס חשבון בקצרה> | קמפיינים: X | לידים שבוע: N (Δ% מול קודם) | CPL: ₪ (Δ%) | <שורת תובנה אחת>"
-
-4. רישום פר-לקוח:
-   a. add_client_update(client_id, content=המשפט מסעיף 3d, מתויג "בדיקת דופק <תאריך>")
-   b. batch_update_client_health באצווה אחת לכל הלקוחות עם mood_status + ה-note.
-
-5. דוח סופי שמוחזר למשתמש (זה גם מה שיישלח ב-WhatsApp):
-   - שורת פתיח אחת: "בדיקת דופק <תאריך> — <N> לקוחות".
-   - אחר כך רשימה ממוספרת, **שורה אחת לכל לקוח**, בפורמט מסעיף 3d.
-   - ללא הקדמות, ללא "עברתי על כל הלקוחות", ללא הסברים, ללא אימוג'ים מיותרים.
-   - אסור להשמיט לקוחות. הספירה בשורת הפתיח חייבת להיות שווה למספר השורות ברשימה.
-
-6. אם לקוח נכשל (אין נתונים / שגיאת API) — עדיין מופיע ברשימה עם:
-   "<שם>: לא נסרק — <סיבה קצרה>"
-
-7. בסיום, אם מופעלת מ-WhatsApp — התשובה הסופית היא הדוח עצמו (היא נשלחת אוטומטית בסשן). אם רצה ברקע (delegate_to_background) — שמרי את הדוח כעדכון מסכם בסוכנות (add_client_update על "לקוח סוכנות" אם קיים, אחרת שלחי כסיכום סשן).
-```
+### D. פלט בדיקת דופק (system prompt)
+לחזק את ההנחיה הקיימת:
+- חובה להריץ `analyze_campaign_performance` לפני סיכום.
+- חובה לדווח בדיוק כמה לקוחות נסרקו (count מ-`list_clients`) ולא להמציא "עברתי על כולם".
+- שורה אחת לכל לקוח, משפט אחד.
+- אם רשימה > 5 לקוחות — חובה `delegate_to_background` (כבר קיים בכלל אבל צריך לחזק בהודעת המערכת לבדיקת דופק).
 
 ---
 
-## מה הסקיל נותן בפועל
-- **כיסוי מלא** — Carmen נדרשת מפורשות לעבור על כל הרשימה ולא לדגום, וחייבת `delegate_to_background` כשיש >5 לקוחות (מתאים לכלל הזיכרון "Carmen Long Tasks").
-- **3 הבדיקות שביקשת** — חיבור קמפיינים, תקלת חשבון/אשראי, השוואה לשבוע קודם — ממופות ישירות לפלט של `analyze_campaign_performance`.
-- **עדכון פר-לקוח** — נכתב ב-`client_updates` דרך `add_client_update`, וגם `mood_status` מתעדכן באצווה.
-- **פלט תמציתי ב-WhatsApp** — שורה אחת לכל לקוח, ספירה תואמת, בלי חפירות.
+## טכני קצר
 
-## איך מוסיפים את זה (פעולה אחת בלבד)
-INSERT לשורה אחת ב-`ai_skills` עבור ה-tenant של marketingcaptain עם השדות לעיל (`name`, `description`, `steps`, `trigger_phrases`). זה מיידית ייטען ל-`skillsContext` של כרמן בכל הרצה (כבר קיים בקוד `ai-support-chat`).
+קבצים שישונו:
+- `supabase/functions/ai-support-chat/index.ts` — פילטר integration_type, cross-tenant tenants, סקופינג לפי תפקיד, חיזוק system prompt לבדיקת דופק.
 
-## נושאים שכדאי לאשר לפני ביצוע
-1. **תחום ברירת מחדל** — כשהמשתמש אומר "בדיקת דופק" בלי לציין סוכנות: לסרוק את כל הלקוחות הפעילים של ה-tenant, או לבקש ממנה לבחור סוכנות?
-2. **ספי ה-mood_status** (ירידה 30% / CPL 40%) — להישאר עליהם או שיש ערכים שאת מעדיפה?
-3. **שמירה גלובלית או למשתמש מסוים** — `ai_skills` הוא פר-tenant היום (`tenant_id`), אז יישמר לכל ה-tenant. מאשר?
+ללא שינויי DB, ללא שינויי RLS — RLS כבר מאפשרת cross-tenant דרך agency_tenant_access; הקוד פשוט לא ניצל את זה.
+
+מאשרת? אריץ את כל התיקונים בקובץ אחד.
