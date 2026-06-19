@@ -129,8 +129,14 @@ ${uiMode === 'aios' ? `📊 **חשוב לגבי תצוגת נתונים (display
 - **אסור** לכתוב "עדכנתי", "בוצע עדכון", "הדלקתי דגל" או ניסוח דומה אם לא הייתה קריאת **update_client_health** או **batch_update_client_health** מוצלחת בפועל.
 - **כשמבצעים בדיקת דופק, עדכון דשבורד, או כל משימה שעוברת על יותר מ-5 לקוחות:**
   **חובה** להשתמש ב-**delegate_to_background** כדי להעביר את המשימה לריצה ברקע. המשימה תרוץ גם אם המשתמש סוגר את הצ׳אט.
-  תיאור המשימה ב-task_description צריך לכלול הוראות מדויקות: "1. קרא ל-analyze_campaign_performance. 2. קרא ל-list_clients. 3. קרא ל-batch_update_client_health עם כל הלקוחות."
+  תיאור המשימה ב-task_description צריך לכלול הוראות מדויקות: "1. קרא ל-analyze_campaign_performance (ללא client_id, כדי לקבל את כל הלקוחות עם נתוני קמפיינים). 2. קרא ל-list_clients. 3. השווה: לכל לקוח מ-list_clients מצא את הרשומה התואמת ב-analyze_campaign_performance. 4. קרא ל-batch_update_client_health עם כל הלקוחות."
   אחרי קריאת delegate_to_background, אמור למשתמש: "התחלתי לעבוד על זה ברקע. תוכל לראות את ההתקדמות בזמן אמת, גם אם תסגור את החלון."
+- **בדיקת דופק — כללי דיווח קשיחים:**
+  • **חובה** להריץ \`analyze_campaign_performance\` (ללא client_id) **לפני** הסיכום — היא מחזירה את כל הלקוחות חוצי-סוכנויות וחוצי-tenants על בסיס תפקיד המשתמש (super_admin/owner רואים הכל, team_manager רק סוכנויות מנוהלות, campaigner רק לקוחותיו).
+  • **אסור** לכתוב "לא זוהה נתון קמפיינים" לפני שווידאת ש-\`analyze_campaign_performance\` רץ והחזיר רשומה ללקוח. אם records_30d > 0 — יש נתונים והשתמש בהם.
+  • הדיווח: שורה אחת לכל לקוח במבנה **שם** — משפט סיכום אחד עם spend/leads/CPL ושינוי %. ללא חפירות, ללא חזרה על "אין נתונים" כשיש.
+  • בסוף הסיכום ציין מספר מדויק של לקוחות שנסרקו (count מ-list_clients) ולא ניסוח מעורפל כמו "כל הלקוחות".
+
 
 📋 **מיפוי סטטוסי תקשורת (עברית ↔ API):**
 - **תקין** / **רגוע** / **הכל בסדר** → mood_status: \`happy\`, communication_status: \`normal\`
@@ -228,6 +234,85 @@ function buildLocalDateTimeRange(dateStr: string, timeStr: string, durationMinut
 
 // Track which entities were modified during tool execution
 const modifiedEntities: Set<string> = new Set();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Carmen scope resolver
+// Returns the tenants Carmen may pull data from and the per-role client filter.
+//   • super_admin / owner / agency_owner / agency_manager → full tenant +
+//     every agency shared in via agency_tenant_access.
+//   • team_manager → only agencies in user_managed_agencies.
+//   • campaigner   → only active/onboarding clients of campaigner_agencies.
+// ─────────────────────────────────────────────────────────────────────────────
+type CarmenScope = {
+  role: string;
+  accessibleTenantIds: string[];
+  sharedAgencyIds: string[];
+  managedAgencyIds: string[] | null;
+  campaignerId: string | null;
+  restrictStatuses: string[] | null;
+};
+
+async function resolveCarmenScope(
+  supabaseClient: any,
+  userId: string,
+  tenantId: string,
+): Promise<CarmenScope> {
+  const { data: roleRows } = await supabaseClient
+    .from('user_roles')
+    .select('role, tenant_id')
+    .eq('user_id', userId);
+  const rolesInTenant = (roleRows || []).filter((r: any) => r.tenant_id === tenantId || r.role === 'super_admin');
+  const roleSet = new Set<string>(rolesInTenant.map((r: any) => r.role));
+  const role =
+    roleSet.has('super_admin') ? 'super_admin'
+    : roleSet.has('owner') ? 'owner'
+    : roleSet.has('agency_owner') ? 'agency_owner'
+    : roleSet.has('agency_manager') ? 'agency_manager'
+    : roleSet.has('team_manager') ? 'team_manager'
+    : roleSet.has('campaigner') ? 'campaigner'
+    : 'viewer';
+
+  const { data: ata } = await supabaseClient
+    .from('agency_tenant_access')
+    .select('agency_id, source_tenant_id, accessing_tenant_id')
+    .or(`accessing_tenant_id.eq.${tenantId},source_tenant_id.eq.${tenantId}`);
+
+  const sharedAgencyIds: string[] = Array.from(new Set((ata || []).map((r: any) => r.agency_id).filter(Boolean) as string[]));
+  const tenantSet = new Set<string>([tenantId]);
+  for (const r of ata || []) {
+    if (r.source_tenant_id) tenantSet.add(r.source_tenant_id);
+    if (r.accessing_tenant_id) tenantSet.add(r.accessing_tenant_id);
+  }
+
+  let managedAgencyIds: string[] | null = null;
+  let campaignerId: string | null = null;
+  let restrictStatuses: string[] | null = null;
+
+  if (role === 'team_manager') {
+    const { data: managed } = await supabaseClient
+      .from('user_managed_agencies')
+      .select('agency_id')
+      .eq('user_id', userId);
+    managedAgencyIds = (managed || []).map((m: any) => m.agency_id).filter(Boolean);
+  } else if (role === 'campaigner') {
+    const { data: profile } = await supabaseClient
+      .from('profiles')
+      .select('campaigner_id')
+      .eq('id', userId)
+      .maybeSingle();
+    campaignerId = profile?.campaigner_id || null;
+    restrictStatuses = ['active', 'onboarding'];
+  }
+
+  return {
+    role,
+    accessibleTenantIds: Array.from(tenantSet),
+    sharedAgencyIds,
+    managedAgencyIds,
+    campaignerId,
+    restrictStatuses,
+  };
+}
 
 async function executeTool(
   toolCall: ToolCall, 
@@ -748,20 +833,86 @@ async function executeTool(
       }
 
       case 'list_clients': {
-        const { status, limit = 100, agency_id: clientsAgencyId, agency_name: clientsAgencyName } = toolCall.args;
-        
+        const { status, limit = 200, agency_id: clientsAgencyId, agency_name: clientsAgencyName } = toolCall.args;
+        const scope = await resolveCarmenScope(supabaseClient, userId, tenantId);
+
+        // Resolve agency by name across accessible tenants (so "DMM" matches even
+        // when the agency lives in another tenant but is shared into this one).
         let resolvedClientAgencyId = clientsAgencyId;
         if (!resolvedClientAgencyId && clientsAgencyName) {
-          const { data: agencyMatch } = await supabaseClient.from('agencies').select('id').eq('tenant_id', tenantId).ilike('name', `%${clientsAgencyName}%`).limit(1).maybeSingle();
+          const { data: agencyMatch } = await supabaseClient
+            .from('agencies')
+            .select('id, tenant_id')
+            .in('tenant_id', scope.accessibleTenantIds)
+            .ilike('name', `%${clientsAgencyName}%`)
+            .limit(1)
+            .maybeSingle();
           if (agencyMatch) resolvedClientAgencyId = agencyMatch.id;
         }
-        
-        let query = supabaseClient.from('clients').select('id, name, contact_name, phone, email, status, agency_id, agencies(name)').eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(limit);
+
+        let query = supabaseClient
+          .from('clients')
+          .select('id, name, contact_name, phone, email, status, agency_id, tenant_id, agencies(name)')
+          .order('created_at', { ascending: false })
+          .limit(limit);
+
+        // Cross-tenant visibility: clients of this tenant OR clients whose agency
+        // is shared in via agency_tenant_access.
+        if (scope.sharedAgencyIds.length > 0) {
+          query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${scope.sharedAgencyIds.join(',')})`);
+        } else {
+          query = query.eq('tenant_id', tenantId);
+        }
+
+        // Role-based scoping.
+        if (scope.role === 'team_manager') {
+          const ids = scope.managedAgencyIds || [];
+          if (ids.length === 0) return { success: true, result: { count: 0, clients: [], scope: scope.role } };
+          query = query.in('agency_id', ids);
+        }
+
         if (status) query = query.eq('status', status);
+        else if (scope.restrictStatuses) query = query.in('status', scope.restrictStatuses);
         if (resolvedClientAgencyId) query = query.eq('agency_id', resolvedClientAgencyId);
+
         const { data, error } = await query;
         if (error) throw error;
-        return { success: true, result: { count: data.length, clients: data.map((c: any) => ({ id: c.id, name: c.name, contact_name: c.contact_name, phone: c.phone, email: c.email, status: c.status, agency_name: c.agencies?.name })) } };
+
+        let clients = data || [];
+
+        // Campaigner: only their assigned clients (via client_team).
+        if (scope.role === 'campaigner' && scope.campaignerId) {
+          const ids = clients.map((c: any) => c.id);
+          if (ids.length === 0) {
+            return { success: true, result: { count: 0, clients: [], scope: 'campaigner' } };
+          }
+          const { data: teamRows } = await supabaseClient
+            .from('client_team')
+            .select('client_id')
+            .eq('campaigner_id', scope.campaignerId)
+            .in('client_id', ids);
+          const allowed = new Set((teamRows || []).map((t: any) => t.client_id));
+          clients = clients.filter((c: any) => allowed.has(c.id));
+        }
+
+        return {
+          success: true,
+          result: {
+            count: clients.length,
+            scope: scope.role,
+            clients: clients.map((c: any) => ({
+              id: c.id,
+              name: c.name,
+              contact_name: c.contact_name,
+              phone: c.phone,
+              email: c.email,
+              status: c.status,
+              agency_id: c.agency_id,
+              tenant_id: c.tenant_id,
+              agency_name: c.agencies?.name,
+            })),
+          },
+        };
       }
 
       case 'create_client': {
@@ -1439,19 +1590,69 @@ async function executeTool(
       }
 
       case 'analyze_campaign_performance': {
+        const scope = await resolveCarmenScope(supabaseClient, userId, tenantId);
+
+        // Pull campaign tables across every accessible tenant (so DMM clients
+        // whose ad tables live in another tenant are not silently skipped),
+        // and across every ad-platform integration_type (not just facebook).
+        const AD_INTEGRATION_TYPES = [
+          'facebook_insights',
+          'facebook_ecommerce',
+          'meta_ads',
+          'google_ads',
+          'tiktok_ads',
+        ];
         const { data: crmTables, error: tablesErr } = await supabaseClient
           .from('crm_tables')
-          .select('id, client_id, slug, name')
-          .eq('tenant_id', tenantId)
-          .ilike('slug', '%facebook%');
+          .select('id, client_id, slug, name, integration_type, tenant_id, agency_id')
+          .in('tenant_id', scope.accessibleTenantIds)
+          .in('integration_type', AD_INTEGRATION_TYPES);
         if (tablesErr) throw tablesErr;
         if (!crmTables || crmTables.length === 0) {
-          return { success: true, result: { message: 'לא נמצאו טבלאות קמפיינים מסונכרנות', clients: [] } };
+          return { success: true, result: { message: 'לא נמצאו טבלאות קמפיינים מסונכרנות', clients: [], scope: scope.role } };
         }
 
-        const tables = toolCall.args.client_id
+        // Restrict to tables tied to clients the caller is allowed to see.
+        const candidateTables = toolCall.args.client_id
           ? crmTables.filter((t: any) => t.client_id === toolCall.args.client_id)
           : crmTables;
+
+        const tableClientIds = Array.from(new Set(candidateTables.map((t: any) => t.client_id).filter(Boolean)));
+        let allowedClientIds: Set<string> | null = null;
+        if (tableClientIds.length > 0) {
+          let cq = supabaseClient
+            .from('clients')
+            .select('id, name, agency_id, tenant_id, status')
+            .in('id', tableClientIds);
+          if (scope.sharedAgencyIds.length > 0) {
+            cq = cq.or(`tenant_id.eq.${tenantId},agency_id.in.(${scope.sharedAgencyIds.join(',')})`);
+          } else {
+            cq = cq.eq('tenant_id', tenantId);
+          }
+          if (scope.role === 'team_manager') {
+            const ids = scope.managedAgencyIds || [];
+            if (ids.length === 0) return { success: true, result: { count: 0, clients: [], scope: scope.role } };
+            cq = cq.in('agency_id', ids);
+          }
+          if (scope.restrictStatuses) cq = cq.in('status', scope.restrictStatuses);
+          const { data: allowedClients } = await cq;
+          let arr = allowedClients || [];
+
+          if (scope.role === 'campaigner' && scope.campaignerId && arr.length > 0) {
+            const { data: teamRows } = await supabaseClient
+              .from('client_team')
+              .select('client_id')
+              .eq('campaigner_id', scope.campaignerId)
+              .in('client_id', arr.map((c: any) => c.id));
+            const ok = new Set((teamRows || []).map((t: any) => t.client_id));
+            arr = arr.filter((c: any) => ok.has(c.id));
+          }
+          allowedClientIds = new Set(arr.map((c: any) => c.id));
+        }
+
+        const tables = allowedClientIds
+          ? candidateTables.filter((t: any) => t.client_id && allowedClientIds!.has(t.client_id))
+          : candidateTables;
 
         const now = new Date();
         const d7 = new Date(now); d7.setDate(d7.getDate() - 7);
@@ -1459,44 +1660,93 @@ async function executeTool(
         const d7Str = d7.toISOString().split('T')[0];
         const d30Str = d30.toISOString().split('T')[0];
 
-        const campResults: any[] = [];
+        // Normalize the various platforms onto a common (spend, leads) shape.
+        const normalize = (row: any, integration_type: string) => {
+          const d = row?.data || {};
+          let spend = parseFloat(d.spend ?? d.cost ?? 0) || 0;
+          if (integration_type === 'google_ads') {
+            // Google Ads stores cost in micros.
+            const micros = parseFloat(d.cost_micros ?? d.metrics_cost_micros ?? 0) || 0;
+            if (micros > 0) spend = micros / 1_000_000;
+          }
+          const leads =
+            parseFloat(
+              d.leads ?? d.conversions ?? d.results ?? d.actions_lead ?? 0,
+            ) || 0;
+          const date = d.date || d.day || d.report_date || null;
+          const updated_time = d.updated_time || d.updated_at || null;
+          return { spend, leads, date, updated_time };
+        };
+
+        // Aggregate per client across all of their ad tables.
+        const perClient: Record<string, {
+          client_id: string;
+          tables: number;
+          platforms: Set<string>;
+          rows7: any[]; rowsOlder: any[]; allRows: any[];
+        }> = {};
+
         for (const table of tables) {
+          if (!table.client_id) continue;
+          // No tenant_id filter — we already constrained by table.id, which is
+          // unique. RLS still enforces what the caller can read.
           const { data: records } = await supabaseClient
             .from('crm_records')
             .select('data')
-            .eq('table_id', table.id)
-            .eq('tenant_id', tenantId);
-
+            .eq('table_id', table.id);
           if (!records || records.length === 0) continue;
 
-          const last7d = records.filter((r: any) => r.data?.date >= d7Str);
-          const last30d = records.filter((r: any) => r.data?.date >= d30Str);
-          const older = last30d.filter((r: any) => r.data?.date < d7Str);
+          const norm = records.map((r: any) => normalize(r, table.integration_type));
+          const bucket = perClient[table.client_id] ||= {
+            client_id: table.client_id,
+            tables: 0,
+            platforms: new Set<string>(),
+            rows7: [], rowsOlder: [], allRows: [],
+          };
+          bucket.tables += 1;
+          bucket.platforms.add(table.integration_type);
+          for (const n of norm) {
+            bucket.allRows.push(n);
+            if (n.date && n.date >= d7Str) bucket.rows7.push(n);
+            else if (n.date && n.date >= d30Str) bucket.rowsOlder.push(n);
+          }
+        }
 
-          const sum = (arr: any[], field: string) => arr.reduce((s: number, r: any) => s + (parseFloat(r.data?.[field]) || 0), 0);
+        // Resolve client names in one shot.
+        const clientIds = Object.keys(perClient);
+        const nameById: Record<string, string> = {};
+        if (clientIds.length > 0) {
+          const { data: clientsRows } = await supabaseClient
+            .from('clients')
+            .select('id, name')
+            .in('id', clientIds);
+          for (const c of clientsRows || []) nameById[c.id] = c.name;
+        }
 
-          const spend7 = sum(last7d, 'spend');
-          const spend_older = sum(older, 'spend');
-          const leads7 = sum(last7d, 'leads');
-          const leads_older = sum(older, 'leads');
+        const sumField = (arr: any[], field: 'spend' | 'leads') =>
+          arr.reduce((s, r) => s + (Number(r[field]) || 0), 0);
 
-          const days7 = Math.max(last7d.length, 1);
-          const daysOlder = Math.max(older.length, 1);
+        const campResults: any[] = [];
+        for (const cid of clientIds) {
+          const b = perClient[cid];
+          const spend7 = sumField(b.rows7, 'spend');
+          const spendOlder = sumField(b.rowsOlder, 'spend');
+          const leads7 = sumField(b.rows7, 'leads');
+          const leadsOlder = sumField(b.rowsOlder, 'leads');
 
+          const days7 = Math.max(b.rows7.length, 1);
+          const daysOlder = Math.max(b.rowsOlder.length, 1);
           const dailySpend7 = spend7 / days7;
-          const dailySpendOlder = spend_older / daysOlder;
+          const dailySpendOlder = spendOlder / daysOlder;
           const spendChangePct = dailySpendOlder > 0 ? ((dailySpend7 - dailySpendOlder) / dailySpendOlder * 100) : null;
 
           const cpl7 = leads7 > 0 ? spend7 / leads7 : null;
-          const cplOlder = leads_older > 0 ? spend_older / leads_older : null;
+          const cplOlder = leadsOlder > 0 ? spendOlder / leadsOlder : null;
           const cplChangePct = cplOlder && cpl7 ? ((cpl7 - cplOlder) / cplOlder * 100) : null;
 
-          const { data: clientData } = await supabaseClient.from('clients').select('name').eq('id', table.client_id).maybeSingle();
-
-          // Find the most recent updated_time across all campaigns for this client
-          const updatedTimes = records
-            .map((r: any) => r.data?.updated_time)
-            .filter((t: any) => t)
+          const updatedTimes = b.allRows
+            .map((r) => r.updated_time)
+            .filter((t) => t)
             .sort()
             .reverse();
           const lastCampaignUpdate = updatedTimes.length > 0 ? updatedTimes[0] : null;
@@ -1505,27 +1755,40 @@ async function executeTool(
             : null;
 
           campResults.push({
-            client_id: table.client_id,
-            client_name: clientData?.name || table.name,
+            client_id: cid,
+            client_name: nameById[cid] || '(לקוח ללא שם)',
+            platforms: Array.from(b.platforms),
+            tables: b.tables,
             spend_7d: Math.round(spend7 * 100) / 100,
-            spend_30d: Math.round((spend7 + spend_older) * 100) / 100,
+            spend_30d: Math.round((spend7 + spendOlder) * 100) / 100,
             leads_7d: leads7,
-            leads_30d: leads7 + leads_older,
+            leads_30d: leads7 + leadsOlder,
             cpl_7d: cpl7 ? Math.round(cpl7 * 100) / 100 : null,
             cpl_30d_avg: cplOlder ? Math.round(cplOlder * 100) / 100 : null,
             spend_change_pct: spendChangePct ? Math.round(spendChangePct * 10) / 10 : null,
             cpl_change_pct: cplChangePct ? Math.round(cplChangePct * 10) / 10 : null,
-            records_7d: last7d.length,
-            records_30d: last30d.length,
+            records_7d: b.rows7.length,
+            records_30d: b.rows7.length + b.rowsOlder.length,
             last_campaign_update: lastCampaignUpdate,
             days_since_last_campaign_touch: daysSinceLastCampaignTouch,
-            alert: spendChangePct !== null && spendChangePct > 15 ? '🔴 התייקרות' : (cplChangePct !== null && cplChangePct > 20 ? '🟡 עלייה בעלות לליד' : '🟢 תקין'),
+            alert: spendChangePct !== null && spendChangePct > 15
+              ? '🔴 התייקרות'
+              : (cplChangePct !== null && cplChangePct > 20 ? '🟡 עלייה בעלות לליד' : '🟢 תקין'),
           });
         }
 
         campResults.sort((a: any, b: any) => (b.spend_change_pct || 0) - (a.spend_change_pct || 0));
         modifiedEntities.add('clients');
-        return { success: true, result: { count: campResults.length, clients: campResults } };
+        return {
+          success: true,
+          result: {
+            count: campResults.length,
+            scope: scope.role,
+            accessible_tenants: scope.accessibleTenantIds.length,
+            tables_scanned: tables.length,
+            clients: campResults,
+          },
+        };
       }
 
       case 'update_client_health': {
