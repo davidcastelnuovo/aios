@@ -1024,6 +1024,17 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (error) throw error
       return { count: data.length, memories: data }
     }
+    case 'recall_memory_fts': {
+      // Hermes-style FTS recall across agent_memory (cross-session, importance-aware)
+      const items = await recallAgentMemoryFTS(supabase, {
+        tenant_id: tenantId,
+        agent_id,
+        query_text: args.query || '',
+        limit: args.limit || 5,
+        min_importance: args.min_importance || 0,
+      })
+      return { count: items.length, memories: items }
+    }
     case 'delete_memory': {
       const { error } = await supabase.from('ai_memory').delete().in('tenant_id', accessibleTenantIds).eq('key', args.key)
       if (error) throw error
