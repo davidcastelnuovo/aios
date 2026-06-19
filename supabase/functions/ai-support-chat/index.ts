@@ -2710,7 +2710,7 @@ const tools = [
       parameters: {
         type: 'object',
         properties: {
-          category: { type: 'string', description: 'סינון לפי קטגוריה (אופציונלי)', enum: ['preferences', 'projects', 'clients', 'workflows', 'personal'] },
+          category: { type: 'string', description: 'סינון לפי קטגוריה (אופציונלי). למשל: instructions, preferences, workflows.' },
         },
       },
     },
