@@ -42,11 +42,15 @@ export async function spawnSubagent(
   supabase: any,
   params: SpawnSubagentParams,
 ): Promise<SpawnSubagentResult> {
+  const promptWithMarker = params.parentTaskId
+    ? `[subagent of ${params.parentTaskId}]\n${params.prompt}`
+    : params.prompt
+
   const taskRow: any = {
     agent_id: params.parentAgentId,
     tenant_id: params.tenantId,
     title: params.title.slice(0, 200),
-    description: params.prompt,
+    description: promptWithMarker,
     priority: params.priority ?? 6,
     status: 'pending',
     schedule_type: 'once',
@@ -57,12 +61,8 @@ export async function spawnSubagent(
     task_mode: params.taskMode || 'agent',
     enabled: true,
     created_by: params.createdBy || null,
-    metadata: {
-      kind: 'subagent',
-      parent_task_id: params.parentTaskId || null,
-      spawned_at: new Date().toISOString(),
-    },
   }
+
 
   const { data, error } = await supabase
     .from('agent_tasks')
