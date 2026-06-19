@@ -34,6 +34,8 @@ const ALL_TOOLS = [
   // AGENT TASKS (for Carmen herself)
   { name: 'create_agent_task', description: 'יצירת משימה לכרמן עצמה (ניהול משימות סוכנים). השתמש בכלי הזה כשהמשתמש מבקש מכרמן ליצור משימה לעצמה, משימה חוזרת, או תזכורת. המשימה תופיע בלוח "ניהול משימות סוכנים". חשוב: scheduled_at חייב להיות בפורמט ISO UTC (Z). אם המשתמש נקב בשעה — היא בשעון ישראל (Asia/Jerusalem); המירי ל-UTC לפני השמירה.', parameters: { type: 'object', properties: { title: { type: 'string', description: 'כותרת המשימה' }, description: { type: 'string', description: 'תיאור מפורט של המשימה' }, priority: { type: 'integer', description: 'עדיפות 1-10 (ברירת מחדל 5)' }, schedule_type: { type: 'string', enum: ['once', 'daily', 'weekly'], description: 'סוג תזמון' }, scheduled_at: { type: 'string', description: 'תאריך ושעה לביצוע ב-ISO UTC (לדוגמה 2026-06-20T18:30:00Z עבור 21:30 שעון ישראל)' }, cron_expression: { type: 'string', description: 'ביטוי CRON למשימות חוזרות' }, task_skills: { type: 'array', items: { type: 'string' }, description: 'רשימת סקילים להפעלה' } }, required: ['title'] } },
   { name: 'list_my_agent_tasks', description: 'רשימת המשימות המתוזמנות של כרמן עצמה (agent_tasks). השתמשי בכלי הזה כשהמשתמש שואל "מה תזמנת?", "באיזו שעה התזכורת?", "תבדקי אם הגדרת" — אסור לענות על שאלות כאלה מהזיכרון בלי לקרוא לכלי הזה. מחזיר זמני תזמון בשעון ישראל.', parameters: { type: 'object', properties: { status: { type: 'string', enum: ['pending','running','completed','failed'], description: 'סינון לפי סטטוס (אופציונלי)' }, limit: { type: 'integer', description: 'ברירת מחדל 10' } } } },
+  { name: 'recall_recent_action', description: 'בדיקה אם כרמן כבר ביצעה פעולה כבדה לאחרונה (pulse_check, campaign_analysis, lead_review וכד׳). חובה לקרוא לכלי הזה לפני הרצה של pulse_check / סקירת קמפיינים / סקירת לידים — כדי לא לעבוד פעמיים. מחזיר את הסיכום של הריצה האחרונה אם נמצאה בחלון הזמן. אם נמצא תוצאה: ענה על הסיכום הקיים וציין את הזמן (בשעון ישראל), ושאל את המשתמש אם לרענן.', parameters: { type: 'object', properties: { action_type: { type: 'string', description: 'שם הפעולה — לדוגמה pulse_check, campaign_analysis, lead_review' }, max_age_hours: { type: 'integer', description: 'גיל מקסימלי של הריצה הקודמת בשעות (ברירת מחדל 8)' } }, required: ['action_type'] } },
+  { name: 'record_action_episode', description: 'שמירת תוצאה של פעולה כבדה ב-long-term memory של כרמן (carmen_memory_episodes). חובה לקרוא בסיום של pulse_check / סקירת קמפיינים / סקירת לידים — כדי שבפעם הבאה recall_recent_action ימצא את התוצאה. כתוב summary תמציתי של מה שמצאת.', parameters: { type: 'object', properties: { action_type: { type: 'string', description: 'pulse_check / campaign_analysis / lead_review וכד׳' }, summary: { type: 'string', description: 'סיכום תמציתי של מה שמצאת — מספר לקוחות, דגלים, אזהרות, החלטות' }, topic_tags: { type: 'array', items: { type: 'string' }, description: 'תגיות נוספות (לקוחות מעורבים, סוכנויות וכו׳)' }, importance: { type: 'integer', description: '1-100 (ברירת מחדל 50)' } }, required: ['action_type', 'summary'] } },
   { name: 'search_tasks', description: 'חיפוש משימות לפי שם/כותרת. חשוב! השתמש בכלי הזה לפני יצירת משימה כדי לוודא שהיא לא קיימת כבר', parameters: { type: 'object', properties: { search_term: { type: 'string', description: 'מילת חיפוש בכותרת המשימה' }, status: { type: 'string' }, client_id: { type: 'string' } }, required: ['search_term'] } },
   { name: 'list_tasks', description: 'רשימת משימות', parameters: { type: 'object', properties: { status: { type: 'string' }, client_id: { type: 'string' }, limit: { type: 'integer' } } } },
   { name: 'update_task_status', description: 'עדכון סטטוס משימה', parameters: { type: 'object', properties: { task_id: { type: 'string' }, status: { type: 'string', enum: ['open', 'in_progress', 'completed', 'cancelled'] } }, required: ['task_id', 'status'] } },
@@ -305,6 +307,62 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
           description_preview: t.description ? String(t.description).slice(0, 120) : null,
         })),
       }
+    }
+    case 'recall_recent_action': {
+      // Check if Carmen already performed an action recently — used before heavy
+      // operations (pulse_check, campaign_analysis, lead_review) so she doesn't
+      // re-run the same work and can answer "I already did it at HH:MM".
+      const action = String(args.action_type || '').trim()
+      const maxHours = Math.max(1, Math.min(168, Number(args.max_age_hours) || 8))
+      const since = new Date(Date.now() - maxHours * 60 * 60 * 1000).toISOString()
+      let q = supabase.from('carmen_memory_episodes')
+        .select('id, topic, topic_tags, summary, importance, ref_date, created_at')
+        .eq('tenant_id', tenantId)
+        .gte('ref_date', since)
+        .order('ref_date', { ascending: false })
+        .limit(3)
+      if (action) q = q.or(`topic.ilike.%${action}%,topic_tags.cs.{${action}}`)
+      const { data, error } = await q
+      if (error) throw error
+      const fmtIl = (iso: string | null) => iso ? new Date(iso).toLocaleString('he-IL', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jerusalem' }) : null
+      return {
+        found: data.length > 0,
+        recent_episodes: data.map((e: any) => ({
+          id: e.id,
+          topic: e.topic,
+          topic_tags: e.topic_tags,
+          summary: e.summary,
+          when_israel: fmtIl(e.ref_date || e.created_at),
+          importance: e.importance,
+        })),
+        guidance: data.length > 0
+          ? 'יש פעולה דומה שנעשתה לאחרונה. אסור לחזור עליה מחדש אלא אם המשתמש ביקש "רענני" / "עכשיו" / "בזמן אמת". ענו עם הסיכום הקיים, ציינו את הזמן, ושאלו אם לרענן.'
+          : 'אין רישום מ-N השעות האחרונות. אפשר להריץ את הפעולה.',
+      }
+    }
+    case 'record_action_episode': {
+      // Persist a heavy-action result into long-term memory so future calls
+      // hit recall_recent_action instead of re-running.
+      const topic = String(args.action_type || args.topic || '').trim()
+      if (!topic) throw new Error('action_type required')
+      const summary = String(args.summary || '').slice(0, 4000)
+      if (!summary) throw new Error('summary required')
+      const tags = Array.isArray(args.topic_tags) && args.topic_tags.length > 0
+        ? args.topic_tags
+        : [topic]
+      const importance = Math.max(1, Math.min(100, Number(args.importance) || 50))
+      const { data, error } = await supabase.from('carmen_memory_episodes').insert({
+        tenant_id: tenantId,
+        topic,
+        topic_tags: tags,
+        summary,
+        importance,
+        ref_date: new Date().toISOString(),
+        source_table: 'agent_runs',
+        participants: callerPhone ? { caller_phone: callerPhone } : {},
+      }).select('id').single()
+      if (error) throw error
+      return { episode_id: data.id, recorded: true }
     }
     case 'search_tasks': {
       let query = supabase.from('tasks').select('id, title, status, priority, due_date, due_time, notes, duration_minutes, clients(name), leads(company_name), campaigners(full_name)')
@@ -2124,7 +2182,7 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     const currentTime = now.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jerusalem' })
     const tomorrowDate = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     const todayISO = now.toISOString().split('T')[0]
-    systemPrompt += `\n\n=== תאריך ושעה נוכחיים ===\nהיום: ${currentDate}, שעה: ${currentTime}\nתאריך ISO של היום: ${todayISO}\nתאריך ISO של מחר: ${tomorrowDate}\nחשוב: כשמבקשים "למחר" השתמש ב-${tomorrowDate}, כש"היום" השתמש ב-${todayISO}.\n\n=== כללי אזור זמן ותזכורות (חובה) ===\n• אזור הזמן של המשתמש הוא Asia/Jerusalem (IST = UTC+2 / IDT = UTC+3). כל שעה שהמשתמש אומר היא בשעון ישראל.\n• כש-create_agent_task דורש scheduled_at — חובה להמיר משעון ישראל ל-UTC ב-ISO עם Z. דוגמה: "מוצ"ש 21:30" → 2026-06-20T18:30:00Z (קיץ, UTC+3). אסור לשמור שעת ישראל בתור UTC.\n• בתשובה למשתמש תמיד הציגי את הזמן בשעון ישראל (לדוגמה "מחר בשעה 21:30") — לא ב-UTC.\n• אם המשתמש שואל "מה תזמנת?" / "באיזו שעה התזכורת?" / "תבדקי אם הגדרת" / "את בטוחה?" — חובה לקרוא ל-list_my_agent_tasks לפני שאת עונה. אסור לנחש או לענות מהזיכרון.\n• הכלי create_agent_task מחזיר scheduled_at_israel — השתמשי בערך הזה כשאת מאשרת למשתמש את הזמן.`
+    systemPrompt += `\n\n=== תאריך ושעה נוכחיים ===\nהיום: ${currentDate}, שעה: ${currentTime}\nתאריך ISO של היום: ${todayISO}\nתאריך ISO של מחר: ${tomorrowDate}\nחשוב: כשמבקשים "למחר" השתמש ב-${tomorrowDate}, כש"היום" השתמש ב-${todayISO}.\n\n=== כללי אזור זמן ותזכורות (חובה) ===\n• אזור הזמן של המשתמש הוא Asia/Jerusalem (IST = UTC+2 / IDT = UTC+3). כל שעה שהמשתמש אומר היא בשעון ישראל.\n• כש-create_agent_task דורש scheduled_at — חובה להמיר משעון ישראל ל-UTC ב-ISO עם Z. דוגמה: "מוצ"ש 21:30" → 2026-06-20T18:30:00Z (קיץ, UTC+3). אסור לשמור שעת ישראל בתור UTC.\n• בתשובה למשתמש תמיד הציגי את הזמן בשעון ישראל (לדוגמה "מחר בשעה 21:30") — לא ב-UTC.\n• אם המשתמש שואל "מה תזמנת?" / "באיזו שעה התזכורת?" / "תבדקי אם הגדרת" / "את בטוחה?" — חובה לקרוא ל-list_my_agent_tasks לפני שאת עונה. אסור לנחש או לענות מהזיכרון.\n• הכלי create_agent_task מחזיר scheduled_at_israel — השתמשי בערך הזה כשאת מאשרת למשתמש את הזמן.\n\n=== זיכרון פעולות חוזרות (חובה) ===\n• לפני הרצה של pulse_check / סקירת קמפיינים / סקירת לידים / כל פעולה כבדה חוזרת — חובה לקרוא קודם ל-recall_recent_action(action_type, max_age_hours=8).\n• אם נמצאה ריצה מהיום (found=true) ולא נאמר במפורש "רענני" / "עכשיו" / "בזמן אמת" / "תרוצי שוב" — אסור להריץ מחדש. ענו על בסיס הסיכום הקיים, ציינו את הזמן בשעון ישראל ("בדקתי בשעה HH:mm"), והוסיפו "אם רוצה לרענן עכשיו תגידי".\n• רק אם המשתמש ביקש במפורש לרענן או שלא נמצא episode — להריץ את הפעולה.\n• בסיום של פעולה כבדה שבאמת רצה — חובה לקרוא ל-record_action_episode(action_type, summary) עם סיכום תמציתי. בלי זה הפעם הבאה לא תזכרי.\n• action_type סטנדרטי: 'pulse_check', 'campaign_analysis', 'lead_review', 'health_check'.`
     systemPrompt += `\n\n=== הקשר ארגוני ===\n${tenantContext}`
 
     // Inject memory context — instructions get top priority and a strict directive

@@ -34,16 +34,19 @@ async function logCarmenAutomationRun(
 
 // Permissive end-keywords — any of these closes the session, even without "כרמן".
 const END_KEYWORD_VARIANTS = [
-  'סיימנו', 'תודה סיימנו', 'תודה כרמן', 'תפסיקי', 'די כרמן', 'די תודה',
-  'עצרי', 'עצרי כרמן', 'מספיק', 'מספיק כרמן', 'ביי כרמן', 'להתראות כרמן',
-  'stop', 'stop carmen', 'end', 'bye carmen', 'thanks carmen',
+  'סיימנו', 'תודה סיימנו', 'תודה כרמן', 'תודה', 'תפסיקי', 'די כרמן', 'די תודה',
+  'עצרי', 'עצרי כרמן', 'מספיק', 'מספיק כרמן', 'ביי כרמן', 'ביי', 'להתראות כרמן', 'להתראות',
+  'stop', 'stop carmen', 'end', 'bye carmen', 'thanks carmen', 'thanks', 'thank you', 'bye',
 ];
 
 // Short "thanks/acknowledgement" messages that should NOT trigger an AI reply
 // inside an active session (prevents Carmen→thanks→Carmen loops).
+// Note: "תודה"/"thanks"/"ביי" intentionally moved to END_KEYWORD_VARIANTS per
+// product decision — these phrases cleanly close the session instead of staying
+// silent. Keep this list to "minimal acks Carmen herself echoes back".
 const ACK_VARIANTS = [
-  'תודה', 'תודה רבה', 'מעולה', 'מעולה תודה', 'סבבה', 'סבבה תודה',
-  'אוקיי', 'אוקי', 'ok', 'okay', 'thanks', 'thank you', 'great', 'cool', '👍', '🙏',
+  'מעולה', 'מעולה תודה', 'סבבה', 'סבבה תודה',
+  'אוקיי', 'אוקי', 'ok', 'okay', 'great', 'cool', '👍', '🙏',
   // Carmen's own minimal acks — if mirrored back as inbound, never reply
   'כן', 'כן.', 'כאן', 'כאן.', 'אני כאן', 'אני כאן.', 'נראה מצוין', 'נראה מצויין',
   'הבנתי', 'הבנתי.', 'יאללה', 'בסדר', 'בסדר.',
