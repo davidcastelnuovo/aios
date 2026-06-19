@@ -50,6 +50,7 @@ import {
   Megaphone as MegaphoneIcon,
   ClipboardList,
   AlertTriangle,
+  Send,
 } from "lucide-react";
 import {
   Sidebar,
