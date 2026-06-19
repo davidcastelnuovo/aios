@@ -2201,7 +2201,7 @@ Deno.serve(async (req) => {
     }
 
     // 7. Auto-memory for non-Carmen agents (fire and forget, doesn't block response).
-    if (!isCarmen && resolvedTenantId && finalOutput) {
+    if (resolvedTenantId && finalOutput && command_text?.trim().length >= 10) {
       const memPromise = summarizeAndStoreAgentMemory({
         supabase,
         tenant_id: resolvedTenantId,
