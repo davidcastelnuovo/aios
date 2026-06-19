@@ -581,6 +581,7 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
     get_subagent_result: "בודקת תוצאת רקע",
     batch_update_client_health: "מעדכן בריאות לקוחות",
     analyze_campaign_performance: "מנתח ביצועי קמפיינים",
+    delegate_to_manus: "מנסה לשלוח ל-Manus (חיצוני)",
   };
 
   const SidebarContent = () => (
