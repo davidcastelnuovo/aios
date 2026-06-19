@@ -827,20 +827,86 @@ async function executeTool(
       }
 
       case 'list_clients': {
-        const { status, limit = 100, agency_id: clientsAgencyId, agency_name: clientsAgencyName } = toolCall.args;
-        
+        const { status, limit = 200, agency_id: clientsAgencyId, agency_name: clientsAgencyName } = toolCall.args;
+        const scope = await resolveCarmenScope(supabaseClient, userId, tenantId);
+
+        // Resolve agency by name across accessible tenants (so "DMM" matches even
+        // when the agency lives in another tenant but is shared into this one).
         let resolvedClientAgencyId = clientsAgencyId;
         if (!resolvedClientAgencyId && clientsAgencyName) {
-          const { data: agencyMatch } = await supabaseClient.from('agencies').select('id').eq('tenant_id', tenantId).ilike('name', `%${clientsAgencyName}%`).limit(1).maybeSingle();
+          const { data: agencyMatch } = await supabaseClient
+            .from('agencies')
+            .select('id, tenant_id')
+            .in('tenant_id', scope.accessibleTenantIds)
+            .ilike('name', `%${clientsAgencyName}%`)
+            .limit(1)
+            .maybeSingle();
           if (agencyMatch) resolvedClientAgencyId = agencyMatch.id;
         }
-        
-        let query = supabaseClient.from('clients').select('id, name, contact_name, phone, email, status, agency_id, agencies(name)').eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(limit);
+
+        let query = supabaseClient
+          .from('clients')
+          .select('id, name, contact_name, phone, email, status, agency_id, tenant_id, agencies(name)')
+          .order('created_at', { ascending: false })
+          .limit(limit);
+
+        // Cross-tenant visibility: clients of this tenant OR clients whose agency
+        // is shared in via agency_tenant_access.
+        if (scope.sharedAgencyIds.length > 0) {
+          query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${scope.sharedAgencyIds.join(',')})`);
+        } else {
+          query = query.eq('tenant_id', tenantId);
+        }
+
+        // Role-based scoping.
+        if (scope.role === 'team_manager') {
+          const ids = scope.managedAgencyIds || [];
+          if (ids.length === 0) return { success: true, result: { count: 0, clients: [], scope: scope.role } };
+          query = query.in('agency_id', ids);
+        }
+
         if (status) query = query.eq('status', status);
+        else if (scope.restrictStatuses) query = query.in('status', scope.restrictStatuses);
         if (resolvedClientAgencyId) query = query.eq('agency_id', resolvedClientAgencyId);
+
         const { data, error } = await query;
         if (error) throw error;
-        return { success: true, result: { count: data.length, clients: data.map((c: any) => ({ id: c.id, name: c.name, contact_name: c.contact_name, phone: c.phone, email: c.email, status: c.status, agency_name: c.agencies?.name })) } };
+
+        let clients = data || [];
+
+        // Campaigner: only their assigned clients (via client_team).
+        if (scope.role === 'campaigner' && scope.campaignerId) {
+          const ids = clients.map((c: any) => c.id);
+          if (ids.length === 0) {
+            return { success: true, result: { count: 0, clients: [], scope: 'campaigner' } };
+          }
+          const { data: teamRows } = await supabaseClient
+            .from('client_team')
+            .select('client_id')
+            .eq('campaigner_id', scope.campaignerId)
+            .in('client_id', ids);
+          const allowed = new Set((teamRows || []).map((t: any) => t.client_id));
+          clients = clients.filter((c: any) => allowed.has(c.id));
+        }
+
+        return {
+          success: true,
+          result: {
+            count: clients.length,
+            scope: scope.role,
+            clients: clients.map((c: any) => ({
+              id: c.id,
+              name: c.name,
+              contact_name: c.contact_name,
+              phone: c.phone,
+              email: c.email,
+              status: c.status,
+              agency_id: c.agency_id,
+              tenant_id: c.tenant_id,
+              agency_name: c.agencies?.name,
+            })),
+          },
+        };
       }
 
       case 'create_client': {
