@@ -130,6 +130,12 @@ const ALL_TOOLS = [
   { name: 'get_whatsapp_status', description: 'בדיקת סטטוס חיבור WhatsApp של instance. מחזיר CONNECTED/DISCONNECTED/QR_READY ומספר הטלפון אם מחובר.', parameters: { type: 'object', properties: { integrationId: { type: 'string', description: 'מזהה האינטגרציה' } }, required: ['integrationId'] } },
   { name: 'send_whatsapp_via_gateway', description: 'שליחת הודעת WhatsApp דרך instance ספציפי של ה-Gateway. עדיף על send_message כשרוצים לשלוח מחיבור מסוים.', parameters: { type: 'object', properties: { integrationId: { type: 'string', description: 'מזהה האינטגרציה' }, phone: { type: 'string', description: 'מספר טלפון (עם או בלי קידומת)' }, message: { type: 'string', description: 'תוכן ההודעה' } }, required: ['integrationId', 'phone', 'message'] } },
   { name: 'delegate_to_github_agent', description: 'האצלת בעיה טכנית/באג במערכת לסוכן הגיטהאב לאבחון או תיקון. השתמש כשמדווחים על תקלה במערכת או באג בקוד.', parameters: { type: 'object', properties: { message: { type: 'string', description: 'תיאור הבעיה/הבקשה הטכנית' }, action: { type: 'string', enum: ['chat_support', 'analyze_error', 'fix_code', 'check_permissions'], description: 'ברירת מחדל: chat_support' } }, required: ['message'] } },
+  // ===========================
+  // HERMES SKILLS SYSTEM (self-improving procedural memory)
+  // ===========================
+  { name: 'recall_skills', description: 'חיפוש סקילים (פרוצדורות שמורות) רלוונטיים למשימה הנוכחית. השתמש כשהמשימה מורכבת/חוזרת ויתכן שכבר יש לך פרוצדורה שמורה לבצע אותה. הסקילים הרלוונטיים ביותר כבר מוזרקים אוטומטית, אבל ניתן לחפש עוד.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'תיאור המשימה לחיפוש' }, limit: { type: 'integer', description: 'ברירת מחדל 5' } }, required: ['query'] } },
+  { name: 'create_skill', description: 'יצירת סקיל חדש (פרוצדורה שמורה) אחרי שביצעת משימה מורכבת בהצלחה ויש סיכוי שתבצע אותה שוב. כתוב את ה-body כשלבים ברורים בעברית, מצב מילות טריגר רלוונטיות שיעזרו למצוא את הסקיל בעתיד. אל תיצור סקיל למשימות פשוטות/חד-פעמיות.', parameters: { type: 'object', properties: { name: { type: 'string', description: 'שם קצר וברור (למשל "ניתוח קמפיין שבועי")' }, description: { type: 'string', description: 'משפט אחד שמתאר מתי להשתמש בסקיל הזה' }, body: { type: 'string', description: 'תוכן הסקיל - שלבים מסודרים, באיזה כלים להשתמש, מה לבדוק' }, trigger_phrases: { type: 'array', items: { type: 'string' }, description: 'מילים/ביטויים בעברית או באנגלית שיעזרו למצוא את הסקיל' } }, required: ['name', 'description', 'body'] } },
+  { name: 'update_skill', description: 'עדכון/שיפור סקיל קיים על בסיס ניסיון חדש. השתמש כשגילית שצעד מסוים לא עובד טוב או שיש דרך טובה יותר לבצע את המשימה.', parameters: { type: 'object', properties: { skill_id: { type: 'string' }, body: { type: 'string', description: 'תוכן מעודכן' }, description: { type: 'string', description: 'תיאור מעודכן (אופציונלי)' }, change_note: { type: 'string', description: 'הערה קצרה מה השתנה ולמה' } }, required: ['skill_id', 'body'] } },
 ]
 
 // ===========================
@@ -1398,6 +1404,73 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (!res.ok) return { error: data.error || `send_whatsapp_via_gateway failed [${res.status}]` }
       return data
     }
+    // ===========================
+    // HERMES SKILLS SYSTEM
+    // ===========================
+    case 'recall_skills': {
+      const limit = Math.min(args.limit || 5, 20)
+      const q = String(args.query || '').trim()
+      // Try FTS first; fall back to ILIKE
+      let { data, error } = await supabase
+        .from('ai_skills')
+        .select('id, name, description, steps, trigger_phrases, usage_count, version, last_used_at')
+        .eq('tenant_id', tenantId)
+        .eq('is_active', true)
+        .textSearch('search_vector', q.split(/\s+/).filter(Boolean).join(' | '), { type: 'websearch', config: 'simple' })
+        .limit(limit)
+      if (error || !data || data.length === 0) {
+        const { data: fb } = await supabase
+          .from('ai_skills')
+          .select('id, name, description, steps, trigger_phrases, usage_count, version, last_used_at')
+          .eq('tenant_id', tenantId)
+          .eq('is_active', true)
+          .or(`name.ilike.%${q}%,description.ilike.%${q}%`)
+          .limit(limit)
+        data = fb || []
+      }
+      return { count: data?.length || 0, skills: data || [] }
+    }
+    case 'create_skill': {
+      const { data, error } = await supabase.from('ai_skills').insert({
+        tenant_id: tenantId,
+        user_id: userId !== 'system' ? userId : null,
+        name: args.name,
+        description: args.description,
+        steps: args.body,
+        trigger_phrases: Array.isArray(args.trigger_phrases) ? args.trigger_phrases : [],
+        created_by_agent: true,
+        is_active: true,
+        version: 1,
+      }).select('id, name, version').single()
+      if (error) throw error
+      console.log(`[Hermes] Skill created by Carmen: ${data.name} (id=${data.id})`)
+      return { skill_id: data.id, name: data.name, version: data.version, message: 'הסקיל נשמר. אשתמש בו אוטומטית במשימות דומות בעתיד.' }
+    }
+    case 'update_skill': {
+      const { data: current } = await supabase
+        .from('ai_skills')
+        .select('id, version, name')
+        .eq('id', args.skill_id)
+        .eq('tenant_id', tenantId)
+        .single()
+      if (!current) return { error: 'Skill not found' }
+      const updates: any = {
+        steps: args.body,
+        version: (current.version || 1) + 1,
+        updated_at: new Date().toISOString(),
+      }
+      if (args.description) updates.description = args.description
+      const { data, error } = await supabase
+        .from('ai_skills')
+        .update(updates)
+        .eq('id', args.skill_id)
+        .eq('tenant_id', tenantId)
+        .select('id, name, version')
+        .single()
+      if (error) throw error
+      console.log(`[Hermes] Skill updated: ${data.name} v${data.version} - ${args.change_note || ''}`)
+      return { skill_id: data.id, name: data.name, version: data.version, message: 'הסקיל עודכן.' }
+    }
     default:
       throw new Error(`Unknown tool: ${name}`)
   }
@@ -1815,6 +1888,37 @@ Deno.serve(async (req) => {
         systemPrompt += `\n\n=== סקילז פעילים ===\n${skillPrompts.join('\n')}`
       }
     }
+    // === HERMES: Auto-inject relevant DB skills (procedural memory) ===
+    try {
+      const queryText = String(command_text || '').trim()
+      if (queryText) {
+        const tokens = queryText.split(/\s+/).filter((t: string) => t.length > 1).slice(0, 8)
+        let relevantSkills: any[] = []
+        if (tokens.length > 0) {
+          const tsQuery = tokens.join(' | ')
+          const { data: ftsHits } = await supabase
+            .from('ai_skills')
+            .select('id, name, description, steps, version, usage_count')
+            .eq('tenant_id', tenantId)
+            .eq('is_active', true)
+            .textSearch('search_vector', tsQuery, { type: 'websearch', config: 'simple' })
+            .limit(3)
+          relevantSkills = ftsHits || []
+        }
+        if (relevantSkills.length > 0) {
+          const skillsBlock = relevantSkills.map((s: any) =>
+            `### ${s.name} (v${s.version}, used ${s.usage_count}×)\n${s.description}\n\n${s.steps}`
+          ).join('\n\n---\n\n')
+          systemPrompt += `\n\n=== סקילים שמורים (פרוצדורות מעבר התנסויות) ===\nאלה פרוצדורות ששמרת או שנשמרו עבורך ממשימות דומות. אם רלוונטי - בצעי לפיהן. אם זיהית דרך טובה יותר - השתמשי ב-update_skill.\n\n${skillsBlock}`
+          // Update usage stats async (don't block)
+          const skillIds = relevantSkills.map((s: any) => s.id)
+          supabase.rpc('increment_skill_usage', { skill_ids: skillIds }).then(() => {}).catch(() => {})
+        }
+      }
+    } catch (e) {
+      console.error('[Hermes] Skill injection failed (non-fatal):', e)
+    }
+
     // Inject writing style
     const writingStyle = (agent as any).writing_style
     if (writingStyle && writingStyle !== 'professional') {

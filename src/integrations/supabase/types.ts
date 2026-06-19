@@ -1505,36 +1505,57 @@ export type Database = {
       ai_skills: {
         Row: {
           created_at: string
+          created_by_agent: boolean
           description: string
           id: string
+          is_active: boolean
+          last_used_at: string | null
           name: string
+          search_vector: unknown
           steps: string
+          success_rate: number | null
           tenant_id: string
           trigger_phrases: string[] | null
           updated_at: string
+          usage_count: number
           user_id: string
+          version: number
         }
         Insert: {
           created_at?: string
+          created_by_agent?: boolean
           description: string
           id?: string
+          is_active?: boolean
+          last_used_at?: string | null
           name: string
+          search_vector?: unknown
           steps: string
+          success_rate?: number | null
           tenant_id: string
           trigger_phrases?: string[] | null
           updated_at?: string
+          usage_count?: number
           user_id: string
+          version?: number
         }
         Update: {
           created_at?: string
+          created_by_agent?: boolean
           description?: string
           id?: string
+          is_active?: boolean
+          last_used_at?: string | null
           name?: string
+          search_vector?: unknown
           steps?: string
+          success_rate?: number | null
           tenant_id?: string
           trigger_phrases?: string[] | null
           updated_at?: string
+          usage_count?: number
           user_id?: string
+          version?: number
         }
         Relationships: [
           {
@@ -9595,6 +9616,10 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      increment_skill_usage: {
+        Args: { skill_ids: string[] }
+        Returns: undefined
       }
       initialize_all_tenants_menu_items: { Args: never; Returns: undefined }
       initialize_default_custom_fields: {
