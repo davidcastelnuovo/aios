@@ -14,6 +14,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { invalidateAIEntityQueries } from "@/lib/aiInvalidation";
 
 interface BackgroundTask {
