@@ -2694,7 +2694,7 @@ const tools = [
       parameters: {
         type: 'object',
         properties: {
-          category: { type: 'string', description: 'קטגוריה: preferences, projects, clients, workflows, personal', enum: ['preferences', 'projects', 'clients', 'workflows', 'personal'] },
+          category: { type: 'string', description: 'קטגוריה חופשית. מומלצים: preferences, projects, clients, workflows, personal, instructions. ניתן להשתמש בכל ערך טקסט.' },
           key: { type: 'string', description: 'מזהה ייחודי לפריט (לדוגמה: "default_priority", "project_x_details")' },
           content: { type: 'string', description: 'תוכן הזיכרון' },
         },
