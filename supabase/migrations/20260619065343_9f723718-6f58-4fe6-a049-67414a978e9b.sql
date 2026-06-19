@@ -1,0 +1,1 @@
+UPDATE public.agent_tasks SET status='pending', started_at=NULL WHERE id IN ('e692438e-d3a9-43cb-bd79-d20e6d349c80','8b23fdd5-22f8-44d3-a3f7-b9a71c483f4c','1d19113a-d123-438c-810a-5dce6cfb6fff','64e39332-ecf7-45b3-8754-b73076d33665');

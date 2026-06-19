@@ -2289,13 +2289,15 @@ async function executeTool(
         
         // Fire run-agent-task in background
         const SUPABASE_URL_ENV = Deno.env.get('SUPABASE_URL')!;
-        const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-        
+        const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+        // Must use service-role key — run-agent-task's requireAuth rejects the anon key.
         fetch(`${SUPABASE_URL_ENV}/functions/v1/run-agent-task`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${ANON_KEY}`,
+            'Authorization': `Bearer ${SERVICE_KEY}`,
+            'apikey': SERVICE_KEY,
           },
           body: JSON.stringify({ task_id: newTask.id }),
         }).catch(e => console.error('Background task trigger failed:', e));
