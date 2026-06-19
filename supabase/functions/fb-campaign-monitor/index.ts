@@ -18,6 +18,85 @@ type AlertInput = {
   details: Record<string, any>;
 };
 
+const NOTIFY_TYPES = new Set(['campaign_stopped', 'ad_disapproved', 'cpl_spike']);
+
+async function resolveRecipients(supabase: any, tenant_id: string, client_id?: string | null) {
+  const phones = new Map<string, string>(); // phone -> label
+
+  // Tenant managers (owner/admin/agency_owner)
+  const { data: managers } = await supabase
+    .from('tenant_users')
+    .select('user_id, role')
+    .eq('tenant_id', tenant_id)
+    .in('role', ['owner', 'admin', 'agency_owner', 'agency_manager']);
+  const managerIds = (managers || []).map((m: any) => m.user_id);
+  if (managerIds.length) {
+    const { data: profs } = await supabase
+      .from('profiles').select('id, phone').in('id', managerIds);
+    for (const p of profs || []) if (p.phone) phones.set(p.phone, 'manager');
+  }
+
+  // Campaigners for the client's agency
+  if (client_id) {
+    const { data: client } = await supabase
+      .from('clients').select('agency_id').eq('id', client_id).maybeSingle();
+    if (client?.agency_id) {
+      const { data: links } = await supabase
+        .from('campaigner_agencies').select('campaigner_id').eq('agency_id', client.agency_id);
+      const campIds = (links || []).map((l: any) => l.campaigner_id);
+      if (campIds.length) {
+        const { data: camps } = await supabase
+          .from('campaigners').select('phone, active').in('id', campIds);
+        for (const c of camps || []) if (c.active && c.phone) phones.set(c.phone, 'campaigner');
+      }
+    }
+  }
+  return Array.from(phones.entries()).map(([phone, role]) => ({ phone, role }));
+}
+
+async function notifyWhatsapp(supabase: any, alert: AlertInput, alert_id: string) {
+  if (!NOTIFY_TYPES.has(alert.alert_type)) return;
+  const recipients = await resolveRecipients(supabase, alert.tenant_id, alert.client_id || null);
+  if (!recipients.length) return;
+
+  // Resolve a sender (any tenant manager user_id) for service-role WA call
+  const { data: anyOwner } = await supabase
+    .from('tenant_users').select('user_id').eq('tenant_id', alert.tenant_id)
+    .in('role', ['owner', 'admin']).limit(1).maybeSingle();
+  if (!anyOwner?.user_id) return;
+
+  const emoji = alert.severity === 'critical' ? '🔴' : '🟡';
+  const typeLabel: Record<string, string> = {
+    campaign_stopped: 'הקמפיין הושהה / נדחה ע״י Meta',
+    ad_disapproved: 'מודעה לא מאושרת',
+    cpl_spike: `CPL חורג (פי ${alert.details?.spike_pct ? (1 + alert.details.spike_pct / 100).toFixed(1) : '?'} מהממוצע השבועי)`,
+  };
+  const message = `${emoji} התראת קמפיין\n` +
+    `קמפיין: ${alert.campaign_name || alert.campaign_id}\n` +
+    `הבעיה: ${typeLabel[alert.alert_type] || alert.alert_type}\n` +
+    `\nענה "כרמן נתחי ${alert.campaign_name || alert.campaign_id}" לקבלת ניתוח ופעולה.`;
+
+  const fnUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/send-manus-wa-message`;
+  for (const r of recipients) {
+    try {
+      await fetch(fnUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        },
+        body: JSON.stringify({
+          phoneNumber: r.phone,
+          message,
+          tenantId: alert.tenant_id,
+          senderUserId: anyOwner.user_id,
+        }),
+      });
+    } catch (e) { console.warn('[fb-campaign-monitor] WA send failed', r.phone, e); }
+  }
+  await supabase.from('campaign_alerts').update({ notified_at: new Date().toISOString() }).eq('id', alert_id);
+}
+
 async function upsertAlert(supabase: any, alert: AlertInput) {
   // Avoid duplicates: skip if same open alert exists in last 24h
   const { data: existing } = await supabase
@@ -31,6 +110,7 @@ async function upsertAlert(supabase: any, alert: AlertInput) {
     .limit(1).maybeSingle();
   if (existing) return null;
   const { data } = await supabase.from('campaign_alerts').insert(alert).select('id').single();
+  if (data?.id) await notifyWhatsapp(supabase, alert, data.id);
   return data;
 }
 
