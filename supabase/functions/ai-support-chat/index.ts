@@ -1616,8 +1616,11 @@ async function executeTool(
         }
 
         // Restrict to tables tied to clients the caller is allowed to see.
-        const candidateTables = toolCall.args.client_id
-          ? crmTables.filter((t: any) => t.client_id === toolCall.args.client_id)
+        const requestedClientIds: string[] | null = Array.isArray(toolCall.args.client_ids) && toolCall.args.client_ids.length > 0
+          ? toolCall.args.client_ids
+          : (toolCall.args.client_id ? [toolCall.args.client_id] : null);
+        const candidateTables = requestedClientIds
+          ? crmTables.filter((t: any) => t.client_id && requestedClientIds.includes(t.client_id))
           : crmTables;
 
         const tableClientIds = Array.from(new Set(candidateTables.map((t: any) => t.client_id).filter(Boolean)));
