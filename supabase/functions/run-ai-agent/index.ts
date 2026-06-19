@@ -32,7 +32,8 @@ const ALL_TOOLS = [
   // TASKS (team tasks - for campaigners/team members)
   { name: 'create_task', description: 'יצירת משימה לצוות (קמפיינרים/אנשי צוות). השתמש בכלי הזה רק כשרוצים ליצור משימה לאדם אחר בצוות. אם המשימה היא לכרמן עצמה — השתמש ב-create_agent_task במקום!', parameters: { type: 'object', properties: { title: { type: 'string' }, client_id: { type: 'string' }, lead_id: { type: 'string' }, campaigner_id: { type: 'string', description: 'מזהה קמפיינר לשיוך המשימה' }, priority: { type: 'integer' }, due_date: { type: 'string' }, due_time: { type: 'string' }, notes: { type: 'string' }, duration_minutes: { type: 'integer', description: 'משך המשימה בדקות' } }, required: ['title'] } },
   // AGENT TASKS (for Carmen herself)
-  { name: 'create_agent_task', description: 'יצירת משימה לכרמן עצמה (ניהול משימות סוכנים). השתמש בכלי הזה כשהמשתמש מבקש מכרמן ליצור משימה לעצמה, משימה חוזרת, או תזכורת. המשימה תופיע בלוח "ניהול משימות סוכנים".', parameters: { type: 'object', properties: { title: { type: 'string', description: 'כותרת המשימה' }, description: { type: 'string', description: 'תיאור מפורט של המשימה' }, priority: { type: 'integer', description: 'עדיפות 1-10 (ברירת מחדל 5)' }, schedule_type: { type: 'string', enum: ['once', 'daily', 'weekly'], description: 'סוג תזמון' }, scheduled_at: { type: 'string', description: 'תאריך ושעה לביצוע (ISO format)' }, cron_expression: { type: 'string', description: 'ביטוי CRON למשימות חוזרות' }, task_skills: { type: 'array', items: { type: 'string' }, description: 'רשימת סקילים להפעלה' } }, required: ['title'] } },
+  { name: 'create_agent_task', description: 'יצירת משימה לכרמן עצמה (ניהול משימות סוכנים). השתמש בכלי הזה כשהמשתמש מבקש מכרמן ליצור משימה לעצמה, משימה חוזרת, או תזכורת. המשימה תופיע בלוח "ניהול משימות סוכנים". חשוב: scheduled_at חייב להיות בפורמט ISO UTC (Z). אם המשתמש נקב בשעה — היא בשעון ישראל (Asia/Jerusalem); המירי ל-UTC לפני השמירה.', parameters: { type: 'object', properties: { title: { type: 'string', description: 'כותרת המשימה' }, description: { type: 'string', description: 'תיאור מפורט של המשימה' }, priority: { type: 'integer', description: 'עדיפות 1-10 (ברירת מחדל 5)' }, schedule_type: { type: 'string', enum: ['once', 'daily', 'weekly'], description: 'סוג תזמון' }, scheduled_at: { type: 'string', description: 'תאריך ושעה לביצוע ב-ISO UTC (לדוגמה 2026-06-20T18:30:00Z עבור 21:30 שעון ישראל)' }, cron_expression: { type: 'string', description: 'ביטוי CRON למשימות חוזרות' }, task_skills: { type: 'array', items: { type: 'string' }, description: 'רשימת סקילים להפעלה' } }, required: ['title'] } },
+  { name: 'list_my_agent_tasks', description: 'רשימת המשימות המתוזמנות של כרמן עצמה (agent_tasks). השתמשי בכלי הזה כשהמשתמש שואל "מה תזמנת?", "באיזו שעה התזכורת?", "תבדקי אם הגדרת" — אסור לענות על שאלות כאלה מהזיכרון בלי לקרוא לכלי הזה. מחזיר זמני תזמון בשעון ישראל.', parameters: { type: 'object', properties: { status: { type: 'string', enum: ['pending','running','completed','failed'], description: 'סינון לפי סטטוס (אופציונלי)' }, limit: { type: 'integer', description: 'ברירת מחדל 10' } } } },
   { name: 'search_tasks', description: 'חיפוש משימות לפי שם/כותרת. חשוב! השתמש בכלי הזה לפני יצירת משימה כדי לוודא שהיא לא קיימת כבר', parameters: { type: 'object', properties: { search_term: { type: 'string', description: 'מילת חיפוש בכותרת המשימה' }, status: { type: 'string' }, client_id: { type: 'string' } }, required: ['search_term'] } },
   { name: 'list_tasks', description: 'רשימת משימות', parameters: { type: 'object', properties: { status: { type: 'string' }, client_id: { type: 'string' }, limit: { type: 'integer' } } } },
   { name: 'update_task_status', description: 'עדכון סטטוס משימה', parameters: { type: 'object', properties: { task_id: { type: 'string' }, status: { type: 'string', enum: ['open', 'in_progress', 'completed', 'cancelled'] } }, required: ['task_id', 'status'] } },
@@ -274,7 +275,36 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       }
       const { data, error } = await supabase.from('agent_tasks').insert(taskData).select('id, title, status, schedule_type, scheduled_at').single()
       if (error) throw error
-      return { agent_task_id: data.id, title: data.title, status: data.status, schedule_type: data.schedule_type, scheduled_at: data.scheduled_at, reminder_phone: looksLikeReminder ? callerPhone : null }
+      const scheduledIl = data.scheduled_at
+        ? new Date(data.scheduled_at).toLocaleString('he-IL', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jerusalem' })
+        : null
+      return { agent_task_id: data.id, title: data.title, status: data.status, schedule_type: data.schedule_type, scheduled_at_utc: data.scheduled_at, scheduled_at_israel: scheduledIl, reminder_phone: looksLikeReminder ? callerPhone : null, note: scheduledIl ? `המשימה תוזמנה ל-${scheduledIl} (שעון ישראל). השיבי למשתמש את הזמן בשעון ישראל בלבד.` : 'נשמר ללא תזמון.' }
+    }
+    case 'list_my_agent_tasks': {
+      let q = supabase.from('agent_tasks')
+        .select('id, title, description, status, schedule_type, scheduled_at, last_run, run_count, result, created_at')
+        .eq('tenant_id', tenantId)
+        .order('created_at', { ascending: false })
+        .limit(args.limit || 10)
+      if (agentId) q = q.eq('agent_id', agentId)
+      if (args.status) q = q.eq('status', args.status)
+      const { data, error } = await q
+      if (error) throw error
+      const fmtIl = (iso: string | null) => iso ? new Date(iso).toLocaleString('he-IL', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jerusalem' }) : null
+      return {
+        count: data.length,
+        tasks: data.map((t: any) => ({
+          id: t.id,
+          title: t.title,
+          status: t.status,
+          schedule_type: t.schedule_type,
+          scheduled_at_israel: fmtIl(t.scheduled_at),
+          last_run_israel: fmtIl(t.last_run),
+          run_count: t.run_count || 0,
+          last_output: t.result?.last_output ? String(t.result.last_output).slice(0, 200) : (t.result?.error ? `שגיאה: ${String(t.result.error).slice(0,200)}` : null),
+          description_preview: t.description ? String(t.description).slice(0, 120) : null,
+        })),
+      }
     }
     case 'search_tasks': {
       let query = supabase.from('tasks').select('id, title, status, priority, due_date, due_time, notes, duration_minutes, clients(name), leads(company_name), campaigners(full_name)')
@@ -2094,7 +2124,7 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     const currentTime = now.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jerusalem' })
     const tomorrowDate = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     const todayISO = now.toISOString().split('T')[0]
-    systemPrompt += `\n\n=== תאריך ושעה נוכחיים ===\nהיום: ${currentDate}, שעה: ${currentTime}\nתאריך ISO של היום: ${todayISO}\nתאריך ISO של מחר: ${tomorrowDate}\nחשוב: כשמבקשים "למחר" השתמש ב-${tomorrowDate}, כש"היום" השתמש ב-${todayISO}.`
+    systemPrompt += `\n\n=== תאריך ושעה נוכחיים ===\nהיום: ${currentDate}, שעה: ${currentTime}\nתאריך ISO של היום: ${todayISO}\nתאריך ISO של מחר: ${tomorrowDate}\nחשוב: כשמבקשים "למחר" השתמש ב-${tomorrowDate}, כש"היום" השתמש ב-${todayISO}.\n\n=== כללי אזור זמן ותזכורות (חובה) ===\n• אזור הזמן של המשתמש הוא Asia/Jerusalem (IST = UTC+2 / IDT = UTC+3). כל שעה שהמשתמש אומר היא בשעון ישראל.\n• כש-create_agent_task דורש scheduled_at — חובה להמיר משעון ישראל ל-UTC ב-ISO עם Z. דוגמה: "מוצ"ש 21:30" → 2026-06-20T18:30:00Z (קיץ, UTC+3). אסור לשמור שעת ישראל בתור UTC.\n• בתשובה למשתמש תמיד הציגי את הזמן בשעון ישראל (לדוגמה "מחר בשעה 21:30") — לא ב-UTC.\n• אם המשתמש שואל "מה תזמנת?" / "באיזו שעה התזכורת?" / "תבדקי אם הגדרת" / "את בטוחה?" — חובה לקרוא ל-list_my_agent_tasks לפני שאת עונה. אסור לנחש או לענות מהזיכרון.\n• הכלי create_agent_task מחזיר scheduled_at_israel — השתמשי בערך הזה כשאת מאשרת למשתמש את הזמן.`
     systemPrompt += `\n\n=== הקשר ארגוני ===\n${tenantContext}`
 
     // Inject memory context — instructions get top priority and a strict directive
