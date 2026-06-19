@@ -997,10 +997,23 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     }
     // MEMORY
     case 'save_memory': {
+      const cat = args.category || 'general'
       const { data, error } = await supabase.from('ai_memory').upsert({
-        tenant_id: tenantId, user_id: userId || 'system', key: args.key, content: args.content, category: args.category || 'general',
+        tenant_id: tenantId, user_id: userId || 'system', key: args.key, content: args.content, category: cat,
       }, { onConflict: 'tenant_id,user_id,key' }).select('key, category').single()
       if (error) throw error
+      // Mirror to agent_memory (Hermes FTS layer) for cross-conversation recall
+      const importanceMap: Record<string, number> = {
+        instructions: 95, preferences: 85, personal: 80, projects: 70, clients: 70, workflows: 65, general: 50,
+      }
+      saveAgentMemory({
+        supabase, tenant_id: tenantId, agent_id,
+        category: cat,
+        title: args.key,
+        summary: args.content,
+        importance: importanceMap[cat] ?? 60,
+        metadata: { source: 'save_memory', key: args.key, user_id: userId || 'system' },
+      }).catch(() => {})
       return { saved: true, key: data.key, category: data.category }
     }
     case 'recall_memory': {
