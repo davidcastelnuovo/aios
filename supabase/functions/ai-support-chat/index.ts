@@ -1684,13 +1684,23 @@ async function executeTool(
           return { spend, leads, date, updated_time };
         };
 
-        // Aggregate per client across all of their ad tables.
+        // Aggregate per client across all of their ad tables, AND per client+platform
+        // (so we can emit one row per "report" when breakdown_by_platform=true).
+        type Bucket = {
+          rows7: any[]; rowsOlder: any[]; allRows: any[];
+        };
+        const newBucket = (): Bucket => ({ rows7: [], rowsOlder: [], allRows: [] });
+
         const perClient: Record<string, {
           client_id: string;
           tables: number;
           platforms: Set<string>;
-          rows7: any[]; rowsOlder: any[]; allRows: any[];
-        }> = {};
+        } & Bucket> = {};
+        const perReport: Record<string, {
+          client_id: string;
+          platform: string;
+          tables: number;
+        } & Bucket> = {};
 
         for (const table of tables) {
           if (!table.client_id) continue;
@@ -1703,18 +1713,29 @@ async function executeTool(
           if (!records || records.length === 0) continue;
 
           const norm = records.map((r: any) => normalize(r, table.integration_type));
-          const bucket = perClient[table.client_id] ||= {
+          const cb = perClient[table.client_id] ||= {
             client_id: table.client_id,
             tables: 0,
             platforms: new Set<string>(),
-            rows7: [], rowsOlder: [], allRows: [],
+            ...newBucket(),
           };
-          bucket.tables += 1;
-          bucket.platforms.add(table.integration_type);
+          cb.tables += 1;
+          cb.platforms.add(table.integration_type);
+
+          const rkey = `${table.client_id}::${table.integration_type}`;
+          const rb = perReport[rkey] ||= {
+            client_id: table.client_id,
+            platform: table.integration_type,
+            tables: 0,
+            ...newBucket(),
+          };
+          rb.tables += 1;
+
           for (const n of norm) {
-            bucket.allRows.push(n);
-            if (n.date && n.date >= d7Str) bucket.rows7.push(n);
-            else if (n.date && n.date >= d30Str) bucket.rowsOlder.push(n);
+            cb.allRows.push(n);
+            rb.allRows.push(n);
+            if (n.date && n.date >= d7Str) { cb.rows7.push(n); rb.rows7.push(n); }
+            else if (n.date && n.date >= d30Str) { cb.rowsOlder.push(n); rb.rowsOlder.push(n); }
           }
         }
 
@@ -1732,67 +1753,117 @@ async function executeTool(
         const sumField = (arr: any[], field: 'spend' | 'leads') =>
           arr.reduce((s, r) => s + (Number(r[field]) || 0), 0);
 
-        const campResults: any[] = [];
-        for (const cid of clientIds) {
-          const b = perClient[cid];
+        const computeMetrics = (b: Bucket) => {
           const spend7 = sumField(b.rows7, 'spend');
           const spendOlder = sumField(b.rowsOlder, 'spend');
           const leads7 = sumField(b.rows7, 'leads');
           const leadsOlder = sumField(b.rowsOlder, 'leads');
-
           const days7 = Math.max(b.rows7.length, 1);
           const daysOlder = Math.max(b.rowsOlder.length, 1);
           const dailySpend7 = spend7 / days7;
           const dailySpendOlder = spendOlder / daysOlder;
           const spendChangePct = dailySpendOlder > 0 ? ((dailySpend7 - dailySpendOlder) / dailySpendOlder * 100) : null;
-
           const cpl7 = leads7 > 0 ? spend7 / leads7 : null;
           const cplOlder = leadsOlder > 0 ? spendOlder / leadsOlder : null;
           const cplChangePct = cplOlder && cpl7 ? ((cpl7 - cplOlder) / cplOlder * 100) : null;
-
-          const updatedTimes = b.allRows
-            .map((r) => r.updated_time)
-            .filter((t) => t)
-            .sort()
-            .reverse();
+          const updatedTimes = b.allRows.map((r) => r.updated_time).filter((t) => t).sort().reverse();
           const lastCampaignUpdate = updatedTimes.length > 0 ? updatedTimes[0] : null;
           const daysSinceLastCampaignTouch = lastCampaignUpdate
             ? Math.floor((now.getTime() - new Date(lastCampaignUpdate).getTime()) / (1000 * 60 * 60 * 24))
             : null;
+          const datesSorted = b.allRows.map((r) => r.date).filter(Boolean).sort();
+          const lastDataDate = datesSorted.length > 0 ? datesSorted[datesSorted.length - 1] : null;
+          const freshnessDays = lastDataDate
+            ? Math.floor((now.getTime() - new Date(lastDataDate).getTime()) / (1000 * 60 * 60 * 24))
+            : null;
+          return {
+            spend7, spendOlder, leads7, leadsOlder,
+            spendChangePct, cpl7, cplOlder, cplChangePct,
+            lastCampaignUpdate, daysSinceLastCampaignTouch,
+            lastDataDate, freshnessDays,
+            rows7Len: b.rows7.length, rowsOlderLen: b.rowsOlder.length,
+          };
+        };
 
+        const breakdown = !!toolCall.args.breakdown_by_platform;
+        const campResults: any[] = [];
+        for (const cid of clientIds) {
+          const b = perClient[cid];
+          const m = computeMetrics(b);
           campResults.push({
             client_id: cid,
             client_name: nameById[cid] || '(לקוח ללא שם)',
             platforms: Array.from(b.platforms),
             tables: b.tables,
-            spend_7d: Math.round(spend7 * 100) / 100,
-            spend_30d: Math.round((spend7 + spendOlder) * 100) / 100,
-            leads_7d: leads7,
-            leads_30d: leads7 + leadsOlder,
-            cpl_7d: cpl7 ? Math.round(cpl7 * 100) / 100 : null,
-            cpl_30d_avg: cplOlder ? Math.round(cplOlder * 100) / 100 : null,
-            spend_change_pct: spendChangePct ? Math.round(spendChangePct * 10) / 10 : null,
-            cpl_change_pct: cplChangePct ? Math.round(cplChangePct * 10) / 10 : null,
-            records_7d: b.rows7.length,
-            records_30d: b.rows7.length + b.rowsOlder.length,
-            last_campaign_update: lastCampaignUpdate,
-            days_since_last_campaign_touch: daysSinceLastCampaignTouch,
-            alert: spendChangePct !== null && spendChangePct > 15
+            spend_7d: Math.round(m.spend7 * 100) / 100,
+            spend_30d: Math.round((m.spend7 + m.spendOlder) * 100) / 100,
+            leads_7d: m.leads7,
+            leads_30d: m.leads7 + m.leadsOlder,
+            cpl_7d: m.cpl7 ? Math.round(m.cpl7 * 100) / 100 : null,
+            cpl_30d_avg: m.cplOlder ? Math.round(m.cplOlder * 100) / 100 : null,
+            spend_change_pct: m.spendChangePct ? Math.round(m.spendChangePct * 10) / 10 : null,
+            cpl_change_pct: m.cplChangePct ? Math.round(m.cplChangePct * 10) / 10 : null,
+            records_7d: m.rows7Len,
+            records_30d: m.rows7Len + m.rowsOlderLen,
+            last_campaign_update: m.lastCampaignUpdate,
+            days_since_last_campaign_touch: m.daysSinceLastCampaignTouch,
+            last_data_date: m.lastDataDate,
+            freshness_days: m.freshnessDays,
+            alert: m.spendChangePct !== null && m.spendChangePct > 15
               ? '🔴 התייקרות'
-              : (cplChangePct !== null && cplChangePct > 20 ? '🟡 עלייה בעלות לליד' : '🟢 תקין'),
+              : (m.cplChangePct !== null && m.cplChangePct > 20 ? '🟡 עלייה בעלות לליד' : '🟢 תקין'),
+          });
+        }
+        campResults.sort((a: any, b: any) => (b.spend_change_pct || 0) - (a.spend_change_pct || 0));
+
+        const reportResults: any[] = [];
+        if (breakdown) {
+          for (const rkey of Object.keys(perReport)) {
+            const r = perReport[rkey];
+            const m = computeMetrics(r);
+            reportResults.push({
+              client_id: r.client_id,
+              client_name: nameById[r.client_id] || '(לקוח ללא שם)',
+              platform: r.platform,
+              tables: r.tables,
+              spend_7d: Math.round(m.spend7 * 100) / 100,
+              spend_30d: Math.round((m.spend7 + m.spendOlder) * 100) / 100,
+              leads_7d: m.leads7,
+              leads_30d: m.leads7 + m.leadsOlder,
+              cpl_7d: m.cpl7 ? Math.round(m.cpl7 * 100) / 100 : null,
+              cpl_30d_avg: m.cplOlder ? Math.round(m.cplOlder * 100) / 100 : null,
+              spend_change_pct: m.spendChangePct ? Math.round(m.spendChangePct * 10) / 10 : null,
+              cpl_change_pct: m.cplChangePct ? Math.round(m.cplChangePct * 10) / 10 : null,
+              records_7d: m.rows7Len,
+              records_30d: m.rows7Len + m.rowsOlderLen,
+              last_data_date: m.lastDataDate,
+              freshness_days: m.freshnessDays,
+              last_campaign_update: m.lastCampaignUpdate,
+              alert: (m.freshnessDays !== null && m.freshnessDays > 2)
+                ? '⚠️ דוח לא מסונכרן'
+                : (m.spendChangePct !== null && m.spendChangePct > 15
+                  ? '🔴 התייקרות'
+                  : (m.cplChangePct !== null && m.cplChangePct > 20 ? '🟡 עלייה בעלות לליד' : '🟢 תקין')),
+            });
+          }
+          reportResults.sort((a: any, b: any) => {
+            const an = a.client_name || ''; const bn = b.client_name || '';
+            if (an !== bn) return an.localeCompare(bn, 'he');
+            return (a.platform || '').localeCompare(b.platform || '');
           });
         }
 
-        campResults.sort((a: any, b: any) => (b.spend_change_pct || 0) - (a.spend_change_pct || 0));
         modifiedEntities.add('clients');
         return {
           success: true,
           result: {
             count: campResults.length,
+            reports_count: breakdown ? reportResults.length : undefined,
             scope: scope.role,
             accessible_tenants: scope.accessibleTenantIds.length,
             tables_scanned: tables.length,
             clients: campResults,
+            ...(breakdown ? { reports: reportResults } : {}),
           },
         };
       }
