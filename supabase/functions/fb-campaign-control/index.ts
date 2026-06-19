@@ -72,10 +72,8 @@ Deno.serve(async (req) => {
     await supabase.from('agent_action_log').insert({
       tenant_id,
       action_type: `fb_${action}`,
-      target_type: 'facebook_campaign',
-      target_id: campaign_id,
-      payload: { before, after: result, request: body },
-      success: true,
+      status: 'success',
+      action_details: { campaign_id, before, after: result, request: body },
     }).then(() => {}, (e: any) => console.warn('audit log failed', e));
 
     return new Response(JSON.stringify({ success: true, action, campaign_id, before, result }), { status: 200, headers: corsHeaders });
