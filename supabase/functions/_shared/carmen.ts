@@ -714,11 +714,12 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
       }
     }
 
-    // 🔁 EXTRA GUARD: if this is the operator's manual outbound (typeWebhook
-    // outgoingMessageReceived) AND the same body was sent by us via API in the
-    // last 60s (chat_messages outbound by service-role/Carmen), it's the
-    // provider mirroring our API send back as "manual outbound". Drop it.
-    if (isManualOutgoing && messageText) {
+    // Mirror guard: if the same body was sent by our API in the last 60s, this
+    // event (whether reported as manual-outgoing on the sender's instance OR as
+    // incoming on the recipient's instance) is the provider mirroring our send.
+    // Drop it. Inbound symmetry is essential when the operator runs a parallel
+    // Green API integration that receives Carmen's Manus replies as inbound.
+    if ((isManualOutgoing || isIncoming) && messageText) {
       const since = new Date(Date.now() - 60_000).toISOString();
       const { data: recentApiSends } = await supabase
         .from('chat_messages')
@@ -729,9 +730,12 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
         .gte('created_at', since)
         .limit(3);
       if (Array.isArray(recentApiSends) && recentApiSends.length > 0) {
-        // Any prior outbound row with the same body within 60s = our own API send
-        // mirrored back. Don't process again.
-        console.log('[carmen] Dropping manual-outbound mirror of recent API send', { session: activeSession.id, len: messageText.length });
+        console.log('[carmen] Dropping mirror of recent API send', {
+          session: activeSession.id,
+          len: messageText.length,
+          isManualOutgoing,
+          isIncoming,
+        });
         await supabase
           .from('carmen_whatsapp_sessions')
           .update({ last_message_at: new Date().toISOString() })
