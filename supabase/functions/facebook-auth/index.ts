@@ -67,13 +67,22 @@ serve(async (req) => {
         );
       }
 
-      // Permissions needed for Lead Ads
+      // Permissions: ads + pages content + comments + Instagram
       const scopes = [
         'pages_manage_ads',
         'leads_retrieval',
         'pages_read_engagement',
         'pages_show_list',
-        'ads_management', // For CAPI
+        'ads_management',
+        // Content publishing & comments management
+        'pages_manage_posts',
+        'pages_manage_engagement',
+        'pages_messaging',
+        'business_management',
+        // Instagram (requires connected IG Business/Creator account)
+        'instagram_basic',
+        'instagram_content_publish',
+        'instagram_manage_comments',
       ].join(',');
 
       // Use a FIXED redirect_uri pointing to the Edge Function callback
