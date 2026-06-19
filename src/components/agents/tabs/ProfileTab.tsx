@@ -193,7 +193,7 @@ export function ProfileTab({ agent }: { agent: any }) {
       {/* ===== Runtime ===== */}
       <Card className="p-5">
         <SectionHeader icon={Settings} title="הגדרות ריצה" subtitle="המוח שבו הסוכן ישתמש ומגבלות תפעוליות" />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
           <Field label="המוח (LLM)" hint="ניתן לעדכן כאן או בכותרת">
             <BrainSelector value={agent.engine} onChange={async (engine) => {
               await supabase.from("ai_agents").update({ engine }).eq("id", agent.id);
@@ -210,6 +210,20 @@ export function ProfileTab({ agent }: { agent: any }) {
               onChange={e => update({ max_tool_rounds: Number(e.target.value) })}
               className="w-32"
             />
+          </Field>
+          <Field label="גרסת Prompt" hint="V2 מוסיף חשיבה מובנית, תכנון, ואימות פעולות. V1 = התנהגות נוכחית">
+            <Select
+              value={form.metadata?.prompt_version || "v1"}
+              onValueChange={v => update({ metadata: { ...form.metadata, prompt_version: v } })}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="בחר גרסה" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="v1">V1 — נוכחי (יציב)</SelectItem>
+                <SelectItem value="v2">V2 — חדש (ReAct, חשיבה, אימות)</SelectItem>
+              </SelectContent>
+            </Select>
           </Field>
         </div>
       </Card>
@@ -391,5 +405,6 @@ function initialForm(agent: any) {
     language: agent.language || "he",
     max_tool_rounds: agent.max_tool_rounds ?? 25,
     active: agent.active ?? true,
+    metadata: agent.metadata || {},
   };
 }
