@@ -375,6 +375,43 @@ Deno.serve(async (req) => {
       }
     }
 
+    // FALLBACK LID RESOLUTION: when an inbound @lid event arrives with no resolvable
+    // counterpart phone (chatId="@c.us"), but there is an ACTIVE Carmen session on
+    // this connection within the idle window, attribute the message to that session's
+    // phone. Without this, mid-conversation replies (which Manus often delivers as
+    // pure LID events) get dropped by scope filtering and Carmen goes silent until
+    // the user types "כרמן" again.
+    if (!isGroup && isLidEvent && !counterpartPhone && messageText.trim()) {
+      try {
+        const { data: freshSessions } = await supabase
+          .from('carmen_whatsapp_sessions')
+          .select('phone, chat_id, last_message_at, automation_id')
+          .eq('tenant_id', tenantId)
+          .eq('status', 'active')
+          .eq('connection_user_id', connectionUserId)
+          .gte('last_message_at', new Date(Date.now() - 5 * 60 * 1000).toISOString())
+          .order('last_message_at', { ascending: false })
+          .limit(2);
+        if (freshSessions && freshSessions.length === 1) {
+          const aliasPhone = String(freshSessions[0].phone);
+          counterpartPhone = aliasPhone;
+          counterpartRaw = `${aliasPhone}@c.us`;
+          normalized = normalizePhone(aliasPhone);
+          isOutgoingFromPhone = true;
+          sourcePhoneNumber = aliasPhone;
+          console.log('[manus-wa] LID fallback → resolved via active Carmen session', {
+            aliasPhone, body: messageText.slice(0, 60),
+          });
+        } else if (freshSessions && freshSessions.length > 1) {
+          console.log('[manus-wa] LID fallback skipped — multiple fresh sessions', {
+            count: freshSessions.length,
+          });
+        }
+      } catch (err) {
+        console.error('[manus-wa] LID fallback resolution failed:', err);
+      }
+    }
+
     // Group messages: skip client/lead matching & chat_messages insert, but still let Carmen respond in-group.
     if (isGroup) {
       const groupChatId = fromRaw.endsWith('@g.us') ? fromRaw : toRaw;
