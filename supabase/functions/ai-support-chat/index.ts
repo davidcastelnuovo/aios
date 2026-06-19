@@ -229,6 +229,85 @@ function buildLocalDateTimeRange(dateStr: string, timeStr: string, durationMinut
 // Track which entities were modified during tool execution
 const modifiedEntities: Set<string> = new Set();
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Carmen scope resolver
+// Returns the tenants Carmen may pull data from and the per-role client filter.
+//   • super_admin / owner / agency_owner / agency_manager → full tenant +
+//     every agency shared in via agency_tenant_access.
+//   • team_manager → only agencies in user_managed_agencies.
+//   • campaigner   → only active/onboarding clients of campaigner_agencies.
+// ─────────────────────────────────────────────────────────────────────────────
+type CarmenScope = {
+  role: string;
+  accessibleTenantIds: string[];
+  sharedAgencyIds: string[];
+  managedAgencyIds: string[] | null;
+  campaignerId: string | null;
+  restrictStatuses: string[] | null;
+};
+
+async function resolveCarmenScope(
+  supabaseClient: any,
+  userId: string,
+  tenantId: string,
+): Promise<CarmenScope> {
+  const { data: roleRows } = await supabaseClient
+    .from('user_roles')
+    .select('role, tenant_id')
+    .eq('user_id', userId);
+  const rolesInTenant = (roleRows || []).filter((r: any) => r.tenant_id === tenantId || r.role === 'super_admin');
+  const roleSet = new Set<string>(rolesInTenant.map((r: any) => r.role));
+  const role =
+    roleSet.has('super_admin') ? 'super_admin'
+    : roleSet.has('owner') ? 'owner'
+    : roleSet.has('agency_owner') ? 'agency_owner'
+    : roleSet.has('agency_manager') ? 'agency_manager'
+    : roleSet.has('team_manager') ? 'team_manager'
+    : roleSet.has('campaigner') ? 'campaigner'
+    : 'viewer';
+
+  const { data: ata } = await supabaseClient
+    .from('agency_tenant_access')
+    .select('agency_id, source_tenant_id, accessing_tenant_id')
+    .or(`accessing_tenant_id.eq.${tenantId},source_tenant_id.eq.${tenantId}`);
+
+  const sharedAgencyIds = Array.from(new Set((ata || []).map((r: any) => r.agency_id).filter(Boolean)));
+  const tenantSet = new Set<string>([tenantId]);
+  for (const r of ata || []) {
+    if (r.source_tenant_id) tenantSet.add(r.source_tenant_id);
+    if (r.accessing_tenant_id) tenantSet.add(r.accessing_tenant_id);
+  }
+
+  let managedAgencyIds: string[] | null = null;
+  let campaignerId: string | null = null;
+  let restrictStatuses: string[] | null = null;
+
+  if (role === 'team_manager') {
+    const { data: managed } = await supabaseClient
+      .from('user_managed_agencies')
+      .select('agency_id')
+      .eq('user_id', userId);
+    managedAgencyIds = (managed || []).map((m: any) => m.agency_id).filter(Boolean);
+  } else if (role === 'campaigner') {
+    const { data: profile } = await supabaseClient
+      .from('profiles')
+      .select('campaigner_id')
+      .eq('id', userId)
+      .maybeSingle();
+    campaignerId = profile?.campaigner_id || null;
+    restrictStatuses = ['active', 'onboarding'];
+  }
+
+  return {
+    role,
+    accessibleTenantIds: Array.from(tenantSet),
+    sharedAgencyIds,
+    managedAgencyIds,
+    campaignerId,
+    restrictStatuses,
+  };
+}
+
 async function executeTool(
   toolCall: ToolCall, 
   supabaseClient: any, 
