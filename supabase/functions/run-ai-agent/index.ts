@@ -1788,7 +1788,7 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
         leadData: leadDataObj,
         taskMode: task_mode,
         taskSkills: task_skills,
-        isWhatsApp: isCarmen,
+        isWhatsApp: isCarmen && surface === 'whatsapp',
         currentDate,
         currentTime,
         todayISO,
