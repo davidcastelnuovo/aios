@@ -1404,6 +1404,73 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (!res.ok) return { error: data.error || `send_whatsapp_via_gateway failed [${res.status}]` }
       return data
     }
+    // ===========================
+    // HERMES SKILLS SYSTEM
+    // ===========================
+    case 'recall_skills': {
+      const limit = Math.min(args.limit || 5, 20)
+      const q = String(args.query || '').trim()
+      // Try FTS first; fall back to ILIKE
+      let { data, error } = await supabase
+        .from('ai_skills')
+        .select('id, name, description, steps, trigger_phrases, usage_count, version, last_used_at')
+        .eq('tenant_id', tenantId)
+        .eq('is_active', true)
+        .textSearch('search_vector', q.split(/\s+/).filter(Boolean).join(' | '), { type: 'websearch', config: 'simple' })
+        .limit(limit)
+      if (error || !data || data.length === 0) {
+        const { data: fb } = await supabase
+          .from('ai_skills')
+          .select('id, name, description, steps, trigger_phrases, usage_count, version, last_used_at')
+          .eq('tenant_id', tenantId)
+          .eq('is_active', true)
+          .or(`name.ilike.%${q}%,description.ilike.%${q}%`)
+          .limit(limit)
+        data = fb || []
+      }
+      return { count: data?.length || 0, skills: data || [] }
+    }
+    case 'create_skill': {
+      const { data, error } = await supabase.from('ai_skills').insert({
+        tenant_id: tenantId,
+        user_id: userId !== 'system' ? userId : null,
+        name: args.name,
+        description: args.description,
+        steps: args.body,
+        trigger_phrases: Array.isArray(args.trigger_phrases) ? args.trigger_phrases : [],
+        created_by_agent: true,
+        is_active: true,
+        version: 1,
+      }).select('id, name, version').single()
+      if (error) throw error
+      console.log(`[Hermes] Skill created by Carmen: ${data.name} (id=${data.id})`)
+      return { skill_id: data.id, name: data.name, version: data.version, message: 'הסקיל נשמר. אשתמש בו אוטומטית במשימות דומות בעתיד.' }
+    }
+    case 'update_skill': {
+      const { data: current } = await supabase
+        .from('ai_skills')
+        .select('id, version, name')
+        .eq('id', args.skill_id)
+        .eq('tenant_id', tenantId)
+        .single()
+      if (!current) return { error: 'Skill not found' }
+      const updates: any = {
+        steps: args.body,
+        version: (current.version || 1) + 1,
+        updated_at: new Date().toISOString(),
+      }
+      if (args.description) updates.description = args.description
+      const { data, error } = await supabase
+        .from('ai_skills')
+        .update(updates)
+        .eq('id', args.skill_id)
+        .eq('tenant_id', tenantId)
+        .select('id, name, version')
+        .single()
+      if (error) throw error
+      console.log(`[Hermes] Skill updated: ${data.name} v${data.version} - ${args.change_note || ''}`)
+      return { skill_id: data.id, name: data.name, version: data.version, message: 'הסקיל עודכן.' }
+    }
     default:
       throw new Error(`Unknown tool: ${name}`)
   }
