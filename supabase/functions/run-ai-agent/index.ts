@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
 import { resolveModelId } from '../_shared/models.ts'
 import { summarizeAndStoreAgentMemory, recallAgentMemory, recallAgentMemoryFTS, saveAgentMemory } from '../_shared/agent-memory.ts'
 import { buildCarmenV2SystemPrompt, shouldUseV2Prompt } from '../_shared/carmen-prompt-v2.ts'
+import { loadMcpTools } from '../_shared/mcp-tools.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -2106,6 +2107,21 @@ Deno.serve(async (req) => {
 
     const toolsForAPI = filteredTools.map(t => ({ type: 'function', function: t }))
 
+    // 4b. Load MCP tools for this tenant + agent (Phase 3)
+    let mcpExecutors = new Map<string, (args: any) => Promise<any>>()
+    try {
+      const mcp = await loadMcpTools(supabase, resolvedTenantId, agent_id)
+      if (mcp.toolDefs.length > 0) {
+        for (const t of mcp.toolDefs) {
+          toolsForAPI.push({ type: 'function', function: t as any })
+        }
+        mcpExecutors = mcp.executors
+        console.log(`[AGENT] Loaded ${mcp.toolDefs.length} MCP tools from ${mcp.connectionsCount} connections`)
+      }
+    } catch (e: any) {
+      console.error('[AGENT] MCP load failed:', e?.message)
+    }
+
     // 5. Run agent with tool loop
     const model = resolveModel(agent.engine || 'gemini-3-flash')
     const maxRounds = agent.max_tool_rounds || 25
@@ -2173,7 +2189,11 @@ Deno.serve(async (req) => {
         console.log(`[AGENT] Tool call: ${toolName}`)
         let result: any
         try {
-          result = await executeTool(toolName, toolArgs, supabase, resolvedTenantId, resolvedUserId, callerCampaignerId, agent_id, callerRole, callerManagedAgencyIds)
+          if (mcpExecutors.has(toolName)) {
+            result = await mcpExecutors.get(toolName)!(toolArgs)
+          } else {
+            result = await executeTool(toolName, toolArgs, supabase, resolvedTenantId, resolvedUserId, callerCampaignerId, agent_id, callerRole, callerManagedAgencyIds)
+          }
           console.log(`[AGENT] Tool ${toolName} OK`)
         } catch (e: any) {
           result = { error: e.message }
