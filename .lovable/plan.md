@@ -1,37 +1,107 @@
-## דילוג על התראת אוטומציה כשהמשתמש משייך משימה לעצמו
+להלן מפרט שאפשר לשלוח לצוות Manus. אני אכין אותו גם כקובץ מסמך אם תאשר.
 
-### מה קורה היום
-ה-trigger `trg_notify_task_assigned` (ב-`public.tasks`) שולח לכל שיוך של `campaigner_id` קריאה ל-`trigger-automation` עם `trigger_type='task_assigned'`. זה רץ גם כשמשתמש מכניס משימה לעצמו, ולכן הוא מקבל וואטסאפ של "התראה למשימה" על משימה שהוא בעצמו רק עכשיו יצר.
+---
 
-### השינוי
-מיגרציה אחת שמחליפה את הפונקציה `public.notify_task_assigned`. בתחילתה, מיד אחרי בדיקות ה-NULL/NO-CHANGE הקיימות, נוסיף בדיקה:
+# Manus WA Webhook — מפרט payload נדרש
 
-```
-v_actor_user_id := COALESCE(auth.uid(), NEW.created_by);
-IF v_actor_user_id IS NOT NULL THEN
-  v_actor_campaigner_id := public.get_user_campaigner_id(v_actor_user_id);
-  IF v_actor_campaigner_id IS NOT NULL
-     AND v_actor_campaigner_id = NEW.campaigner_id THEN
-    RETURN NEW;  -- שיוך עצמי: לא שולחים התראה
-  END IF;
-END IF;
+## הבעיה הנוכחית
+Webhook נכנס מ-Manus כולל היום רק:
+```json
+{
+  "instanceId": "YwIn7GY3Ul3OAxXG",
+  "from": "224686986293269",
+  "body": "כרמן שומעת",
+  "timestamp": 1781867346
+}
 ```
 
-הסבר:
-- `auth.uid()` הוא המשתמש הפעיל. ב-INSERT שמגיע מה-CRM הוא תואם ל-`created_by` (שכבר מוגדר default ל-`auth.uid()`).
-- ב-UPDATE של `campaigner_id` ע"י קמפיינר על משימה של עצמו — `auth.uid()` יחזיר אותו, ולכן השיוך ייחשב עצמי.
-- `get_user_campaigner_id` כבר קיים במערכת (מתועד בכמה מיגרציות RLS) — ממפה user_id → campaigner_id.
-- super_admin/owner שמשייך לעצמו לא קמפיינר → `get_user_campaigner_id` יחזיר NULL → לא נחשב שיוך עצמי, וההתראה תרוץ כרגיל. אם תרצה שגם הם לא יקבלו התראה על שיוך לעצמם, נוסיף השוואה גם דרך `(SELECT user_id FROM campaigners WHERE id = NEW.campaigner_id) = v_actor_user_id` — תגיד אם אתה רוצה שזה יכוסה.
+`from` מכיל **WhatsApp LID** (Linked Identity, 15 ספרות, לא E.164), בלי מספר טלפון אמיתי. אין דרך לזהות מי השולח, לא ניתן להחיל whitelist/session/scoping, וההודעה נדחית כ-`no_session_inbound`.
 
-### מה לא משתנה
-- שיוך מ-Carmen, מאוטומציות, או מאדמין שמשייך לקמפיינר אחר — ימשיך לטרגר את ההתראה כרגיל.
-- ה-trigger עצמו (`AFTER INSERT OR UPDATE OF campaigner_id`) נשאר.
-- הלוגיקה ב-`trigger-automation` לא משתנה.
+## מה אנחנו צריכים לקבל
+לכל אירוע הודעה (גם נכנסת וגם יוצאת), שדות אלה — חובה:
 
-### קובץ שיתעדכן
-- מיגרציה חדשה שמחליפה את `public.notify_task_assigned()` (CREATE OR REPLACE FUNCTION).
+| שדה | סוג | חובה | תיאור |
+|---|---|---|---|
+| `instanceId` | string | חובה | מזהה מכשיר Manus (כבר קיים) |
+| `messageId` | string | חובה | מזהה הודעה ייחודי לדדופ |
+| `timestamp` | number (epoch sec) | חובה | זמן ההודעה |
+| `direction` | `"inbound"` \| `"outbound"` | חובה | במקום `fromMe` בלבד — מפורש |
+| `chatId` | string | חובה | המזהה הגולמי של WhatsApp (LID או phone@c.us או group@g.us) |
+| `chatType` | `"private"` \| `"group"` | חובה | סוג השיחה |
+| `senderPhone` | string E.164 (ללא +) | **חובה כשניתן לפתור** | מספר הטלפון האמיתי של השולח (למשל `972549696673`). חובה לבצע resolve מ-LID לפני שליחה. |
+| `senderLid` | string | אופציונלי | ה-LID הגולמי, אם קיים |
+| `senderName` | string | מומלץ | שם תצוגה של השולח |
+| `recipientPhone` | string E.164 | **חובה כשניתן לפתור** | המספר אליו נשלחה ההודעה (במקרה שלנו: המספר של מכשיר ה-Manus) |
+| `groupId` | string | חובה לקבוצות | LID/phone של הקבוצה |
+| `groupName` | string | מומלץ | שם הקבוצה |
+| `body` | string | חובה | תוכן ההודעה |
+| `mediaUrl` / `mediaType` | string | אופציונלי | אם רלוונטי |
 
-### אימות
-1. כניסה כמשתמש קמפיינר, יצירת משימה ושיוך לעצמו → אין התראה.
-2. אדמין משייך משימה לקמפיינר אחר → ההתראה נשלחת.
-3. שינוי `campaigner_id` של משימה קיימת מקמפיינר אחד למשתמש הפעיל עצמו → אין התראה.
+### דוגמה — הודעה פרטית נכנסת
+```json
+{
+  "instanceId": "YwIn7GY3Ul3OAxXG",
+  "messageId": "3EB0XXXXXXXXXXXXXXXX",
+  "timestamp": 1781867346,
+  "direction": "inbound",
+  "chatType": "private",
+  "chatId": "972549696673@c.us",
+  "senderPhone": "972549696673",
+  "senderLid": "224686986293269",
+  "senderName": "Avi Cohen",
+  "recipientPhone": "972507677613",
+  "body": "כרמן שומעת"
+}
+```
+
+### דוגמה — הודעה בקבוצה
+```json
+{
+  "instanceId": "YwIn7GY3Ul3OAxXG",
+  "messageId": "3EB0YYYYYYYYYYYYYYYY",
+  "timestamp": 1781867400,
+  "direction": "inbound",
+  "chatType": "group",
+  "chatId": "120363012345678901@g.us",
+  "groupId": "120363012345678901@g.us",
+  "groupName": "צוות שיווק",
+  "senderPhone": "972549696673",
+  "senderLid": "224686986293269",
+  "senderName": "Avi Cohen",
+  "recipientPhone": "972507677613",
+  "body": "כרמן בדקי דופק"
+}
+```
+
+### דוגמה — הודעה יוצאת מהמכשיר
+```json
+{
+  "instanceId": "YwIn7GY3Ul3OAxXG",
+  "messageId": "3EB0ZZZZZZZZZZZZZZZZ",
+  "timestamp": 1781867500,
+  "direction": "outbound",
+  "chatType": "private",
+  "chatId": "972549696673@c.us",
+  "senderPhone": "972507677613",
+  "recipientPhone": "972549696673",
+  "body": "ההודעה ששלח המכשיר"
+}
+```
+
+## דרישות מפתח
+1. **LID resolution חובה** — לבצע lookup מ-LID למספר טלפון אמיתי לפני שליחת ה-webhook (WhatsApp Web/Multi-Device Protocol מאפשר זאת דרך contact sync). אם resolve נכשל — לשלוח את ה-LID ב-`senderLid` **וגם** לשלוח ניסיון כל-שהוא ב-`senderPhone` (או null מפורש), אבל לא להשמיט את השדה.
+2. **E.164 ללא `+`** — תמיד פורמט אחיד (`972549696673`), לא `+972...` ולא `0549696673`.
+3. **`direction` מפורש** במקום הסתמכות רק על `fromMe`.
+4. **שדות בקבוצה** — `groupId` ו-`senderPhone` חייבים להיות נפרדים. היום `from` מבלבל בין השניים.
+5. **`messageId` יציב** — אותו ID לאותה הודעה גם אם ה-webhook נשלח שוב (retry).
+6. **תאימות לאחור** — לשמור את `from`/`fromMe` הקיימים לתקופת מעבר, אך להוסיף את השדות החדשים מיידית.
+
+## מה זה פותר אצלנו
+- Carmen תזהה מי השולח האמיתי → תפעיל whitelist/scoping נכון.
+- שיוך משימות לקמפיינר לפי `senderPhone` יעבוד.
+- Dedup נקי לפי `messageId`.
+- תמיכה תקינה בקבוצות (להבדיל בין שולח לקבוצה).
+- אפשר לפצל בין מכשירים מרובים לפי `recipientPhone`.
+
+## אישור
+לאשר את המפרט, להוסיף/לגרוע שדות, או שאני אכין גרסת אנגלית של המסמך לשליחה לצוות Manus?
