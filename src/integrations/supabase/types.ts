@@ -2071,6 +2071,60 @@ export type Database = {
           },
         ]
       }
+      campaign_alerts: {
+        Row: {
+          acknowledged_at: string | null
+          acknowledged_by: string | null
+          ad_account_id: string | null
+          alert_type: string
+          campaign_id: string
+          campaign_name: string | null
+          client_id: string | null
+          created_at: string
+          details: Json | null
+          id: string
+          notified_at: string | null
+          resolved_at: string | null
+          severity: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          ad_account_id?: string | null
+          alert_type: string
+          campaign_id: string
+          campaign_name?: string | null
+          client_id?: string | null
+          created_at?: string
+          details?: Json | null
+          id?: string
+          notified_at?: string | null
+          resolved_at?: string | null
+          severity?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          ad_account_id?: string | null
+          alert_type?: string
+          campaign_id?: string
+          campaign_name?: string | null
+          client_id?: string | null
+          created_at?: string
+          details?: Json | null
+          id?: string
+          notified_at?: string | null
+          resolved_at?: string | null
+          severity?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       campaigner_agencies: {
         Row: {
           agency_id: string

@@ -52,6 +52,11 @@ const ALL_TOOLS = [
   { name: 'get_facebook_campaign_data', description: 'שליפת נתוני קמפיינים מפייסבוק לצורך ניתוח', parameters: { type: 'object', properties: { client_id: { type: 'string' }, days: { type: 'integer', description: 'מספר ימים אחורה (ברירת מחדל 30)' } } } },
   { name: 'list_facebook_campaigns', description: 'רשימת קמפיינים פעילים/מושבתים של לקוח עם campaign_id, שם וסטטוס. השתמש כדי למצוא את ה-campaign_id לפני toggle.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, name_search: { type: 'string', description: 'חיפוש חלקי בשם הקמפיין' } }, required: ['client_id'] } },
   { name: 'toggle_facebook_campaign', description: 'הפעלה (ACTIVE) או השהיה (PAUSED) של קמפיין פייסבוק לפי campaign_id. דורש אישור מפורש של המשתמש לפני הפעלה — אל תקרא לכלי לפני שהמשתמש אישר את הפעולה הספציפית.', parameters: { type: 'object', properties: { campaign_id: { type: 'string', description: 'Facebook campaign ID (מספרי, לא שם)' }, status: { type: 'string', enum: ['ACTIVE', 'PAUSED'] }, confirmed: { type: 'boolean', description: 'חובה true — מאשר שהמשתמש אישר במפורש את הפעולה' } }, required: ['campaign_id', 'status', 'confirmed'] } },
+  { name: 'analyze_facebook_campaign', description: 'ניתוח עומק של קמפיין פייסבוק יחיד: השוואת היום מול 7 ימים מול 30 ימים, מטריקות (CPL, CTR, frequency, spend), זיהוי חריגות והמלצות לפעולה. השתמש לפני שמציעים פעולה כדי לבסס המלצה.', parameters: { type: 'object', properties: { campaign_id: { type: 'string' } }, required: ['campaign_id'] } },
+  { name: 'update_facebook_budget', description: 'עדכון תקציב יומי או כולל לקמפיין פייסבוק. דורש אישור מפורש של המשתמש (confirmed=true). חריגה של מעל 20% או מעל 500 ש"ח דורשת התרעה מפורשת.', parameters: { type: 'object', properties: { campaign_id: { type: 'string' }, daily_budget: { type: 'number', description: 'תקציב יומי בשקלים (לא במיקרו-יחידות)' }, lifetime_budget: { type: 'number' }, confirmed: { type: 'boolean' } }, required: ['campaign_id', 'confirmed'] } },
+  { name: 'duplicate_facebook_campaign', description: 'שכפול קמפיין פייסבוק (במצב PAUSED) לצורך ניסיון בקהל/יצירה אחרים. דורש אישור.', parameters: { type: 'object', properties: { campaign_id: { type: 'string' }, name_suffix: { type: 'string' }, confirmed: { type: 'boolean' } }, required: ['campaign_id', 'confirmed'] } },
+  { name: 'get_campaign_alerts', description: 'שליפת התראות פתוחות על קמפיינים (קמפיין נעצר, מודעה לא מאושרת, CPL חורג, frequency גבוה). השתמש בתחילת בדיקת דופק או כשהמשתמש שואל על מצב הקמפיינים.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, severity: { type: 'string', enum: ['info', 'warning', 'critical'] }, only_open: { type: 'boolean', description: 'ברירת מחדל true' } } } },
+  { name: 'acknowledge_campaign_alert', description: 'סימון התראת קמפיין כטופלה.', parameters: { type: 'object', properties: { alert_id: { type: 'string' } }, required: ['alert_id'] } },
   { name: 'analyze_campaign_performance', description: 'ניתוח ביצועי קמפיינים מטבלאות CRM. מזהה טבלאות קמפיין לפי שדות (spend+campaign_name) ולא לפי שם — תופס גם טבלאות בעברית. מחזיר coverage_summary (כמה לקוחות מסונכרנים מתוך הסקופ), synced_clients (עם spend/CPL/שינוי 7 מול 30 יום) ו-not_connected_clients (לקוחות שאין להם טבלת קמפיין). חובה לדווח על שני הסלוטים, ולא רק על מי שיש לו נתונים.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה לקוח ספציפי' }, agency_id: { type: 'string', description: 'סינון לסוכנות מסוימת' }, agency_name: { type: 'string', description: 'סינון לפי שם סוכנות (case-insensitive, חיפוש חלקי)' } } } },
   { name: 'update_client_health', description: 'עדכון מצב בריאות לקוח: מעדכן mood_status בטבלת clients ויוצר רשומה ב-communication_logs. השתמש בכלי הזה כדי להדליק דגל על לקוח כשמזהים בעיה (התייקרות, ירידה בביצועים).', parameters: { type: 'object', properties: { client_id: { type: 'string' }, mood_status: { type: 'string', enum: ['happy', 'wavering', 'churn_risk'], description: 'מצב הלקוח: happy=תקין, wavering=מתלבט, churn_risk=סיכון נטישה' }, communication_status: { type: 'string', enum: ['normal', 'sensitive', 'complaint'], description: 'סטטוס תקשורת לרשומת communication_logs' }, note: { type: 'string', description: 'הערה/סיכום — מה הבעיה שזוהתה' } }, required: ['client_id', 'mood_status', 'note'] } },
   // CLIENTS - full CRUD
@@ -647,6 +652,64 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const json = await res.json().catch(() => ({}))
       if (!res.ok) return { error: 'toggle_failed', details: json }
       return { success: true, campaign_id: args.campaign_id, new_status: args.status, fb: json }
+    }
+    case 'analyze_facebook_campaign': {
+      const targetTenantId = accessibleTenantIds[0]
+      const fnUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/fb-campaign-analyze`
+      const res = await fetch(fnUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
+        body: JSON.stringify({ tenant_id: targetTenantId, campaign_id: args.campaign_id }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) return { error: 'analyze_failed', details: json }
+      return json
+    }
+    case 'update_facebook_budget':
+    case 'duplicate_facebook_campaign': {
+      if (args.confirmed !== true) {
+        return { error: 'not_confirmed', message: 'אישור משתמש מפורש נדרש (confirmed=true).' }
+      }
+      const targetTenantId = accessibleTenantIds[0]
+      const action = name === 'update_facebook_budget' ? 'update_budget' : 'duplicate'
+      const fnUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/fb-campaign-control`
+      const res = await fetch(fnUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
+        body: JSON.stringify({
+          tenant_id: targetTenantId,
+          action,
+          campaign_id: args.campaign_id,
+          daily_budget: args.daily_budget,
+          lifetime_budget: args.lifetime_budget,
+          name_suffix: args.name_suffix,
+          confirmed: true,
+        }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) return { error: `${action}_failed`, details: json }
+      return json
+    }
+    case 'get_campaign_alerts': {
+      let q = supabase.from('campaign_alerts')
+        .select('id, tenant_id, client_id, campaign_id, campaign_name, alert_type, severity, details, created_at, acknowledged_at, resolved_at')
+        .in('tenant_id', accessibleTenantIds)
+        .order('created_at', { ascending: false })
+        .limit(100)
+      if (args.client_id) q = q.eq('client_id', args.client_id)
+      if (args.severity) q = q.eq('severity', args.severity)
+      if (args.only_open !== false) q = q.is('resolved_at', null).is('acknowledged_at', null)
+      const { data, error } = await q
+      if (error) return { error: error.message }
+      return { count: data?.length || 0, alerts: data || [] }
+    }
+    case 'acknowledge_campaign_alert': {
+      const { error } = await supabase.from('campaign_alerts')
+        .update({ acknowledged_at: new Date().toISOString() })
+        .eq('id', args.alert_id)
+        .in('tenant_id', accessibleTenantIds)
+      if (error) return { error: error.message }
+      return { success: true, alert_id: args.alert_id }
     }
     case 'analyze_campaign_performance': {
       // 1. Resolve scope -> list of target clients (active+onboarding)
