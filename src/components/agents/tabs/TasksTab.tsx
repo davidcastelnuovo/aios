@@ -10,12 +10,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { ListTodo, Plus, Play, Trash2, Clock, CheckCircle2, XCircle, Loader2, Repeat, Calendar } from "lucide-react";
+import { ListTodo, Plus, Play, Trash2, Clock, CheckCircle2, XCircle, Loader2, Repeat, Calendar, Bell, Send, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
 import { he } from "date-fns/locale";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 const STATUS_META: Record<string, { label: string; icon: any; color: string }> = {
   pending: { label: "ממתין", icon: Clock, color: "text-muted-foreground" },
