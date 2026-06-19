@@ -275,7 +275,36 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       }
       const { data, error } = await supabase.from('agent_tasks').insert(taskData).select('id, title, status, schedule_type, scheduled_at').single()
       if (error) throw error
-      return { agent_task_id: data.id, title: data.title, status: data.status, schedule_type: data.schedule_type, scheduled_at: data.scheduled_at, reminder_phone: looksLikeReminder ? callerPhone : null }
+      const scheduledIl = data.scheduled_at
+        ? new Date(data.scheduled_at).toLocaleString('he-IL', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jerusalem' })
+        : null
+      return { agent_task_id: data.id, title: data.title, status: data.status, schedule_type: data.schedule_type, scheduled_at_utc: data.scheduled_at, scheduled_at_israel: scheduledIl, reminder_phone: looksLikeReminder ? callerPhone : null, note: scheduledIl ? `המשימה תוזמנה ל-${scheduledIl} (שעון ישראל). השיבי למשתמש את הזמן בשעון ישראל בלבד.` : 'נשמר ללא תזמון.' }
+    }
+    case 'list_my_agent_tasks': {
+      let q = supabase.from('agent_tasks')
+        .select('id, title, description, status, schedule_type, scheduled_at, last_run, run_count, result, created_at')
+        .eq('tenant_id', tenantId)
+        .order('created_at', { ascending: false })
+        .limit(args.limit || 10)
+      if (agentId) q = q.eq('agent_id', agentId)
+      if (args.status) q = q.eq('status', args.status)
+      const { data, error } = await q
+      if (error) throw error
+      const fmtIl = (iso: string | null) => iso ? new Date(iso).toLocaleString('he-IL', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jerusalem' }) : null
+      return {
+        count: data.length,
+        tasks: data.map((t: any) => ({
+          id: t.id,
+          title: t.title,
+          status: t.status,
+          schedule_type: t.schedule_type,
+          scheduled_at_israel: fmtIl(t.scheduled_at),
+          last_run_israel: fmtIl(t.last_run),
+          run_count: t.run_count || 0,
+          last_output: t.result?.last_output ? String(t.result.last_output).slice(0, 200) : (t.result?.error ? `שגיאה: ${String(t.result.error).slice(0,200)}` : null),
+          description_preview: t.description ? String(t.description).slice(0, 120) : null,
+        })),
+      }
     }
     case 'search_tasks': {
       let query = supabase.from('tasks').select('id, title, status, priority, due_date, due_time, notes, duration_minutes, clients(name), leads(company_name), campaigners(full_name)')
