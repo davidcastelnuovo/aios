@@ -2148,9 +2148,23 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
 
     // 4. Filter tools
     const allowedTools = (agent.allowed_tools || []) as string[]
-    const filteredTools = allowedTools.length > 0
+    let filteredTools = allowedTools.length > 0
       ? ALL_TOOLS.filter(t => allowedTools.includes(t.name))
       : ALL_TOOLS
+
+    // 4a. Surface-based delegation guard.
+    // - On AIOS: hide delegate_to_subagent unless the user explicitly asked for background work.
+    //   This prevents Carmen from answering "I'm working in the background" to ordinary "check report"
+    //   prompts and forces direct execution + a real answer in the same conversation turn.
+    // - On 'task' surface (a subagent itself running via run-agent-task): hide delegation tools entirely
+    //   so a subagent can't recursively spawn more subagents.
+    const cmd = (command_text || '').toString()
+    const userAskedBackground = /\b(ברקע|תמשיכ[יה]\s+לבד|background|אל\s+תחכ[יה]|תעדכנ[יה]\s+אחר[\s-]?כך|תרוצ[יה]\s+ברקע)\b/i.test(cmd)
+    if (surface === 'task') {
+      filteredTools = filteredTools.filter(t => t.name !== 'delegate_to_subagent' && t.name !== 'delegate_to_manus' && t.name !== 'delegate_to_github_agent')
+    } else if (surface === 'aios' && !userAskedBackground) {
+      filteredTools = filteredTools.filter(t => t.name !== 'delegate_to_subagent')
+    }
 
     const toolsForAPI = filteredTools.map(t => ({ type: 'function', function: t }))
 
