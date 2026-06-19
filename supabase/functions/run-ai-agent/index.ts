@@ -605,6 +605,49 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (error) throw error
       return { count: data?.length || 0, campaigns: data || [], period: `${daysBack} days` }
     }
+    case 'list_facebook_campaigns': {
+      let q = supabase
+        .from('facebook_insights')
+        .select('campaign_id, campaign_name, campaign_status, date, spend')
+        .in('tenant_id', accessibleTenantIds)
+        .eq('client_id', args.client_id)
+        .order('date', { ascending: false })
+        .limit(500)
+      if (args.name_search) q = q.ilike('campaign_name', `%${args.name_search}%`)
+      const { data, error } = await q
+      if (error) throw error
+      // Dedup by campaign_id, keep most recent status
+      const map = new Map<string, any>()
+      for (const r of (data || [])) {
+        if (!r.campaign_id) continue
+        if (!map.has(r.campaign_id)) {
+          map.set(r.campaign_id, { campaign_id: r.campaign_id, campaign_name: r.campaign_name, status: r.campaign_status, last_date: r.date })
+        }
+      }
+      return { count: map.size, campaigns: Array.from(map.values()) }
+    }
+    case 'toggle_facebook_campaign': {
+      if (args.confirmed !== true) {
+        return { error: 'not_confirmed', message: 'אישור משתמש מפורש נדרש. שאל את המשתמש לפני קריאה לכלי הזה ושלח confirmed=true רק אחרי שהוא אישר.' }
+      }
+      const targetTenantId = accessibleTenantIds[0]
+      const fnUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/toggle-facebook-campaign`
+      const res = await fetch(fnUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        },
+        body: JSON.stringify({
+          tenant_id: targetTenantId,
+          campaign_id: args.campaign_id,
+          status: args.status,
+        }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) return { error: 'toggle_failed', details: json }
+      return { success: true, campaign_id: args.campaign_id, new_status: args.status, fb: json }
+    }
     case 'analyze_campaign_performance': {
       // 1. Resolve scope -> list of target clients (active+onboarding)
       let agencyIdsFilter: string[] | null = null
