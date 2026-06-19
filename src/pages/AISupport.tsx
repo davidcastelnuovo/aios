@@ -33,6 +33,8 @@ interface Conversation {
 
 export default function AISupport() {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
+  const { tenantId } = useCurrentTenant();
+
   const [input, setInput] = useState("");
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
