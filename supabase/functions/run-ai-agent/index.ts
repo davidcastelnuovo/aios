@@ -1010,7 +1010,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const cat = args.category || 'general'
       const { data, error } = await supabase.from('ai_memory').upsert({
         tenant_id: tenantId, user_id: userId || 'system', key: args.key, content: args.content, category: cat,
-      }, { onConflict: 'tenant_id,user_id,key' }).select('key, category').single()
+      }, { onConflict: 'user_id,tenant_id,category,key' }).select('key, category').single()
       if (error) throw error
       // Mirror to agent_memory (Hermes FTS layer) for cross-conversation recall
       const importanceMap: Record<string, number> = {
@@ -2160,10 +2160,19 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     //   so a subagent can't recursively spawn more subagents.
     const cmd = (command_text || '').toString()
     const userAskedBackground = /\b(ברקע|תמשיכ[יה]\s+לבד|background|אל\s+תחכ[יה]|תעדכנ[יה]\s+אחר[\s-]?כך|תרוצ[יה]\s+ברקע)\b/i.test(cmd)
+    const userAskedManus = /\b(manus|מנוס|מאנוס|מנואס)\b/i.test(cmd)
     if (surface === 'task') {
       filteredTools = filteredTools.filter(t => t.name !== 'delegate_to_subagent' && t.name !== 'delegate_to_manus' && t.name !== 'delegate_to_github_agent')
-    } else if (surface === 'aios' && !userAskedBackground) {
-      filteredTools = filteredTools.filter(t => t.name !== 'delegate_to_subagent')
+    } else if (surface === 'aios') {
+      if (!userAskedBackground) {
+        filteredTools = filteredTools.filter(t => t.name !== 'delegate_to_subagent')
+      }
+      if (!userAskedManus) {
+        // Manus is an external long-running agent that requires a working API key.
+        // Hide it by default on AIOS so Carmen uses internal tools (analyze_campaign_performance etc.)
+        // for ordinary requests like "בדיקת דופק" / "בדיקת דוח" instead of returning Unauthorized.
+        filteredTools = filteredTools.filter(t => t.name !== 'delegate_to_manus')
+      }
     }
 
     const toolsForAPI = filteredTools.map(t => ({ type: 'function', function: t }))
