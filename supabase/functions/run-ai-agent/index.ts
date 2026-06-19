@@ -481,99 +481,150 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return { count: data?.length || 0, campaigns: data || [], period: `${daysBack} days` }
     }
     case 'analyze_campaign_performance': {
-      // Fetch all Facebook CRM tables for this tenant
-      const { data: crmTables, error: tablesErr } = await supabase
-        .from('crm_tables')
-        .select('id, client_id, slug, name')
-        .in('tenant_id', accessibleTenantIds)
-        .ilike('slug', '%facebook%')
-      if (tablesErr) throw tablesErr
-      if (!crmTables || crmTables.length === 0) {
-        return { message: 'לא נמצאו טבלאות קמפיינים מסונכרנות', clients: [] }
+      // 1. Resolve scope -> list of target clients (active+onboarding)
+      let agencyIdsFilter: string[] | null = null
+      let agencyNameLabel: string | null = null
+      if (args.agency_id) {
+        agencyIdsFilter = [args.agency_id]
+      } else if (args.agency_name) {
+        const { data: ags } = await supabase
+          .from('agencies').select('id, name')
+          .in('tenant_id', accessibleTenantIds)
+          .ilike('name', `%${args.agency_name}%`)
+        agencyIdsFilter = (ags || []).map((a: any) => a.id)
+        agencyNameLabel = (ags || []).map((a: any) => a.name).join(', ') || args.agency_name
+        if (agencyIdsFilter.length === 0) {
+          return { scope: { agency_name: args.agency_name }, coverage_summary: { synced: 0, not_connected: 0 }, synced_clients: [], not_connected_clients: [], note: `no agency matched "${args.agency_name}"` }
+        }
       }
 
-      // Filter to specific client if requested
-      const tables = args.client_id 
-        ? crmTables.filter((t: any) => t.client_id === args.client_id)
-        : crmTables
+      let clientsQuery = supabase
+        .from('clients')
+        .select('id, name, agency_id, agencies(name)')
+        .in('tenant_id', accessibleTenantIds)
+        .in('status', ['active', 'onboarding'])
+        .order('name')
+      if (args.client_id) clientsQuery = clientsQuery.eq('id', args.client_id)
+      if (agencyIdsFilter) clientsQuery = clientsQuery.in('agency_id', agencyIdsFilter)
+      const { data: targetClients, error: clientsErr } = await clientsQuery
+      if (clientsErr) throw clientsErr
 
+      const clientIds = (targetClients || []).map((c: any) => c.id)
+      if (clientIds.length === 0) {
+        return { scope: { agency_name: agencyNameLabel, total_active_clients: 0 }, coverage_summary: { synced: 0, not_connected: 0 }, synced_clients: [], not_connected_clients: [] }
+      }
+
+      // 2. Find campaign tables by SCHEMA (spend + campaign_name/id), not by slug
+      const { data: campaignTables, error: rpcErr } = await supabase
+        .rpc('find_campaign_tables', { p_client_ids: clientIds })
+      if (rpcErr) throw rpcErr
+
+      const tablesByClient = new Map<string, any[]>()
+      for (const t of (campaignTables || [])) {
+        const arr = tablesByClient.get(t.client_id) || []
+        arr.push(t)
+        tablesByClient.set(t.client_id, arr)
+      }
+
+      // 3. Compute metrics for each client that has tables
       const now = new Date()
       const d7 = new Date(now); d7.setDate(d7.getDate() - 7)
       const d30 = new Date(now); d30.setDate(d30.getDate() - 30)
       const d7Str = d7.toISOString().split('T')[0]
       const d30Str = d30.toISOString().split('T')[0]
 
-      const results: any[] = []
-      for (const table of tables) {
-        // Fetch last 30 days of records
+      const synced_clients: any[] = []
+      const not_connected_clients: any[] = []
+
+      for (const client of (targetClients || [])) {
+        const tables = tablesByClient.get(client.id) || []
+        if (tables.length === 0) {
+          not_connected_clients.push({ client_id: client.id, client_name: client.name, reason: 'no_campaign_table' })
+          continue
+        }
+
+        const tableIds = tables.map((t: any) => t.table_id)
         const { data: records } = await supabase
-          .from('crm_records')
-          .select('data')
-          .eq('table_id', table.id)
+          .from('crm_records').select('data')
+          .in('table_id', tableIds)
           .in('tenant_id', accessibleTenantIds)
 
-        if (!records || records.length === 0) continue
+        if (!records || records.length === 0) {
+          not_connected_clients.push({ client_id: client.id, client_name: client.name, reason: 'empty_table' })
+          continue
+        }
 
-        // Split into 7d and 30d
-        const last7d = records.filter((r: any) => r.data?.date >= d7Str)
-        const last30d = records.filter((r: any) => r.data?.date >= d30Str)
+        const last30d = records.filter((r: any) => r.data?.date && r.data.date >= d30Str)
+        if (last30d.length === 0) {
+          not_connected_clients.push({ client_id: client.id, client_name: client.name, reason: 'no_recent_data_30d' })
+          continue
+        }
+
+        const last7d = last30d.filter((r: any) => r.data?.date >= d7Str)
         const older = last30d.filter((r: any) => r.data?.date < d7Str)
 
         const sum = (arr: any[], field: string) => arr.reduce((s: number, r: any) => s + (parseFloat(r.data?.[field]) || 0), 0)
-        
         const spend7 = sum(last7d, 'spend')
-        const spend_older = sum(older, 'spend')
+        const spendOlder = sum(older, 'spend')
         const leads7 = sum(last7d, 'leads')
-        const leads_older = sum(older, 'leads')
+        const leadsOlder = sum(older, 'leads')
 
-        // Calculate daily averages for comparison
         const days7 = Math.max(last7d.length, 1)
         const daysOlder = Math.max(older.length, 1)
-        
         const dailySpend7 = spend7 / days7
-        const dailySpendOlder = spend_older / daysOlder
+        const dailySpendOlder = spendOlder / daysOlder
         const spendChangePct = dailySpendOlder > 0 ? ((dailySpend7 - dailySpendOlder) / dailySpendOlder * 100) : null
 
         const cpl7 = leads7 > 0 ? spend7 / leads7 : null
-        const cplOlder = leads_older > 0 ? spend_older / leads_older : null
+        const cplOlder = leadsOlder > 0 ? spendOlder / leadsOlder : null
         const cplChangePct = cplOlder && cpl7 ? ((cpl7 - cplOlder) / cplOlder * 100) : null
 
-        // Get client name
-        const { data: clientData } = await supabase.from('clients').select('name').eq('id', table.client_id).single()
-
-        // Find the most recent updated_time across all campaigns for this client
-        const updatedTimes = records
-          .map((r: any) => r.data?.updated_time)
-          .filter((t: any) => t)
-          .sort()
-          .reverse()
-        const lastCampaignUpdate = updatedTimes.length > 0 ? updatedTimes[0] : null
+        const updatedTimes = last30d.map((r: any) => r.data?.updated_time).filter((t: any) => t).sort().reverse()
+        const lastCampaignUpdate = updatedTimes[0] || null
         const daysSinceLastCampaignTouch = lastCampaignUpdate
           ? Math.floor((now.getTime() - new Date(lastCampaignUpdate).getTime()) / (1000 * 60 * 60 * 24))
           : null
 
-        results.push({
-          client_id: table.client_id,
-          client_name: clientData?.name || table.name,
+        const lastDataDate = last30d.map((r: any) => r.data?.date).filter(Boolean).sort().reverse()[0] || null
+
+        synced_clients.push({
+          client_id: client.id,
+          client_name: client.name,
+          agency_name: client.agencies?.name ?? null,
           spend_7d: Math.round(spend7 * 100) / 100,
-          spend_30d: Math.round((spend7 + spend_older) * 100) / 100,
+          spend_30d: Math.round((spend7 + spendOlder) * 100) / 100,
           leads_7d: leads7,
-          leads_30d: leads7 + leads_older,
+          leads_30d: leads7 + leadsOlder,
           cpl_7d: cpl7 ? Math.round(cpl7 * 100) / 100 : null,
           cpl_30d_avg: cplOlder ? Math.round(cplOlder * 100) / 100 : null,
-          spend_change_pct: spendChangePct ? Math.round(spendChangePct * 10) / 10 : null,
-          cpl_change_pct: cplChangePct ? Math.round(cplChangePct * 10) / 10 : null,
-          records_7d: last7d.length,
-          records_30d: last30d.length,
+          spend_change_pct: spendChangePct !== null ? Math.round(spendChangePct * 10) / 10 : null,
+          cpl_change_pct: cplChangePct !== null ? Math.round(cplChangePct * 10) / 10 : null,
+          last_data_date: lastDataDate,
           last_campaign_update: lastCampaignUpdate,
           days_since_last_campaign_touch: daysSinceLastCampaignTouch,
           alert: spendChangePct !== null && spendChangePct > 15 ? '🔴 התייקרות' : (cplChangePct !== null && cplChangePct > 20 ? '🟡 עלייה בעלות לליד' : '🟢 תקין'),
         })
       }
 
-      // Sort by spend change (highest first = most alarming)
-      results.sort((a: any, b: any) => (b.spend_change_pct || 0) - (a.spend_change_pct || 0))
-      return { count: results.length, clients: results }
+      synced_clients.sort((a: any, b: any) => (b.spend_change_pct || 0) - (a.spend_change_pct || 0))
+
+      return {
+        scope: {
+          agency_name: agencyNameLabel,
+          agency_ids: agencyIdsFilter,
+          client_id: args.client_id || null,
+          total_active_clients: targetClients?.length || 0,
+        },
+        coverage_summary: {
+          synced: synced_clients.length,
+          not_connected: not_connected_clients.length,
+        },
+        synced_clients,
+        not_connected_clients,
+        instructions_to_agent: not_connected_clients.length > 0
+          ? 'דווחי על שני הסלוטים: גם synced_clients וגם not_connected_clients. אסור לטעון "אין נתונים" כשיש synced_clients. עבור not_connected_clients הציעי למשתמש לפתוח משימת חיבור פייסבוק (אל תיצרי משימה ללא אישור).'
+          : 'כל הלקוחות בסקופ מסונכרנים. דווחי על synced_clients עם המספרים המדויקים בלבד.',
+      }
     }
     case 'update_client_health': {
       // Resolve an actor user for audit/update visibility even in background "system" runs
