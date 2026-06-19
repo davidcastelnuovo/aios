@@ -114,9 +114,11 @@ ${uiMode === 'aios' ? `📊 **חשוב לגבי תצוגת נתונים (display
 
 🧠 **חשוב לגבי זיכרון:**
 - כשהמשתמש מספר לך העדפות, שמות פרויקטים, הוראות חוזרות, או מידע חשוב — **שמור אותם אוטומטית** באמצעות save_memory
-- קטגוריות מומלצות: "preferences" (העדפות), "projects" (פרויקטים), "clients" (לקוחות), "workflows" (תהליכים), "personal" (אישי)
+- קטגוריות מומלצות: "preferences" (העדפות), "projects" (פרויקטים), "clients" (לקוחות), "workflows" (תהליכים), "personal" (אישי), "instructions" (הוראות קבועות)
+- **טריגרים בעברית** "תזכרי / זכרי / שמרי / מעכשיו / תמיד / מהיום והלאה" — חובה לקרוא ל-\`save_memory\` עם \`category='instructions'\`, \`key\` תיאורי קצר באנגלית (לדוגמה: \`pulse_check_format\`), ו-\`content\` שמכיל את ההוראה המלאה כפי שנאמרה. אחרי שמירה, אמור: "שמרתי. מעכשיו אפעל ככה."
 - אל תשמור מידע טריוויאלי — רק דברים שיעזרו לך בשיחות עתידיות
 - כש-key כבר קיים, הוא יתעדכן אוטומטית (UPSERT)
+- אסור לומר "ניסיתי לשמור ולא הצלחתי" אלא אם \`save_memory\` באמת החזיר שגיאה — במקרה כזה דווח את השגיאה המדויקת.
 
 💬 **הנחיות תקשורת:**
 - דבר בעברית, בצורה ישירה ומקצועית
@@ -131,11 +133,12 @@ ${uiMode === 'aios' ? `📊 **חשוב לגבי תצוגת נתונים (display
   **חובה** להשתמש ב-**delegate_to_background** כדי להעביר את המשימה לריצה ברקע. המשימה תרוץ גם אם המשתמש סוגר את הצ׳אט.
   תיאור המשימה ב-task_description צריך לכלול הוראות מדויקות: "1. קרא ל-analyze_campaign_performance (ללא client_id, כדי לקבל את כל הלקוחות עם נתוני קמפיינים). 2. קרא ל-list_clients. 3. השווה: לכל לקוח מ-list_clients מצא את הרשומה התואמת ב-analyze_campaign_performance. 4. קרא ל-batch_update_client_health עם כל הלקוחות."
   אחרי קריאת delegate_to_background, אמור למשתמש: "התחלתי לעבוד על זה ברקע. תוכל לראות את ההתקדמות בזמן אמת, גם אם תסגור את החלון."
-- **בדיקת דופק — כללי דיווח קשיחים:**
+- **בדיקת דופק / מעבר דוח-דוח — כללי דיווח קשיחים:**
   • **חובה** להריץ \`analyze_campaign_performance\` (ללא client_id) **לפני** הסיכום — היא מחזירה את כל הלקוחות חוצי-סוכנויות וחוצי-tenants על בסיס תפקיד המשתמש (super_admin/owner רואים הכל, team_manager רק סוכנויות מנוהלות, campaigner רק לקוחותיו).
   • **אסור** לכתוב "לא זוהה נתון קמפיינים" לפני שווידאת ש-\`analyze_campaign_performance\` רץ והחזיר רשומה ללקוח. אם records_30d > 0 — יש נתונים והשתמש בהם.
-  • הדיווח: שורה אחת לכל לקוח במבנה **שם** — משפט סיכום אחד עם spend/leads/CPL ושינוי %. ללא חפירות, ללא חזרה על "אין נתונים" כשיש.
-  • בסוף הסיכום ציין מספר מדויק של לקוחות שנסרקו (count מ-list_clients) ולא ניסוח מעורפל כמו "כל הלקוחות".
+  • **כשהמשתמש מבקש "לעבור דוח-דוח" / "כל הדוחות" / "לקוח-לקוח"** — קרא ל-\`analyze_campaign_performance\` עם \`breakdown_by_platform=true\`. אז הפלט הוא \`reports[]\` — שורה לכל זוג לקוח+פלטפורמה. דווח שורה אחת לכל רשומה במבנה: \`<שם לקוח> · <פלטפורמה>: ספנד 7י׳ ₪X | לידים Y | CPL ₪Z | טריות N ימים\`. אם \`freshness_days > 2\` הוסף "⚠️ דוח לא מסונכרן".
+  • הדיווח הרגיל (ללא breakdown): שורה אחת לכל לקוח במבנה **שם** — משפט סיכום אחד עם spend/leads/CPL ושינוי %. ללא חפירות, ללא חזרה על "אין נתונים" כשיש.
+  • בסוף הסיכום ציין מספר מדויק של לקוחות/דוחות שנסרקו ולא ניסוח מעורפל כמו "כל הלקוחות".
 
 
 📋 **מיפוי סטטוסי תקשורת (עברית ↔ API):**
@@ -1613,8 +1616,11 @@ async function executeTool(
         }
 
         // Restrict to tables tied to clients the caller is allowed to see.
-        const candidateTables = toolCall.args.client_id
-          ? crmTables.filter((t: any) => t.client_id === toolCall.args.client_id)
+        const requestedClientIds: string[] | null = Array.isArray(toolCall.args.client_ids) && toolCall.args.client_ids.length > 0
+          ? toolCall.args.client_ids
+          : (toolCall.args.client_id ? [toolCall.args.client_id] : null);
+        const candidateTables = requestedClientIds
+          ? crmTables.filter((t: any) => t.client_id && requestedClientIds.includes(t.client_id))
           : crmTables;
 
         const tableClientIds = Array.from(new Set(candidateTables.map((t: any) => t.client_id).filter(Boolean)));
@@ -1678,13 +1684,23 @@ async function executeTool(
           return { spend, leads, date, updated_time };
         };
 
-        // Aggregate per client across all of their ad tables.
+        // Aggregate per client across all of their ad tables, AND per client+platform
+        // (so we can emit one row per "report" when breakdown_by_platform=true).
+        type Bucket = {
+          rows7: any[]; rowsOlder: any[]; allRows: any[];
+        };
+        const newBucket = (): Bucket => ({ rows7: [], rowsOlder: [], allRows: [] });
+
         const perClient: Record<string, {
           client_id: string;
           tables: number;
           platforms: Set<string>;
-          rows7: any[]; rowsOlder: any[]; allRows: any[];
-        }> = {};
+        } & Bucket> = {};
+        const perReport: Record<string, {
+          client_id: string;
+          platform: string;
+          tables: number;
+        } & Bucket> = {};
 
         for (const table of tables) {
           if (!table.client_id) continue;
@@ -1697,18 +1713,29 @@ async function executeTool(
           if (!records || records.length === 0) continue;
 
           const norm = records.map((r: any) => normalize(r, table.integration_type));
-          const bucket = perClient[table.client_id] ||= {
+          const cb = perClient[table.client_id] ||= {
             client_id: table.client_id,
             tables: 0,
             platforms: new Set<string>(),
-            rows7: [], rowsOlder: [], allRows: [],
+            ...newBucket(),
           };
-          bucket.tables += 1;
-          bucket.platforms.add(table.integration_type);
+          cb.tables += 1;
+          cb.platforms.add(table.integration_type);
+
+          const rkey = `${table.client_id}::${table.integration_type}`;
+          const rb = perReport[rkey] ||= {
+            client_id: table.client_id,
+            platform: table.integration_type,
+            tables: 0,
+            ...newBucket(),
+          };
+          rb.tables += 1;
+
           for (const n of norm) {
-            bucket.allRows.push(n);
-            if (n.date && n.date >= d7Str) bucket.rows7.push(n);
-            else if (n.date && n.date >= d30Str) bucket.rowsOlder.push(n);
+            cb.allRows.push(n);
+            rb.allRows.push(n);
+            if (n.date && n.date >= d7Str) { cb.rows7.push(n); rb.rows7.push(n); }
+            else if (n.date && n.date >= d30Str) { cb.rowsOlder.push(n); rb.rowsOlder.push(n); }
           }
         }
 
@@ -1726,67 +1753,117 @@ async function executeTool(
         const sumField = (arr: any[], field: 'spend' | 'leads') =>
           arr.reduce((s, r) => s + (Number(r[field]) || 0), 0);
 
-        const campResults: any[] = [];
-        for (const cid of clientIds) {
-          const b = perClient[cid];
+        const computeMetrics = (b: Bucket) => {
           const spend7 = sumField(b.rows7, 'spend');
           const spendOlder = sumField(b.rowsOlder, 'spend');
           const leads7 = sumField(b.rows7, 'leads');
           const leadsOlder = sumField(b.rowsOlder, 'leads');
-
           const days7 = Math.max(b.rows7.length, 1);
           const daysOlder = Math.max(b.rowsOlder.length, 1);
           const dailySpend7 = spend7 / days7;
           const dailySpendOlder = spendOlder / daysOlder;
           const spendChangePct = dailySpendOlder > 0 ? ((dailySpend7 - dailySpendOlder) / dailySpendOlder * 100) : null;
-
           const cpl7 = leads7 > 0 ? spend7 / leads7 : null;
           const cplOlder = leadsOlder > 0 ? spendOlder / leadsOlder : null;
           const cplChangePct = cplOlder && cpl7 ? ((cpl7 - cplOlder) / cplOlder * 100) : null;
-
-          const updatedTimes = b.allRows
-            .map((r) => r.updated_time)
-            .filter((t) => t)
-            .sort()
-            .reverse();
+          const updatedTimes = b.allRows.map((r) => r.updated_time).filter((t) => t).sort().reverse();
           const lastCampaignUpdate = updatedTimes.length > 0 ? updatedTimes[0] : null;
           const daysSinceLastCampaignTouch = lastCampaignUpdate
             ? Math.floor((now.getTime() - new Date(lastCampaignUpdate).getTime()) / (1000 * 60 * 60 * 24))
             : null;
+          const datesSorted = b.allRows.map((r) => r.date).filter(Boolean).sort();
+          const lastDataDate = datesSorted.length > 0 ? datesSorted[datesSorted.length - 1] : null;
+          const freshnessDays = lastDataDate
+            ? Math.floor((now.getTime() - new Date(lastDataDate).getTime()) / (1000 * 60 * 60 * 24))
+            : null;
+          return {
+            spend7, spendOlder, leads7, leadsOlder,
+            spendChangePct, cpl7, cplOlder, cplChangePct,
+            lastCampaignUpdate, daysSinceLastCampaignTouch,
+            lastDataDate, freshnessDays,
+            rows7Len: b.rows7.length, rowsOlderLen: b.rowsOlder.length,
+          };
+        };
 
+        const breakdown = !!toolCall.args.breakdown_by_platform;
+        const campResults: any[] = [];
+        for (const cid of clientIds) {
+          const b = perClient[cid];
+          const m = computeMetrics(b);
           campResults.push({
             client_id: cid,
             client_name: nameById[cid] || '(לקוח ללא שם)',
             platforms: Array.from(b.platforms),
             tables: b.tables,
-            spend_7d: Math.round(spend7 * 100) / 100,
-            spend_30d: Math.round((spend7 + spendOlder) * 100) / 100,
-            leads_7d: leads7,
-            leads_30d: leads7 + leadsOlder,
-            cpl_7d: cpl7 ? Math.round(cpl7 * 100) / 100 : null,
-            cpl_30d_avg: cplOlder ? Math.round(cplOlder * 100) / 100 : null,
-            spend_change_pct: spendChangePct ? Math.round(spendChangePct * 10) / 10 : null,
-            cpl_change_pct: cplChangePct ? Math.round(cplChangePct * 10) / 10 : null,
-            records_7d: b.rows7.length,
-            records_30d: b.rows7.length + b.rowsOlder.length,
-            last_campaign_update: lastCampaignUpdate,
-            days_since_last_campaign_touch: daysSinceLastCampaignTouch,
-            alert: spendChangePct !== null && spendChangePct > 15
+            spend_7d: Math.round(m.spend7 * 100) / 100,
+            spend_30d: Math.round((m.spend7 + m.spendOlder) * 100) / 100,
+            leads_7d: m.leads7,
+            leads_30d: m.leads7 + m.leadsOlder,
+            cpl_7d: m.cpl7 ? Math.round(m.cpl7 * 100) / 100 : null,
+            cpl_30d_avg: m.cplOlder ? Math.round(m.cplOlder * 100) / 100 : null,
+            spend_change_pct: m.spendChangePct ? Math.round(m.spendChangePct * 10) / 10 : null,
+            cpl_change_pct: m.cplChangePct ? Math.round(m.cplChangePct * 10) / 10 : null,
+            records_7d: m.rows7Len,
+            records_30d: m.rows7Len + m.rowsOlderLen,
+            last_campaign_update: m.lastCampaignUpdate,
+            days_since_last_campaign_touch: m.daysSinceLastCampaignTouch,
+            last_data_date: m.lastDataDate,
+            freshness_days: m.freshnessDays,
+            alert: m.spendChangePct !== null && m.spendChangePct > 15
               ? '🔴 התייקרות'
-              : (cplChangePct !== null && cplChangePct > 20 ? '🟡 עלייה בעלות לליד' : '🟢 תקין'),
+              : (m.cplChangePct !== null && m.cplChangePct > 20 ? '🟡 עלייה בעלות לליד' : '🟢 תקין'),
+          });
+        }
+        campResults.sort((a: any, b: any) => (b.spend_change_pct || 0) - (a.spend_change_pct || 0));
+
+        const reportResults: any[] = [];
+        if (breakdown) {
+          for (const rkey of Object.keys(perReport)) {
+            const r = perReport[rkey];
+            const m = computeMetrics(r);
+            reportResults.push({
+              client_id: r.client_id,
+              client_name: nameById[r.client_id] || '(לקוח ללא שם)',
+              platform: r.platform,
+              tables: r.tables,
+              spend_7d: Math.round(m.spend7 * 100) / 100,
+              spend_30d: Math.round((m.spend7 + m.spendOlder) * 100) / 100,
+              leads_7d: m.leads7,
+              leads_30d: m.leads7 + m.leadsOlder,
+              cpl_7d: m.cpl7 ? Math.round(m.cpl7 * 100) / 100 : null,
+              cpl_30d_avg: m.cplOlder ? Math.round(m.cplOlder * 100) / 100 : null,
+              spend_change_pct: m.spendChangePct ? Math.round(m.spendChangePct * 10) / 10 : null,
+              cpl_change_pct: m.cplChangePct ? Math.round(m.cplChangePct * 10) / 10 : null,
+              records_7d: m.rows7Len,
+              records_30d: m.rows7Len + m.rowsOlderLen,
+              last_data_date: m.lastDataDate,
+              freshness_days: m.freshnessDays,
+              last_campaign_update: m.lastCampaignUpdate,
+              alert: (m.freshnessDays !== null && m.freshnessDays > 2)
+                ? '⚠️ דוח לא מסונכרן'
+                : (m.spendChangePct !== null && m.spendChangePct > 15
+                  ? '🔴 התייקרות'
+                  : (m.cplChangePct !== null && m.cplChangePct > 20 ? '🟡 עלייה בעלות לליד' : '🟢 תקין')),
+            });
+          }
+          reportResults.sort((a: any, b: any) => {
+            const an = a.client_name || ''; const bn = b.client_name || '';
+            if (an !== bn) return an.localeCompare(bn, 'he');
+            return (a.platform || '').localeCompare(b.platform || '');
           });
         }
 
-        campResults.sort((a: any, b: any) => (b.spend_change_pct || 0) - (a.spend_change_pct || 0));
         modifiedEntities.add('clients');
         return {
           success: true,
           result: {
             count: campResults.length,
+            reports_count: breakdown ? reportResults.length : undefined,
             scope: scope.role,
             accessible_tenants: scope.accessibleTenantIds.length,
             tables_scanned: tables.length,
             clients: campResults,
+            ...(breakdown ? { reports: reportResults } : {}),
           },
         };
       }
@@ -2691,7 +2768,7 @@ const tools = [
       parameters: {
         type: 'object',
         properties: {
-          category: { type: 'string', description: 'קטגוריה: preferences, projects, clients, workflows, personal', enum: ['preferences', 'projects', 'clients', 'workflows', 'personal'] },
+          category: { type: 'string', description: 'קטגוריה חופשית. מומלצים: preferences, projects, clients, workflows, personal, instructions. ניתן להשתמש בכל ערך טקסט.' },
           key: { type: 'string', description: 'מזהה ייחודי לפריט (לדוגמה: "default_priority", "project_x_details")' },
           content: { type: 'string', description: 'תוכן הזיכרון' },
         },
@@ -2707,7 +2784,7 @@ const tools = [
       parameters: {
         type: 'object',
         properties: {
-          category: { type: 'string', description: 'סינון לפי קטגוריה (אופציונלי)', enum: ['preferences', 'projects', 'clients', 'workflows', 'personal'] },
+          category: { type: 'string', description: 'סינון לפי קטגוריה (אופציונלי). למשל: instructions, preferences, workflows.' },
         },
       },
     },
@@ -2763,7 +2840,7 @@ const tools = [
   { type: 'function', function: { name: 'list_manus_tasks', description: 'הצגת רשימת משימות Manus AI', parameters: { type: 'object', properties: { limit: { type: 'integer' }, status: { type: 'string', enum: ['pending', 'running', 'completed', 'failed'] } } } } },
   { type: 'function', function: { name: 'get_manus_task_result', description: 'שליפת תוצאות של משימת Manus לפי מזהה', parameters: { type: 'object', properties: { taskId: { type: 'string', description: 'מזהה המשימה ב-Manus' } }, required: ['taskId'] } } },
   // === GROUP 5: CAMPAIGN ANALYSIS & HEALTH TOOLS ===
-  { type: 'function', function: { name: 'analyze_campaign_performance', description: 'ניתוח ביצועי קמפיינים מטבלאות CRM: משווה 7 ימים אחרונים מול 30 ימים עבור כל לקוח. מחזיר אחוזי שינוי בהוצאות, עלות לליד, ו-ROAS, וגם תאריך עדכון אחרון בקמפיין (last_campaign_update) ומספר ימים מאז (days_since_last_campaign_touch). השתמש בכלי הזה כדי לזהות התייקרויות, ירידות ביצועים, וקמפיינים שלא נגעו בהם.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה לקוח ספציפי (אופציונלי — ללא = כל הלקוחות)' } } } } },
+  { type: 'function', function: { name: 'analyze_campaign_performance', description: 'ניתוח ביצועי קמפיינים מטבלאות CRM (Meta, Google Ads, TikTok): משווה 7 ימים אחרונים מול 30 ימים. ברירת מחדל: שורה מצברת לכל לקוח. עם breakdown_by_platform=true: מחזיר reports[] עם שורה לכל זוג לקוח+פלטפורמה (לכל "דוח" בנפרד). השתמש ב-breakdown כשהמשתמש מבקש "לעבור דוח-דוח" או רוצה פירוט לפי פלטפורמה.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה לקוח ספציפי (אופציונלי)' }, client_ids: { type: 'array', items: { type: 'string' }, description: 'רשימת מזהי לקוחות לצמצום הסריקה (אופציונלי)' }, breakdown_by_platform: { type: 'boolean', description: 'true = שורה לכל לקוח×פלטפורמה (reports[]). false (ברירת מחדל) = שורה מצברת לכל לקוח (clients[]).' } } } } },
   { type: 'function', function: { name: 'update_client_health', description: 'עדכון מצב בריאות לקוח בודד: מעדכן mood_status בטבלת clients ויוצר רשומה ב-communication_logs. לעדכון מרובה של לקוחות — השתמשי ב-batch_update_client_health במקום!', parameters: { type: 'object', properties: { client_id: { type: 'string' }, mood_status: { type: 'string', enum: ['happy', 'wavering', 'churn_risk'], description: 'מצב הלקוח: happy=תקין (הכל בסדר), wavering=רגיש (צריך תשומת לב), churn_risk=תלונה (סיכון נטישה)' }, communication_status: { type: 'string', enum: ['normal', 'sensitive', 'complaint'], description: 'סטטוס תקשורת: normal=תקין, sensitive=רגיש, complaint=תלונה' }, note: { type: 'string', description: 'הערה/סיכום — מה הבעיה שזוהתה' } }, required: ['client_id', 'mood_status', 'note'] } } },
   { type: 'function', function: { name: 'batch_update_client_health', description: 'עדכון מצב בריאות של מספר לקוחות בבת אחת. **השתמשי בכלי הזה תמיד כשצריך לעדכן יותר מלקוח אחד** (למשל בדיקת דופק, עדכון דשבורד). מקבל מערך של עדכונים ומבצע את כולם בקריאה אחת.', parameters: { type: 'object', properties: { updates: { type: 'array', items: { type: 'object', properties: { client_id: { type: 'string' }, mood_status: { type: 'string', enum: ['happy', 'wavering', 'churn_risk'] }, communication_status: { type: 'string', enum: ['normal', 'sensitive', 'complaint'] }, note: { type: 'string' } }, required: ['client_id', 'mood_status', 'note'] }, description: 'מערך של עדכוני לקוחות' } }, required: ['updates'] } } },
   { type: 'function', function: { name: 'sync_meta_ads', description: 'סנכרון נתוני Meta Ads (פייסבוק) מטבלאות CRM. מפעיל סנכרון מול Meta Ads API עבור לקוח ספציפי או כל הלקוחות שיש להם טבלת meta_ads. השתמש בכלי הזה כשהמשתמש מבקש לסנכרן/לרענן נתוני פייסבוק.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה לקוח ספציפי (אופציונלי — ללא = כל הטבלאות)' }, client_name: { type: 'string', description: 'שם לקוח לחיפוש (אופציונלי)' } } } } },

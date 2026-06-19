@@ -1,66 +1,52 @@
-## הבעיה
+## הבעיות שאיתרתי
 
-מהצילום: כרמן מבצעת בדיקת דופק וכותבת "לא זוהה כרגע נתון קמפיינים" לכל לקוח. בדקתי את `ai-support-chat` ומצאתי שלושה כשלים שגורמים בדיוק לזה:
-
-### 1. `analyze_campaign_performance` — פילטר קמפיינים שגוי
-היום הקוד מחפש טבלאות עם:
+### 1. כרמן לא מצליחה לשמור הוראות בזיכרון
+ב-`save_memory` (קובץ `supabase/functions/ai-support-chat/index.ts`, שורה 2694) הקטגוריה מוגבלת ב-enum נוקשה:
 ```ts
-.ilike('slug', '%facebook%')
+enum: ['preferences','projects','clients','workflows','personal']
 ```
-זה מפספס:
-- `integration_type = 'google_ads'` (טבלאות Google Ads)
-- `integration_type = 'meta_ads'` (קמפיינים מ-Meta החדשים)
-- `facebook_ecommerce`
-- כל טבלה ש-slug שלה לא מכיל "facebook" (למשל "מטא-לקוח-X")
+אבל ה-Memory של הפרויקט מחייב את כרמן לשמור הוראות תחת `category=instructions` (טריגרים בעברית: "תזכרי/זכרי/שמרי/מעכשיו/תמיד"). הערך `instructions` **לא קיים ב-enum**, ולכן ה-AI Gateway דוחה את ה-tool call כ-`invalid enum value` — וכרמן עונה "ניסיתי לשמור אבל לא הצלחתי". זה גם הסיבה ש-`recall_memory` לא רואה אותן בשיחות הבאות.
 
-לכן רוב הלקוחות חוזרים ללא רשומות → "לא זוהה נתון".
-
-### 2. אין תמיכה ב-cross-tenant
-גם `list_clients` וגם `analyze_campaign_performance` מסננים רק `eq('tenant_id', tenantId)`. לקוחות של סוכנות DMM שמשותפת בין tenants דרך `agency_tenant_access` — הקמפיינים שלהם יושבים ב-`crm_tables` של ה-tenant המקור (לרוב MarketingCaptain), והשאילתה מסתכלת רק על ה-tenant הפעיל. זה גם הסיבה שהיא "לא רואה" קמפיינים אצל לקוחות DMM.
-
-### 3. אין סקופינג לפי תפקיד
-ה-Memory של הפרויקט מגדיר: campaigner→לקוחות active/onboarding שלו בלבד; team_manager→סוכנויות מנוהלות; owner/super_admin→כל ה-tenant + cross-tenant. בפועל `list_clients` מחזיר את כל ה-tenant ללא הבחנה. כדי שכרמן "באמת תעבור על כל הלקוחות" ותדע להבדיל סוכנויות/הרשאות — צריך להחיל סקופינג מובנה.
+### 2. כרמן לא עוברת דוח-דוח על קמפיינים
+היום `analyze_campaign_performance` מצברת לכל לקוח שורת סיכום אחת (`spend7/spend30/leads7/leads30`) ומחזירה הכל בקריאה אחת. כשיש הרבה לקוחות עם כמה פלטפורמות (Meta + Google + TikTok), המודל מקבל גוש אחד צפוף ובוחר לסכם — במקום לדווח שורה לכל "דוח" (טבלה/פלטפורמה לכל לקוח). אין לה גם דרך לבקש לקוח בודד עם פירוט לפי פלטפורמה.
 
 ---
 
-## מה אתקן
+## התיקונים
 
-### A. `analyze_campaign_performance` (supabase/functions/ai-support-chat/index.ts ~1441)
-- להחליף את `.ilike('slug', '%facebook%')` ב:
+### A. הרחבת `save_memory` (שורות 2691-2699 + 1252-1293)
+- להחליף את ה-enum הסגור ב:
   ```ts
-  .in('integration_type', ['facebook_insights','facebook_ecommerce','meta_ads','google_ads'])
+  category: { type: 'string', description: 'קטגוריה חופשית: preferences, projects, clients, workflows, personal, instructions, ...' }
   ```
-- להרחיב את שליפת הטבלאות לכל ה-tenants הנגישים (ה-tenant הפעיל + כל ה-`source_tenant_id` מ-`agency_tenant_access` עבור ה-tenant הזה).
-- בעת איסוף `crm_records`, לסנן לפי `table_id` (כבר מוגן ב-RLS), לא לפי `tenant_id`, כדי לתפוס נתונים cross-tenant.
-- לטפל בשמות שדות מנורמלים: לחלק מהאינטגרציות `spend`/`leads`, לאחרות `cost_micros`/`conversions` (Google Ads). למפות לשדה אחיד לפני החישוב.
+  (להסיר `enum`, להשאיר רק תיאור — מאפשר `instructions` וכל קטגוריה עתידית).
+- אותו תיקון ב-`recall_memory` ו-`delete_memory` (שורות 2710, 2723).
+- לעדכן את ה-system prompt (שורה ~115) שיציין במפורש: "טריגרים 'תזכרי/זכרי/שמרי/מעכשיו/תמיד' → קרא ל-`save_memory` עם `category='instructions'`".
+- ב-`buildSystemPrompt` כבר נטען `memoryContext` מ-`ai_memory` ללא סינון קטגוריה, אז הוראות חדשות יעלו אוטומטית בכל שיחה.
 
-### B. `list_clients` (~750)
-- להוסיף resolve של רשימת agency_ids משותפים מ-`agency_tenant_access` (כפי שעושה `useCrossTenantAgencyIds`).
-- לבנות `OR` filter: `tenant_id.eq.${tenantId},agency_id.in.(${sharedAgencyIds})`.
-- כך DMM תופיע במלואה בכל בדיקת דופק.
+### B. מעבר דוח-דוח ב-`analyze_campaign_performance` (שורות 1592-1730)
+- להוסיף ארגומנט אופציונלי `breakdown_by_platform: boolean` (ברירת מחדל `false` כדי לא לשבור את הדגלים הקיימים).
+- כשהוא `true` — להחזיר במקום `clients[]` עם בקט מצטבר, מערך `reports[]` שבו **כל פלטפורמה לכל לקוח היא רשומה נפרדת**:
+  ```
+  { client_id, client_name, platform: 'meta_ads', spend7, spend30, leads7, leads30, last_data_date, freshness_days }
+  ```
+- להוסיף ארגומנט `client_ids: string[]` (אופציונלי) כדי שכרמן תוכל לבקש קבוצת לקוחות ספציפית ולא להעמיס על תשובה אחת.
+- בעדכון תיאור הכלי ב-tool schema (~שורה 2890 בסביבה) לציין: "השתמש ב-`breakdown_by_platform=true` כדי לקבל שורה לכל דוח (לקוח × פלטפורמה) בנפרד".
 
-### C. סקופינג לפי תפקיד (helper משותף)
-פונקציה `resolveCarmenScope(supabase, userId, tenantId)` שמחזירה:
-- `role`: super_admin / owner / agency_owner / agency_manager / team_manager / campaigner
-- `clientFilter`: או `null` (= כל ה-tenant + cross-tenant) או `{ campaigner_id }` או `{ agency_ids: [...] }`
-- שימוש ב-`user_managed_agencies` עבור team_manager ו-`campaigner_agencies` עבור campaigner.
-
-`list_clients` ו-`analyze_campaign_performance` יקבלו את הסקופ אוטומטית. campaigner יראה רק לקוחות active/onboarding שלו (תואם ל-Memory).
-
-### D. פלט בדיקת דופק (system prompt)
-לחזק את ההנחיה הקיימת:
-- חובה להריץ `analyze_campaign_performance` לפני סיכום.
-- חובה לדווח בדיוק כמה לקוחות נסרקו (count מ-`list_clients`) ולא להמציא "עברתי על כולם".
-- שורה אחת לכל לקוח, משפט אחד.
-- אם רשימה > 5 לקוחות — חובה `delegate_to_background` (כבר קיים בכלל אבל צריך לחזק בהודעת המערכת לבדיקת דופק).
+### C. חיזוק ה-system prompt לבדיקת דוחות (שורות ~128-140)
+- להוסיף הוראה: "כשהמשתמש מבקש 'לעבור על כל הדוחות' או 'לקוח-לקוח' → קרא ל-`analyze_campaign_performance` עם `breakdown_by_platform=true`, ודווח **שורה לכל זוג לקוח+פלטפורמה**, פורמט: `<שם לקוח> · <פלטפורמה>: ספנד 7י׳ ₪X | לידים 7י׳ Y | טריות: Z ימים`. אם > 5 לקוחות → `delegate_to_background`."
+- גם להוסיף מפורשות שאם `freshness_days > 2` להבליט את זה כ"דוח לא מסונכרן".
 
 ---
 
 ## טכני קצר
 
 קבצים שישונו:
-- `supabase/functions/ai-support-chat/index.ts` — פילטר integration_type, cross-tenant tenants, סקופינג לפי תפקיד, חיזוק system prompt לבדיקת דופק.
+- `supabase/functions/ai-support-chat/index.ts` — בלבד.
+  - הסרת ה-enum מ-3 כלי הזיכרון.
+  - הוספת `breakdown_by_platform` ו-`client_ids` ל-`analyze_campaign_performance` + שינוי הפלט כשהדגל פעיל.
+  - חיזוק 2 קטעים ב-system prompt (זיכרון + מעבר דוח-דוח).
 
-ללא שינויי DB, ללא שינויי RLS — RLS כבר מאפשרת cross-tenant דרך agency_tenant_access; הקוד פשוט לא ניצל את זה.
+ללא שינוי DB, ללא שינוי RLS, ללא שינוי בכלים אחרים.
 
-מאשרת? אריץ את כל התיקונים בקובץ אחד.
+מאשר?
