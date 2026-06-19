@@ -206,7 +206,7 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
           },
           body: JSON.stringify({
             command_text: input,
-            tenant_id: tenantSlug ? undefined : undefined, // Resolved server-side via user session if absent
+            tenant_id: tenantId,
             surface: 'aios',
             stream: true,
             conversation_history: conversationHistory,
