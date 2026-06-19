@@ -43,8 +43,17 @@ Deno.serve(async (req: Request) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !user) throw new Error('Unauthorized');
+
+    // Internal calls from run-ai-agent come in with the service-role key as
+    // the bearer. service-role tokens have no user, so getUser() returns 401.
+    // Skip user auth for internal calls; identity is carried via tenant_id
+    // in the request body.
+    const isInternalCall = token === SUPABASE_SERVICE_ROLE_KEY;
+    if (!isInternalCall) {
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+      if (authError || !user) throw new Error('Unauthorized');
+    }
+
 
     const request = await req.json() as AgentRequest;
     const { action, tenant_id } = request;

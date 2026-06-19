@@ -1,50 +1,29 @@
-## למה כרמן בחרה ב-Manus, ולמה זה נכשל ב-Unauthorized
+## למה כרמן עכשיו קוראת ל-`delegate_to_github_agent` ושוב נכשלת
 
-### למה היא בחרה ב-Manus
-עד היום, הכלי `delegate_to_manus` היה תמיד זמין לכרמן (גם ב-AIOS). כש-בקשה הייתה "כבדה" (יותר מ-5 לקוחות, בדיקת דופק וכו'), המודל פשוט בחר במסלול "ברקע" — `delegate_to_manus` — כי זה הכלי היחיד שתואר כ-"רץ ברקע ולוקח דקות עד שעות". הוא לא היה צריך טריגר מילולי, רק היוריסטיקה של המודל.
+בצילום רואים: לבקשה "בדיקת דופק לכל הלקוחות בארגון" כרמן הריצה `delegate_to_github_agent` (וקודם לכן שיחזרה זיכרון), וזה נכשל ב-Unauthorized.
 
-בתיקון של היום הוספתי פילטר ב-`run-ai-agent` (שורות 2163–2175) שמסתיר את `delegate_to_manus` ב-AIOS אלא אם המשתמש כתב במפורש "manus / מנוס / ברקע". זה התיקון להתנהגות, אבל **זה לא מתקן את Manus עצמו**.
+זו בדיוק אותה תקלה שתיקנו אתמול ב-`manus-api`, אבל ב-edge function אחר:
+- `supabase/functions/github-agent/index.ts:44-47` עושה `supabase.auth.getUser(token)`.
+- `run-ai-agent` קוראת ל-`github-agent` עם `Bearer SUPABASE_SERVICE_ROLE_KEY`.
+- service-role JWT אין לו user → 401 Unauthorized.
 
-### למה ה-API מחזיר Unauthorized — זה באג, לא מפתח לא תקין
-מצאתי את שורש הבעיה (וזה היה ככה גם קודם, גם כשנדמה היה שזה "עבד"):
-
-1. `run-ai-agent/index.ts:448-455` קורא ל-`manus-api` עם:
-   ```
-   Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}
-   ```
-2. `manus-api/index.ts:17-28` מריץ:
-   ```
-   supabaseClient.auth.getUser()
-   ```
-   על ה-token. service-role JWT הוא לא משתמש אנושי — אין לו `sub`/user, אז `getUser()` מחזיר `Unauthorized` ו-`manus-api` עוצר עוד לפני שהוא בכלל מנסה לקרוא ל-`api.manus.ai`.
-
-כלומר: **מפתח ה-Manus API שלך תקין לחלוטין**. הוא בכלל לא נבדק. הקריאה נופלת בשלב האימות הפנימי בין שתי edge functions שלנו, לפני יציאה ל-Manus.
-
-עדות בלוגים: `[AGENT] Tool delegate_to_manus` מסתיים מיידית עם `Manus API error: {"error":"Unauthorized"}` — זו בדיוק ההודעה ש-`manus-api` מחזיר ב-401 משלו, לא ש-Manus החזירה.
-
-זה ככל הנראה היה שבור גם קודם — מה ש"עבד" בעבר היו קריאות מה-UI (עם JWT אמיתי של משתמש), לא מתוך כרמן.
+חוץ מזה, `delegate_to_github_agent` הוא בכלל הכלי הלא נכון לבקשה הזו — הוא מיועד לניתוח שגיאות קוד / תמיכה טכנית, לא לבדיקת דופק לקוחות. ברגע שחסמנו אתמול את `delegate_to_subagent` ואת `delegate_to_manus` ב-AIOS, המודל פשוט קפץ לכלי ה"ברקע" הבא ברשימה — `delegate_to_github_agent`. צריך לסגור גם אותו בנתיב הזה, ולחזק את ההנחיה ש"בדיקת דופק" חייב לרוץ ישירות עם `analyze_campaign_performance`.
 
 ### תוכנית תיקון
 
-**1. תקן את `manus-api` שיקבל קריאה פנימית עם service-role**
-ב-`supabase/functions/manus-api/index.ts`:
-- אם הכותרת `Authorization` היא ה-`SUPABASE_SERVICE_ROLE_KEY` (קריאה פנימית מ-`run-ai-agent`), דלג על `auth.getUser()` וקבל את הזהות מתוך הבקשה (ה-`tenantId` כבר נשלח). אחרת, התנהגות רגילה (אימות משתמש).
-- ככה `delegate_to_manus` יזרום מכרמן → manus-api → api.manus.ai עם המפתח שמאוחסן ב-`tenant_integrations`.
+**1. `supabase/functions/github-agent/index.ts`**
+זיהוי קריאה פנימית עם service-role (אותו דפוס שהפעלנו ב-`manus-api` אתמול): אם `Authorization: Bearer <SUPABASE_SERVICE_ROLE_KEY>` — דלג על `auth.getUser` והמשך עם הקליינט הקיים שמשתמש ב-service-role. אחרת אימות משתמש רגיל.
 
-**2. שפר את הודעת השגיאה ב-`delegate_to_manus`**
-ב-`run-ai-agent/index.ts` סביב 437-470: כשהקריאה נכשלת, החזר הודעה שמבחינה בין:
-- "Manus integration not configured" (אין שורה ב-`tenant_integrations`)
-- "Manus API key not found" (יש שורה אבל בלי `api_key`)
-- שגיאה אמיתית מ-`api.manus.ai` (כולל הסטטוס שהיא החזירה)
+**2. `supabase/functions/run-ai-agent/index.ts` — פילטר AIOS**
+ב-`surface === 'aios'`, להוסיף ל-`filteredTools` הסתרה של `delegate_to_github_agent` כברירת מחדל, ולחשוף אותו רק אם המשתמש כתב במפורש `github / שגיאה / קוד / אגנט` (היוריסטיקה דומה ל-Manus). ככה למילים "בדיקת דופק / דוח / לקוחות" לא יהיה כלי "ברקע" זמין בכלל, והמודל יחזור ל-`analyze_campaign_performance`.
 
-ככה אם זה ייפול שוב, נדע מיידית אם זה אצלנו או אצלם.
-
-**3. השאר את הפילטר ב-AIOS שכבר נוסף**
-זה נשאר כי גם אחרי התיקון Manus היא משימה של דקות-שעות. ל"בדיקת דופק" אנחנו רוצים תשובה מיידית. רק כשהמשתמש מבקש מפורשות ("מנוס" / "ברקע") הכלי ייחשף.
+**3. `supabase/functions/_shared/carmen-prompt-v2.ts`**
+להוסיף שורה מפורשת: `🚫 אסור להשתמש ב-delegate_to_github_agent ל"בדיקת דופק" / "סיכום לקוחות" / "מצב קמפיינים" — הוא רק לתמיכה טכנית בקוד.`
 
 **4. אימות**
-אחרי הפריסה: תפעילי "כרמן תשלחי ל-מנוס מחקר על X" — נוודא בלוגים של `manus-api` ש-`api.manus.ai` נקראת ושמתקבלת תשובה תקינה (task_id).
+אחרי deploy: לשלוח שוב "בדיקת דופק לכל הלקוחות בארגון" ולוודא בלוגים של `run-ai-agent` שמופיע `Tool call: analyze_campaign_performance` ולא delegation, ושהתשובה למשתמש מכילה דאטה אמיתי במקום הודעה על ריצה ברקע.
 
 ### קבצים שיתעדכנו
-- `supabase/functions/manus-api/index.ts` — בייפס auth כשהקורא הוא service-role
-- `supabase/functions/run-ai-agent/index.ts` — הודעות שגיאה מפורטות ב-`delegate_to_manus`
+- `supabase/functions/github-agent/index.ts` — בייפס auth ל-service-role (תיקון Unauthorized)
+- `supabase/functions/run-ai-agent/index.ts` — הסתרת `delegate_to_github_agent` ב-AIOS אלא אם נתבקש מפורשות
+- `supabase/functions/_shared/carmen-prompt-v2.ts` — איסור מפורש על השימוש בו לבדיקות פנימיות
