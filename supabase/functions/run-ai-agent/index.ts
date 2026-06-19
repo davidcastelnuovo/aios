@@ -254,7 +254,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       let finalDescription = descStr || null
       if (looksLikeReminder && callerPhone) {
         const reminderText = descStr || titleStr
-        const instruction = `\n\n[הוראת ביצוע אוטומטית לזמן ההפעלה]\nכשמשימה זו רצה, שלחי הודעת WhatsApp תזכורת לטלפון ${callerPhone} עם הטקסט הבא בעברית, בקצרה ובחום:\n"${reminderText}"\nהשתמשי בכלי send_whatsapp_message (או הכלי המתאים לשליחת WhatsApp) עם phone="${callerPhone}". אל תיצרי משימת agent חדשה — רק שלחי את ההודעה ואז סיימי.`
+        const instruction = `\n\n[הוראת ביצוע אוטומטית לזמן ההפעלה]\nכשמשימה זו רצה, חובה לשלוח עכשיו הודעת WhatsApp תזכורת לטלפון ${callerPhone} עם הטקסט בעברית, בקצרה ובחום:\n"${reminderText}"\nהשתמשי בכלי send_whatsapp_via_gateway (אם יש integrationId זמין) או send_message (אם phone=${callerPhone} שייך ל-lead/client). אם אף כלי לא זמין — השתמשי בכל כלי WhatsApp אחר שיש לך. אסור לסיים את המשימה בלי לשלוח בפועל. אל תיצרי משימת agent חדשה.`
         finalDescription = (descStr ? descStr : titleStr) + instruction
       }
       const taskData: any = {
