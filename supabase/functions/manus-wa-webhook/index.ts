@@ -375,13 +375,17 @@ Deno.serve(async (req) => {
       }
     }
 
-    // FALLBACK LID RESOLUTION: when an inbound @lid event arrives with no resolvable
-    // counterpart phone (chatId="@c.us"), but there is an ACTIVE Carmen session on
-    // this connection within the idle window, attribute the message to that session's
-    // phone. Without this, mid-conversation replies (which Manus often delivers as
-    // pure LID events) get dropped by scope filtering and Carmen goes silent until
-    // the user types "כרמן" again.
-    if (!isGroup && isLidEvent && !counterpartPhone && messageText.trim()) {
+    // FALLBACK LID RESOLUTION: when an inbound @lid event arrives and the counterpart
+    // phone is unresolvable (empty OR equals the raw LID number which is NOT a real
+    // phone), but there is an ACTIVE Carmen session on this connection within the
+    // idle window, attribute the message to that session's phone. Without this,
+    // mid-conversation replies (which Manus often delivers as pure LID events) get
+    // dropped by scope filtering and Carmen goes silent until the user types "כרמן" again.
+    const counterpartLooksLikeLid =
+      !counterpartPhone ||
+      counterpartPhone.replace(/\D/g, '') === fromDigits ||
+      counterpartPhone.replace(/\D/g, '').length > 14; // real phones ≤ 15 digits, LIDs are typically 15+
+    if (!isGroup && isLidEvent && counterpartLooksLikeLid && messageText.trim()) {
       try {
         const { data: freshSessions } = await supabase
           .from('carmen_whatsapp_sessions')
@@ -405,6 +409,11 @@ Deno.serve(async (req) => {
         } else if (freshSessions && freshSessions.length > 1) {
           console.log('[manus-wa] LID fallback skipped — multiple fresh sessions', {
             count: freshSessions.length,
+            preview: messageText.slice(0, 60),
+          });
+        } else {
+          console.log('[manus-wa] LID fallback found no active Carmen session', {
+            counterpartPhone, fromDigits, preview: messageText.slice(0, 60),
           });
         }
       } catch (err) {
