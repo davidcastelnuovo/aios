@@ -1556,10 +1556,28 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       console.log(`[Hermes] Skill updated: ${data.name} v${data.version} - ${args.change_note || ''}`)
       return { skill_id: data.id, name: data.name, version: data.version, message: 'הסקיל עודכן.' }
     }
+    case 'delegate_to_subagent': {
+      if (!args.title || !args.prompt) throw new Error('title and prompt are required')
+      return await spawnSubagent(supabase, {
+        parentAgentId: agentId || null,
+        tenantId,
+        title: args.title,
+        prompt: args.prompt,
+        taskMode: args.task_mode,
+        taskSkills: Array.isArray(args.task_skills) ? args.task_skills : undefined,
+        priority: typeof args.priority === 'number' ? args.priority : undefined,
+        createdBy: userId !== 'system' ? userId : null,
+      })
+    }
+    case 'get_subagent_result': {
+      if (!args.sub_task_id) throw new Error('sub_task_id is required')
+      return await getSubagentResult(supabase, tenantId, args.sub_task_id)
+    }
     default:
       throw new Error(`Unknown tool: ${name}`)
   }
 }
+
 
 // ===========================
 // MAIN HANDLER
