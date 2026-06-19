@@ -332,8 +332,6 @@ Deno.serve(async (req) => {
         }
 
         if (aliasPhone) {
-          const allowedPhonesArr = [aliasPhone];
-          const aliasPhone = allowedPhones[0] as string;
           const idleMinutes = Number(cfg.session_timeout_minutes) > 0 ? Number(cfg.session_timeout_minutes) : 5;
           const aliasChatId = `${aliasPhone}@c.us`;
           const { data: activeAliasSession } = await supabase
