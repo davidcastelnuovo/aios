@@ -1004,5 +1004,15 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     await syncCarmenToAIConversation(supabase, newSession, history);
   }
 
+  await logCarmenAutomationRun(
+    supabase,
+    carmenAutomation.id,
+    true,
+    { source: 'carmen_session', mode: 'started', chat_id: chatId, phone: phoneNumber, sender_name: senderName, message: messageText, is_group: isGroup },
+    null,
+    null,
+    handlerStartedAt,
+  );
+
   return { handled: true, outcome: 'started' };
 }
