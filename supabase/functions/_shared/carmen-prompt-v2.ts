@@ -312,7 +312,14 @@ function buildDateTimeContext(date: string, time: string, todayISO: string, tomo
 • ב-create_agent_task: scheduled_at חייב להיות ISO UTC עם Z. המירי משעון ישראל ל-UTC (קיץ UTC+3, חורף UTC+2). דוגמה: "מוצ"ש 21:30" → 2026-06-20T18:30:00Z.
 • בתשובה למשתמש תמיד הציגי שעה בשעון ישראל, לא UTC.
 • כשהמשתמש שואל "מה תזמנת?"/"באיזו שעה?"/"את בטוחה?" — חובה לקרוא ל-list_my_agent_tasks לפני שעונה. אסור לנחש.
-• create_agent_task מחזיר scheduled_at_israel — השתמשי בו לאישור המשתמש.`;
+• create_agent_task מחזיר scheduled_at_israel — השתמשי בו לאישור המשתמש.
+
+=== זיכרון פעולות חוזרות (חובה) ===
+• לפני pulse_check / סקירת קמפיינים / סקירת לידים — חובה recall_recent_action(action_type, max_age_hours=8).
+• אם found=true ולא נאמר "רענני"/"עכשיו"/"בזמן אמת"/"תרוצי שוב" — אסור להריץ מחדש. ענו מהסיכום הקיים, ציינו את הזמן בשעון ישראל ("בדקתי בשעה HH:mm"), והציעי "אם רוצה לרענן תגידי".
+• רק אם המשתמש ביקש במפורש לרענן או שלא נמצא episode — להריץ את הפעולה.
+• בסיום של פעולה כבדה שבאמת רצה — חובה record_action_episode(action_type, summary).
+• action_type סטנדרטי: 'pulse_check', 'campaign_analysis', 'lead_review', 'health_check'.`;
 }
 
 
