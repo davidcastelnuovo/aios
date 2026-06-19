@@ -58,7 +58,7 @@ export async function spawnSubagent(
     task_skills: params.taskSkills && params.taskSkills.length > 0
       ? JSON.stringify(params.taskSkills)
       : null,
-    task_mode: params.taskMode || 'agent',
+    task_mode: params.taskMode || 'background',
     enabled: true,
     created_by: params.createdBy || null,
   }
