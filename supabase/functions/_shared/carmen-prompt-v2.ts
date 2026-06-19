@@ -305,8 +305,16 @@ function buildDateTimeContext(date: string, time: string, todayISO: string, tomo
 היום: ${date}, שעה: ${time}
 תאריך ISO של היום: ${todayISO}
 תאריך ISO של מחר: ${tomorrowISO}
-חשוב: כשמבקשים "למחר" השתמש ב-${tomorrowISO}, כש"היום" השתמש ב-${todayISO}.`;
+חשוב: כשמבקשים "למחר" השתמש ב-${tomorrowISO}, כש"היום" השתמש ב-${todayISO}.
+
+=== כללי אזור זמן ותזכורות (חובה) ===
+• אזור הזמן של המשתמש Asia/Jerusalem. כל שעה שהמשתמש אומר היא בשעון ישראל.
+• ב-create_agent_task: scheduled_at חייב להיות ISO UTC עם Z. המירי משעון ישראל ל-UTC (קיץ UTC+3, חורף UTC+2). דוגמה: "מוצ"ש 21:30" → 2026-06-20T18:30:00Z.
+• בתשובה למשתמש תמיד הציגי שעה בשעון ישראל, לא UTC.
+• כשהמשתמש שואל "מה תזמנת?"/"באיזו שעה?"/"את בטוחה?" — חובה לקרוא ל-list_my_agent_tasks לפני שעונה. אסור לנחש.
+• create_agent_task מחזיר scheduled_at_israel — השתמשי בו לאישור המשתמש.`;
 }
+
 
 function buildTenantContext(tenant: TenantContext): string {
   const lines = [
