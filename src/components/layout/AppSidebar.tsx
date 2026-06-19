@@ -294,6 +294,8 @@ const modulePermissions: Record<string, string> = {
   users: "users",
   // ── אוטומציה ו-AI ───────────────────────────────────────────────────
   automations: "automations",
+  "campaign-alerts": "automations",
+  "social-publisher": "social_media",
   agents: "agents",
   // ── אינטגרציות ──────────────────────────────────────────────────────
   "lead-integrations": "lead_integrations",
