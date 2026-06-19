@@ -14,17 +14,30 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_ANON_KEY')!,
-      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
-    );
+    const authHeader = req.headers.get('Authorization') || '';
+    const bearer = authHeader.replace(/^Bearer\s+/i, '');
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const isInternalCall = bearer && bearer === serviceRoleKey;
 
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    // For internal calls (e.g. from run-ai-agent's delegate_to_manus),
+    // we use the service-role client and skip user auth — identity is
+    // carried via the tenantId in the request body.
+    // For external calls (from the UI), we authenticate the user normally.
+    const supabaseClient = isInternalCall
+      ? createClient(Deno.env.get('SUPABASE_URL')!, serviceRoleKey)
+      : createClient(
+          Deno.env.get('SUPABASE_URL')!,
+          Deno.env.get('SUPABASE_ANON_KEY')!,
+          { global: { headers: { Authorization: authHeader } } }
+        );
+
+    if (!isInternalCall) {
+      const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+      if (authError || !user) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     const body = await req.json();
@@ -46,10 +59,11 @@ serve(async (req) => {
       .maybeSingle();
 
     if (intError || !integration) {
-      return new Response(JSON.stringify({ error: 'Manus integration not configured' }), {
+      return new Response(JSON.stringify({ error: 'Manus integration not configured', detail: intError?.message }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
 
     const apiKey = (integration.settings as any)?.api_key;
     if (!apiKey) {
