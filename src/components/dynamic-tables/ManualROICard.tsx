@@ -105,90 +105,103 @@ export function ManualROICard({
 
   return (
     <Card className="mb-4 p-4" dir="rtl">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="font-semibold text-base">סיכום ROI ידני</h3>
-        {saving && <span className="text-xs text-muted-foreground">שומר...</span>}
-      </div>
+  const [open, setOpen] = useState(false);
 
-      {/* Row 1: read-only context */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4 text-sm">
-        <div>
-          <div className="text-muted-foreground text-xs">הוצאה</div>
-          <div className="font-medium">{formatCurrency(spend)}</div>
-        </div>
-        <div>
-          <div className="text-muted-foreground text-xs">לידים</div>
-          <div className="font-medium">{leads.toLocaleString("he-IL")}</div>
-        </div>
-        <div>
-          <div className="text-muted-foreground text-xs">סגירות</div>
-          {readOnly ? (
-            <div className="font-medium">{hasData ? closuresNum.toLocaleString("he-IL") : "—"}</div>
-          ) : (
-            <Input
-              type="number"
-              min="0"
-              step="1"
-              value={closures}
-              placeholder="0"
-              onChange={(e) => {
-                setClosures(e.target.value);
-                scheduleSave(e.target.value, revenue);
-              }}
-              className="h-8 text-sm"
+  return (
+    <Card className="mb-4 p-4" dir="rtl">
+      <Collapsible open={open} onOpenChange={setOpen}>
+        <div className="flex items-center justify-between">
+          <CollapsibleTrigger className="flex items-center gap-2 group">
+            <ChevronDown
+              className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`}
             />
-          )}
+            <h3 className="font-semibold text-base">סיכום ROI ידני</h3>
+          </CollapsibleTrigger>
+          {saving && <span className="text-xs text-muted-foreground">שומר...</span>}
         </div>
-        <div>
-          <div className="text-muted-foreground text-xs">הכנסות</div>
-          {readOnly ? (
-            <div className="font-medium">{hasData ? formatCurrency(revenueNum) : "—"}</div>
-          ) : (
-            <Input
-              type="number"
-              min="0"
-              step="1"
-              value={revenue}
-              placeholder="0"
-              onChange={(e) => {
-                setRevenue(e.target.value);
-                scheduleSave(closures, e.target.value);
-              }}
-              className="h-8 text-sm"
-            />
-          )}
-        </div>
-      </div>
 
-      {/* Row 2: calculations */}
-      {hasData ? (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t text-sm">
-          <div>
-            <div className="text-muted-foreground text-xs">אחוז סגירה</div>
-            <div className="font-medium">{closingRate.toLocaleString("he-IL", { maximumFractionDigits: 1 })}%</div>
-          </div>
-          <div>
-            <div className="text-muted-foreground text-xs">עלות לסגירה</div>
-            <div className="font-medium">{closuresNum > 0 ? formatCurrency(costPerClosure) : "—"}</div>
-          </div>
-          <div>
-            <div className="text-muted-foreground text-xs">רווח</div>
-            <div className={`font-semibold ${profitColor}`}>{formatCurrency(profit)}</div>
-          </div>
-          <div>
-            <div className="text-muted-foreground text-xs">ROI</div>
-            <div className={`font-semibold ${roiColor}`}>
-              {roi.toLocaleString("he-IL", { maximumFractionDigits: 1 })}%
+        <CollapsibleContent>
+          {/* Row 1: read-only context */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3 mb-4 text-sm">
+            <div>
+              <div className="text-muted-foreground text-xs">הוצאה</div>
+              <div className="font-medium">{formatCurrency(spend)}</div>
+            </div>
+            <div>
+              <div className="text-muted-foreground text-xs">לידים</div>
+              <div className="font-medium">{leads.toLocaleString("he-IL")}</div>
+            </div>
+            <div>
+              <div className="text-muted-foreground text-xs">סגירות</div>
+              {readOnly ? (
+                <div className="font-medium">{hasData ? closuresNum.toLocaleString("he-IL") : "—"}</div>
+              ) : (
+                <Input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={closures}
+                  placeholder="0"
+                  onChange={(e) => {
+                    setClosures(e.target.value);
+                    scheduleSave(e.target.value, revenue);
+                  }}
+                  className="h-8 text-sm"
+                />
+              )}
+            </div>
+            <div>
+              <div className="text-muted-foreground text-xs">הכנסות</div>
+              {readOnly ? (
+                <div className="font-medium">{hasData ? formatCurrency(revenueNum) : "—"}</div>
+              ) : (
+                <Input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={revenue}
+                  placeholder="0"
+                  onChange={(e) => {
+                    setRevenue(e.target.value);
+                    scheduleSave(closures, e.target.value);
+                  }}
+                  className="h-8 text-sm"
+                />
+              )}
             </div>
           </div>
-        </div>
-      ) : (
-        !readOnly && (
-          <div className="pt-3 border-t text-xs text-muted-foreground">
-            הזן סגירות והכנסות כדי לראות חישוב רווח ו-ROI.
-          </div>
-        )
-      )}
+
+          {/* Row 2: calculations */}
+          {hasData ? (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t text-sm">
+              <div>
+                <div className="text-muted-foreground text-xs">אחוז סגירה</div>
+                <div className="font-medium">{closingRate.toLocaleString("he-IL", { maximumFractionDigits: 1 })}%</div>
+              </div>
+              <div>
+                <div className="text-muted-foreground text-xs">עלות לסגירה</div>
+                <div className="font-medium">{closuresNum > 0 ? formatCurrency(costPerClosure) : "—"}</div>
+              </div>
+              <div>
+                <div className="text-muted-foreground text-xs">רווח</div>
+                <div className={`font-semibold ${profitColor}`}>{formatCurrency(profit)}</div>
+              </div>
+              <div>
+                <div className="text-muted-foreground text-xs">ROI</div>
+                <div className={`font-semibold ${roiColor}`}>
+                  {roi.toLocaleString("he-IL", { maximumFractionDigits: 1 })}%
+                </div>
+              </div>
+            </div>
+          ) : (
+            !readOnly && (
+              <div className="pt-3 border-t text-xs text-muted-foreground">
+                הזן סגירות והכנסות כדי לראות חישוב רווח ו-ROI.
+              </div>
+            )
+          )}
+        </CollapsibleContent>
+      </Collapsible>
     </Card>
   );
 }
