@@ -1584,28 +1584,49 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
 // ===========================
 import { requireAuth } from "../_shared/security.ts";
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
+// Surface for which the agent is currently invoked
+type Surface = 'whatsapp' | 'aios' | 'task'
 
-  const auth = await requireAuth(req)
-  if (!auth) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    })
-  }
+// Emit function used by the streaming wrapper to push SSE events to the client.
+// In non-streaming mode it's a no-op.
+type Emit = ((obj: any) => void) | undefined
 
+async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Promise<Response> {
   try {
-    const { agent_id, command_text, temperature, automation_id, user_name, lead_data, tenant_id, user_id, task_skills, task_mode, conversation_history } = await req.json()
-    console.log(`[AGENT] Starting run: agent=${agent_id}, command="${command_text?.substring(0, 80)}"`)
+    const { agent_id: bodyAgentId, command_text, temperature, automation_id, user_name, lead_data, tenant_id, user_id, task_skills, task_mode, conversation_history } = bodyJson
+    console.log(`[AGENT] Starting run: agent=${bodyAgentId}, command="${command_text?.substring(0, 80)}", surface=${surface}, stream=${!!emit}`)
 
-    if (!agent_id || !command_text) throw new Error('Missing agent_id or command_text')
+    if (!command_text) throw new Error('Missing command_text')
     if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured')
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-    // 1. Fetch agent
-    const { data: agent, error: agentError } = await supabase.from('ai_agents').select('*').eq('id', agent_id).single()
-    if (agentError || !agent) throw new Error(`Agent not found: ${agent_id}`)
+    // 1. Fetch agent — by id, or default to the tenant's Carmen agent
+    let agent: any
+    let agent_id = bodyAgentId
+    if (agent_id) {
+      const { data, error: agentError } = await supabase.from('ai_agents').select('*').eq('id', agent_id).single()
+      if (agentError || !data) throw new Error(`Agent not found: ${agent_id}`)
+      agent = data
+    } else {
+      // No agent_id provided — look up the active Carmen agent for the tenant.
+      // This lets AIOS / other surfaces invoke the unified brain without preloading the id.
+      if (!tenant_id) throw new Error('Missing agent_id or tenant_id (one is required to resolve the agent)')
+      const { data: carmen } = await supabase
+        .from('ai_agents')
+        .select('*')
+        .eq('tenant_id', tenant_id)
+        .or('name.ilike.%carmen%,name.ilike.%כרמן%')
+        .eq('active', true)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+      if (!carmen) throw new Error(`No active Carmen agent found for tenant ${tenant_id}`)
+      agent = carmen
+      agent_id = carmen.id
+      console.log(`[AGENT] Resolved default Carmen agent: ${agent.name} (${agent_id})`)
+    }
+
 
 
     // 2. Resolve tenant
@@ -1767,7 +1788,7 @@ Deno.serve(async (req) => {
         leadData: leadDataObj,
         taskMode: task_mode,
         taskSkills: task_skills,
-        isWhatsApp: isCarmen,
+        isWhatsApp: isCarmen && surface === 'whatsapp',
         currentDate,
         currentTime,
         todayISO,
@@ -2202,7 +2223,14 @@ Deno.serve(async (req) => {
       if (!msg.tool_calls || msg.tool_calls.length === 0) {
         finalOutput = msg.content || ''
         console.log(`[AGENT] Done after ${round + 1} rounds, output length=${finalOutput.length}`)
+        // Stream the final assistant text in one chunk so AIOS frontends can render progressively.
+        if (emit && finalOutput) emit({ type: 'token', content: finalOutput })
         break
+      }
+
+      // Mid-loop assistant text (assistant decided to talk while also calling tools) — stream it too.
+      if (emit && typeof msg.content === 'string' && msg.content.length > 0) {
+        emit({ type: 'token', content: msg.content })
       }
 
       // Execute tool calls
@@ -2213,6 +2241,8 @@ Deno.serve(async (req) => {
         try { toolArgs = JSON.parse(tc.function.arguments || '{}') } catch { /* ignore */ }
 
         console.log(`[AGENT] Tool call: ${toolName}`)
+        if (emit) emit({ type: 'tool_call', tool: toolName, args: toolArgs })
+
         let result: any
         try {
           if (mcpExecutors.has(toolName)) {
@@ -2232,6 +2262,7 @@ Deno.serve(async (req) => {
 
       messages.push(...toolResults)
     }
+
 
     const executionTime = Date.now() - startTime
 
@@ -2281,4 +2312,59 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400,
     })
   }
+}
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
+
+  const auth = await requireAuth(req)
+  if (!auth) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+
+  let bodyJson: any = {}
+  try { bodyJson = await req.json() } catch { /* ignore */ }
+
+  const wantStream = bodyJson.stream === true
+  const surface: Surface = bodyJson.surface === 'aios' ? 'aios'
+    : bodyJson.surface === 'task' ? 'task'
+    : 'whatsapp'
+
+  if (!wantStream) {
+    return await handleRunAgent(bodyJson, surface, undefined)
+  }
+
+  // Streaming mode: AIOS-compatible SSE.
+  // Events emitted: {type:'tool_call',tool,args}, {type:'token',content}, {type:'done',...}
+  const enc = new TextEncoder()
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const emit = (obj: any) => {
+        try { controller.enqueue(enc.encode(`data: ${JSON.stringify(obj)}\n\n`)) } catch { /* ignore */ }
+      }
+      try {
+        const resp = await handleRunAgent(bodyJson, surface, emit)
+        let final: any = {}
+        try { final = await resp.json() } catch { /* ignore */ }
+        emit({ type: 'done', success: final.success !== false, output: final.output, tools_used: final.tools_used, error: final.error })
+      } catch (e: any) {
+        emit({ type: 'error', error: e?.message || String(e) })
+        emit({ type: 'done', success: false, error: e?.message || String(e) })
+      } finally {
+        try { controller.close() } catch { /* ignore */ }
+      }
+    },
+  })
+
+  return new Response(stream, {
+    headers: {
+      ...corsHeaders,
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+    },
+  })
 })
+

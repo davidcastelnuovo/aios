@@ -45,8 +45,14 @@ export function AIOSProvider({ children }: { children: React.ReactNode }) {
       const { data: session } = await supabase.auth.getSession();
       if (!session?.session) return;
 
+      // Build conversation_history from prior messages (excluding the just-pushed user turn).
+      const conversationHistory = history.map((h) => ({
+        role: h.role === "assistant" ? "assistant" : "user",
+        content: h.content,
+      }));
+
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-support-chat`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/run-ai-agent`,
         {
           method: "POST",
           headers: {
@@ -54,12 +60,16 @@ export function AIOSProvider({ children }: { children: React.ReactNode }) {
             Authorization: `Bearer ${session.session.access_token}`,
           },
           body: JSON.stringify({
-            message: text,
+            command_text: text,
             tenant_id: tenantId,
-            conversation_id: conversationId,
+            user_id: userId,
+            surface: "aios",
+            stream: true,
+            conversation_history: conversationHistory,
           }),
         }
       );
+
 
       if (!response.ok) throw new Error("Failed to get AI response");
 

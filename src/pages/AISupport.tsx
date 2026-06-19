@@ -11,6 +11,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Bot, Send, Plus, Loader2, Wrench, Menu, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+
 import { useIsMobile } from "@/hooks/use-mobile";
 import ReactMarkdown from "react-markdown";
 import { invalidateAIEntityQueries } from "@/lib/aiInvalidation";
@@ -33,6 +35,8 @@ interface Conversation {
 
 export default function AISupport() {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
+  const { tenantId } = useCurrentTenant();
+
   const [input, setInput] = useState("");
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -128,8 +132,12 @@ export default function AISupport() {
         throw new Error('Not authenticated');
       }
 
+      const conversationHistory = messages
+        .filter((m) => m.role === 'user' || m.role === 'assistant')
+        .map((m) => ({ role: m.role, content: m.content || '' }));
+
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-support-chat`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/run-ai-agent`,
         {
           method: 'POST',
           headers: {
@@ -137,12 +145,15 @@ export default function AISupport() {
             'Authorization': `Bearer ${session.access_token}`,
           },
           body: JSON.stringify({
-            message: input,
-            conversation_id: currentConversationId,
-            tenant_slug: tenantSlug,
+            command_text: input,
+            tenant_id: tenantId,
+            surface: 'aios',
+            stream: true,
+            conversation_history: conversationHistory,
           }),
         }
       );
+
 
       if (!response.ok) {
         if (response.status === 429) {
