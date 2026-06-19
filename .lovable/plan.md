@@ -1,110 +1,139 @@
-# הפיכת כרמן להרמס - אימוץ יכולות
+# תיקון: כרמן רואה רק 2 מתוך 13 לקוחות עם נתוני קמפיין
 
-המטרה: לא להחליף את כרמן (היא ממשיכה לרוץ ב-edge function בתוך ה-CRM), אלא לאמץ את ארבעת עמודי התווך של הרמס לתוך הארכיטקטורה הקיימת. הפרויקט כבר מחזיק חלק מהתשתית (`ai_skills`, `agent_memory`, `carmen_memory_*`, `agent_mcp_connections`) - הרבה מהעבודה היא להפעיל ולחבר.
+## אבחון מתוקן
 
-## עדיפויות (לפי בחירתך)
-1. Skills System
-2. Self-improving Memory
-3. MCP Integration
-4. Subagent delegation
+הבדיקה הקודמת הייתה שגויה כי השתמשתי באותו פילטר שגוי שכרמן משתמשת בו. בדיקה לפי **שדות הטבלה** (קיום `spend`+`campaign_name`) חושפת את המציאות האמיתית בסוכנות `promo`:
 
----
+| לקוח | טבלת קמפיינים | נתון אחרון |
+|---|---|---|
+| 4/4 ארבע על ארבע | ✅ | 19/06 |
+| Beverthech | ✅ | 19/06 |
+| איימי בכור | ✅ | 19/06 |
+| איריס גייר | ✅ | 19/06 |
+| איתי לוי | ✅ | 19/06 |
+| וילה סול | ✅ | 19/06 |
+| לידר | ✅ | 19/06 |
+| מימד נוסף | ✅ | 19/06 |
+| עולם הדימיון | ✅ | 19/06 |
+| פרימיום umcs | ✅ | 19/06 |
+| רווה קולינריה נוזלית | ✅ | 19/06 |
+| שושנה קנדל | ✅ | 19/06 |
+| רינת עוז | ✅ | 17/06 |
+| בילבי | ❌ | — |
+| בר תרגומים | ❌ | — |
+| דורון אקו | ❌ | — |
+| רינת מתנות מרגשות | ❌ | — |
 
-## שלב 1 - Skills System (פרוצדורות אוטונומיות)
+**13 מסונכרנים, 4 לא — לא 2 מתוך 17 כמו שכרמן דיווחה.**
 
-**הקונספט של הרמס:** סקיל = קובץ markdown עם `name`, `description`, ו-body של "איך לבצע משימה X". הסוכן בוחר סקיל רלוונטי כשהמשימה מתאימה ל-description, ויכול ליצור/לעדכן סקילים בעצמו מתוך התנסות.
+## Root cause
 
-**מצב נוכחי:** טבלת `ai_skills` קיימת (9 עמודות, 4 policies) - לבדוק סכמה ולהשלים.
+ב-`supabase/functions/run-ai-agent/index.ts` שורה 489:
 
-**מה נבנה:**
-- ודא ש-`ai_skills` כוללת: `name`, `description`, `body` (markdown), `tenant_id`, `created_by` (`carmen` | user_id), `usage_count`, `last_used_at`, `success_rate`, `version`
-- `_shared/skills-loader.ts`: בזמן בנית הפרומפט, שולף Top-K סקילים רלוונטיים לפי matching של ה-description מול הודעת המשתמש (embedding similarity או keyword match - מתחילים ב-keyword)
-- שני tools חדשים לכרמן:
-  - `create_skill({name, description, body})` - לאחר ביצוע משימה מורכבת מוצלחת
-  - `update_skill({id, body})` - לשיפור עצמי על בסיס ניסיון
-- Seed ראשוני: ~10 סקילים מבוססי תפקודי הליבה ("ניתוח קמפיין שבועי", "Pulse Check", "החלפת חבר צוות", "הוספת לקוח חדש", "ניתוח SEO")
-- UI ב-Settings → AI Agent → Skills לצפייה/עריכה ידנית
+```ts
+.ilike('slug', '%facebook%')
+```
 
----
+הסלאג של טבלת קמפיינים נוצר משם הלקוח (למשל `עולם-הדימיון-mnbrne86`), לא מ-`facebook`. רק 2 טבלאות במקרה כוללות "facebook" בסלאג. כל היתר נופלות מתחת לרדאר של הכלי.
 
-## שלב 2 - Self-improving Memory
+## התיקון
 
-**הקונספט:** הרמס ל-3 שכבות זיכרון: episodic (מה קרה), semantic (עובדות עליך), procedural (סקילים). בנוסף יש "nudges" - הסוכן מחליט מתי לשמור ול-FTS5 search חוצה-שיחות.
+### שלב 1 — זיהוי טבלת קמפיינים לפי schema, לא לפי שם
 
-**מצב נוכחי:** יש כבר `carmen_memory_episodes`, `carmen_memory_pointers`, `carmen_memory_outbox`, `agent_memory`, `ai_memory`, וגם `carmen-memory-*` functions. צריך לוודא שזה מחובר וחי.
+ב-`run-ai-agent/index.ts`, case `analyze_campaign_performance` (שורות 483–577):
 
-**מה נבנה:**
-- ניטרול כפילויות: לבחור שכבה אחת ראשית (`agent_memory` עם `kind: episodic | semantic | instruction`)
-- **Nudges**: בסוף כל ריצת agent, אם מתקיים אחד מ:
-  - המשתמש שיתף עובדה חדשה ויציבה (שם בן/בת זוג, העדפה, חוק עסקי)
-  - הופעלה משימה חדשה שלא היתה לה סקיל
-  - תיקון מפורש ("לא ככה, אלא...")
-  
-  → לקרוא ל-LLM קצר ולהציע `save_memory({content, category, importance})`. זה כבר חלקית קיים (memory ב-keywords עברית "תזכרי/זכרי") - להרחיב להיות אוטונומי ולא רק על מילות מפתח.
-- **Cross-session FTS recall**: להוסיף `tsvector` column ל-`agent_memory` עם GIN index, ופונקציה `recall_memory(query, tenant_id, limit)`. בכל בניית פרומפט, להריץ FTS על הודעת המשתמש ולהזריק Top-5 זיכרונות רלוונטיים.
-- **Periodic consolidation**: ה-cron הקיים `carmen-memory-consolidate` ירוץ פעם ביום, יזהה זיכרונות חופפים ומיזוגם, ויסיק עובדות semantic מאפיזודות חוזרות.
+**מחליפים את ה-query הראשי** מ:
+```ts
+.from('crm_tables').select(...).ilike('slug', '%facebook%')
+```
 
----
+ל-RPC חדש שיוצר במיגרציה: `find_campaign_tables(tenant_ids uuid[], client_ids uuid[])` שמחזירה טבלאות שעומדות בקריטריון:
+- יש לפחות רשומה אחת
+- הרשומה הראשונה מכילה `data ? 'spend'` AND (`data ? 'campaign_name'` OR `data ? 'campaign_id'`)
 
-## שלב 3 - MCP Integration
+לחלופין (פשוט יותר, ללא RPC) — ב-edge function עצמה:
+1. שלוף את כל ה-`crm_tables` לסקופ
+2. לכל טבלה, שלוף `LIMIT 1` מ-`crm_records`
+3. סנן בזיכרון את אלה עם השדות הרלוונטיים
 
-**הקונספט:** במקום לבנות tool לכל אינטגרציה ידנית (Meta Ads, Google Ads, Notion), כרמן מתחברת ל-MCP servers שמספקים tools מוכנים.
+עדיף RPC (שאילתה אחת ב-DB במקום N+1).
 
-**מצב נוכחי:** טבלת `agent_mcp_connections` קיימת.
+### שלב 2 — סקופ לפי סוכנות + תמונה מלאה
 
-**מה נבנה:**
-- `_shared/mcp-client.ts` - לקוח MCP על בסיס AI SDK (`@modelcontextprotocol/sdk` או fetch ידני ל-Streamable HTTP עם `Accept: application/json, text/event-stream`)
-- בזמן ריצת ה-agent: שלוף את כל ה-MCP connections של ה-tenant במצב `ready`, צור lazy clients, רשום את ה-tools שלהם תחת namespace (`mcp_<server>__<tool>`)
-- Edge function חדש `mcp-oauth-callback` ל-OAuth flows
-- UI ב-Settings → AI Agent → MCP Connections:
-  - הוספת חיבור (URL + auth type)
-  - רשימת tools זמינים מכל שרת
-  - הפעלה/השבתה של tools ספציפיים (control של scope)
-- שימור: tokens מוצפנים ב-DB scope-מוגן ב-RLS לפי tenant + user
+הפרמטרים החדשים שכבר היו בתוכנית הקודמת נשארים:
+- `agency_id` / `agency_name` — סינון ל-17 לקוחות הסוכנות
+- `client_id` — לקוח בודד
 
-**הערה:** Lovable מציעה MCP connectors בצד ה-builder (Notion/Linear וכו'). אלה לא רצים בתוך אפליקציה. הבנייה כאן היא MCP בצד ה-runtime של ה-app - דבר שונה.
+הפלט נשאר עם `coverage_summary` ושני סלוטים:
+```json
+{
+  "scope": { "agency_name": "promo", "total_active_clients": 17 },
+  "coverage_summary": { "synced": 13, "not_connected": 4 },
+  "synced_clients": [ ...13 לקוחות עם spend/cpl/שינוי... ],
+  "not_connected_clients": [ "בילבי", "בר תרגומים", "דורון אקו", "רינת מתנות מרגשות" ]
+}
+```
 
----
+### שלב 3 — שכרמן תסנכרן את הלא-מסונכרנים, לא תכריז עליהם
 
-## שלב 4 - Subagent Delegation
+הוספה לפרומפט (`carmen-prompt-v2.ts`) ולסקיל החדש "סטטוס קמפיינים":
 
-**הקונספט:** כרמן יכולה לפצל משימה למקבילית - "בדוק את 50 הלקוחות במקביל" - כל subagent רץ עם context משלו, מחזיר סיכום.
+```
+=== חיבור פייסבוק חסר ===
+אם analyze_campaign_performance מחזיר not_connected_clients:
+1. אסור לסיים את התשובה במצב "X לא מסונכרנים".
+2. הריצי בו-זמנית sync_facebook_campaigns(client_id) לכל לקוח חסר
+   (אם הכלי קיים — ראה כלי ניהול אינטגרציות).
+3. אם החיבור נכשל (אין credentials / אין ad_account_id) - צרי משימה
+   אחת מסוג "חיבור פייסבוק" עם כל הלקוחות החסרים, ושלחי הודעה אחת:
+   "סנכרנתי את [synced]. [לא_מחובר] חסרים credentials — פתחתי משימה."
+4. אסור לדווח "לא מסונכרנים" כתוצאה סופית בלי ניסיון סנכרון או יצירת משימה.
+```
 
-**מצב נוכחי:** קיים `delegate_to_background` (heartbeat-based, סדרתי). חסר parallelization אמיתי.
+לפני שאני ממשיך — צריך לבדוק אם קיים כלי `sync_facebook_campaigns`/דומה ב-Carmen. אם לא קיים, נסתפק בשלב הזה ביצירת משימה אחת מאוחדת לסוכנות.
 
-**מה נבנה:**
-- Tool חדש `spawn_parallel_subagents({tasks: [{prompt, context}], max_concurrency})`
-- כל subagent הוא הזמנה רקורסיבית של `run-ai-agent` עם `parent_run_id`, `subtask=true`, ו-system prompt מצומצם (ללא רוב הסקילים, רק ה-tools הנדרשים למשימה)
-- שמירת תוצאות ב-`agent_runs` עם `parent_run_id`, ו-`spawn_parallel_subagents` ממתין (Promise.all עד גבול concurrency=5) ומחזיר מערך תוצאות
-- שימוש לדוגמה: Pulse Check על 50 לקוחות → 10 subagents במקביל של 5 לקוחות כל אחד
+### שלב 4 — סקיל "מצב קמפיינים מסודר"
 
----
+INSERT ב-`ai_skills`:
+```
+name: סטטוס קמפיינים לסוכנות
+trigger_phrases: [מצב קמפיינים, סטטוס קמפיינים, ניתוח קמפיינים, ביצועים]
+steps:
+1. קבעי scope: agency_name או agency_id מההקשר.
+2. הריצי analyze_campaign_performance(agency_name).
+3. דווחי בפורמט:
+   📊 [שם סוכנות] — [synced]/[total] עם נתוני קמפיין
 
-## פיצול לסדר ביצוע מומלץ
+   🟢 מסונכרנים:
+   • [שם] — Spend 7d: ₪X | CPL: ₪Y | שינוי: ±Z%
+   ...
 
-| שלב | משך | סיכון | תלויות |
-|---|---|---|---|
-| 1. Skills System | 1-2 sessions | נמוך | אין |
-| 2. Memory FTS + Nudges | 1 session | בינוני (DB) | אין |
-| 3. MCP Integration | 2-3 sessions | גבוה (OAuth) | אין |
-| 4. Subagents | 1 session | בינוני | אין |
+4. אם יש not_connected_clients:
+   - נסי לסנכרן (ראה "חיבור פייסבוק חסר" בפרומפט)
+   - אל תרשמי "לא מסונכרנים" כתוצאה סופית בלי פעולה
+5. אסור להמציא מספרים. כל מספר חייב לבוא מהפלט של הכלי.
+```
 
-ניתן לבצע במקביל את 1+2 או לפצל לסשנים נפרדים לפי בחירה.
+### שלב 5 — anti-waffling (כמו בתוכנית הקודמת)
+
+תוספת לבלוק Anti-Hallucination בפרומפט:
+- אם הצהרת מספר באותה שיחה — אסור לסתור בלי הרצת כלי מחדש
+- כשמבקשים "כל הלקוחות" — חובה להראות גם את אלה ללא נתונים, ולא להציג חלק כאילו זה כל התמונה
+- אם תוצאה ריקה/חלקית — דווחי כעובדה, אל תנחשי הסבר
 
 ## פרטים טכניים
 
-- **אין שינויי schema ל-`ai_agents`** - כל היכולות מצורפות דרך טבלאות נלוות.
-- **הכל מאחורי feature flag** ב-`ai_agents.metadata` (`hermes_skills: true`, `hermes_memory_v2: true`, וכו') כדי לא לשבור את V2 הקיים.
-- **Logging**: כל קריאה לסקיל / זיכרון / MCP נרשמת ב-`agent_action_log` עם `kind`.
-- **תאימות לאחור**: כרמן הקיימת ממשיכה לעבוד בלי שום שינוי אם flags כבויים.
+קבצים:
+- **`supabase/migrations/<new>.sql`** — RPC `find_campaign_tables(p_client_ids uuid[])` שמחזיר טבלאות עם שדות קמפיין
+- **`supabase/functions/run-ai-agent/index.ts`** — case `analyze_campaign_performance`: החלפת הסינון מ-slug ל-RPC, תוספת agency filter, מבנה תוצאה חדש עם coverage
+- **`supabase/functions/_shared/carmen-prompt-v2.ts`** — תוספת "חיבור פייסבוק חסר" + "כללי עקביות"
+- **`ai_skills`** — INSERT של סקיל אחד
 
-## מה לא נכלל בכוונה
+ללא שינוי schema של טבלאות, רק RPC חדש.
 
-- לא נחליף את ה-runtime ל-Modal/Daytona (דורש מהפכה ארכיטקטונית)
-- לא נכניס SOUL.md פורמלי - ההרכב הנוכחי של V2 prompt מספיק
-- לא נכניס Voice Mode (רעיון עתידי נפרד)
-- לא נסנכרן עם agentskills.io - סקילים יישארו פנימיים לכל tenant
+## בדיקה
+1. ב-WhatsApp: "מצב קמפיינים פרומו"
+2. תשובה צפויה: 13 לקוחות עם spend/CPL/שינוי + 4 חסרים שכרמן ניסתה לסנכרן או פתחה להם משימה
+3. ללא הצהרות סותרות, ללא "8 מחוברים", ללא "2 מתוך 17"
 
----
-
-**הצעה ראשונה:** להתחיל ב**שלב 1 בלבד** (Skills System) כסשן ראשון - הוא העצמאי ביותר, מחזיר ערך מיידי, ובונה את ה-foundation למה שיבוא. אישור לזה?
+מאשרת ביצוע?
