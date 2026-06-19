@@ -3,6 +3,7 @@ import { Send, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 export interface AIOSMessage {
   role: "user" | "assistant";
