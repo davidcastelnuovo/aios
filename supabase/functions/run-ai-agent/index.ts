@@ -2290,7 +2290,7 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
           if (mcpExecutors.has(toolName)) {
             result = await mcpExecutors.get(toolName)!(toolArgs)
           } else {
-            result = await executeTool(toolName, toolArgs, supabase, resolvedTenantId, resolvedUserId, callerCampaignerId, agent_id, callerRole, callerManagedAgencyIds)
+            result = await executeTool(toolName, toolArgs, supabase, resolvedTenantId, resolvedUserId, callerCampaignerId, agent_id, callerRole, callerManagedAgencyIds, callerPhone)
           }
           console.log(`[AGENT] Tool ${toolName} OK`)
         } catch (e: any) {
