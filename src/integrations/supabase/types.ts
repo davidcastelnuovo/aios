@@ -9423,6 +9423,15 @@ export type Database = {
         }
         Returns: string
       }
+      find_campaign_tables: {
+        Args: { p_client_ids: string[] }
+        Returns: {
+          client_id: string
+          name: string
+          slug: string
+          table_id: string
+        }[]
+      }
       generate_tracking_id: { Args: never; Returns: string }
       get_channel_invite_by_token: { Args: { _token: string }; Returns: Json }
       get_chat_contacts: {
