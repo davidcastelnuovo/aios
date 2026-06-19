@@ -426,8 +426,12 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
 
+      const followUpHistory = messages
+        .filter((m) => m.role === 'user' || m.role === 'assistant')
+        .map((m) => ({ role: m.role, content: m.content || '' }));
+
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-support-chat`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/run-ai-agent`,
         {
           method: 'POST',
           headers: {
@@ -435,12 +439,15 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
             'Authorization': `Bearer ${session.access_token}`,
           },
           body: JSON.stringify({
-            message: text,
-            conversation_id: currentConversationId,
-            tenant_slug: tenantSlug,
+            command_text: text,
+            tenant_id: tenantId,
+            surface: 'aios',
+            stream: true,
+            conversation_history: followUpHistory,
           }),
         }
       );
+
 
       if (!response.ok) {
         if (response.status === 429) throw new Error('חריגה ממגבלת הקצב. אנא נסה שוב מאוחר יותר.');
