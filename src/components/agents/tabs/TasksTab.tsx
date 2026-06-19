@@ -131,6 +131,9 @@ export function TasksTab({ agent }: { agent: any }) {
         <Button size="sm" variant="outline" onClick={() => navigate(buildPath("/agent-tasks"))}>
           תצוגה מלאה
         </Button>
+        <Button size="sm" variant="outline" onClick={() => testReminder.mutate()} disabled={testReminder.isPending} title="בדיקה: יוצר תזכורת לעוד 2 דקות">
+          <Bell className="h-4 w-4 me-1" /> בדיקה (2 ד׳)
+        </Button>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button size="sm"><Plus className="h-4 w-4 me-1" /> משימה חדשה</Button>
