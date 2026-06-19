@@ -180,7 +180,17 @@ Deno.serve(async (req) => {
 
     const fromRaw = String(payload.from || '');
     const toRaw = String(payload.to || '');
-    const isGroup = fromRaw.endsWith('@g.us') || toRaw.endsWith('@g.us');
+    const chatIdRaw = String(payload.chatId || '');
+    const senderLidRaw = String(payload.senderLid || '');
+    const isGroup = fromRaw.endsWith('@g.us') || toRaw.endsWith('@g.us') || chatIdRaw.endsWith('@g.us');
+
+    // LID detection: Manus often delivers `from` as bare digits but flags the chat as
+    // `@lid` via `chatId` (or includes a `senderLid`). Treat any of these as LID so the
+    // pairing/resolution blocks below actually fire.
+    const isLidEvent =
+      fromRaw.endsWith('@lid') ||
+      chatIdRaw.endsWith('@lid') ||
+      (!!senderLidRaw && senderLidRaw.replace(/\D/g, '') === fromRaw.replace(/\D/g, ''));
 
     // Outbound detection: prefer explicit flags from Manus, then fall back to phone comparison
     const myPhone = (settings.phone_number || '').toString().replace(/\D/g, '');
@@ -223,7 +233,7 @@ Deno.serve(async (req) => {
 
     // ECHO GUARD: Manus mirrors EVERY message (in and out) as inbound @lid events.
     // If we just sent this exact text via Manus or Green API in the last 2 minutes, drop it.
-    if (!isOutgoingFromPhone && fromRaw.endsWith('@lid') && messageText.trim()) {
+    if (!isOutgoingFromPhone && isLidEvent && messageText.trim()) {
       const { data: ownOutbound } = await supabase
         .from('chat_messages')
         .select('id, provider, created_at')
@@ -250,7 +260,7 @@ Deno.serve(async (req) => {
     // as the direction/contact source AND route Carmen replies through Green API
     // (so the reply comes from the same WhatsApp number the operator actually used).
     let pairedFromGreenApi = false;
-    if (!isOutgoingFromPhone && !isGroup && fromRaw.endsWith('@lid') && messageText.trim()) {
+    if (!isOutgoingFromPhone && !isGroup && isLidEvent && messageText.trim()) {
       await new Promise((resolve) => setTimeout(resolve, 2600));
       const { data: greenMatches } = await supabase
         .from('chat_messages')
@@ -284,7 +294,7 @@ Deno.serve(async (req) => {
     // For a direct Carmen flow pinned to this Manus integration and scoped to exactly
     // one phone, resolve the LID to that configured phone so the Carmen trigger/session
     // can match instead of being blocked by the random LID number.
-    if (!isGroup && !pairedFromGreenApi && fromRaw.endsWith('@lid')) {
+    if (!isGroup && !pairedFromGreenApi && isLidEvent) {
       try {
         const carmenAutomation = await findCarmenSessionAutomation(supabase, tenantId, integ.id, {
           isGroup: false,
@@ -296,8 +306,32 @@ Deno.serve(async (req) => {
           ? [...new Set(cfg.carmen_allowed_phones.map((p: any) => String(p).replace(/\D/g, '')).filter(Boolean))]
           : [];
 
-        if ((cfg.carmen_scope_mode || 'all') === 'specific_phone' && allowedPhones.length === 1) {
-          const aliasPhone = allowedPhones[0] as string;
+        // When multiple allowed phones exist, try to pick the one with an active/recent
+        // Carmen session — that's almost certainly the same human we're hearing from now.
+        let aliasPhone: string | null = null;
+        if ((cfg.carmen_scope_mode || 'all') === 'specific_phone' && allowedPhones.length >= 1) {
+          if (allowedPhones.length === 1) {
+            aliasPhone = allowedPhones[0] as string;
+          } else {
+            const idleMin = Number(cfg.session_timeout_minutes) > 0 ? Number(cfg.session_timeout_minutes) : 5;
+            const since = new Date(Date.now() - idleMin * 60 * 1000).toISOString();
+            const { data: recentSessions } = await supabase
+              .from('carmen_whatsapp_sessions')
+              .select('phone, last_message_at, created_at')
+              .eq('tenant_id', tenantId)
+              .eq('status', 'active')
+              .eq('connection_user_id', connectionUserId)
+              .in('phone', allowedPhones)
+              .gte('last_message_at', since)
+              .order('last_message_at', { ascending: false })
+              .limit(1);
+            if (recentSessions && recentSessions.length > 0) {
+              aliasPhone = String(recentSessions[0].phone);
+            }
+          }
+        }
+
+        if (aliasPhone) {
           const idleMinutes = Number(cfg.session_timeout_minutes) > 0 ? Number(cfg.session_timeout_minutes) : 5;
           const aliasChatId = `${aliasPhone}@c.us`;
           const { data: activeAliasSession } = await supabase
