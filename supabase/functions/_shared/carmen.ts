@@ -825,6 +825,15 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
       .eq('id', activeSession.id);
     await routedSend(chatId, carmenResponse);
     await syncCarmenToAIConversation(supabase, activeSession, updatedHistory);
+    await logCarmenAutomationRun(
+      supabase,
+      activeSession.automation_id || earlyAutomation?.id,
+      true,
+      { source: 'carmen_session', mode: 'continue', chat_id: chatId, phone: phoneNumber, sender_name: senderName, message: messageText, is_group: isGroup },
+      carmenResponse,
+      null,
+      handlerStartedAt,
+    );
     return { handled: true, outcome: 'active' };
   }
 
