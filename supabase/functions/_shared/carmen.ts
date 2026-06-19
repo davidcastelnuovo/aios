@@ -589,6 +589,8 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     isIncoming, isManualOutgoing, isGroup, sendMessage,
   } = ctx;
 
+  const handlerStartedAt = Date.now();
+
   // Groups are supported — Carmen replies in the group chat.
   if (!isIncoming && !isManualOutgoing) return { handled: false, reason: 'not_user_message' };
 
