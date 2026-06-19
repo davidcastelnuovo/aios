@@ -49,6 +49,7 @@ import {
   Wrench,
   Megaphone as MegaphoneIcon,
   ClipboardList,
+  AlertTriangle,
 } from "lucide-react";
 import {
   Sidebar,
