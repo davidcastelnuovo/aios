@@ -610,14 +610,14 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
   // create or update a parallel session here. The pinned-integration webhook owns this
   // conversation and will reply. Processing on both channels causes split histories,
   // duplicate replies, and silent drops via the mirror/echo guards.
-  const pinnedIntegrationId = cfg.carmen_integration_id || null;
-  if (pinnedIntegrationId && integrationId && pinnedIntegrationId !== integrationId) {
+  const automationPinnedIntegrationId = cfg.carmen_integration_id || null;
+  if (automationPinnedIntegrationId && integrationId && automationPinnedIntegrationId !== integrationId) {
     console.log('[CARMEN] Dropped: dual-channel duplicate, skipping', {
       tenantId,
       chatId,
       phoneNumber,
       callerIntegrationId: integrationId,
-      pinnedIntegrationId,
+      pinnedIntegrationId: automationPinnedIntegrationId,
       isManualOutgoing,
       isIncoming,
     });
@@ -727,6 +727,7 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
         .eq('tenant_id', tenantId)
         .eq('direction', 'outbound')
         .eq('message_text', messageText)
+        .not('sent_by_user_id', 'is', null)
         .gte('created_at', since)
         .limit(3);
       if (Array.isArray(recentApiSends) && recentApiSends.length > 0) {
@@ -799,9 +800,9 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     return { handled: true, outcome: 'active' };
   }
 
-  // No active session — outgoing (operator-typed) messages OR incoming group messages can start a new one.
-  // In 1-on-1 chats we still require the owner to type the keyword; in groups, any member can trigger Carmen.
-  if (!isManualOutgoing && !isGroup) return { handled: false, reason: 'no_session_inbound' };
+  // No active session — any allowed 1:1/group message can start one, but only if it
+  // includes the trigger keyword below. This is required for direct Manus chats where
+  // the user's "כרמן" arrives as inbound to Carmen's number.
 
   // Don't open a brand-new session from an end-message ("סיימנו כרמן" / "תודה כרמן"),
   // even though it contains the trigger keyword. Same for short acks.
