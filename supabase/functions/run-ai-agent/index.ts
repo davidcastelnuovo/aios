@@ -1584,28 +1584,49 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
 // ===========================
 import { requireAuth } from "../_shared/security.ts";
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
+// Surface for which the agent is currently invoked
+type Surface = 'whatsapp' | 'aios' | 'task'
 
-  const auth = await requireAuth(req)
-  if (!auth) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    })
-  }
+// Emit function used by the streaming wrapper to push SSE events to the client.
+// In non-streaming mode it's a no-op.
+type Emit = ((obj: any) => void) | undefined
 
+async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Promise<Response> {
   try {
-    const { agent_id, command_text, temperature, automation_id, user_name, lead_data, tenant_id, user_id, task_skills, task_mode, conversation_history } = await req.json()
-    console.log(`[AGENT] Starting run: agent=${agent_id}, command="${command_text?.substring(0, 80)}"`)
+    const { agent_id: bodyAgentId, command_text, temperature, automation_id, user_name, lead_data, tenant_id, user_id, task_skills, task_mode, conversation_history } = bodyJson
+    console.log(`[AGENT] Starting run: agent=${bodyAgentId}, command="${command_text?.substring(0, 80)}", surface=${surface}, stream=${!!emit}`)
 
-    if (!agent_id || !command_text) throw new Error('Missing agent_id or command_text')
+    if (!command_text) throw new Error('Missing command_text')
     if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured')
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-    // 1. Fetch agent
-    const { data: agent, error: agentError } = await supabase.from('ai_agents').select('*').eq('id', agent_id).single()
-    if (agentError || !agent) throw new Error(`Agent not found: ${agent_id}`)
+    // 1. Fetch agent — by id, or default to the tenant's Carmen agent
+    let agent: any
+    let agent_id = bodyAgentId
+    if (agent_id) {
+      const { data, error: agentError } = await supabase.from('ai_agents').select('*').eq('id', agent_id).single()
+      if (agentError || !data) throw new Error(`Agent not found: ${agent_id}`)
+      agent = data
+    } else {
+      // No agent_id provided — look up the active Carmen agent for the tenant.
+      // This lets AIOS / other surfaces invoke the unified brain without preloading the id.
+      if (!tenant_id) throw new Error('Missing agent_id or tenant_id (one is required to resolve the agent)')
+      const { data: carmen } = await supabase
+        .from('ai_agents')
+        .select('*')
+        .eq('tenant_id', tenant_id)
+        .or('name.ilike.%carmen%,name.ilike.%כרמן%')
+        .eq('active', true)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+      if (!carmen) throw new Error(`No active Carmen agent found for tenant ${tenant_id}`)
+      agent = carmen
+      agent_id = carmen.id
+      console.log(`[AGENT] Resolved default Carmen agent: ${agent.name} (${agent_id})`)
+    }
+
 
 
     // 2. Resolve tenant
