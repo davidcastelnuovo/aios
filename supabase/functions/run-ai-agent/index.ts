@@ -456,7 +456,17 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
 
       if (!manusRes.ok) {
         const errText = await manusRes.text()
-        throw new Error(`Manus API error: ${errText}`)
+        let parsed: any = null
+        try { parsed = JSON.parse(errText) } catch { /* ignore */ }
+        const detail = parsed?.error || errText
+        // Distinguish between local config errors and real Manus API errors
+        if (manusRes.status === 400 && /not configured|key not found/i.test(String(detail))) {
+          throw new Error(`Manus לא מוגדר עבור הטננט הזה: ${detail}. הוסיפי מפתח API בהגדרות אינטגרציות → Manus.`)
+        }
+        if (manusRes.status === 401) {
+          throw new Error(`Manus auth failed (internal): ${detail}`)
+        }
+        throw new Error(`Manus API error [${manusRes.status}]: ${detail}`)
       }
 
       const manusData = await manusRes.json()
@@ -468,6 +478,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         message: 'המשימה נשלחה ל-Manus AI ורצה ברקע. תוכל לעקוב אחריה בהגדרות Manus.',
       }
     }
+
     case 'get_facebook_campaign_data': {
       const daysBack = args.days || 30
       const sinceDate = new Date()
