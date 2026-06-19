@@ -1563,7 +1563,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         tenantId,
         title: args.title,
         prompt: args.prompt,
-        taskMode: args.task_mode,
+        taskMode: args.task_mode || 'background',
         taskSkills: Array.isArray(args.task_skills) ? args.task_skills : undefined,
         priority: typeof args.priority === 'number' ? args.priority : undefined,
         createdBy: userId !== 'system' ? userId : null,
