@@ -1,0 +1,1 @@
+UPDATE public.ai_agents SET engine = 'gpt-5.4' WHERE engine = 'gpt-5.4-pro';
