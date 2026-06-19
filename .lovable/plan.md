@@ -1,67 +1,49 @@
-# איחוד מלא של מוח כרמן — סוכן אחד, גישה מכל מקום
+## מה הבעיה
+כרמן משתמשת ב־`delegate_to_subagent` גם כשביקשת פעולה שאמורה להסתיים עכשיו, למשל “בדיקת דוח”. הפרומפט הנוכחי אפילו אומר לה שאחרי האצלה היא צריכה לענות “בודקת ברקע”, ולכן ב־AIOS את רואה שוב ושוב את אותה תשובה במקום תוצאה.
 
-הבנתי: ניקוי מלא + שלב 3 עכשיו. אחרי הביצוע יהיה מוח אחד (`run-ai-agent`) שמשרת את הטלפון (WhatsApp) ואת המחשב (AIOS) — אותו פרומפט V2, אותם כלים, אותו זיכרון, אותם MCP+subagents.
+יש כאן שני שורשים:
+1. כללי הפרומפט מעודדים האצלה רחבה מדי: 5+ לקוחות/קמפיינים → לשלוח לתת־סוכן.
+2. ב־AIOS אין מנגנון שמקשר את `sub_task_id` חזרה לשיחה ומכניס את התוצאה לצ׳אט כשמשימת הרקע הסתיימה.
 
-## מה קיים היום (אומת)
+## תוכנית תיקון
 
-| חזית | קוראת ל- | מה יש שם |
-|---|---|---|
-| WhatsApp (Green API + Manus) | `run-ai-agent` (דרך `_shared/carmen.ts`) | פרומפט V2, ~140 כלים, MCP, subagents, זיכרון, סקופ |
-| AIOS (Dialog/CommandBar/Context) | `ai-support-chat` (3257 שורות) | פרומפט נפרד, ~50 כלים משלה, tool loop משלה, SSE |
+### 1. להפוך את ברירת המחדל: ביצוע עכשיו, לא “רקע”
+ב־`supabase/functions/_shared/carmen-prompt-v2.ts` אשנה את חוקי תת־הסוכנים:
+- ב־AIOS כרמן חייבת לבצע ישירות ולתת תוצאה, גם אם זה דורש כמה כלי קריאה.
+- `delegate_to_subagent` מותר רק אם המשתמש ביקש במפורש “ברקע”, “תמשיכי לבד”, “תעדכני אחר כך”, או אם יש חריגה אמיתית של זמן/כמות.
+- בקשות כמו “בדיקת דוח”, “תבדקי”, “תני סיכום”, “רשימת לקוחות” לא יישלחו לתת־סוכן אם אפשר לסיים אותן בשיחה.
+- אם כן נוצרה משימת רקע, כרמן חייבת להחזיר מזהה ברור ואת מה שהיא כן בדקה עד עכשיו, לא רק “אני עובדת”.
 
-## תוכנית הביצוע (סדר עבודה)
+### 2. להסתיר/לרסן את `delegate_to_subagent` ב־AIOS לפי צורך
+ב־`supabase/functions/run-ai-agent/index.ts` אשנה את קטלוג הכלים לפי `surface`:
+- ב־WhatsApp נשאיר אפשרות האצלה בגלל מגבלות זמן ותשובות קצרות.
+- ב־AIOS נעדיף לא לחשוף `delegate_to_subagent` כברירת מחדל, או לחשוף אותו רק כשיש אות מפורש בבקשה לביצוע ברקע.
+- כך “בדיקת דוח” תרוץ בכלים הישירים של כרמן במקום לפתוח משימת רקע.
 
-### שלב A — Streaming SSE ל-`run-ai-agent`
-- תוספת בודדת בסוף ה-handler: אם `body.stream === true` → להחזיר `text/event-stream` במקום JSON.
-- אירועים: `text_delta` (תוכן הודעת ה-assistant), `tool_call` ({name,args}), `tool_result` ({name,result}), `done` ({output, tools_used, execution_time_ms}).
-- במצב לא-stream — אפס שינוי בהתנהגות (WhatsApp ממשיכה כרגיל).
+### 3. תיקון הרקע כשכן צריך רקע
+ב־`supabase/functions/_shared/subagent.ts` וב־`supabase/functions/run-agent-task/index.ts`:
+- משימות שנוצרות ע״י `delegate_to_subagent` יסומנו תמיד `task_mode: 'background'`, כדי שה־AIOS יראה אותן נכון.
+- `run-agent-task` יקרא ל־`run-ai-agent` עם `surface: 'task'`, כדי שהסוכן המשני לא יפעיל עוד האצלה לעצמו וייכנס ללולאה.
+- נוסיף guard: אם משימת רקע מחזירה רק “אני ממשיכה/עובדת ברקע” בלי תוצאה, לא נסמן אותה כהצלחה אמיתית; ננסה להמשיך פעם אחת ואז נכשל עם הודעת אבחון במקום לופ שקט.
 
-### שלב B — שלב 3: קטלוג כלים משותף `_shared/carmen-tools.ts`
-- מוציאים את `ALL_TOOLS` ואת `executeTool` מ-`run-ai-agent/index.ts` למודול משותף.
-- חתימה: `getCarmenTools()` → `{ defs, execute(name, args, ctx) }` כש-`ctx` כולל `supabase, tenantId, userId, callerCampaignerId, agentId, callerRole, callerManagedAgencyIds, surface`.
-- `run-ai-agent` מייבאת ומשתמשת בקטלוג היחיד (לוגיקה זהה — רק מקום אחר).
-- לא נוגעים ב-MCP/subagent loaders שכבר ב-`_shared/`.
+### 4. להחזיר תוצאה לצ׳אט כשהרקע מסתיים
+ב־`src/components/AIOSDialog.tsx`:
+- כשמתקבל `tool_call` של `delegate_to_subagent`, נשמור את ה־task id מה־`tool_result`/`done` אם זמין.
+- כאשר realtime מזהה `agent_tasks.status = completed`, אם יש `result.final_output`, נוסיף הודעת assistant לצ׳אט עם התוצאה בפועל.
+- אם task נכשל, תופיע הודעה ברורה ולא “רץ ברקע...” לנצח.
 
-### שלב C — ניקוי `ai-support-chat`
-שתי חלופות. אני ממליץ על **(1)** שזה ניקוי מלא כפי שביקשת:
+### 5. להוסיף אירועי SSE לתוצאת כלי
+ב־`run-ai-agent` streaming:
+- כרגע AIOS רואה `tool_call` אבל לא תמיד רואה `tool_result`.
+- נוסיף event מסוג `tool_result` אחרי כל כלי, כולל `sub_task_id` כשנוצר תת־סוכן.
+- זה יאפשר ל־AIOS להציג “נפתחה משימת רקע” עם מזהה ולחבר את ההשלמה לשיחה.
 
-**(1) ניקוי מלא — מחיקה והפניה ישירה (מועדף):**
-- AIOS (`AIOSContext.tsx`, `AIOSDialog.tsx`) קוראים ישירות ל-`run-ai-agent` עם `stream: true`, `surface: 'aios'`, `agent_id` של כרמן, `conversation_history`, `command_text`.
-- מתאימים את ה-SSE parser ב-AIOS לפורמט החדש (`text_delta` במקום ה-events הנוכחיים).
-- מוחקים את `supabase/functions/ai-support-chat/` כולה.
+### 6. בדיקות שאעשה אחרי המימוש
+- בדיקת AIOS עם בקשה כמו “בדיקת דוח”: כרמן מחזירה תוצאה, לא רק “עובדת ברקע”.
+- בדיקה שבקשה מפורשת “תעבדי על זה ברקע” עדיין פותחת משימת רקע.
+- בדיקה שמשימת רקע שהושלמה מופיעה בצ׳אט עם `final_output`.
+- בדיקת WhatsApp שלא נשברה ושעדיין משתמשת באותו מוח.
+- בדיקת לוגים של `run-ai-agent` ו־`run-agent-task` לוודא שאין לולאת delegation.
 
-**(2) Proxy דק (חלופה, פחות "ניקוי"):**
-- `ai-support-chat` הופכת ל-~80 שורות שמתרגמות body ומעבירות SSE מ-`run-ai-agent`. AIOS לא משתנה.
-
-הולך עם (1).
-
-### שלב D — Surface flag בפרומפט
-- ל-`run-ai-agent` תוספת פרמטר `surface: 'whatsapp' | 'aios'` (ברירת מחדל `whatsapp` לתאימות).
-- ב-`buildCarmenV2SystemPrompt`: `isWhatsApp` נקבע מ-`surface`. כללי WA הקצרים נדלקים רק כשהטלפון מדבר; ב-AIOS כרמן יכולה לתת תשובות יותר מפורטות.
-- כל השאר זהה (זיכרון, סקילז, סקופ קמפיינר, MCP, subagents) — בשני ה-surfaces.
-
-### שלב E — איחוד שם הסוכן
-- בדיקה: יש סוכן יחיד עם `name ILIKE '%carmen%' OR '%כרמן%'` בכל tenant. אם יש כפילויות — מאחדים לסוכן הראשי (חיפוש דרך ה-DB, לא מחיקה אוטומטית — אדווח לפני).
-- שני ה-surfaces מעבירים את אותו `agent_id` (הסוכן של ה-tenant הנוכחי) → אותם `allowed_tools`, `active_skills`, `metadata.prompt_version=v2`.
-
-### שלב F — אימות עצמי (תבדוק את עצמך)
-1. `deno check` על `run-ai-agent` ו-`_shared/carmen-tools.ts` — חייב לעבור ללא שגיאות חדשות.
-2. `deploy_edge_functions(['run-ai-agent'])`.
-3. `curl_edge_functions` ל-`run-ai-agent` עם stream=false ובדיקה שהכלים עובדים (`list_clients`).
-4. `curl_edge_functions` עם stream=true ואימות שיש `text_delta` + `done`.
-5. בדיקת AIOS UI חי דרך Playwright: לפתוח את ה-Dialog, לשלוח "תני לי 3 לקוחות", לוודא שהתשובה זורמת ושמופיעות tool calls ב-DataCanvas.
-6. בדיקת WhatsApp loop בלוגים של `green-api-webhook` — לוודא ש-`handleCarmenMessage` ממשיך לעבוד וש-`run-ai-agent` מחזיר תשובה תקינה (קריאה ידנית עם payload דמה אם אפשר).
-7. בדיקת `agent_tasks` (subagent מ-Phase 4) דרך AIOS — לוודא שכלי `delegate_to_subagent` נגיש גם משם.
-
-## סיכון ידוע
-- AIOS היום משתמשת ב-`ai-support-chat` להעלאות קולית (`transcribe-voice`) ולכלים ייחודיים (Manus task creation, וכו'). אצטרך לוודא שכל כלי שהיה ב-`ai-support-chat` בלבד עובר לקטלוג המאוחד או נשמר כקריאה נפרדת. **בדיקה ראשונה בשלב B** — diff בין רשימות הכלים.
-
-## מה משתנה בקבצים
-- חדש: `supabase/functions/_shared/carmen-tools.ts`.
-- שינוי: `supabase/functions/run-ai-agent/index.ts` (streaming + import מהקטלוג + surface).
-- שינוי: `supabase/functions/_shared/carmen-prompt-v2.ts` (surface flag).
-- שינוי: `src/contexts/AIOSContext.tsx`, `src/components/AIOSDialog.tsx` (URL חדש + parser SSE).
-- מחיקה: `supabase/functions/ai-support-chat/` (אחרי הוכחה ש-AIOS עובדת על המוח החדש).
-
-## נקודה אחת לאישור
-האם בשלב C אני הולך על **(1) מחיקה מלאה** (מומלץ — זה מה שביקשת)? אם תאשר, אני מתחיל מיד אחרי שאעבור ל-build mode.
+## סיכון
+הסיכון העיקרי הוא שמשימות ארוכות מאוד ב־AIOS ייקחו יותר זמן לפני תשובה. אני מצמצם את זה בכך שרק בקשות ממש ארוכות או בקשות “ברקע” יישארו background, וכל השאר יחזיר תוצאה ישירה.

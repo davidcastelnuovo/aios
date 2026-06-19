@@ -1563,7 +1563,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         tenantId,
         title: args.title,
         prompt: args.prompt,
-        taskMode: args.task_mode,
+        taskMode: args.task_mode || 'background',
         taskSkills: Array.isArray(args.task_skills) ? args.task_skills : undefined,
         priority: typeof args.priority === 'number' ? args.priority : undefined,
         createdBy: userId !== 'system' ? userId : null,
@@ -2148,9 +2148,23 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
 
     // 4. Filter tools
     const allowedTools = (agent.allowed_tools || []) as string[]
-    const filteredTools = allowedTools.length > 0
+    let filteredTools = allowedTools.length > 0
       ? ALL_TOOLS.filter(t => allowedTools.includes(t.name))
       : ALL_TOOLS
+
+    // 4a. Surface-based delegation guard.
+    // - On AIOS: hide delegate_to_subagent unless the user explicitly asked for background work.
+    //   This prevents Carmen from answering "I'm working in the background" to ordinary "check report"
+    //   prompts and forces direct execution + a real answer in the same conversation turn.
+    // - On 'task' surface (a subagent itself running via run-agent-task): hide delegation tools entirely
+    //   so a subagent can't recursively spawn more subagents.
+    const cmd = (command_text || '').toString()
+    const userAskedBackground = /\b(ברקע|תמשיכ[יה]\s+לבד|background|אל\s+תחכ[יה]|תעדכנ[יה]\s+אחר[\s-]?כך|תרוצ[יה]\s+ברקע)\b/i.test(cmd)
+    if (surface === 'task') {
+      filteredTools = filteredTools.filter(t => t.name !== 'delegate_to_subagent' && t.name !== 'delegate_to_manus' && t.name !== 'delegate_to_github_agent')
+    } else if (surface === 'aios' && !userAskedBackground) {
+      filteredTools = filteredTools.filter(t => t.name !== 'delegate_to_subagent')
+    }
 
     const toolsForAPI = filteredTools.map(t => ({ type: 'function', function: t }))
 
@@ -2258,6 +2272,12 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
 
         toolLog.push({ tool: toolName, args: toolArgs, result })
         toolResults.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(result) })
+
+        // Emit tool_result so AIOS can link e.g. delegate_to_subagent → sub_task_id back to the chat.
+        if (emit) {
+          const subTaskId = (result && typeof result === 'object' && (result as any).sub_task_id) || undefined
+          emit({ type: 'tool_result', tool: toolName, sub_task_id: subTaskId, ok: !(result && (result as any).error), error: (result && (result as any).error) || undefined })
+        }
       }
 
       messages.push(...toolResults)

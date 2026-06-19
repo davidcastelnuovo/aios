@@ -123,7 +123,7 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
       }, (payload) => {
         const task = payload.new as any;
         if (task?.task_mode !== 'background') return;
-        
+
         setBackgroundTasks(prev => {
           const idx = prev.findIndex(t => t.id === task.id);
           const updated: BackgroundTask = {
@@ -135,6 +135,30 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
             created_at: task.created_at,
             completed_at: task.completed_at,
           };
+
+          // When a background task transitions to completed/failed, append its result to the chat
+          // so the user actually sees the answer instead of "working in the background…" forever.
+          const wasNotDone = idx < 0 || (prev[idx].status !== 'completed' && prev[idx].status !== 'failed');
+          const isDoneNow = task.status === 'completed' || task.status === 'failed';
+          if (wasNotDone && isDoneNow) {
+            const result = (task.result || {}) as any;
+            let output: string = typeof result.final_output === 'string' ? result.final_output : '';
+            if (!output && Array.isArray(result.conversation_history)) {
+              const lastA = [...result.conversation_history].reverse().find((m: any) => m?.role === 'assistant' && typeof m.content === 'string' && m.content.trim());
+              if (lastA) output = lastA.content;
+            }
+            const errorText = typeof result.error === 'string' ? result.error : '';
+            const header = task.status === 'completed'
+              ? `✅ **משימת רקע הושלמה — ${task.title}**`
+              : `⚠️ **משימת רקע נכשלה — ${task.title}**`;
+            const body = output || errorText || (task.status === 'completed' ? '_(המשימה הסתיימה אך לא החזירה תוצאה.)_' : '_(לא התקבלה הודעת שגיאה.)_');
+            setMessages(m => [...m, {
+              role: 'assistant',
+              content: `${header}\n\n${body}`,
+              timestamp: new Date().toISOString(),
+            }]);
+          }
+
           if (idx >= 0) {
             const copy = [...prev];
             copy[idx] = updated;
@@ -553,6 +577,8 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
     recall_memory: "שולף זיכרון",
     delete_memory: "מוחק זיכרון",
     delegate_to_background: "מעביר לריצה ברקע",
+    delegate_to_subagent: "פותחת משימת רקע",
+    get_subagent_result: "בודקת תוצאת רקע",
     batch_update_client_health: "מעדכן בריאות לקוחות",
     analyze_campaign_performance: "מנתח ביצועי קמפיינים",
   };
