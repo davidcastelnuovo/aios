@@ -1508,6 +1508,7 @@ export type Database = {
           description: string
           id: string
           name: string
+          search_vector: unknown
           steps: string
           tenant_id: string
           trigger_phrases: string[] | null
@@ -1519,6 +1520,7 @@ export type Database = {
           description: string
           id?: string
           name: string
+          search_vector?: unknown
           steps: string
           tenant_id: string
           trigger_phrases?: string[] | null
@@ -1530,6 +1532,7 @@ export type Database = {
           description?: string
           id?: string
           name?: string
+          search_vector?: unknown
           steps?: string
           tenant_id?: string
           trigger_phrases?: string[] | null
