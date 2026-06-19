@@ -653,6 +653,64 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (!res.ok) return { error: 'toggle_failed', details: json }
       return { success: true, campaign_id: args.campaign_id, new_status: args.status, fb: json }
     }
+    case 'analyze_facebook_campaign': {
+      const targetTenantId = accessibleTenantIds[0]
+      const fnUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/fb-campaign-analyze`
+      const res = await fetch(fnUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
+        body: JSON.stringify({ tenant_id: targetTenantId, campaign_id: args.campaign_id }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) return { error: 'analyze_failed', details: json }
+      return json
+    }
+    case 'update_facebook_budget':
+    case 'duplicate_facebook_campaign': {
+      if (args.confirmed !== true) {
+        return { error: 'not_confirmed', message: 'אישור משתמש מפורש נדרש (confirmed=true).' }
+      }
+      const targetTenantId = accessibleTenantIds[0]
+      const action = name === 'update_facebook_budget' ? 'update_budget' : 'duplicate'
+      const fnUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/fb-campaign-control`
+      const res = await fetch(fnUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
+        body: JSON.stringify({
+          tenant_id: targetTenantId,
+          action,
+          campaign_id: args.campaign_id,
+          daily_budget: args.daily_budget,
+          lifetime_budget: args.lifetime_budget,
+          name_suffix: args.name_suffix,
+          confirmed: true,
+        }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) return { error: `${action}_failed`, details: json }
+      return json
+    }
+    case 'get_campaign_alerts': {
+      let q = supabase.from('campaign_alerts')
+        .select('id, tenant_id, client_id, campaign_id, campaign_name, alert_type, severity, details, created_at, acknowledged_at, resolved_at')
+        .in('tenant_id', accessibleTenantIds)
+        .order('created_at', { ascending: false })
+        .limit(100)
+      if (args.client_id) q = q.eq('client_id', args.client_id)
+      if (args.severity) q = q.eq('severity', args.severity)
+      if (args.only_open !== false) q = q.is('resolved_at', null).is('acknowledged_at', null)
+      const { data, error } = await q
+      if (error) return { error: error.message }
+      return { count: data?.length || 0, alerts: data || [] }
+    }
+    case 'acknowledge_campaign_alert': {
+      const { error } = await supabase.from('campaign_alerts')
+        .update({ acknowledged_at: new Date().toISOString() })
+        .eq('id', args.alert_id)
+        .in('tenant_id', accessibleTenantIds)
+      if (error) return { error: error.message }
+      return { success: true, alert_id: args.alert_id }
+    }
     case 'analyze_campaign_performance': {
       // 1. Resolve scope -> list of target clients (active+onboarding)
       let agencyIdsFilter: string[] | null = null
