@@ -306,6 +306,62 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         })),
       }
     }
+    case 'recall_recent_action': {
+      // Check if Carmen already performed an action recently — used before heavy
+      // operations (pulse_check, campaign_analysis, lead_review) so she doesn't
+      // re-run the same work and can answer "I already did it at HH:MM".
+      const action = String(args.action_type || '').trim()
+      const maxHours = Math.max(1, Math.min(168, Number(args.max_age_hours) || 8))
+      const since = new Date(Date.now() - maxHours * 60 * 60 * 1000).toISOString()
+      let q = supabase.from('carmen_memory_episodes')
+        .select('id, topic, topic_tags, summary, importance, ref_date, created_at')
+        .eq('tenant_id', tenantId)
+        .gte('ref_date', since)
+        .order('ref_date', { ascending: false })
+        .limit(3)
+      if (action) q = q.or(`topic.ilike.%${action}%,topic_tags.cs.{${action}}`)
+      const { data, error } = await q
+      if (error) throw error
+      const fmtIl = (iso: string | null) => iso ? new Date(iso).toLocaleString('he-IL', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jerusalem' }) : null
+      return {
+        found: data.length > 0,
+        recent_episodes: data.map((e: any) => ({
+          id: e.id,
+          topic: e.topic,
+          topic_tags: e.topic_tags,
+          summary: e.summary,
+          when_israel: fmtIl(e.ref_date || e.created_at),
+          importance: e.importance,
+        })),
+        guidance: data.length > 0
+          ? 'יש פעולה דומה שנעשתה לאחרונה. אסור לחזור עליה מחדש אלא אם המשתמש ביקש "רענני" / "עכשיו" / "בזמן אמת". ענו עם הסיכום הקיים, ציינו את הזמן, ושאלו אם לרענן.'
+          : 'אין רישום מ-N השעות האחרונות. אפשר להריץ את הפעולה.',
+      }
+    }
+    case 'record_action_episode': {
+      // Persist a heavy-action result into long-term memory so future calls
+      // hit recall_recent_action instead of re-running.
+      const topic = String(args.action_type || args.topic || '').trim()
+      if (!topic) throw new Error('action_type required')
+      const summary = String(args.summary || '').slice(0, 4000)
+      if (!summary) throw new Error('summary required')
+      const tags = Array.isArray(args.topic_tags) && args.topic_tags.length > 0
+        ? args.topic_tags
+        : [topic]
+      const importance = Math.max(1, Math.min(100, Number(args.importance) || 50))
+      const { data, error } = await supabase.from('carmen_memory_episodes').insert({
+        tenant_id: tenantId,
+        topic,
+        topic_tags: tags,
+        summary,
+        importance,
+        ref_date: new Date().toISOString(),
+        source_table: 'agent_runs',
+        participants: callerPhone ? { caller_phone: callerPhone } : {},
+      }).select('id').single()
+      if (error) throw error
+      return { episode_id: data.id, recorded: true }
+    }
     case 'search_tasks': {
       let query = supabase.from('tasks').select('id, title, status, priority, due_date, due_time, notes, duration_minutes, clients(name), leads(company_name), campaigners(full_name)')
         .in('tenant_id', accessibleTenantIds)
