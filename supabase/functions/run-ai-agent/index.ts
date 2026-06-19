@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
 import { resolveModelId } from '../_shared/models.ts'
 import { summarizeAndStoreAgentMemory, recallAgentMemory } from '../_shared/agent-memory.ts'
+import { buildCarmenV2SystemPrompt, shouldUseV2Prompt } from '../_shared/carmen-prompt-v2.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1532,8 +1533,72 @@ Deno.serve(async (req) => {
       `לקוחות פעילים: ${clientsData.data?.length || 0}`,
       `משימות פתוחות: ${tasksData.data?.length || 0}`,
     ].filter(Boolean).join('\n')
-    let systemPrompt = agent.system_prompt || ''
     const isCarmen = agent.name?.toLowerCase().includes('carmen') || agent.name?.includes('כרמן')
+    // ─── PROMPT VERSION SWITCH ───
+    // V2 prompt is opt-in per agent via metadata.prompt_version === 'v2'
+    // Keeps V1 behavior as default; zero risk to existing agents
+    let systemPrompt: string
+    if (shouldUseV2Prompt(agent)) {
+      // Build V2 prompt using the new modular builder
+      // We need to collect all the context that V1 was building inline
+      
+      // Rebuild the context objects that V1 built inline
+      const callerContext = {
+        callerName: callerName ?? undefined,
+        callerCampaignerId: callerCampaignerId ?? undefined,
+        callerRole: callerRole ?? undefined,
+        isManagerRole: isManagerRoleCaller,
+        isTeamManager: isTeamManagerCaller,
+        managedAgencyIds: callerManagedAgencyIds,
+      }
+      
+      const tenantContextObj = {
+        tenantName,
+        tenantId: resolvedTenantId,
+        ownAgencyList,
+        sharedAgencyList,
+        sharedAgenciesCount: sharedAgencies.length,
+        leadsByStatus,
+        totalLeads: leadsData.data?.length || 0,
+        activeClients: clientsData.data?.length || 0,
+        openTasks: tasksData.data?.length || 0,
+      }
+      
+      const memoryItemsObj: any = {
+        instructionItems: memoryRes.data?.filter((m: any) => m.category === 'instructions') || [],
+        otherItems: memoryRes.data?.filter((m: any) => m.category !== 'instructions') || [],
+      }
+      
+      // Build date/time context
+      const now = new Date()
+      const currentDate = now.toLocaleDateString('he-IL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Jerusalem' })
+      const currentTime = now.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jerusalem' })
+      const tomorrowISO = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+      const todayISO = now.toISOString().split('T')[0]
+      
+      // Lead data context
+      const leadDataObj: Record<string, string> = {}
+      if (lead_data) {
+        Object.entries(lead_data).forEach(([k, v]) => { if (v) leadDataObj[k] = String(v) })
+      }
+      
+      systemPrompt = buildCarmenV2SystemPrompt({
+        agent,
+        tenant: tenantContextObj,
+        caller: callerContext,
+        memory: memoryItemsObj,
+        leadData: leadDataObj,
+        taskMode: task_mode,
+        taskSkills: task_skills,
+        isWhatsApp: isCarmen,
+        currentDate,
+        currentTime,
+        todayISO,
+        tomorrowISO,
+      })
+    } else {
+      // ─── V1 PROMPT BUILDING (UNCHANGED) ───
+      systemPrompt = agent.system_prompt || ''
     if (!systemPrompt) {
       const parts = isCarmen
         ? [
