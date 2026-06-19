@@ -2189,7 +2189,11 @@ Deno.serve(async (req) => {
         console.log(`[AGENT] Tool call: ${toolName}`)
         let result: any
         try {
-          result = await executeTool(toolName, toolArgs, supabase, resolvedTenantId, resolvedUserId, callerCampaignerId, agent_id, callerRole, callerManagedAgencyIds)
+          if (mcpExecutors.has(toolName)) {
+            result = await mcpExecutors.get(toolName)!(toolArgs)
+          } else {
+            result = await executeTool(toolName, toolArgs, supabase, resolvedTenantId, resolvedUserId, callerCampaignerId, agent_id, callerRole, callerManagedAgencyIds)
+          }
           console.log(`[AGENT] Tool ${toolName} OK`)
         } catch (e: any) {
           result = { error: e.message }
