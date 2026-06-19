@@ -2312,4 +2312,59 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400,
     })
   }
+}
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
+
+  const auth = await requireAuth(req)
+  if (!auth) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+
+  let bodyJson: any = {}
+  try { bodyJson = await req.json() } catch { /* ignore */ }
+
+  const wantStream = bodyJson.stream === true
+  const surface: Surface = bodyJson.surface === 'aios' ? 'aios'
+    : bodyJson.surface === 'task' ? 'task'
+    : 'whatsapp'
+
+  if (!wantStream) {
+    return await handleRunAgent(bodyJson, surface, undefined)
+  }
+
+  // Streaming mode: AIOS-compatible SSE.
+  // Events emitted: {type:'tool_call',tool,args}, {type:'token',content}, {type:'done',...}
+  const enc = new TextEncoder()
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const emit = (obj: any) => {
+        try { controller.enqueue(enc.encode(`data: ${JSON.stringify(obj)}\n\n`)) } catch { /* ignore */ }
+      }
+      try {
+        const resp = await handleRunAgent(bodyJson, surface, emit)
+        let final: any = {}
+        try { final = await resp.json() } catch { /* ignore */ }
+        emit({ type: 'done', success: final.success !== false, output: final.output, tools_used: final.tools_used, error: final.error })
+      } catch (e: any) {
+        emit({ type: 'error', error: e?.message || String(e) })
+        emit({ type: 'done', success: false, error: e?.message || String(e) })
+      } finally {
+        try { controller.close() } catch { /* ignore */ }
+      }
+    },
+  })
+
+  return new Response(stream, {
+    headers: {
+      ...corsHeaders,
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+    },
+  })
 })
+
