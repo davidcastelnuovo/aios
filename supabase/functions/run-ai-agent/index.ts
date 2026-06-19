@@ -2272,6 +2272,12 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
 
         toolLog.push({ tool: toolName, args: toolArgs, result })
         toolResults.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(result) })
+
+        // Emit tool_result so AIOS can link e.g. delegate_to_subagent → sub_task_id back to the chat.
+        if (emit) {
+          const subTaskId = (result && typeof result === 'object' && (result as any).sub_task_id) || undefined
+          emit({ type: 'tool_result', tool: toolName, sub_task_id: subTaskId, ok: !(result && (result as any).error), error: (result && (result as any).error) || undefined })
+        }
       }
 
       messages.push(...toolResults)
