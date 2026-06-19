@@ -164,7 +164,7 @@ async function getAccessibleTenantIds(supabase: any, tenantId: string): Promise<
   }
 }
 
-async function executeTool(name: string, args: Record<string, any>, supabase: any, tenantId: string, userId: string, callerCampaignerId?: string | null, agentId?: string | null, callerRole?: string | null, callerManagedAgencyIds?: string[] | null): Promise<any> {
+async function executeTool(name: string, args: Record<string, any>, supabase: any, tenantId: string, userId: string, callerCampaignerId?: string | null, agentId?: string | null, callerRole?: string | null, callerManagedAgencyIds?: string[] | null, callerPhone?: string | null): Promise<any> {
   const accessibleTenantIds = await getAccessibleTenantIds(supabase, tenantId)
   // Role-based scope: managers (owner/agency_owner/agency_manager/super_admin) bypass the campaigner narrow-scope.
   const isManagerRole = !!callerRole && ['owner','agency_owner','agency_manager','super_admin'].includes(callerRole)
@@ -243,11 +243,25 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     }
     case 'create_agent_task': {
       // Create task in agent_tasks table (for Carmen herself)
+      // If this looks like a reminder and we know the caller's WhatsApp phone,
+      // inject explicit reminder-delivery instructions so when the dispatcher
+      // fires the task, the agent knows where to send the reminder.
+      const skillsArr: string[] = Array.isArray(args.task_skills) ? args.task_skills : []
+      const titleStr = String(args.title || '')
+      const descStr = String(args.description || '')
+      const looksLikeReminder = skillsArr.includes('reminder')
+        || /תזכור|reminder|להזכיר|תזכר/i.test(titleStr + ' ' + descStr)
+      let finalDescription = descStr || null
+      if (looksLikeReminder && callerPhone) {
+        const reminderText = descStr || titleStr
+        const instruction = `\n\n[הוראת ביצוע אוטומטית לזמן ההפעלה]\nכשמשימה זו רצה, שלחי הודעת WhatsApp תזכורת לטלפון ${callerPhone} עם הטקסט הבא בעברית, בקצרה ובחום:\n"${reminderText}"\nהשתמשי בכלי send_whatsapp_message (או הכלי המתאים לשליחת WhatsApp) עם phone="${callerPhone}". אל תיצרי משימת agent חדשה — רק שלחי את ההודעה ואז סיימי.`
+        finalDescription = (descStr ? descStr : titleStr) + instruction
+      }
       const taskData: any = {
         agent_id: agentId || args.agent_id,
         tenant_id: tenantId,
         title: args.title,
-        description: args.description || null,
+        description: finalDescription,
         priority: args.priority || 5,
         status: 'pending',
         schedule_type: args.schedule_type || 'once',
@@ -258,9 +272,9 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         enabled: true,
         created_by: userId !== 'system' ? userId : null,
       }
-      const { data, error } = await supabase.from('agent_tasks').insert(taskData).select('id, title, status, schedule_type').single()
+      const { data, error } = await supabase.from('agent_tasks').insert(taskData).select('id, title, status, schedule_type, scheduled_at').single()
       if (error) throw error
-      return { agent_task_id: data.id, title: data.title, status: data.status, schedule_type: data.schedule_type }
+      return { agent_task_id: data.id, title: data.title, status: data.status, schedule_type: data.schedule_type, scheduled_at: data.scheduled_at, reminder_phone: looksLikeReminder ? callerPhone : null }
     }
     case 'search_tasks': {
       let query = supabase.from('tasks').select('id, title, status, priority, due_date, due_time, notes, duration_minutes, clients(name), leads(company_name), campaigners(full_name)')
@@ -2290,7 +2304,7 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
           if (mcpExecutors.has(toolName)) {
             result = await mcpExecutors.get(toolName)!(toolArgs)
           } else {
-            result = await executeTool(toolName, toolArgs, supabase, resolvedTenantId, resolvedUserId, callerCampaignerId, agent_id, callerRole, callerManagedAgencyIds)
+            result = await executeTool(toolName, toolArgs, supabase, resolvedTenantId, resolvedUserId, callerCampaignerId, agent_id, callerRole, callerManagedAgencyIds, callerPhone)
           }
           console.log(`[AGENT] Tool ${toolName} OK`)
         } catch (e: any) {
