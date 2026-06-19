@@ -774,6 +774,7 @@ Deno.serve(async (req) => {
     
     // Extract phone number from chatId (format: 972501234567@c.us or group ID)
     const phoneNumber = senderData.chatId.split('@')[0];
+    const sourcePhoneNumber = senderData.sender?.split('@')?.[0]?.replace(/\D/g, '') || null;
     const normalizedPhone = normalizePhone(phoneNumber);
     
     // Extract message text based on message type
@@ -1444,14 +1445,16 @@ Deno.serve(async (req) => {
     // ensures Carmen only replies in groups that the automation explicitly targets.
     if (isIncoming || isManualOutgoing) {
       try {
+        const carmenPhoneNumber = isManualOutgoing && sourcePhoneNumber ? sourcePhoneNumber : phoneNumber;
+        const carmenChatId = isManualOutgoing && sourcePhoneNumber ? `${sourcePhoneNumber}@c.us` : senderData.chatId;
         const result = await handleCarmenMessage({
           supabase: supabaseClient,
           tenantId,
           integrationId: integration.id,
           connectionUserId,
-          chatId: senderData.chatId,
-          phoneNumber,
-          sourcePhoneNumber: senderData.sender?.split('@')?.[0] || null,
+          chatId: carmenChatId,
+          phoneNumber: carmenPhoneNumber,
+          sourcePhoneNumber,
           senderName: senderData.senderName || null,
           messageText,
           isIncoming,
@@ -1509,6 +1512,8 @@ Deno.serve(async (req) => {
             chat_id: senderData.chatId,
             sender_name: senderData.senderName || null,
             sender_phone: phoneNumber,
+            source_phone: sourcePhoneNumber,
+            source_phone_number: sourcePhoneNumber,
             message_text: messageText,
             direction: isOutgoing ? 'outgoing' : 'incoming',
             group_id: null,
