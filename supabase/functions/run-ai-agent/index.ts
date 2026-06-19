@@ -1538,6 +1538,7 @@ Deno.serve(async (req) => {
     // V2 prompt is opt-in per agent via metadata.prompt_version === 'v2'
     // Keeps V1 behavior as default; zero risk to existing agents
     let systemPrompt: string
+    console.log(`[Carmen] agent=${agent.name} prompt_version=${shouldUseV2Prompt(agent) ? 'v2' : 'v1'}`)
     if (shouldUseV2Prompt(agent)) {
       // Build V2 prompt using the new modular builder
       // We need to collect all the context that V1 was building inline
