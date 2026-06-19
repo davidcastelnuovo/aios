@@ -18,6 +18,9 @@ const END_KEYWORD_VARIANTS = [
 const ACK_VARIANTS = [
   'תודה', 'תודה רבה', 'מעולה', 'מעולה תודה', 'סבבה', 'סבבה תודה',
   'אוקיי', 'אוקי', 'ok', 'okay', 'thanks', 'thank you', 'great', 'cool', '👍', '🙏',
+  // Carmen's own minimal acks — if mirrored back as inbound, never reply
+  'כן', 'כן.', 'כאן', 'כאן.', 'אני כאן', 'אני כאן.', 'נראה מצוין', 'נראה מצויין',
+  'הבנתי', 'הבנתי.', 'יאללה', 'בסדר', 'בסדר.',
 ];
 
 function normalize(msg: string): string {
@@ -663,15 +666,55 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     // 🔁 ECHO/LOOP GUARD: if the incoming text matches Carmen's own last assistant reply
     // (verbatim or as prefix), it's almost certainly a self-echo (provider mirrored our
     // send back as inbound). Ignore it to prevent an infinite reply loop.
-    // Require min length 15 on BOTH sides so short legitimate replies like
-    // "כן, אבל..." aren't swallowed when Carmen previously said "כן".
+    // No minimum length — short replies like "כן." mirror back too and were the main
+    // source of "כן/כאן/כן/כאן" loops. We only require an exact equality OR strict
+    // prefix match (not just any substring) so legitimate replies starting with the
+    // same word still get through.
     const history = activeSession.conversation_history || [];
     const lastAssistant = [...history].reverse().find((m: any) => m?.role === 'assistant');
     if (lastAssistant?.content) {
       const a = String(lastAssistant.content).trim();
       const b = String(messageText || '').trim();
-      if (a.length >= 15 && b.length >= 15 && (a === b || a.startsWith(b) || b.startsWith(a))) {
-        console.log('[carmen] Dropping echoed assistant reply for session', activeSession.id);
+      const lastTs = lastAssistant.timestamp ? new Date(lastAssistant.timestamp).getTime() : 0;
+      const ageMs = lastTs ? Date.now() - lastTs : Number.MAX_SAFE_INTEGER;
+      // Within a 90-second window after Carmen's reply, drop any inbound that
+      // equals or strictly starts-with the assistant text — this is the provider
+      // mirror echo. After 90s, only equality counts (so legitimate repeats are
+      // still treated as new turns).
+      const isExact = a === b;
+      const isMirror = ageMs <= 90_000 && (a.startsWith(b) || b.startsWith(a));
+      if (isExact || isMirror) {
+        console.log('[carmen] Dropping echoed assistant reply for session', activeSession.id, { ageMs, len: b.length });
+        await supabase
+          .from('carmen_whatsapp_sessions')
+          .update({ last_message_at: new Date().toISOString() })
+          .eq('id', activeSession.id);
+        return { handled: true, outcome: 'active' };
+      }
+    }
+
+    // 🔁 EXTRA GUARD: if this is the operator's manual outbound (typeWebhook
+    // outgoingMessageReceived) AND the same body was sent by us via API in the
+    // last 60s (chat_messages outbound by service-role/Carmen), it's the
+    // provider mirroring our API send back as "manual outbound". Drop it.
+    if (isManualOutgoing && messageText) {
+      const since = new Date(Date.now() - 60_000).toISOString();
+      const { data: recentApiSends } = await supabase
+        .from('chat_messages')
+        .select('id, sent_by_user_id, raw_provider_data')
+        .eq('tenant_id', tenantId)
+        .eq('direction', 'outbound')
+        .eq('message_text', messageText)
+        .gte('created_at', since)
+        .limit(3);
+      if (Array.isArray(recentApiSends) && recentApiSends.length > 0) {
+        // Any prior outbound row with the same body within 60s = our own API send
+        // mirrored back. Don't process again.
+        console.log('[carmen] Dropping manual-outbound mirror of recent API send', { session: activeSession.id, len: messageText.length });
+        await supabase
+          .from('carmen_whatsapp_sessions')
+          .update({ last_message_at: new Date().toISOString() })
+          .eq('id', activeSession.id);
         return { handled: true, outcome: 'active' };
       }
     }
