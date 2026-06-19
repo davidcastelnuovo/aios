@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
     let userId: string;
 
     if (isServiceRole) {
-      // Internal call from another edge function (e.g. ai-support-chat)
+      // Internal call from another edge function (e.g. run-ai-agent)
       // We'll read senderUserId from the body later
       userId = ''; // will be set from body
     } else {
