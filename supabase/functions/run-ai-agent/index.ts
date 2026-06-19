@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
 import { resolveModelId } from '../_shared/models.ts'
-import { summarizeAndStoreAgentMemory, recallAgentMemory } from '../_shared/agent-memory.ts'
+import { summarizeAndStoreAgentMemory, recallAgentMemory, recallAgentMemoryFTS, saveAgentMemory } from '../_shared/agent-memory.ts'
 import { buildCarmenV2SystemPrompt, shouldUseV2Prompt } from '../_shared/carmen-prompt-v2.ts'
 
 const corsHeaders = {
@@ -87,7 +87,8 @@ const ALL_TOOLS = [
   { name: 'generate_ad_image', description: 'יצירת תמונה למודעה/פוסט באמצעות AI. מחזיר URL של התמונה שנוצרה. השתמש בכלי הזה כדי ליצור ויזואל למודעות ופוסטים ואז השתמש ב-create_social_post כדי לשמור את הפוסט.', parameters: { type: 'object', properties: { prompt: { type: 'string', description: 'תיאור מפורט של התמונה הרצויה באנגלית' }, aspect_ratio: { type: 'string', enum: ['1:1', '16:9', '9:16', '4:5'], description: 'יחס גובה-רוחב' } }, required: ['prompt'] } },
   // MEMORY
   { name: 'save_memory', description: 'שמירת מידע לזיכרון מתמשך (העדפות, פרויקטים, הוראות)', parameters: { type: 'object', properties: { key: { type: 'string', description: 'מפתח זיהוי' }, content: { type: 'string', description: 'התוכן לשמירה' }, category: { type: 'string', enum: ['preferences', 'projects', 'clients', 'workflows', 'personal', 'instructions'] } }, required: ['key', 'content'] } },
-  { name: 'recall_memory', description: 'שליפת זיכרונות שנשמרו', parameters: { type: 'object', properties: { category: { type: 'string' }, search: { type: 'string' } } } },
+  { name: 'recall_memory', description: 'שליפת זיכרונות שנשמרו (key/value, מהיר)', parameters: { type: 'object', properties: { category: { type: 'string' }, search: { type: 'string' } } } },
+  { name: 'recall_memory_fts', description: 'חיפוש זיכרונות חוצה-שיחות עם Full-Text Search ודירוג לפי importance. השתמשי כדי למצוא הקשר רלוונטי משיחות עבר על נושא, לקוח, או הוראה. שונה מ-recall_memory: זה מחפש בכל ה-agent_memory (זיכרונות שנוצרו אוטומטית מסיכומי ריצות + זיכרונות ידניים) ומדורג לפי חשיבות.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'טקסט חיפוש (מילות מפתח, שם לקוח, נושא)' }, limit: { type: 'integer', description: 'ברירת מחדל 5' }, min_importance: { type: 'integer', description: 'סף חשיבות מינימלי 0-100' } }, required: ['query'] } },
   { name: 'delete_memory', description: 'מחיקת זיכרון', parameters: { type: 'object', properties: { key: { type: 'string' } }, required: ['key'] } },
   // KNOWLEDGE BASE (Carmen Memory Pointers + Episodes — ממלכת הידע)
   { name: 'kb_list_folder', description: 'דפדוף בממלכת הידע של כרמן. מחזיר מצביעים (pointers) בתיקייה: clients/, team/, messages/<date>/, conversations/<topic>/, system_map/. הציון `path` הוא ההיררכיה. השתמש כדי לראות מה קיים לפני kb_open.', parameters: { type: 'object', properties: { category: { type: 'string', enum: ['clients','team','messages','conversations','system_map'] }, subcategory: { type: 'string' }, path_prefix: { type: 'string', description: 'תחילית נתיב לסינון, למשל "clients/" או "team/<id>/tasks"' }, limit: { type: 'integer' } } } },
@@ -997,10 +998,23 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     }
     // MEMORY
     case 'save_memory': {
+      const cat = args.category || 'general'
       const { data, error } = await supabase.from('ai_memory').upsert({
-        tenant_id: tenantId, user_id: userId || 'system', key: args.key, content: args.content, category: args.category || 'general',
+        tenant_id: tenantId, user_id: userId || 'system', key: args.key, content: args.content, category: cat,
       }, { onConflict: 'tenant_id,user_id,key' }).select('key, category').single()
       if (error) throw error
+      // Mirror to agent_memory (Hermes FTS layer) for cross-conversation recall
+      const importanceMap: Record<string, number> = {
+        instructions: 95, preferences: 85, personal: 80, projects: 70, clients: 70, workflows: 65, general: 50,
+      }
+      saveAgentMemory({
+        supabase, tenant_id: tenantId, agent_id,
+        category: cat,
+        title: args.key,
+        summary: args.content,
+        importance: importanceMap[cat] ?? 60,
+        metadata: { source: 'save_memory', key: args.key, user_id: userId || 'system' },
+      }).catch(() => {})
       return { saved: true, key: data.key, category: data.category }
     }
     case 'recall_memory': {
@@ -1010,6 +1024,17 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const { data, error } = await query.order('updated_at', { ascending: false }).limit(20)
       if (error) throw error
       return { count: data.length, memories: data }
+    }
+    case 'recall_memory_fts': {
+      // Hermes-style FTS recall across agent_memory (cross-session, importance-aware)
+      const items = await recallAgentMemoryFTS(supabase, {
+        tenant_id: tenantId,
+        agent_id,
+        query_text: args.query || '',
+        limit: args.limit || 5,
+        min_importance: args.min_importance || 0,
+      })
+      return { count: items.length, memories: items }
     }
     case 'delete_memory': {
       const { error } = await supabase.from('ai_memory').delete().in('tenant_id', accessibleTenantIds).eq('key', args.key)
@@ -2014,17 +2039,18 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Per-agent memory recall (non-Carmen agents): pull relevant past episodes by similarity.
-    if (!isCarmen) {
-      try {
-        const recalled = await recallAgentMemory(supabase, agent_id, command_text, 6)
-        if (recalled.length > 0) {
-          const block = recalled.map((m: any) => `• [${m.category}] ${m.title}: ${m.summary}`).join('\n')
-          systemPrompt += `\n\n🧠 === זיכרון רלוונטי מאינטראקציות קודמות ===\n${block}`
-        }
-      } catch (e) {
-        console.error('[AGENT] recall memory failed:', (e as any)?.message)
+    // Per-agent memory recall: pull relevant past episodes.
+    // Carmen uses fast FTS (cheap, indexed). Other agents use embedding similarity.
+    try {
+      const recalled = isCarmen
+        ? await recallAgentMemoryFTS(supabase, { tenant_id: resolvedTenantId, agent_id, query_text: command_text, limit: 5, min_importance: 30 })
+        : await recallAgentMemory(supabase, agent_id, command_text, 6)
+      if (recalled.length > 0) {
+        const block = recalled.map((m: any) => `• [${m.category}${m.importance ? ` · ${m.importance}` : ''}] ${m.title}: ${m.summary}`).join('\n')
+        systemPrompt += `\n\n🧠 === זיכרון רלוונטי מסשנים קודמים ===\n${block}`
       }
+    } catch (e) {
+      console.error('[AGENT] recall memory failed:', (e as any)?.message)
     }
 
     // Inject lead context
@@ -2175,7 +2201,7 @@ Deno.serve(async (req) => {
     }
 
     // 7. Auto-memory for non-Carmen agents (fire and forget, doesn't block response).
-    if (!isCarmen && resolvedTenantId && finalOutput) {
+    if (resolvedTenantId && finalOutput && command_text?.trim().length >= 10) {
       const memPromise = summarizeAndStoreAgentMemory({
         supabase,
         tenant_id: resolvedTenantId,
