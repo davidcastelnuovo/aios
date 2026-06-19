@@ -3,6 +3,8 @@ import { resolveModelId } from '../_shared/models.ts'
 import { summarizeAndStoreAgentMemory, recallAgentMemory, recallAgentMemoryFTS, saveAgentMemory } from '../_shared/agent-memory.ts'
 import { buildCarmenV2SystemPrompt, shouldUseV2Prompt } from '../_shared/carmen-prompt-v2.ts'
 import { loadMcpTools } from '../_shared/mcp-tools.ts'
+import { spawnSubagent, getSubagentResult } from '../_shared/subagent.ts'
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -138,7 +140,13 @@ const ALL_TOOLS = [
   { name: 'recall_skills', description: 'חיפוש סקילים (פרוצדורות שמורות) רלוונטיים למשימה הנוכחית. השתמש כשהמשימה מורכבת/חוזרת ויתכן שכבר יש לך פרוצדורה שמורה לבצע אותה. הסקילים הרלוונטיים ביותר כבר מוזרקים אוטומטית, אבל ניתן לחפש עוד.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'תיאור המשימה לחיפוש' }, limit: { type: 'integer', description: 'ברירת מחדל 5' } }, required: ['query'] } },
   { name: 'create_skill', description: 'יצירת סקיל חדש (פרוצדורה שמורה) אחרי שביצעת משימה מורכבת בהצלחה ויש סיכוי שתבצע אותה שוב. כתוב את ה-body כשלבים ברורים בעברית, מצב מילות טריגר רלוונטיות שיעזרו למצוא את הסקיל בעתיד. אל תיצור סקיל למשימות פשוטות/חד-פעמיות.', parameters: { type: 'object', properties: { name: { type: 'string', description: 'שם קצר וברור (למשל "ניתוח קמפיין שבועי")' }, description: { type: 'string', description: 'משפט אחד שמתאר מתי להשתמש בסקיל הזה' }, body: { type: 'string', description: 'תוכן הסקיל - שלבים מסודרים, באיזה כלים להשתמש, מה לבדוק' }, trigger_phrases: { type: 'array', items: { type: 'string' }, description: 'מילים/ביטויים בעברית או באנגלית שיעזרו למצוא את הסקיל' } }, required: ['name', 'description', 'body'] } },
   { name: 'update_skill', description: 'עדכון/שיפור סקיל קיים על בסיס ניסיון חדש. השתמש כשגילית שצעד מסוים לא עובד טוב או שיש דרך טובה יותר לבצע את המשימה.', parameters: { type: 'object', properties: { skill_id: { type: 'string' }, body: { type: 'string', description: 'תוכן מעודכן' }, description: { type: 'string', description: 'תיאור מעודכן (אופציונלי)' }, change_note: { type: 'string', description: 'הערה קצרה מה השתנה ולמה' } }, required: ['skill_id', 'body'] } },
+  // ===========================
+  // SUBAGENT DELEGATION (Phase 4) — spawn focused background sub-tasks
+  // ===========================
+  { name: 'delegate_to_subagent', description: 'יצירת תת-סוכן (subagent) שירוץ ברקע על משימה ממוקדת — מחקר, ניתוח רב-לקוחות, סריקה ארוכה, או כל עבודה שלא חייבת להיענות בשיחה הנוכחית. מחזיר sub_task_id מיידית. השתמשי בכלי הזה במקום delegate_to_manus כשהמשימה היא פנימית למערכת (מצריכה כלים של כרמן עצמה). אסור להשתמש בו לתשובה קצרה שאפשר לענות מיד — רק כשהמשימה תיקח זמן או צריכה לרוץ ברקע במקביל לשיחה.', parameters: { type: 'object', properties: { title: { type: 'string', description: 'כותרת קצרה לתת-המשימה' }, prompt: { type: 'string', description: 'הוראה מפורטת מה לבצע. כתבי כאילו את מדריכה כרמן אחרת — כללי המטרה, היקף, ומה חייב להחזיר בסוף.' }, task_mode: { type: 'string', enum: ['analyst','sales','support','copywriting','scheduler','onboarding'], description: 'מוד פעולה (אופציונלי)' }, task_skills: { type: 'array', items: { type: 'string' }, description: 'סקילים להפעיל בתת-הסוכן' }, priority: { type: 'integer', description: '1-10' } }, required: ['title','prompt'] } },
+  { name: 'get_subagent_result', description: 'בדיקת מצב/קבלת תוצאה של תת-סוכן שנוצר ב-delegate_to_subagent. מחזיר status, done, ואם הסתיים — output. אל תקראי לזה בלולאה צמודה; אם done=false פשוט המשיכי בעבודה אחרת או הודיעי למשתמש שהמשימה עדיין רצה.', parameters: { type: 'object', properties: { sub_task_id: { type: 'string', description: 'המזהה שהוחזר מ-delegate_to_subagent' } }, required: ['sub_task_id'] } },
 ]
+
 
 // ===========================
 // TOOL EXECUTOR
@@ -1548,10 +1556,28 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       console.log(`[Hermes] Skill updated: ${data.name} v${data.version} - ${args.change_note || ''}`)
       return { skill_id: data.id, name: data.name, version: data.version, message: 'הסקיל עודכן.' }
     }
+    case 'delegate_to_subagent': {
+      if (!args.title || !args.prompt) throw new Error('title and prompt are required')
+      return await spawnSubagent(supabase, {
+        parentAgentId: agentId || null,
+        tenantId,
+        title: args.title,
+        prompt: args.prompt,
+        taskMode: args.task_mode,
+        taskSkills: Array.isArray(args.task_skills) ? args.task_skills : undefined,
+        priority: typeof args.priority === 'number' ? args.priority : undefined,
+        createdBy: userId !== 'system' ? userId : null,
+      })
+    }
+    case 'get_subagent_result': {
+      if (!args.sub_task_id) throw new Error('sub_task_id is required')
+      return await getSubagentResult(supabase, tenantId, args.sub_task_id)
+    }
     default:
       throw new Error(`Unknown tool: ${name}`)
   }
 }
+
 
 // ===========================
 // MAIN HANDLER
