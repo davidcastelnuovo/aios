@@ -1,29 +1,50 @@
-האבחנה: Manos לא עובד כי כרמן מפעילה `delegate_to_manus`, והקריאה ל-Manos מחזירה `Unauthorized` מהמפתח/הרשאה של Manus. אבל לבדיקת דופק בכלל לא צריך Manos — יש לכרמן כלי פנימי `analyze_campaign_performance`, ולכן הבעיה העיקרית היא בחירת כלי שגויה + הודעת רקע מטעה.
+## למה כרמן בחרה ב-Manus, ולמה זה נכשל ב-Unauthorized
 
-התוכנית לתיקון:
+### למה היא בחרה ב-Manus
+עד היום, הכלי `delegate_to_manus` היה תמיד זמין לכרמן (גם ב-AIOS). כש-בקשה הייתה "כבדה" (יותר מ-5 לקוחות, בדיקת דופק וכו'), המודל פשוט בחר במסלול "ברקע" — `delegate_to_manus` — כי זה הכלי היחיד שתואר כ-"רץ ברקע ולוקח דקות עד שעות". הוא לא היה צריך טריגר מילולי, רק היוריסטיקה של המודל.
 
-1. למנוע שימוש ב-Manos מתוך AIOS כברירת מחדל
-   - ב-`supabase/functions/run-ai-agent/index.ts` לסנן גם את `delegate_to_manus` ב-`surface: 'aios'`, אלא אם המשתמש ביקש מפורשות להשתמש ב-Manos.
-   - עבור `בדיקת דופק`, `בדיקת דוח`, `סיכום לקוחות`, `מצב קמפיינים` — כרמן תשתמש בכלים הפנימיים ולא ב-Manos.
+בתיקון של היום הוספתי פילטר ב-`run-ai-agent` (שורות 2163–2175) שמסתיר את `delegate_to_manus` ב-AIOS אלא אם המשתמש כתב במפורש "manus / מנוס / ברקע". זה התיקון להתנהגות, אבל **זה לא מתקן את Manus עצמו**.
 
-2. להקשיח את הפרומפט של כרמן
-   - ב-`supabase/functions/_shared/carmen-prompt-v2.ts` להוסיף כלל מפורש: בדיקת דופק/דוח/קמפיינים מבוצעת עם `analyze_campaign_performance`, לא עם `delegate_to_manus`.
-   - לא לענות “אני עובדת ברקע” אם לא נוצרה בפועל משימת רקע עם `sub_task_id`.
+### למה ה-API מחזיר Unauthorized — זה באג, לא מפתח לא תקין
+מצאתי את שורש הבעיה (וזה היה ככה גם קודם, גם כשנדמה היה שזה "עבד"):
 
-3. לתקן את הודעת הרקע השקרית
-   - ב-`run-ai-agent` להוסיף guard: אם התשובה אומרת שהתחילה עבודה ברקע אבל לא הופעל `delegate_to_subagent`/לא חזר `sub_task_id`, להחליף אותה בתשובה ברורה: “לא התחלתי משימת רקע; אני צריכה להריץ את הבדיקה ישירות/לפרק אותה”.
-   - זה ימנע מצב שהצ׳אט מציג התקדמות שלא קיימת.
+1. `run-ai-agent/index.ts:448-455` קורא ל-`manus-api` עם:
+   ```
+   Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}
+   ```
+2. `manus-api/index.ts:17-28` מריץ:
+   ```
+   supabaseClient.auth.getUser()
+   ```
+   על ה-token. service-role JWT הוא לא משתמש אנושי — אין לו `sub`/user, אז `getUser()` מחזיר `Unauthorized` ו-`manus-api` עוצר עוד לפני שהוא בכלל מנסה לקרוא ל-`api.manus.ai`.
 
-4. לתקן את כשל שמירת הזיכרון
-   - שגיאת `there is no unique or exclusion constraint matching the ON CONFLICT specification` מגיעה מ-`save_memory` על `ai_memory`.
-   - אוסיף מיגרציה עם unique index מתאים ל-`tenant_id, user_id, key`, או אתאים את ה-upsert למבנה הקיים — כדי שכרמן תוכל לזכור את ההנחיה “לא להשתמש ב-Manos לבדיקת דופק”.
+כלומר: **מפתח ה-Manus API שלך תקין לחלוטין**. הוא בכלל לא נבדק. הקריאה נופלת בשלב האימות הפנימי בין שתי edge functions שלנו, לפני יציאה ל-Manus.
 
-5. לשפר את UI הכלים ב-AIOS
-   - ב-`src/components/AIOSDialog.tsx` להציג תוויות ברורות יותר: `delegate_to_manus` כ-“מנסה לשלוח ל-Manos”, ו-`analyze_campaign_performance` כ-“בודקת ביצועי קמפיינים”.
-   - אם יש `tool_result` עם שגיאה, להציג אותה קצר וברור במקום רק שורת “שולף זיכרון”.
+עדות בלוגים: `[AGENT] Tool delegate_to_manus` מסתיים מיידית עם `Manus API error: {"error":"Unauthorized"}` — זו בדיוק ההודעה ש-`manus-api` מחזיר ב-401 משלו, לא ש-Manus החזירה.
 
-6. פריסה ובדיקה
-   - לפרוס את הפונקציות שהשתנו.
-   - לבדוק שוב את התרחיש: “בדיקת דופק” צריך להפעיל `analyze_campaign_performance` ולהחזיר נתונים/כיסוי, בלי `delegate_to_manus` ובלי “עובדת ברקע” אם לא באמת נוצרה משימת רקע.
+זה ככל הנראה היה שבור גם קודם — מה ש"עבד" בעבר היו קריאות מה-UI (עם JWT אמיתי של משתמש), לא מתוך כרמן.
 
-הערה על Manos עצמו: אם תרצי להשתמש ב-Manos למשימות חיצוניות באמת, כן צריך מפתח API תקין/מעודכן בהגדרות Manus. אבל לתיקון הנוכחי אני לא בונה על Manos — אני גורם לכרמן להשתמש בכלים שכבר קיימים במערכת.
+### תוכנית תיקון
+
+**1. תקן את `manus-api` שיקבל קריאה פנימית עם service-role**
+ב-`supabase/functions/manus-api/index.ts`:
+- אם הכותרת `Authorization` היא ה-`SUPABASE_SERVICE_ROLE_KEY` (קריאה פנימית מ-`run-ai-agent`), דלג על `auth.getUser()` וקבל את הזהות מתוך הבקשה (ה-`tenantId` כבר נשלח). אחרת, התנהגות רגילה (אימות משתמש).
+- ככה `delegate_to_manus` יזרום מכרמן → manus-api → api.manus.ai עם המפתח שמאוחסן ב-`tenant_integrations`.
+
+**2. שפר את הודעת השגיאה ב-`delegate_to_manus`**
+ב-`run-ai-agent/index.ts` סביב 437-470: כשהקריאה נכשלת, החזר הודעה שמבחינה בין:
+- "Manus integration not configured" (אין שורה ב-`tenant_integrations`)
+- "Manus API key not found" (יש שורה אבל בלי `api_key`)
+- שגיאה אמיתית מ-`api.manus.ai` (כולל הסטטוס שהיא החזירה)
+
+ככה אם זה ייפול שוב, נדע מיידית אם זה אצלנו או אצלם.
+
+**3. השאר את הפילטר ב-AIOS שכבר נוסף**
+זה נשאר כי גם אחרי התיקון Manus היא משימה של דקות-שעות. ל"בדיקת דופק" אנחנו רוצים תשובה מיידית. רק כשהמשתמש מבקש מפורשות ("מנוס" / "ברקע") הכלי ייחשף.
+
+**4. אימות**
+אחרי הפריסה: תפעילי "כרמן תשלחי ל-מנוס מחקר על X" — נוודא בלוגים של `manus-api` ש-`api.manus.ai` נקראת ושמתקבלת תשובה תקינה (task_id).
+
+### קבצים שיתעדכנו
+- `supabase/functions/manus-api/index.ts` — בייפס auth כשהקורא הוא service-role
+- `supabase/functions/run-ai-agent/index.ts` — הודעות שגיאה מפורטות ב-`delegate_to_manus`
