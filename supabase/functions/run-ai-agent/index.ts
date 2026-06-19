@@ -1010,7 +1010,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const cat = args.category || 'general'
       const { data, error } = await supabase.from('ai_memory').upsert({
         tenant_id: tenantId, user_id: userId || 'system', key: args.key, content: args.content, category: cat,
-      }, { onConflict: 'tenant_id,user_id,key' }).select('key, category').single()
+      }, { onConflict: 'user_id,tenant_id,category,key' }).select('key, category').single()
       if (error) throw error
       // Mirror to agent_memory (Hermes FTS layer) for cross-conversation recall
       const importanceMap: Record<string, number> = {
