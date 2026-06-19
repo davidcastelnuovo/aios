@@ -1,29 +1,37 @@
-## למה כרמן עכשיו קוראת ל-`delegate_to_github_agent` ושוב נכשלת
+## דילוג על התראת אוטומציה כשהמשתמש משייך משימה לעצמו
 
-בצילום רואים: לבקשה "בדיקת דופק לכל הלקוחות בארגון" כרמן הריצה `delegate_to_github_agent` (וקודם לכן שיחזרה זיכרון), וזה נכשל ב-Unauthorized.
+### מה קורה היום
+ה-trigger `trg_notify_task_assigned` (ב-`public.tasks`) שולח לכל שיוך של `campaigner_id` קריאה ל-`trigger-automation` עם `trigger_type='task_assigned'`. זה רץ גם כשמשתמש מכניס משימה לעצמו, ולכן הוא מקבל וואטסאפ של "התראה למשימה" על משימה שהוא בעצמו רק עכשיו יצר.
 
-זו בדיוק אותה תקלה שתיקנו אתמול ב-`manus-api`, אבל ב-edge function אחר:
-- `supabase/functions/github-agent/index.ts:44-47` עושה `supabase.auth.getUser(token)`.
-- `run-ai-agent` קוראת ל-`github-agent` עם `Bearer SUPABASE_SERVICE_ROLE_KEY`.
-- service-role JWT אין לו user → 401 Unauthorized.
+### השינוי
+מיגרציה אחת שמחליפה את הפונקציה `public.notify_task_assigned`. בתחילתה, מיד אחרי בדיקות ה-NULL/NO-CHANGE הקיימות, נוסיף בדיקה:
 
-חוץ מזה, `delegate_to_github_agent` הוא בכלל הכלי הלא נכון לבקשה הזו — הוא מיועד לניתוח שגיאות קוד / תמיכה טכנית, לא לבדיקת דופק לקוחות. ברגע שחסמנו אתמול את `delegate_to_subagent` ואת `delegate_to_manus` ב-AIOS, המודל פשוט קפץ לכלי ה"ברקע" הבא ברשימה — `delegate_to_github_agent`. צריך לסגור גם אותו בנתיב הזה, ולחזק את ההנחיה ש"בדיקת דופק" חייב לרוץ ישירות עם `analyze_campaign_performance`.
+```
+v_actor_user_id := COALESCE(auth.uid(), NEW.created_by);
+IF v_actor_user_id IS NOT NULL THEN
+  v_actor_campaigner_id := public.get_user_campaigner_id(v_actor_user_id);
+  IF v_actor_campaigner_id IS NOT NULL
+     AND v_actor_campaigner_id = NEW.campaigner_id THEN
+    RETURN NEW;  -- שיוך עצמי: לא שולחים התראה
+  END IF;
+END IF;
+```
 
-### תוכנית תיקון
+הסבר:
+- `auth.uid()` הוא המשתמש הפעיל. ב-INSERT שמגיע מה-CRM הוא תואם ל-`created_by` (שכבר מוגדר default ל-`auth.uid()`).
+- ב-UPDATE של `campaigner_id` ע"י קמפיינר על משימה של עצמו — `auth.uid()` יחזיר אותו, ולכן השיוך ייחשב עצמי.
+- `get_user_campaigner_id` כבר קיים במערכת (מתועד בכמה מיגרציות RLS) — ממפה user_id → campaigner_id.
+- super_admin/owner שמשייך לעצמו לא קמפיינר → `get_user_campaigner_id` יחזיר NULL → לא נחשב שיוך עצמי, וההתראה תרוץ כרגיל. אם תרצה שגם הם לא יקבלו התראה על שיוך לעצמם, נוסיף השוואה גם דרך `(SELECT user_id FROM campaigners WHERE id = NEW.campaigner_id) = v_actor_user_id` — תגיד אם אתה רוצה שזה יכוסה.
 
-**1. `supabase/functions/github-agent/index.ts`**
-זיהוי קריאה פנימית עם service-role (אותו דפוס שהפעלנו ב-`manus-api` אתמול): אם `Authorization: Bearer <SUPABASE_SERVICE_ROLE_KEY>` — דלג על `auth.getUser` והמשך עם הקליינט הקיים שמשתמש ב-service-role. אחרת אימות משתמש רגיל.
+### מה לא משתנה
+- שיוך מ-Carmen, מאוטומציות, או מאדמין שמשייך לקמפיינר אחר — ימשיך לטרגר את ההתראה כרגיל.
+- ה-trigger עצמו (`AFTER INSERT OR UPDATE OF campaigner_id`) נשאר.
+- הלוגיקה ב-`trigger-automation` לא משתנה.
 
-**2. `supabase/functions/run-ai-agent/index.ts` — פילטר AIOS**
-ב-`surface === 'aios'`, להוסיף ל-`filteredTools` הסתרה של `delegate_to_github_agent` כברירת מחדל, ולחשוף אותו רק אם המשתמש כתב במפורש `github / שגיאה / קוד / אגנט` (היוריסטיקה דומה ל-Manus). ככה למילים "בדיקת דופק / דוח / לקוחות" לא יהיה כלי "ברקע" זמין בכלל, והמודל יחזור ל-`analyze_campaign_performance`.
+### קובץ שיתעדכן
+- מיגרציה חדשה שמחליפה את `public.notify_task_assigned()` (CREATE OR REPLACE FUNCTION).
 
-**3. `supabase/functions/_shared/carmen-prompt-v2.ts`**
-להוסיף שורה מפורשת: `🚫 אסור להשתמש ב-delegate_to_github_agent ל"בדיקת דופק" / "סיכום לקוחות" / "מצב קמפיינים" — הוא רק לתמיכה טכנית בקוד.`
-
-**4. אימות**
-אחרי deploy: לשלוח שוב "בדיקת דופק לכל הלקוחות בארגון" ולוודא בלוגים של `run-ai-agent` שמופיע `Tool call: analyze_campaign_performance` ולא delegation, ושהתשובה למשתמש מכילה דאטה אמיתי במקום הודעה על ריצה ברקע.
-
-### קבצים שיתעדכנו
-- `supabase/functions/github-agent/index.ts` — בייפס auth ל-service-role (תיקון Unauthorized)
-- `supabase/functions/run-ai-agent/index.ts` — הסתרת `delegate_to_github_agent` ב-AIOS אלא אם נתבקש מפורשות
-- `supabase/functions/_shared/carmen-prompt-v2.ts` — איסור מפורש על השימוש בו לבדיקות פנימיות
+### אימות
+1. כניסה כמשתמש קמפיינר, יצירת משימה ושיוך לעצמו → אין התראה.
+2. אדמין משייך משימה לקמפיינר אחר → ההתראה נשלחת.
+3. שינוי `campaigner_id` של משימה קיימת מקמפיינר אחד למשתמש הפעיל עצמו → אין התראה.
