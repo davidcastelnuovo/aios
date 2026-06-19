@@ -8,10 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { toast } from "sonner";
-import { Loader2, Send, Image as ImageIcon, Film, RefreshCw, EyeOff, MessageSquare } from "lucide-react";
+import { Loader2, Send, Image as ImageIcon, Film, RefreshCw, EyeOff, MessageSquare, Check, ChevronsUpDown } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { he } from "date-fns/locale";
+import { cn } from "@/lib/utils";
 
 type Page = {
   id: string;
@@ -41,6 +44,72 @@ const POST_TYPES = [
   { value: "story", label: "Story" },
   { value: "link", label: "קישור" },
 ];
+
+function PageSearchableSelect({
+  value,
+  onChange,
+  pages,
+  placeholder = "בחר עמוד...",
+  allowAll = false,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  pages: Page[];
+  placeholder?: string;
+  allowAll?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = pages.find((p) => p.id === value);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-full justify-between"
+        >
+          {value === "all" && allowAll
+            ? "כל העמודים"
+            : selected
+              ? `${selected.platform === "instagram" ? "📷" : "📘"} ${selected.page_name}`
+              : placeholder}
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-full p-0" align="start">
+        <Command>
+          <CommandInput placeholder="חפש עמוד..." className="h-9" />
+          <CommandList>
+            <CommandEmpty>לא נמצאו עמודים</CommandEmpty>
+            <CommandGroup>
+              {allowAll && (
+                <CommandItem
+                  value="all"
+                  onSelect={() => { onChange("all"); setOpen(false); }}
+                >
+                  <Check className={cn("ml-2 h-4 w-4", value === "all" ? "opacity-100" : "opacity-0")} />
+                  כל העמודים
+                </CommandItem>
+              )}
+              {pages.map((p) => (
+                <CommandItem
+                  key={p.id}
+                  value={p.page_name}
+                  onSelect={() => { onChange(p.id); setOpen(false); }}
+                >
+                  <Check className={cn("ml-2 h-4 w-4", value === p.id ? "opacity-100" : "opacity-0")} />
+                  {p.platform === "instagram" ? "📷" : "📘"} {p.page_name}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 export default function SocialPublisher() {
   const { tenant } = useCurrentTenant();
@@ -204,16 +273,12 @@ export default function SocialPublisher() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <label className="text-sm font-medium mb-1 block">עמוד יעד</label>
-                <Select value={pageId} onValueChange={setPageId}>
-                  <SelectTrigger><SelectValue placeholder="בחר עמוד..." /></SelectTrigger>
-                  <SelectContent>
-                    {pages.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.platform === "instagram" ? "📷" : "📘"} {p.page_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <PageSearchableSelect
+                  value={pageId}
+                  onChange={setPageId}
+                  pages={pages}
+                  placeholder="בחר עמוד..."
+                />
               </div>
               <div>
                 <label className="text-sm font-medium mb-1 block">סוג פוסט</label>
@@ -268,13 +333,15 @@ export default function SocialPublisher() {
         {/* COMMENTS */}
         <TabsContent value="comments" className="space-y-3">
           <div className="flex items-center justify-between">
-            <Select value={pageId} onValueChange={setPageId}>
-              <SelectTrigger className="w-72"><SelectValue placeholder="עמוד לסינון" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">כל העמודים</SelectItem>
-                {pages.map((p) => <SelectItem key={p.id} value={p.id}>{p.platform === "instagram" ? "📷" : "📘"} {p.page_name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <div className="w-72">
+              <PageSearchableSelect
+                value={pageId || "all"}
+                onChange={setPageId}
+                pages={pages}
+                placeholder="עמוד לסינון"
+                allowAll
+              />
+            </div>
             <Button variant="outline" onClick={fetchComments} disabled={busyId === "fetch"}>
               {busyId === "fetch" ? <Loader2 className="ms-2 h-4 w-4 animate-spin" /> : <RefreshCw className="ms-2 h-4 w-4" />}
               משוך תגובות חדשות
