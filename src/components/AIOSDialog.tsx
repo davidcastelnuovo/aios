@@ -577,6 +577,8 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
     recall_memory: "שולף זיכרון",
     delete_memory: "מוחק זיכרון",
     delegate_to_background: "מעביר לריצה ברקע",
+    delegate_to_subagent: "פותחת משימת רקע",
+    get_subagent_result: "בודקת תוצאת רקע",
     batch_update_client_health: "מעדכן בריאות לקוחות",
     analyze_campaign_performance: "מנתח ביצועי קמפיינים",
   };
