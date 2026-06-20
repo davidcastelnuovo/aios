@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
-import { useUser } from "@supabase/auth-helpers-react";
+
 import { DEFAULT_LAYOUTS } from "../utils/layoutUtils";
 import type { IslandId, LayoutItem } from "../types/visualWorkspaceTypes";
 
