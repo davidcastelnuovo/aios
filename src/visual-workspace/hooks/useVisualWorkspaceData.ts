@@ -30,9 +30,17 @@ export function useVisualWorkspaceData() {
       const todayIso = new Date().toISOString();
 
       const sb = supabase as any;
-      const head = (q: any) => q.then((r: any) => r.count ?? 0);
+      const safeCount = async (q: any): Promise<number> => {
+        try { const r = await q; return r?.count ?? 0; } catch { return 0; }
+      };
+      const safeRows = async (q: any): Promise<any[]> => {
+        try { const r = await q; return r?.data ?? []; } catch { return []; }
+      };
+      const safeMaybe = async (q: any): Promise<any> => {
+        try { const r = await q; return r?.data ?? null; } catch { return null; }
+      };
 
-      const tenantRow = await sb.from("tenants").select("name").eq("id", tid).maybeSingle();
+      const tenantRow = await safeMaybe(sb.from("tenants").select("name").eq("id", tid).maybeSingle());
 
       const [
         clientsActive,
@@ -56,32 +64,32 @@ export function useVisualWorkspaceData() {
         expensePayments,
         unpaidInvoices,
       ] = await Promise.all([
-        head(sb.from("clients").select("id", { count: "exact", head: true }).eq("tenant_id", tid).neq("status", "ended")),
-        head(sb.from("clients").select("id", { count: "exact", head: true }).eq("tenant_id", tid).in("mood_status", ["churn_risk", "not_progressing"])),
-        head(sb.from("tasks").select("id", { count: "exact", head: true }).eq("tenant_id", tid).in("status", ["open", "in_progress"])),
-        head(sb.from("tasks").select("id", { count: "exact", head: true }).eq("tenant_id", tid).in("status", ["open", "in_progress"]).lte("due_date", todayIso)),
-        head(sb.from("ai_agents").select("id", { count: "exact", head: true }).eq("tenant_id", tid).eq("active", true)),
-        head(sb.from("campaign_alerts").select("id", { count: "exact", head: true }).eq("tenant_id", tid).eq("status", "open")),
-        head(sb.from("report_alerts").select("id", { count: "exact", head: true }).eq("tenant_id", tid).eq("is_active", true)),
-        head(sb.from("leads").select("id", { count: "exact", head: true }).eq("tenant_id", tid).gte("created_at", weekAgo)),
-        head(sb.from("leads").select("id", { count: "exact", head: true }).eq("tenant_id", tid).eq("status", "hot")),
-        head(sb.from("social_publications").select("id", { count: "exact", head: true }).eq("tenant_id", tid).eq("status", "scheduled")),
-        head(sb.from("automations").select("id", { count: "exact", head: true }).eq("tenant_id", tid).eq("is_active", true)),
-        head(sb.from("automation_executions").select("id", { count: "exact", head: true }).eq("tenant_id", tid).gte("created_at", weekAgo)),
-        head(sb.from("error_logs").select("id", { count: "exact", head: true }).eq("tenant_id", tid).gte("created_at", weekAgo)),
-        head(sb.from("tenant_integrations").select("id", { count: "exact", head: true }).eq("tenant_id", tid).eq("is_active", true)),
-        head(sb.from("tenant_users").select("user_id", { count: "exact", head: true }).eq("tenant_id", tid)),
-        head(sb.from("agent_runs").select("id", { count: "exact", head: true }).eq("tenant_id", tid).in("status", ["running", "queued"])),
-        head(sb.from("goals").select("id", { count: "exact", head: true }).eq("tenant_id", tid).neq("status", "completed")),
-        sb.from("income_payments").select("amount").eq("tenant_id", tid).gte("payment_date", monthStart),
-        sb.from("expense_payments").select("amount").eq("tenant_id", tid).gte("payment_date", monthStart),
-        head(sb.from("supplier_invoices").select("id", { count: "exact", head: true }).eq("tenant_id", tid).neq("status", "paid")),
+        safeCount(sb.from("clients").select("id", { count: "exact", head: true }).eq("tenant_id", tid).neq("status", "ended")),
+        safeCount(sb.from("clients").select("id", { count: "exact", head: true }).eq("tenant_id", tid).in("mood_status", ["churn_risk", "not_progressing"])),
+        safeCount(sb.from("tasks").select("id", { count: "exact", head: true }).eq("tenant_id", tid).in("status", ["open", "in_progress"])),
+        safeCount(sb.from("tasks").select("id", { count: "exact", head: true }).eq("tenant_id", tid).in("status", ["open", "in_progress"]).lte("due_date", todayIso)),
+        safeCount(sb.from("ai_agents").select("id", { count: "exact", head: true }).eq("tenant_id", tid).eq("active", true)),
+        safeCount(sb.from("campaign_alerts").select("id", { count: "exact", head: true }).eq("tenant_id", tid).eq("status", "open")),
+        safeCount(sb.from("report_alerts").select("id", { count: "exact", head: true }).eq("tenant_id", tid).eq("is_active", true)),
+        safeCount(sb.from("leads").select("id", { count: "exact", head: true }).eq("tenant_id", tid).gte("created_at", weekAgo)),
+        safeCount(sb.from("leads").select("id", { count: "exact", head: true }).eq("tenant_id", tid).eq("status", "hot")),
+        safeCount(sb.from("social_publications").select("id", { count: "exact", head: true }).eq("tenant_id", tid).eq("status", "scheduled")),
+        safeCount(sb.from("automations").select("id", { count: "exact", head: true }).eq("tenant_id", tid).eq("is_active", true)),
+        safeCount(sb.from("automation_executions").select("id", { count: "exact", head: true }).eq("tenant_id", tid).gte("created_at", weekAgo)),
+        safeCount(sb.from("error_logs").select("id", { count: "exact", head: true }).eq("tenant_id", tid).gte("created_at", weekAgo)),
+        safeCount(sb.from("tenant_integrations").select("id", { count: "exact", head: true }).eq("tenant_id", tid).eq("is_active", true)),
+        safeCount(sb.from("tenant_users").select("user_id", { count: "exact", head: true }).eq("tenant_id", tid)),
+        safeCount(sb.from("agent_runs").select("id", { count: "exact", head: true }).eq("tenant_id", tid).in("status", ["running", "queued"])),
+        safeCount(sb.from("goals").select("id", { count: "exact", head: true }).eq("tenant_id", tid).neq("status", "completed")),
+        safeRows(sb.from("income_payments").select("amount").eq("tenant_id", tid).gte("payment_date", monthStart)),
+        safeRows(sb.from("expense_payments").select("amount").eq("tenant_id", tid).gte("payment_date", monthStart)),
+        safeCount(sb.from("supplier_invoices").select("id", { count: "exact", head: true }).eq("tenant_id", tid).neq("status", "paid")),
       ]);
 
-      const incomeMonth = (incomePayments.data ?? []).reduce((s: number, r: any) => s + Number(r.amount || 0), 0);
-      const expenseMonth = (expensePayments.data ?? []).reduce((s: number, r: any) => s + Number(r.amount || 0), 0);
+      const incomeMonth = (incomePayments as any[]).reduce((s: number, r: any) => s + Number(r.amount || 0), 0);
+      const expenseMonth = (expensePayments as any[]).reduce((s: number, r: any) => s + Number(r.amount || 0), 0);
 
-      const businessName = (tenantRow.data?.name as string) || "העסק שלי";
+      const businessName = (tenantRow?.name as string) || "העסק שלי";
       const totalAlerts = campaignAlertsOpen + reportAlertsOpen;
 
       const islands: IslandSummary[] = [
