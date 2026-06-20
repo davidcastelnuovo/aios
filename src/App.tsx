@@ -87,6 +87,7 @@ const ManusSettings = lazy(() => import("./pages/ManusSettings"));
 const ManusTasksPage = lazy(() => import("./pages/ManusTasksPage"));
 const AgentHub = lazy(() => import("./pages/AgentHub"));
 const CarmenInsights = lazy(() => import("./pages/CarmenInsights"));
+const VisualWorkspace = lazy(() => import("./pages/VisualWorkspace"));
 const AgentTasksPage = lazy(() => import("./pages/AgentTasksPage"));
 const SharedDashboard = lazy(() => import("./pages/SharedDashboard"));
 const SharedTable = lazy(() => import("./pages/SharedTable"));
