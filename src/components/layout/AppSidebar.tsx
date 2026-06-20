@@ -52,6 +52,7 @@ import {
   AlertTriangle,
   Send,
   Brain,
+  Sparkles,
 } from "lucide-react";
 import {
   Sidebar,
