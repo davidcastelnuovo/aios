@@ -213,15 +213,12 @@ async function scanTenant(supabase: any, tenant_id: string, token: string, stats
   }
 }
 
-async function runScan() {
-  const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+async function getTokensByTenant(supabase: any) {
   const { data: integrations } = await supabase
     .from('tenant_integrations')
     .select('tenant_id, api_key, shared_from_integration_id')
     .in('integration_type', ['facebook', 'facebook_lead_ads'])
     .eq('is_active', true);
-
-  const stats = { tenants: 0, campaigns_scanned: 0, alerts_created: 0, errors: 0 };
   const tokensByTenant = new Map<string, string>();
   for (const integ of integrations || []) {
     let token = integ.api_key as string | null;
@@ -232,26 +229,57 @@ async function runScan() {
     }
     if (token) tokensByTenant.set(integ.tenant_id, token);
   }
+  return tokensByTenant;
+}
 
-  await Promise.all(Array.from(tokensByTenant.entries()).map(([tid, tok]) => scanTenant(supabase, tid, tok, stats)));
-  console.log('[fb-campaign-monitor] done', JSON.stringify(stats));
+// Single-tenant scan (called per-tenant, runs in its own invocation to stay within CPU limits)
+async function runTenantScan(tenant_id: string) {
+  const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+  const tokens = await getTokensByTenant(supabase);
+  const token = tokens.get(tenant_id);
+  if (!token) return { error: 'no_token' };
+  const stats = { tenants: 0, campaigns_scanned: 0, alerts_created: 0, errors: 0 };
+  await scanTenant(supabase, tenant_id, token, stats);
+  console.log('[fb-campaign-monitor] tenant done', tenant_id, JSON.stringify(stats));
   return stats;
+}
+
+// Fan-out: invokes self once per tenant in background so each runs in its own CPU budget
+async function fanOutAllTenants() {
+  const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+  const tokens = await getTokensByTenant(supabase);
+  const fnUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/fb-campaign-monitor`;
+  const auth = `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`;
+  const tenantIds = Array.from(tokens.keys());
+  // Fire in parallel; do not await responses (each runs background)
+  await Promise.all(tenantIds.map((tid) =>
+    fetch(fnUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': auth },
+      body: JSON.stringify({ tenant_id: tid }),
+    }).catch((e) => console.error('[fb-campaign-monitor] fanout error', tid, e?.message))
+  ));
+  console.log('[fb-campaign-monitor] fanout dispatched', tenantIds.length);
+  return { dispatched: tenantIds.length };
 }
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
-  const url = new URL(req.url);
-  const sync = url.searchParams.get('sync') === '1';
+  let body: any = {};
+  try { body = await req.json(); } catch (_) { /* ignore */ }
+  const tenant_id: string | undefined = body?.tenant_id;
 
   try {
-    if (sync) {
-      const stats = await runScan();
-      return new Response(JSON.stringify({ success: true, stats }), { status: 200, headers: corsHeaders });
+    if (tenant_id) {
+      // Per-tenant child invocation: run scan in background and ack
+      // @ts-ignore
+      EdgeRuntime.waitUntil(runTenantScan(tenant_id).catch((e) => console.error('[fb-campaign-monitor] child bg', tenant_id, e)));
+      return new Response(JSON.stringify({ success: true, started: true, tenant_id }), { status: 202, headers: corsHeaders });
     }
-    // Background mode: return immediately so cron / clients don't time out
-    // @ts-ignore EdgeRuntime is provided in Supabase Edge Functions
-    EdgeRuntime.waitUntil(runScan().catch((e) => console.error('[fb-campaign-monitor] bg', e)));
+    // Parent invocation: fan out per tenant
+    // @ts-ignore
+    EdgeRuntime.waitUntil(fanOutAllTenants().catch((e) => console.error('[fb-campaign-monitor] parent bg', e)));
     return new Response(JSON.stringify({ success: true, started: true }), { status: 202, headers: corsHeaders });
   } catch (err: any) {
     console.error('[fb-campaign-monitor]', err);
