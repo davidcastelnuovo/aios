@@ -601,42 +601,91 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       sinceDate.setDate(sinceDate.getDate() - daysBack)
       const sinceDateStr = sinceDate.toISOString().split('T')[0]
 
-      let query = supabase
-        .from('facebook_insights')
-        .select('campaign_name, date, impressions, clicks, spend, leads_count, reach, cpc, cpm, ctr, cost_per_lead, campaign_status')
-        .in('tenant_id', accessibleTenantIds)
-        .gte('date', sinceDateStr)
-        .order('date', { ascending: false })
-        .limit(500)
-
-      if (args.client_id) {
-        query = query.eq('client_id', args.client_id)
+      if (!args.client_id) {
+        return { error: 'client_id_required', message: 'יש להעביר client_id' }
       }
 
-      const { data, error } = await query
+      // Find campaign tables for this client (CRM dynamic tables that hold FB insights)
+      const { data: campaignTables, error: rpcErr } = await supabase
+        .rpc('find_campaign_tables', { p_client_ids: [args.client_id] })
+      if (rpcErr) throw rpcErr
+      const tableIds = (campaignTables || []).map((t: any) => t.table_id)
+      if (tableIds.length === 0) {
+        return { count: 0, campaigns: [], period: `${daysBack} days`, note: 'no_campaign_table_for_client' }
+      }
+
+      const { data: records, error } = await supabase
+        .from('crm_records').select('data')
+        .in('table_id', tableIds)
+        .in('tenant_id', accessibleTenantIds)
       if (error) throw error
-      return { count: data?.length || 0, campaigns: data || [], period: `${daysBack} days` }
+
+      const rows = (records || [])
+        .map((r: any) => r.data || {})
+        .filter((d: any) => d.date && d.date >= sinceDateStr)
+        .sort((a: any, b: any) => (b.date || '').localeCompare(a.date || ''))
+        .slice(0, 500)
+        .map((d: any) => ({
+          campaign_id: d.campaign_id ?? null,
+          campaign_name: d.campaign_name ?? null,
+          date: d.date ?? null,
+          impressions: d.impressions ?? null,
+          clicks: d.clicks ?? null,
+          spend: d.spend ?? d.cost ?? null,
+          leads_count: d.leads ?? d.leads_count ?? d.form_leads ?? null,
+          reach: d.reach ?? null,
+          cpc: d.cpc ?? null,
+          cpm: d.cpm ?? null,
+          ctr: d.ctr ?? null,
+          cost_per_lead: d.cost_per_lead ?? d.cpl ?? null,
+          campaign_status: d.effective_status ?? d.campaign_status ?? d.configured_status ?? null,
+        }))
+      return { count: rows.length, campaigns: rows, period: `${daysBack} days` }
     }
     case 'list_facebook_campaigns': {
-      let q = supabase
-        .from('facebook_insights')
-        .select('campaign_id, campaign_name, campaign_status, date, spend')
+      if (!args.client_id) {
+        return { error: 'client_id_required', message: 'יש להעביר client_id' }
+      }
+      // Find campaign tables for this client (CRM dynamic tables hold FB insights with status)
+      const { data: campaignTables, error: rpcErr } = await supabase
+        .rpc('find_campaign_tables', { p_client_ids: [args.client_id] })
+      if (rpcErr) throw rpcErr
+      const tableIds = (campaignTables || []).map((t: any) => t.table_id)
+      if (tableIds.length === 0) {
+        return { count: 0, campaigns: [], note: 'no_campaign_table_for_client — חבר טבלת קמפיינים ללקוח (Meta Ads sync).' }
+      }
+
+      const { data: records, error } = await supabase
+        .from('crm_records').select('data')
+        .in('table_id', tableIds)
         .in('tenant_id', accessibleTenantIds)
-        .eq('client_id', args.client_id)
-        .order('date', { ascending: false })
-        .limit(500)
-      if (args.name_search) q = q.ilike('campaign_name', `%${args.name_search}%`)
-      const { data, error } = await q
       if (error) throw error
-      // Dedup by campaign_id, keep most recent status
+
+      const search = (args.name_search || '').toString().toLowerCase()
+      // Dedup by campaign_id, keep row with most recent date
       const map = new Map<string, any>()
-      for (const r of (data || [])) {
-        if (!r.campaign_id) continue
-        if (!map.has(r.campaign_id)) {
-          map.set(r.campaign_id, { campaign_id: r.campaign_id, campaign_name: r.campaign_name, status: r.campaign_status, last_date: r.date })
+      for (const r of (records || [])) {
+        const d = r.data || {}
+        const cid = d.campaign_id
+        if (!cid) continue
+        const name = d.campaign_name || ''
+        if (search && !String(name).toLowerCase().includes(search)) continue
+        const status = d.effective_status ?? d.campaign_status ?? d.configured_status ?? null
+        const date = d.date || ''
+        const existing = map.get(cid)
+        if (!existing || (date > (existing.last_date || ''))) {
+          map.set(cid, {
+            campaign_id: cid,
+            campaign_name: name,
+            status,
+            effective_status: d.effective_status ?? null,
+            configured_status: d.configured_status ?? null,
+            last_date: date || null,
+          })
         }
       }
-      return { count: map.size, campaigns: Array.from(map.values()) }
+      const campaigns = Array.from(map.values()).sort((a, b) => (b.last_date || '').localeCompare(a.last_date || ''))
+      return { count: campaigns.length, campaigns }
     }
     case 'toggle_facebook_campaign': {
       if (args.confirmed !== true) {
