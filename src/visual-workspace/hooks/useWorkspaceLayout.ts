@@ -24,25 +24,30 @@ export function useWorkspaceLayout() {
     if (!userId || !tenantId) return;
     let cancelled = false;
     (async () => {
-      const { data } = await supabase
-        .from("user_workspace_layout")
-        .select("module_id, x_position, y_position, width, height, is_open")
-        .eq("user_id", userId)
-        .eq("tenant_id", tenantId);
-      if (cancelled) return;
-      const merged: LayoutMap = { ...DEFAULT_LAYOUTS };
-      (data ?? []).forEach((row: any) => {
-        merged[row.module_id] = {
-          module_id: row.module_id,
-          x_position: row.x_position,
-          y_position: row.y_position,
-          width: row.width,
-          height: row.height,
-          is_open: row.is_open,
-        };
-      });
-      setLayout(merged);
-      setLoaded(true);
+      try {
+        const { data } = await (supabase as any)
+          .from("user_workspace_layout")
+          .select("module_id, x_position, y_position, width, height, is_open")
+          .eq("user_id", userId)
+          .eq("tenant_id", tenantId);
+        if (cancelled) return;
+        const merged: LayoutMap = { ...DEFAULT_LAYOUTS };
+        (data ?? []).forEach((row: any) => {
+          merged[row.module_id] = {
+            module_id: row.module_id,
+            x_position: row.x_position,
+            y_position: row.y_position,
+            width: row.width,
+            height: row.height,
+            is_open: row.is_open,
+          };
+        });
+        setLayout(merged);
+      } catch (e) {
+        console.warn("[VisualWorkspace] layout load failed", e);
+      } finally {
+        if (!cancelled) setLoaded(true);
+      }
     })();
     return () => { cancelled = true; };
   }, [userId, tenantId]);
