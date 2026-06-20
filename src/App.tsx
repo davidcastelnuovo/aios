@@ -184,6 +184,7 @@ const App = () => (
                   <Route path="/t/:tenantSlug/tenants" element={<ProtectedRoute requiredPermission="tenants"><AppLayout><Tenants /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/automations" element={<ProtectedRoute requiredPermission="automations"><AppLayout><Automations /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/carmen-insights" element={<ProtectedRoute><AppLayout><CarmenInsights /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/visual-workspace" element={<ProtectedRoute><AppLayout><VisualWorkspace /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/campaign-alerts" element={<ProtectedRoute><AppLayout><CampaignAlerts /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/social-publisher" element={<ProtectedRoute><AppLayout><SocialPublisher /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/automations/flow/:automationId" element={<ProtectedRoute requiredPermission="automations"><AutomationFlow /></ProtectedRoute>} />
