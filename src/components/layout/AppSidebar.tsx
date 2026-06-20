@@ -52,6 +52,7 @@ import {
   AlertTriangle,
   Send,
   Brain,
+  Sparkles,
 } from "lucide-react";
 import {
   Sidebar,
@@ -242,6 +243,7 @@ const MENU_TABS: MenuTab[] = [
           { key: "social-publisher", label: "רשתות חברתיות", route: "/social-publisher", icon: Send },
           { key: "agents", label: "סוכני AI", route: "/agents", icon: Bot },
           { key: "carmen-insights", label: "למידה של כרמן", route: "/carmen-insights", icon: Brain },
+          { key: "visual-workspace", label: "Visual Workspace", route: "/visual-workspace", icon: Sparkles },
         ],
       },
       {
