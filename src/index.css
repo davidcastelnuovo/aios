@@ -250,3 +250,14 @@ html {
     padding: 2px 4px;
   }
 }
+
+@keyframes corepulse {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.02); }
+}
+
+@keyframes wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-1.5deg); }
+  75% { transform: rotate(1.5deg); }
+}
