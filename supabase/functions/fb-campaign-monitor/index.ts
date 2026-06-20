@@ -114,134 +114,145 @@ async function upsertAlert(supabase: any, alert: AlertInput) {
   return data;
 }
 
+async function scanCampaign(supabase: any, tenant_id: string, token: string, acc: any, c: any, stats: any) {
+  const isStopped = c.effective_status && !['ACTIVE', 'PAUSED', 'CAMPAIGN_PAUSED'].includes(c.effective_status);
+  const hasIssues = c.issues_info && c.issues_info.length > 0;
+
+  if (isStopped) {
+    const r = await upsertAlert(supabase, {
+      tenant_id, campaign_id: c.id, campaign_name: c.name, ad_account_id: acc.id,
+      alert_type: 'campaign_stopped', severity: 'critical',
+      details: { effective_status: c.effective_status, issues: c.issues_info || [] },
+    });
+    if (r) stats.alerts_created++;
+  } else if (hasIssues) {
+    const r = await upsertAlert(supabase, {
+      tenant_id, campaign_id: c.id, campaign_name: c.name, ad_account_id: acc.id,
+      alert_type: 'campaign_with_issues', severity: 'warning',
+      details: { issues: c.issues_info },
+    });
+    if (r) stats.alerts_created++;
+  }
+
+  if (c.effective_status !== 'ACTIVE') return;
+
+  try {
+    const [insJ, ins7J] = await Promise.all([
+      fetch(`https://graph.facebook.com/v21.0/${c.id}/insights?fields=spend,frequency,ctr,cost_per_action_type&date_preset=today&access_token=${token}`).then(r => r.json()),
+      fetch(`https://graph.facebook.com/v21.0/${c.id}/insights?fields=cost_per_action_type,frequency,ctr&date_preset=last_7d&access_token=${token}`).then(r => r.json()),
+    ]);
+    const today = insJ?.data?.[0];
+    const last7 = ins7J?.data?.[0];
+
+    const cplToday = (today?.cost_per_action_type || []).find((a: any) => a.action_type?.includes('lead'))?.value;
+    const cpl7 = (last7?.cost_per_action_type || []).find((a: any) => a.action_type?.includes('lead'))?.value;
+    if (cplToday && cpl7 && Number(cplToday) > Number(cpl7) * 1.5) {
+      const r = await upsertAlert(supabase, {
+        tenant_id, campaign_id: c.id, campaign_name: c.name, ad_account_id: acc.id,
+        alert_type: 'cpl_spike', severity: 'warning',
+        details: { cpl_today: Number(cplToday), cpl_7d_avg: Number(cpl7), spike_pct: Math.round(((Number(cplToday) / Number(cpl7)) - 1) * 100) },
+      });
+      if (r) stats.alerts_created++;
+    }
+    const freq = Number(last7?.frequency || 0);
+    if (freq > 3.5) {
+      const r = await upsertAlert(supabase, {
+        tenant_id, campaign_id: c.id, campaign_name: c.name, ad_account_id: acc.id,
+        alert_type: 'frequency_high', severity: 'info',
+        details: { frequency: freq },
+      });
+      if (r) stats.alerts_created++;
+    }
+  } catch (_) { /* skip */ }
+}
+
+async function scanAccount(supabase: any, tenant_id: string, token: string, acc: any, stats: any) {
+  const fields = 'id,name,status,effective_status,daily_budget,issues_info';
+  const [campJson, adsJ] = await Promise.all([
+    fetch(`https://graph.facebook.com/v21.0/${acc.id}/campaigns?fields=${fields}&limit=200&access_token=${token}`).then(r => r.json()),
+    fetch(`https://graph.facebook.com/v21.0/${acc.id}/ads?fields=id,name,effective_status,campaign{id,name}&limit=200&effective_status=["DISAPPROVED","PENDING_REVIEW"]&access_token=${token}`).then(r => r.json()),
+  ]);
+  if (campJson?.error) { stats.errors++; return; }
+
+  const campaigns = campJson?.data || [];
+  stats.campaigns_scanned += campaigns.length;
+  // Parallel per-campaign in chunks to limit concurrency
+  const chunkSize = 8;
+  for (let i = 0; i < campaigns.length; i += chunkSize) {
+    await Promise.all(campaigns.slice(i, i + chunkSize).map((c: any) => scanCampaign(supabase, tenant_id, token, acc, c, stats)));
+  }
+
+  for (const ad of adsJ?.data || []) {
+    if (['DISAPPROVED', 'PENDING_REVIEW'].includes(ad.effective_status)) {
+      const r = await upsertAlert(supabase, {
+        tenant_id, campaign_id: ad.campaign?.id || ad.id, campaign_name: ad.campaign?.name,
+        ad_account_id: acc.id, alert_type: 'ad_disapproved',
+        severity: ad.effective_status === 'DISAPPROVED' ? 'critical' : 'warning',
+        details: { ad_id: ad.id, ad_name: ad.name, ad_status: ad.effective_status },
+      });
+      if (r) stats.alerts_created++;
+    }
+  }
+}
+
+async function scanTenant(supabase: any, tenant_id: string, token: string, stats: any) {
+  stats.tenants++;
+  try {
+    const accRes = await fetch(`https://graph.facebook.com/v21.0/me/adaccounts?fields=id,name,account_status&limit=50&access_token=${token}`);
+    const accJson = await accRes.json();
+    if (accJson?.error) { stats.errors++; return; }
+    const accounts = accJson?.data || [];
+    // Parallel accounts
+    await Promise.all(accounts.map((acc: any) => scanAccount(supabase, tenant_id, token, acc, stats).catch((e: any) => {
+      console.error('[fb-campaign-monitor] account error', acc.id, e?.message);
+      stats.errors++;
+    })));
+  } catch (e: any) {
+    console.error('[fb-campaign-monitor] tenant error', tenant_id, e?.message);
+    stats.errors++;
+  }
+}
+
+async function runScan() {
+  const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+  const { data: integrations } = await supabase
+    .from('tenant_integrations')
+    .select('tenant_id, api_key, shared_from_integration_id')
+    .in('integration_type', ['facebook', 'facebook_lead_ads'])
+    .eq('is_active', true);
+
+  const stats = { tenants: 0, campaigns_scanned: 0, alerts_created: 0, errors: 0 };
+  const tokensByTenant = new Map<string, string>();
+  for (const integ of integrations || []) {
+    let token = integ.api_key as string | null;
+    if (!token && integ.shared_from_integration_id) {
+      const { data: src } = await supabase.from('tenant_integrations').select('api_key')
+        .eq('id', integ.shared_from_integration_id).eq('is_active', true).maybeSingle();
+      token = src?.api_key || null;
+    }
+    if (token) tokensByTenant.set(integ.tenant_id, token);
+  }
+
+  await Promise.all(Array.from(tokensByTenant.entries()).map(([tid, tok]) => scanTenant(supabase, tid, tok, stats)));
+  console.log('[fb-campaign-monitor] done', JSON.stringify(stats));
+  return stats;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
+  const url = new URL(req.url);
+  const sync = url.searchParams.get('sync') === '1';
+
   try {
-    const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
-
-    // Get all active FB integrations
-    const { data: integrations } = await supabase
-      .from('tenant_integrations')
-      .select('tenant_id, api_key, shared_from_integration_id')
-      .in('integration_type', ['facebook', 'facebook_lead_ads'])
-      .eq('is_active', true);
-
-    const stats = { tenants: 0, campaigns_scanned: 0, alerts_created: 0, errors: 0 };
-    const tokensByTenant = new Map<string, string>();
-
-    for (const integ of integrations || []) {
-      let token = integ.api_key as string | null;
-      if (!token && integ.shared_from_integration_id) {
-        const { data: src } = await supabase.from('tenant_integrations').select('api_key')
-          .eq('id', integ.shared_from_integration_id).eq('is_active', true).maybeSingle();
-        token = src?.api_key || null;
-      }
-      if (token) tokensByTenant.set(integ.tenant_id, token);
+    if (sync) {
+      const stats = await runScan();
+      return new Response(JSON.stringify({ success: true, stats }), { status: 200, headers: corsHeaders });
     }
-
-    for (const [tenant_id, token] of tokensByTenant) {
-      stats.tenants++;
-      try {
-        // Fetch ad accounts
-        const accRes = await fetch(`https://graph.facebook.com/v21.0/me/adaccounts?fields=id,name,account_status&limit=50&access_token=${token}`);
-        const accJson = await accRes.json();
-        if (accJson?.error) { stats.errors++; continue; }
-
-        for (const acc of accJson?.data || []) {
-          // Active+paused campaigns with insights last 7d
-          const fields = 'id,name,status,effective_status,daily_budget,issues_info';
-          const campRes = await fetch(`https://graph.facebook.com/v21.0/${acc.id}/campaigns?fields=${fields}&limit=200&access_token=${token}`);
-          const campJson = await campRes.json();
-          if (campJson?.error) { stats.errors++; continue; }
-
-          for (const c of campJson?.data || []) {
-            stats.campaigns_scanned++;
-            const isStopped = c.effective_status && !['ACTIVE', 'PAUSED', 'CAMPAIGN_PAUSED'].includes(c.effective_status);
-            const hasIssues = c.issues_info && c.issues_info.length > 0;
-
-            if (isStopped) {
-              const r = await upsertAlert(supabase, {
-                tenant_id,
-                campaign_id: c.id,
-                campaign_name: c.name,
-                ad_account_id: acc.id,
-                alert_type: 'campaign_stopped',
-                severity: 'critical',
-                details: { effective_status: c.effective_status, issues: c.issues_info || [] },
-              });
-              if (r) stats.alerts_created++;
-            } else if (hasIssues) {
-              const r = await upsertAlert(supabase, {
-                tenant_id,
-                campaign_id: c.id,
-                campaign_name: c.name,
-                ad_account_id: acc.id,
-                alert_type: 'campaign_with_issues',
-                severity: 'warning',
-                details: { issues: c.issues_info },
-              });
-              if (r) stats.alerts_created++;
-            }
-
-            // Only check CPL/frequency for ACTIVE campaigns
-            if (c.effective_status === 'ACTIVE') {
-              try {
-                const insR = await fetch(`https://graph.facebook.com/v21.0/${c.id}/insights?fields=spend,frequency,ctr,cost_per_action_type&date_preset=today&access_token=${token}`);
-                const insJ = await insR.json();
-                const today = insJ?.data?.[0];
-                const ins7R = await fetch(`https://graph.facebook.com/v21.0/${c.id}/insights?fields=cost_per_action_type,frequency,ctr&date_preset=last_7d&access_token=${token}`);
-                const ins7J = await ins7R.json();
-                const last7 = ins7J?.data?.[0];
-
-                const cplToday = (today?.cost_per_action_type || []).find((a: any) => a.action_type?.includes('lead'))?.value;
-                const cpl7 = (last7?.cost_per_action_type || []).find((a: any) => a.action_type?.includes('lead'))?.value;
-                if (cplToday && cpl7 && Number(cplToday) > Number(cpl7) * 1.5) {
-                  const r = await upsertAlert(supabase, {
-                    tenant_id, campaign_id: c.id, campaign_name: c.name, ad_account_id: acc.id,
-                    alert_type: 'cpl_spike', severity: 'warning',
-                    details: { cpl_today: Number(cplToday), cpl_7d_avg: Number(cpl7), spike_pct: Math.round(((Number(cplToday) / Number(cpl7)) - 1) * 100) },
-                  });
-                  if (r) stats.alerts_created++;
-                }
-                const freq = Number(last7?.frequency || 0);
-                if (freq > 3.5) {
-                  const r = await upsertAlert(supabase, {
-                    tenant_id, campaign_id: c.id, campaign_name: c.name, ad_account_id: acc.id,
-                    alert_type: 'frequency_high', severity: 'info',
-                    details: { frequency: freq },
-                  });
-                  if (r) stats.alerts_created++;
-                }
-              } catch (_) { /* per-campaign error skip */ }
-            }
-          }
-
-          // Disapproved ads
-          const adsR = await fetch(`https://graph.facebook.com/v21.0/${acc.id}/ads?fields=id,name,effective_status,campaign{id,name}&limit=200&access_token=${token}`);
-          const adsJ = await adsR.json();
-          for (const ad of adsJ?.data || []) {
-            if (['DISAPPROVED', 'PENDING_REVIEW'].includes(ad.effective_status)) {
-              const r = await upsertAlert(supabase, {
-                tenant_id,
-                campaign_id: ad.campaign?.id || ad.id,
-                campaign_name: ad.campaign?.name,
-                ad_account_id: acc.id,
-                alert_type: 'ad_disapproved',
-                severity: ad.effective_status === 'DISAPPROVED' ? 'critical' : 'warning',
-                details: { ad_id: ad.id, ad_name: ad.name, ad_status: ad.effective_status },
-              });
-              if (r) stats.alerts_created++;
-            }
-          }
-        }
-      } catch (e: any) {
-        console.error('[fb-campaign-monitor] tenant error', tenant_id, e?.message);
-        stats.errors++;
-      }
-    }
-
-    return new Response(JSON.stringify({ success: true, stats }), { status: 200, headers: corsHeaders });
+    // Background mode: return immediately so cron / clients don't time out
+    // @ts-ignore EdgeRuntime is provided in Supabase Edge Functions
+    EdgeRuntime.waitUntil(runScan().catch((e) => console.error('[fb-campaign-monitor] bg', e)));
+    return new Response(JSON.stringify({ success: true, started: true }), { status: 202, headers: corsHeaders });
   } catch (err: any) {
     console.error('[fb-campaign-monitor]', err);
     return new Response(JSON.stringify({ error: String(err?.message || err) }), { status: 500, headers: corsHeaders });
