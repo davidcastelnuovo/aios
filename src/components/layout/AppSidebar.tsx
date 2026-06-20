@@ -51,6 +51,7 @@ import {
   ClipboardList,
   AlertTriangle,
   Send,
+  Brain,
 } from "lucide-react";
 import {
   Sidebar,
