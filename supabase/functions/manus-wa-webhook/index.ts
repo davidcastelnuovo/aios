@@ -302,19 +302,25 @@ Deno.serve(async (req) => {
           phoneNumber: counterpartPhone,
         });
         const cfg = carmenAutomation?.configuration || {};
+        const scopeMode = cfg.carmen_scope_mode || 'all';
         const allowedPhones = Array.isArray(cfg.carmen_allowed_phones)
           ? [...new Set(cfg.carmen_allowed_phones.map((p: any) => String(p).replace(/\D/g, '')).filter(Boolean))]
           : [];
+        const idleMin = Number(cfg.session_timeout_minutes) > 0 ? Number(cfg.session_timeout_minutes) : 5;
+        const since = new Date(Date.now() - idleMin * 60 * 1000).toISOString();
 
-        // When multiple allowed phones exist, try to pick the one with an active/recent
-        // Carmen session — that's almost certainly the same human we're hearing from now.
+        // Resolution priority for LID events on private Carmen flows:
+        // 1) Explicit allowed phones (specific_phone scope) — pick fresh session phone, else single allowed phone.
+        // 2) Otherwise (scope=all or no allowed list) — pick the unique fresh active Carmen session
+        //    on this connection. This is what enables continuation messages without re-saying "כרמן".
         let aliasPhone: string | null = null;
-        if ((cfg.carmen_scope_mode || 'all') === 'specific_phone' && allowedPhones.length >= 1) {
+        let aliasReason = '';
+
+        if (scopeMode === 'specific_phone' && allowedPhones.length >= 1) {
           if (allowedPhones.length === 1) {
             aliasPhone = allowedPhones[0] as string;
+            aliasReason = 'single_allowed_phone';
           } else {
-            const idleMin = Number(cfg.session_timeout_minutes) > 0 ? Number(cfg.session_timeout_minutes) : 5;
-            const since = new Date(Date.now() - idleMin * 60 * 1000).toISOString();
             const { data: recentSessions } = await supabase
               .from('carmen_whatsapp_sessions')
               .select('phone, last_message_at, created_at')
@@ -327,12 +333,43 @@ Deno.serve(async (req) => {
               .limit(1);
             if (recentSessions && recentSessions.length > 0) {
               aliasPhone = String(recentSessions[0].phone);
+              aliasReason = 'fresh_session_within_allowed';
+            }
+          }
+        }
+
+        // Generic resolver: even without specific_phone scope, if exactly one fresh
+        // active Carmen session exists on this connection, attribute the @lid event
+        // to it. This makes continuation messages work in "כרמן ישיר" flows.
+        if (!aliasPhone) {
+          const { data: freshSessions } = await supabase
+            .from('carmen_whatsapp_sessions')
+            .select('phone, last_message_at, created_at, automation_id')
+            .eq('tenant_id', tenantId)
+            .eq('status', 'active')
+            .eq('connection_user_id', connectionUserId)
+            .gte('last_message_at', since)
+            .order('last_message_at', { ascending: false })
+            .limit(2);
+          if (freshSessions && freshSessions.length === 1) {
+            aliasPhone = String(freshSessions[0].phone);
+            aliasReason = 'unique_fresh_session';
+          } else if (freshSessions && freshSessions.length > 1 && carmenAutomation?.id) {
+            // Prefer a session bound to the same Carmen automation we matched.
+            const preferred = freshSessions.find((s: any) => s.automation_id === carmenAutomation.id);
+            if (preferred) {
+              aliasPhone = String(preferred.phone);
+              aliasReason = 'fresh_session_matching_automation';
+            } else {
+              console.log('[manus-wa] LID resolution skipped — multiple fresh sessions, no clear owner', {
+                count: freshSessions.length,
+                preview: messageText.slice(0, 60),
+              });
             }
           }
         }
 
         if (aliasPhone) {
-          const idleMinutes = Number(cfg.session_timeout_minutes) > 0 ? Number(cfg.session_timeout_minutes) : 5;
           const aliasChatId = `${aliasPhone}@c.us`;
           const { data: activeAliasSession } = await supabase
             .from('carmen_whatsapp_sessions')
@@ -349,7 +386,7 @@ Deno.serve(async (req) => {
           const lastActivity = activeAliasSession
             ? new Date(activeAliasSession.last_message_at || activeAliasSession.created_at).getTime()
             : 0;
-          const hasFreshAliasSession = !!activeAliasSession && (Date.now() - lastActivity) <= idleMinutes * 60 * 1000;
+          const hasFreshAliasSession = !!activeAliasSession && (Date.now() - lastActivity) <= idleMin * 60 * 1000;
           const triggerKeyword = String(cfg.trigger_keyword || 'כרמן').toLowerCase();
           const hasTriggerKeyword = String(messageText || '').toLowerCase().includes(triggerKeyword);
 
@@ -365,6 +402,8 @@ Deno.serve(async (req) => {
           console.log('[manus-wa] resolved LID for Carmen direct flow', {
             fromRaw,
             aliasPhone,
+            aliasReason,
+            scopeMode,
             manualLike: isOutgoingFromPhone,
             hasFreshAliasSession,
             hasTriggerKeyword,
