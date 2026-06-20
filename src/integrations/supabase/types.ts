@@ -9039,6 +9039,48 @@ export type Database = {
           },
         ]
       }
+      user_workspace_layout: {
+        Row: {
+          created_at: string
+          height: number
+          id: string
+          is_open: boolean
+          module_id: string
+          tenant_id: string
+          updated_at: string
+          user_id: string
+          width: number
+          x_position: number
+          y_position: number
+        }
+        Insert: {
+          created_at?: string
+          height?: number
+          id?: string
+          is_open?: boolean
+          module_id: string
+          tenant_id: string
+          updated_at?: string
+          user_id: string
+          width?: number
+          x_position?: number
+          y_position?: number
+        }
+        Update: {
+          created_at?: string
+          height?: number
+          id?: string
+          is_open?: boolean
+          module_id?: string
+          tenant_id?: string
+          updated_at?: string
+          user_id?: string
+          width?: number
+          x_position?: number
+          y_position?: number
+        }
+        Relationships: []
+      }
       whatsapp_groups: {
         Row: {
           agency_id: string | null
