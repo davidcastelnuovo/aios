@@ -301,6 +301,8 @@ const modulePermissions: Record<string, string> = {
   "campaign-alerts": "automations",
   "social-publisher": "social_media",
   agents: "agents",
+  "carmen-insights": "agents",
+  "visual-workspace": "agents",
   // ── אינטגרציות ──────────────────────────────────────────────────────
   "lead-integrations": "lead_integrations",
   integrations: "integrations",
