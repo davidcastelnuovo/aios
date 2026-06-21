@@ -375,6 +375,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
           </div>
           <div className="border-t p-3">
             <ClientReportPanel
+              key={`${clientId}-${activeItem.raw.id}`}
               table={activeItem.raw}
               clientId={clientId}
               tenantId={tenantId || ""}
