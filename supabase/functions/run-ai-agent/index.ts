@@ -4,6 +4,7 @@ import { summarizeAndStoreAgentMemory, recallAgentMemory, recallAgentMemoryFTS, 
 import { buildCarmenV2SystemPrompt, shouldUseV2Prompt } from '../_shared/carmen-prompt-v2.ts'
 import { loadMcpTools } from '../_shared/mcp-tools.ts'
 import { spawnSubagent, getSubagentResult } from '../_shared/subagent.ts'
+import { buildSkillsBlock, resolveActiveSkills } from '../_shared/skills/registry.ts'
 
 
 const corsHeaders = {
