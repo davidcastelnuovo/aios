@@ -194,9 +194,10 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
     setCaptureReady(false);
     setScreenshotBlob(null);
 
-    // Show stale cached image only as a placeholder while we sync+recapture
-    const cached = localStorage.getItem(CACHE_KEY_PREFIX + table.id);
-    setScreenshotUrl(cached || null);
+    // Always start blank on table/client switch — never show a stale cached image
+    // from a previous client. The placeholder UI handles the "loading" state.
+    setScreenshotUrl(null);
+
 
     let cancelled = false;
 

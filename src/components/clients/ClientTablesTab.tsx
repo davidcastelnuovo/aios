@@ -332,6 +332,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
           </div>
           <div className="border-t p-3">
             <ClientDashboardPanel
+              key={`${clientId}-${activeItem.raw.id}`}
               dashboard={{ id: activeItem.raw.id, name: activeItem.raw.name }}
               clientId={clientId}
               tenantId={tenantId || ""}
@@ -375,6 +376,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
           </div>
           <div className="border-t p-3">
             <ClientReportPanel
+              key={`${clientId}-${activeItem.raw.id}`}
               table={activeItem.raw}
               clientId={clientId}
               tenantId={tenantId || ""}
