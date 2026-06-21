@@ -2726,6 +2726,32 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
       }
     }
 
+    // 8. Run trace — one row per turn so we can audit later whether Carmen
+    // actually executed what she claimed. Same shape across every surface.
+    try {
+      await supabase.from('agent_action_log').insert({
+        tenant_id: resolvedTenantId,
+        agent_id,
+        action_type: 'agent_turn',
+        status: 'success',
+        action_details: {
+          surface,
+          command_preview: String(command_text || '').slice(0, 240),
+          tools_used: toolLog.map((t: any) => t.tool),
+          tool_count: toolLog.length,
+          output_preview: String(finalOutput || '').slice(0, 600),
+          caller_role: callerRole,
+          caller_campaigner_id: callerCampaignerId,
+        },
+        user_id: callerUserId,
+        tool_calls: toolLog.length,
+        model,
+        duration_ms: executionTime,
+      })
+    } catch (e: any) {
+      console.error('[AGENT] action_log insert failed:', e?.message)
+    }
+
     return new Response(JSON.stringify({
       success: true,
       output: finalOutput,
