@@ -113,7 +113,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
   const params = useParams();
   const shareToken = shareTokenOverride ?? params.shareToken;
   const queryClient = useQueryClient();
-  const [dateFilter, setDateFilter] = useState('last_30_days');
+  const [dateFilter, setDateFilter] = useState('last_7_days');
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
