@@ -2042,28 +2042,31 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
 
     // ─── 2.7. Code-level instruction capture (cross-channel learning) ───
     // Don't depend on the model deciding to call save_memory. Whenever the user
-    // says "תזכרי / מעכשיו / תמיד / אל תעשי / שמרי / תרשמי / remember / from now on",
-    // persist the instruction to ai_memory (category=instructions) and mirror it to
-    // agent_memory BEFORE we even call the model. This way the rule survives the
-    // current turn even if the model errors out, and it loads automatically into the
-    // memory block on every subsequent turn — across WhatsApp / internal chat / AIOS.
+    // says a learning trigger, persist the FULL surrounding sentence to ai_memory
+    // (category=instructions) and mirror to agent_memory BEFORE we call the model.
+    // Survives model errors and loads automatically into every subsequent turn —
+    // across WhatsApp / internal_chat / AIOS / task surfaces.
+    let instructionCaptured: string | null = null
     try {
       const cmdRaw = String(command_text || '').trim()
-      const looksLikeInstruction = cmdRaw.length > 0 && cmdRaw.length < 800 && (
-        /(^|[\s,.!?])(תזכרי|זכרי|תזכור|שמרי|תרשמי|מעכשיו|מהיום והלאה|תמיד|לעולם|אל תעני|אל תעשי|אל תכתבי)([\s,.!?]|$)/.test(cmdRaw)
-        || /\b(remember|from now on|always|never)\b/i.test(cmdRaw)
-      )
+      const TRIGGER_RE = /(תזכרי|זכרי|תזכור|שמרי|תרשמי|מעכשיו|מהיום והלאה|תמיד|לעולם|אל\s*תעני|אל\s*תעשי|אל\s*תכתבי|אל\s*תשכחי|שימי\s*לב|תכניסי\s*לזיכרון|הוסיפי\s*לזיכרון|גם\s*בזיכרון|תזכרי\s*גם|remember|from\s*now\s*on|always|never|note\s*that|learn\s*this)/i
+      const m = cmdRaw.match(TRIGGER_RE)
+      const looksLikeInstruction = !!m && cmdRaw.length > 0 && cmdRaw.length < 1500
       if (looksLikeInstruction && resolvedTenantId) {
+        // Extract the surrounding sentence/paragraph (split on . ! ? newlines, max ~400 chars)
+        const triggerIdx = m!.index ?? 0
+        const before = cmdRaw.slice(0, triggerIdx).split(/[\.!?\n]/).slice(-1)[0] || ''
+        const after = cmdRaw.slice(triggerIdx).split(/[\.!?\n]/)[0] || ''
+        const sentence = (before + after).trim().slice(0, 400) || cmdRaw.slice(0, 400)
         // Build a stable snake_case key from a short hash of the content.
-        const norm = cmdRaw.replace(/\s+/g, ' ').slice(0, 240)
         let h = 0
-        for (let i = 0; i < norm.length; i++) h = ((h << 5) - h + norm.charCodeAt(i)) | 0
+        for (let i = 0; i < sentence.length; i++) h = ((h << 5) - h + sentence.charCodeAt(i)) | 0
         const keyBase = `instr_${Math.abs(h).toString(36)}`
         await supabase.from('ai_memory').upsert({
           tenant_id: resolvedTenantId,
           user_id: callerUserId || resolvedUserId || 'system',
           key: keyBase,
-          content: norm,
+          content: sentence,
           category: 'instructions',
         }, { onConflict: 'user_id,tenant_id,category,key' })
         // Mirror to Hermes FTS layer (agent_memory) so cross-conversation recall sees it.
@@ -2074,12 +2077,13 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
             agent_id,
             category: 'instructions',
             title: keyBase,
-            summary: norm,
+            summary: sentence,
             importance: 95,
-            metadata: { source: 'auto_instruction_capture', surface, key: keyBase },
+            metadata: { source: 'auto_instruction_capture', surface, key: keyBase, trigger: m![0] },
           })
         } catch (_) { /* non-fatal */ }
-        console.log(`[AGENT] Auto-captured instruction (${surface}) → key=${keyBase}`)
+        instructionCaptured = sentence
+        console.log(`[AGENT] Auto-captured instruction (${surface}, trigger="${m![0]}") → key=${keyBase}`)
       }
     } catch (e: any) {
       console.error('[AGENT] auto-instruction capture failed:', e?.message)
