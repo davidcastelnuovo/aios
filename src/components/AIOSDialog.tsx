@@ -232,7 +232,7 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
           body: JSON.stringify({
             command_text: input,
             tenant_id: tenantId,
-            surface: 'aios',
+            surface: 'internal_chat',
             stream: true,
             conversation_history: conversationHistory,
           }),
@@ -466,7 +466,7 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
           body: JSON.stringify({
             command_text: text,
             tenant_id: tenantId,
-            surface: 'aios',
+            surface: 'internal_chat',
             stream: true,
             conversation_history: followUpHistory,
           }),
@@ -584,6 +584,14 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
     analyze_campaign_performance: "מנתח ביצועי קמפיינים",
     delegate_to_manus: "מנסה לשלוח ל-Manus (חיצוני)",
   };
+
+  const hiddenToolCalls = new Set([
+    'save_memory',
+    'recall_memory',
+    'recall_recent_action',
+    'record_action_episode',
+    'kb_learn',
+  ]);
 
   const SidebarContent = () => (
     <>
@@ -747,7 +755,7 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
             </div>
           ) : (
             <div className="space-y-3 max-w-2xl mx-auto">
-              {messages.map((msg, idx) => (
+              {messages.filter((msg) => msg.role !== 'tool_call' || !hiddenToolCalls.has(msg.tool || '')).map((msg, idx) => (
                 <div key={idx}>
                   {msg.role === 'user' ? (
                     <div className="flex justify-end">
