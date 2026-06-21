@@ -931,6 +931,17 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         const cplOlder = leadsOlder > 0 ? spendOlder / leadsOlder : null
         const cplChangePct = cplOlder && cpl7 ? ((cpl7 - cplOlder) / cplOlder * 100) : null
 
+        // Ecommerce metrics (purchases / purchase_value / roas)
+        const purchases7 = sum(last7d, 'purchases')
+        const purchasesOlder = sum(older, 'purchases')
+        const purchaseValue7 = sum(last7d, 'purchase_value')
+        const purchaseValueOlder = sum(older, 'purchase_value')
+        const cpp7 = purchases7 > 0 ? spend7 / purchases7 : null
+        const cppOlder = purchasesOlder > 0 ? spendOlder / purchasesOlder : null
+        const cppChangePct = cppOlder && cpp7 ? ((cpp7 - cppOlder) / cppOlder * 100) : null
+        const roas7 = spend7 > 0 ? purchaseValue7 / spend7 : null
+        const profit7 = purchaseValue7 - spend7
+
         const updatedTimes = last30d.map((r: any) => r.data?.updated_time).filter((t: any) => t).sort().reverse()
         const lastCampaignUpdate = updatedTimes[0] || null
         const daysSinceLastCampaignTouch = lastCampaignUpdate
@@ -939,24 +950,44 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
 
         const lastDataDate = last30d.map((r: any) => r.data?.date).filter(Boolean).sort().reverse()[0] || null
 
+        const isEcom = !!client.is_ecommerce
+        const ecomAlert = isEcom
+          ? (roas7 !== null && roas7 < 1 ? '🔴 ROAS<1 הפסד'
+            : purchases7 === 0 && spend7 > 0 ? '🔴 אין רכישות'
+            : roas7 !== null && roas7 < 1.5 ? '🟠 ROAS נמוך'
+            : (cppChangePct !== null && cppChangePct > 25) ? '🟠 CPP עלה'
+            : '🟢 תקין')
+          : null
+
         synced_clients.push({
           client_id: client.id,
           client_name: client.name,
           agency_name: client.agencies?.name ?? null,
+          is_ecommerce: isEcom,
           spend_7d: Math.round(spend7 * 100) / 100,
           spend_30d: Math.round((spend7 + spendOlder) * 100) / 100,
           leads_7d: leads7,
           leads_30d: leads7 + leadsOlder,
           cpl_7d: cpl7 ? Math.round(cpl7 * 100) / 100 : null,
           cpl_30d_avg: cplOlder ? Math.round(cplOlder * 100) / 100 : null,
+          // Ecommerce metrics — present for all clients but the skill only uses them when is_ecommerce=true
+          purchases_7d: purchases7,
+          purchases_30d: purchases7 + purchasesOlder,
+          revenue_7d: Math.round(purchaseValue7 * 100) / 100,
+          revenue_30d: Math.round((purchaseValue7 + purchaseValueOlder) * 100) / 100,
+          cpp_7d: cpp7 ? Math.round(cpp7 * 100) / 100 : null,
+          cpp_change_pct: cppChangePct !== null ? Math.round(cppChangePct * 10) / 10 : null,
+          roas_7d: roas7 !== null ? Math.round(roas7 * 100) / 100 : null,
+          profit_7d: Math.round(profit7 * 100) / 100,
           spend_change_pct: spendChangePct !== null ? Math.round(spendChangePct * 10) / 10 : null,
           cpl_change_pct: cplChangePct !== null ? Math.round(cplChangePct * 10) / 10 : null,
           last_data_date: lastDataDate,
           last_campaign_update: lastCampaignUpdate,
           days_since_last_campaign_touch: daysSinceLastCampaignTouch,
-          alert: spendChangePct !== null && spendChangePct > 15 ? '🔴 התייקרות' : (cplChangePct !== null && cplChangePct > 20 ? '🟡 עלייה בעלות לליד' : '🟢 תקין'),
+          alert: isEcom ? ecomAlert : (spendChangePct !== null && spendChangePct > 15 ? '🔴 התייקרות' : (cplChangePct !== null && cplChangePct > 20 ? '🟡 עלייה בעלות לליד' : '🟢 תקין')),
         })
       }
+
 
       synced_clients.sort((a: any, b: any) => (b.spend_change_pct || 0) - (a.spend_change_pct || 0))
 
