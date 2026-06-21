@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Plus, Workflow, CalendarRange } from "lucide-react";
+import { Plus, Workflow, CalendarRange, ArrowRight } from "lucide-react";
 import { ClientSelector } from "@/components/marketing/ClientSelector";
 import { ClientConnectionsBar } from "@/components/marketing/ClientConnectionsBar";
 import { PipelineCanvas } from "@/components/marketing/PipelineCanvas";
@@ -74,6 +74,14 @@ export default function MarketingDepartment() {
     <div className="fixed inset-0 flex flex-col bg-background overscroll-contain" dir="rtl">
       {/* Top bar */}
       <header className="flex items-center gap-3 border-b bg-card/50 px-4 py-2 backdrop-blur">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate(`/t/${tenantSlug}`)}
+        >
+          <ArrowRight className="ml-1 h-4 w-4" />
+          חזרה
+        </Button>
         <h1 className="text-lg font-semibold">מחלקת שיווק</h1>
         <div className="mx-2 h-6 w-px bg-border" />
         <ClientSelector
