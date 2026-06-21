@@ -150,6 +150,7 @@ export default function MarketingDepartment() {
                       pipelineId={pipeline.id}
                       tenantId={tenantId!}
                       clientId={clientId}
+                      track={value}
                       onSelectItem={setSelectedItemId}
                     />
                   </TabsContent>
