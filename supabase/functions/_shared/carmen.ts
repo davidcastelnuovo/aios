@@ -409,6 +409,16 @@ export async function sendCarmenReplyViaActionStep(args: {
   }
 }
 
+export interface CarmenWaNotify {
+  surface: 'whatsapp';
+  tenant_id: string;
+  automation_id: string | null;
+  connection_user_id: string;
+  chat_id: string;
+  phone_number: string | null;
+  is_group: boolean;
+}
+
 export async function runCarmenAI(
   supabase: any,
   agentId: string,
@@ -417,6 +427,7 @@ export async function runCarmenAI(
   conversationHistory: any[],
   senderPhone?: string | null,
   senderName?: string | null,
+  waNotify?: CarmenWaNotify | null,
 ): Promise<string> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -439,7 +450,10 @@ export async function runCarmenAI(
     tenant_id: tenantId,
     user_name: senderName || 'WhatsApp',
     lead_data: senderPhone ? { phone: senderPhone } : undefined,
+    surface: 'whatsapp',
+    wa_notify: waNotify || null,
   });
+
 
   // Try once; on hard failure (network error, non-2xx, or empty output) retry exactly
   // once after a 1s delay. If the retry also fails, throw — the caller will swallow
