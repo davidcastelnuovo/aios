@@ -197,7 +197,7 @@ export function StageConfigDialog({ stage, tenantId, clientId, onClose, onSaved 
               </Select>
               {agentId && (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  {agents.find((a: any) => a.id === agentId)?.description ?? ""}
+                  {agents.find((a: any) => a.id === agentId)?.personality ?? ""}
                 </p>
               )}
             </div>
