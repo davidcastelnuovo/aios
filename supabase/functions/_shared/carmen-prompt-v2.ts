@@ -579,6 +579,8 @@ export function buildCarmenV2SystemPrompt(ctx: PromptBuildContext): string {
 
   // 7. Social content rules
   sections.push(buildSocialContentRules());
+  // 7b. Ad-Ops capabilities (Meta + Google) + approval flow
+  sections.push(buildAdOpsCapabilities());
 
   // 8. Response style
   sections.push(buildResponseStyle(ctx.isWhatsApp));
