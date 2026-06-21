@@ -126,7 +126,7 @@ export default function MarketingDepartment() {
           {/* Top-level tabs: 3 tracks + content calendar */}
           <Tabs
             value={topTab}
-            onValueChange={(v) => setTopTab(v as MarketingTrack | "calendar")}
+            onValueChange={(v) => setTopTab(v as any)}
             className="flex flex-1 min-h-0 flex-col"
           >
             <TabsList className="mx-4 mt-2 w-fit">
