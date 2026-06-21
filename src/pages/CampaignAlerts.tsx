@@ -171,6 +171,24 @@ export default function CampaignAlerts() {
                     {a.notified_at && <Badge variant="secondary" className="text-xs">📱 נשלח WA</Badge>}
                   </div>
                   <h3 className="font-semibold truncate">{a.campaign_name || a.campaign_id}</h3>
+                  {(() => {
+                    const accId = a.ad_account_id || "";
+                    const accNum = accId.replace(/^act_/, "");
+                    const linkedClient = a.client_id ? clientsById.get(a.client_id) : clientsByAdAccount.get(accNum)?.name;
+                    return (
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-xs text-muted-foreground">
+                        {accId && <span>חשבון מודעות: <span className="font-mono">{accNum}</span></span>}
+                        <span>
+                          לקוח:{" "}
+                          {linkedClient ? (
+                            <span className="font-medium text-foreground">{linkedClient}</span>
+                          ) : (
+                            <span className="italic">לא משויך</span>
+                          )}
+                        </span>
+                      </div>
+                    );
+                  })()}
                   <p className="text-sm text-muted-foreground mt-1">
                     {a.alert_type === "cpl_spike" && a.details?.cpl_today
                       ? `CPL היום: ₪${Number(a.details.cpl_today).toFixed(1)} | ממוצע 7 ימים: ₪${Number(a.details.cpl_7d_avg).toFixed(1)} (+${a.details.spike_pct}%)`
