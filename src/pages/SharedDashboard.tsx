@@ -640,7 +640,8 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
   }
 
   const dashboard = data.dashboard;
-  const showAnalyticsCards = platformFilter === 'all' || platformFilter === 'google_analytics';
+  const hasAnalyticsData = records.some((r: any) => isAnalyticsPlatform(r._source || ''));
+  const showAnalyticsCards = (platformFilter === 'all' || platformFilter === 'google_analytics') && hasAnalyticsData;
   const showAdsCards = platformFilter === 'all' || platformFilter === 'facebook' || platformFilter === 'google_ads';
 
   const isSnapshotReady = !isLoading && !!data?.dashboard && Array.isArray(tables);
