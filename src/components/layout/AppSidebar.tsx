@@ -104,161 +104,9 @@ const iconMap: Record<string, any> = {
 };
 
 // ─── Menu structure ───────────────────────────────────────────────────────────
-type MenuSection = {
-  label: string;
-  items: { key: string; label: string; route: string; icon: any }[];
-};
-
-type MenuTab = {
-  id: string;
-  label: string;
-  icon: any;
-  sections: MenuSection[];
-};
-
-const MENU_TABS: MenuTab[] = [
-  {
-    id: "daily",
-    label: "ניהול שוטף",
-    icon: ClipboardList,
-    sections: [
-      {
-        label: "לקוחות",
-        items: [
-          { key: "clients", label: "לקוחות", route: "/clients", icon: Users },
-          { key: "dmm-dashboard", label: "דשבורד CRM סוכנות", route: "/dmm-dashboard", icon: LayoutDashboard },
-          { key: "client-onboarding", label: "לקוחות בקליטה", route: "/client-onboarding", icon: UserPlus },
-          { key: "tasks", label: "משימות", route: "/tasks", icon: CheckSquare },
-          { key: "time-tracking", label: "מעקב זמני עבודה", route: "/time-tracking", icon: Clock },
-        ],
-      },
-      {
-        label: "צוות",
-        items: [
-          { key: "campaigners", label: "קמפיינרים", route: "/campaigners", icon: Megaphone },
-        ],
-      },
-      {
-        label: "תקשורת",
-        items: [
-          { key: "chat", label: "צ'אט", route: "/chat", icon: MessageSquare },
-          { key: "team-chat", label: "צ'אט צוות", route: "/team-chat", icon: MessagesSquare },
-        ],
-      },
-    ],
-  },
-  {
-    id: "sales",
-    label: "מכירות",
-    icon: TrendingUp,
-    sections: [
-      {
-        label: "מכירות",
-        items: [
-          { key: "sales-dashboard", label: "דשבורד מכירות", route: "/sales-dashboard", icon: TrendingUp },
-          { key: "leads", label: "לידים", route: "/leads", icon: Target },
-        ],
-      },
-      {
-        label: "צוות מכירות",
-        items: [
-          { key: "sales-people", label: "אנשי מכירות", route: "/sales-people", icon: UserCheck },
-        ],
-      },
-      {
-        label: "כלים",
-        items: [
-          { key: "products", label: "מוצרים ושירותים", route: "/products", icon: Package },
-          { key: "time-tracking", label: "מעקב זמן", route: "/time-tracking", icon: Clock },
-          { key: "lead-integrations", label: "אינטגרציות לידים", route: "/lead-integrations", icon: Plug },
-        ],
-      },
-    ],
-  },
-  {
-    id: "marketing",
-    label: "שיווק",
-    icon: Share2,
-    sections: [
-      {
-        label: "קמפיינים",
-        items: [
-          { key: "social-media", label: "ניהול סושיאל", route: "/social-media", icon: Share2 },
-          { key: "recordings", label: "הקלטות", route: "/recordings", icon: Cpu },
-        ],
-      },
-      {
-        label: "אנליטיקס",
-        items: [
-          // { key: "site_analytics", label: "אנליטיקס אתרים", route: "/site-analytics", icon: BarChart3 }, // hidden
-          // { key: "rank_tracking", label: "מעקב מיקומים", route: "/rank-tracking", icon: Radar }, // hidden
-          { key: "dynamic-tables", label: "דשבורדים ודוחות", route: "/dynamic-tables", icon: Table2 },
-          { key: "ai-detection", label: "ניטור נראות AI", route: "/ai-detection", icon: Bot },
-        ],
-      },
-      {
-        label: "תקשורת",
-        items: [
-          { key: "gmail", label: "Gmail", route: "/gmail", icon: Mail },
-          { key: "signatures", label: "חתימות", route: "/signatures", icon: PenLine },
-        ],
-      },
-      {
-        label: "אינטגרציות",
-        items: [
-          { key: "integrations", label: "אינטגרציות", route: "/integrations", icon: Plug },
-          { key: "chat-integrations", label: "אינטגרציות צ'אט", route: "/chat-integrations", icon: MessageSquare },
-        ],
-      },
-    ],
-  },
-  {
-    id: "admin",
-    label: "ניהול",
-    icon: Settings,
-    sections: [
-      {
-        label: "ניהול",
-        items: [
-          { key: "dashboard", label: "דשבורד", route: "/dashboard", icon: LayoutDashboard },
-          { key: "tenants", label: "ניהול ארגונים", route: "/tenants", icon: Building },
-          { key: "agencies", label: "סוכנויות", route: "/agencies", icon: Building2 },
-          { key: "users", label: "משתמשים", route: "/users", icon: Users },
-          { key: "suppliers", label: "ספקים", route: "/suppliers", icon: Truck },
-        ],
-      },
-      {
-        label: "כספים",
-        items: [
-          // { key: "finance", label: "כספים", route: "/finance", icon: DollarSign }, // hidden
-          
-          { key: "accounting-integrations", label: "הנהלת חשבונות", route: "/accounting-integrations", icon: BarChart3 },
-        ],
-      },
-      {
-        label: "אוטומציה ו-AI",
-        items: [
-          { key: "automations", label: "אוטומציות", route: "/automations", icon: Zap },
-          { key: "campaign-alerts", label: "התראות קמפיינים", route: "/campaign-alerts", icon: AlertTriangle },
-          { key: "social-publisher", label: "רשתות חברתיות", route: "/social-publisher", icon: Send },
-          { key: "agents", label: "סוכני AI", route: "/agents", icon: Bot },
-          { key: "carmen-insights", label: "למידה של כרמן", route: "/carmen-insights", icon: Brain },
-          { key: "visual-workspace", label: "Visual Workspace", route: "/visual-workspace", icon: Sparkles },
-        ],
-      },
-      {
-        label: "הגדרות",
-        items: [
-          { key: "my-profile", label: "אזור אישי", route: "/my-profile", icon: User },
-          { key: "branding", label: "התאמת מערכת", route: "/branding", icon: Palette },
-          { key: "menu-management", label: "ניהול תפריטים", route: "/menu-management", icon: Menu },
-          { key: "fields-management", label: "ניהול שדות", route: "/fields-management", icon: ListTree },
-          { key: "ai-support", label: "תמיכה טכנית AI", route: "/ai-support", icon: ShieldCheck },
-        ],
-      },
-    ],
-  },
-];
+// Imported from a shared module so the Visual Workspace and the sidebar stay in sync.
+import { MENU_TABS as BASE_MENU_TABS, type MenuTab, type MenuSection, type MenuTabId } from "@/lib/menuStructure";
+import { computeSidebarOverlay } from "@/visual-workspace/hooks/useSitemap";
 
 // Permission map
 /**
@@ -351,6 +199,49 @@ export function AppSidebar() {
     dbMenuItems.filter(m => m.custom_label).map(m => [m.menu_key, m.custom_label!])
   );
 
+  // Apply Visual-Workspace overrides (tab/section labels + module reassignment)
+  const overlay = computeSidebarOverlay(dbMenuItems);
+  const effectiveTabs: MenuTab[] = BASE_MENU_TABS.map(tab => ({
+    ...tab,
+    label: overlay.tabLabels.get(tab.id) || tab.label,
+    sections: tab.sections.map(section => ({
+      ...section,
+      label: overlay.sectionLabels.get(`${tab.id}:${section.label}`) || section.label,
+      // Drop modules that have been reassigned elsewhere via overlay
+      items: section.items.filter(item => {
+        const home = overlay.moduleHome.get(item.key);
+        return !home || (home.tabId === tab.id && home.sectionLabel === section.label);
+      }),
+    })),
+  }));
+  // Insert reassigned modules into their target section
+  for (const [moduleKey, target] of overlay.moduleHome) {
+    // Find original module
+    let original: MenuSection["items"][number] | undefined;
+    for (const tab of BASE_MENU_TABS) {
+      for (const sec of tab.sections) {
+        const m = sec.items.find(i => i.key === moduleKey);
+        if (m) { original = m; break; }
+      }
+      if (original) break;
+    }
+    if (!original) continue;
+    const targetTab = effectiveTabs.find(t => t.id === target.tabId);
+    if (!targetTab) continue;
+    let targetSection = targetTab.sections.find(s =>
+      s.label === target.sectionLabel ||
+      (overlay.sectionLabels.get(`${target.tabId}:${target.sectionLabel}`) === s.label)
+    );
+    if (!targetSection) {
+      targetSection = { label: target.sectionLabel, items: [] };
+      targetTab.sections.push(targetSection);
+    }
+    if (!targetSection.items.some(i => i.key === moduleKey)) {
+      targetSection.items.push(original);
+    }
+  }
+
+
   const { data: userTenants, isLoading: isLoadingTenants } = useQuery({
     queryKey: ["user-tenants", userId],
     queryFn: async () => {
@@ -426,7 +317,7 @@ export function AppSidebar() {
       return canAccess(item.key);
     });
 
-  const activeMenuTab = MENU_TABS.find(t => t.id === activeTab) || MENU_TABS[0];
+  const activeMenuTab = effectiveTabs.find(t => t.id === activeTab) || effectiveTabs[0];
 
   if (isLoadingMenuItems || isLoading) return null;
 
@@ -442,7 +333,7 @@ export function AppSidebar() {
               <Building2 className="h-8 w-8" />
             )}
             {/* Tab icons in collapsed mode */}
-            {MENU_TABS.map(tab => {
+            {effectiveTabs.map(tab => {
               const TabIcon = tab.icon;
               return (
                 <Tooltip key={tab.id}>
@@ -505,7 +396,7 @@ export function AppSidebar() {
 
             {/* Tab switcher — 3 main tabs */}
             <div className="flex gap-1 bg-sidebar-accent/40 rounded-lg p-1">
-              {MENU_TABS.filter(t => t.id !== "daily").map(tab => {
+              {effectiveTabs.filter(t => t.id !== "daily").map(tab => {
                 const TabIcon = tab.icon;
                 const isActive = activeTab === tab.id;
                 return (
@@ -527,7 +418,7 @@ export function AppSidebar() {
 
             {/* Daily tab — separate row */}
             {(() => {
-              const dailyTab = MENU_TABS.find(t => t.id === "daily")!;
+              const dailyTab = effectiveTabs.find(t => t.id === "daily")!;
               const DailyIcon = dailyTab.icon;
               const isActive = activeTab === "daily";
               return (
