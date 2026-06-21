@@ -39,7 +39,30 @@ export async function ensurePipelineForClient({
     .eq("client_id", clientId)
     .maybeSingle();
 
-  if (existing) return existing;
+  if (existing) {
+    // One-shot RTL realignment for legacy pipelines: ensure stage positions match the RTL defaults.
+    const { data: stages } = await supabase
+      .from("marketing_pipeline_stages")
+      .select("id, stage_type, position_x, position_y")
+      .eq("pipeline_id", existing.id);
+    const needsFix = (stages ?? []).some((s: any) => {
+      const def = DEFAULT_STAGES.find((d) => d.stage_type === s.stage_type);
+      return def && (s.position_x !== def.position_x || s.position_y !== def.position_y);
+    });
+    if (needsFix) {
+      await Promise.all(
+        (stages ?? []).map((s: any) => {
+          const def = DEFAULT_STAGES.find((d) => d.stage_type === s.stage_type);
+          if (!def) return Promise.resolve();
+          return supabase
+            .from("marketing_pipeline_stages")
+            .update({ position_x: def.position_x, position_y: def.position_y })
+            .eq("id", s.id);
+        }),
+      );
+    }
+    return existing;
+  }
 
   const { data: created, error } = await supabase
     .from("marketing_pipelines")
