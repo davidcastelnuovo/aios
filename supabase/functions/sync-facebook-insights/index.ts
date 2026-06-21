@@ -343,8 +343,22 @@ Deno.serve(async (req) => {
         'messaging_conversation_started_7d',
       ]);
       const _pixelLeadsValue = sumByTypes(['offsite_conversion.fb_pixel_lead']);
+      // Custom Conversions on the Pixel.
+      // FB returns BOTH a parent aggregate (`offsite_conversion.custom` or
+      // `offsite_conversion.fb_pixel_custom` — exact match, no suffix) AND each
+      // child custom conversion (e.g. `offsite_conversion.fb_pixel_custom.NewLead`).
+      // The parent equals the sum of children, so we sum CHILDREN only to avoid double
+      // counting. We accept both `offsite_conversion.custom.*` (legacy) and
+      // `offsite_conversion.fb_pixel_custom.*` (current) prefixes — the latter is what
+      // Facebook returns today for Pixel-based custom conversions used as leads.
       const _customConversionLeadsValue = allActions
-        .filter((a: any) => String(a.action_type || '').startsWith('offsite_conversion.custom'))
+        .filter((a: any) => {
+          const t = String(a.action_type || '');
+          return (
+            (t.startsWith('offsite_conversion.custom.') ||
+             t.startsWith('offsite_conversion.fb_pixel_custom.'))
+          );
+        })
         .reduce((sum: number, a: any) => sum + (parseInt(a.value) || 0), 0);
       // Standard intent events fired on landing pages (Complete Registration / Contact / etc.)
       const _standardIntentValue = sumByTypes(STANDARD_INTENT_LEAD_TYPES);
