@@ -5,11 +5,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Plus, Workflow, CalendarRange, ArrowRight, Megaphone, Search, Share2 } from "lucide-react";
+import { Plus, Workflow, CalendarRange, ArrowRight, Megaphone, Search, Share2, Coins, Palette } from "lucide-react";
 import { ClientSelector } from "@/components/marketing/ClientSelector";
 import { ClientConnectionsBar } from "@/components/marketing/ClientConnectionsBar";
 import { PipelineCanvas } from "@/components/marketing/PipelineCanvas";
 import { WorkItemSidePanel } from "@/components/marketing/WorkItemSidePanel";
+import { CreativeBoard } from "@/components/marketing/CreativeBoard";
+import { UsagePanel } from "@/components/marketing/UsagePanel";
 import {
   ensurePipelineForClient,
   TRACK_LABELS,
