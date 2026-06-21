@@ -1,122 +1,59 @@
-# תיקון Carmen: זיכרון, סקיל איקומרס, בדיקת חשבונות מודעות
+# תכנית: Skills כ-DB-driven עם cache חכם
 
-## שפה משותפת לבניית סוכנים (terminology)
+## עקרון
+פורמט הפלט של "בדיקת דופק" (לפי הדוגמה ששלחת) ננעל כתבנית קבועה. תוכן הסקילז (system prompt + output template + tools allowed) עובר מהקוד ל-DB. שינוי סקיל = update בטבלה, **בלי deploy**, יעיל מיידית בכל ריצה.
 
-נשתמש בז'רגון אחיד מעכשיו - גם בקוד וגם בשיחות איתי:
+## מה עושים
 
-- **Agent** = הסוכן עצמו (Carmen). מוח אחד עם זיכרון אחד.
-- **Surface** = איפה מדברים איתה: `whatsapp` | `internal_chat` | `aios` | `task` (background).
-- **Skill** = יכולת ממוקדת = פרומפט קשיח + רשימת tools מותרת + פלט מובנה. דוגמאות: `pulse_check`, `ecommerce_pulse`, `ad_accounts_health`.
-- **Tool** = פונקציה אטומית שכרמן יכולה לקרוא לה (analyze_campaign_performance, list_facebook_ad_accounts וכד').
-- **Memory** = `ai_memory` (key/value, instructions) + `agent_memory` (FTS חוצה-שיחות) + `carmen_memory_episodes` (אירועי שיחה).
-- **Episode / Action log** = `agent_action_log` - לוג של כל turn (surface, tools_used, output).
+### 1. שימוש בטבלת `ai_skills` הקיימת (הרחבה)
+מיגרציה תוסיף עמודות:
+- `slug text unique` — מזהה יציב (`pulse_check`, `ecommerce_pulse`, `ad_accounts_health`)
+- `system_prompt text` — הפרומפט עצמו
+- `output_template text` — תבנית הפלט (הפורמט שאישרת למעלה)
+- `allowed_tools text[]` — אילו tools הסקיל רשאי לקרוא
+- `scope text` — `global` | `tenant`
+- `model text` — אופציונלי (ברירת מחדל מהקונפיג)
 
-מעכשיו כשאני אגיד "תוסיפי סקיל X" - הכוונה: פרומפט hardcoded חדש ב-`_shared/skills/` + רישום ברגיסטרי + טריגר מילות-מפתח.
+`global` (ללא tenant_id) = סקילים שלי שמותקנים לכולם. `tenant` = סקילז מותאמים שלקוח יוצר.
 
----
+### 2. Skill Loader עם cache
+קובץ חדש `supabase/functions/_shared/skills/loader.ts`:
+- `getSkill(slug, tenantId)` — שולף global + tenant override, ממזג, מחזיר.
+- Cache in-memory ל-60 שניות לפי `(slug, tenant_id, version)`.
+- Invalidation: כל update ב-`ai_skills` מקדם `version` (טריגר), ה-loader בודק version מול DB עם `SELECT version` קליל (single-row, indexed) — שינוי מורגש תוך שנייה.
 
-## 1. תיקון הזיכרון (לא נשמר גם אחרי ההוק)
+### 3. שילוב ב-`run-ai-agent`
+לפני הקריאה למודל:
+1. זיהוי הסקיל לפי trigger (`bedikat dofek`, "בדיקת דופק", "פולס", "ecommerce pulse", "ad accounts health" וכו').
+2. `getSkill(slug, tenantId)` → מזריק `system_prompt + output_template` לפרומפט, מגביל `allowed_tools`.
+3. אם אין סקיל מתאים → התנהגות ברירת מחדל הקיימת.
 
-הבעיה: ה-pre-save hook ב-`run-ai-agent` פועל רק על trigger words אנגלית/עברית מצומצמים, ולא תופס "תזכרי גם בזיכרון" בהקשר של הוראת ביצוע (כמו בצילום: "תזכרי שגם בזיכרון קמפיינר איקומרס...").
+### 4. Seed ראשוני (3 סקילז גלובליים)
+מיגרציה תזריק:
+- **`pulse_check`** — output_template = הפורמט שלך עם הקבוצות לפי סוכנות, אייקונים 🔴🟠🟢, "ללא חיבור דוחות", סיכום מהיר. tools: `analyze_campaign_performance`, `check_ad_accounts_health`, `list_clients`.
+- **`ecommerce_pulse`** — purchases/CPP/revenue/profit/ROAS, טריגר אוטומטי כשלקוח `is_ecommerce=true`. tools: meta + woocommerce + shopify.
+- **`ad_accounts_health`** — disabled/closed, no spend 7d, all paused, token expired. tools: `check_ad_accounts_health`.
 
-תיקון:
-- הרחבת רגקס הטריגר ב-`run-ai-agent/index.ts`: מוסיפים `שימי לב`, `תכניסי לזיכרון`, `גם בזיכרון`, `הוסיפי לזיכרון`, `אל תשכחי`, `learn this`, `note that`.
-- כשמזהים טריגר - שולפים את **כל המשפט/פסקה** סביב הטריגר (לא רק keyword), לא 80 תווים שטוחים.
-- כותבים בו-זמנית ל-3 מקומות (ללא תלות בהצלחת המודל לקרוא ל-`save_memory`):
-  1. `ai_memory` - category=`instructions`, key=hash סמנטי (snake_case מתוך תקציר LLM קצר), value=טקסט מלא.
-  2. `agent_memory` - importance=8, content=טקסט מלא, tags=['user_instruction', surface].
-  3. `carmen_memory_episodes` - kind=`instruction_captured`.
-- מוסיפים בפרומפט אזהרה מפורשת: "אם נכשלת ב-save_memory - חזרי וקראי שוב לפני שאת עונה".
-- בלוג של `agent_action_log` נוסיף שדה `instructions_captured: string[]` כדי לראות בעין שזה עבד.
+### 5. UI לניהול סקילז (דף קיים `AISkillsManager` או חדש)
+- רשימת סקילז (גלובליים מסומנים read-only למי שאינו super_admin).
+- עריכת `system_prompt`, `output_template`, `allowed_tools` עם textarea + monaco-like.
+- כפתור "Test" → קורא ל-`run-ai-agent` עם הסקיל ב-dry-run.
+- שמירה = update + bump version. בעריכה הבאה של Carmen — הפרומפט החדש פעיל אוטומטית.
 
-בדיקה: שולחים בצ'אט הפנימי "תזכרי שלקוחות איקומרס מקבלים רווח+CPP+כמות רכישות"  →  שורה ב-`ai_memory` נוצרת מיד  →  בשיחה הבאה `recall_memory` מחזיר אותה.
+### 6. Deploy אוטומטי
+אין מה לעשות ידני: שינוי שורה ב-DB → ה-loader מזהה version חדש → ריצה הבאה משתמשת בפרומפט החדש. אפס deploy.
 
----
+## קבצים
+**חדש:** `supabase/functions/_shared/skills/loader.ts`, מיגרציה (עמודות + seed + טריגר version).
+**עריכה:** `run-ai-agent/index.ts` (skill resolver במקום פרומפטים hardcoded), `src/pages/AISkillsManager.tsx` (טופס עריכה מלא).
+**מחיקה:** הפרומפטים שהיו אמורים להיות hardcoded (לא קיימים עוד) — במקום זה הכל ב-DB.
 
-## 2. סקיל חדש: `ecommerce_pulse` (רווח, CPP, כמות רכישות)
+## טרמינולוגיה (מוסכמת מעכשיו)
+- **Skill** = יחידת פרומפט+פורמט+tools, בעלת slug.
+- **Surface** = איפה הסקיל נטען (chat / whatsapp / heartbeat).
+- **Tool** = פונקציית JS שהמודל קורא (`analyze_campaign_performance` וכו').
+- **Memory** = `ai_memory`/`agent_memory` — נשמר אוטומטית בטריגר `תזכרי/שימי לב/...`.
+- **Episode** = רשומת `carmen_memory_episodes` — אירוע ספציפי שקרה.
+- **Action log** = `agent_action_log` — מה כרמן עשתה בריצה.
 
-קובץ חדש: `supabase/functions/_shared/skills/ecommerce-pulse.ts`
-
-תוכן הסקיל (פרומפט hardcoded):
-- טריגר: לקוח מסומן `client_type='ecommerce'` או tag/שדה custom שמסמן איקומרס. אם לא קיים - נוסיף עמודה `is_ecommerce boolean` ל-`clients` (migration).
-- מקור נתונים: **Meta Ads + Shopify/WooCommerce** (לפי הבחירה שלך).
-  - Meta Ads (קיים): `purchases`, `purchase_value`, `spend` מתוך `facebook_insights` שכרמן כבר ניגשת אליו ב-`analyze_campaign_performance`.
-  - WooCommerce: דרך הקונקטור הקיים (טבלאות `woocommerce_orders`) - מצרפים order count + revenue לפי תאריך.
-  - Shopify: דרך אינטגרציית Shopify הקיימת (אם הלקוח חיבר). אם לא חיבר - מדווחים `shop_not_connected`.
-- מטריקות שנחזיר ללקוח איקומרס במקום CPL:
-  - `purchases_7d`, `purchases_30d` (מס' רכישות)
-  - `cpp_7d` = `spend_7d / purchases_7d` (Cost Per Purchase)
-  - `revenue_7d`, `profit_7d` = `revenue - spend` (אם יש cogs בשדה custom נחסיר אותו)
-  - `roas_7d` = `revenue / spend`
-- פלט: באותה תבנית של pulse_check אבל "X רכישות | CPP Y | רווח Z | ROAS W" במקום "X לידים | CPL Y".
-- Tools מותרים בסקיל: `analyze_campaign_performance`, `list_woocommerce_orders` (חדש), `list_shopify_orders` (חדש אם נחבר), `get_client_meta_purchases` (wrapper).
-
----
-
-## 3. הרחבת `pulse_check`: בדיקת תקינות חשבונות מודעות
-
-מוסיפים שלב חדש לסקיל הקיים: **Ad Accounts Health**.
-
-לכל לקוח עם חשבון מודעות מחובר (FB/Google), לרוץ במקביל לבדיקה הרגילה ולהדגיש דגלים אדומים אם:
-- ❌ `account_status` ∈ {disabled, closed, pending_review} (Meta: status≠1; Google: SUSPENDED/CANCELLED)
-- ⚠️ `spend_7d == 0` (אין הוצאה 7 ימים אחרונים) - דגל כתום
-- ⚠️ כל הקמפיינים `paused/off` (לא רץ כלום)
-- ❌ `token_expired` או שגיאת API מהקונקטור (`fireIntegrationAlert` כבר קיים ל-`ad_account_blocked` - נשתמש בו)
-
-Tool חדש: `check_ad_accounts_health(client_id?, agency_id?)` - מחזיר לכל לקוח:
-```
-{ client_id, fb: { status, has_spend_7d, all_paused, token_ok }, google: { ... }, flags: ['fb_disabled', 'google_no_spend_7d'] }
-```
-
-בפלט הסיכום (בצילום שלך) יתווסף בלוק:
-```
-🚨 חשבונות מודעות לא תקינים:
-• אביאלי טייג — FB account disabled
-• כביר מונטנג — Google: אין spend 7 ימים
-• קרניליוס — Token פג, צריך חיבור מחדש
-```
-
-מימוש Tool:
-- FB: GET `/me/adaccounts?fields=account_status,name,currency,spend_cap` דרך הטוקן הקיים.
-- Google Ads: דרך הקונקטור הקיים, customer.status.
-- Spend 7d: קוורי מצומצם על `facebook_insights` / `google_ads_insights` עם `date_start >= now()-7d`.
-- אם API מחזיר 401/403 - יורים `fireIntegrationAlert('ad_account_blocked', client_id)`.
-
----
-
-## 4. רגיסטרי סקילז (תשתית, פעם אחת)
-
-קובץ חדש: `supabase/functions/_shared/skills/registry.ts`
-```ts
-export const SKILLS = {
-  pulse_check: { triggers: ['בדיקת דופק','pulse'], prompt: pulseCheckPrompt, tools: [...] },
-  ecommerce_pulse: { triggers: ['בדיקת דופק איקומרס','ecommerce'], prompt: ecomPrompt, tools: [...] },
-  ad_accounts_health: { triggers: ['חשבונות מודעות','ad accounts'], prompt: adHealthPrompt, tools: [...] },
-}
-```
-
-ב-`run-ai-agent` לפני שליחת הפרומפט: מזהים סקיל אקטיבי לפי טריגר במסר → מזריקים את `prompt` שלו לסיסטם + מסננים את `tools` המוצעים לאותם שמותרים. זה מונע hallucination ומבטיח עקביות.
-
-`pulse_check` הקיים יעוטף גם הוא בסקיל ב-registry (העברת הטקסט שכבר נמצא ב-`carmen-prompt-v2.ts` שורות 150–155 לקובץ דדיקייטד).
-
----
-
-## 5. קבצים שישתנו / יווצרו
-
-נוצרים:
-- `supabase/functions/_shared/skills/registry.ts`
-- `supabase/functions/_shared/skills/pulse-check.ts`
-- `supabase/functions/_shared/skills/ecommerce-pulse.ts`
-- `supabase/functions/_shared/skills/ad-accounts-health.ts`
-- migration: עמודה `is_ecommerce boolean default false` ב-`clients`
-
-נערכים:
-- `supabase/functions/run-ai-agent/index.ts` - הרחבת trigger regex לזיכרון, רישום skill resolver, tools חדשים (`check_ad_accounts_health`, `list_woocommerce_orders`).
-- `supabase/functions/_shared/carmen-prompt-v2.ts` - הפניה ל-skill registry במקום הטקסט המוטבע של pulse_check.
-- `supabase/functions/_shared/carmen.ts` - הרחבת `forceToolsForPulse` כדי לכלול גם ecommerce + ad health.
-
----
-
-## אישור
-
-אחרי שתאשר אעבור ל-Build mode וארוץ הכל ברצף: migration → skills files → עריכת run-ai-agent → deploy של הפונקציה → בדיקה ידנית בצ'אט.
+מאשר ומיישם?

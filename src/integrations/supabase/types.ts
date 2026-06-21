@@ -1504,57 +1504,78 @@ export type Database = {
       }
       ai_skills: {
         Row: {
+          allowed_tools: string[] | null
           created_at: string
           created_by_agent: boolean
           description: string
           id: string
           is_active: boolean
           last_used_at: string | null
+          model: string | null
           name: string
+          output_template: string | null
+          scope: string
           search_vector: unknown
+          slug: string | null
           steps: string
           success_rate: number | null
-          tenant_id: string
+          system_prompt: string | null
+          tenant_id: string | null
           trigger_phrases: string[] | null
+          triggers: string[] | null
           updated_at: string
           usage_count: number
-          user_id: string
+          user_id: string | null
           version: number
         }
         Insert: {
+          allowed_tools?: string[] | null
           created_at?: string
           created_by_agent?: boolean
           description: string
           id?: string
           is_active?: boolean
           last_used_at?: string | null
+          model?: string | null
           name: string
+          output_template?: string | null
+          scope?: string
           search_vector?: unknown
+          slug?: string | null
           steps: string
           success_rate?: number | null
-          tenant_id: string
+          system_prompt?: string | null
+          tenant_id?: string | null
           trigger_phrases?: string[] | null
+          triggers?: string[] | null
           updated_at?: string
           usage_count?: number
-          user_id: string
+          user_id?: string | null
           version?: number
         }
         Update: {
+          allowed_tools?: string[] | null
           created_at?: string
           created_by_agent?: boolean
           description?: string
           id?: string
           is_active?: boolean
           last_used_at?: string | null
+          model?: string | null
           name?: string
+          output_template?: string | null
+          scope?: string
           search_vector?: unknown
+          slug?: string | null
           steps?: string
           success_rate?: number | null
-          tenant_id?: string
+          system_prompt?: string | null
+          tenant_id?: string | null
           trigger_phrases?: string[] | null
+          triggers?: string[] | null
           updated_at?: string
           usage_count?: number
-          user_id?: string
+          user_id?: string | null
           version?: number
         }
         Relationships: [
