@@ -164,6 +164,40 @@ const ALL_TOOLS = [
   // ===========================
   { name: 'delegate_to_subagent', description: 'יצירת תת-סוכן (subagent) שירוץ ברקע על משימה ממוקדת — מחקר, ניתוח רב-לקוחות, סריקה ארוכה, או כל עבודה שלא חייבת להיענות בשיחה הנוכחית. מחזיר sub_task_id מיידית. השתמשי בכלי הזה במקום delegate_to_manus כשהמשימה היא פנימית למערכת (מצריכה כלים של כרמן עצמה). אסור להשתמש בו לתשובה קצרה שאפשר לענות מיד — רק כשהמשימה תיקח זמן או צריכה לרוץ ברקע במקביל לשיחה.', parameters: { type: 'object', properties: { title: { type: 'string', description: 'כותרת קצרה לתת-המשימה' }, prompt: { type: 'string', description: 'הוראה מפורטת מה לבצע. כתבי כאילו את מדריכה כרמן אחרת — כללי המטרה, היקף, ומה חייב להחזיר בסוף.' }, task_mode: { type: 'string', enum: ['analyst','sales','support','copywriting','scheduler','onboarding'], description: 'מוד פעולה (אופציונלי)' }, task_skills: { type: 'array', items: { type: 'string' }, description: 'סקילים להפעיל בתת-הסוכן' }, priority: { type: 'integer', description: '1-10' } }, required: ['title','prompt'] } },
   { name: 'get_subagent_result', description: 'בדיקת מצב/קבלת תוצאה של תת-סוכן שנוצר ב-delegate_to_subagent. מחזיר status, done, ואם הסתיים — output. אל תקראי לזה בלולאה צמודה; אם done=false פשוט המשיכי בעבודה אחרת או הודיעי למשתמש שהמשימה עדיין רצה.', parameters: { type: 'object', properties: { sub_task_id: { type: 'string', description: 'המזהה שהוחזר מ-delegate_to_subagent' } }, required: ['sub_task_id'] } },
+  // ===========================
+  // MEDIA LIBRARY (carmen-media bucket + marketing_media_library)
+  // ===========================
+  { name: 'save_media_from_chat', description: 'שמירת מדיה (תמונה/וידאו) מהודעת צ\'אט אל ספריית המדיה של הלקוח. אם message_id ניתן — מושך את כתובת הקובץ מההודעה אוטומטית. אם רק media_url — שומר ישירות. אסור להמציא URL — או לקבל מהמשתמש או להשתמש ב-message_id מההיסטוריה.', parameters: { type: 'object', properties: { message_id: { type: 'string', description: 'מזהה ההודעה ב-chat_messages (עדיף)' }, media_url: { type: 'string' }, mime_type: { type: 'string' }, client_id: { type: 'string' }, lead_id: { type: 'string' }, caption: { type: 'string' }, tags: { type: 'array', items: { type: 'string' } } } } },
+  { name: 'list_client_media', description: 'רשימת קבצי מדיה ששמורים ללקוח (או ליד). מחזיר media_id, mime, ad_ready, caption.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, lead_id: { type: 'string' }, only_ad_ready: { type: 'boolean' }, tags: { type: 'array', items: { type: 'string' } }, limit: { type: 'integer' } } } },
+  // ===========================
+  // META (Facebook + Instagram) ADS — all mutating actions go through approval queue
+  // ===========================
+  { name: 'fb_create_campaign', description: 'יצירת קמפיין חדש בפייסבוק/אינסטגרם. **דורש אישור בוואטסאפ** — הכלי יוצר בקשת אישור ומחכה. סטטוס ברירת מחדל PAUSED. השתמש objective: OUTCOME_LEADS / OUTCOME_TRAFFIC / OUTCOME_SALES.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, name: { type: 'string' }, objective: { type: 'string' }, daily_budget: { type: 'number', description: 'בש"ח (לא מינור-יוניטס)' }, special_ad_categories: { type: 'array', items: { type: 'string' } } }, required: ['client_id','name'] } },
+  { name: 'fb_create_adset', description: 'יצירת ad set חדש (קהל יעד + תקציב). דורש אישור.', parameters: { type: 'object', properties: { campaign_id: { type: 'string' }, name: { type: 'string' }, daily_budget: { type: 'number' }, billing_event: { type: 'string' }, optimization_goal: { type: 'string' }, targeting: { type: 'object', description: 'מבנה Meta targeting (geo, age, interests)' }, start_time: { type: 'string' }, end_time: { type: 'string' } }, required: ['campaign_id','name','targeting'] } },
+  { name: 'fb_create_creative_from_media', description: 'בניית קריאייטיב חדש מתוך media_id בספריה + page_id + טקסט. דורש אישור. אם lead_form_id מצורף — הקריאייטיב יוצר/מקושר ל-Lead Gen Form.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, media_id: { type: 'string' }, page_id: { type: 'string' }, message: { type: 'string' }, link: { type: 'string' }, name: { type: 'string' }, call_to_action_type: { type: 'string' }, lead_form_id: { type: 'string' } }, required: ['client_id','media_id','page_id','message'] } },
+  { name: 'fb_create_ad', description: 'יצירת מודעה (ad) ב-ad set קיים עם קריאייטיב מוכן. דורש אישור.', parameters: { type: 'object', properties: { adset_id: { type: 'string' }, name: { type: 'string' }, creative_id: { type: 'string' } }, required: ['adset_id','name','creative_id'] } },
+  { name: 'fb_replace_lead_form', description: 'החלפת טופס לידים במודעה קיימת. דורש אישור.', parameters: { type: 'object', properties: { ad_id: { type: 'string' }, new_form_id: { type: 'string' } }, required: ['ad_id','new_form_id'] } },
+  { name: 'fb_update_budget', description: 'שינוי תקציב יומי או lifetime לקמפיין/ad set. דורש אישור.', parameters: { type: 'object', properties: { entity_id: { type: 'string', description: 'campaign_id או adset_id' }, daily_budget: { type: 'number' }, lifetime_budget: { type: 'number' } }, required: ['entity_id'] } },
+  { name: 'fb_pause', description: 'השהיית קמפיין/ad set/מודעה (PAUSED). דורש אישור.', parameters: { type: 'object', properties: { entity_id: { type: 'string' } }, required: ['entity_id'] } },
+  { name: 'fb_resume', description: 'הדלקה מחדש (ACTIVE) של קמפיין/ad set/מודעה. דורש אישור.', parameters: { type: 'object', properties: { entity_id: { type: 'string' } }, required: ['entity_id'] } },
+  // ===========================
+  // GOOGLE ADS — pause/resume/budget at campaign level
+  // ===========================
+  { name: 'gads_pause', description: 'השהיית קמפיין Google Ads. דורש אישור.', parameters: { type: 'object', properties: { customer_id: { type: 'string' }, campaign_id: { type: 'string' } }, required: ['customer_id','campaign_id'] } },
+  { name: 'gads_resume', description: 'הדלקת קמפיין Google Ads. דורש אישור.', parameters: { type: 'object', properties: { customer_id: { type: 'string' }, campaign_id: { type: 'string' } }, required: ['customer_id','campaign_id'] } },
+  { name: 'gads_update_budget', description: 'שינוי תקציב יומי לקמפיין Google Ads. דורש אישור.', parameters: { type: 'object', properties: { customer_id: { type: 'string' }, campaign_id: { type: 'string' }, daily_budget: { type: 'number' } }, required: ['customer_id','campaign_id','daily_budget'] } },
+  // ===========================
+  // SCHEDULED PAUSE/RESUME
+  // ===========================
+  { name: 'schedule_campaign_toggle', description: 'תזמון אוטומטי של כיבוי/הדלקה בלוח זמנים (cron) או חד-פעמי (run_at). דורש אישור. דוגמה: לכבות כל יום ב-22:00 → cron_expression "0 22 * * *". להדליק ראשון-חמישי 07:00 → "0 7 * * 1-5".', parameters: { type: 'object', properties: { entity_id: { type: 'string' }, entity_type: { type: 'string', enum: ['fb_campaign','fb_adset','fb_ad','google_campaign'] }, action: { type: 'string', enum: ['pause','resume'] }, cron_expression: { type: 'string' }, run_at: { type: 'string', description: 'ISO datetime לחד-פעמי' }, timezone: { type: 'string', description: 'ברירת מחדל Asia/Jerusalem' }, client_id: { type: 'string' }, notes: { type: 'string' } }, required: ['entity_id','entity_type','action'] } },
+  { name: 'list_campaign_schedules', description: 'רשימת תזמונים פעילים של פעולות על קמפיינים (כיבוי/הדלקה).', parameters: { type: 'object', properties: { client_id: { type: 'string' }, only_enabled: { type: 'boolean' }, limit: { type: 'integer' } } } },
+  { name: 'cancel_campaign_schedule', description: 'ביטול תזמון קיים.', parameters: { type: 'object', properties: { schedule_id: { type: 'string' } }, required: ['schedule_id'] } },
+  // ===========================
+  // APPROVAL FLOW
+  // ===========================
+  { name: 'list_pending_approvals', description: 'רשימת בקשות אישור פתוחות (פעולות שכרמן ביקשה לבצע ומחכות לאישור משתמש). השתמש כשהמשתמש שולח "אשרי"/"כן" כדי למצוא איזו בקשה לבצע.', parameters: { type: 'object', properties: { limit: { type: 'integer' } } } },
+  { name: 'execute_pending_approval', description: 'ביצוע בקשת אישור פתוחה — אחרי שהמשתמש אישר בוואטסאפ ("אשרי"/"כן"). הכלי מבצע את הפעולה בפועל ומעדכן את הסטטוס. אם אין approval_id — קח את הפתוח האחרון מ-list_pending_approvals.', parameters: { type: 'object', properties: { approval_id: { type: 'string' } } } },
+  { name: 'reject_pending_approval', description: 'דחיית בקשת אישור פתוחה — אחרי שהמשתמש סירב.', parameters: { type: 'object', properties: { approval_id: { type: 'string' }, reason: { type: 'string' } }, required: ['approval_id'] } },
 ]
 
 
@@ -2100,10 +2134,152 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (!args.sub_task_id) throw new Error('sub_task_id is required')
       return await getSubagentResult(supabase, tenantId, args.sub_task_id)
     }
+
+    // ============ MEDIA LIBRARY ============
+    case 'save_media_from_chat': {
+      const r = await fetch(`${SUPABASE_URL}/functions/v1/carmen-save-media`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json', apikey: SUPABASE_SERVICE_ROLE_KEY },
+        body: JSON.stringify({ tenant_id: tenantId, created_by: userId, ...args }),
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j?.error || 'save_media_failed')
+      return j
+    }
+    case 'list_client_media': {
+      let q = supabase.from('marketing_media_library').select('id, mime_type, file_size, ad_ready, caption, tags, created_at, client_id, lead_id').eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(args.limit || 20)
+      if (args.client_id) q = q.eq('client_id', args.client_id)
+      if (args.lead_id) q = q.eq('lead_id', args.lead_id)
+      if (args.only_ad_ready) q = q.eq('ad_ready', true)
+      if (Array.isArray(args.tags) && args.tags.length) q = q.contains('tags', args.tags)
+      const { data, error } = await q
+      if (error) throw error
+      return { count: data.length, media: data }
+    }
+
+    // ============ APPROVAL HELPERS ============
+    case 'list_pending_approvals': {
+      const { data, error } = await supabase.from('agent_approval_queue')
+        .select('id, action_type, title, description, tool_name, tool_input, created_at, status, requested_by')
+        .eq('tenant_id', tenantId)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+        .limit(args.limit || 10)
+      if (error) throw error
+      return { count: data.length, approvals: data }
+    }
+    case 'execute_pending_approval': {
+      let approvalId = args.approval_id
+      if (!approvalId) {
+        const { data } = await supabase.from('agent_approval_queue').select('id').eq('tenant_id', tenantId).eq('status', 'pending').order('created_at', { ascending: false }).limit(1).maybeSingle()
+        approvalId = data?.id
+      }
+      if (!approvalId) return { success: false, error: 'no_pending_approval' }
+      const r = await fetch(`${SUPABASE_URL}/functions/v1/carmen-approval-execute`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json', apikey: SUPABASE_SERVICE_ROLE_KEY },
+        body: JSON.stringify({ approval_id: approvalId, approved_by: userId }),
+      })
+      const j = await r.json()
+      return j
+    }
+    case 'reject_pending_approval': {
+      const { error } = await supabase.from('agent_approval_queue').update({ status: 'rejected', approved_by: userId, approved_at: new Date().toISOString(), execution_result: { reason: args.reason || null } }).eq('id', args.approval_id).eq('tenant_id', tenantId)
+      if (error) throw error
+      return { success: true, approval_id: args.approval_id, status: 'rejected' }
+    }
+
+    // ============ FB ADS — all create approval rows, return pending ============
+    case 'fb_create_campaign':
+    case 'fb_create_adset':
+    case 'fb_create_ad':
+    case 'fb_create_creative_from_media':
+    case 'fb_replace_lead_form':
+    case 'fb_update_budget':
+    case 'fb_pause':
+    case 'fb_resume':
+    case 'gads_pause':
+    case 'gads_resume':
+    case 'gads_update_budget': {
+      const titles: Record<string, string> = {
+        fb_create_campaign: `יצירת קמפיין FB: ${args.name || ''}`,
+        fb_create_adset: `יצירת ad set: ${args.name || ''}`,
+        fb_create_ad: `יצירת מודעה: ${args.name || ''}`,
+        fb_create_creative_from_media: `בניית קריאייטיב חדש מ-media`,
+        fb_replace_lead_form: `החלפת טופס לידים במודעה ${args.ad_id}`,
+        fb_update_budget: `שינוי תקציב ${args.entity_id} → ${args.daily_budget ?? args.lifetime_budget}`,
+        fb_pause: `כיבוי ${args.entity_id}`,
+        fb_resume: `הדלקה ${args.entity_id}`,
+        gads_pause: `Google Ads — כיבוי ${args.campaign_id}`,
+        gads_resume: `Google Ads — הדלקה ${args.campaign_id}`,
+        gads_update_budget: `Google Ads — תקציב ${args.campaign_id} → ${args.daily_budget}`,
+      }
+      const { data, error } = await supabase.from('agent_approval_queue').insert({
+        tenant_id: tenantId,
+        agent_id: agentId || null,
+        requested_by: userId,
+        action_type: name,
+        title: titles[name] || name,
+        description: 'פעולת mutating שדורשת אישור משתמש בוואטסאפ',
+        tool_name: name,
+        tool_input: args,
+        context: { caller_role: callerRole, caller_phone: callerPhone },
+        status: 'pending',
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      }).select('id').single()
+      if (error) throw error
+      return {
+        pending_approval: true,
+        approval_id: data.id,
+        action: name,
+        summary: titles[name] || name,
+        instruction_for_carmen: 'הצג למשתמש בקצרה מה את עומדת לעשות ובקש אישור: "לאשר? (כן/לא)". אל תבצעי כלום עד שיגיע אישור — קוראת ל-execute_pending_approval רק אחרי תשובה חיובית.',
+      }
+    }
+
+    // ============ SCHEDULES ============
+    case 'schedule_campaign_toggle': {
+      const nextRun = args.run_at || (args.cron_expression ? new Date(Date.now() + 60_000).toISOString() : null)
+      const { data, error } = await supabase.from('agent_approval_queue').insert({
+        tenant_id: tenantId,
+        agent_id: agentId || null,
+        requested_by: userId,
+        action_type: 'schedule_campaign_toggle',
+        title: `תזמון ${args.action} ל-${args.entity_id}`,
+        description: args.cron_expression ? `cron: ${args.cron_expression} (${args.timezone || 'Asia/Jerusalem'})` : `חד-פעמי: ${args.run_at}`,
+        tool_name: 'schedule_campaign_toggle',
+        tool_input: { ...args, next_run_at: nextRun },
+        status: 'pending',
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      }).select('id').single()
+      if (error) throw error
+      return {
+        pending_approval: true,
+        approval_id: data.id,
+        action: 'schedule_campaign_toggle',
+        summary: `תזמון ${args.action} ל-${args.entity_id}: ${args.cron_expression || args.run_at}`,
+        instruction_for_carmen: 'הצג את התזמון ובקש אישור. רק אחרי "כן" קוראת ל-execute_pending_approval — והוא ייצור את הרשומה ב-campaign_schedules.',
+      }
+    }
+    case 'list_campaign_schedules': {
+      let q = supabase.from('campaign_schedules').select('id, entity_id, entity_type, action, cron_expression, run_at, timezone, enabled, next_run_at, last_run_at, last_run_status, notes').eq('tenant_id', tenantId).order('next_run_at', { ascending: true }).limit(args.limit || 50)
+      if (args.client_id) q = q.eq('client_id', args.client_id)
+      if (args.only_enabled) q = q.eq('enabled', true)
+      const { data, error } = await q
+      if (error) throw error
+      return { count: data.length, schedules: data }
+    }
+    case 'cancel_campaign_schedule': {
+      const { error } = await supabase.from('campaign_schedules').update({ enabled: false }).eq('id', args.schedule_id).eq('tenant_id', tenantId)
+      if (error) throw error
+      return { success: true, schedule_id: args.schedule_id, enabled: false }
+    }
+
     default:
       throw new Error(`Unknown tool: ${name}`)
   }
 }
+
 
 
 // ===========================

@@ -53,6 +53,36 @@ Deno.serve(async (req) => {
     if (row.status === 'executed') return new Response(JSON.stringify({ success: true, already_executed: true, result: row.execution_result }), { headers: corsHeaders });
     if (row.status === 'rejected') return new Response(JSON.stringify({ error: 'rejected' }), { status: 400, headers: corsHeaders });
 
+    // Special handling: schedule_campaign_toggle inserts into campaign_schedules instead of running FB/Google
+    if (row.tool_name === 'schedule_campaign_toggle') {
+      const inp = (row.tool_input as any) || {};
+      const { data: schedRow, error: schedErr } = await supabase.from('campaign_schedules').insert({
+        tenant_id: row.tenant_id,
+        client_id: inp.client_id || null,
+        entity_id: inp.entity_id,
+        entity_type: inp.entity_type,
+        action: inp.action,
+        cron_expression: inp.cron_expression || null,
+        run_at: inp.run_at || null,
+        timezone: inp.timezone || 'Asia/Jerusalem',
+        enabled: true,
+        next_run_at: inp.next_run_at || inp.run_at || new Date(Date.now() + 60_000).toISOString(),
+        approved_at: new Date().toISOString(),
+        approved_by: approved_by || row.requested_by,
+        created_by: row.requested_by,
+        notes: inp.notes || null,
+      }).select('id').single();
+      const result = schedErr ? { error: schedErr.message } : { schedule_id: schedRow.id };
+      await supabase.from('agent_approval_queue').update({
+        status: schedErr ? 'failed' : 'executed',
+        approved_by: approved_by || row.requested_by,
+        approved_at: row.approved_at || new Date().toISOString(),
+        executed_at: new Date().toISOString(),
+        execution_result: result,
+      }).eq('id', approval_id);
+      return new Response(JSON.stringify({ success: !schedErr, result, approval_id }), { status: schedErr ? 400 : 200, headers: corsHeaders });
+    }
+
     const route = TOOL_TO_FUNCTION[row.tool_name];
     if (!route) return new Response(JSON.stringify({ error: 'unknown_tool', tool_name: row.tool_name }), { status: 400, headers: corsHeaders });
 
