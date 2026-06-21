@@ -1,140 +1,182 @@
 /**
- * Carmen Skills Registry — hardcoded skill prompts surfaced by trigger keywords.
+ * Carmen Skills Registry — DB-driven with in-memory cache.
  *
- * A "skill" is a focused capability = system-prompt fragment + recommended tool list.
- * When the user message matches a skill's triggers, we append the skill prompt to the
- * system prompt for that turn so Carmen runs the workflow consistently across surfaces
- * (whatsapp / internal_chat / aios / task).
+ * Skills live in `public.ai_skills` (scope='global' for built-ins, scope='tenant'
+ * for tenant-specific overrides). Each skill = {slug, system_prompt, output_template,
+ * allowed_tools, triggers, version}. Editing a row in the DB bumps `version`
+ * automatically (trigger), and the cache picks up the new content within ~30s
+ * — no edge function deploy required.
+ *
+ * Fallback: if the DB lookup fails or the row is missing, we use the hardcoded
+ * prompts below so a fresh deployment still has working skills.
  */
 
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
 export interface CarmenSkill {
-  id: string;
-  triggers: RegExp[];
-  prompt: string;
-  // Names of tools the skill expects — informational only, used for logging.
-  tools: string[];
+  id: string
+  triggers: RegExp[]
+  prompt: string
+  tools: string[]
+  version?: number
+  source?: 'db' | 'fallback'
 }
 
-export const PULSE_CHECK_SKILL: CarmenSkill = {
+interface DbSkillRow {
+  slug: string
+  system_prompt: string | null
+  output_template: string | null
+  allowed_tools: string[] | null
+  triggers: string[] | null
+  version: number
+  scope: string
+  tenant_id: string | null
+}
+
+// ────────── Hardcoded fallbacks (used only if DB read fails) ──────────
+
+const FALLBACK_PULSE_CHECK: CarmenSkill = {
   id: 'pulse_check',
-  triggers: [
-    /בדיקת\s*דופק/,
-    /בדיקת\s*דוח/,
-    /סיכום\s*קמפיינים/,
-    /מצב\s*קמפיינים/,
-    /מצב\s*לקוחות/,
-    /\bpulse\s*check\b/i,
-  ],
+  triggers: [/בדיקת\s*דופק/, /בדיקת\s*דוח/, /סיכום\s*קמפיינים/, /מצב\s*קמפיינים/, /\bpulse\s*check\b/i],
   tools: ['analyze_campaign_performance', 'check_ad_accounts_health'],
-  prompt: `=== סקיל: בדיקת דופק (חובה לפעול לפי המבנה הזה) ===
-
-זרימה:
-1. הריצי analyze_campaign_performance (בלי scope = כל הסקופ של הקורא, או עם agency_name אם פורט מפורש).
-2. במקביל הריצי check_ad_accounts_health כדי לוודא שכל חשבונות המודעות תקינים.
-3. הצליבי את שתי התוצאות לסיכום אחד.
-
-פלט חובה (בסדר הזה, אין לדלג על אף סעיף):
-
-🚨 חשבונות מודעות לא תקינים (אם יש):
-• <שם לקוח> — <FB account disabled / Google: אין spend 7 ימים / Token פג / כל הקמפיינים paused>
-
-לכל סוכנות:
-**<שם סוכנות>**
-🔴/🟠/🟢 <שם לקוח> — <X לידים | CPL ₪Y | שינוי 7 מול 30 ימים: ±Z%>
-לקוחות איקומרס (is_ecommerce=true) מציגים: <X רכישות | CPP ₪Y | רווח ₪Z | ROAS W>
-לקוחות ללא חיבור פייסבוק/דאטה — תחת הכותרת "ללא חיבור דוחות".
-
-חוקי דגלים:
-🔴 אם אין spend 7 ימים | חשבון disabled | ירידה חדה (45%+) | תלונה
-🟠 אם CPL עלה 20%+ | spend ירד 30%+ | רגיש
-🟢 ביצועים תקינים
-
-אסור לדלג על לקוחות בלי דאטה, אסור להמציא מספרים, אסור לקצר את הרשימה. אם הרשימה ארוכה - חלקי לפי סוכנות אבל אל תחתכי.`,
-};
-
-export const ECOMMERCE_PULSE_SKILL: CarmenSkill = {
+  prompt: '=== סקיל: בדיקת דופק ===\nהריצי analyze_campaign_performance + check_ad_accounts_health, הציגי לפי סוכנות עם 🔴/🟠/🟢 וסיכום מהיר.',
+  source: 'fallback',
+}
+const FALLBACK_ECOMMERCE: CarmenSkill = {
   id: 'ecommerce_pulse',
-  triggers: [
-    /איקומרס/,
-    /ecommerce/i,
-    /e-commerce/i,
-    /רכישות/,
-    /רוא[״"]?[סצ]/,
-    /\broas\b/i,
-    /\bcpp\b/i,
-  ],
+  triggers: [/איקומרס/, /ecommerce/i, /e-commerce/i, /רכישות/, /\broas\b/i, /\bcpp\b/i],
   tools: ['analyze_campaign_performance', 'check_ad_accounts_health'],
-  prompt: `=== סקיל: בדיקת דופק איקומרס ===
-
-ללקוחות שמסומנים is_ecommerce=true (השדה מוחזר ב-analyze_campaign_performance תחת synced_clients[].is_ecommerce):
-• אסור להציג CPL/לידים. במקום זאת:
-  – purchases_7d / purchases_30d (כמות רכישות)
-  – revenue_7d = sum(purchase_value) ב-7 ימים
-  – cpp_7d = spend_7d / purchases_7d (Cost Per Purchase, ₪)
-  – roas_7d = revenue_7d / spend_7d (אם spend>0)
-  – profit_7d = revenue_7d - spend_7d (לא כולל COGS אלא אם הוזן)
-• פורמט שורת לקוח:
-  🔴/🟠/🟢 <שם> — <N רכישות | CPP ₪X | רווח ₪Y | ROAS Z>
-• דגלים מיוחדים לאיקומרס:
-  🔴 ROAS<1 (הפסד), אין רכישות 7 ימים, חשבון מודעות disabled
-  🟠 ROAS 1-1.5, CPP עלה 25%+, ירידה ברווח
-  🟢 ROAS≥1.5 ויציבות
-
-אם הלקוח is_ecommerce=true אבל אין שדות purchases/purchase_value — אמרי "אין נתוני רכישות בדוח, צריך לעדכן את השדות בטבלת facebook_insights" ואל תחשבי CPL כתחליף.`,
-};
-
-export const AD_ACCOUNTS_HEALTH_SKILL: CarmenSkill = {
+  prompt: '=== סקיל: בדיקת דופק איקומרס ===\nללקוחות is_ecommerce=true: רכישות, CPP, רווח, ROAS — לא CPL.',
+  source: 'fallback',
+}
+const FALLBACK_AD_HEALTH: CarmenSkill = {
   id: 'ad_accounts_health',
-  triggers: [
-    /חשבונות\s*מודעות/,
-    /תקינות\s*חשבונות/,
-    /חשבון\s*פייסבוק/,
-    /\bad\s*accounts?\b/i,
-    /\baccount\s*status\b/i,
-  ],
+  triggers: [/חשבונות\s*מודעות/, /תקינות\s*חשבונות/, /\bad\s*accounts?\b/i],
   tools: ['check_ad_accounts_health'],
-  prompt: `=== סקיל: בדיקת תקינות חשבונות מודעות ===
+  prompt: '=== סקיל: בדיקת תקינות חשבונות מודעות ===\nהריצי check_ad_accounts_health ודווחי רק חשבונות עם בעיה.',
+  source: 'fallback',
+}
 
-הריצי check_ad_accounts_health (אם המשתמש לא ציין client_id/agency_id - בלי פילטר, על כל הסקופ).
+const FALLBACKS: Record<string, CarmenSkill> = {
+  pulse_check: FALLBACK_PULSE_CHECK,
+  ecommerce_pulse: FALLBACK_ECOMMERCE,
+  ad_accounts_health: FALLBACK_AD_HEALTH,
+}
 
-הכלי מחזיר לכל לקוח:
-{ client_id, client_name, fb: {status, has_spend_7d, all_paused, token_ok}, flags: [...] }
+// Backwards-compat exports (some files may still import these)
+export const PULSE_CHECK_SKILL = FALLBACK_PULSE_CHECK
+export const ECOMMERCE_PULSE_SKILL = FALLBACK_ECOMMERCE
+export const AD_ACCOUNTS_HEALTH_SKILL = FALLBACK_AD_HEALTH
+export const SKILLS_REGISTRY = [FALLBACK_PULSE_CHECK, FALLBACK_ECOMMERCE, FALLBACK_AD_HEALTH]
 
-פורמט תשובה:
+// ────────── DB Loader with cache ──────────
 
-🚨 חשבונות לא תקינים (<N>):
-• <לקוח> — <flag בעברית>: <FB account disabled / אין spend 7 ימים / כל הקמפיינים paused / Token פג>
+interface CacheEntry {
+  skills: CarmenSkill[]
+  fetchedAt: number
+}
 
-✅ חשבונות תקינים: <M>
+const CACHE_TTL_MS = 30_000 // 30s — fast enough for "no deploy" feel
+const cache = new Map<string, CacheEntry>()
 
-אם flag = fb_token_expired או account_disabled — הציעי משימת חיבור מחדש (אבל אל תיצרי אוטומטית בלי אישור).
-אם הכל תקין - תשובה אחת קצרה: "כל <N> חשבונות המודעות תקינים".`,
-};
+function getServiceClient() {
+  const url = Deno.env.get('SUPABASE_URL')!
+  const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  return createClient(url, key, { auth: { persistSession: false } })
+}
 
-export const SKILLS_REGISTRY: CarmenSkill[] = [
-  PULSE_CHECK_SKILL,
-  ECOMMERCE_PULSE_SKILL,
-  AD_ACCOUNTS_HEALTH_SKILL,
-];
+function rowToSkill(row: DbSkillRow): CarmenSkill {
+  const triggerStrings = row.triggers || []
+  const regexes = triggerStrings.map((t) => {
+    // Build a lenient regex: word boundaries optional for Hebrew, escape regex chars
+    const escaped = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s*')
+    return new RegExp(escaped, 'i')
+  })
+  const promptParts: string[] = []
+  if (row.system_prompt) promptParts.push(row.system_prompt)
+  if (row.output_template) promptParts.push('פורמט פלט חובה:\n' + row.output_template)
+  return {
+    id: row.slug,
+    triggers: regexes,
+    prompt: `=== סקיל: ${row.slug} ===\n${promptParts.join('\n\n')}`,
+    tools: row.allowed_tools || [],
+    version: row.version,
+    source: 'db',
+  }
+}
+
+async function loadSkillsForTenant(tenantId: string | null): Promise<CarmenSkill[]> {
+  const cacheKey = tenantId || 'global'
+  const cached = cache.get(cacheKey)
+  if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
+    return cached.skills
+  }
+  try {
+    const sb = getServiceClient()
+    // Pull global + this tenant. Tenant overrides global on the same slug.
+    const { data, error } = await sb
+      .from('ai_skills')
+      .select('slug,system_prompt,output_template,allowed_tools,triggers,version,scope,tenant_id')
+      .eq('is_active', true)
+      .or(tenantId ? `scope.eq.global,and(scope.eq.tenant,tenant_id.eq.${tenantId})` : 'scope.eq.global')
+
+    if (error) throw error
+
+    const bySlug = new Map<string, DbSkillRow>()
+    for (const row of (data || []) as DbSkillRow[]) {
+      if (!row.slug) continue
+      const existing = bySlug.get(row.slug)
+      // Tenant scope wins over global
+      if (!existing || (row.scope === 'tenant' && existing.scope === 'global')) {
+        bySlug.set(row.slug, row)
+      }
+    }
+    const skills = Array.from(bySlug.values()).map(rowToSkill)
+    // Add hardcoded fallbacks for any slug missing from DB
+    for (const slug of Object.keys(FALLBACKS)) {
+      if (!bySlug.has(slug)) skills.push(FALLBACKS[slug])
+    }
+    cache.set(cacheKey, { skills, fetchedAt: Date.now() })
+    return skills
+  } catch (e) {
+    console.error('[skills/registry] DB load failed, using fallbacks:', e)
+    const skills = Object.values(FALLBACKS)
+    cache.set(cacheKey, { skills, fetchedAt: Date.now() })
+    return skills
+  }
+}
 
 /**
  * Resolve which skills are activated by a user message.
- * Returns the matching skill prompts (deduplicated) ready to inject into the system prompt.
+ * @param commandText user message
+ * @param tenantId tenant context (for tenant-specific overrides)
  */
-export function resolveActiveSkills(commandText: string): CarmenSkill[] {
-  if (!commandText) return [];
-  const text = commandText.toLowerCase();
-  const matches: CarmenSkill[] = [];
-  for (const skill of SKILLS_REGISTRY) {
+export async function resolveActiveSkills(
+  commandText: string,
+  tenantId: string | null = null
+): Promise<CarmenSkill[]> {
+  if (!commandText) return []
+  const all = await loadSkillsForTenant(tenantId)
+  const text = commandText.toLowerCase()
+  const matches: CarmenSkill[] = []
+  for (const skill of all) {
     if (skill.triggers.some((re) => re.test(text))) {
-      matches.push(skill);
+      matches.push(skill)
     }
   }
-  return matches;
+  return matches
 }
 
-export function buildSkillsBlock(commandText: string): string {
-  const matches = resolveActiveSkills(commandText);
-  if (matches.length === 0) return '';
-  return '\n\n' + matches.map((s) => s.prompt).join('\n\n');
+export async function buildSkillsBlock(
+  commandText: string,
+  tenantId: string | null = null
+): Promise<string> {
+  const matches = await resolveActiveSkills(commandText, tenantId)
+  if (matches.length === 0) return ''
+  return '\n\n' + matches.map((s) => s.prompt).join('\n\n')
+}
+
+/** For warmup or admin tools */
+export function clearSkillsCache() {
+  cache.clear()
 }
