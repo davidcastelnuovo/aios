@@ -1747,6 +1747,155 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (error) throw error
       return { success: true, table_id: table.id, name: table.name, slug: table.slug, ad_account_id, client_name: client.name }
     }
+    case 'check_ad_accounts_health': {
+      // 1. Resolve client scope
+      let clientsQuery = supabase
+        .from('clients')
+        .select('id, name, agency_id, agencies(name)')
+        .in('tenant_id', accessibleTenantIds)
+        .in('status', ['active', 'onboarding'])
+        .order('name')
+      if (args.client_id) clientsQuery = clientsQuery.eq('id', args.client_id)
+      if (args.agency_id) clientsQuery = clientsQuery.eq('agency_id', args.agency_id)
+      const { data: scopeClients } = await clientsQuery
+      const clientIds = (scopeClients || []).map((c: any) => c.id)
+      if (clientIds.length === 0) return { count: 0, healthy: 0, unhealthy: [], note: 'no clients in scope' }
+
+      // 2. Find facebook_insights tables (which contain ad_account_id) for these clients
+      const { data: fbTables } = await supabase
+        .from('crm_tables')
+        .select('client_id, integration_settings')
+        .in('tenant_id', accessibleTenantIds)
+        .in('client_id', clientIds)
+        .eq('integration_type', 'facebook_insights')
+
+      const fbTableByClient = new Map<string, any>()
+      for (const t of (fbTables || [])) fbTableByClient.set(t.client_id, t.integration_settings)
+
+      // 3. Fetch Facebook access token (tenant integration)
+      let { data: integration } = await supabase
+        .from('tenant_integrations')
+        .select('api_key, shared_from_integration_id')
+        .in('tenant_id', accessibleTenantIds)
+        .in('integration_type', ['facebook', 'facebook_lead_ads'])
+        .eq('is_active', true)
+        .limit(1)
+        .maybeSingle()
+      if (integration?.shared_from_integration_id && !integration?.api_key) {
+        const { data: src } = await supabase
+          .from('tenant_integrations').select('api_key')
+          .eq('id', integration.shared_from_integration_id).eq('is_active', true).maybeSingle()
+        if (src?.api_key) integration = { ...integration, api_key: src.api_key }
+      }
+      const accessToken = integration?.api_key || null
+
+      // 4. Fetch all ad accounts in one shot (status + spend_cap)
+      const accountStatusById = new Map<string, { status: number; name: string; disable_reason?: number }>()
+      let tokenOk = !!accessToken
+      if (accessToken) {
+        try {
+          let url: string | null = `https://graph.facebook.com/v21.0/me/adaccounts?fields=id,account_id,name,account_status,disable_reason&limit=200&access_token=${accessToken}`
+          while (url) {
+            const r: any = await fetch(url)
+            const j: any = await r.json()
+            if (j.error) { tokenOk = false; break }
+            for (const a of (j.data || [])) {
+              accountStatusById.set(String(a.id), { status: a.account_status, name: a.name, disable_reason: a.disable_reason })
+              accountStatusById.set(`act_${a.account_id}`, { status: a.account_status, name: a.name, disable_reason: a.disable_reason })
+            }
+            url = j.paging?.next || null
+          }
+        } catch (_) { tokenOk = false }
+      }
+
+      // 5. Compute spend_7d per client from facebook_insights records
+      const now = new Date()
+      const d7 = new Date(now); d7.setDate(d7.getDate() - 7)
+      const d7Str = d7.toISOString().split('T')[0]
+      const fbTableIds = (fbTables || []).map((t: any) => t).filter(Boolean)
+      const tableIdsForRecords = await supabase
+        .from('crm_tables').select('id, client_id, integration_settings')
+        .in('client_id', clientIds).in('tenant_id', accessibleTenantIds).eq('integration_type', 'facebook_insights')
+      const tableIdToClient = new Map<string, string>()
+      const settingsByClient = new Map<string, any>()
+      for (const t of (tableIdsForRecords.data || [])) {
+        tableIdToClient.set(t.id, t.client_id)
+        settingsByClient.set(t.client_id, t.integration_settings)
+      }
+      const tableIds = Array.from(tableIdToClient.keys())
+      const spendByClient = new Map<string, { spend7: number; activeCount: number; pausedCount: number }>()
+      if (tableIds.length > 0) {
+        const { data: recs } = await supabase
+          .from('crm_records').select('table_id, data')
+          .in('table_id', tableIds).in('tenant_id', accessibleTenantIds)
+        for (const r of (recs || [])) {
+          const cid = tableIdToClient.get(r.table_id)
+          if (!cid) continue
+          const cur = spendByClient.get(cid) || { spend7: 0, activeCount: 0, pausedCount: 0 }
+          if (r.data?.date && r.data.date >= d7Str) cur.spend7 += parseFloat(r.data?.spend) || 0
+          const eff = String(r.data?.effective_status || '').toUpperCase()
+          if (eff === 'ACTIVE') cur.activeCount += 1
+          else if (eff === 'PAUSED' || eff === 'OFF') cur.pausedCount += 1
+          spendByClient.set(cid, cur)
+        }
+      }
+
+      const unhealthy: any[] = []
+      let healthy = 0
+      for (const c of (scopeClients || [])) {
+        const settings = settingsByClient.get(c.id)
+        const adAccountId = settings?.ad_account_id || null
+        const flags: string[] = []
+        let status: string = 'unknown'
+        let hasSpend7 = false
+        let allPaused = false
+        const sb = spendByClient.get(c.id)
+        if (sb) {
+          hasSpend7 = sb.spend7 > 0
+          allPaused = sb.activeCount === 0 && sb.pausedCount > 0
+        }
+        if (!adAccountId) {
+          flags.push('not_connected')
+        } else if (!tokenOk) {
+          flags.push('fb_token_expired')
+          status = 'token_expired'
+        } else {
+          const acct = accountStatusById.get(String(adAccountId)) || accountStatusById.get(`act_${String(adAccountId).replace(/^act_/, '')}`)
+          if (!acct) {
+            flags.push('account_not_found')
+            status = 'not_found'
+          } else {
+            // Meta: 1=ACTIVE, 2=DISABLED, 3=UNSETTLED, 7=PENDING_RISK_REVIEW, 8=PENDING_SETTLEMENT, 9=IN_GRACE_PERIOD, 100=PENDING_CLOSURE, 101=CLOSED, 102=PENDING_REVIEW, 201=ANY_ACTIVE
+            const s = acct.status
+            status = s === 1 ? 'active' : s === 2 ? 'disabled' : s === 101 ? 'closed' : s === 7 || s === 102 ? 'pending_review' : `status_${s}`
+            if (s !== 1) flags.push(`fb_${status}`)
+          }
+        }
+        if (status === 'active' && !hasSpend7) flags.push('no_spend_7d')
+        if (status === 'active' && allPaused) flags.push('all_campaigns_paused')
+
+        if (flags.length === 0) healthy += 1
+        else unhealthy.push({
+          client_id: c.id,
+          client_name: c.name,
+          agency_name: c.agencies?.name ?? null,
+          ad_account_id: adAccountId,
+          fb: { status, has_spend_7d: hasSpend7, all_paused: allPaused, token_ok: tokenOk },
+          flags,
+        })
+      }
+
+      return {
+        count: scopeClients?.length || 0,
+        healthy,
+        unhealthy_count: unhealthy.length,
+        token_ok: tokenOk,
+        unhealthy,
+        instructions_to_agent: unhealthy.length > 0
+          ? 'דווחי על כל הלקוחות הבעייתיים בבלוק "🚨 חשבונות מודעות לא תקינים". לכל אחד פרטי בעברית את ה-flag הראשי. אם token_ok=false — ציינו בנפרד שצריך לחבר מחדש את אינטגרציית פייסבוק.'
+          : 'כל החשבונות תקינים. החזירי משפט קצר אחד.',
+      }
+    }
     case 'list_unconnected_clients': {
       // Get active clients that don't have a facebook_insights table
       const { data: allClients, error: clientsErr } = await supabase
