@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   ReactFlow,
@@ -24,6 +24,7 @@ import {
   BarChart3,
   Bot,
 } from "lucide-react";
+import { StageConfigDialog } from "./StageConfigDialog";
 
 const STAGE_ICONS: Record<string, any> = {
   strategy: Lightbulb,
@@ -50,10 +51,12 @@ function StageNode({ data }: { data: any }) {
   const color = STAGE_COLORS[data.stage_type] ?? "from-muted to-muted/40 border-border";
   return (
     <Card
+      dir="rtl"
       className={`min-w-[220px] cursor-pointer border-2 bg-gradient-to-br ${color} p-3 shadow-md transition-all hover:shadow-lg`}
       onClick={data.onClick}
     >
-      <Handle type="target" position={Position.Left} />
+      {/* RTL: source on the left (output), target on the right (input) */}
+      <Handle type="source" position={Position.Left} />
       <div className="flex items-start gap-2">
         <div className="rounded-md bg-background/60 p-1.5">
           <Icon className="h-4 w-4" />
@@ -74,7 +77,7 @@ function StageNode({ data }: { data: any }) {
           {data.approvalLabel}
         </Badge>
       </div>
-      <Handle type="source" position={Position.Right} />
+      <Handle type="target" position={Position.Right} />
     </Card>
   );
 }
@@ -84,6 +87,7 @@ const nodeTypes = { stage: StageNode };
 interface Props {
   pipelineId: string;
   tenantId: string;
+  clientId: string;
   onSelectItem: (id: string) => void;
 }
 
@@ -93,8 +97,10 @@ const APPROVAL_LABELS: Record<string, string> = {
   hybrid: "היברידי",
 };
 
-export function PipelineCanvas({ pipelineId }: Props) {
-  const { data: stages } = useQuery({
+export function PipelineCanvas({ pipelineId, tenantId, clientId }: Props) {
+  const [openStageId, setOpenStageId] = useState<string | null>(null);
+
+  const { data: stages, refetch: refetchStages } = useQuery({
     queryKey: ["marketing-stages", pipelineId],
     queryFn: async () => {
       const { data } = await supabase
@@ -132,6 +138,7 @@ export function PipelineCanvas({ pipelineId }: Props) {
         agentName: s.ai_agents?.name,
         approvalLabel: APPROVAL_LABELS[s.approval_mode] ?? s.approval_mode,
         itemCount: itemCounts?.[s.id] ?? 0,
+        onClick: () => setOpenStageId(s.id),
       },
       draggable: true,
     }));
@@ -139,11 +146,9 @@ export function PipelineCanvas({ pipelineId }: Props) {
 
   const edges: Edge[] = useMemo(() => {
     if (!stages) return [];
-    const sorted = [...stages].sort((a: any, b: any) => a.sort_order - b.sort_order);
-    const out: Edge[] = [];
-    // Link strategy → copy → creative
     const byType: Record<string, any> = {};
-    sorted.forEach((s: any) => (byType[s.stage_type] = s));
+    stages.forEach((s: any) => (byType[s.stage_type] = s));
+    const out: Edge[] = [];
     const link = (a: string, b: string) => {
       if (byType[a] && byType[b]) {
         out.push({
@@ -165,6 +170,8 @@ export function PipelineCanvas({ pipelineId }: Props) {
     return out;
   }, [stages]);
 
+  const openStage = (stages ?? []).find((s: any) => s.id === openStageId) ?? null;
+
   return (
     <div className="h-full w-full" dir="ltr">
       <ReactFlow
@@ -179,6 +186,16 @@ export function PipelineCanvas({ pipelineId }: Props) {
         <Controls />
         <MiniMap pannable zoomable />
       </ReactFlow>
+
+      <StageConfigDialog
+        stage={openStage}
+        tenantId={tenantId}
+        clientId={clientId}
+        onClose={() => setOpenStageId(null)}
+        onSaved={() => {
+          refetchStages();
+        }}
+      />
     </div>
   );
 }
