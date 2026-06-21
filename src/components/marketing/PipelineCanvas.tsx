@@ -3,8 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import {
   ReactFlow,
   Background,
-  Controls,
-  MiniMap,
   type Node,
   type Edge,
   Handle,
