@@ -346,32 +346,44 @@ Deno.serve(async (req) => {
       const _customConversionLeadsValue = allActions
         .filter((a: any) => String(a.action_type || '').startsWith('offsite_conversion.custom'))
         .reduce((sum: number, a: any) => sum + (parseInt(a.value) || 0), 0);
+      // Standard intent events fired on landing pages (Complete Registration / Contact / etc.)
+      const _standardIntentValue = sumByTypes(STANDARD_INTENT_LEAD_TYPES);
 
       // FB's aggregate `lead` action_type is the deduplicated total across all lead
       // sources (form + pixel + custom). Use it when available — matches Ads Manager.
       const _aggregateLeadValue = sumByTypes(['lead']);
 
+      // Unified leads count: take MAX of FB's aggregate vs. our manually summed total
+      // across ALL lead-like signals (form + pixel + custom + standard intent + messaging).
+      // MAX (not sum) avoids double-counting the same conversion that FB reports under
+      // multiple action_types, while still catching cases where FB's `lead` aggregate is
+      // missing or under-reports (e.g. landing-page Custom Conversions, Complete Registration).
+      const _summed =
+        _formLeadsValue +
+        _pixelLeadsValue +
+        _customConversionLeadsValue +
+        _standardIntentValue +
+        _messagingLeadsValue;
       let leads: number;
-      if (_isLeadFormObjective) {
-        // Lead-form campaigns can collect BOTH form leads and website (pixel/custom)
-        // leads on the same landing page. FB's "Results" column shows the sum.
-        // Prefer the aggregate `lead` (already deduplicated by FB); fallback to sum.
-        const _summed = _formLeadsValue + _pixelLeadsValue + _customConversionLeadsValue;
-        leads = Math.max(_aggregateLeadValue, _summed, _formLeadsValue);
-      } else if (_isMessagingObjective) {
-        // Messaging campaigns: count conversation starts (matches FB Results column).
+      if (_isMessagingObjective && _messagingLeadsValue > 0 && _aggregateLeadValue === 0 && _summed === _messagingLeadsValue) {
+        // Pure messaging campaign with no other signals — count conversation starts.
         leads = _messagingLeadsValue;
       } else {
-        // Other campaigns (Traffic/Awareness/Conversions/etc): take the largest single
-        // attributed signal — never sum, to avoid double counting the same lead across
-        // multiple action_types (FB returns the same conversion under several types).
-        leads = Math.max(
-          _aggregateLeadValue,
-          _formLeadsValue,
-          _messagingLeadsValue,
-          _pixelLeadsValue,
-          _customConversionLeadsValue,
-        );
+        leads = Math.max(_aggregateLeadValue, _summed);
+      }
+
+      // Diagnostic: when FB charged us but reported zero leads, dump every action_type
+      // we received so we can identify a missing event name (e.g. unusual custom conversion).
+      const _spendForLog = parseFloat(insight.spend) || 0;
+      if (leads === 0 && _spendForLog > 0) {
+        console.log('[sync-facebook-insights] ZERO leads despite spend', {
+          campaign: insight.campaign_name,
+          campaign_id: insight.campaign_id,
+          date: insight.date_start,
+          spend: _spendForLog,
+          objective: _objectiveForLeads,
+          action_types: Array.from(actionTypeSet),
+        });
       }
       const _leadgenGroupedValue = _formLeadsValue;
 
