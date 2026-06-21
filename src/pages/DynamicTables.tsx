@@ -115,6 +115,7 @@ export default function DynamicTables() {
   const [editAdAccountId, setEditAdAccountId] = useState<string>("");
   const [editMaskyooNumber, setEditMaskyooNumber] = useState<string>("");
   const [clientSearch, setClientSearch] = useState<string>("");
+  const [dashboardSearch, setDashboardSearch] = useState<string>("");
 
   // For campaigners: fetch their assigned client IDs
   const { data: assignedClientIds } = useQuery({
