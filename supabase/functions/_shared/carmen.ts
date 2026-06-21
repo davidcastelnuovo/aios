@@ -987,8 +987,9 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     );
     const mergedHistory = buildCarmenMergedHistory(recentContext, []);
     const carmenResponse = await runCarmenAI(
-      supabase, agentId, tenantId, contentAfterKeyword, mergedHistory, phoneNumber, senderName,
+      supabase, agentId, tenantId, contentAfterKeyword, mergedHistory, phoneNumber, senderName, waNotify,
     );
+
     const history = [
       { role: 'user', content: contentAfterKeyword, timestamp: new Date().toISOString() },
       { role: 'assistant', content: carmenResponse, timestamp: new Date().toISOString() },
