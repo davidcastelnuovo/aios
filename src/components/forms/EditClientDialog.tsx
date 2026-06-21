@@ -31,7 +31,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, X, Calendar as CalendarIcon, Clock, CheckCircle2, Paperclip, Plus, Trash2, Users, UserPlus, Copy } from "lucide-react";
+import { Loader2, X, Calendar as CalendarIcon, Clock, CheckCircle2, Paperclip, Plus, Trash2, Users, UserPlus, Copy, Plug } from "lucide-react";
+import { ClientConnectionsTab } from "@/components/clients/ClientConnectionsTab";
 import { FolderLinksField } from "@/components/forms/FolderLinksField";
 import { AttachmentsField } from "@/components/forms/AttachmentsField";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -544,8 +545,12 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
         </DialogHeader>
 
         <Tabs defaultValue="details" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5">
             <TabsTrigger value="details">פרטי לקוח</TabsTrigger>
+            <TabsTrigger value="connections" className="flex items-center gap-1">
+              <Plug className="h-3 w-3" />
+              חיבורים
+            </TabsTrigger>
             <TabsTrigger value="files" className="flex items-center gap-1">
               <Paperclip className="h-3 w-3" />
               קבצים
@@ -1076,6 +1081,10 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
             </div>
           </form>
         </Form>
+          </TabsContent>
+
+          <TabsContent value="connections" className="mt-4">
+            {tenantId && <ClientConnectionsTab clientId={client.id} tenantId={tenantId} />}
           </TabsContent>
 
           <TabsContent value="meeting" className="mt-4 space-y-4">
