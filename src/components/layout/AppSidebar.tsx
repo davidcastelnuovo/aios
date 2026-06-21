@@ -105,7 +105,7 @@ const iconMap: Record<string, any> = {
 
 // ─── Menu structure ───────────────────────────────────────────────────────────
 // Imported from a shared module so the Visual Workspace and the sidebar stay in sync.
-import { effectiveTabs as BASE_MENU_TABS, type MenuTab, type MenuSection, type MenuTabId } from "@/lib/menuStructure";
+import { MENU_TABS as BASE_MENU_TABS, type MenuTab, type MenuSection, type MenuTabId } from "@/lib/menuStructure";
 import { computeSidebarOverlay } from "@/visual-workspace/hooks/useSitemap";
 
 // Permission map
