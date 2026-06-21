@@ -34,7 +34,7 @@ const Finance = lazy(() => import("./pages/Finance"));
 const Tasks = lazy(() => import("./pages/Tasks"));
 const ClientOnboarding = lazy(() => import("./pages/ClientOnboarding"));
 const TimeTracking = lazy(() => import("./pages/TimeTracking"));
-const Reports = lazy(() => import("./pages/Reports"));
+
 const MyProfile = lazy(() => import("./pages/MyProfile"));
 const Users = lazy(() => import("./pages/Users"));
 const SalesPeople = lazy(() => import("./pages/SalesPeople"));
