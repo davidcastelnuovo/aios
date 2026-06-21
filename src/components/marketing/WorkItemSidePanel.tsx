@@ -170,49 +170,133 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
     refetchRuns();
   };
 
+  // Group assets by type for tabbed preview
+  const assetsByType: Record<string, any[]> = {};
+  for (const a of assets ?? []) {
+    (assetsByType[a.type] ??= []).push(a);
+  }
+  const TYPE_LABELS: Record<string, string> = {
+    brief: "Brief",
+    copy: "Copy",
+    image: "קריאייטיב",
+    data: "מדידה",
+  };
+  const availableTypes = Object.keys(assetsByType);
+  const [activeAssetTab, setActiveAssetTab] = useState<string>("");
+  useEffect(() => {
+    if (availableTypes.length && !availableTypes.includes(activeAssetTab)) {
+      setActiveAssetTab(availableTypes[0]);
+    }
+  }, [availableTypes.join("|")]);
+
+  const stageHasAsset = (stageId: string) =>
+    (assets ?? []).some((a: any) => a.stage_id === stageId);
+
   return (
     <Sheet open={!!itemId} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="left" className="w-[560px] sm:max-w-none overflow-y-auto" dir="rtl">
+      <SheetContent side="left" className="w-[600px] sm:max-w-none overflow-y-auto" dir="rtl">
         <SheetHeader>
-          <SheetTitle>פריט תוכן</SheetTitle>
+          <SheetTitle className="text-right">{item?.title ?? "פריט תוכן"}</SheetTitle>
         </SheetHeader>
         {!item ? (
           <div className="py-8 text-center text-sm text-muted-foreground">טוען...</div>
         ) : (
           <div className="mt-4 space-y-4">
-            <div className="flex gap-2">
-              <Button onClick={runFullPipeline} disabled={!!running} className="flex-1">
-                {running === "ALL" ? <Loader2 className="ml-1 h-4 w-4 animate-spin" /> : <Play className="ml-1 h-4 w-4" />}
-                הפעל את כל ה-Pipeline
-              </Button>
-            </div>
-
-            <div>
-              <Label>כותרת</Label>
-              <Input
-                defaultValue={item.title ?? ""}
-                onBlur={(e) => save({ title: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>תאריך פרסום מתוכנן</Label>
-              <Input
-                type="date"
-                defaultValue={item.scheduled_date ?? ""}
-                onBlur={(e) => save({ scheduled_date: e.target.value || null })}
-              />
-            </div>
-            <div>
-              <Label>שלב נוכחי</Label>
-              <Select value={item.current_stage_id ?? ""} onValueChange={(v) => save({ current_stage_id: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {stages.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+            {/* Hero: latest AI output */}
+            {availableTypes.length > 0 ? (
+              <div className="rounded-lg border bg-card p-3">
+                <div className="mb-2 flex items-center gap-2">
+                  <Label className="text-sm font-semibold">מה שקרמן הכינה</Label>
+                  <Badge variant="secondary" className="text-[10px]">
+                    {(assets ?? []).length} תוצרים
+                  </Badge>
+                </div>
+                {availableTypes.length > 1 && (
+                  <div className="mb-2 flex flex-wrap gap-1">
+                    {availableTypes.map((t) => (
+                      <Button
+                        key={t}
+                        size="sm"
+                        variant={activeAssetTab === t ? "default" : "outline"}
+                        className="h-7 text-xs"
+                        onClick={() => setActiveAssetTab(t)}
+                      >
+                        {TYPE_LABELS[t] ?? t}
+                        <span className="ms-1 opacity-60">({assetsByType[t].length})</span>
+                      </Button>
+                    ))}
+                  </div>
+                )}
+                <div className="space-y-3">
+                  {(assetsByType[activeAssetTab] ?? []).map((a: any) => (
+                    <div key={a.id} className="rounded-md border bg-background p-3">
+                      <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+                        <Badge variant="outline" className="text-[10px]">
+                          {TYPE_LABELS[a.type] ?? a.type}
+                        </Badge>
+                        <span>{a.marketing_pipeline_stages?.name ?? ""}</span>
+                        <span className="ms-auto">
+                          {new Date(a.created_at).toLocaleString("he-IL")}
+                        </span>
+                      </div>
+                      {a.url && (
+                        <a href={a.url} target="_blank" rel="noopener" className="block">
+                          <img
+                            src={a.url}
+                            alt="asset"
+                            className="max-h-72 w-full rounded object-cover"
+                          />
+                        </a>
+                      )}
+                      {a.content && (
+                        <div className="whitespace-pre-wrap text-sm leading-relaxed">
+                          {a.content}
+                        </div>
+                      )}
+                    </div>
                   ))}
-                </SelectContent>
-              </Select>
-            </div>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
+                עוד לא נוצר תוכן. הפעילי שלב או את כל ה-Pipeline למטה.
+              </div>
+            )}
+
+            {/* Awaiting approval */}
+            {(runs ?? [])
+              .filter((r: any) => r.status === "awaiting_approval")
+              .map((r: any) => (
+                <div
+                  key={r.id}
+                  className="rounded-md border-2 border-amber-500/60 bg-amber-500/10 p-3"
+                >
+                  <div className="mb-2 text-sm font-medium">
+                    ממתין לאישור — {r.marketing_pipeline_stages?.name}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={() => approveRun(r.id, r.stage_id)}>
+                      <Check className="ml-1 h-3 w-3" /> אשר והמשך
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => runStage(r.stage_id)}>
+                      <RotateCw className="ml-1 h-3 w-3" /> הרץ מחדש
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => rejectRun(r.id)}>
+                      <X className="ml-1 h-3 w-3" /> דחה
+                    </Button>
+                  </div>
+                </div>
+              ))}
+
+            {/* Run pipeline button */}
+            <Button onClick={runFullPipeline} disabled={!!running} className="w-full">
+              {running === "ALL" ? (
+                <Loader2 className="ml-1 h-4 w-4 animate-spin" />
+              ) : (
+                <Play className="ml-1 h-4 w-4" />
+              )}
+              הפעל את כל ה-Pipeline
+            </Button>
 
             {/* Stage-by-stage runner */}
             <div>
@@ -220,8 +304,13 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
               <div className="space-y-1.5">
                 {stages.map((s) => {
                   const lastRun = (runs ?? []).find((r: any) => r.stage_id === s.id);
+                  const hasAsset = stageHasAsset(s.id);
                   return (
-                    <div key={s.id} className="flex items-center gap-2 rounded-md border bg-muted/20 p-2">
+                    <div
+                      key={s.id}
+                      className="flex items-center gap-2 rounded-md border bg-muted/20 p-2"
+                    >
+                      {hasAsset && <Check className="h-3.5 w-3.5 text-green-600" />}
                       <span className="flex-1 text-sm">{s.name}</span>
                       {lastRun && (
                         <Badge variant={STATUS_LABELS[lastRun.status]?.variant ?? "outline"}>
@@ -235,7 +324,11 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
                         onClick={() => runStage(s.id)}
                         title="הפעל שלב זה"
                       >
-                        {running === s.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+                        {running === s.id ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Play className="h-3 w-3" />
+                        )}
                       </Button>
                     </div>
                   );
@@ -243,83 +336,84 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
               </div>
             </div>
 
-            {/* Generated assets */}
-            {(assets ?? []).length > 0 && (
-              <div>
-                <Label className="mb-2 block">תוצרים שנוצרו</Label>
-                <div className="space-y-2">
-                  {(assets ?? []).map((a: any) => (
-                    <div key={a.id} className="rounded-md border p-2">
-                      <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
-                        <Badge variant="outline" className="text-[10px]">{a.type}</Badge>
-                        <span>{a.marketing_pipeline_stages?.name ?? ""}</span>
-                        <span className="ms-auto">{new Date(a.created_at).toLocaleString("he-IL")}</span>
-                      </div>
-                      {a.url && (
-                        <a href={a.url} target="_blank" rel="noopener" className="block">
-                          <img src={a.url} alt="asset" className="max-h-48 w-full rounded object-cover" />
-                        </a>
-                      )}
-                      {a.content && (
-                        <pre className="whitespace-pre-wrap text-sm">{a.content}</pre>
-                      )}
-                    </div>
-                  ))}
+            {/* Collapsed metadata form */}
+            <details className="rounded-md border p-3">
+              <summary className="cursor-pointer text-sm font-medium">פרטי הפריט</summary>
+              <div className="mt-3 space-y-3">
+                <div>
+                  <Label>כותרת</Label>
+                  <Input
+                    defaultValue={item.title ?? ""}
+                    onBlur={(e) => save({ title: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>תאריך פרסום מתוכנן</Label>
+                  <Input
+                    type="date"
+                    defaultValue={item.scheduled_date ?? ""}
+                    onBlur={(e) => save({ scheduled_date: e.target.value || null })}
+                  />
+                </div>
+                <div>
+                  <Label>שלב נוכחי</Label>
+                  <Select
+                    value={item.current_stage_id ?? ""}
+                    onValueChange={(v) => save({ current_stage_id: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {stages.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>הערות</Label>
+                  <Textarea
+                    rows={3}
+                    defaultValue={item.payload?.notes ?? ""}
+                    onBlur={(e) =>
+                      save({ payload: { ...(item.payload ?? {}), notes: e.target.value } })
+                    }
+                  />
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {saving ? "שומר..." : "שינויים נשמרים אוטומטית"}
                 </div>
               </div>
-            )}
-
-            {/* Awaiting approval bar */}
-            {(runs ?? []).filter((r: any) => r.status === "awaiting_approval").map((r: any) => (
-              <div key={r.id} className="rounded-md border-2 border-amber-500/60 bg-amber-500/10 p-3">
-                <div className="mb-2 text-sm font-medium">
-                  ממתין לאישור — {r.marketing_pipeline_stages?.name}
-                </div>
-                <div className="flex gap-2">
-                  <Button size="sm" onClick={() => approveRun(r.id, r.stage_id)}>
-                    <Check className="ml-1 h-3 w-3" /> אשר והמשך
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => runStage(r.stage_id)}>
-                    <RotateCw className="ml-1 h-3 w-3" /> הרץ מחדש
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => rejectRun(r.id)}>
-                    <X className="ml-1 h-3 w-3" /> דחה
-                  </Button>
-                </div>
-              </div>
-            ))}
+            </details>
 
             {/* Recent runs / token usage */}
             {(runs ?? []).length > 0 && (
               <details className="rounded-md border p-2">
-                <summary className="cursor-pointer text-sm font-medium">היסטוריית ריצות ושימוש בטוקנים</summary>
+                <summary className="cursor-pointer text-sm font-medium">
+                  היסטוריית ריצות ושימוש בטוקנים
+                </summary>
                 <div className="mt-2 space-y-1 text-xs">
                   {(runs ?? []).map((r: any) => (
                     <div key={r.id} className="flex items-center gap-2">
-                      <Badge variant={STATUS_LABELS[r.status]?.variant ?? "outline"} className="text-[10px]">
+                      <Badge
+                        variant={STATUS_LABELS[r.status]?.variant ?? "outline"}
+                        className="text-[10px]"
+                      >
                         {STATUS_LABELS[r.status]?.label ?? r.status}
                       </Badge>
                       <span>{r.marketing_pipeline_stages?.name}</span>
                       <span className="ms-auto text-muted-foreground">
-                        {r.tokens_in + r.tokens_out} tok · ${Number(r.cost_usd).toFixed(4)}
+                        {(r.tokens_in ?? 0) + (r.tokens_out ?? 0)} tok · $
+                        {Number(r.cost_usd ?? 0).toFixed(4)}
                       </span>
                     </div>
                   ))}
                 </div>
               </details>
             )}
-
-            <div>
-              <Label>הערות</Label>
-              <Textarea
-                rows={3}
-                defaultValue={item.payload?.notes ?? ""}
-                onBlur={(e) => save({ payload: { ...(item.payload ?? {}), notes: e.target.value } })}
-              />
-            </div>
-            <div className="pt-2 text-xs text-muted-foreground">
-              {saving ? "שומר..." : "שינויים נשמרים אוטומטית"}
-            </div>
           </div>
         )}
       </SheetContent>
