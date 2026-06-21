@@ -33,8 +33,9 @@ export default function MarketingDepartment() {
   const { tenant } = useCurrentTenant();
   const tenantId = tenant?.id;
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [view, setView] = useState<"flow" | "calendar">("flow");
-  const [track, setTrack] = useState<MarketingTrack>("campaigns");
+  const [topTab, setTopTab] = useState<MarketingTrack | "calendar">("campaigns");
+  const [calendarTrack, setCalendarTrack] = useState<MarketingTrack>("campaigns");
+  const track: MarketingTrack = topTab === "calendar" ? calendarTrack : topTab;
 
   const clientId = routeClientId ?? null;
 
