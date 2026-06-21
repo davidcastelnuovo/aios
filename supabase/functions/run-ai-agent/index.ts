@@ -2511,7 +2511,7 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     const userAskedGithubAgent = /\b(github|גיטהאב|גיט\s*האב|שגיאת\s*קוד|תמיכה\s*טכנית|אגנט\s*קוד)\b/i.test(cmd)
     if (surface === 'task') {
       filteredTools = filteredTools.filter(t => t.name !== 'delegate_to_subagent' && t.name !== 'delegate_to_manus' && t.name !== 'delegate_to_github_agent')
-    } else if (surface === 'aios' || surface === 'whatsapp') {
+    } else if (surface === 'aios' || surface === 'whatsapp' || surface === 'internal_chat') {
       // Same default-direct rule for WhatsApp as for AIOS: hide delegation tools unless
       // the user explicitly asked for background work. On WhatsApp this is even more
       // important — there is no "window" the user can leave open to watch progress, and
