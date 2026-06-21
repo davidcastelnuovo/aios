@@ -138,6 +138,14 @@ export default function MarketingDepartment() {
                 <CalendarRange className="ml-1 h-4 w-4" />
                 לוח תוכן
               </TabsTrigger>
+              <TabsTrigger value="creative">
+                <Palette className="ml-1 h-4 w-4" />
+                קריאייטיב
+              </TabsTrigger>
+              <TabsTrigger value="usage">
+                <Coins className="ml-1 h-4 w-4" />
+                שימוש בטוקנים
+              </TabsTrigger>
             </TabsList>
 
             {!pipeline ? (
