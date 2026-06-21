@@ -2941,6 +2941,8 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
           output_preview: String(finalOutput || '').slice(0, 600),
           caller_role: callerRole,
           caller_campaigner_id: callerCampaignerId,
+          active_skills: matchedSkills,
+          instruction_captured: instructionCaptured,
         },
         user_id: callerUserId,
         tool_calls: toolLog.length,
