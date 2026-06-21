@@ -1,42 +1,107 @@
-# תיקון התנהגות "כרמן עצלנית/מתחמקת"
+# Carmen Ad-Ops Toolkit (Meta + Google Ads)
 
-## הבעיה (לפי הצ'אט שצירפת)
-כרמן ענתה דברים כמו:
-- "אני לא רואה אוטומטית מי תייג אותך בקבוצה או את ההקשר עם אנה, אלא אם ההודעות הגיעו למערכת"
-- "כנראה הייתה תקלה בזיהוי או בטריגר של ההודעה"
-- "סבבה, סיימנו 🙏"
+הרחבת כרמן עם יכולות מלאות לניהול קמפיינים מהוואטסאפ — כולל שמירת מדיה מההתכתבות, יצירה/עריכה של קמפיינים, מודעות, לידפורמים, אופטימיזציה ותזמון. **כל פעולה מבצעת — דורשת אישור בוואטסאפ לפני ביצוע** דרך `agent_approval_queue` (קיים).
 
-זה מתחמק ולא מקצועי — ההודעות בפועל **כן** הגיעו אליה (ראיתי בלוגים), והיא היתה צריכה לבצע, לא להאשים את "המערכת" או לסגור עם 🙏 במקום לפעול.
+## 1. תשתית מדיה (Media Library)
 
-הסיבה: ה-system prompt שלה לא אוסר עליה את הדפוסים האלה ספציפית, ובנוסף יש לה פתח ל"טריגר תקלה / לא קיבלתי הודעה" כתירוץ.
+**Storage bucket חדש** `carmen-media` (פרטי, RLS על tenant_id).
 
-## מה אתקן
+**טבלה חדשה** `marketing_media_library`:
+- `id`, `tenant_id`, `client_id?`, `lead_id?`
+- `bucket_path`, `mime_type`, `file_size`, `width/height`
+- `source` (`whatsapp` | `telegram` | `upload` | `ai_generated`)
+- `source_message_id?` (קישור ל-`chat_messages.id`)
+- `caption`, `tags[]`, `usage_count`
+- `created_by`, `created_at`
+- GRANT + RLS לפי tenant + has_role
 
-### 1. כללי "אסור להתחמק" ב-system prompt (`carmen-prompt-v2.ts`)
-מוסיף סעיף חדש "אנטי-התחמקות" שאוסר במפורש:
-- 🚫 לטעון "אני לא רואה את ההודעות" / "ההודעות לא הגיעו" / "לא קיבלתי" — כשהיא בפועל קוראת את ההודעה הזו עכשיו, ההודעה כן הגיעה. אסור להאשים את הצינור.
-- 🚫 להאשים "תקלה בזיהוי / בטריגר / במערכת" כדרך להתחמק מתשובה. אם יש חשד לבעיה — לבצע מה שאפשר ולציין בקצרה "אם משהו חוזר על עצמו, נבדוק", לא להפוך את זה לתשובה במקום פעולה.
-- 🚫 לסגור שיחה עם "סבבה, סיימנו / 🙏 / קיבלתי" כשהמשתמש דווקא ביקש פעולה או חקירה. אם המשתמש מבקש "תבדקי / תחקרי / תחזרי אליי" — חובה לבצע צעד קונקרטי (קריאת כלי) ולא רק לאשר.
-- 🚫 "להקטין ראש" — לתת תשובה בירוקרטית ("לפי ההנחיות שלי…", "אני יכולה רק אם…") במקום לבצע. אם יש לך גישה (וברוב המקרים יש), בצעי.
+**Edge Function חדש** `carmen-save-media`:
+- מקבל message_id או media_url מההתכתבות
+- מוריד את הקובץ (Green API / Manus / Telegram URL)
+- מעלה ל-bucket `carmen-media/{tenant_id}/{client_id}/...`
+- יוצר רשומה ב-`marketing_media_library` עם שיוך ללקוח/ליד אוטומטית מההתכתבות
 
-### 2. כלל "ownership" חיובי
-מוסיף בסעיף הזהות:
-- את **חלק מהצוות** של Marketing Captain. אם משהו לא עובד טוב — את לוקחת אחריות לבדוק, לא דוחה את זה ל"המערכת".
-- אם משתמש שואל "למה לא ענית קודם?" — אל תמציאי הסבר טכני. עני בכנות שאת רואה את הבקשה עכשיו וממשיכה ממנה, בלי תירוצים על "טריגרים".
+## 2. כלי כרמן חדשים (Skill Registry)
 
-### 3. כלל "המשך הקשר" בקבוצות WhatsApp (`buildWhatsAppRules`)
-- כשהודעה קודמת בקבוצה הייתה outbound שלך וההודעה הנוכחית מתייחסת אליה — חובה להתייחס להקשר ההיסטורי של 10 ההודעות האחרונות שיש לך. אסור לטעון "אין לי הקשר".
-- כשמתייגים אותך עם "כרמן" בלי שאלה ספציפית — עני קצר "כן, מה צריך?" ואל תיכנסי לאופן הסברים על איך את עובדת.
+נוספים ל-`supabase/functions/_shared/skills/registry.ts` ול-`mcp-tools.ts`:
 
-### 4. שמירת ההנחיה החדשה ב-ai_memory
-מוסיף רשומת `instructions` כללית עם המפתח `no_excuses_no_minimizing`:
-> "אסור להתחמק עם 'לא קיבלתי הודעה' / 'תקלה בטריגר' / 'אין לי הקשר'. אם הודעה הגיעה אליך, היא הגיעה. אם משתמש מבקש לבדוק/לחקור — בצעי צעד קונקרטי, אל תאשרי בלי לפעול."
+### מדיה
+- `save_media_from_chat({ message_id?, client_id?, lead_id?, tags?, caption? })` — שומר מדיה מהודעה ספציפית או מההודעה האחרונה בשיחה
+- `list_client_media({ client_id, limit?, tags? })` — רשימת מדיה של לקוח
+- `link_media_to_client({ media_id, client_id })`
 
-## קבצים שיתעדכנו
-1. `supabase/functions/_shared/carmen-prompt-v2.ts` — הוספת סעיף `buildAntiDeflection()` ושילובו ב-`buildCarmenV2SystemPrompt`, חידוד `buildIdentity` ו-`buildWhatsAppRules`.
-2. INSERT אחד ל-`ai_memory` עם ההנחיה הקבועה (tenant marketingcaptain).
+### Meta (Facebook + Instagram)
+- `create_fb_campaign({ client_id, name, objective, daily_budget, ... })` → `needsApproval: true`
+- `create_fb_adset({ campaign_id, targeting, schedule, optimization_goal, ... })` → approval
+- `create_fb_ad({ adset_id, creative: { media_id, headline, primary_text, cta, link }, ... })` → approval
+- `replace_lead_form({ ad_id, new_form_id })` → approval
+- `update_fb_creative({ ad_id, media_id?, headline?, ... })` → approval
+- `update_fb_budget({ entity_id, level: 'campaign'|'adset', daily_budget })` → approval
+- `pause_fb_entity({ entity_id, level })` / `resume_fb_entity(...)` → approval
+- `schedule_fb_toggle({ entity_id, level, action: 'pause'|'resume', cron_or_datetime })` → approval
 
-## אימות אחרי ההטמעה
-- שולחים בקבוצה "כרמן, את שם?" → מצופה: תשובה קצרה ופעילה ("כן, מה צריך?"), בלי "אני לא רואה הקשר".
-- שולחים "כרמן תבדקי למה X לא קרה" → מצופה: היא קוראת לכלי בדיקה (recall_memory / search_tasks / analyze_campaign_performance) ומחזירה מה מצאה — לא "כנראה תקלה".
-- אין שינוי ב-tools או ב-RLS, רק בהוראות ההתנהגות.
+### Google Ads
+- `create_google_campaign(...)`, `update_google_budget(...)`, `pause_google_campaign(...)`, `resume_google_campaign(...)`, `schedule_google_toggle(...)` — אותם דפוסים, דרך Google Ads API v23
+
+### אופטימיזציה
+- `analyze_and_suggest_optimization({ campaign_id, days })` — מחזיר המלצות (תקציב/יצירתי/קהל) **בלי לבצע**, רק מציע. כרמן מציגה בוואטסאפ ומבקשת אישור לכל שינוי כצעד נפרד.
+
+## 3. תזמון אוטומטי (Pause/Resume בלוח זמנים)
+
+**טבלה חדשה** `campaign_schedules`:
+- `id`, `tenant_id`, `client_id`, `entity_id`, `entity_type` (`fb_campaign`|`fb_adset`|`fb_ad`|`google_campaign`)
+- `action` (`pause`|`resume`)
+- `cron_expression` (לחזרתיות) או `run_at` (חד-פעמי)
+- `timezone`, `enabled`, `last_run_at`, `next_run_at`
+- `created_by`, `approved_at`
+- RLS + GRANT
+
+**Edge Function חדש** `campaign-scheduler-cron` (כל 5 דקות):
+- שואב רשומות ב-`campaign_schedules` שה-`next_run_at` שלהן הגיע
+- מבצע pause/resume דרך `fb-campaign-control` או Google Ads API
+- מעדכן `last_run_at`, מחשב `next_run_at` מה-cron
+- שולח התראה לכרמן/וואטסאפ על הביצוע
+
+`pg_cron` יקרא לפונקציה כל 5 דקות.
+
+## 4. זרימת אישור בוואטסאפ (קיימת — נשתמש בה)
+
+לכל כלי mutating:
+1. כרמן קוראת לכלי → הכלי **לא מבצע**, אלא יוצר רשומה ב-`agent_approval_queue` עם `payload` מלא
+2. כרמן שולחת לוואטסאפ סיכום: "אני עומדת לכבות קמפיין X מ-22:00. לאשר? כן/לא"
+3. תשובה "כן" → ה-webhook (`manus-wa-webhook`) מזהה approval, מבצע את הפעולה, שולח אישור ביצוע
+4. "לא" → דוחה, מנקה מהתור
+
+## 5. קבצים שיתווספו / ישתנו
+
+**חדש:**
+- `supabase/functions/carmen-save-media/index.ts`
+- `supabase/functions/carmen-fb-tools/index.ts` (create campaign/adset/ad/lead-form)
+- `supabase/functions/carmen-google-tools/index.ts`
+- `supabase/functions/campaign-scheduler-cron/index.ts`
+- מיגרציות: `marketing_media_library`, `campaign_schedules`, bucket `carmen-media` + RLS
+- אינסרט נפרד (לא מיגרציה): `cron.schedule(...)` ל-`campaign-scheduler-cron`
+
+**עריכה:**
+- `supabase/functions/_shared/skills/registry.ts` — רישום כל הכלים החדשים עם regex triggers בעברית
+- `supabase/functions/_shared/mcp-tools.ts` — מימוש ה-tool definitions
+- `supabase/functions/_shared/carmen-prompt-v2.ts` — הוספת סקציה `buildAdOpsCapabilities()` שמסבירה לכרמן שהיא **כן** יכולה לבצע את כל הפעולות, ושהזרימה היא: הצעה → אישור בוואטסאפ → ביצוע
+- `supabase/functions/manus-wa-webhook/index.ts` — זיהוי תשובת approval ("כן"/"לא"/"אשר") כשיש פריט פתוח ב-`agent_approval_queue` למשתמש
+
+## 6. סקופ ובטחון
+- כל הכלים מסוננים לפי tenant + role (קמפיינר → רק לקוחות שלו, manager → סוכנות)
+- שום פעולה לא מתבצעת בלי `approved_at` ב-`agent_approval_queue`
+- כל פעולת mutate נכתבת ל-`agent_action_log` עם payload מלא + תוצאה
+
+## 7. שלבי הוצאה לפועל
+1. מיגרציה: `marketing_media_library` + bucket + `campaign_schedules`
+2. `carmen-save-media` + רישום ב-skills registry
+3. `carmen-fb-tools` (create campaign/adset/ad + lead form swap + budget/pause/resume)
+4. `campaign-scheduler-cron` + pg_cron
+5. `carmen-google-tools` (אותם דפוסים)
+6. עדכון `carmen-prompt-v2` + flow אישור ב-`manus-wa-webhook`
+7. בדיקות end-to-end בוואטסאפ
+
+## הערות
+- אם החיבור Meta של הלקוח לא קיים — הכלי יחזיר שגיאה ידידותית וכרמן תבקש מהמשתמש לחבר ב-Integrations.
+- שמירת מדיה תומכת רק בפורמטים נתמכים ל-Meta (jpg/png/mp4) — אחרים יסומנו `not_ad_ready`.
