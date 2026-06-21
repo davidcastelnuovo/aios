@@ -185,9 +185,6 @@ export default function MarketingDepartment() {
                 </TabsContent>
                 <TabsContent value="creative" className="flex-1 min-h-0 m-0 overflow-auto">
                   <CreativeBoard clientId={clientId} onSelectItem={setSelectedItemId} />
-                      </TabsContent>
-                    ))}
-                  </Tabs>
                 </TabsContent>
               </>
             )}
