@@ -183,8 +183,6 @@ export function PipelineCanvas({ pipelineId, tenantId, clientId }: Props) {
         proOptions={{ hideAttribution: true }}
       >
         <Background />
-        <Controls />
-        <MiniMap pannable zoomable />
       </ReactFlow>
 
       <StageConfigDialog
