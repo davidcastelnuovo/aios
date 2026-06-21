@@ -32,7 +32,7 @@ const Campaigners = lazy(() => import("./pages/Campaigners"));
 const Suppliers = lazy(() => import("./pages/Suppliers"));
 const Finance = lazy(() => import("./pages/Finance"));
 const Tasks = lazy(() => import("./pages/Tasks"));
-const ClientOnboarding = lazy(() => import("./pages/ClientOnboarding"));
+
 const TimeTracking = lazy(() => import("./pages/TimeTracking"));
 
 const MyProfile = lazy(() => import("./pages/MyProfile"));
@@ -172,7 +172,7 @@ const App = () => (
                   <Route path="/t/:tenantSlug/suppliers" element={<ProtectedRoute requiredPermission="suppliers"><AppLayout><Suppliers /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/finance" element={<ProtectedRoute requiredPermission="finance"><AppLayout><Finance /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/tasks" element={<ProtectedRoute requiredPermission="tasks"><AppLayout><Tasks /></AppLayout></ProtectedRoute>} />
-                  <Route path="/t/:tenantSlug/client-onboarding" element={<ProtectedRoute requiredPermission="client_onboarding"><AppLayout><ClientOnboarding /></AppLayout></ProtectedRoute>} />
+                  
                   <Route path="/t/:tenantSlug/time-tracking" element={<ProtectedRoute requiredPermission="time_tracking"><AppLayout><TimeTracking /></AppLayout></ProtectedRoute>} />
                   
                   <Route path="/t/:tenantSlug/my-profile" element={<ProtectedRoute><AppLayout><MyProfile /></AppLayout></ProtectedRoute>} />
