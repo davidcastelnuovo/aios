@@ -278,14 +278,32 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
 
   const campaignTypeByPlatform: Record<string, CampaignType> = useMemo(() => {
     const map: Record<string, CampaignType> = {};
+    const explicitlySet = new Set<string>();
     tables.forEach((t: any) => {
       const key = t?.integration_type || 'unknown';
+      const explicitType = t?.integration_settings?.campaign_type;
+      if (explicitType === 'leads' || explicitType === 'ecommerce') {
+        map[key] = explicitType;
+        explicitlySet.add(key);
+        return;
+      }
       const ct = getCampaignType(t?.integration_type, t?.integration_settings);
       if (ct === 'ecommerce') map[key] = 'ecommerce';
     });
-    // Scan data for ecommerce signals
+    // Lock known leads-default ad platforms so noisy Pixel events (e.g. add_to_cart) on a
+    // leads campaign don't flip the entire dashboard to ecommerce columns. To force ecommerce
+    // mode on these platforms, set integration_settings.campaign_type='ecommerce' on the table
+    // (or use facebook_ecommerce as the table type for FB).
+    ['facebook_insights', 'google_ads'].forEach((key) => {
+      if (!map[key] && tables.some((t: any) => t.integration_type === key)) {
+        map[key] = 'leads';
+        explicitlySet.add(key);
+      }
+    });
+    // Scan data for ecommerce signals — only for platforms NOT locked above
     records.forEach((record: any) => {
       const source = record._source || 'unknown';
+      if (explicitlySet.has(source)) return;
       if (map[source] === 'ecommerce') return;
       const d = record.data || {};
       if (Number(d.purchases) > 0 || Number(d.purchase_value) > 0 || Number(d.add_to_cart) > 0 ||
