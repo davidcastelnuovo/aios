@@ -44,6 +44,8 @@ const SEVERITY_STYLE: Record<Alert["severity"], string> = {
 export default function CampaignAlerts() {
   const { tenant } = useCurrentTenant();
   const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [clientsByAdAccount, setClientsByAdAccount] = useState<Map<string, { id: string; name: string }>>(new Map());
+  const [clientsById, setClientsById] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "critical" | "warning" | "info">("all");
   const [running, setRunning] = useState(false);
@@ -52,17 +54,32 @@ export default function CampaignAlerts() {
   const load = async () => {
     if (!tenant?.id) return;
     setLoading(true);
-    const { data, error } = await supabase
-      .from("campaign_alerts")
-      .select("*")
-      .eq("tenant_id", tenant.id)
-      .is("resolved_at", null)
-      .order("created_at", { ascending: false })
-      .limit(200);
-    if (error) toast.error(error.message);
-    setAlerts((data || []) as Alert[]);
+    const [alertsRes, clientsRes] = await Promise.all([
+      supabase
+        .from("campaign_alerts")
+        .select("*")
+        .eq("tenant_id", tenant.id)
+        .is("resolved_at", null)
+        .order("created_at", { ascending: false })
+        .limit(200),
+      supabase
+        .from("clients")
+        .select("id, name, meta_ads_account_id")
+        .eq("tenant_id", tenant.id),
+    ]);
+    if (alertsRes.error) toast.error(alertsRes.error.message);
+    setAlerts((alertsRes.data || []) as Alert[]);
+    const byAcc = new Map<string, { id: string; name: string }>();
+    const byId = new Map<string, string>();
+    for (const c of (clientsRes.data || []) as any[]) {
+      byId.set(c.id, c.name);
+      if (c.meta_ads_account_id) byAcc.set(String(c.meta_ads_account_id), { id: c.id, name: c.name });
+    }
+    setClientsByAdAccount(byAcc);
+    setClientsById(byId);
     setLoading(false);
   };
+
 
   useEffect(() => { load(); }, [tenant?.id]);
 
