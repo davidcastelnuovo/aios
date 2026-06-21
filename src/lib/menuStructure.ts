@@ -179,13 +179,11 @@ export const MENU_TABS: MenuTab[] = [
  *  Drawn in workspace as connected to their parent via a secondary line.
  */
 export const SUB_MODULES: Array<MenuModule & { parentKey: string }> = [
-  { key: "social-gantt", parentKey: "social-media", label: "סושיאל גאנט", route: "/social-gantt", icon: CalendarRange },
-  { key: "social", parentKey: "social-media", label: "סושיאל", route: "/social", icon: Share2 },
   { key: "gmail-settings", parentKey: "gmail", label: "הגדרות Gmail", route: "/gmail-settings", icon: Settings },
   { key: "agent-tasks", parentKey: "agents", label: "משימות סוכן", route: "/agent-tasks", icon: CheckSquare },
   { key: "manus-tasks", parentKey: "agents", label: "Manus Tasks", route: "/manus-tasks", icon: CheckSquare },
   { key: "github-agent", parentKey: "agents", label: "GitHub Agent", route: "/github-agent", icon: Bot },
-  { key: "rank-tracking", parentKey: "ai-detection", label: "מעקב מיקומים", route: "/rank-tracking", icon: Target },
+  { key: "rank-tracking", parentKey: "marketing", label: "מעקב מיקומים", route: "/rank-tracking", icon: Target },
   { key: "site-analytics", parentKey: "dynamic-tables", label: "אנליטיקס אתרים", route: "/site-analytics", icon: BarChart3 },
   { key: "accounting-settings", parentKey: "accounting-integrations", label: "הגדרות הנה״ח", route: "/accounting-settings", icon: Settings },
 ];
