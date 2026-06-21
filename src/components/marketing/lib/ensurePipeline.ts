@@ -23,32 +23,12 @@ interface DefaultStage {
   sort_order: number;
 }
 
-// RTL: brief on the right (high x), measurement on the left (low x)
 function buildDefaultStages(track: MarketingTrack): DefaultStage[] {
   const targetByTrack: Record<MarketingTrack, DefaultStage> = {
-    campaigns: {
-      stage_type: "target_paid",
-      name: "קמפיין ממומן",
-      position_x: 280,
-      position_y: 200,
-      sort_order: 3,
-    },
-    seo_geo: {
-      stage_type: "target_seo",
-      name: "SEO / GEO",
-      position_x: 280,
-      position_y: 200,
-      sort_order: 3,
-    },
-    social_organic: {
-      stage_type: "target_organic",
-      name: "סושיאל אורגני",
-      position_x: 280,
-      position_y: 200,
-      sort_order: 3,
-    },
+    campaigns: { stage_type: "target_paid", name: "קמפיין ממומן", position_x: 280, position_y: 200, sort_order: 3 },
+    seo_geo: { stage_type: "target_seo", name: "SEO / GEO", position_x: 280, position_y: 200, sort_order: 3 },
+    social_organic: { stage_type: "target_organic", name: "סושיאל אורגני", position_x: 280, position_y: 200, sort_order: 3 },
   };
-
   return [
     { stage_type: "strategy", name: "בריף", position_x: 1120, position_y: 200, sort_order: 0 },
     { stage_type: "copy", name: "כתיבת תוכן", position_x: 840, position_y: 200, sort_order: 1 },
@@ -83,12 +63,35 @@ export async function ensurePipelineForClient({
     .single();
   if (error) throw error;
 
+  // Load tenant-level templates for this track
+  const { data: templates } = await supabase
+    .from("marketing_stage_templates")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .eq("track", track);
+
+  const tplByStageType: Record<string, any> = {};
+  (templates ?? []).forEach((t: any) => {
+    tplByStageType[t.stage_type] = t;
+  });
+
   await supabase.from("marketing_pipeline_stages").insert(
-    buildDefaultStages(track).map((s) => ({
-      pipeline_id: created.id,
-      tenant_id: tenantId,
-      ...s,
-    })),
+    buildDefaultStages(track).map((s) => {
+      const tpl = tplByStageType[s.stage_type];
+      return {
+        pipeline_id: created.id,
+        tenant_id: tenantId,
+        ...s,
+        name: tpl?.name ?? s.name,
+        agent_id: tpl?.default_agent_id ?? null,
+        approval_mode: tpl?.default_approval_mode ?? "manual",
+        configuration: {
+          instructions: tpl?.default_instructions ?? "",
+          tools: tpl?.default_tools ?? [],
+          target: tpl?.default_target ?? {},
+        },
+      };
+    }),
   );
 
   return created;

@@ -5231,6 +5231,45 @@ export type Database = {
           },
         ]
       }
+      marketing_assets: {
+        Row: {
+          content: string | null
+          created_at: string
+          id: string
+          item_id: string
+          meta: Json
+          run_id: string | null
+          stage_id: string | null
+          tenant_id: string
+          type: string
+          url: string | null
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string
+          id?: string
+          item_id: string
+          meta?: Json
+          run_id?: string | null
+          stage_id?: string | null
+          tenant_id: string
+          type: string
+          url?: string | null
+        }
+        Update: {
+          content?: string | null
+          created_at?: string
+          id?: string
+          item_id?: string
+          meta?: Json
+          run_id?: string | null
+          stage_id?: string | null
+          tenant_id?: string
+          type?: string
+          url?: string | null
+        }
+        Relationships: []
+      }
       marketing_item_transitions: {
         Row: {
           created_at: string
@@ -5388,6 +5427,177 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      marketing_runs: {
+        Row: {
+          cost_usd: number
+          created_at: string
+          created_by: string | null
+          error: string | null
+          finished_at: string | null
+          id: string
+          input: Json
+          item_id: string
+          model: string | null
+          output: Json
+          stage_id: string
+          started_at: string | null
+          status: string
+          tenant_id: string
+          tokens_in: number
+          tokens_out: number
+          updated_at: string
+        }
+        Insert: {
+          cost_usd?: number
+          created_at?: string
+          created_by?: string | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          input?: Json
+          item_id: string
+          model?: string | null
+          output?: Json
+          stage_id: string
+          started_at?: string | null
+          status?: string
+          tenant_id: string
+          tokens_in?: number
+          tokens_out?: number
+          updated_at?: string
+        }
+        Update: {
+          cost_usd?: number
+          created_at?: string
+          created_by?: string | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          input?: Json
+          item_id?: string
+          model?: string | null
+          output?: Json
+          stage_id?: string
+          started_at?: string | null
+          status?: string
+          tenant_id?: string
+          tokens_in?: number
+          tokens_out?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      marketing_stage_templates: {
+        Row: {
+          created_at: string
+          default_agent_id: string | null
+          default_approval_mode: string
+          default_instructions: string | null
+          default_target: Json
+          default_tools: Json
+          id: string
+          is_system: boolean
+          name: string
+          stage_type: string
+          tenant_id: string
+          track: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          default_agent_id?: string | null
+          default_approval_mode?: string
+          default_instructions?: string | null
+          default_target?: Json
+          default_tools?: Json
+          id?: string
+          is_system?: boolean
+          name: string
+          stage_type: string
+          tenant_id: string
+          track: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          default_agent_id?: string | null
+          default_approval_mode?: string
+          default_instructions?: string | null
+          default_target?: Json
+          default_tools?: Json
+          id?: string
+          is_system?: boolean
+          name?: string
+          stage_type?: string
+          tenant_id?: string
+          track?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      marketing_triggers: {
+        Row: {
+          client_id: string
+          created_at: string
+          event_type: string | null
+          id: string
+          is_active: boolean
+          last_run_at: string | null
+          name: string
+          next_run_at: string | null
+          pipeline_id: string
+          schedule_cron: string | null
+          schedule_dom: number | null
+          schedule_dow: number | null
+          schedule_hour: number | null
+          schedule_preset: string | null
+          template_payload: Json
+          tenant_id: string
+          trigger_type: string
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          event_type?: string | null
+          id?: string
+          is_active?: boolean
+          last_run_at?: string | null
+          name: string
+          next_run_at?: string | null
+          pipeline_id: string
+          schedule_cron?: string | null
+          schedule_dom?: number | null
+          schedule_dow?: number | null
+          schedule_hour?: number | null
+          schedule_preset?: string | null
+          template_payload?: Json
+          tenant_id: string
+          trigger_type?: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          event_type?: string | null
+          id?: string
+          is_active?: boolean
+          last_run_at?: string | null
+          name?: string
+          next_run_at?: string | null
+          pipeline_id?: string
+          schedule_cron?: string | null
+          schedule_dom?: number | null
+          schedule_dow?: number | null
+          schedule_hour?: number | null
+          schedule_preset?: string | null
+          template_payload?: Json
+          tenant_id?: string
+          trigger_type?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       marketing_work_items: {
         Row: {

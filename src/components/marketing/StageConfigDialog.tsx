@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { useClientConnections } from "./lib/useClientConnections";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Plus, Save, Download, Globe } from "lucide-react";
 
 interface Stage {
   id: string;
@@ -20,12 +20,14 @@ interface Stage {
   agent_id: string | null;
   approval_mode: "manual" | "auto" | "hybrid";
   configuration: any;
+  pipeline_id: string;
 }
 
 interface Props {
   stage: Stage | null;
   tenantId: string;
   clientId: string;
+  track?: string;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -73,7 +75,25 @@ const TOOLS_BY_STAGE: Record<string, { id: string; label: string }[]> = {
   ],
 };
 
-export function StageConfigDialog({ stage, tenantId, clientId, onClose, onSaved }: Props) {
+const DEFAULT_PROMPTS: Record<string, string> = {
+  strategy:
+    "אתה אסטרטג שיווקי בכיר. הפק בריף שיווקי מובנה לפריט הזה: קהל יעד מדויק, כאבים מרכזיים, הצעת ערך ייחודית, 3-5 מסרים מרכזיים, טון תקשורת, ו-KPIs מדידים. השתמש במידע על הלקוח שניתן לך.",
+  copy:
+    "אתה קופירייטר מקצועי. כתוב את הקופי לפי הבריף שניתן לך. שמור על נימה התואמת למותג, באורך מתאים לערוץ הפרסום. כתוב טקסט שיווקי משכנע, ברור ועם call to action חזק.",
+  creative:
+    "אתה Art Director. צור תמונה שיווקית מקצועית התואמת לקופי שניתן לך. תמונה ברורה, מודרנית, מעוצבת, מתאימה לפלטפורמה. ללא טקסט מודבק על התמונה (אלא אם התבקש במפורש).",
+  target_paid:
+    "אתה מומחה קמפיינים ממומנים. ארגן את הפריט לקראת השקה ב-Meta/Google: בחר קהלי יעד, גזור variations של הקופי, התאם את התמונה למידות הנדרשות, והכן draft של הקמפיין.",
+  target_seo:
+    "אתה מומחה SEO/GEO. עבד את הפריט לפרסום אורגני: כותרת SEO, מטא תיאור, מבנה כותרות (H1/H2/H3), Schema markup, וקישורים פנימיים רלוונטיים.",
+  target_organic:
+    "אתה מנהל סושיאל מדיה. עבד את הפריט לפרסום אורגני: התאם פורמט לכל פלטפורמה, בחר האשטגים רלוונטיים, וקבע זמן פרסום אופטימלי.",
+  measurement:
+    "אתה אנליסט שיווק. סכם את ביצועי הפריט מהנתונים שניתנו לך: מדדים מרכזיים, השוואה ליעדים, נקודות חוזק וחולשה, והמלצות פעולה לשיפור.",
+};
+
+export function StageConfigDialog({ stage, tenantId, clientId, track, onClose, onSaved }: Props) {
+  const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [agentId, setAgentId] = useState<string | null>(null);
   const [approvalMode, setApprovalMode] = useState<"manual" | "auto" | "hybrid">("manual");
@@ -97,6 +117,22 @@ export function StageConfigDialog({ stage, tenantId, clientId, onClose, onSaved 
     enabled: !!tenantId,
   });
 
+  const { data: template } = useQuery({
+    queryKey: ["marketing-template", tenantId, track, stage?.stage_type],
+    queryFn: async () => {
+      if (!track || !stage?.stage_type) return null;
+      const { data } = await supabase
+        .from("marketing_stage_templates")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .eq("track", track)
+        .eq("stage_type", stage.stage_type)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!tenantId && !!track && !!stage?.stage_type,
+  });
+
   useEffect(() => {
     if (!stage) return;
     setName(stage.name ?? "");
@@ -112,9 +148,8 @@ export function StageConfigDialog({ stage, tenantId, clientId, onClose, onSaved 
 
   const stageTools = TOOLS_BY_STAGE[stage.stage_type] ?? [];
 
-  const toggleTool = (id: string) => {
+  const toggleTool = (id: string) =>
     setTools((prev) => (prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]));
-  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -129,7 +164,8 @@ export function StageConfigDialog({ stage, tenantId, clientId, onClose, onSaved 
         })
         .eq("id", stage.id);
       if (error) throw error;
-      toast.success("השלב נשמר");
+      toast.success("✓ השלב נשמר בהצלחה");
+      queryClient.invalidateQueries({ queryKey: ["marketing-stages", stage.pipeline_id] });
       onSaved();
       onClose();
     } catch (e: any) {
@@ -139,12 +175,119 @@ export function StageConfigDialog({ stage, tenantId, clientId, onClose, onSaved 
     }
   };
 
+  const loadDefaultPrompt = () => {
+    const def = DEFAULT_PROMPTS[stage.stage_type];
+    if (def) {
+      setInstructions(def);
+      toast.success("נטען prompt מובנה");
+    }
+  };
+
+  const loadFromTemplate = () => {
+    if (!template) {
+      toast.info("עדיין אין תבנית כללית לשלב הזה");
+      return;
+    }
+    setAgentId(template.default_agent_id ?? null);
+    setApprovalMode((template.default_approval_mode as any) ?? "manual");
+    setInstructions(template.default_instructions ?? "");
+    setTools((template.default_tools as string[]) ?? []);
+    setTarget(template.default_target ?? {});
+    toast.success("נטען מתבנית כללית");
+  };
+
+  const saveAsTemplate = async () => {
+    if (!track) {
+      toast.error("לא ניתן לשמור כתבנית — חסר טראק");
+      return;
+    }
+    const { error } = await supabase
+      .from("marketing_stage_templates")
+      .upsert(
+        {
+          tenant_id: tenantId,
+          track,
+          stage_type: stage.stage_type,
+          name,
+          default_agent_id: agentId,
+          default_approval_mode: approvalMode,
+          default_instructions: instructions,
+          default_tools: tools as any,
+          default_target: target,
+          is_system: false,
+        },
+        { onConflict: "tenant_id,track,stage_type" },
+      );
+    if (error) {
+      toast.error("שגיאה בשמירת תבנית: " + error.message);
+      return;
+    }
+    toast.success("✓ נשמר כתבנית כללית — יוחל על לקוחות חדשים");
+  };
+
+  const applyToAllClients = async () => {
+    if (!track) return;
+    if (!confirm("להחיל את ההגדרות האלה על כל הלקוחות בטראק זה? (לא ידרוס שינויים שכבר נעשו ידנית)"))
+      return;
+    // Find all pipelines for this tenant + track
+    const { data: pipelines } = await supabase
+      .from("marketing_pipelines")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .eq("track", track);
+    if (!pipelines || pipelines.length === 0) {
+      toast.info("אין פייפליינים אחרים");
+      return;
+    }
+    const pipelineIds = pipelines.map((p) => p.id);
+    const { data: stages } = await supabase
+      .from("marketing_pipeline_stages")
+      .select("id, configuration, agent_id")
+      .in("pipeline_id", pipelineIds)
+      .eq("stage_type", stage.stage_type as any);
+    let updated = 0;
+    for (const s of stages ?? []) {
+      const existingCfg = (s.configuration as any) ?? {};
+      const hasManualOverride = existingCfg.instructions || s.agent_id;
+      if (hasManualOverride && s.id !== stage.id) continue;
+      await supabase
+        .from("marketing_pipeline_stages")
+        .update({
+          agent_id: agentId,
+          approval_mode: approvalMode,
+          configuration: { instructions, tools, target: existingCfg.target ?? {} },
+        })
+        .eq("id", s.id);
+      updated++;
+    }
+    toast.success(`הוחל על ${updated} לקוחות`);
+  };
+
   return (
     <Dialog open={!!stage} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" dir="rtl">
         <DialogHeader>
           <DialogTitle>הגדרת שלב — {stage.name}</DialogTitle>
         </DialogHeader>
+
+        <div className="flex flex-wrap gap-2 border-b pb-3">
+          <Button size="sm" variant="outline" onClick={loadDefaultPrompt}>
+            <Download className="ml-1 h-3 w-3" /> Prompt מובנה
+          </Button>
+          {track && (
+            <>
+              <Button size="sm" variant="outline" onClick={loadFromTemplate}>
+                <Download className="ml-1 h-3 w-3" /> טען מתבנית כללית
+              </Button>
+              <Button size="sm" variant="outline" onClick={saveAsTemplate}>
+                <Save className="ml-1 h-3 w-3" /> שמור כתבנית כללית
+              </Button>
+              <Button size="sm" variant="outline" onClick={applyToAllClients}>
+                <Globe className="ml-1 h-3 w-3" /> החל על כל הלקוחות
+              </Button>
+            </>
+          )}
+        </div>
 
         <Tabs defaultValue="general" className="w-full">
           <TabsList className="w-full justify-start">
@@ -154,7 +297,6 @@ export function StageConfigDialog({ stage, tenantId, clientId, onClose, onSaved 
             <TabsTrigger value="target">יעד</TabsTrigger>
           </TabsList>
 
-          {/* GENERAL */}
           <TabsContent value="general" className="space-y-3 pt-4">
             <div>
               <Label>שם השלב</Label>
@@ -174,15 +316,14 @@ export function StageConfigDialog({ stage, tenantId, clientId, onClose, onSaved 
             <div>
               <Label>הוראות פתיחה לאייג'נט (System Prompt)</Label>
               <Textarea
-                rows={6}
+                rows={8}
                 value={instructions}
                 onChange={(e) => setInstructions(e.target.value)}
-                placeholder="לדוגמה: כתוב פוסט בסגנון של המותג, באורך 80-120 מילים, בנימה ידידותית..."
+                placeholder="לדוגמה: כתוב פוסט בסגנון של המותג, באורך 80-120 מילים..."
               />
             </div>
           </TabsContent>
 
-          {/* AGENT */}
           <TabsContent value="agent" className="space-y-3 pt-4">
             <div>
               <Label>אייג'נט אחראי</Label>
@@ -203,7 +344,6 @@ export function StageConfigDialog({ stage, tenantId, clientId, onClose, onSaved 
             </div>
           </TabsContent>
 
-          {/* TOOLS */}
           <TabsContent value="tools" className="space-y-2 pt-4">
             <Label>כלים זמינים בשלב זה</Label>
             <div className="grid grid-cols-2 gap-2">
@@ -216,7 +356,6 @@ export function StageConfigDialog({ stage, tenantId, clientId, onClose, onSaved 
             </div>
           </TabsContent>
 
-          {/* TARGET */}
           <TabsContent value="target" className="space-y-3 pt-4">
             {connections.isLoading ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -324,16 +463,6 @@ function TargetSection({
         >
           שמור כאתר ראשי בלקוח
         </Button>
-        {connections.wpSites?.length > 0 && (
-          <div className="mt-2">
-            <Label>אתרי WordPress מחוברים</Label>
-            <ul className="mt-1 text-sm text-muted-foreground list-disc list-inside">
-              {connections.wpSites.map((s: any) => (
-                <li key={s.id}>{s.site_name || s.site_url}</li>
-              ))}
-            </ul>
-          </div>
-        )}
       </div>
     );
   }
@@ -358,23 +487,6 @@ function TargetSection({
             placeholder="123-456-7890"
           />
         </div>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={async () => {
-            await supabase
-              .from("clients")
-              .update({
-                meta_ads_account_id: target.meta_ad_account ?? c?.meta_ads_account_id,
-                google_ads_account_id: target.google_ad_account ?? c?.google_ads_account_id,
-              })
-              .eq("id", clientId);
-            toast.success("נשמר בכרטיס הלקוח");
-            onConnectionsChanged();
-          }}
-        >
-          שמור בכרטיס לקוח
-        </Button>
       </div>
     );
   }
@@ -386,15 +498,7 @@ function TargetSection({
   );
 }
 
-function AddSocialPageInline({
-  clientId,
-  tenantId,
-  onAdded,
-}: {
-  clientId: string;
-  tenantId: string;
-  onAdded: () => void;
-}) {
+function AddSocialPageInline({ clientId, tenantId, onAdded }: { clientId: string; tenantId: string; onAdded: () => void }) {
   const [open, setOpen] = useState(false);
   const [platform, setPlatform] = useState("facebook");
   const [pageId, setPageId] = useState("");

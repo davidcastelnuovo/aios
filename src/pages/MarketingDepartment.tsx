@@ -5,11 +5,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Plus, Workflow, CalendarRange, ArrowRight, Megaphone, Search, Share2 } from "lucide-react";
+import { Plus, Workflow, CalendarRange, ArrowRight, Megaphone, Search, Share2, Coins, Palette } from "lucide-react";
 import { ClientSelector } from "@/components/marketing/ClientSelector";
 import { ClientConnectionsBar } from "@/components/marketing/ClientConnectionsBar";
 import { PipelineCanvas } from "@/components/marketing/PipelineCanvas";
 import { WorkItemSidePanel } from "@/components/marketing/WorkItemSidePanel";
+import { CreativeBoard } from "@/components/marketing/CreativeBoard";
+import { UsagePanel } from "@/components/marketing/UsagePanel";
 import {
   ensurePipelineForClient,
   TRACK_LABELS,
@@ -33,9 +35,11 @@ export default function MarketingDepartment() {
   const { tenant } = useCurrentTenant();
   const tenantId = tenant?.id;
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [topTab, setTopTab] = useState<MarketingTrack | "calendar">("campaigns");
+  const [topTab, setTopTab] = useState<MarketingTrack | "calendar" | "creative" | "usage">("campaigns");
   const [calendarTrack, setCalendarTrack] = useState<MarketingTrack>("campaigns");
-  const track: MarketingTrack = topTab === "calendar" ? calendarTrack : topTab;
+  const track: MarketingTrack = topTab === "calendar"
+    ? calendarTrack
+    : (topTab === "creative" || topTab === "usage" ? "campaigns" : topTab);
 
   const clientId = routeClientId ?? null;
 
@@ -122,7 +126,7 @@ export default function MarketingDepartment() {
           {/* Top-level tabs: 3 tracks + content calendar */}
           <Tabs
             value={topTab}
-            onValueChange={(v) => setTopTab(v as MarketingTrack | "calendar")}
+            onValueChange={(v) => setTopTab(v as any)}
             className="flex flex-1 min-h-0 flex-col"
           >
             <TabsList className="mx-4 mt-2 w-fit">
@@ -135,6 +139,14 @@ export default function MarketingDepartment() {
               <TabsTrigger value="calendar">
                 <CalendarRange className="ml-1 h-4 w-4" />
                 לוח תוכן
+              </TabsTrigger>
+              <TabsTrigger value="creative">
+                <Palette className="ml-1 h-4 w-4" />
+                קריאייטיב
+              </TabsTrigger>
+              <TabsTrigger value="usage">
+                <Coins className="ml-1 h-4 w-4" />
+                שימוש בטוקנים
               </TabsTrigger>
             </TabsList>
 
@@ -150,6 +162,7 @@ export default function MarketingDepartment() {
                       pipelineId={pipeline.id}
                       tenantId={tenantId!}
                       clientId={clientId}
+                      track={value}
                       onSelectItem={setSelectedItemId}
                     />
                   </TabsContent>
@@ -174,10 +187,16 @@ export default function MarketingDepartment() {
                         value={value}
                         className="flex-1 min-h-0 m-0 overflow-auto"
                       >
-                        <MarketingCalendarView pipelineId={pipeline.id} clientId={clientId} />
+                        <MarketingCalendarView pipelineId={pipeline.id} clientId={clientId} onSelectItem={setSelectedItemId} />
                       </TabsContent>
                     ))}
                   </Tabs>
+                </TabsContent>
+                <TabsContent value="usage" className="flex-1 min-h-0 m-0 overflow-auto">
+                  <UsagePanel tenantId={tenantId!} clientId={clientId} />
+                </TabsContent>
+                <TabsContent value="creative" className="flex-1 min-h-0 m-0 overflow-auto">
+                  <CreativeBoard clientId={clientId} onSelectItem={setSelectedItemId} />
                 </TabsContent>
               </>
             )}

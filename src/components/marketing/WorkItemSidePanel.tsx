@@ -1,44 +1,104 @@
 import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
+import { Play, Loader2, Check, X, RotateCw, Image as ImageIcon } from "lucide-react";
 
 interface Props {
   itemId: string | null;
   onClose: () => void;
 }
 
+const STATUS_LABELS: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
+  queued: { label: "ממתין", variant: "outline" },
+  running: { label: "רץ...", variant: "secondary" },
+  awaiting_approval: { label: "ממתין לאישור", variant: "default" },
+  completed: { label: "הושלם", variant: "secondary" },
+  failed: { label: "נכשל", variant: "destructive" },
+  cancelled: { label: "בוטל", variant: "outline" },
+};
+
 export function WorkItemSidePanel({ itemId, onClose }: Props) {
+  const queryClient = useQueryClient();
   const [item, setItem] = useState<any>(null);
   const [stages, setStages] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
+  const [running, setRunning] = useState<string | null>(null);
+
+  const loadItem = async () => {
+    if (!itemId) return;
+    const { data } = await supabase.from("marketing_work_items").select("*").eq("id", itemId).single();
+    setItem(data);
+    if (data?.pipeline_id) {
+      const { data: st } = await supabase
+        .from("marketing_pipeline_stages")
+        .select("id, name, stage_type, sort_order, agent_id, approval_mode, configuration")
+        .eq("pipeline_id", data.pipeline_id)
+        .order("sort_order");
+      setStages(st ?? []);
+    }
+  };
 
   useEffect(() => {
     if (!itemId) {
       setItem(null);
       return;
     }
-    (async () => {
+    loadItem();
+  }, [itemId]);
+
+  const { data: assets, refetch: refetchAssets } = useQuery({
+    queryKey: ["marketing-assets", itemId],
+    enabled: !!itemId,
+    queryFn: async () => {
       const { data } = await supabase
-        .from("marketing_work_items")
-        .select("*")
-        .eq("id", itemId)
-        .single();
-      setItem(data);
-      if (data?.pipeline_id) {
-        const { data: st } = await supabase
-          .from("marketing_pipeline_stages")
-          .select("id, name, stage_type, sort_order")
-          .eq("pipeline_id", data.pipeline_id)
-          .order("sort_order");
-        setStages(st ?? []);
-      }
-    })();
+        .from("marketing_assets")
+        .select("*, marketing_pipeline_stages(name, stage_type)")
+        .eq("item_id", itemId!)
+        .order("created_at", { ascending: false });
+      return data ?? [];
+    },
+  });
+
+  const { data: runs, refetch: refetchRuns } = useQuery({
+    queryKey: ["marketing-runs", itemId],
+    enabled: !!itemId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("marketing_runs")
+        .select("*, marketing_pipeline_stages(name, stage_type)")
+        .eq("item_id", itemId!)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      return data ?? [];
+    },
+  });
+
+  // Realtime: refresh runs while something is running
+  useEffect(() => {
+    if (!itemId) return;
+    const channel = supabase
+      .channel(`marketing-runs-${itemId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "marketing_runs", filter: `item_id=eq.${itemId}` },
+        () => {
+          refetchRuns();
+          refetchAssets();
+          loadItem();
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [itemId]);
 
   if (!itemId) return null;
@@ -54,9 +114,65 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
     setSaving(false);
   };
 
+  const runStage = async (stageId: string) => {
+    setRunning(stageId);
+    try {
+      const { data, error } = await supabase.functions.invoke("marketing-run-stage", {
+        body: { item_id: itemId, stage_id: stageId },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast({ title: "✓ הופעל", description: "השלב הסתיים" });
+      refetchRuns();
+      refetchAssets();
+      loadItem();
+      queryClient.invalidateQueries({ queryKey: ["marketing-items-calendar"] });
+    } catch (e: any) {
+      toast({ title: "שגיאה", description: e.message, variant: "destructive" });
+    } finally {
+      setRunning(null);
+    }
+  };
+
+  const runFullPipeline = async () => {
+    setRunning("ALL");
+    try {
+      const { data, error } = await supabase.functions.invoke("marketing-run-pipeline", {
+        body: { item_id: itemId },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast({ title: "✓ ה-Pipeline הופעל" });
+      refetchRuns();
+      refetchAssets();
+      loadItem();
+      queryClient.invalidateQueries({ queryKey: ["marketing-items-calendar"] });
+    } catch (e: any) {
+      toast({ title: "שגיאה", description: e.message, variant: "destructive" });
+    } finally {
+      setRunning(null);
+    }
+  };
+
+  const approveRun = async (runId: string, stageId: string) => {
+    await supabase.from("marketing_runs").update({ status: "completed" }).eq("id", runId);
+    // advance to next stage
+    const idx = stages.findIndex((s) => s.id === stageId);
+    if (idx >= 0 && idx < stages.length - 1) {
+      await save({ current_stage_id: stages[idx + 1].id });
+    }
+    refetchRuns();
+    toast({ title: "✓ אושר" });
+  };
+
+  const rejectRun = async (runId: string) => {
+    await supabase.from("marketing_runs").update({ status: "cancelled" }).eq("id", runId);
+    refetchRuns();
+  };
+
   return (
     <Sheet open={!!itemId} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="left" className="w-[480px] sm:max-w-none" dir="rtl">
+      <SheetContent side="left" className="w-[560px] sm:max-w-none overflow-y-auto" dir="rtl">
         <SheetHeader>
           <SheetTitle>פריט תוכן</SheetTitle>
         </SheetHeader>
@@ -64,6 +180,13 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
           <div className="py-8 text-center text-sm text-muted-foreground">טוען...</div>
         ) : (
           <div className="mt-4 space-y-4">
+            <div className="flex gap-2">
+              <Button onClick={runFullPipeline} disabled={!!running} className="flex-1">
+                {running === "ALL" ? <Loader2 className="ml-1 h-4 w-4 animate-spin" /> : <Play className="ml-1 h-4 w-4" />}
+                הפעל את כל ה-Pipeline
+              </Button>
+            </div>
+
             <div>
               <Label>כותרת</Label>
               <Input
@@ -72,57 +195,126 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
               />
             </div>
             <div>
+              <Label>תאריך פרסום מתוכנן</Label>
+              <Input
+                type="date"
+                defaultValue={item.scheduled_date ?? ""}
+                onBlur={(e) => save({ scheduled_date: e.target.value || null })}
+              />
+            </div>
+            <div>
               <Label>שלב נוכחי</Label>
-              <Select
-                value={item.current_stage_id ?? ""}
-                onValueChange={(v) => save({ current_stage_id: v })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+              <Select value={item.current_stage_id ?? ""} onValueChange={(v) => save({ current_stage_id: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {stages.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}
-                    </SelectItem>
+                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Stage-by-stage runner */}
             <div>
-              <Label>ערוץ יעד</Label>
-              <Select
-                value={item.target_channel ?? ""}
-                onValueChange={(v) => save({ target_channel: v })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="בחר ערוץ" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="paid_ads">קמפיין ממומן</SelectItem>
-                  <SelectItem value="seo_geo">SEO / GEO</SelectItem>
-                  <SelectItem value="organic_social">סושיאל אורגני</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label className="mb-2 block">הרצת שלבים</Label>
+              <div className="space-y-1.5">
+                {stages.map((s) => {
+                  const lastRun = (runs ?? []).find((r: any) => r.stage_id === s.id);
+                  return (
+                    <div key={s.id} className="flex items-center gap-2 rounded-md border bg-muted/20 p-2">
+                      <span className="flex-1 text-sm">{s.name}</span>
+                      {lastRun && (
+                        <Badge variant={STATUS_LABELS[lastRun.status]?.variant ?? "outline"}>
+                          {STATUS_LABELS[lastRun.status]?.label ?? lastRun.status}
+                        </Badge>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={!!running}
+                        onClick={() => runStage(s.id)}
+                        title="הפעל שלב זה"
+                      >
+                        {running === s.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-            <div>
-              <Label>קופי</Label>
-              <Textarea
-                rows={5}
-                defaultValue={item.payload?.copy_text ?? ""}
-                onBlur={(e) =>
-                  save({ payload: { ...(item.payload ?? {}), copy_text: e.target.value } })
-                }
-              />
-            </div>
+
+            {/* Generated assets */}
+            {(assets ?? []).length > 0 && (
+              <div>
+                <Label className="mb-2 block">תוצרים שנוצרו</Label>
+                <div className="space-y-2">
+                  {(assets ?? []).map((a: any) => (
+                    <div key={a.id} className="rounded-md border p-2">
+                      <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
+                        <Badge variant="outline" className="text-[10px]">{a.type}</Badge>
+                        <span>{a.marketing_pipeline_stages?.name ?? ""}</span>
+                        <span className="ms-auto">{new Date(a.created_at).toLocaleString("he-IL")}</span>
+                      </div>
+                      {a.url && (
+                        <a href={a.url} target="_blank" rel="noopener" className="block">
+                          <img src={a.url} alt="asset" className="max-h-48 w-full rounded object-cover" />
+                        </a>
+                      )}
+                      {a.content && (
+                        <pre className="whitespace-pre-wrap text-sm">{a.content}</pre>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Awaiting approval bar */}
+            {(runs ?? []).filter((r: any) => r.status === "awaiting_approval").map((r: any) => (
+              <div key={r.id} className="rounded-md border-2 border-amber-500/60 bg-amber-500/10 p-3">
+                <div className="mb-2 text-sm font-medium">
+                  ממתין לאישור — {r.marketing_pipeline_stages?.name}
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => approveRun(r.id, r.stage_id)}>
+                    <Check className="ml-1 h-3 w-3" /> אשר והמשך
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => runStage(r.stage_id)}>
+                    <RotateCw className="ml-1 h-3 w-3" /> הרץ מחדש
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => rejectRun(r.id)}>
+                    <X className="ml-1 h-3 w-3" /> דחה
+                  </Button>
+                </div>
+              </div>
+            ))}
+
+            {/* Recent runs / token usage */}
+            {(runs ?? []).length > 0 && (
+              <details className="rounded-md border p-2">
+                <summary className="cursor-pointer text-sm font-medium">היסטוריית ריצות ושימוש בטוקנים</summary>
+                <div className="mt-2 space-y-1 text-xs">
+                  {(runs ?? []).map((r: any) => (
+                    <div key={r.id} className="flex items-center gap-2">
+                      <Badge variant={STATUS_LABELS[r.status]?.variant ?? "outline"} className="text-[10px]">
+                        {STATUS_LABELS[r.status]?.label ?? r.status}
+                      </Badge>
+                      <span>{r.marketing_pipeline_stages?.name}</span>
+                      <span className="ms-auto text-muted-foreground">
+                        {r.tokens_in + r.tokens_out} tok · ${Number(r.cost_usd).toFixed(4)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
+
             <div>
               <Label>הערות</Label>
               <Textarea
                 rows={3}
                 defaultValue={item.payload?.notes ?? ""}
-                onBlur={(e) =>
-                  save({ payload: { ...(item.payload ?? {}), notes: e.target.value } })
-                }
+                onBlur={(e) => save({ payload: { ...(item.payload ?? {}), notes: e.target.value } })}
               />
             </div>
             <div className="pt-2 text-xs text-muted-foreground">
