@@ -1256,8 +1256,12 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
                         <TableHead className="text-right">פלטפורמה</TableHead>
                         <TableHead className="text-right">הוצאה</TableHead>
                         <TableHead className="text-right">חשיפות</TableHead>
-                        <TableHead className="text-right">סשנים</TableHead>
-                        <TableHead className="text-right">סשנים יחודיים</TableHead>
+                          {showAnalyticsCards && (
+                            <>
+                              <TableHead className="text-right">סשנים</TableHead>
+                              <TableHead className="text-right">סשנים יחודיים</TableHead>
+                            </>
+                          )}
                         {dashboardCampaignType === 'ecommerce' ? (
                           <>
                             <TableHead className="text-right">הוספה לעגלה</TableHead>
@@ -1287,8 +1291,12 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
                             </TableCell>
                             <TableCell>{isAnalytics ? '-' : formatCurrency(metrics.spend)}</TableCell>
                             <TableCell>{isAnalytics ? '-' : formatNumber(metrics.impressions)}</TableCell>
-                            <TableCell>{isAnalytics ? formatNumber(metrics.sessions) : '-'}</TableCell>
-                            <TableCell>{isAnalytics ? formatNumber(metrics.users) : '-'}</TableCell>
+                            {showAnalyticsCards && (
+                              <>
+                                <TableCell>{isAnalytics ? formatNumber(metrics.sessions) : '-'}</TableCell>
+                                <TableCell>{isAnalytics ? formatNumber(metrics.users) : '-'}</TableCell>
+                              </>
+                            )}
                             {dashboardCampaignType === 'ecommerce' ? (
                               <>
                                 <TableCell>{formatNumber(metrics.addToCart)}</TableCell>
@@ -1314,14 +1322,18 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
                       <TableRow className="bg-muted/50 font-bold border-t-2">
                         <TableCell>
                           סה"כ
-                          {dashboardCampaignType === 'ecommerce' && summaryByPlatform['google_analytics'] && (
+                          {dashboardCampaignType === 'ecommerce' && showAnalyticsCards && summaryByPlatform['google_analytics'] && (
                             <span className="text-xs font-normal text-muted-foreground block">הכנסות מ-Analytics / הוצאות פרסום</span>
                           )}
                         </TableCell>
                         <TableCell>{formatCurrency(totalSummary.spend)}</TableCell>
                         <TableCell>{formatNumber(totalSummary.impressions)}</TableCell>
-                        <TableCell>{formatNumber(totalSummary.analyticsSessions)}</TableCell>
-                        <TableCell>{formatNumber(totalSummary.analyticsUsers)}</TableCell>
+                        {showAnalyticsCards && (
+                          <>
+                            <TableCell>{formatNumber(totalSummary.analyticsSessions)}</TableCell>
+                            <TableCell>{formatNumber(totalSummary.analyticsUsers)}</TableCell>
+                          </>
+                        )}
                         {dashboardCampaignType === 'ecommerce' ? (
                           <>
                             <TableCell>{formatNumber(totalSummary.analyticsAddToCart)}</TableCell>
