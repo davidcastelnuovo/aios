@@ -2134,10 +2134,152 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (!args.sub_task_id) throw new Error('sub_task_id is required')
       return await getSubagentResult(supabase, tenantId, args.sub_task_id)
     }
+
+    // ============ MEDIA LIBRARY ============
+    case 'save_media_from_chat': {
+      const r = await fetch(`${SUPABASE_URL}/functions/v1/carmen-save-media`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json', apikey: SUPABASE_SERVICE_ROLE_KEY },
+        body: JSON.stringify({ tenant_id: tenantId, created_by: userId, ...args }),
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j?.error || 'save_media_failed')
+      return j
+    }
+    case 'list_client_media': {
+      let q = supabase.from('marketing_media_library').select('id, mime_type, file_size, ad_ready, caption, tags, created_at, client_id, lead_id').eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(args.limit || 20)
+      if (args.client_id) q = q.eq('client_id', args.client_id)
+      if (args.lead_id) q = q.eq('lead_id', args.lead_id)
+      if (args.only_ad_ready) q = q.eq('ad_ready', true)
+      if (Array.isArray(args.tags) && args.tags.length) q = q.contains('tags', args.tags)
+      const { data, error } = await q
+      if (error) throw error
+      return { count: data.length, media: data }
+    }
+
+    // ============ APPROVAL HELPERS ============
+    case 'list_pending_approvals': {
+      const { data, error } = await supabase.from('agent_approval_queue')
+        .select('id, action_type, title, description, tool_name, tool_input, created_at, status, requested_by')
+        .eq('tenant_id', tenantId)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+        .limit(args.limit || 10)
+      if (error) throw error
+      return { count: data.length, approvals: data }
+    }
+    case 'execute_pending_approval': {
+      let approvalId = args.approval_id
+      if (!approvalId) {
+        const { data } = await supabase.from('agent_approval_queue').select('id').eq('tenant_id', tenantId).eq('status', 'pending').order('created_at', { ascending: false }).limit(1).maybeSingle()
+        approvalId = data?.id
+      }
+      if (!approvalId) return { success: false, error: 'no_pending_approval' }
+      const r = await fetch(`${SUPABASE_URL}/functions/v1/carmen-approval-execute`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json', apikey: SUPABASE_SERVICE_ROLE_KEY },
+        body: JSON.stringify({ approval_id: approvalId, approved_by: userId }),
+      })
+      const j = await r.json()
+      return j
+    }
+    case 'reject_pending_approval': {
+      const { error } = await supabase.from('agent_approval_queue').update({ status: 'rejected', approved_by: userId, approved_at: new Date().toISOString(), execution_result: { reason: args.reason || null } }).eq('id', args.approval_id).eq('tenant_id', tenantId)
+      if (error) throw error
+      return { success: true, approval_id: args.approval_id, status: 'rejected' }
+    }
+
+    // ============ FB ADS — all create approval rows, return pending ============
+    case 'fb_create_campaign':
+    case 'fb_create_adset':
+    case 'fb_create_ad':
+    case 'fb_create_creative_from_media':
+    case 'fb_replace_lead_form':
+    case 'fb_update_budget':
+    case 'fb_pause':
+    case 'fb_resume':
+    case 'gads_pause':
+    case 'gads_resume':
+    case 'gads_update_budget': {
+      const titles: Record<string, string> = {
+        fb_create_campaign: `יצירת קמפיין FB: ${args.name || ''}`,
+        fb_create_adset: `יצירת ad set: ${args.name || ''}`,
+        fb_create_ad: `יצירת מודעה: ${args.name || ''}`,
+        fb_create_creative_from_media: `בניית קריאייטיב חדש מ-media`,
+        fb_replace_lead_form: `החלפת טופס לידים במודעה ${args.ad_id}`,
+        fb_update_budget: `שינוי תקציב ${args.entity_id} → ${args.daily_budget ?? args.lifetime_budget}`,
+        fb_pause: `כיבוי ${args.entity_id}`,
+        fb_resume: `הדלקה ${args.entity_id}`,
+        gads_pause: `Google Ads — כיבוי ${args.campaign_id}`,
+        gads_resume: `Google Ads — הדלקה ${args.campaign_id}`,
+        gads_update_budget: `Google Ads — תקציב ${args.campaign_id} → ${args.daily_budget}`,
+      }
+      const { data, error } = await supabase.from('agent_approval_queue').insert({
+        tenant_id: tenantId,
+        agent_id: agentId || null,
+        requested_by: userId,
+        action_type: name,
+        title: titles[name] || name,
+        description: 'פעולת mutating שדורשת אישור משתמש בוואטסאפ',
+        tool_name: name,
+        tool_input: args,
+        context: { caller_role: callerRole, caller_phone: callerPhone },
+        status: 'pending',
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      }).select('id').single()
+      if (error) throw error
+      return {
+        pending_approval: true,
+        approval_id: data.id,
+        action: name,
+        summary: titles[name] || name,
+        instruction_for_carmen: 'הצג למשתמש בקצרה מה את עומדת לעשות ובקש אישור: "לאשר? (כן/לא)". אל תבצעי כלום עד שיגיע אישור — קוראת ל-execute_pending_approval רק אחרי תשובה חיובית.',
+      }
+    }
+
+    // ============ SCHEDULES ============
+    case 'schedule_campaign_toggle': {
+      const nextRun = args.run_at || (args.cron_expression ? new Date(Date.now() + 60_000).toISOString() : null)
+      const { data, error } = await supabase.from('agent_approval_queue').insert({
+        tenant_id: tenantId,
+        agent_id: agentId || null,
+        requested_by: userId,
+        action_type: 'schedule_campaign_toggle',
+        title: `תזמון ${args.action} ל-${args.entity_id}`,
+        description: args.cron_expression ? `cron: ${args.cron_expression} (${args.timezone || 'Asia/Jerusalem'})` : `חד-פעמי: ${args.run_at}`,
+        tool_name: 'schedule_campaign_toggle',
+        tool_input: { ...args, next_run_at: nextRun },
+        status: 'pending',
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      }).select('id').single()
+      if (error) throw error
+      return {
+        pending_approval: true,
+        approval_id: data.id,
+        action: 'schedule_campaign_toggle',
+        summary: `תזמון ${args.action} ל-${args.entity_id}: ${args.cron_expression || args.run_at}`,
+        instruction_for_carmen: 'הצג את התזמון ובקש אישור. רק אחרי "כן" קוראת ל-execute_pending_approval — והוא ייצור את הרשומה ב-campaign_schedules.',
+      }
+    }
+    case 'list_campaign_schedules': {
+      let q = supabase.from('campaign_schedules').select('id, entity_id, entity_type, action, cron_expression, run_at, timezone, enabled, next_run_at, last_run_at, last_run_status, notes').eq('tenant_id', tenantId).order('next_run_at', { ascending: true }).limit(args.limit || 50)
+      if (args.client_id) q = q.eq('client_id', args.client_id)
+      if (args.only_enabled) q = q.eq('enabled', true)
+      const { data, error } = await q
+      if (error) throw error
+      return { count: data.length, schedules: data }
+    }
+    case 'cancel_campaign_schedule': {
+      const { error } = await supabase.from('campaign_schedules').update({ enabled: false }).eq('id', args.schedule_id).eq('tenant_id', tenantId)
+      if (error) throw error
+      return { success: true, schedule_id: args.schedule_id, enabled: false }
+    }
+
     default:
       throw new Error(`Unknown tool: ${name}`)
   }
 }
+
 
 
 // ===========================
