@@ -101,7 +101,22 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
     };
   }, [itemId]);
 
+  const [activeAssetTab, setActiveAssetTab] = useState<string>("");
+  const availableTypes = Object.keys(
+    (assets ?? []).reduce((acc: Record<string, true>, a: any) => {
+      acc[a.type] = true;
+      return acc;
+    }, {}),
+  );
+  useEffect(() => {
+    if (availableTypes.length && !availableTypes.includes(activeAssetTab)) {
+      setActiveAssetTab(availableTypes[0]);
+    }
+  }, [availableTypes.join("|")]);
+
   if (!itemId) return null;
+
+
 
   const save = async (patch: Partial<any>) => {
     setSaving(true);
@@ -181,13 +196,6 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
     image: "קריאייטיב",
     data: "מדידה",
   };
-  const availableTypes = Object.keys(assetsByType);
-  const [activeAssetTab, setActiveAssetTab] = useState<string>("");
-  useEffect(() => {
-    if (availableTypes.length && !availableTypes.includes(activeAssetTab)) {
-      setActiveAssetTab(availableTypes[0]);
-    }
-  }, [availableTypes.join("|")]);
 
   const stageHasAsset = (stageId: string) =>
     (assets ?? []).some((a: any) => a.stage_id === stageId);
