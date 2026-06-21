@@ -693,6 +693,20 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     return sendMessage(toChatId, message);
   };
 
+  // Built once and passed to runCarmenAI so any subagent that Carmen spawns
+  // during this turn can push its final result back into THIS WhatsApp chat
+  // (without it, "I'm working in the background" turns into a dead end).
+  const waNotify: CarmenWaNotify = {
+    surface: 'whatsapp',
+    tenant_id: tenantId,
+    automation_id: routingAutomationId,
+    connection_user_id: connectionUserId,
+    chat_id: chatId,
+    phone_number: phoneNumber || null,
+    is_group: isGroup,
+  };
+
+
 
 
 
