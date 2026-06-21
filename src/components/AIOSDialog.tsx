@@ -670,47 +670,51 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
           </div>
         </div>
 
-        {/* Background Tasks Progress */}
-        {backgroundTasks.filter(t => t.status === 'pending' || t.status === 'running').length > 0 && (
-          <div className="border-b border-border px-3 py-2 bg-muted/30 flex-shrink-0 space-y-1.5">
-            {backgroundTasks
-              .filter(t => t.status === 'pending' || t.status === 'running')
-              .map(task => (
-                <div key={task.id} className="flex items-center gap-2 text-xs">
-                  {task.status === 'pending' ? (
-                    <Clock className="h-3.5 w-3.5 text-muted-foreground animate-pulse" />
-                  ) : (
-                    <Loader2 className="h-3.5 w-3.5 text-primary animate-spin" />
-                  )}
-                  <span className="font-medium truncate flex-1">{task.title}</span>
-                  {task.run_count && task.run_count > 1 && (
-                    <span className="text-muted-foreground">סבב {task.run_count}</span>
-                  )}
-                  <span className="text-muted-foreground">
-                    {task.status === 'pending' ? 'ממתין...' : 'רץ ברקע...'}
-                  </span>
+        {/* Background Tasks Progress — hide internal self-tasks like Pulse Check */}
+        {(() => {
+          const isInternalTask = (t: BackgroundTask) => {
+            const title = (t.title || '').toLowerCase();
+            return title.includes('בדיקת דופק') || title.includes('pulse');
+          };
+          const visibleActive = backgroundTasks.filter(t => (t.status === 'pending' || t.status === 'running') && !isInternalTask(t));
+          const visibleCompleted = backgroundTasks.filter(t => t.status === 'completed' && t.completed_at &&
+            (Date.now() - new Date(t.completed_at).getTime()) < 60000 && !isInternalTask(t));
+          return (
+            <>
+              {visibleActive.length > 0 && (
+                <div className="border-b border-border px-3 py-2 bg-muted/30 flex-shrink-0 space-y-1.5">
+                  {visibleActive.map(task => (
+                    <div key={task.id} className="flex items-center gap-2 text-xs">
+                      {task.status === 'pending' ? (
+                        <Clock className="h-3.5 w-3.5 text-muted-foreground animate-pulse" />
+                      ) : (
+                        <Loader2 className="h-3.5 w-3.5 text-primary animate-spin" />
+                      )}
+                      <span className="font-medium truncate flex-1">{task.title}</span>
+                      {task.run_count && task.run_count > 1 && (
+                        <span className="text-muted-foreground">סבב {task.run_count}</span>
+                      )}
+                      <span className="text-muted-foreground">
+                        {task.status === 'pending' ? 'ממתין...' : 'רץ ברקע...'}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-          </div>
-        )}
-
-        {/* Completed Background Tasks (show briefly) */}
-        {backgroundTasks.filter(t => t.status === 'completed' && t.completed_at && 
-          (Date.now() - new Date(t.completed_at).getTime()) < 60000
-        ).length > 0 && (
-          <div className="border-b border-border px-3 py-2 bg-success/5 flex-shrink-0 space-y-1.5">
-            {backgroundTasks
-              .filter(t => t.status === 'completed' && t.completed_at && 
-                (Date.now() - new Date(t.completed_at).getTime()) < 60000)
-              .map(task => (
-                <div key={task.id} className="flex items-center gap-2 text-xs">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-success" />
-                  <span className="font-medium truncate flex-1">{task.title}</span>
-                  <span className="text-success">הושלם ✓</span>
+              )}
+              {visibleCompleted.length > 0 && (
+                <div className="border-b border-border px-3 py-2 bg-success/5 flex-shrink-0 space-y-1.5">
+                  {visibleCompleted.map(task => (
+                    <div key={task.id} className="flex items-center gap-2 text-xs">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+                      <span className="font-medium truncate flex-1">{task.title}</span>
+                      <span className="text-success">הושלם ✓</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-          </div>
-        )}
+              )}
+            </>
+          );
+        })()}
 
         {/* Messages */}
         <ScrollArea className="flex-1 p-3">
