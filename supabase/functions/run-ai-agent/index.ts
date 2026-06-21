@@ -2784,6 +2784,19 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     const maxRounds = agent.max_tool_rounds || 25
     const safeTemp = typeof temperature === 'number' ? Math.min(2, Math.max(0, temperature)) : undefined
 
+    // ─── Skill resolver: detect active skills from the user message and append their prompts ───
+    const activeSkillsBlock = buildSkillsBlock(String(command_text || ''))
+    const matchedSkills = resolveActiveSkills(String(command_text || '')).map(s => s.id)
+    if (activeSkillsBlock) {
+      systemPrompt += activeSkillsBlock
+      console.log(`[AGENT] Active skills (${surface}): ${matchedSkills.join(', ')}`)
+    }
+    // Surface instruction-capture confirmation in the system prompt so the model knows
+    // a rule was just persisted and can acknowledge it briefly without re-saving.
+    if (instructionCaptured) {
+      systemPrompt += `\n\n🧾 הנחיה חדשה נשמרה לזיכרון אוטומטית: "${instructionCaptured}". אשרי בקצרה ("נרשם") והמשיכי בבקשה.`
+    }
+
     // Build messages with conversation history
     let messages: any[] = [{ role: 'system', content: systemPrompt }]
     
