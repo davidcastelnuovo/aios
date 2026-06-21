@@ -2504,23 +2504,23 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     const userAskedGithubAgent = /\b(github|גיטהאב|גיט\s*האב|שגיאת\s*קוד|תמיכה\s*טכנית|אגנט\s*קוד)\b/i.test(cmd)
     if (surface === 'task') {
       filteredTools = filteredTools.filter(t => t.name !== 'delegate_to_subagent' && t.name !== 'delegate_to_manus' && t.name !== 'delegate_to_github_agent')
-    } else if (surface === 'aios') {
+    } else if (surface === 'aios' || surface === 'whatsapp') {
+      // Same default-direct rule for WhatsApp as for AIOS: hide delegation tools unless
+      // the user explicitly asked for background work. On WhatsApp this is even more
+      // important — there is no "window" the user can leave open to watch progress, and
+      // until subagent results are pushed back to WA, claiming "I'm working in the
+      // background" leaves the user with nothing.
       if (!userAskedBackground) {
         filteredTools = filteredTools.filter(t => t.name !== 'delegate_to_subagent')
       }
       if (!userAskedManus) {
-        // Manus is an external long-running agent that requires a working API key.
-        // Hide it by default on AIOS so Carmen uses internal tools (analyze_campaign_performance etc.)
-        // for ordinary requests like "בדיקת דופק" / "בדיקת דוח" instead of returning Unauthorized.
         filteredTools = filteredTools.filter(t => t.name !== 'delegate_to_manus')
       }
       if (!userAskedGithubAgent) {
-        // delegate_to_github_agent is for code/error analysis only. Hide it on AIOS for
-        // routine business requests like "בדיקת דופק / סיכום לקוחות / מצב קמפיינים" so
-        // Carmen does not pick it as a generic "background" fallback.
         filteredTools = filteredTools.filter(t => t.name !== 'delegate_to_github_agent')
       }
     }
+
 
 
     const toolsForAPI = filteredTools.map(t => ({ type: 'function', function: t }))
