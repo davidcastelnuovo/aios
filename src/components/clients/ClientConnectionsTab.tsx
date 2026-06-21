@@ -171,17 +171,9 @@ export function ClientConnectionsTab({ clientId, tenantId }: Props) {
             ))}
           </div>
         )}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
-          <div>
-            <Label>כתובת אתר</Label>
-            <Input value={newWpUrl} onChange={(e) => setNewWpUrl(e.target.value)} placeholder="https://" />
-          </div>
-          <div>
-            <Label>שם תצוגה</Label>
-            <Input value={newWpName} onChange={(e) => setNewWpName(e.target.value)} />
-          </div>
-          <Button size="sm" onClick={addWp}><Plus className="ml-1 h-4 w-4" /> הוסף</Button>
-        </div>
+        <p className="text-xs text-muted-foreground">
+          חיבור אתר WordPress חדש דורש פרטי גישה — בצע חיבור דרך מודול האינטגרציות.
+        </p>
       </Card>
     </div>
   );
