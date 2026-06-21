@@ -473,6 +473,16 @@ export default function DashboardView() {
       const ct = getCampaignType(t?.integration_type, t?.integration_settings);
       if (ct === 'ecommerce') map[key] = 'ecommerce';
     });
+    // Lock known leads-default ad platforms so noisy Pixel events (e.g. add_to_cart) on a
+    // leads campaign don't flip the entire dashboard to ecommerce columns. To force ecommerce
+    // mode on these platforms, set integration_settings.campaign_type='ecommerce' on the table
+    // (or use facebook_ecommerce as the table type for FB).
+    ['facebook_insights', 'google_ads'].forEach((key) => {
+      if (!map[key] && tables.some((t: any) => t.integration_type === key)) {
+        map[key] = 'leads';
+        explicitlySet.add(key);
+      }
+    });
     // Then override by scanning actual data for ecommerce signals — but ONLY for platforms not explicitly set by user
     allRecords.forEach((record: any) => {
       const source = record._source || 'unknown';
@@ -1372,7 +1382,11 @@ export default function DashboardView() {
                   revenue: acc.revenue + c.revenue,
                 }), { impressions: 0, clicks: 0, spend: 0, addToCart: 0, purchases: 0, revenue: 0 });
                 const totalRoas = totals.spend > 0 ? totals.revenue / totals.spend : 0;
-                const isEcom = totals.purchases > 0 || totals.revenue > 0 || totals.addToCart > 0;
+                // Drive ecom vs leads layout from the table type, not from data noise.
+                // FB Pixel emits add_to_cart events even for leads campaigns, which used to flip
+                // the whole table to ecom columns by accident.
+                const isEcom = campaignTypeByPlatform['facebook_ecommerce'] === 'ecommerce'
+                  || campaignTypeByPlatform['facebook_insights'] === 'ecommerce';
 
                 return (
                   <Card>
