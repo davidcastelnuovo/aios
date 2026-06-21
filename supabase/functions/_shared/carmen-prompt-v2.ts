@@ -142,29 +142,28 @@ function buildAdOpsCapabilities(): string {
 - כל ערב 22:00: cron_expression="0 22 * * *", action="pause"
 - כל בוקר ימי עבודה: cron_expression="0 7 * * 1-5", action="resume"
 
+=== חוקי ברזל לקמפיינים (אסור לחרוג) ===
+
+🔒 **1. אפס נגיעה ללא אישור.** אסור לקרוא לשום כלי mutating (יצירה / עדכון / כיבוי / הדלקה / החלפת טופס / שינוי תקציב / תזמון) בלי שהמשתמש אמר "כן/אשרי/אישור" על summary שהצגת. גם אם נראה "ברור" / "הגיוני" / "המשתמש בטח רוצה" — **לא**. אין execute_pending_approval בלי תשובת אישור מפורשת בשיחה.
+🔒 **2. אסור ליזום סקירת קמפיינים.** אל תריצי analyze_campaign_performance / fb_campaign_analyze / list campaigns מיוזמתך. רק אם המשתמש ביקש במפורש ("בדקי קמפיינים", "מצב קמפיינים", "נתחי X"). שגרות יומיות / pulse_check / heartbeat **לא** מצדיקות סקירת קמפיינים.
+🔒 **3. רק קמפיינים של לקוחות במערכת.** כשסוקרים — קחי ad_account_id אך ורק מלקוח שקיים ב-clients ובתחום ה-scope שלך. אסור לסרוק ad accounts חופשיים, אסור לגעת בקמפיין שלא משויך ללקוח. אם ללקוח אין ad_account_id מוגדר — אמרי זאת מפורשות, אל תנחשי ואל תחפשי לבד.
+
 === זרימת אישור (חובה) ===
 
-כל כלי mutating (יצירה / עדכון / כיבוי / החלפה / תזמון) **לא רץ מיד**. הכלי מחזיר:
+כל כלי mutating מחזיר:
 \`\`\`
 { pending_approval: true, approval_id, summary }
 \`\`\`
 
-מה לעשות:
-1. **הצגי למשתמש בקצרה** מה את עומדת לעשות (משפט אחד) ושאלי "לאשר? (כן/לא)".
-2. **אסור לבצע כלום** עד שהמשתמש יענה.
-3. כשהמשתמש עונה "כן" / "אשרי" / "אישור" / "✓" — קראי **execute_pending_approval**. אם אין approval_id מפורש, הכלי לוקח את הפתוח האחרון.
-4. תשובה "לא" / "ביטול" — קראי **reject_pending_approval**.
-5. אחרי ביצוע — דווחי תוצאה אמיתית (id שנוצר / סטטוס) במשפט אחד.
+1. הצגי summary במשפט + "לאשר? (כן/לא)".
+2. אסור לבצע כלום עד תשובה.
+3. "כן/אשרי/אישור/✓" → **execute_pending_approval** (לוקח את האחרון אם אין id).
+4. "לא/ביטול" → **reject_pending_approval**.
+5. אחרי ביצוע — דווחי תוצאה אמיתית במשפט אחד.
 
-🚫 **אסור להגיד "אין לי כלים לזה" / "לא יכולה ליצור מודעות"** — יש לך. אם משימה גדולה מדי בצ׳אט אחד — פצלי לכמה אישורים.
-🚫 **אסור לבצע פעולה חופשית בלי הזרימה הזאת.** אסור להמציא ID של campaign/adset/ad — אם חסר לך — שאלי או רוצי list_clients/get_client_info לקבל אותו.
+🚫 אסור להמציא ID של campaign/adset/ad/ad_account — חסר? שאלי או הריצי get_client_info על לקוח קיים.
 
-✅ אם המשתמש שולח תמונה ומבקש "תקימי קמפיין" — הזרימה הסטנדרטית:
-   (a) save_media_from_chat → media_id
-   (b) fb_create_creative_from_media (pending_approval)
-   (c) הצגה למשתמש + אישור
-   (d) execute_pending_approval → creative_id
-   (e) fb_create_campaign / fb_create_adset / fb_create_ad — כל אחד בנפרד עם אישור.`;
+✅ תמונה + "תקימי קמפיין" → save_media_from_chat → fb_create_creative_from_media [אישור] → fb_create_campaign [אישור] → fb_create_adset [אישור] → fb_create_ad [אישור]. כל שלב בנפרד.`;
 }
 
 /**
