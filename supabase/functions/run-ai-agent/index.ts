@@ -852,7 +852,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
 
       let clientsQuery = supabase
         .from('clients')
-        .select('id, name, agency_id, agencies(name)')
+        .select('id, name, agency_id, is_ecommerce, agencies(name)')
         .in('tenant_id', accessibleTenantIds)
         .in('status', ['active', 'onboarding'])
         .order('name')
