@@ -2714,7 +2714,8 @@ Deno.serve(async (req) => {
   const wantStream = bodyJson.stream === true
   const surface: Surface = bodyJson.surface === 'aios' ? 'aios'
     : bodyJson.surface === 'task' ? 'task'
-    : 'whatsapp'
+    : bodyJson.surface === 'whatsapp' ? 'whatsapp'
+    : 'internal_chat'
 
   if (!wantStream) {
     return await handleRunAgent(bodyJson, surface, undefined)
