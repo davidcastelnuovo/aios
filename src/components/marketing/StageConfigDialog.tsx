@@ -89,7 +89,7 @@ export function StageConfigDialog({ stage, tenantId, clientId, onClose, onSaved 
     queryFn: async () => {
       const { data } = await supabase
         .from("ai_agents")
-        .select("id, name, description")
+        .select("id, name, personality")
         .eq("tenant_id", tenantId)
         .order("name");
       return data ?? [];
