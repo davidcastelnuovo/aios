@@ -1907,8 +1907,13 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         taskSkills: Array.isArray(args.task_skills) ? args.task_skills : undefined,
         priority: typeof args.priority === 'number' ? args.priority : undefined,
         createdBy: userId !== 'system' ? userId : null,
+        // When the caller is on WhatsApp, propagate the chat target so the
+        // subagent can deliver its final result back to the same WA chat
+        // instead of dying silently.
+        notify: waNotify && waNotify.surface === 'whatsapp' ? waNotify : null,
       })
     }
+
     case 'get_subagent_result': {
       if (!args.sub_task_id) throw new Error('sub_task_id is required')
       return await getSubagentResult(supabase, tenantId, args.sub_task_id)
