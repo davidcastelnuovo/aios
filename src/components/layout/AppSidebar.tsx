@@ -118,7 +118,7 @@ const modulePermissions: Record<string, string> = {
   // ── ניהול שוטף ──────────────────────────────────────────────────────
   dashboard: "dashboard",
   clients: "clients",
-  "client-onboarding": "client_onboarding",
+  
   tasks: "tasks",
   "time-tracking": "time_tracking",
   recordings: "recordings",
