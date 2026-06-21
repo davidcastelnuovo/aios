@@ -113,7 +113,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
   const params = useParams();
   const shareToken = shareTokenOverride ?? params.shareToken;
   const queryClient = useQueryClient();
-  const [dateFilter, setDateFilter] = useState('last_30_days');
+  const [dateFilter, setDateFilter] = useState('last_7_days');
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -640,7 +640,8 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
   }
 
   const dashboard = data.dashboard;
-  const showAnalyticsCards = platformFilter === 'all' || platformFilter === 'google_analytics';
+  const hasAnalyticsData = records.some((r: any) => isAnalyticsPlatform(r._source || ''));
+  const showAnalyticsCards = (platformFilter === 'all' || platformFilter === 'google_analytics') && hasAnalyticsData;
   const showAdsCards = platformFilter === 'all' || platformFilter === 'facebook' || platformFilter === 'google_ads';
 
   const isSnapshotReady = !isLoading && !!data?.dashboard && Array.isArray(tables);
