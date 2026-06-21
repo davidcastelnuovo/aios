@@ -128,6 +128,7 @@ export default function MarketingDepartment() {
             <PipelineCanvas
               pipelineId={pipeline.id}
               tenantId={tenantId!}
+              clientId={clientId}
               onSelectItem={setSelectedItemId}
             />
           </TabsContent>
