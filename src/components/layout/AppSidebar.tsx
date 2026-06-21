@@ -105,7 +105,7 @@ const iconMap: Record<string, any> = {
 
 // ─── Menu structure ───────────────────────────────────────────────────────────
 // Imported from a shared module so the Visual Workspace and the sidebar stay in sync.
-import { MENU_TABS as BASE_MENU_TABS, type MenuTab, type MenuSection, type MenuTabId } from "@/lib/menuStructure";
+import { effectiveTabs as BASE_MENU_TABS, type MenuTab, type MenuSection, type MenuTabId } from "@/lib/menuStructure";
 import { computeSidebarOverlay } from "@/visual-workspace/hooks/useSitemap";
 
 // Permission map
@@ -317,7 +317,7 @@ export function AppSidebar() {
       return canAccess(item.key);
     });
 
-  const activeMenuTab = MENU_TABS.find(t => t.id === activeTab) || MENU_TABS[0];
+  const activeMenuTab = effectiveTabs.find(t => t.id === activeTab) || effectiveTabs[0];
 
   if (isLoadingMenuItems || isLoading) return null;
 
@@ -333,7 +333,7 @@ export function AppSidebar() {
               <Building2 className="h-8 w-8" />
             )}
             {/* Tab icons in collapsed mode */}
-            {MENU_TABS.map(tab => {
+            {effectiveTabs.map(tab => {
               const TabIcon = tab.icon;
               return (
                 <Tooltip key={tab.id}>
@@ -396,7 +396,7 @@ export function AppSidebar() {
 
             {/* Tab switcher — 3 main tabs */}
             <div className="flex gap-1 bg-sidebar-accent/40 rounded-lg p-1">
-              {MENU_TABS.filter(t => t.id !== "daily").map(tab => {
+              {effectiveTabs.filter(t => t.id !== "daily").map(tab => {
                 const TabIcon = tab.icon;
                 const isActive = activeTab === tab.id;
                 return (
@@ -418,7 +418,7 @@ export function AppSidebar() {
 
             {/* Daily tab — separate row */}
             {(() => {
-              const dailyTab = MENU_TABS.find(t => t.id === "daily")!;
+              const dailyTab = effectiveTabs.find(t => t.id === "daily")!;
               const DailyIcon = dailyTab.icon;
               const isActive = activeTab === "daily";
               return (
