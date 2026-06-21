@@ -462,7 +462,16 @@ Deno.serve(async (req) => {
 
     // Group messages: skip client/lead matching & chat_messages insert, but still let Carmen respond in-group.
     if (isGroup) {
-      const groupChatId = fromRaw.endsWith('@g.us') ? fromRaw : toRaw;
+      // Prefer explicit group fields. `from` is often the sender's personal phone in groups,
+      // and `to` may be empty — in which case we must fall back to chatId/groupId from the payload.
+      const groupIdRaw = String((payload as any).groupId || '');
+      const groupChatId = (
+        fromRaw.endsWith('@g.us') ? fromRaw :
+        toRaw.endsWith('@g.us') ? toRaw :
+        chatIdRaw.endsWith('@g.us') ? chatIdRaw :
+        groupIdRaw.endsWith('@g.us') ? groupIdRaw :
+        (chatIdRaw || groupIdRaw || toRaw)
+      );
       const messageText = payload.body || (payload.hasMedia ? '[מדיה]' : '');
       const senderName = (payload.senderName || payload.fromName || payload.authorName || null) as string | null;
 
