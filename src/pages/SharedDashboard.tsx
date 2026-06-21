@@ -445,6 +445,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
 
   // Analytics source breakdown
   const analyticsSourceBreakdown = useMemo(() => {
+    if (!hasVisibleAnalyticsData) return [];
     const categorize = (sourceMedium: string): string => {
       const sm = sourceMedium.toLowerCase();
       if (sm.includes('facebook') || sm.includes('fb')) {
@@ -486,10 +487,11 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
     return Object.entries(sources)
       .map(([name, data]) => ({ name, ...data }))
       .sort((a, b) => b.sessions - a.sessions);
-  }, [records]);
+  }, [records, hasVisibleAnalyticsData]);
 
   // Traffic Acquisition by Channel Group
   const channelGroupBreakdown = useMemo(() => {
+    if (!hasVisibleAnalyticsData) return [];
     const channels: Record<string, { sessions: number; engagedSessions: number; users: number; purchases: number; revenue: number; rateSum: number; durationSum: number; eventsSum: number; count: number }> = {};
     records.forEach((record: any) => {
       const source = record._source || 'unknown';
@@ -521,7 +523,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
         revenue: d.revenue,
       }))
       .sort((a, b) => b.sessions - a.sessions);
-  }, [records]);
+  }, [records, hasVisibleAnalyticsData]);
 
   // Daily chart data
   const dailyChartData = useMemo(() => {
