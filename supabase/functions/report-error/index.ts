@@ -31,7 +31,6 @@ Deno.serve(async (req) => {
     const { data: errorLog, error: insertError } = await supabase
       .from('error_logs')
       .insert({
-        tenant_id: tenant_id || null,
         source: source || 'frontend',
         error_message,
         error_stack: error_stack || null,
