@@ -565,6 +565,9 @@ export function buildCarmenV2SystemPrompt(ctx: PromptBuildContext): string {
   // 3. Anti-hallucination rules
   sections.push(buildAntiHallucination());
 
+  // 3b. Anti-deflection / anti-laziness rules
+  sections.push(buildAntiDeflection());
+
   // 4. Task type rules
   sections.push(buildTaskTypeRules());
 
