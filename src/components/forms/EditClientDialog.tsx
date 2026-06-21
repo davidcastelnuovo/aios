@@ -544,8 +544,12 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
         </DialogHeader>
 
         <Tabs defaultValue="details" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5">
             <TabsTrigger value="details">פרטי לקוח</TabsTrigger>
+            <TabsTrigger value="connections" className="flex items-center gap-1">
+              <Plug className="h-3 w-3" />
+              חיבורים
+            </TabsTrigger>
             <TabsTrigger value="files" className="flex items-center gap-1">
               <Paperclip className="h-3 w-3" />
               קבצים
