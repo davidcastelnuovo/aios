@@ -2146,6 +2146,75 @@ export type Database = {
         }
         Relationships: []
       }
+      campaign_schedules: {
+        Row: {
+          action: string
+          approved_at: string | null
+          approved_by: string | null
+          client_id: string | null
+          created_at: string
+          created_by: string | null
+          cron_expression: string | null
+          enabled: boolean
+          entity_id: string
+          entity_type: string
+          id: string
+          last_run_at: string | null
+          last_run_error: string | null
+          last_run_status: string | null
+          next_run_at: string | null
+          notes: string | null
+          run_at: string | null
+          tenant_id: string
+          timezone: string
+          updated_at: string
+        }
+        Insert: {
+          action: string
+          approved_at?: string | null
+          approved_by?: string | null
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          cron_expression?: string | null
+          enabled?: boolean
+          entity_id: string
+          entity_type: string
+          id?: string
+          last_run_at?: string | null
+          last_run_error?: string | null
+          last_run_status?: string | null
+          next_run_at?: string | null
+          notes?: string | null
+          run_at?: string | null
+          tenant_id: string
+          timezone?: string
+          updated_at?: string
+        }
+        Update: {
+          action?: string
+          approved_at?: string | null
+          approved_by?: string | null
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          cron_expression?: string | null
+          enabled?: boolean
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          last_run_at?: string | null
+          last_run_error?: string | null
+          last_run_status?: string | null
+          next_run_at?: string | null
+          notes?: string | null
+          run_at?: string | null
+          tenant_id?: string
+          timezone?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       campaigner_agencies: {
         Row: {
           agency_id: string
@@ -5313,6 +5382,72 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      marketing_media_library: {
+        Row: {
+          ad_ready: boolean
+          bucket_path: string
+          caption: string | null
+          client_id: string | null
+          created_at: string
+          created_by: string | null
+          duration_seconds: number | null
+          file_size: number | null
+          height: number | null
+          id: string
+          lead_id: string | null
+          mime_type: string
+          source: string
+          source_message_id: string | null
+          tags: string[]
+          tenant_id: string
+          updated_at: string
+          usage_count: number
+          width: number | null
+        }
+        Insert: {
+          ad_ready?: boolean
+          bucket_path: string
+          caption?: string | null
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          duration_seconds?: number | null
+          file_size?: number | null
+          height?: number | null
+          id?: string
+          lead_id?: string | null
+          mime_type: string
+          source?: string
+          source_message_id?: string | null
+          tags?: string[]
+          tenant_id: string
+          updated_at?: string
+          usage_count?: number
+          width?: number | null
+        }
+        Update: {
+          ad_ready?: boolean
+          bucket_path?: string
+          caption?: string | null
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          duration_seconds?: number | null
+          file_size?: number | null
+          height?: number | null
+          id?: string
+          lead_id?: string | null
+          mime_type?: string
+          source?: string
+          source_message_id?: string | null
+          tags?: string[]
+          tenant_id?: string
+          updated_at?: string
+          usage_count?: number
+          width?: number | null
+        }
+        Relationships: []
       }
       marketing_pipeline_stages: {
         Row: {
