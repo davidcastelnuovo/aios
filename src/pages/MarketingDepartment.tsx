@@ -119,8 +119,12 @@ export default function MarketingDepartment() {
         </div>
       ) : (
         <div className="flex flex-1 min-h-0 flex-col">
-          {/* Track tabs */}
-          <Tabs value={track} onValueChange={(v) => setTrack(v as MarketingTrack)}>
+          {/* Top-level tabs: 3 tracks + content calendar */}
+          <Tabs
+            value={topTab}
+            onValueChange={(v) => setTopTab(v as MarketingTrack | "calendar")}
+            className="flex flex-1 min-h-0 flex-col"
+          >
             <TabsList className="mx-4 mt-2 w-fit">
               {TRACKS.map(({ value, icon: Icon }) => (
                 <TabsTrigger key={value} value={value}>
@@ -128,20 +132,6 @@ export default function MarketingDepartment() {
                   {TRACK_LABELS[value]}
                 </TabsTrigger>
               ))}
-            </TabsList>
-          </Tabs>
-
-          {/* View toggle (flow / calendar) */}
-          <Tabs
-            value={view}
-            onValueChange={(v) => setView(v as "flow" | "calendar")}
-            className="flex flex-1 min-h-0 flex-col"
-          >
-            <TabsList className="mx-4 my-2 w-fit">
-              <TabsTrigger value="flow">
-                <Workflow className="ml-1 h-4 w-4" />
-                פס יצור
-              </TabsTrigger>
               <TabsTrigger value="calendar">
                 <CalendarRange className="ml-1 h-4 w-4" />
                 לוח תוכן
@@ -154,22 +144,47 @@ export default function MarketingDepartment() {
               </div>
             ) : (
               <>
-                <TabsContent value="flow" className="flex-1 min-h-0 m-0">
-                  <PipelineCanvas
-                    pipelineId={pipeline.id}
-                    tenantId={tenantId!}
-                    clientId={clientId}
-                    onSelectItem={setSelectedItemId}
-                  />
-                </TabsContent>
-                <TabsContent value="calendar" className="flex-1 min-h-0 m-0 overflow-auto">
-                  <MarketingCalendarView pipelineId={pipeline.id} clientId={clientId} />
+                {TRACKS.map(({ value }) => (
+                  <TabsContent key={value} value={value} className="flex-1 min-h-0 m-0">
+                    <PipelineCanvas
+                      pipelineId={pipeline.id}
+                      tenantId={tenantId!}
+                      clientId={clientId}
+                      onSelectItem={setSelectedItemId}
+                    />
+                  </TabsContent>
+                ))}
+                <TabsContent value="calendar" className="flex-1 min-h-0 m-0 flex flex-col">
+                  <Tabs
+                    value={calendarTrack}
+                    onValueChange={(v) => setCalendarTrack(v as MarketingTrack)}
+                    className="flex flex-1 min-h-0 flex-col"
+                  >
+                    <TabsList className="mx-4 my-2 w-fit">
+                      {TRACKS.map(({ value, icon: Icon }) => (
+                        <TabsTrigger key={value} value={value}>
+                          <Icon className="ml-1 h-4 w-4" />
+                          {TRACK_LABELS[value]}
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+                    {TRACKS.map(({ value }) => (
+                      <TabsContent
+                        key={value}
+                        value={value}
+                        className="flex-1 min-h-0 m-0 overflow-auto"
+                      >
+                        <MarketingCalendarView pipelineId={pipeline.id} clientId={clientId} />
+                      </TabsContent>
+                    ))}
+                  </Tabs>
                 </TabsContent>
               </>
             )}
           </Tabs>
         </div>
       )}
+
 
       <WorkItemSidePanel itemId={selectedItemId} onClose={() => setSelectedItemId(null)} />
     </div>
