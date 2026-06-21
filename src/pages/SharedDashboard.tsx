@@ -52,6 +52,12 @@ const getPurchasesFromData = (data: any) => Number(data?.purchases) || Number(da
 const getSessionsFromData = (data: any) => Number(data?.sessions) || 0;
 const getUsersFromData = (data: any) => Number(data?.users) || 0;
 const getAddToCartFromData = (data: any) => Number(data?.add_to_cart) || Number(data?.addToCarts) || 0;
+const hasMeaningfulAnalyticsMetrics = (data: any) =>
+  getSessionsFromData(data) > 0 ||
+  getUsersFromData(data) > 0 ||
+  getPurchasesFromData(data) > 0 ||
+  getRevenueFromData(data) > 0 ||
+  getAddToCartFromData(data) > 0;
 const isAdsPlatform = (s: string) => ['facebook_insights', 'facebook_ecommerce', 'google_ads'].includes(s);
 const isAnalyticsPlatform = (s: string) => s === 'google_analytics';
 const isFacebookPlatform = (s: string) => ['facebook_insights', 'facebook_ecommerce'].includes(s);
@@ -243,6 +249,13 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
       .sort((a, b) => a.month.localeCompare(b.month));
   }, [seoGaRecords]);
 
+  const hasVisibleAnalyticsData = useMemo(() => {
+    return records.some((record: any) => {
+      const source = record._source || '';
+      return isAnalyticsPlatform(source) && hasMeaningfulAnalyticsMetrics(record.data || {});
+    });
+  }, [records]);
+
   // Available platforms
   const availablePlatforms = useMemo(() => {
     const set = new Set<string>();
@@ -250,11 +263,11 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
     const platforms: PlatformFilter[] = [];
     if (set.has('facebook_insights') || set.has('facebook_ecommerce')) platforms.push('facebook');
     if (set.has('google_ads')) platforms.push('google_ads');
-    if (set.has('google_analytics')) platforms.push('google_analytics');
+    if (set.has('google_analytics') && hasVisibleAnalyticsData) platforms.push('google_analytics');
     if (hasWooCommerce) platforms.push('woocommerce');
     if (hasSeo) platforms.push('seo');
     return platforms;
-  }, [tables, hasWooCommerce, hasSeo]);
+  }, [tables, hasWooCommerce, hasSeo, hasVisibleAnalyticsData]);
 
   // Filter records: platform filter + only use 'daily' aggregate records for Analytics
   const filteredRecords = useMemo(() => {
@@ -262,19 +275,21 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
       const source = record._source || 'unknown';
       if (!matchesPlatformFilter(source, platformFilter)) return false;
       if (isAnalyticsPlatform(source)) {
+        if (!hasVisibleAnalyticsData) return false;
         const data = record.data || {};
         if (data.report_type !== 'daily') return false;
       }
       return true;
     });
-  }, [records, platformFilter]);
+  }, [records, platformFilter, hasVisibleAnalyticsData]);
 
   // All analytics records (unfiltered by report_type) for GoogleAnalyticsDashboard
   const allAnalyticsRecords = useMemo(() => {
+    if (!hasVisibleAnalyticsData) return [];
     return records
       .filter((r: any) => isAnalyticsPlatform(r._source || ''))
       .map((r: any) => ({ id: r.id, data: r.data }));
-  }, [records]);
+  }, [records, hasVisibleAnalyticsData]);
 
   const campaignTypeByPlatform: Record<string, CampaignType> = useMemo(() => {
     const map: Record<string, CampaignType> = {};
@@ -430,6 +445,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
 
   // Analytics source breakdown
   const analyticsSourceBreakdown = useMemo(() => {
+    if (!hasVisibleAnalyticsData) return [];
     const categorize = (sourceMedium: string): string => {
       const sm = sourceMedium.toLowerCase();
       if (sm.includes('facebook') || sm.includes('fb')) {
@@ -471,10 +487,11 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
     return Object.entries(sources)
       .map(([name, data]) => ({ name, ...data }))
       .sort((a, b) => b.sessions - a.sessions);
-  }, [records]);
+  }, [records, hasVisibleAnalyticsData]);
 
   // Traffic Acquisition by Channel Group
   const channelGroupBreakdown = useMemo(() => {
+    if (!hasVisibleAnalyticsData) return [];
     const channels: Record<string, { sessions: number; engagedSessions: number; users: number; purchases: number; revenue: number; rateSum: number; durationSum: number; eventsSum: number; count: number }> = {};
     records.forEach((record: any) => {
       const source = record._source || 'unknown';
@@ -506,7 +523,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
         revenue: d.revenue,
       }))
       .sort((a, b) => b.sessions - a.sessions);
-  }, [records]);
+  }, [records, hasVisibleAnalyticsData]);
 
   // Daily chart data
   const dailyChartData = useMemo(() => {
@@ -640,8 +657,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
   }
 
   const dashboard = data.dashboard;
-  const hasAnalyticsData = records.some((r: any) => isAnalyticsPlatform(r._source || ''));
-  const showAnalyticsCards = (platformFilter === 'all' || platformFilter === 'google_analytics') && hasAnalyticsData;
+  const showAnalyticsCards = (platformFilter === 'all' || platformFilter === 'google_analytics') && hasVisibleAnalyticsData;
   const showAdsCards = platformFilter === 'all' || platformFilter === 'facebook' || platformFilter === 'google_ads';
 
   const isSnapshotReady = !isLoading && !!data?.dashboard && Array.isArray(tables);
@@ -1240,8 +1256,12 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
                         <TableHead className="text-right">פלטפורמה</TableHead>
                         <TableHead className="text-right">הוצאה</TableHead>
                         <TableHead className="text-right">חשיפות</TableHead>
-                        <TableHead className="text-right">סשנים</TableHead>
-                        <TableHead className="text-right">סשנים יחודיים</TableHead>
+                          {showAnalyticsCards && (
+                            <>
+                              <TableHead className="text-right">סשנים</TableHead>
+                              <TableHead className="text-right">סשנים יחודיים</TableHead>
+                            </>
+                          )}
                         {dashboardCampaignType === 'ecommerce' ? (
                           <>
                             <TableHead className="text-right">הוספה לעגלה</TableHead>
@@ -1271,8 +1291,12 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
                             </TableCell>
                             <TableCell>{isAnalytics ? '-' : formatCurrency(metrics.spend)}</TableCell>
                             <TableCell>{isAnalytics ? '-' : formatNumber(metrics.impressions)}</TableCell>
-                            <TableCell>{isAnalytics ? formatNumber(metrics.sessions) : '-'}</TableCell>
-                            <TableCell>{isAnalytics ? formatNumber(metrics.users) : '-'}</TableCell>
+                            {showAnalyticsCards && (
+                              <>
+                                <TableCell>{isAnalytics ? formatNumber(metrics.sessions) : '-'}</TableCell>
+                                <TableCell>{isAnalytics ? formatNumber(metrics.users) : '-'}</TableCell>
+                              </>
+                            )}
                             {dashboardCampaignType === 'ecommerce' ? (
                               <>
                                 <TableCell>{formatNumber(metrics.addToCart)}</TableCell>
@@ -1298,14 +1322,18 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
                       <TableRow className="bg-muted/50 font-bold border-t-2">
                         <TableCell>
                           סה"כ
-                          {dashboardCampaignType === 'ecommerce' && summaryByPlatform['google_analytics'] && (
+                          {dashboardCampaignType === 'ecommerce' && showAnalyticsCards && summaryByPlatform['google_analytics'] && (
                             <span className="text-xs font-normal text-muted-foreground block">הכנסות מ-Analytics / הוצאות פרסום</span>
                           )}
                         </TableCell>
                         <TableCell>{formatCurrency(totalSummary.spend)}</TableCell>
                         <TableCell>{formatNumber(totalSummary.impressions)}</TableCell>
-                        <TableCell>{formatNumber(totalSummary.analyticsSessions)}</TableCell>
-                        <TableCell>{formatNumber(totalSummary.analyticsUsers)}</TableCell>
+                        {showAnalyticsCards && (
+                          <>
+                            <TableCell>{formatNumber(totalSummary.analyticsSessions)}</TableCell>
+                            <TableCell>{formatNumber(totalSummary.analyticsUsers)}</TableCell>
+                          </>
+                        )}
                         {dashboardCampaignType === 'ecommerce' ? (
                           <>
                             <TableCell>{formatNumber(totalSummary.analyticsAddToCart)}</TableCell>
@@ -1327,9 +1355,11 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
                     </TableBody>
                   </Table>
                 </div>
-                <p className="text-xs text-muted-foreground mt-3 px-1">
-                  * נתוני רכישות וערך רכישות של פייסבוק מבוססים על דיווח פייסבוק (כולל ייחוס צפייה וחלון 7 ימים), ועשויים להיות גבוהים מנתוני Analytics בשל ספירה כפולה בין קמפיינים. ה-ROAS הכללי בשורת הסה"כ מחושב לפי הכנסות Analytics בלבד.
-                </p>
+                {dashboardCampaignType === 'ecommerce' && showAnalyticsCards && (
+                  <p className="text-xs text-muted-foreground mt-3 px-1">
+                    * נתוני רכישות וערך רכישות של פייסבוק מבוססים על דיווח פייסבוק (כולל ייחוס צפייה וחלון 7 ימים), ועשויים להיות גבוהים מנתוני Analytics בשל ספירה כפולה בין קמפיינים. ה-ROAS הכללי בשורת הסה"כ מחושב לפי הכנסות Analytics בלבד.
+                  </p>
+                )}
               </CardContent>
             </Card>
           )}
