@@ -44,6 +44,7 @@ const LeadIntegrations = lazy(() => import("./pages/LeadIntegrations"));
 const Tenants = lazy(() => import("./pages/Tenants"));
 const Automations = lazy(() => import("./pages/Automations"));
 const MarketingDepartment = lazy(() => import("./pages/MarketingDepartment"));
+const CampaignAlerts = lazy(() => import("./pages/CampaignAlerts"));
 const Products = lazy(() => import("./pages/Products"));
 const AccountingIntegrations = lazy(() => import("./pages/AccountingIntegrations"));
 const AccountingSettings = lazy(() => import("./pages/AccountingSettings"));
@@ -186,6 +187,7 @@ const App = () => (
                   <Route path="/t/:tenantSlug/visual-workspace" element={<ProtectedRoute><AppLayout><VisualWorkspace /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/marketing" element={<ProtectedRoute><MarketingDepartment /></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/marketing/:clientId" element={<ProtectedRoute><MarketingDepartment /></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/campaign-alerts" element={<ProtectedRoute><AppLayout><CampaignAlerts /></AppLayout></ProtectedRoute>} />
 
                   <Route path="/t/:tenantSlug/automations/flow/:automationId" element={<ProtectedRoute requiredPermission="automations"><AutomationFlow /></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/products" element={<ProtectedRoute requiredPermission="leads"><AppLayout><Products /></AppLayout></ProtectedRoute>} />
