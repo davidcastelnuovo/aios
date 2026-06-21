@@ -12,6 +12,8 @@ const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!
 const MAX_EXECUTION_TIME_MS = 240_000 // 240s, leave 60s buffer before 300s wall clock
 
 import { requireAuth } from "../_shared/security.ts";
+import { sendCarmenReplyViaActionStep, findCarmenSessionAutomation } from "../_shared/carmen.ts";
+
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -175,7 +177,11 @@ Deno.serve(async (req) => {
       (result.tools_used?.length >= 20 && !output.includes('סיימתי') && !output.includes('הושלם'))
 
     // Build updated checkpoint
-    const updatedCheckpoint = {
+    // Preserve `notify` (set by spawnSubagent on the initial result row) so we
+    // can dispatch the final output back to the originating WhatsApp chat once
+    // the subagent finishes — without this, every per-run update overwrites it.
+    const preservedNotify = (checkpoint as any)?.notify || (task.result as any)?.notify || null
+    const updatedCheckpoint: any = {
       conversation_history: [
         ...previousHistory,
         { role: 'user', content: commandText },
@@ -187,6 +193,7 @@ Deno.serve(async (req) => {
       last_output: output,
       execution_time_ms: elapsed,
     }
+    if (preservedNotify) updatedCheckpoint.notify = preservedNotify
 
     if (isIncomplete && runCount < 10) {
       // Save checkpoint and self-invoke to continue
@@ -220,6 +227,43 @@ Deno.serve(async (req) => {
       },
       completed_at: new Date().toISOString(),
     }).eq('id', task_id)
+
+    // Push the final output back to the user's WhatsApp chat if this subagent
+    // was spawned from a WA conversation. Best-effort — failures are logged
+    // but never fail the task.
+    if (preservedNotify && preservedNotify.surface === 'whatsapp' && output) {
+      try {
+        let automationId: string | null = preservedNotify.automation_id || null
+        if (!automationId) {
+          const auto = await findCarmenSessionAutomation(
+            supabase,
+            preservedNotify.tenant_id,
+            null,
+            { isGroup: !!preservedNotify.is_group, chatId: preservedNotify.chat_id, phoneNumber: preservedNotify.phone_number },
+          )
+          automationId = auto?.id || null
+        }
+        if (automationId) {
+          const trimmed = output.length > 1500 ? output.slice(0, 1497) + '…' : output
+          const ok = await sendCarmenReplyViaActionStep({
+            supabase,
+            automationId,
+            tenantId: preservedNotify.tenant_id,
+            connectionUserId: preservedNotify.connection_user_id,
+            chatId: preservedNotify.chat_id,
+            phoneNumber: preservedNotify.phone_number || '',
+            isGroup: !!preservedNotify.is_group,
+            message: trimmed,
+          })
+          console.log(`[run-agent-task] WA notify dispatched=${ok} for task ${task_id}`)
+        } else {
+          console.warn(`[run-agent-task] No automation found for WA notify on task ${task_id}`)
+        }
+      } catch (e: any) {
+        console.error(`[run-agent-task] WA notify failed for task ${task_id}:`, e?.message)
+      }
+    }
+
 
     return new Response(JSON.stringify({
       success: true,

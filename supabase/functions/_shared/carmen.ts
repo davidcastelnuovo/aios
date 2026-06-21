@@ -409,6 +409,16 @@ export async function sendCarmenReplyViaActionStep(args: {
   }
 }
 
+export interface CarmenWaNotify {
+  surface: 'whatsapp';
+  tenant_id: string;
+  automation_id: string | null;
+  connection_user_id: string;
+  chat_id: string;
+  phone_number: string | null;
+  is_group: boolean;
+}
+
 export async function runCarmenAI(
   supabase: any,
   agentId: string,
@@ -417,6 +427,7 @@ export async function runCarmenAI(
   conversationHistory: any[],
   senderPhone?: string | null,
   senderName?: string | null,
+  waNotify?: CarmenWaNotify | null,
 ): Promise<string> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -439,7 +450,10 @@ export async function runCarmenAI(
     tenant_id: tenantId,
     user_name: senderName || 'WhatsApp',
     lead_data: senderPhone ? { phone: senderPhone } : undefined,
+    surface: 'whatsapp',
+    wa_notify: waNotify || null,
   });
+
 
   // Try once; on hard failure (network error, non-2xx, or empty output) retry exactly
   // once after a 1s delay. If the retry also fails, throw — the caller will swallow
@@ -679,6 +693,20 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     return sendMessage(toChatId, message);
   };
 
+  // Built once and passed to runCarmenAI so any subagent that Carmen spawns
+  // during this turn can push its final result back into THIS WhatsApp chat
+  // (without it, "I'm working in the background" turns into a dead end).
+  const waNotify: CarmenWaNotify = {
+    surface: 'whatsapp',
+    tenant_id: tenantId,
+    automation_id: routingAutomationId,
+    connection_user_id: connectionUserId,
+    chat_id: chatId,
+    phone_number: phoneNumber || null,
+    is_group: isGroup,
+  };
+
+
 
 
 
@@ -795,8 +823,9 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
       const mergedHistory = buildCarmenMergedHistory(recentContext, history);
       carmenResponse = await runCarmenAI(
         supabase, activeSession.agent_id, tenantId, messageText, mergedHistory,
-        effectivePhone, effectiveName,
+        effectivePhone, effectiveName, waNotify,
       );
+
     } catch (err) {
       // AI failed twice (with retry). Stay silent — don't send "מצטערת..." to the user.
       // Keep the session warm so the next inbound message gets a fresh attempt.
@@ -958,8 +987,9 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     );
     const mergedHistory = buildCarmenMergedHistory(recentContext, []);
     const carmenResponse = await runCarmenAI(
-      supabase, agentId, tenantId, contentAfterKeyword, mergedHistory, phoneNumber, senderName,
+      supabase, agentId, tenantId, contentAfterKeyword, mergedHistory, phoneNumber, senderName, waNotify,
     );
+
     const history = [
       { role: 'user', content: contentAfterKeyword, timestamp: new Date().toISOString() },
       { role: 'assistant', content: carmenResponse, timestamp: new Date().toISOString() },
@@ -987,8 +1017,9 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     let opener: string;
     try {
       opener = await runCarmenAI(
-        supabase, agentId, tenantId, openerPrompt, mergedHistory, phoneNumber, senderName,
+        supabase, agentId, tenantId, openerPrompt, mergedHistory, phoneNumber, senderName, waNotify,
       );
+
     } catch (err) {
       console.error('[CARMEN] contextual opener failed, falling back:', err);
       opener = hasPriorContext

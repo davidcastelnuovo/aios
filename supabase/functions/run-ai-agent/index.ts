@@ -181,7 +181,7 @@ async function getAccessibleTenantIds(supabase: any, tenantId: string): Promise<
   }
 }
 
-async function executeTool(name: string, args: Record<string, any>, supabase: any, tenantId: string, userId: string, callerCampaignerId?: string | null, agentId?: string | null, callerRole?: string | null, callerManagedAgencyIds?: string[] | null, callerPhone?: string | null): Promise<any> {
+async function executeTool(name: string, args: Record<string, any>, supabase: any, tenantId: string, userId: string, callerCampaignerId?: string | null, agentId?: string | null, callerRole?: string | null, callerManagedAgencyIds?: string[] | null, callerPhone?: string | null, waNotify?: any): Promise<any> {
   const accessibleTenantIds = await getAccessibleTenantIds(supabase, tenantId)
   // Role-based scope: managers (owner/agency_owner/agency_manager/super_admin) bypass the campaigner narrow-scope.
   const isManagerRole = !!callerRole && ['owner','agency_owner','agency_manager','super_admin'].includes(callerRole)
@@ -1907,8 +1907,13 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         taskSkills: Array.isArray(args.task_skills) ? args.task_skills : undefined,
         priority: typeof args.priority === 'number' ? args.priority : undefined,
         createdBy: userId !== 'system' ? userId : null,
+        // When the caller is on WhatsApp, propagate the chat target so the
+        // subagent can deliver its final result back to the same WA chat
+        // instead of dying silently.
+        notify: waNotify && waNotify.surface === 'whatsapp' ? waNotify : null,
       })
     }
+
     case 'get_subagent_result': {
       if (!args.sub_task_id) throw new Error('sub_task_id is required')
       return await getSubagentResult(supabase, tenantId, args.sub_task_id)
@@ -1933,7 +1938,7 @@ type Emit = ((obj: any) => void) | undefined
 
 async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Promise<Response> {
   try {
-    const { agent_id: bodyAgentId, command_text, temperature, automation_id, user_name, lead_data, tenant_id, user_id, task_skills, task_mode, conversation_history } = bodyJson
+    const { agent_id: bodyAgentId, command_text, temperature, automation_id, user_name, lead_data, tenant_id, user_id, task_skills, task_mode, conversation_history, wa_notify } = bodyJson
     console.log(`[AGENT] Starting run: agent=${bodyAgentId}, command="${command_text?.substring(0, 80)}", surface=${surface}, stream=${!!emit}`)
 
     if (!command_text) throw new Error('Missing command_text')
@@ -2504,23 +2509,23 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     const userAskedGithubAgent = /\b(github|גיטהאב|גיט\s*האב|שגיאת\s*קוד|תמיכה\s*טכנית|אגנט\s*קוד)\b/i.test(cmd)
     if (surface === 'task') {
       filteredTools = filteredTools.filter(t => t.name !== 'delegate_to_subagent' && t.name !== 'delegate_to_manus' && t.name !== 'delegate_to_github_agent')
-    } else if (surface === 'aios') {
+    } else if (surface === 'aios' || surface === 'whatsapp') {
+      // Same default-direct rule for WhatsApp as for AIOS: hide delegation tools unless
+      // the user explicitly asked for background work. On WhatsApp this is even more
+      // important — there is no "window" the user can leave open to watch progress, and
+      // until subagent results are pushed back to WA, claiming "I'm working in the
+      // background" leaves the user with nothing.
       if (!userAskedBackground) {
         filteredTools = filteredTools.filter(t => t.name !== 'delegate_to_subagent')
       }
       if (!userAskedManus) {
-        // Manus is an external long-running agent that requires a working API key.
-        // Hide it by default on AIOS so Carmen uses internal tools (analyze_campaign_performance etc.)
-        // for ordinary requests like "בדיקת דופק" / "בדיקת דוח" instead of returning Unauthorized.
         filteredTools = filteredTools.filter(t => t.name !== 'delegate_to_manus')
       }
       if (!userAskedGithubAgent) {
-        // delegate_to_github_agent is for code/error analysis only. Hide it on AIOS for
-        // routine business requests like "בדיקת דופק / סיכום לקוחות / מצב קמפיינים" so
-        // Carmen does not pick it as a generic "background" fallback.
         filteredTools = filteredTools.filter(t => t.name !== 'delegate_to_github_agent')
       }
     }
+
 
 
     const toolsForAPI = filteredTools.map(t => ({ type: 'function', function: t }))
@@ -2619,7 +2624,7 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
           if (mcpExecutors.has(toolName)) {
             result = await mcpExecutors.get(toolName)!(toolArgs)
           } else {
-            result = await executeTool(toolName, toolArgs, supabase, resolvedTenantId, resolvedUserId, callerCampaignerId, agent_id, callerRole, callerManagedAgencyIds, callerPhone)
+            result = await executeTool(toolName, toolArgs, supabase, resolvedTenantId, resolvedUserId, callerCampaignerId, agent_id, callerRole, callerManagedAgencyIds, callerPhone, wa_notify)
           }
           console.log(`[AGENT] Tool ${toolName} OK`)
         } catch (e: any) {
