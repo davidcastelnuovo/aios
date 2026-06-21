@@ -25,6 +25,21 @@ export interface SpawnSubagentParams {
   taskSkills?: string[]
   priority?: number
   createdBy?: string | null
+  /**
+   * Optional delivery target for the subagent's final output.
+   * When set with surface='whatsapp', run-agent-task will POST the final
+   * result back into the originating WhatsApp chat on completion — so
+   * "אני עובדת על זה ברקע" doesn't become a dead end on the user's phone.
+   */
+  notify?: {
+    surface: 'whatsapp'
+    tenant_id: string
+    automation_id: string | null
+    connection_user_id: string
+    chat_id: string
+    phone_number: string | null
+    is_group: boolean
+  } | null
 }
 
 export interface SpawnSubagentResult {
@@ -61,7 +76,12 @@ export async function spawnSubagent(
     task_mode: params.taskMode || 'background',
     enabled: true,
     created_by: params.createdBy || null,
+    // Seed the result jsonb with the notify target so run-agent-task can find
+    // it on completion. Kept under `result` (not a new column) to avoid a
+    // schema migration; run-agent-task preserves `result.notify` across runs.
+    result: params.notify ? { notify: params.notify } : null,
   }
+
 
 
   const { data, error } = await supabase
