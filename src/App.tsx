@@ -44,6 +44,7 @@ const LeadIntegrations = lazy(() => import("./pages/LeadIntegrations"));
 const Tenants = lazy(() => import("./pages/Tenants"));
 const Automations = lazy(() => import("./pages/Automations"));
 const MarketingDepartment = lazy(() => import("./pages/MarketingDepartment"));
+const CampaignAlerts = lazy(() => import("./pages/CampaignAlerts"));
 const Products = lazy(() => import("./pages/Products"));
 const AccountingIntegrations = lazy(() => import("./pages/AccountingIntegrations"));
 const AccountingSettings = lazy(() => import("./pages/AccountingSettings"));
