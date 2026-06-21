@@ -1017,8 +1017,9 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     let opener: string;
     try {
       opener = await runCarmenAI(
-        supabase, agentId, tenantId, openerPrompt, mergedHistory, phoneNumber, senderName,
+        supabase, agentId, tenantId, openerPrompt, mergedHistory, phoneNumber, senderName, waNotify,
       );
+
     } catch (err) {
       console.error('[CARMEN] contextual opener failed, falling back:', err);
       opener = hasPriorContext
