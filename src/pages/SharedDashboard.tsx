@@ -252,7 +252,8 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
   const hasVisibleAnalyticsData = useMemo(() => {
     return records.some((record: any) => {
       const source = record._source || '';
-      return isAnalyticsPlatform(source) && hasMeaningfulAnalyticsMetrics(record.data || {});
+      const recordData = record.data || {};
+      return isAnalyticsPlatform(source) && recordData.report_type === 'daily' && hasMeaningfulAnalyticsMetrics(recordData);
     });
   }, [records]);
 
@@ -657,7 +658,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
   }
 
   const dashboard = data.dashboard;
-  const showAnalyticsCards = (platformFilter === 'all' || platformFilter === 'google_analytics') && hasVisibleAnalyticsData;
+  const showAnalyticsCards = (platformFilter === 'all' || platformFilter === 'google_analytics') && hasVisibleAnalyticsData && totalSummary.analyticsSessions > 0;
   const showAdsCards = platformFilter === 'all' || platformFilter === 'facebook' || platformFilter === 'google_ads';
 
   const isSnapshotReady = !isLoading && !!data?.dashboard && Array.isArray(tables);
