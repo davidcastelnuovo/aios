@@ -199,6 +199,49 @@ export function AppSidebar() {
     dbMenuItems.filter(m => m.custom_label).map(m => [m.menu_key, m.custom_label!])
   );
 
+  // Apply Visual-Workspace overrides (tab/section labels + module reassignment)
+  const overlay = computeSidebarOverlay(dbMenuItems);
+  const effectiveTabs: MenuTab[] = BASE_MENU_TABS.map(tab => ({
+    ...tab,
+    label: overlay.tabLabels.get(tab.id) || tab.label,
+    sections: tab.sections.map(section => ({
+      ...section,
+      label: overlay.sectionLabels.get(`${tab.id}:${section.label}`) || section.label,
+      // Drop modules that have been reassigned elsewhere via overlay
+      items: section.items.filter(item => {
+        const home = overlay.moduleHome.get(item.key);
+        return !home || (home.tabId === tab.id && home.sectionLabel === section.label);
+      }),
+    })),
+  }));
+  // Insert reassigned modules into their target section
+  for (const [moduleKey, target] of overlay.moduleHome) {
+    // Find original module
+    let original: MenuSection["items"][number] | undefined;
+    for (const tab of BASE_MENU_TABS) {
+      for (const sec of tab.sections) {
+        const m = sec.items.find(i => i.key === moduleKey);
+        if (m) { original = m; break; }
+      }
+      if (original) break;
+    }
+    if (!original) continue;
+    const targetTab = effectiveTabs.find(t => t.id === target.tabId);
+    if (!targetTab) continue;
+    let targetSection = targetTab.sections.find(s =>
+      s.label === target.sectionLabel ||
+      (overlay.sectionLabels.get(`${target.tabId}:${target.sectionLabel}`) === s.label)
+    );
+    if (!targetSection) {
+      targetSection = { label: target.sectionLabel, items: [] };
+      targetTab.sections.push(targetSection);
+    }
+    if (!targetSection.items.some(i => i.key === moduleKey)) {
+      targetSection.items.push(original);
+    }
+  }
+
+
   const { data: userTenants, isLoading: isLoadingTenants } = useQuery({
     queryKey: ["user-tenants", userId],
     queryFn: async () => {
