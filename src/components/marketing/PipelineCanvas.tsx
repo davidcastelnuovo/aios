@@ -3,8 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import {
   ReactFlow,
   Background,
-  Controls,
-  MiniMap,
   type Node,
   type Edge,
   Handle,
@@ -183,8 +181,6 @@ export function PipelineCanvas({ pipelineId, tenantId, clientId }: Props) {
         proOptions={{ hideAttribution: true }}
       >
         <Background />
-        <Controls />
-        <MiniMap pannable zoomable />
       </ReactFlow>
 
       <StageConfigDialog
