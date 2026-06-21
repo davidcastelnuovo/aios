@@ -43,8 +43,7 @@ const SalesDashboard = lazy(() => import("./pages/SalesDashboard"));
 const LeadIntegrations = lazy(() => import("./pages/LeadIntegrations"));
 const Tenants = lazy(() => import("./pages/Tenants"));
 const Automations = lazy(() => import("./pages/Automations"));
-const CampaignAlerts = lazy(() => import("./pages/CampaignAlerts"));
-const SocialPublisher = lazy(() => import("./pages/SocialPublisher"));
+const MarketingDepartment = lazy(() => import("./pages/MarketingDepartment"));
 const Products = lazy(() => import("./pages/Products"));
 const AccountingIntegrations = lazy(() => import("./pages/AccountingIntegrations"));
 const AccountingSettings = lazy(() => import("./pages/AccountingSettings"));
@@ -91,12 +90,12 @@ const VisualWorkspace = lazy(() => import("./pages/VisualWorkspace"));
 const AgentTasksPage = lazy(() => import("./pages/AgentTasksPage"));
 const SharedDashboard = lazy(() => import("./pages/SharedDashboard"));
 const SharedTable = lazy(() => import("./pages/SharedTable"));
-const AiDetection = lazy(() => import("./pages/AiDetection"));
+
 const TelephonySettings = lazy(() => import("./pages/TelephonySettings"));
 const MaskyooSettings = lazy(() => import("./pages/MaskyooSettings"));
 const TelegramSettings = lazy(() => import("./pages/TelegramSettings"));
 const GithubAgent = lazy(() => import("./pages/GithubAgent"));
-const SocialDashboard = lazy(() => import("./pages/SocialDashboard"));
+
 const WordPressSettings = lazy(() => import("./pages/WordPressSettings"));
 const LandingPageSubmissions = lazy(() => import("./pages/LandingPageSubmissions"));
 const UnifiedSettings = lazy(() => import("./pages/UnifiedSettings"));
@@ -185,8 +184,9 @@ const App = () => (
                   <Route path="/t/:tenantSlug/automations" element={<ProtectedRoute requiredPermission="automations"><AppLayout><Automations /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/carmen-insights" element={<ProtectedRoute><AppLayout><CarmenInsights /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/visual-workspace" element={<ProtectedRoute><AppLayout><VisualWorkspace /></AppLayout></ProtectedRoute>} />
-                  <Route path="/t/:tenantSlug/campaign-alerts" element={<ProtectedRoute><AppLayout><CampaignAlerts /></AppLayout></ProtectedRoute>} />
-                  <Route path="/t/:tenantSlug/social-publisher" element={<ProtectedRoute><AppLayout><SocialPublisher /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/marketing" element={<ProtectedRoute><MarketingDepartment /></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/marketing/:clientId" element={<ProtectedRoute><MarketingDepartment /></ProtectedRoute>} />
+
                   <Route path="/t/:tenantSlug/automations/flow/:automationId" element={<ProtectedRoute requiredPermission="automations"><AutomationFlow /></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/products" element={<ProtectedRoute requiredPermission="leads"><AppLayout><Products /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/branding" element={<ProtectedRoute requiredPermission="branding"><AppLayout><Branding /></AppLayout></ProtectedRoute>} />
@@ -231,7 +231,7 @@ const App = () => (
                   <Route path="/t/:tenantSlug/manus-tasks" element={<ProtectedRoute><AppLayout><ManusTasksPage /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/agents" element={<ProtectedRoute><AppLayout><AgentHub /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/agent-tasks" element={<ProtectedRoute><AppLayout><AgentTasksPage /></AppLayout></ProtectedRoute>} />
-                  <Route path="/t/:tenantSlug/ai-detection" element={<ProtectedRoute><AppLayout><AiDetection /></AppLayout></ProtectedRoute>} />
+                  
                   <Route path="/t/:tenantSlug/github-agent" element={<ProtectedRoute><AppLayout><GithubAgent /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/telephony-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><TelephonySettings /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/maskyoo-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><MaskyooSettings /></AppLayout></ProtectedRoute>} />
@@ -240,9 +240,6 @@ const App = () => (
                   <Route path="/t/:tenantSlug/unified-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><UnifiedSettings /></AppLayout></ProtectedRoute>} />
                   <Route path="/unified-callback" element={<Suspense fallback={<div />}><UnifiedCallback /></Suspense>} />
                   <Route path="/t/:tenantSlug/unified-callback" element={<Suspense fallback={<div />}><UnifiedCallback /></Suspense>} />
-                  <Route path="/t/:tenantSlug/social-media" element={<ProtectedRoute><AppLayout><SocialDashboard /></AppLayout></ProtectedRoute>} />
-                  <Route path="/t/:tenantSlug/social-gantt" element={<ProtectedRoute><AppLayout><SocialDashboard /></AppLayout></ProtectedRoute>} />
-                  <Route path="/t/:tenantSlug/social" element={<ProtectedRoute><AppLayout><SocialDashboard /></AppLayout></ProtectedRoute>} />
                    
                    {/* Public signing page */}
                   <Route path="/sign/:token" element={<SignDocument />} />

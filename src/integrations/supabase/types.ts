@@ -5231,6 +5231,227 @@ export type Database = {
           },
         ]
       }
+      marketing_item_transitions: {
+        Row: {
+          created_at: string
+          from_stage_id: string | null
+          id: string
+          item_id: string
+          notes: string | null
+          tenant_id: string
+          to_stage_id: string | null
+          trigger_type: string
+          triggered_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          from_stage_id?: string | null
+          id?: string
+          item_id: string
+          notes?: string | null
+          tenant_id: string
+          to_stage_id?: string | null
+          trigger_type?: string
+          triggered_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          from_stage_id?: string | null
+          id?: string
+          item_id?: string
+          notes?: string | null
+          tenant_id?: string
+          to_stage_id?: string | null
+          trigger_type?: string
+          triggered_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketing_item_transitions_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_work_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marketing_pipeline_stages: {
+        Row: {
+          agent_id: string | null
+          approval_mode: Database["public"]["Enums"]["marketing_approval_mode"]
+          configuration: Json
+          created_at: string
+          id: string
+          name: string
+          parent_stage_id: string | null
+          pipeline_id: string
+          position_x: number
+          position_y: number
+          sort_order: number
+          stage_type: Database["public"]["Enums"]["marketing_stage_type"]
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          agent_id?: string | null
+          approval_mode?: Database["public"]["Enums"]["marketing_approval_mode"]
+          configuration?: Json
+          created_at?: string
+          id?: string
+          name: string
+          parent_stage_id?: string | null
+          pipeline_id: string
+          position_x?: number
+          position_y?: number
+          sort_order?: number
+          stage_type: Database["public"]["Enums"]["marketing_stage_type"]
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string | null
+          approval_mode?: Database["public"]["Enums"]["marketing_approval_mode"]
+          configuration?: Json
+          created_at?: string
+          id?: string
+          name?: string
+          parent_stage_id?: string | null
+          pipeline_id?: string
+          position_x?: number
+          position_y?: number
+          sort_order?: number
+          stage_type?: Database["public"]["Enums"]["marketing_stage_type"]
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketing_pipeline_stages_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketing_pipeline_stages_parent_stage_id_fkey"
+            columns: ["parent_stage_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_pipeline_stages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketing_pipeline_stages_pipeline_id_fkey"
+            columns: ["pipeline_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_pipelines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marketing_pipelines: {
+        Row: {
+          client_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketing_pipelines_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marketing_work_items: {
+        Row: {
+          client_id: string
+          created_at: string
+          created_by: string | null
+          current_stage_id: string | null
+          id: string
+          links: Json
+          payload: Json
+          pipeline_id: string
+          scheduled_date: string | null
+          status: Database["public"]["Enums"]["marketing_item_status"]
+          target_channel: string | null
+          tenant_id: string
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          current_stage_id?: string | null
+          id?: string
+          links?: Json
+          payload?: Json
+          pipeline_id: string
+          scheduled_date?: string | null
+          status?: Database["public"]["Enums"]["marketing_item_status"]
+          target_channel?: string | null
+          tenant_id: string
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          current_stage_id?: string | null
+          id?: string
+          links?: Json
+          payload?: Json
+          pipeline_id?: string
+          scheduled_date?: string | null
+          status?: Database["public"]["Enums"]["marketing_item_status"]
+          target_channel?: string | null
+          tenant_id?: string
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketing_work_items_current_stage_id_fkey"
+            columns: ["current_stage_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_pipeline_stages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketing_work_items_pipeline_id_fkey"
+            columns: ["pipeline_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_pipelines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       maskyoo_manual_overrides: {
         Row: {
           answered_count: number | null
@@ -10282,6 +10503,23 @@ export type Database = {
         | "transferred_to_onboarding"
         | "meeting_scheduled"
         | "negotiation"
+      marketing_approval_mode: "manual" | "auto" | "hybrid"
+      marketing_item_status:
+        | "draft"
+        | "in_progress"
+        | "waiting_approval"
+        | "approved"
+        | "published"
+        | "failed"
+        | "archived"
+      marketing_stage_type:
+        | "strategy"
+        | "copy"
+        | "creative"
+        | "target_paid"
+        | "target_seo"
+        | "target_organic"
+        | "measurement"
       onboarding_status:
         | "research_meeting"
         | "receiving_access"
@@ -10530,6 +10768,25 @@ export const Constants = {
         "transferred_to_onboarding",
         "meeting_scheduled",
         "negotiation",
+      ],
+      marketing_approval_mode: ["manual", "auto", "hybrid"],
+      marketing_item_status: [
+        "draft",
+        "in_progress",
+        "waiting_approval",
+        "approved",
+        "published",
+        "failed",
+        "archived",
+      ],
+      marketing_stage_type: [
+        "strategy",
+        "copy",
+        "creative",
+        "target_paid",
+        "target_seo",
+        "target_organic",
+        "measurement",
       ],
       onboarding_status: [
         "research_meeting",

@@ -1,62 +1,220 @@
-# Visual Workspace → Live Sitemap (synced with menu)
+# מודול "מחלקת שיווק" — איפיון מלא
 
-Turn the Visual Workspace into a hierarchical tree where each card is a module and each branch is a category, mirroring the sidebar menu. Editing the tree visually edits `menu_items` — so the sidebar updates instantly.
+מודול אחד מאוחד שמחליף את: **ניהול סושיאל**, **רשתות חברתיות**, **התראות קמפיינים**, **ניטור נראות AI**.
+(נשארים בנפרד: דשבורדים ודוחות.)
 
-## What you'll see
+---
 
-- Compact module cards (≈ 1/3 current size) — icon + label only, hover for description.
-- One column per top-level category (e.g. ניהול, מכירות, תקשורת, אוטומציה ו-AI, הגדרות, אינטגרציות).
-- Connector lines from each category header down to its modules (SVG).
-- Sub-modules (e.g. Social Gantt under Social Media) connect to their parent module with a secondary line.
-- Two extra auto-generated categories at the end:
-  - **"בלי דרך ישירה"** — modules whose route exists in the app but isn't reachable from any visible menu item (e.g. `/agent-tasks`, `/landing-page-submissions`, `/home`).
-  - **"לא בשימוש / מוסתר"** — menu items with `is_visible=false`, plus app routes with no `menu_items` row at all.
+## 1. החוויה (UX)
 
-## Editing actions (all sync to `menu_items`)
+### כניסה
+- מסך מלא (`h-screen overflow-hidden`) — כמו `AutomationFlow`. ללא header/sidebar שמכרסם.
+- שלב ראשון: **בורר לקוח** (Combobox עליון). הבחירה נשמרת ב-URL: `/t/:slug/marketing/:clientId`.
+- מציג למעלה ביישור ימין סטטוס חיבורים של הלקוח: Meta Ads, Google Ads, FB/IG Pages, אתר WordPress, GSC. אינדיקציה ירוק/אדום + קישור מהיר לחיבור חסר.
 
-1. **Drag a module card** between categories → updates `parent_menu_key` + `sort_order`.
-2. **Drag a module under another module** → makes it a sub-module (parent becomes that module's key).
-3. **Double-click a category title** → inline rename → updates that category row's `custom_label`. Sidebar reflects the new label immediately (sidebar already reads `custom_label || original_label`).
-4. **+ category button** → creates a new `menu_items` row with `route='#'` and no parent (becomes a sidebar group).
-5. **Toggle visibility** on a card (eye icon) → flips `is_visible`. Hidden cards move to "לא בשימוש".
-6. **Delete category** → only allowed when empty; otherwise prompts to move children first.
+### תצוגה ראשית: Pipeline ויזואלי
+- שני מצבים בלשוניות:
+  1. **תצוגת פס יצור (Flow)** — קנבס `@xyflow/react` במסך מלא, אופקי משמאל לימין (RTL aware).
+  2. **תצוגת לוח תוכן (Calendar)** — Gantt חודשי קיים (`SocialGanttVisualView`) מלמעלה למטה לכל הפריטים שעוברים בפס.
 
-All mutations use the existing `menu_items` RLS (already tenant-scoped), invalidate the `['menu-items', tenantId]` query, so `AppSidebar` re-renders without reload.
+### פס היצור (5 שלבים)
+```
+[אסטרטגיה] → [כתיבת תוכן] → [קריאייטיב] → [יעד: קמפיין / SEO-GEO / סושיאל אורגני] → [מדידה]
+```
+כל שלב = node בקנבס, עם:
+- שם השלב + אייקון
+- אייג'נט אחראי (תמונה+שם, נשלף מ-`ai_agents`)
+- מצב הרצה: Idle / Running / Waiting Approval / Done / Failed
+- מד התקדמות פריטים (X/Y פריטים בשלב)
+- כפתור "הרץ" (ידני) / "הגדרות"
+- קליק על node פותח Sheet מימין עם פרטי השלב + רשימת הפריטים + הגדרות אישור (ידני/אוטומטי).
 
-## Data model
+### יצירת פריט תוכן
+- כפתור "+ פריט תוכן חדש" יוצר `marketing_work_item` שמתחיל בשלב 1.
+- כל פריט = יחידה שזורמת בפס. אפשר לראות אותה כקלף קטן מתחת ל-node הנוכחי, או ב-Sheet הצדדי.
+- מעבר בין שלבים: ידני (כפתור), אוטומטי (אם מוגדר), או דרך אישור אייג'נט.
 
-No schema changes needed — `menu_items` already has `parent_menu_key`, `sort_order`, `custom_label`, `is_visible`, `route`. Categories are rows with `route='#'` and `parent_menu_key=null`.
+### Approval Gate לכל שלב
+לכל שלב יש toggle בהגדרות:
+- **ידני** — האייג'נט מציע, אדם מאשר.
+- **אוטומטי** — האייג'נט מבצע ועובר הלאה.
+- **היברידי** — אוטומטי תחת תנאי (למשל "ציון איכות > 80").
 
-To detect orphans:
-- Build the set of routes from `src/App.tsx` (static catalog, exported from a new `src/lib/appRoutes.ts`).
-- Compare against `menu_items.route`. Any app route not in `menu_items` → "לא בשימוש". Any `menu_items` row whose route can't be navigated to via a visible parent chain → "בלי דרך ישירה".
+### Visual Flow View נוסף
+כפתור "תצוגת פלואו מלא" — מציג את הפריט הבודד כדיאגרמה: כל הצמתים והקישורים, איפה הוא נתקע, מי האחראי.
 
-## Files to add / change
+---
 
-- `src/lib/appRoutes.ts` *(new)* — single source-of-truth list `{ key, route, label, icon, description }` for every real route in `App.tsx`, grouped by suggested category. Used by both the workspace and the orphan detector.
-- `src/visual-workspace/components/WorkspaceCanvas.tsx` *(rewrite)* — replaces the current "departments / customers / agents" canvas with the sitemap tree.
-- `src/visual-workspace/components/SitemapTree.tsx` *(new)* — renders columns, cards, SVG connector lines.
-- `src/visual-workspace/components/ModuleCard.tsx` *(new)* — compact draggable card.
-- `src/visual-workspace/components/CategoryColumn.tsx` *(new)* — droppable column with editable title + add/delete.
-- `src/visual-workspace/hooks/useSitemap.ts` *(new)* — joins `menu_items` + `appRoutes.ts`, returns `{ categories, modulesByParent, orphans, hidden }`, plus mutations: `renameCategory`, `moveModule`, `createCategory`, `deleteCategory`, `toggleVisibility`.
-- `src/visual-workspace/utils/connectors.ts` *(new)* — computes SVG paths between parent/child DOM rects via `ResizeObserver`.
+## 2. השלבים בפירוט
 
-Out of scope (not touched): existing `BusinessCore`, `DepartmentIsland`, `CustomerSheet`, `TaskSheet`, `AgentSheet` — left in place but no longer rendered by `WorkspaceCanvas`. Can be deleted in a follow-up.
+### שלב 1 — אסטרטגיה
+- **אייג'נט:** Strategy Agent (חדש; LLM מבוסס Gemini).
+- **קלט:** ברייף לקוח, יעדים, קהל יעד, מתחרים, לוח שנה (חגים/אירועים).
+- **פלט:** `strategy_brief` (JSONB): נושאי-על, פילרים, KPIs, לוח תוכן חודשי מומלץ.
+- **UI:** טופס בריף + תצוגה של הצעות אסטרטגיה לאישור.
 
-## Technical details
+### שלב 2 — כתיבת תוכן
+- **אייג'נט:** Copy Agent (קיים — `CopyAgent.tsx`, `social-gantt-generate`).
+- **בורר סוג תוכן:** פוסט סושיאל / מודעה / מאמר SEO / תיאור מוצר / מייל.
+- **פלט:** `copy_text` + 3 וריאציות.
 
-- Drag-and-drop: reuse `@dnd-kit` already in the project. Each `CategoryColumn` is a `useDroppable`; each `ModuleCard` is `useDraggable`. On drop, mutate `menu_items` with the new `parent_menu_key` and recompute `sort_order` for the destination column (gap-based ordering: `prev.sort_order + 1`, then resequence on collision).
-- Connector SVG sits in an absolutely-positioned overlay covering the canvas; lines re-draw on layout change via `ResizeObserver`. Lines use `stroke-muted-foreground/40`, 1.5px, with rounded curves.
-- Card size target: `w-36 h-12` with truncated label, icon 16px. Mobile: switches to single-column accordion (out of immediate scope but layout uses CSS grid `auto-fit minmax(180px,1fr)` so it degrades).
-- Sidebar sync: no change to `AppSidebar.tsx` needed — it already reads from `useMenuItems`. Verify by checking that `parent_menu_key` is honored when rendering groups (it is).
-- Permissions: only roles that can already edit menus (`owner`, `agency_owner`, `super_admin`) can mutate; viewers see read-only. Gate via `useUserRole`.
+### שלב 3 — קריאייטיב
+- **אייג'נט:** Creative Agent (קיים — `CreativeAgent.tsx`, `ai-generate-social-image`).
+- מייצר תמונה/וידאו לפי הקופי + פרומפט.
+- **פלט:** `creative_url` ב-Storage.
 
-## Open questions
+### שלב 4 — יעד (Branching)
+ה-node מתפצל לפי `target_channel` של הפריט:
+  - **קמפיין ממומן** — שולח ל-Meta/Google Ads (יוצר Draft Ad). מנטר דרך `fb-campaign-monitor` הקיים → שולף את `campaign_alerts` של הלקוח אל ה-node.
+  - **SEO-GEO** — מפרסם ל-WordPress (`social_media_wordpress_sites` קיים) + מסמן ב-GSC.
+  - **סושיאל אורגני** — `social-publish` ל-FB/IG/TikTok/LinkedIn (`social_pages` קיים).
 
-```text
-1. Categories: keep the 6 from the sitemap diagram (ניהול / מכירות / תקשורת / אוטומציה ו-AI / הגדרות / אינטגרציות) as the seed,
-   or read whatever currently exists in menu_items (today there are only `sales` and `management` — most modules sit at the root)?
-2. Should "אינטגרציות" become a real sidebar category too, or stay a virtual workspace-only grouping?
+### שלב 5 — מדידה
+- **אייג'נט:** Insights Agent.
+- מסכם ביצועים: התראות קמפיין, נראות AI (`ai_detection_scores`), אנגייג'מנט סושיאל, תנועה ל-WP.
+- **פלט:** סיכום שבועי לדשבורד הראשי + הזנה חזרה לשלב 1 (לולאת לימוד).
+
+---
+
+## 3. ארכיטקטורה טכנית
+
+### דאטה — טבלאות חדשות
+
+```sql
+-- צינור לכל לקוח (אחד לכל לקוח, ניתן להתאמה אישית)
+CREATE TABLE public.marketing_pipelines (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  client_id uuid NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
+  name text NOT NULL DEFAULT 'מחלקת שיווק',
+  is_active boolean DEFAULT true,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
+  UNIQUE(client_id)
+);
+
+-- שלבים (nodes) של הפיפליין
+CREATE TYPE marketing_stage_type AS ENUM
+  ('strategy','copy','creative','target_paid','target_seo','target_organic','measurement');
+
+CREATE TYPE marketing_approval_mode AS ENUM ('manual','auto','hybrid');
+
+CREATE TABLE public.marketing_pipeline_stages (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  pipeline_id uuid NOT NULL REFERENCES public.marketing_pipelines(id) ON DELETE CASCADE,
+  tenant_id uuid NOT NULL,
+  stage_type marketing_stage_type NOT NULL,
+  name text NOT NULL,
+  agent_id uuid REFERENCES public.ai_agents(id),
+  approval_mode marketing_approval_mode DEFAULT 'manual',
+  position_x int DEFAULT 0,
+  position_y int DEFAULT 0,
+  parent_stage_id uuid REFERENCES public.marketing_pipeline_stages(id),
+  configuration jsonb DEFAULT '{}'::jsonb,
+  created_at timestamptz DEFAULT now()
+);
+
+-- פריטי עבודה הזורמים בפיפליין
+CREATE TYPE marketing_item_status AS ENUM
+  ('draft','in_progress','waiting_approval','approved','published','failed','archived');
+
+CREATE TABLE public.marketing_work_items (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  pipeline_id uuid NOT NULL REFERENCES public.marketing_pipelines(id) ON DELETE CASCADE,
+  tenant_id uuid NOT NULL,
+  client_id uuid NOT NULL,
+  current_stage_id uuid REFERENCES public.marketing_pipeline_stages(id),
+  target_channel text, -- 'paid_ads' | 'seo_geo' | 'organic_social'
+  title text,
+  status marketing_item_status DEFAULT 'draft',
+  payload jsonb DEFAULT '{}'::jsonb, -- {brief, copy_text, creative_url, scheduled_date, ...}
+  links jsonb DEFAULT '{}'::jsonb,    -- {social_gantt_post_id, social_publication_id, campaign_id, wp_post_id}
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+
+-- לוג מעברי שלבים
+CREATE TABLE public.marketing_item_transitions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  item_id uuid NOT NULL REFERENCES public.marketing_work_items(id) ON DELETE CASCADE,
+  tenant_id uuid NOT NULL,
+  from_stage_id uuid,
+  to_stage_id uuid,
+  triggered_by uuid, -- user or agent
+  trigger_type text, -- 'manual' | 'auto' | 'agent'
+  notes text,
+  created_at timestamptz DEFAULT now()
+);
+```
+כל הטבלאות עם RLS לפי `tenant_id` + GRANTים מלאים — לפי תקן הפרויקט.
+
+### שימוש מחדש בקיים
+- **`social_gantt_posts`** — כל פריט אורגני יוצר/מתחבר לרשומה כאן (דרך `marketing_work_items.links.social_gantt_post_id`). הקלנדר בלשונית #2 של המודול נטען מ-`social_gantt_posts` כפי שהוא היום.
+- **`social_publications`, `social_pages`, `social-publish`** — שלב היעד האורגני.
+- **`social_media_wordpress_sites`** — שלב היעד SEO-GEO.
+- **`campaign_alerts`, `fb-campaign-monitor`** — מוצגים בתוך node "קמפיין ממומן" כ-feed חי.
+- **`ai_detection_*`** — מוצגים בתוך node "מדידה" + node צד "ניטור נראות AI".
+
+### Edge Functions
+- `marketing-pipeline-advance` — חדש; מקדם פריט שלב (קורא ל-CopyAgent/CreativeAgent/הפרסום הקיימים).
+- `marketing-strategy-agent` — חדש; שלב 1.
+- `marketing-insights-agent` — חדש; שלב 5.
+- שאר הפונקציות נשארות (`social-gantt-generate`, `ai-generate-social-image`, `social-publish`, `fb-campaign-monitor`, `ai-detection-scan`).
+
+### קומפוננטות חזית
+```
+src/pages/MarketingDepartment.tsx        (מסך מלא, בורר לקוח, לשוניות Flow/Calendar)
+src/components/marketing/
+  PipelineCanvas.tsx                     (@xyflow/react, מקביל ל-FlowEditor)
+  StageNode.tsx                          (custom node — אייג'נט+סטטוס+מד פריטים)
+  StageConfigSheet.tsx                   (Sheet מימין, מצב אישור, בחירת אייג'נט)
+  WorkItemList.tsx                       (כרטיסי פריטים תחת node נבחר)
+  WorkItemDetailPanel.tsx                (פרטי פריט יחיד + מעברים)
+  WorkItemFlowDialog.tsx                 (תצוגת פלואו של פריט בודד)
+  ClientConnectionsBar.tsx               (אינדיקציות חיבורים)
+  ClientSelector.tsx
+  agents/
+    StrategyPanel.tsx
+    CopyPanel.tsx        (עוטף CopyAgent הקיים)
+    CreativePanel.tsx    (עוטף CreativeAgent הקיים)
+    TargetPaidPanel.tsx  (משלב CampaignAlerts)
+    TargetSeoPanel.tsx
+    TargetOrganicPanel.tsx (משלב SocialPublisher)
+    InsightsPanel.tsx    (משלב AiDetection)
 ```
 
-I'll default to: **seed the missing categories into `menu_items` on first load** (so the sidebar gains them), and surface them as full categories in both places. Confirm in chat or the plan covers it.
+### ניתוב + תפריט
+- נתיב חדש: `/t/:slug/marketing` (ברירת מחדל: בורר לקוח), `/t/:slug/marketing/:clientId`.
+- `menuStructure.ts`: מוסיפים פריט אחד `marketing-department` תחת קטגוריית "שיווק".
+- מוחקים את 4 פריטי התפריט הישנים.
+
+---
+
+## 4. מחיקות
+
+לאחר שכל ה-import-ים מועברים אל המודול החדש, נמחקים:
+- `src/pages/SocialDashboard.tsx`, `src/pages/SocialPublisher.tsx`, `src/pages/CampaignAlerts.tsx`, `src/pages/AiDetection.tsx`
+- `src/components/social-gantt/*` (חוץ מ-CopyAgent/CreativeAgent שעוברים ל-`src/components/marketing/agents/`)
+- `src/components/ai-detection/*` (עוברים ל-`InsightsPanel`)
+- הנתיבים המתאימים ב-`App.tsx`
+- הפריטים המתאימים ב-`menuStructure.ts` ו-`AppSidebar.tsx`
+
+הטבלאות בדאטה **נשארות** — `social_gantt_posts`, `social_publications`, `social_pages`, `campaign_alerts`, `ai_detection_*` נדרשות למודול החדש.
+
+---
+
+## 5. תוכנית מימוש (סדר ביצוע)
+
+1. מיגרציה: 4 הטבלאות החדשות + RLS + GRANTs.
+2. עמוד `MarketingDepartment.tsx` עם בורר לקוח + שורת חיבורים + שלד 2 לשוניות.
+3. `PipelineCanvas.tsx` עם @xyflow/react ו-`StageNode` בסיסי (5 צמתים default).
+4. `StageConfigSheet` + מצבי אישור.
+5. עטיפת CopyAgent/CreativeAgent הקיימים בפאנלים החדשים.
+6. שלב יעד — שילוב SocialPublisher + CampaignAlerts + WordPress.
+7. שלב מדידה — שילוב AiDetection.
+8. Edge functions חדשים: strategy + advance + insights.
+9. תצוגת פלואו לפריט בודד (`WorkItemFlowDialog`).
+10. ניתוב + תפריט + מחיקת המודולים הישנים.
+11. seed: יצירת pipeline ברירת מחדל לכל לקוח קיים.
+
+זמן משוער למימוש מלא: ~6–8 צעדי build.

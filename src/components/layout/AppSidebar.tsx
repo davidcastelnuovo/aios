@@ -134,11 +134,9 @@ const modulePermissions: Record<string, string> = {
   campaigners: "campaigners",
   products: "products",
   // ── שיווק ואנליטיקס ─────────────────────────────────────────────────
-  "social-media": "social_media",
-  "social-gantt": "social_media",
+  marketing: "social_media",
   reports: "finance",
   "dynamic-tables": "dynamic_tables",
-  "ai-detection": "ai_detection",
   // ── ניהול ארגון ─────────────────────────────────────────────────────
   agencies: "agencies",
   suppliers: "suppliers",
@@ -146,8 +144,6 @@ const modulePermissions: Record<string, string> = {
   users: "users",
   // ── אוטומציה ו-AI ───────────────────────────────────────────────────
   automations: "automations",
-  "campaign-alerts": "automations",
-  "social-publisher": "social_media",
   agents: "agents",
   "carmen-insights": "agents",
   "visual-workspace": "agents",

@@ -103,9 +103,9 @@ export const MENU_TABS: MenuTab[] = [
     icon: Share2,
     sections: [
       {
-        label: "קמפיינים",
+        label: "מחלקת שיווק",
         items: [
-          { key: "social-media", label: "ניהול סושיאל", route: "/social-media", icon: Share2 },
+          { key: "marketing", label: "מחלקת שיווק", route: "/marketing", icon: Share2 },
           { key: "recordings", label: "הקלטות", route: "/recordings", icon: Cpu },
         ],
       },
@@ -113,7 +113,6 @@ export const MENU_TABS: MenuTab[] = [
         label: "אנליטיקס",
         items: [
           { key: "dynamic-tables", label: "דשבורדים ודוחות", route: "/dynamic-tables", icon: Table2 },
-          { key: "ai-detection", label: "ניטור נראות AI", route: "/ai-detection", icon: Bot },
         ],
       },
       {
@@ -157,8 +156,6 @@ export const MENU_TABS: MenuTab[] = [
         label: "אוטומציה ו-AI",
         items: [
           { key: "automations", label: "אוטומציות", route: "/automations", icon: Zap },
-          { key: "campaign-alerts", label: "התראות קמפיינים", route: "/campaign-alerts", icon: AlertTriangle },
-          { key: "social-publisher", label: "רשתות חברתיות", route: "/social-publisher", icon: Send },
           { key: "agents", label: "סוכני AI", route: "/agents", icon: Bot },
           { key: "carmen-insights", label: "למידה של כרמן", route: "/carmen-insights", icon: Brain },
           { key: "visual-workspace", label: "Visual Workspace", route: "/visual-workspace", icon: Sparkles },
@@ -182,13 +179,11 @@ export const MENU_TABS: MenuTab[] = [
  *  Drawn in workspace as connected to their parent via a secondary line.
  */
 export const SUB_MODULES: Array<MenuModule & { parentKey: string }> = [
-  { key: "social-gantt", parentKey: "social-media", label: "סושיאל גאנט", route: "/social-gantt", icon: CalendarRange },
-  { key: "social", parentKey: "social-media", label: "סושיאל", route: "/social", icon: Share2 },
   { key: "gmail-settings", parentKey: "gmail", label: "הגדרות Gmail", route: "/gmail-settings", icon: Settings },
   { key: "agent-tasks", parentKey: "agents", label: "משימות סוכן", route: "/agent-tasks", icon: CheckSquare },
   { key: "manus-tasks", parentKey: "agents", label: "Manus Tasks", route: "/manus-tasks", icon: CheckSquare },
   { key: "github-agent", parentKey: "agents", label: "GitHub Agent", route: "/github-agent", icon: Bot },
-  { key: "rank-tracking", parentKey: "ai-detection", label: "מעקב מיקומים", route: "/rank-tracking", icon: Target },
+  { key: "rank-tracking", parentKey: "marketing", label: "מעקב מיקומים", route: "/rank-tracking", icon: Target },
   { key: "site-analytics", parentKey: "dynamic-tables", label: "אנליטיקס אתרים", route: "/site-analytics", icon: BarChart3 },
   { key: "accounting-settings", parentKey: "accounting-integrations", label: "הגדרות הנה״ח", route: "/accounting-settings", icon: Settings },
 ];
