@@ -26,9 +26,6 @@ export function ClientConnectionsTab({ clientId, tenantId }: Props) {
   const [newPageId, setNewPageId] = useState("");
   const [newPageName, setNewPageName] = useState("");
 
-  const [newWpUrl, setNewWpUrl] = useState("");
-  const [newWpName, setNewWpName] = useState("");
-
   if (conns.isLoading || !conns.data) return <div className="p-4 text-sm text-muted-foreground">טוען חיבורים...</div>;
 
   const c = conns.data.client;
