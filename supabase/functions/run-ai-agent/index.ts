@@ -1929,8 +1929,10 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
 // ===========================
 import { requireAuth } from "../_shared/security.ts";
 
-// Surface for which the agent is currently invoked
-type Surface = 'whatsapp' | 'aios' | 'task'
+// Surface for which the agent is currently invoked.
+// 'internal_chat' = the in-app chat / dialog / AI Support page (same brain as AIOS,
+// but no dialog progress UI). Default for unspecified callers.
+type Surface = 'whatsapp' | 'aios' | 'task' | 'internal_chat'
 
 // Emit function used by the streaming wrapper to push SSE events to the client.
 // In non-streaming mode it's a no-op.
