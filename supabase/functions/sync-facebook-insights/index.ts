@@ -256,12 +256,30 @@ Deno.serve(async (req) => {
     // All lead action types to count.
     // Note: when the account uses a Custom Conversion as the "Result" (כמו בתמונה),
     // Facebook returns it as action_type like: offsite_conversion.custom.*
+    // Standard FB Pixel "intent" events that landing pages frequently use INSTEAD of
+    // the standard `Lead` event (every one of these means "user submitted info / asked
+    // to be contacted / scheduled / subscribed"). We treat them as leads.
+    const STANDARD_INTENT_LEAD_TYPES = [
+      'complete_registration',
+      'offsite_conversion.fb_pixel_complete_registration',
+      'omni_complete_registration',
+      'contact',
+      'offsite_conversion.fb_pixel_contact',
+      'submit_application',
+      'offsite_conversion.fb_pixel_submit_application',
+      'schedule',
+      'offsite_conversion.fb_pixel_schedule',
+      'subscribe',
+      'offsite_conversion.fb_pixel_subscribe',
+    ];
     const leadActionTypes = [
       'lead', // Aggregate lead count
-      'leadgen_grouped', // Facebook Lead Forms
+      'leadgen_grouped', 'leadgen.other', // Facebook Lead Forms
       'offsite_conversion.fb_pixel_lead', // Landing page leads (standard pixel event)
       'onsite_conversion.lead_grouped', // On-site leads
       'app_custom_event.fb_mobile_lead', // App leads
+      // Standard intent events (Complete Registration / Contact / Submit Application / Schedule / Subscribe)
+      ...STANDARD_INTENT_LEAD_TYPES,
       // WhatsApp / Messaging conversions
       'onsite_conversion.messaging_conversation_started_7d',
       'messaging_conversation_started_7d',
