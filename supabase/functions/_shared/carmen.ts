@@ -823,8 +823,9 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
       const mergedHistory = buildCarmenMergedHistory(recentContext, history);
       carmenResponse = await runCarmenAI(
         supabase, activeSession.agent_id, tenantId, messageText, mergedHistory,
-        effectivePhone, effectiveName,
+        effectivePhone, effectiveName, waNotify,
       );
+
     } catch (err) {
       // AI failed twice (with retry). Stay silent — don't send "מצטערת..." to the user.
       // Keep the session warm so the next inbound message gets a fresh attempt.
