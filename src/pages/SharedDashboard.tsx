@@ -925,7 +925,11 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
               revenue: acc.revenue + c.revenue,
             }), { impressions: 0, clicks: 0, spend: 0, addToCart: 0, purchases: 0, revenue: 0 });
             const totalRoas = totals.spend > 0 ? totals.revenue / totals.spend : 0;
-            const isEcom = totals.purchases > 0 || totals.revenue > 0 || totals.addToCart > 0;
+            // Drive ecom vs leads layout from the table type, not from data noise.
+            // FB Pixel emits add_to_cart events even for leads campaigns, which used to flip
+            // the whole table to ecom columns by accident.
+            const isEcom = campaignTypeByPlatform['facebook_ecommerce'] === 'ecommerce'
+              || campaignTypeByPlatform['facebook_insights'] === 'ecommerce';
 
             return (
               <Card>
