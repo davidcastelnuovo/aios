@@ -2038,6 +2038,52 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     const isManagerRoleCaller = !!callerRole && ['owner','agency_owner','agency_manager','super_admin'].includes(callerRole)
     const isTeamManagerCaller = callerRole === 'team_manager'
 
+
+    // ─── 2.7. Code-level instruction capture (cross-channel learning) ───
+    // Don't depend on the model deciding to call save_memory. Whenever the user
+    // says "תזכרי / מעכשיו / תמיד / אל תעשי / שמרי / תרשמי / remember / from now on",
+    // persist the instruction to ai_memory (category=instructions) and mirror it to
+    // agent_memory BEFORE we even call the model. This way the rule survives the
+    // current turn even if the model errors out, and it loads automatically into the
+    // memory block on every subsequent turn — across WhatsApp / internal chat / AIOS.
+    try {
+      const cmdRaw = String(command_text || '').trim()
+      const looksLikeInstruction = cmdRaw.length > 0 && cmdRaw.length < 800 && (
+        /(^|[\s,.!?])(תזכרי|זכרי|תזכור|שמרי|תרשמי|מעכשיו|מהיום והלאה|תמיד|לעולם|אל תעני|אל תעשי|אל תכתבי)([\s,.!?]|$)/.test(cmdRaw)
+        || /\b(remember|from now on|always|never)\b/i.test(cmdRaw)
+      )
+      if (looksLikeInstruction && resolvedTenantId) {
+        // Build a stable snake_case key from a short hash of the content.
+        const norm = cmdRaw.replace(/\s+/g, ' ').slice(0, 240)
+        let h = 0
+        for (let i = 0; i < norm.length; i++) h = ((h << 5) - h + norm.charCodeAt(i)) | 0
+        const keyBase = `instr_${Math.abs(h).toString(36)}`
+        await supabase.from('ai_memory').upsert({
+          tenant_id: resolvedTenantId,
+          user_id: callerUserId || resolvedUserId || 'system',
+          key: keyBase,
+          content: norm,
+          category: 'instructions',
+        }, { onConflict: 'user_id,tenant_id,category,key' })
+        // Mirror to Hermes FTS layer (agent_memory) so cross-conversation recall sees it.
+        try {
+          await saveAgentMemory({
+            supabase,
+            tenant_id: resolvedTenantId,
+            agent_id,
+            category: 'instructions',
+            title: keyBase,
+            summary: norm,
+            importance: 95,
+            metadata: { source: 'auto_instruction_capture', surface, key: keyBase },
+          })
+        } catch (_) { /* non-fatal */ }
+        console.log(`[AGENT] Auto-captured instruction (${surface}) → key=${keyBase}`)
+      }
+    } catch (e: any) {
+      console.error('[AGENT] auto-instruction capture failed:', e?.message)
+    }
+
     // 3. Build system prompt with full tenant context
     // Fetch tenant context, memory for Carmen and all agents
     const [tenantRes, agenciesRes, statsRes, memoryRes] = await Promise.all([
