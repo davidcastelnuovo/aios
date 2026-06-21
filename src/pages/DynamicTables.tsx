@@ -906,6 +906,15 @@ export default function DynamicTables() {
 
         {/* Dashboards Tab Content */}
         <TabsContent value="dashboards">
+          {/* Dashboard name search */}
+          <div className="mb-4 max-w-sm">
+            <Input
+              placeholder="חיפוש לפי שם דשבורד, לקוח או סוכנות..."
+              value={dashboardSearch}
+              onChange={(e) => setDashboardSearch(e.target.value)}
+              className="text-right"
+            />
+          </div>
           {dashboardsLoading ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {[1, 2, 3].map((i) => (
@@ -940,6 +949,14 @@ export default function DynamicTables() {
                     if (dashboard.agency_id && dashboard.agency_id !== selectedAgency) {
                       return false;
                     }
+                  }
+                  // Search by dashboard name, client name, or agency name
+                  if (dashboardSearch.trim()) {
+                    const search = dashboardSearch.trim().toLowerCase();
+                    const nameMatch = dashboard.name?.toLowerCase().includes(search);
+                    const clientMatch = dashboard.clients?.name?.toLowerCase().includes(search);
+                    const agencyMatch = dashboard.agencies?.name?.toLowerCase().includes(search);
+                    if (!nameMatch && !clientMatch && !agencyMatch) return false;
                   }
                   // Campaigners can only see dashboards linked to their assigned clients
                   if (isRestrictedClientViewer && assignedClientIds) {
