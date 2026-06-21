@@ -106,6 +106,7 @@ export const MENU_TABS: MenuTab[] = [
         label: "מחלקת שיווק",
         items: [
           { key: "marketing", label: "מחלקת שיווק", route: "/marketing", icon: Share2 },
+          { key: "campaign-alerts", label: "התראות קמפיינים", route: "/campaign-alerts", icon: AlertTriangle },
           { key: "recordings", label: "הקלטות", route: "/recordings", icon: Cpu },
         ],
       },
