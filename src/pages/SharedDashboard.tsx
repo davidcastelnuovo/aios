@@ -52,6 +52,12 @@ const getPurchasesFromData = (data: any) => Number(data?.purchases) || Number(da
 const getSessionsFromData = (data: any) => Number(data?.sessions) || 0;
 const getUsersFromData = (data: any) => Number(data?.users) || 0;
 const getAddToCartFromData = (data: any) => Number(data?.add_to_cart) || Number(data?.addToCarts) || 0;
+const hasMeaningfulAnalyticsMetrics = (data: any) =>
+  getSessionsFromData(data) > 0 ||
+  getUsersFromData(data) > 0 ||
+  getPurchasesFromData(data) > 0 ||
+  getRevenueFromData(data) > 0 ||
+  getAddToCartFromData(data) > 0;
 const isAdsPlatform = (s: string) => ['facebook_insights', 'facebook_ecommerce', 'google_ads'].includes(s);
 const isAnalyticsPlatform = (s: string) => s === 'google_analytics';
 const isFacebookPlatform = (s: string) => ['facebook_insights', 'facebook_ecommerce'].includes(s);
@@ -243,6 +249,13 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
       .sort((a, b) => a.month.localeCompare(b.month));
   }, [seoGaRecords]);
 
+  const hasVisibleAnalyticsData = useMemo(() => {
+    return records.some((record: any) => {
+      const source = record._source || '';
+      return isAnalyticsPlatform(source) && hasMeaningfulAnalyticsMetrics(record.data || {});
+    });
+  }, [records]);
+
   // Available platforms
   const availablePlatforms = useMemo(() => {
     const set = new Set<string>();
@@ -250,11 +263,11 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
     const platforms: PlatformFilter[] = [];
     if (set.has('facebook_insights') || set.has('facebook_ecommerce')) platforms.push('facebook');
     if (set.has('google_ads')) platforms.push('google_ads');
-    if (set.has('google_analytics')) platforms.push('google_analytics');
+    if (set.has('google_analytics') && hasVisibleAnalyticsData) platforms.push('google_analytics');
     if (hasWooCommerce) platforms.push('woocommerce');
     if (hasSeo) platforms.push('seo');
     return platforms;
-  }, [tables, hasWooCommerce, hasSeo]);
+  }, [tables, hasWooCommerce, hasSeo, hasVisibleAnalyticsData]);
 
   // Filter records: platform filter + only use 'daily' aggregate records for Analytics
   const filteredRecords = useMemo(() => {
@@ -262,19 +275,21 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
       const source = record._source || 'unknown';
       if (!matchesPlatformFilter(source, platformFilter)) return false;
       if (isAnalyticsPlatform(source)) {
+        if (!hasVisibleAnalyticsData) return false;
         const data = record.data || {};
         if (data.report_type !== 'daily') return false;
       }
       return true;
     });
-  }, [records, platformFilter]);
+  }, [records, platformFilter, hasVisibleAnalyticsData]);
 
   // All analytics records (unfiltered by report_type) for GoogleAnalyticsDashboard
   const allAnalyticsRecords = useMemo(() => {
+    if (!hasVisibleAnalyticsData) return [];
     return records
       .filter((r: any) => isAnalyticsPlatform(r._source || ''))
       .map((r: any) => ({ id: r.id, data: r.data }));
-  }, [records]);
+  }, [records, hasVisibleAnalyticsData]);
 
   const campaignTypeByPlatform: Record<string, CampaignType> = useMemo(() => {
     const map: Record<string, CampaignType> = {};
