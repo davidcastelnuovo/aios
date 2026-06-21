@@ -73,21 +73,6 @@ export function ClientConnectionsTab({ clientId, tenantId }: Props) {
     conns.invalidate();
   };
 
-  const addWp = async () => {
-    if (!newWpUrl) return;
-    const { error } = await supabase.from("social_media_wordpress_sites").insert({
-      client_id: clientId,
-      tenant_id: tenantId,
-      site_url: newWpUrl,
-      site_name: newWpName || null,
-    } as any);
-    if (error) return toast.error(error.message);
-    setNewWpUrl("");
-    setNewWpName("");
-    toast.success("האתר נוסף");
-    conns.invalidate();
-  };
-
   const removeWp = async (id: string) => {
     const { error } = await supabase.from("social_media_wordpress_sites").delete().eq("id", id);
     if (error) return toast.error(error.message);
