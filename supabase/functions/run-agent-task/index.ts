@@ -12,6 +12,8 @@ const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!
 const MAX_EXECUTION_TIME_MS = 240_000 // 240s, leave 60s buffer before 300s wall clock
 
 import { requireAuth } from "../_shared/security.ts";
+import { sendCarmenReplyViaActionStep, findCarmenSessionAutomation } from "../_shared/carmen.ts";
+
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
