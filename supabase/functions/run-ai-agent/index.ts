@@ -4,6 +4,7 @@ import { summarizeAndStoreAgentMemory, recallAgentMemory, recallAgentMemoryFTS, 
 import { buildCarmenV2SystemPrompt, shouldUseV2Prompt } from '../_shared/carmen-prompt-v2.ts'
 import { loadMcpTools } from '../_shared/mcp-tools.ts'
 import { spawnSubagent, getSubagentResult } from '../_shared/subagent.ts'
+import { buildSkillsBlock, resolveActiveSkills } from '../_shared/skills/registry.ts'
 
 
 const corsHeaders = {
@@ -136,6 +137,7 @@ const ALL_TOOLS = [
   { name: 'list_facebook_ad_accounts', description: 'שליפת כל חשבונות המודעות מפייסבוק. מחזיר id, name, status, currency.', parameters: { type: 'object', properties: {} } },
   { name: 'create_facebook_report_table', description: 'חיבור חשבון מודעות פייסבוק ללקוח — יוצר טבלת דוח facebook_insights ב-CRM', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח' }, ad_account_id: { type: 'string', description: 'מזהה חשבון מודעות פייסבוק (act_XXXXX)' }, ad_account_name: { type: 'string', description: 'שם חשבון המודעות' } }, required: ['client_id', 'ad_account_id', 'ad_account_name'] } },
   { name: 'list_unconnected_clients', description: 'רשימת לקוחות פעילים שאין להם עדיין טבלת דוח פייסבוק (facebook_insights) ב-CRM. שימושי לזיהוי לקוחות שצריכים חיבור.', parameters: { type: 'object', properties: {} } },
+  { name: 'check_ad_accounts_health', description: 'בדיקת תקינות חשבונות מודעות פייסבוק לכל הלקוחות בסקופ הקורא. מחזיר לכל לקוח: status (active/disabled/closed), has_spend_7d (האם יש הוצאה ב-7 ימים אחרונים), all_paused (האם כל הקמפיינים מושהים), token_ok (האם הטוקן תקף), flags (מערך של בעיות). השתמשי ב-pulse check ובכל בקשת "תקינות/מצב חשבונות מודעות".', parameters: { type: 'object', properties: { client_id: { type: 'string' }, agency_id: { type: 'string' } } } },
   // INTEGRATIONS MANAGEMENT
   { name: 'list_integrations', description: 'רשימת אינטגרציות מוגדרות בטננט (סוג, סטטוס פעיל, הגדרות בסיסיות). שימושי כשרוצים לדעת מה מחובר ומה לא.', parameters: { type: 'object', properties: { type: { type: 'string', description: 'סינון לפי סוג אינטגרציה' }, only_active: { type: 'boolean' } } } },
   { name: 'toggle_integration', description: 'הפעלה או השבתה של אינטגרציה לפי מזהה.', parameters: { type: 'object', properties: { integration_id: { type: 'string' }, is_active: { type: 'boolean' } }, required: ['integration_id', 'is_active'] } },
@@ -850,7 +852,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
 
       let clientsQuery = supabase
         .from('clients')
-        .select('id, name, agency_id, agencies(name)')
+        .select('id, name, agency_id, is_ecommerce, agencies(name)')
         .in('tenant_id', accessibleTenantIds)
         .in('status', ['active', 'onboarding'])
         .order('name')
@@ -929,6 +931,17 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         const cplOlder = leadsOlder > 0 ? spendOlder / leadsOlder : null
         const cplChangePct = cplOlder && cpl7 ? ((cpl7 - cplOlder) / cplOlder * 100) : null
 
+        // Ecommerce metrics (purchases / purchase_value / roas)
+        const purchases7 = sum(last7d, 'purchases')
+        const purchasesOlder = sum(older, 'purchases')
+        const purchaseValue7 = sum(last7d, 'purchase_value')
+        const purchaseValueOlder = sum(older, 'purchase_value')
+        const cpp7 = purchases7 > 0 ? spend7 / purchases7 : null
+        const cppOlder = purchasesOlder > 0 ? spendOlder / purchasesOlder : null
+        const cppChangePct = cppOlder && cpp7 ? ((cpp7 - cppOlder) / cppOlder * 100) : null
+        const roas7 = spend7 > 0 ? purchaseValue7 / spend7 : null
+        const profit7 = purchaseValue7 - spend7
+
         const updatedTimes = last30d.map((r: any) => r.data?.updated_time).filter((t: any) => t).sort().reverse()
         const lastCampaignUpdate = updatedTimes[0] || null
         const daysSinceLastCampaignTouch = lastCampaignUpdate
@@ -937,24 +950,44 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
 
         const lastDataDate = last30d.map((r: any) => r.data?.date).filter(Boolean).sort().reverse()[0] || null
 
+        const isEcom = !!client.is_ecommerce
+        const ecomAlert = isEcom
+          ? (roas7 !== null && roas7 < 1 ? '🔴 ROAS<1 הפסד'
+            : purchases7 === 0 && spend7 > 0 ? '🔴 אין רכישות'
+            : roas7 !== null && roas7 < 1.5 ? '🟠 ROAS נמוך'
+            : (cppChangePct !== null && cppChangePct > 25) ? '🟠 CPP עלה'
+            : '🟢 תקין')
+          : null
+
         synced_clients.push({
           client_id: client.id,
           client_name: client.name,
           agency_name: client.agencies?.name ?? null,
+          is_ecommerce: isEcom,
           spend_7d: Math.round(spend7 * 100) / 100,
           spend_30d: Math.round((spend7 + spendOlder) * 100) / 100,
           leads_7d: leads7,
           leads_30d: leads7 + leadsOlder,
           cpl_7d: cpl7 ? Math.round(cpl7 * 100) / 100 : null,
           cpl_30d_avg: cplOlder ? Math.round(cplOlder * 100) / 100 : null,
+          // Ecommerce metrics — present for all clients but the skill only uses them when is_ecommerce=true
+          purchases_7d: purchases7,
+          purchases_30d: purchases7 + purchasesOlder,
+          revenue_7d: Math.round(purchaseValue7 * 100) / 100,
+          revenue_30d: Math.round((purchaseValue7 + purchaseValueOlder) * 100) / 100,
+          cpp_7d: cpp7 ? Math.round(cpp7 * 100) / 100 : null,
+          cpp_change_pct: cppChangePct !== null ? Math.round(cppChangePct * 10) / 10 : null,
+          roas_7d: roas7 !== null ? Math.round(roas7 * 100) / 100 : null,
+          profit_7d: Math.round(profit7 * 100) / 100,
           spend_change_pct: spendChangePct !== null ? Math.round(spendChangePct * 10) / 10 : null,
           cpl_change_pct: cplChangePct !== null ? Math.round(cplChangePct * 10) / 10 : null,
           last_data_date: lastDataDate,
           last_campaign_update: lastCampaignUpdate,
           days_since_last_campaign_touch: daysSinceLastCampaignTouch,
-          alert: spendChangePct !== null && spendChangePct > 15 ? '🔴 התייקרות' : (cplChangePct !== null && cplChangePct > 20 ? '🟡 עלייה בעלות לליד' : '🟢 תקין'),
+          alert: isEcom ? ecomAlert : (spendChangePct !== null && spendChangePct > 15 ? '🔴 התייקרות' : (cplChangePct !== null && cplChangePct > 20 ? '🟡 עלייה בעלות לליד' : '🟢 תקין')),
         })
       }
+
 
       synced_clients.sort((a: any, b: any) => (b.spend_change_pct || 0) - (a.spend_change_pct || 0))
 
@@ -1714,6 +1747,155 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (error) throw error
       return { success: true, table_id: table.id, name: table.name, slug: table.slug, ad_account_id, client_name: client.name }
     }
+    case 'check_ad_accounts_health': {
+      // 1. Resolve client scope
+      let clientsQuery = supabase
+        .from('clients')
+        .select('id, name, agency_id, agencies(name)')
+        .in('tenant_id', accessibleTenantIds)
+        .in('status', ['active', 'onboarding'])
+        .order('name')
+      if (args.client_id) clientsQuery = clientsQuery.eq('id', args.client_id)
+      if (args.agency_id) clientsQuery = clientsQuery.eq('agency_id', args.agency_id)
+      const { data: scopeClients } = await clientsQuery
+      const clientIds = (scopeClients || []).map((c: any) => c.id)
+      if (clientIds.length === 0) return { count: 0, healthy: 0, unhealthy: [], note: 'no clients in scope' }
+
+      // 2. Find facebook_insights tables (which contain ad_account_id) for these clients
+      const { data: fbTables } = await supabase
+        .from('crm_tables')
+        .select('client_id, integration_settings')
+        .in('tenant_id', accessibleTenantIds)
+        .in('client_id', clientIds)
+        .eq('integration_type', 'facebook_insights')
+
+      const fbTableByClient = new Map<string, any>()
+      for (const t of (fbTables || [])) fbTableByClient.set(t.client_id, t.integration_settings)
+
+      // 3. Fetch Facebook access token (tenant integration)
+      let { data: integration } = await supabase
+        .from('tenant_integrations')
+        .select('api_key, shared_from_integration_id')
+        .in('tenant_id', accessibleTenantIds)
+        .in('integration_type', ['facebook', 'facebook_lead_ads'])
+        .eq('is_active', true)
+        .limit(1)
+        .maybeSingle()
+      if (integration?.shared_from_integration_id && !integration?.api_key) {
+        const { data: src } = await supabase
+          .from('tenant_integrations').select('api_key')
+          .eq('id', integration.shared_from_integration_id).eq('is_active', true).maybeSingle()
+        if (src?.api_key) integration = { ...integration, api_key: src.api_key }
+      }
+      const accessToken = integration?.api_key || null
+
+      // 4. Fetch all ad accounts in one shot (status + spend_cap)
+      const accountStatusById = new Map<string, { status: number; name: string; disable_reason?: number }>()
+      let tokenOk = !!accessToken
+      if (accessToken) {
+        try {
+          let url: string | null = `https://graph.facebook.com/v21.0/me/adaccounts?fields=id,account_id,name,account_status,disable_reason&limit=200&access_token=${accessToken}`
+          while (url) {
+            const r: any = await fetch(url)
+            const j: any = await r.json()
+            if (j.error) { tokenOk = false; break }
+            for (const a of (j.data || [])) {
+              accountStatusById.set(String(a.id), { status: a.account_status, name: a.name, disable_reason: a.disable_reason })
+              accountStatusById.set(`act_${a.account_id}`, { status: a.account_status, name: a.name, disable_reason: a.disable_reason })
+            }
+            url = j.paging?.next || null
+          }
+        } catch (_) { tokenOk = false }
+      }
+
+      // 5. Compute spend_7d per client from facebook_insights records
+      const now = new Date()
+      const d7 = new Date(now); d7.setDate(d7.getDate() - 7)
+      const d7Str = d7.toISOString().split('T')[0]
+      const fbTableIds = (fbTables || []).map((t: any) => t).filter(Boolean)
+      const tableIdsForRecords = await supabase
+        .from('crm_tables').select('id, client_id, integration_settings')
+        .in('client_id', clientIds).in('tenant_id', accessibleTenantIds).eq('integration_type', 'facebook_insights')
+      const tableIdToClient = new Map<string, string>()
+      const settingsByClient = new Map<string, any>()
+      for (const t of (tableIdsForRecords.data || [])) {
+        tableIdToClient.set(t.id, t.client_id)
+        settingsByClient.set(t.client_id, t.integration_settings)
+      }
+      const tableIds = Array.from(tableIdToClient.keys())
+      const spendByClient = new Map<string, { spend7: number; activeCount: number; pausedCount: number }>()
+      if (tableIds.length > 0) {
+        const { data: recs } = await supabase
+          .from('crm_records').select('table_id, data')
+          .in('table_id', tableIds).in('tenant_id', accessibleTenantIds)
+        for (const r of (recs || [])) {
+          const cid = tableIdToClient.get(r.table_id)
+          if (!cid) continue
+          const cur = spendByClient.get(cid) || { spend7: 0, activeCount: 0, pausedCount: 0 }
+          if (r.data?.date && r.data.date >= d7Str) cur.spend7 += parseFloat(r.data?.spend) || 0
+          const eff = String(r.data?.effective_status || '').toUpperCase()
+          if (eff === 'ACTIVE') cur.activeCount += 1
+          else if (eff === 'PAUSED' || eff === 'OFF') cur.pausedCount += 1
+          spendByClient.set(cid, cur)
+        }
+      }
+
+      const unhealthy: any[] = []
+      let healthy = 0
+      for (const c of (scopeClients || [])) {
+        const settings = settingsByClient.get(c.id)
+        const adAccountId = settings?.ad_account_id || null
+        const flags: string[] = []
+        let status: string = 'unknown'
+        let hasSpend7 = false
+        let allPaused = false
+        const sb = spendByClient.get(c.id)
+        if (sb) {
+          hasSpend7 = sb.spend7 > 0
+          allPaused = sb.activeCount === 0 && sb.pausedCount > 0
+        }
+        if (!adAccountId) {
+          flags.push('not_connected')
+        } else if (!tokenOk) {
+          flags.push('fb_token_expired')
+          status = 'token_expired'
+        } else {
+          const acct = accountStatusById.get(String(adAccountId)) || accountStatusById.get(`act_${String(adAccountId).replace(/^act_/, '')}`)
+          if (!acct) {
+            flags.push('account_not_found')
+            status = 'not_found'
+          } else {
+            // Meta: 1=ACTIVE, 2=DISABLED, 3=UNSETTLED, 7=PENDING_RISK_REVIEW, 8=PENDING_SETTLEMENT, 9=IN_GRACE_PERIOD, 100=PENDING_CLOSURE, 101=CLOSED, 102=PENDING_REVIEW, 201=ANY_ACTIVE
+            const s = acct.status
+            status = s === 1 ? 'active' : s === 2 ? 'disabled' : s === 101 ? 'closed' : s === 7 || s === 102 ? 'pending_review' : `status_${s}`
+            if (s !== 1) flags.push(`fb_${status}`)
+          }
+        }
+        if (status === 'active' && !hasSpend7) flags.push('no_spend_7d')
+        if (status === 'active' && allPaused) flags.push('all_campaigns_paused')
+
+        if (flags.length === 0) healthy += 1
+        else unhealthy.push({
+          client_id: c.id,
+          client_name: c.name,
+          agency_name: c.agencies?.name ?? null,
+          ad_account_id: adAccountId,
+          fb: { status, has_spend_7d: hasSpend7, all_paused: allPaused, token_ok: tokenOk },
+          flags,
+        })
+      }
+
+      return {
+        count: scopeClients?.length || 0,
+        healthy,
+        unhealthy_count: unhealthy.length,
+        token_ok: tokenOk,
+        unhealthy,
+        instructions_to_agent: unhealthy.length > 0
+          ? 'דווחי על כל הלקוחות הבעייתיים בבלוק "🚨 חשבונות מודעות לא תקינים". לכל אחד פרטי בעברית את ה-flag הראשי. אם token_ok=false — ציינו בנפרד שצריך לחבר מחדש את אינטגרציית פייסבוק.'
+          : 'כל החשבונות תקינים. החזירי משפט קצר אחד.',
+      }
+    }
     case 'list_unconnected_clients': {
       // Get active clients that don't have a facebook_insights table
       const { data: allClients, error: clientsErr } = await supabase
@@ -2041,28 +2223,31 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
 
     // ─── 2.7. Code-level instruction capture (cross-channel learning) ───
     // Don't depend on the model deciding to call save_memory. Whenever the user
-    // says "תזכרי / מעכשיו / תמיד / אל תעשי / שמרי / תרשמי / remember / from now on",
-    // persist the instruction to ai_memory (category=instructions) and mirror it to
-    // agent_memory BEFORE we even call the model. This way the rule survives the
-    // current turn even if the model errors out, and it loads automatically into the
-    // memory block on every subsequent turn — across WhatsApp / internal chat / AIOS.
+    // says a learning trigger, persist the FULL surrounding sentence to ai_memory
+    // (category=instructions) and mirror to agent_memory BEFORE we call the model.
+    // Survives model errors and loads automatically into every subsequent turn —
+    // across WhatsApp / internal_chat / AIOS / task surfaces.
+    let instructionCaptured: string | null = null
     try {
       const cmdRaw = String(command_text || '').trim()
-      const looksLikeInstruction = cmdRaw.length > 0 && cmdRaw.length < 800 && (
-        /(^|[\s,.!?])(תזכרי|זכרי|תזכור|שמרי|תרשמי|מעכשיו|מהיום והלאה|תמיד|לעולם|אל תעני|אל תעשי|אל תכתבי)([\s,.!?]|$)/.test(cmdRaw)
-        || /\b(remember|from now on|always|never)\b/i.test(cmdRaw)
-      )
+      const TRIGGER_RE = /(תזכרי|זכרי|תזכור|שמרי|תרשמי|מעכשיו|מהיום והלאה|תמיד|לעולם|אל\s*תעני|אל\s*תעשי|אל\s*תכתבי|אל\s*תשכחי|שימי\s*לב|תכניסי\s*לזיכרון|הוסיפי\s*לזיכרון|גם\s*בזיכרון|תזכרי\s*גם|remember|from\s*now\s*on|always|never|note\s*that|learn\s*this)/i
+      const m = cmdRaw.match(TRIGGER_RE)
+      const looksLikeInstruction = !!m && cmdRaw.length > 0 && cmdRaw.length < 1500
       if (looksLikeInstruction && resolvedTenantId) {
+        // Extract the surrounding sentence/paragraph (split on . ! ? newlines, max ~400 chars)
+        const triggerIdx = m!.index ?? 0
+        const before = cmdRaw.slice(0, triggerIdx).split(/[\.!?\n]/).slice(-1)[0] || ''
+        const after = cmdRaw.slice(triggerIdx).split(/[\.!?\n]/)[0] || ''
+        const sentence = (before + after).trim().slice(0, 400) || cmdRaw.slice(0, 400)
         // Build a stable snake_case key from a short hash of the content.
-        const norm = cmdRaw.replace(/\s+/g, ' ').slice(0, 240)
         let h = 0
-        for (let i = 0; i < norm.length; i++) h = ((h << 5) - h + norm.charCodeAt(i)) | 0
+        for (let i = 0; i < sentence.length; i++) h = ((h << 5) - h + sentence.charCodeAt(i)) | 0
         const keyBase = `instr_${Math.abs(h).toString(36)}`
         await supabase.from('ai_memory').upsert({
           tenant_id: resolvedTenantId,
           user_id: callerUserId || resolvedUserId || 'system',
           key: keyBase,
-          content: norm,
+          content: sentence,
           category: 'instructions',
         }, { onConflict: 'user_id,tenant_id,category,key' })
         // Mirror to Hermes FTS layer (agent_memory) so cross-conversation recall sees it.
@@ -2073,12 +2258,13 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
             agent_id,
             category: 'instructions',
             title: keyBase,
-            summary: norm,
+            summary: sentence,
             importance: 95,
-            metadata: { source: 'auto_instruction_capture', surface, key: keyBase },
+            metadata: { source: 'auto_instruction_capture', surface, key: keyBase, trigger: m![0] },
           })
         } catch (_) { /* non-fatal */ }
-        console.log(`[AGENT] Auto-captured instruction (${surface}) → key=${keyBase}`)
+        instructionCaptured = sentence
+        console.log(`[AGENT] Auto-captured instruction (${surface}, trigger="${m![0]}") → key=${keyBase}`)
       }
     } catch (e: any) {
       console.error('[AGENT] auto-instruction capture failed:', e?.message)
@@ -2598,6 +2784,19 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     const maxRounds = agent.max_tool_rounds || 25
     const safeTemp = typeof temperature === 'number' ? Math.min(2, Math.max(0, temperature)) : undefined
 
+    // ─── Skill resolver: detect active skills from the user message and append their prompts ───
+    const activeSkillsBlock = buildSkillsBlock(String(command_text || ''))
+    const matchedSkills = resolveActiveSkills(String(command_text || '')).map(s => s.id)
+    if (activeSkillsBlock) {
+      systemPrompt += activeSkillsBlock
+      console.log(`[AGENT] Active skills (${surface}): ${matchedSkills.join(', ')}`)
+    }
+    // Surface instruction-capture confirmation in the system prompt so the model knows
+    // a rule was just persisted and can acknowledge it briefly without re-saving.
+    if (instructionCaptured) {
+      systemPrompt += `\n\n🧾 הנחיה חדשה נשמרה לזיכרון אוטומטית: "${instructionCaptured}". אשרי בקצרה ("נרשם") והמשיכי בבקשה.`
+    }
+
     // Build messages with conversation history
     let messages: any[] = [{ role: 'system', content: systemPrompt }]
     
@@ -2742,6 +2941,8 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
           output_preview: String(finalOutput || '').slice(0, 600),
           caller_role: callerRole,
           caller_campaigner_id: callerCampaignerId,
+          active_skills: matchedSkills,
+          instruction_captured: instructionCaptured,
         },
         user_id: callerUserId,
         tool_calls: toolLog.length,

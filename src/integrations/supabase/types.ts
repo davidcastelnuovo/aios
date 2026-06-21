@@ -3043,6 +3043,7 @@ export type Database = {
           health_score: number | null
           id: string
           industry: string | null
+          is_ecommerce: boolean
           is_seo_client: boolean | null
           manychat_subscriber_id: string | null
           meta_ads_account_id: string | null
@@ -3081,6 +3082,7 @@ export type Database = {
           health_score?: number | null
           id?: string
           industry?: string | null
+          is_ecommerce?: boolean
           is_seo_client?: boolean | null
           manychat_subscriber_id?: string | null
           meta_ads_account_id?: string | null
@@ -3119,6 +3121,7 @@ export type Database = {
           health_score?: number | null
           id?: string
           industry?: string | null
+          is_ecommerce?: boolean
           is_seo_client?: boolean | null
           manychat_subscriber_id?: string | null
           meta_ads_account_id?: string | null

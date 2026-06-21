@@ -1,128 +1,122 @@
-נכון — Carmen לא צריכה להיות “WhatsApp bot” בנפרד ו“צ׳אט פנימי” בנפרד. הבעיה המרכזית היא שיש היום כמה שכבות שמנסות לעשות אותו דבר: WhatsApp עובר דרך `_shared/carmen.ts`, הצ׳אט הפנימי/AIOS קורא ל-`run-ai-agent`, יש Prompt V1/V2 כפול, ויש כמה מערכות זיכרון במקביל. לכן היא יכולה להתנהג טוב יום אחד ולהתקלקל יום אחר: לא כל הערוצים מקבלים את אותו prompt, אותו memory retrieval, אותו routing לכלים, ואותה לוגיקת למידה.
+# תיקון Carmen: זיכרון, סקיל איקומרס, בדיקת חשבונות מודעות
 
-## אבחנה קצרה
+## שפה משותפת לבניית סוכנים (terminology)
 
-1. **אין “מוח Carmen” יחיד**
-   - יש core agent ב-`run-ai-agent`, אבל WhatsApp עוטף אותו עם חוקים, session history, echo guards ו-notify metadata.
-   - AIOS/הצ׳אט הפנימי משתמשים באותו endpoint חלקית, אבל לא בהכרח באותו session context, אותו WhatsApp context, או אותה שכבת למידה.
+נשתמש בז'רגון אחיד מעכשיו - גם בקוד וגם בשיחות איתי:
 
-2. **הזיכרון מפוצל**
-   - `ai_memory` שומר הוראות מפורשות.
-   - `agent_memory` משמש recall כללי/Hermes-style.
-   - `carmen_memory_episodes` ו-`carmen_memory_pointers` לומדים מסשני WhatsApp.
-   - `ai_skills` שומר פרוצדורות.
-   אבל אין עדיין loader אחד שמבטיח שכל ערוץ מקבל את אותה חבילת זיכרון רלוונטית.
+- **Agent** = הסוכן עצמו (Carmen). מוח אחד עם זיכרון אחד.
+- **Surface** = איפה מדברים איתה: `whatsapp` | `internal_chat` | `aios` | `task` (background).
+- **Skill** = יכולת ממוקדת = פרומפט קשיח + רשימת tools מותרת + פלט מובנה. דוגמאות: `pulse_check`, `ecommerce_pulse`, `ad_accounts_health`.
+- **Tool** = פונקציה אטומית שכרמן יכולה לקרוא לה (analyze_campaign_performance, list_facebook_ad_accounts וכד').
+- **Memory** = `ai_memory` (key/value, instructions) + `agent_memory` (FTS חוצה-שיחות) + `carmen_memory_episodes` (אירועי שיחה).
+- **Episode / Action log** = `agent_action_log` - לוג של כל turn (surface, tools_used, output).
 
-3. **הלמידה תלויה מדי בסגירת סשן**
-   - אם המשתמש לא סוגר סשן, או שהסשן פג/מתחלף, לא תמיד מופעלת למידה פסיבית.
-   - הוראות מפורשות כן אמורות להישמר מיידית, אבל בגלל פיצול prompt/tools היא לא תמיד עושה את זה עקבית.
+מעכשיו כשאני אגיד "תוסיפי סקיל X" - הכוונה: פרומפט hardcoded חדש ב-`_shared/skills/` + רישום ברגיסטרי + טריגר מילות-מפתח.
 
-4. **הבחנה בין ערוצים קיימת אבל לא מספיק נקייה**
-   - יש `surface: 'whatsapp' | 'aios' | 'task'`, אבל הכללים מפוזרים בתוך prompt וקוד.
-   - צריך להפוך את זה לחוזה ברור: אותו מוח, אותו זיכרון, אותן יכולות — רק סגנון ו-delivery משתנים לפי הערוץ.
+---
 
-## התוכנית
+## 1. תיקון הזיכרון (לא נשמר גם אחרי ההוק)
 
-### 1. לבנות “Carmen Core Context” אחד
-ניצור/נסדר שכבה משותפת שמחזירה לכל ריצה של Carmen אותו context:
+הבעיה: ה-pre-save hook ב-`run-ai-agent` פועל רק על trigger words אנגלית/עברית מצומצמים, ולא תופס "תזכרי גם בזיכרון" בהקשר של הוראת ביצוע (כמו בצילום: "תזכרי שגם בזיכרון קמפיינר איקומרס...").
 
-```text
-Carmen request
-→ identify surface: whatsapp / internal_chat / aios / background_task
-→ load same identity + tenant + caller + permissions
-→ load same memories + skills + recent history
-→ choose same tools with surface-specific guards
-→ execute
-→ save learning + action trace
-→ reply through the correct channel
+תיקון:
+- הרחבת רגקס הטריגר ב-`run-ai-agent/index.ts`: מוסיפים `שימי לב`, `תכניסי לזיכרון`, `גם בזיכרון`, `הוסיפי לזיכרון`, `אל תשכחי`, `learn this`, `note that`.
+- כשמזהים טריגר - שולפים את **כל המשפט/פסקה** סביב הטריגר (לא רק keyword), לא 80 תווים שטוחים.
+- כותבים בו-זמנית ל-3 מקומות (ללא תלות בהצלחת המודל לקרוא ל-`save_memory`):
+  1. `ai_memory` - category=`instructions`, key=hash סמנטי (snake_case מתוך תקציר LLM קצר), value=טקסט מלא.
+  2. `agent_memory` - importance=8, content=טקסט מלא, tags=['user_instruction', surface].
+  3. `carmen_memory_episodes` - kind=`instruction_captured`.
+- מוסיפים בפרומפט אזהרה מפורשת: "אם נכשלת ב-save_memory - חזרי וקראי שוב לפני שאת עונה".
+- בלוג של `agent_action_log` נוסיף שדה `instructions_captured: string[]` כדי לראות בעין שזה עבד.
+
+בדיקה: שולחים בצ'אט הפנימי "תזכרי שלקוחות איקומרס מקבלים רווח+CPP+כמות רכישות"  →  שורה ב-`ai_memory` נוצרת מיד  →  בשיחה הבאה `recall_memory` מחזיר אותה.
+
+---
+
+## 2. סקיל חדש: `ecommerce_pulse` (רווח, CPP, כמות רכישות)
+
+קובץ חדש: `supabase/functions/_shared/skills/ecommerce-pulse.ts`
+
+תוכן הסקיל (פרומפט hardcoded):
+- טריגר: לקוח מסומן `client_type='ecommerce'` או tag/שדה custom שמסמן איקומרס. אם לא קיים - נוסיף עמודה `is_ecommerce boolean` ל-`clients` (migration).
+- מקור נתונים: **Meta Ads + Shopify/WooCommerce** (לפי הבחירה שלך).
+  - Meta Ads (קיים): `purchases`, `purchase_value`, `spend` מתוך `facebook_insights` שכרמן כבר ניגשת אליו ב-`analyze_campaign_performance`.
+  - WooCommerce: דרך הקונקטור הקיים (טבלאות `woocommerce_orders`) - מצרפים order count + revenue לפי תאריך.
+  - Shopify: דרך אינטגרציית Shopify הקיימת (אם הלקוח חיבר). אם לא חיבר - מדווחים `shop_not_connected`.
+- מטריקות שנחזיר ללקוח איקומרס במקום CPL:
+  - `purchases_7d`, `purchases_30d` (מס' רכישות)
+  - `cpp_7d` = `spend_7d / purchases_7d` (Cost Per Purchase)
+  - `revenue_7d`, `profit_7d` = `revenue - spend` (אם יש cogs בשדה custom נחסיר אותו)
+  - `roas_7d` = `revenue / spend`
+- פלט: באותה תבנית של pulse_check אבל "X רכישות | CPP Y | רווח Z | ROAS W" במקום "X לידים | CPL Y".
+- Tools מותרים בסקיל: `analyze_campaign_performance`, `list_woocommerce_orders` (חדש), `list_shopify_orders` (חדש אם נחבר), `get_client_meta_purchases` (wrapper).
+
+---
+
+## 3. הרחבת `pulse_check`: בדיקת תקינות חשבונות מודעות
+
+מוסיפים שלב חדש לסקיל הקיים: **Ad Accounts Health**.
+
+לכל לקוח עם חשבון מודעות מחובר (FB/Google), לרוץ במקביל לבדיקה הרגילה ולהדגיש דגלים אדומים אם:
+- ❌ `account_status` ∈ {disabled, closed, pending_review} (Meta: status≠1; Google: SUSPENDED/CANCELLED)
+- ⚠️ `spend_7d == 0` (אין הוצאה 7 ימים אחרונים) - דגל כתום
+- ⚠️ כל הקמפיינים `paused/off` (לא רץ כלום)
+- ❌ `token_expired` או שגיאת API מהקונקטור (`fireIntegrationAlert` כבר קיים ל-`ad_account_blocked` - נשתמש בו)
+
+Tool חדש: `check_ad_accounts_health(client_id?, agency_id?)` - מחזיר לכל לקוח:
+```
+{ client_id, fb: { status, has_spend_7d, all_paused, token_ok }, google: { ... }, flags: ['fb_disabled', 'google_no_spend_7d'] }
 ```
 
-הערוץ ישפיע רק על:
-- אורך וסגנון תשובה.
-- האם מותר לדבר על “חלון/התקדמות”.
-- איך שולחים follow-up בסיום משימת רקע.
-- איזה היסטוריית שיחה מקומית מצורפת.
-
-### 2. לאחד Memory Loader לכל הערוצים
-נבנה helper משותף שנטען בתחילת כל ריצה, גם WhatsApp וגם צ׳אט פנימי:
-
-- הוראות קבועות מ-`ai_memory` category `instructions`.
-- זיכרון רלוונטי מ-`agent_memory` לפי FTS.
-- פרקי זיכרון של Carmen מ-`carmen_memory_episodes`.
-- pointers חיים מ-`carmen_memory_pointers` כשיש נושא/לקוח/שיחה רלוונטיים.
-- סקילים מ-`ai_skills` לפי חיפוש טקסטואלי/FTS.
-
-המטרה: אם לימדת את Carmen משהו ב-WhatsApp, היא תדע אותו גם בצ׳אט הפנימי — ולהפך.
-
-### 3. להקשיח “שמירה לזיכרון” כהתנהגות מערכתית, לא רק prompt
-במקום לסמוך רק על זה שהמודל יחליט לקרוא `save_memory`:
-
-- נוסיף pre-check בקוד להודעות עם ביטויים כמו “תזכרי”, “מעכשיו”, “תמיד”, “אל תעשי”, “שמרי”.
-- אם מזוהה instruction מפורש — נשמור אותו מיידית לשכבת הזיכרון לפני/במקביל לקריאת המודל.
-- עדיין נשאיר למודל את האפשרות לשמור זיכרון עם key מדויק יותר, אבל לא נסתמך רק עליו.
-
-### 4. להפריד בין “יכולות” לבין “משלוח תשובה”
-כל הכלים העסקיים יהיו זמינים לפי הרשאות ותפקיד, לא לפי ערוץ.
-
-אבל delivery יהיה תלוי surface:
-- WhatsApp: הודעה קצרה, בלי markdown, בלי “סגור חלון”, ועם follow-up רק אם באמת נוצרה משימת רקע.
-- צ׳אט פנימי/AIOS: אפשר תשובה מפורטת יותר, טבלאות, tool activity, והתקדמות.
-- background task: אין האצלה נוספת, רק ביצוע וסיכום סופי.
-
-### 5. לתקן עקביות delegation/background
-- `delegate_to_subagent` יהיה זמין רק כשבאמת ביקשת עבודה ברקע או כשהמשימה גדולה מדי.
-- בכל ערוץ יישמר source metadata:
-  - אם התחיל מ-WhatsApp → התוצאה חוזרת ל-WhatsApp.
-  - אם התחיל מצ׳אט פנימי/AIOS → התוצאה נשמרת ומוצגת שם.
-- אסור ל-Carmen לטעון “עובדת ברקע” בלי `sub_task_id` אמיתי.
-
-### 6. לחבר tracing בסגנון open-source agents
-נשתמש בדפוס ReAct/LangGraph/OpenAI Agents בלי להמציא מחדש:
-
-```text
-plan → tool call → observation → next step → final answer → memory update
+בפלט הסיכום (בצילום שלך) יתווסף בלוק:
+```
+🚨 חשבונות מודעות לא תקינים:
+• אביאלי טייג — FB account disabled
+• כביר מונטנג — Google: אין spend 7 ימים
+• קרניליוס — Token פג, צריך חיבור מחדש
 ```
 
-בפועל:
-- לרשום כל ריצה ל-`agent_runs` או לפחות ל-`agent_action_log` בצורה עקבית.
-- לשמור tool calls, תוצאות, final answer, surface, user/channel.
-- כך אפשר לבדוק בדיעבד אם היא באמת ביצעה או רק ענתה.
+מימוש Tool:
+- FB: GET `/me/adaccounts?fields=account_status,name,currency,spend_cap` דרך הטוקן הקיים.
+- Google Ads: דרך הקונקטור הקיים, customer.status.
+- Spend 7d: קוורי מצומצם על `facebook_insights` / `google_ads_insights` עם `date_start >= now()-7d`.
+- אם API מחזיר 401/403 - יורים `fireIntegrationAlert('ad_account_blocked', client_id)`.
 
-### 7. לתקן למידה פסיבית משיחות קודמות
-- לא להסתמך רק על טריגר “סשן נסגר”.
-- להפעיל למידה גם בסשנים שפגו/הסתיימו אוטומטית או אחרי מספר הודעות משמעותי.
-- תובנות חשובות יישמרו כזיכרון; פרוצדורות חוזרות יישמרו כ-skill.
+---
 
-### 8. לנקות כפילות Prompt V1/V2
-- להפוך את `carmen-prompt-v2` למקור האמת.
-- להסיר/לצמצם חוקים כפולים שמוזרקים גם ידנית בתוך `run-ai-agent`.
-- להבטיח שכל surface משתמש באותה מערכת כללים, עם section קטן שמותאם לערוץ.
+## 4. רגיסטרי סקילז (תשתית, פעם אחת)
 
-## בדיקות קבלה
+קובץ חדש: `supabase/functions/_shared/skills/registry.ts`
+```ts
+export const SKILLS = {
+  pulse_check: { triggers: ['בדיקת דופק','pulse'], prompt: pulseCheckPrompt, tools: [...] },
+  ecommerce_pulse: { triggers: ['בדיקת דופק איקומרס','ecommerce'], prompt: ecomPrompt, tools: [...] },
+  ad_accounts_health: { triggers: ['חשבונות מודעות','ad accounts'], prompt: adHealthPrompt, tools: [...] },
+}
+```
 
-1. **למידה חוצה ערוצים**
-   - ב-WhatsApp: “כרמן, מעכשיו אל תעני לי עם הצעות נוספות”.
-   - בצ׳אט פנימי: Carmen חייבת לפעול לפי זה.
+ב-`run-ai-agent` לפני שליחת הפרומפט: מזהים סקיל אקטיבי לפי טריגר במסר → מזריקים את `prompt` שלו לסיסטם + מסננים את `tools` המוצעים לאותם שמותרים. זה מונע hallucination ומבטיח עקביות.
 
-2. **למידה הפוכה**
-   - בצ׳אט פנימי מלמדים פרוצדורה.
-   - ב-WhatsApp מבקשים פעולה דומה — Carmen משתמשת בפרוצדורה.
+`pulse_check` הקיים יעוטף גם הוא בסקיל ב-registry (העברת הטקסט שכבר נמצא ב-`carmen-prompt-v2.ts` שורות 150–155 לקובץ דדיקייטד).
 
-3. **WhatsApp רגיל**
-   - “כרמן בדיקת דופק” → תשובה עם נתונים אמיתיים, לא “עובדת ברקע”.
+---
 
-4. **WhatsApp רקע מפורש**
-   - “תרוצי ברקע ותעדכני אותי” → נוצר `sub_task_id`, ובסיום נשלחת הודעת WhatsApp.
+## 5. קבצים שישתנו / יווצרו
 
-5. **צ׳אט פנימי/AIOS**
-   - אותה בקשה מקבלת אותו reasoning וכלים, אבל יכולה להציג יותר פירוט/טבלה/התקדמות.
+נוצרים:
+- `supabase/functions/_shared/skills/registry.ts`
+- `supabase/functions/_shared/skills/pulse-check.ts`
+- `supabase/functions/_shared/skills/ecommerce-pulse.ts`
+- `supabase/functions/_shared/skills/ad-accounts-health.ts`
+- migration: עמודה `is_ecommerce boolean default false` ב-`clients`
 
-6. **בדיקת עקביות**
-   - לכל תשובה שטוענת “בוצע” יש tool call או action log שמוכיח את זה.
+נערכים:
+- `supabase/functions/run-ai-agent/index.ts` - הרחבת trigger regex לזיכרון, רישום skill resolver, tools חדשים (`check_ad_accounts_health`, `list_woocommerce_orders`).
+- `supabase/functions/_shared/carmen-prompt-v2.ts` - הפניה ל-skill registry במקום הטקסט המוטבע של pulse_check.
+- `supabase/functions/_shared/carmen.ts` - הרחבת `forceToolsForPulse` כדי לכלול גם ecommerce + ad health.
 
-## מה לא נעשה
+---
 
-- לא נבנה Carmen חדשה מאפס.
-- לא נפריד מוח ל-WhatsApp ומוח לצ׳אט.
-- לא נסתמך רק על prompt כדי “לקוות” שהיא תלמד.
-- לא נשבור הרשאות/tenant scoping קיימים.
+## אישור
+
+אחרי שתאשר אעבור ל-Build mode וארוץ הכל ברצף: migration → skills files → עריכת run-ai-agent → deploy של הפונקציה → בדיקה ידנית בצ'אט.
