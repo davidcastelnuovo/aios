@@ -175,7 +175,16 @@ export default function MarketingDepartment() {
                         value={value}
                         className="flex-1 min-h-0 m-0 overflow-auto"
                       >
-                        <MarketingCalendarView pipelineId={pipeline.id} clientId={clientId} />
+                        <MarketingCalendarView pipelineId={pipeline.id} clientId={clientId} onSelectItem={setSelectedItemId} />
+                      </TabsContent>
+                    ))}
+                  </Tabs>
+                </TabsContent>
+                <TabsContent value="usage" className="flex-1 min-h-0 m-0 overflow-auto">
+                  <UsagePanel tenantId={tenantId!} clientId={clientId} />
+                </TabsContent>
+                <TabsContent value="creative" className="flex-1 min-h-0 m-0 overflow-auto">
+                  <CreativeBoard clientId={clientId} onSelectItem={setSelectedItemId} />
                       </TabsContent>
                     ))}
                   </Tabs>
