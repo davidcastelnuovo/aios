@@ -5356,6 +5356,7 @@ export type Database = {
           is_active: boolean
           name: string
           tenant_id: string
+          track: string
           updated_at: string
         }
         Insert: {
@@ -5365,6 +5366,7 @@ export type Database = {
           is_active?: boolean
           name?: string
           tenant_id: string
+          track?: string
           updated_at?: string
         }
         Update: {
@@ -5374,13 +5376,14 @@ export type Database = {
           is_active?: boolean
           name?: string
           tenant_id?: string
+          track?: string
           updated_at?: string
         }
         Relationships: [
           {
             foreignKeyName: "marketing_pipelines_client_id_fkey"
             columns: ["client_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "clients"
             referencedColumns: ["id"]
           },
