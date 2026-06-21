@@ -592,6 +592,7 @@ export default function AgentTasksPage() {
                 tenant_id: tenantId,
                 task_skills: task.task_skills,
                 task_mode: task.task_mode,
+                surface: 'task',
               },
             });
             return { subtask: sub.title, result: data };
@@ -622,6 +623,7 @@ export default function AgentTasksPage() {
           tenant_id: tenantId,
           task_skills: task.task_skills,
           task_mode: task.task_mode,
+          surface: 'task',
         },
       });
       if (error) throw error;

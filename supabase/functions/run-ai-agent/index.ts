@@ -1929,8 +1929,10 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
 // ===========================
 import { requireAuth } from "../_shared/security.ts";
 
-// Surface for which the agent is currently invoked
-type Surface = 'whatsapp' | 'aios' | 'task'
+// Surface for which the agent is currently invoked.
+// 'internal_chat' = the in-app chat / dialog / AI Support page (same brain as AIOS,
+// but no dialog progress UI). Default for unspecified callers.
+type Surface = 'whatsapp' | 'aios' | 'task' | 'internal_chat'
 
 // Emit function used by the streaming wrapper to push SSE events to the client.
 // In non-streaming mode it's a no-op.
@@ -2035,6 +2037,52 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     }
     const isManagerRoleCaller = !!callerRole && ['owner','agency_owner','agency_manager','super_admin'].includes(callerRole)
     const isTeamManagerCaller = callerRole === 'team_manager'
+
+
+    // ─── 2.7. Code-level instruction capture (cross-channel learning) ───
+    // Don't depend on the model deciding to call save_memory. Whenever the user
+    // says "תזכרי / מעכשיו / תמיד / אל תעשי / שמרי / תרשמי / remember / from now on",
+    // persist the instruction to ai_memory (category=instructions) and mirror it to
+    // agent_memory BEFORE we even call the model. This way the rule survives the
+    // current turn even if the model errors out, and it loads automatically into the
+    // memory block on every subsequent turn — across WhatsApp / internal chat / AIOS.
+    try {
+      const cmdRaw = String(command_text || '').trim()
+      const looksLikeInstruction = cmdRaw.length > 0 && cmdRaw.length < 800 && (
+        /(^|[\s,.!?])(תזכרי|זכרי|תזכור|שמרי|תרשמי|מעכשיו|מהיום והלאה|תמיד|לעולם|אל תעני|אל תעשי|אל תכתבי)([\s,.!?]|$)/.test(cmdRaw)
+        || /\b(remember|from now on|always|never)\b/i.test(cmdRaw)
+      )
+      if (looksLikeInstruction && resolvedTenantId) {
+        // Build a stable snake_case key from a short hash of the content.
+        const norm = cmdRaw.replace(/\s+/g, ' ').slice(0, 240)
+        let h = 0
+        for (let i = 0; i < norm.length; i++) h = ((h << 5) - h + norm.charCodeAt(i)) | 0
+        const keyBase = `instr_${Math.abs(h).toString(36)}`
+        await supabase.from('ai_memory').upsert({
+          tenant_id: resolvedTenantId,
+          user_id: callerUserId || resolvedUserId || 'system',
+          key: keyBase,
+          content: norm,
+          category: 'instructions',
+        }, { onConflict: 'user_id,tenant_id,category,key' })
+        // Mirror to Hermes FTS layer (agent_memory) so cross-conversation recall sees it.
+        try {
+          await saveAgentMemory({
+            supabase,
+            tenant_id: resolvedTenantId,
+            agent_id,
+            category: 'instructions',
+            title: keyBase,
+            summary: norm,
+            importance: 95,
+            metadata: { source: 'auto_instruction_capture', surface, key: keyBase },
+          })
+        } catch (_) { /* non-fatal */ }
+        console.log(`[AGENT] Auto-captured instruction (${surface}) → key=${keyBase}`)
+      }
+    } catch (e: any) {
+      console.error('[AGENT] auto-instruction capture failed:', e?.message)
+    }
 
     // 3. Build system prompt with full tenant context
     // Fetch tenant context, memory for Carmen and all agents
@@ -2509,7 +2557,7 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     const userAskedGithubAgent = /\b(github|גיטהאב|גיט\s*האב|שגיאת\s*קוד|תמיכה\s*טכנית|אגנט\s*קוד)\b/i.test(cmd)
     if (surface === 'task') {
       filteredTools = filteredTools.filter(t => t.name !== 'delegate_to_subagent' && t.name !== 'delegate_to_manus' && t.name !== 'delegate_to_github_agent')
-    } else if (surface === 'aios' || surface === 'whatsapp') {
+    } else if (surface === 'aios' || surface === 'whatsapp' || surface === 'internal_chat') {
       // Same default-direct rule for WhatsApp as for AIOS: hide delegation tools unless
       // the user explicitly asked for background work. On WhatsApp this is even more
       // important — there is no "window" the user can leave open to watch progress, and
@@ -2678,6 +2726,32 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
       }
     }
 
+    // 8. Run trace — one row per turn so we can audit later whether Carmen
+    // actually executed what she claimed. Same shape across every surface.
+    try {
+      await supabase.from('agent_action_log').insert({
+        tenant_id: resolvedTenantId,
+        agent_id,
+        action_type: 'agent_turn',
+        status: 'success',
+        action_details: {
+          surface,
+          command_preview: String(command_text || '').slice(0, 240),
+          tools_used: toolLog.map((t: any) => t.tool),
+          tool_count: toolLog.length,
+          output_preview: String(finalOutput || '').slice(0, 600),
+          caller_role: callerRole,
+          caller_campaigner_id: callerCampaignerId,
+        },
+        user_id: callerUserId,
+        tool_calls: toolLog.length,
+        model,
+        duration_ms: executionTime,
+      })
+    } catch (e: any) {
+      console.error('[AGENT] action_log insert failed:', e?.message)
+    }
+
     return new Response(JSON.stringify({
       success: true,
       output: finalOutput,
@@ -2712,7 +2786,8 @@ Deno.serve(async (req) => {
   const wantStream = bodyJson.stream === true
   const surface: Surface = bodyJson.surface === 'aios' ? 'aios'
     : bodyJson.surface === 'task' ? 'task'
-    : 'whatsapp'
+    : bodyJson.surface === 'whatsapp' ? 'whatsapp'
+    : 'internal_chat'
 
   if (!wantStream) {
     return await handleRunAgent(bodyJson, surface, undefined)
