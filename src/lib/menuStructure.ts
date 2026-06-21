@@ -103,9 +103,9 @@ export const MENU_TABS: MenuTab[] = [
     icon: Share2,
     sections: [
       {
-        label: "קמפיינים",
+        label: "מחלקת שיווק",
         items: [
-          { key: "social-media", label: "ניהול סושיאל", route: "/social-media", icon: Share2 },
+          { key: "marketing", label: "מחלקת שיווק", route: "/marketing", icon: Share2 },
           { key: "recordings", label: "הקלטות", route: "/recordings", icon: Cpu },
         ],
       },
@@ -113,7 +113,6 @@ export const MENU_TABS: MenuTab[] = [
         label: "אנליטיקס",
         items: [
           { key: "dynamic-tables", label: "דשבורדים ודוחות", route: "/dynamic-tables", icon: Table2 },
-          { key: "ai-detection", label: "ניטור נראות AI", route: "/ai-detection", icon: Bot },
         ],
       },
       {
@@ -157,8 +156,6 @@ export const MENU_TABS: MenuTab[] = [
         label: "אוטומציה ו-AI",
         items: [
           { key: "automations", label: "אוטומציות", route: "/automations", icon: Zap },
-          { key: "campaign-alerts", label: "התראות קמפיינים", route: "/campaign-alerts", icon: AlertTriangle },
-          { key: "social-publisher", label: "רשתות חברתיות", route: "/social-publisher", icon: Send },
           { key: "agents", label: "סוכני AI", route: "/agents", icon: Bot },
           { key: "carmen-insights", label: "למידה של כרמן", route: "/carmen-insights", icon: Brain },
           { key: "visual-workspace", label: "Visual Workspace", route: "/visual-workspace", icon: Sparkles },
