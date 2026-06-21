@@ -473,6 +473,16 @@ export default function DashboardView() {
       const ct = getCampaignType(t?.integration_type, t?.integration_settings);
       if (ct === 'ecommerce') map[key] = 'ecommerce';
     });
+    // Lock known leads-default ad platforms so noisy Pixel events (e.g. add_to_cart) on a
+    // leads campaign don't flip the entire dashboard to ecommerce columns. To force ecommerce
+    // mode on these platforms, set integration_settings.campaign_type='ecommerce' on the table
+    // (or use facebook_ecommerce as the table type for FB).
+    ['facebook_insights', 'google_ads'].forEach((key) => {
+      if (!map[key] && tables.some((t: any) => t.integration_type === key)) {
+        map[key] = 'leads';
+        explicitlySet.add(key);
+      }
+    });
     // Then override by scanning actual data for ecommerce signals — but ONLY for platforms not explicitly set by user
     allRecords.forEach((record: any) => {
       const source = record._source || 'unknown';
