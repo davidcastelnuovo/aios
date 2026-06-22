@@ -559,6 +559,26 @@ Deno.serve(async (req) => {
     });
 
 
+    if (debug) {
+      return new Response(JSON.stringify({
+        success: true,
+        debug: true,
+        table_id,
+        ad_account_id: adAccountId,
+        date_range: dateRange,
+        since: sinceStr,
+        until: untilStr,
+        records_fetched: insights.length,
+        totals: {
+          leads: insights.reduce((sum, row) => sum + row.leads, 0),
+          spend: insights.reduce((sum, row) => sum + row.spend, 0),
+        },
+        rows: debugRows,
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
     // Make sure fields exist for Facebook Insights table
     const fieldKeys = ['date', 'campaign_name', 'campaign_id', 'impressions', 'clicks', 'lp_or_form_views', 'cpm', 'ctr', 'leads', 'form_leads', 'cost_per_lead', 'spend', 'purchases', 'purchase_value', 'add_to_cart', 'roas', 'campaign_objective', 'campaign_type', 'effective_status', 'configured_status', 'updated_time'];
     const fieldNames = ['תאריך', 'שם הקמפיין', 'מזהה קמפיין', 'חשיפות', 'קליקים', 'צפיות LP / פתיחות טופס', 'עלות ל-1000 חשיפות', 'אחוז קליקים', 'לידים', 'לידים מטופס', 'עלות לליד', 'הוצאה', 'רכישות', 'ערך רכישות', 'הוספות לעגלה', 'ROAS', 'מטרת קמפיין', 'סוג קמפיין', 'סטטוס בפועל', 'סטטוס מוגדר', 'עדכון אחרון בקמפיין'];
