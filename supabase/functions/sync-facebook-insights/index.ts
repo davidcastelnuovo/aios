@@ -351,15 +351,25 @@ Deno.serve(async (req) => {
       // counting. We accept both `offsite_conversion.custom.*` (legacy) and
       // `offsite_conversion.fb_pixel_custom.*` (current) prefixes — the latter is what
       // Facebook returns today for Pixel-based custom conversions used as leads.
-      const _customConversionLeadsValue = allActions
+      // Use CHILDREN when present (per-conversion granularity); otherwise fall
+      // back to the PARENT aggregate so we don't lose leads on campaigns where
+      // FB returns only `offsite_conversion.fb_pixel_custom` with no children.
+      const _customChildrenValue = allActions
         .filter((a: any) => {
           const t = String(a.action_type || '');
           return (
-            (t.startsWith('offsite_conversion.custom.') ||
-             t.startsWith('offsite_conversion.fb_pixel_custom.'))
+            t.startsWith('offsite_conversion.custom.') ||
+            t.startsWith('offsite_conversion.fb_pixel_custom.')
           );
         })
         .reduce((sum: number, a: any) => sum + (parseInt(a.value) || 0), 0);
+      const _customParentValue = sumByTypes([
+        'offsite_conversion.fb_pixel_custom',
+        'offsite_conversion.custom',
+      ]);
+      const _customConversionLeadsValue = _customChildrenValue > 0
+        ? _customChildrenValue
+        : _customParentValue;
       // Standard intent events fired on landing pages (Complete Registration / Contact / etc.)
       const _standardIntentValue = sumByTypes(STANDARD_INTENT_LEAD_TYPES);
 
