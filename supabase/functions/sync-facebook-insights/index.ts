@@ -367,23 +367,28 @@ Deno.serve(async (req) => {
       // sources (form + pixel + custom). Use it when available — matches Ads Manager.
       const _aggregateLeadValue = sumByTypes(['lead']);
 
-      // Unified leads count: take MAX of FB's aggregate vs. our manually summed total
-      // across ALL lead-like signals (form + pixel + custom + standard intent + messaging).
-      // MAX (not sum) avoids double-counting the same conversion that FB reports under
-      // multiple action_types, while still catching cases where FB's `lead` aggregate is
-      // missing or under-reports (e.g. landing-page Custom Conversions, Complete Registration).
-      const _summed =
-        _formLeadsValue +
-        _pixelLeadsValue +
-        _customConversionLeadsValue +
-        _standardIntentValue +
-        _messagingLeadsValue;
+      // Single-source leads count — match what Facebook Ads Manager shows per campaign,
+      // never mix sources (form + pixel) for the same campaign to avoid duplicates.
+      // Priority by campaign objective:
+      //   - Lead Form campaigns → ONLY leadgen form submissions
+      //   - Messaging/Engagement → ONLY conversation starts
+      //   - Conversions/Sales/Traffic with pixel → website leads (MAX of pixel / custom / intent)
+      //   - Fallback → FB's aggregate `lead` value (already deduped by FB)
       let leads: number;
-      if (_isMessagingObjective && _messagingLeadsValue > 0 && _aggregateLeadValue === 0 && _summed === _messagingLeadsValue) {
-        // Pure messaging campaign with no other signals — count conversation starts.
+      if (_isLeadFormObjective) {
+        leads = _formLeadsValue;
+      } else if (_isMessagingObjective) {
         leads = _messagingLeadsValue;
       } else {
-        leads = Math.max(_aggregateLeadValue, _summed);
+        // Website lead campaigns: pick the single best pixel signal — MAX, not sum,
+        // because FB often reports the same conversion under multiple action_types
+        // (e.g. fb_pixel_lead AND a custom conversion). Summing would double count.
+        const _websiteLeads = Math.max(
+          _pixelLeadsValue,
+          _customConversionLeadsValue,
+          _standardIntentValue,
+        );
+        leads = _websiteLeads > 0 ? _websiteLeads : _aggregateLeadValue;
       }
 
       // Diagnostic: when FB charged us but reported zero leads, dump every action_type
