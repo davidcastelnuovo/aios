@@ -58,10 +58,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const body = await req.json();
-    const { table_id } = body;
-    const debug = body?.debug === true;
-    const dateRangeOverride = typeof body?.date_range === 'string' ? body.date_range : null;
+    const { table_id } = await req.json();
     
     if (!table_id) {
       return new Response(JSON.stringify({ error: 'table_id required' }), {
@@ -101,7 +98,7 @@ Deno.serve(async (req) => {
 
     const settings = table.integration_settings || {};
     const adAccountId = settings.ad_account_id;
-    const dateRange = dateRangeOverride || settings.date_range || 'last_30_days';
+    const dateRange = settings.date_range || 'last_30_days';
 
     if (!adAccountId) {
       return new Response(JSON.stringify({ error: 'No ad account configured' }), {
@@ -160,8 +157,8 @@ Deno.serve(async (req) => {
         since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek);
         break;
       case 'last_7_days':
-        since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
-        until = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+        since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
+        until = today;
         break;
       case 'last_14_days':
         since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 14);
