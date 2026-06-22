@@ -302,7 +302,6 @@ Deno.serve(async (req) => {
     ];
 
     console.log(`[sync-facebook-insights] Got ${(data.data || []).length} insight rows from FB`);
-    const debugRows: any[] = [];
 
     const insights: InsightRecord[] = (data.data || []).map((insight: any) => {
       const allActions = [...(insight.actions ?? []), ...(insight.conversions ?? [])];
@@ -406,29 +405,6 @@ Deno.serve(async (req) => {
           spend: _spendForLog,
           objective: _objectiveForLeads,
           action_types: Array.from(actionTypeSet),
-        });
-      }
-      if (debug) {
-        debugRows.push({
-          date: insight.date_start,
-          campaign_id: insight.campaign_id,
-          campaign_name: insight.campaign_name,
-          objective: _objectiveForLeads,
-          spend: _spendForLog,
-          computed_leads: leads,
-          candidates: {
-            form: _formLeadsValue,
-            messaging_started: _messagingLeadsValue,
-            pixel: _pixelLeadsValue,
-            custom_conversion_children: _customConversionLeadsValue,
-            standard_intent: _standardIntentValue,
-            aggregate_lead: _aggregateLeadValue,
-            website_max: _websiteLeads,
-          },
-          actions: allActions.map((a: any) => ({
-            action_type: String(a.action_type || ''),
-            value: Number(a.value) || 0,
-          })),
         });
       }
       const _leadgenGroupedValue = _formLeadsValue;
@@ -555,26 +531,6 @@ Deno.serve(async (req) => {
       };
     });
 
-
-    if (debug) {
-      return new Response(JSON.stringify({
-        success: true,
-        debug: true,
-        table_id,
-        ad_account_id: adAccountId,
-        date_range: dateRange,
-        since: sinceStr,
-        until: untilStr,
-        records_fetched: insights.length,
-        totals: {
-          leads: insights.reduce((sum, row) => sum + row.leads, 0),
-          spend: insights.reduce((sum, row) => sum + row.spend, 0),
-        },
-        rows: debugRows,
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
 
     // Make sure fields exist for Facebook Insights table
     const fieldKeys = ['date', 'campaign_name', 'campaign_id', 'impressions', 'clicks', 'lp_or_form_views', 'cpm', 'ctr', 'leads', 'form_leads', 'cost_per_lead', 'spend', 'purchases', 'purchase_value', 'add_to_cart', 'roas', 'campaign_objective', 'campaign_type', 'effective_status', 'configured_status', 'updated_time'];
