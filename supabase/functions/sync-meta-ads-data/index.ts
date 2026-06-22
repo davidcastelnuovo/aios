@@ -99,7 +99,7 @@ Deno.serve(async (req) => {
         endDate.setDate(endDate.getDate() - 1);
         break;
       case 'last_7_days':
-        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
         break;
       case 'last_14_days':
         startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 14);
