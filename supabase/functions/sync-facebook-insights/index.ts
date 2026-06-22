@@ -58,7 +58,10 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { table_id } = await req.json();
+    const body = await req.json();
+    const { table_id } = body;
+    const debug = body?.debug === true;
+    const dateRangeOverride = typeof body?.date_range === 'string' ? body.date_range : null;
     
     if (!table_id) {
       return new Response(JSON.stringify({ error: 'table_id required' }), {
@@ -98,7 +101,7 @@ Deno.serve(async (req) => {
 
     const settings = table.integration_settings || {};
     const adAccountId = settings.ad_account_id;
-    const dateRange = settings.date_range || 'last_30_days';
+    const dateRange = dateRangeOverride || settings.date_range || 'last_30_days';
 
     if (!adAccountId) {
       return new Response(JSON.stringify({ error: 'No ad account configured' }), {
@@ -302,6 +305,7 @@ Deno.serve(async (req) => {
     ];
 
     console.log(`[sync-facebook-insights] Got ${(data.data || []).length} insight rows from FB`);
+    const debugRows: any[] = [];
 
     const insights: InsightRecord[] = (data.data || []).map((insight: any) => {
       const allActions = [...(insight.actions ?? []), ...(insight.conversions ?? [])];
@@ -405,6 +409,29 @@ Deno.serve(async (req) => {
           spend: _spendForLog,
           objective: _objectiveForLeads,
           action_types: Array.from(actionTypeSet),
+        });
+      }
+      if (debug) {
+        debugRows.push({
+          date: insight.date_start,
+          campaign_id: insight.campaign_id,
+          campaign_name: insight.campaign_name,
+          objective: _objectiveForLeads,
+          spend: _spendForLog,
+          computed_leads: leads,
+          candidates: {
+            form: _formLeadsValue,
+            messaging_started: _messagingLeadsValue,
+            pixel: _pixelLeadsValue,
+            custom_conversion_children: _customConversionLeadsValue,
+            standard_intent: _standardIntentValue,
+            aggregate_lead: _aggregateLeadValue,
+            website_max: _websiteLeads,
+          },
+          actions: allActions.map((a: any) => ({
+            action_type: String(a.action_type || ''),
+            value: Number(a.value) || 0,
+          })),
         });
       }
       const _leadgenGroupedValue = _formLeadsValue;
