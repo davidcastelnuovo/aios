@@ -157,8 +157,8 @@ Deno.serve(async (req) => {
         since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek);
         break;
       case 'last_7_days':
-        since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
-        until = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+        since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
+        until = today;
         break;
       case 'last_14_days':
         since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 14);

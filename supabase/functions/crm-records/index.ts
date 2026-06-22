@@ -90,8 +90,8 @@ function getDateRange(filter: string, customFrom?: string, customTo?: string, in
     case 'last_7_days': {
       const isAds = ['facebook_insights', 'facebook_ecommerce', 'google_ads'].includes(String(integrationType || ''));
       if (isAds) {
-        startDate = shiftDateString(today, -7);
-        endDate = shiftDateString(today, -1);
+        startDate = shiftDateString(today, -6);
+        endDate = today;
       } else {
         const yesterday = shiftDateString(today, -1);
         const yDow = getWeekdayIndexInTimeZone(new Date(yesterday + 'T12:00:00Z'));

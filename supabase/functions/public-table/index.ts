@@ -25,8 +25,8 @@ function subDays(base: Date, days: number): Date {
  * (the internal report). MUST stay in sync so the public share link
  * shows the exact same numbers as the internal view.
  *
- * Notably: "last_N_days" excludes today (today-N .. today-1) — same as
- * the internal view, because today's data is usually partial during the day.
+ * Notably: "last_N_days" includes today for ads reports — same as
+ * the internal view and Meta/Google report expectations.
  */
 function getDateRange(
   filter: string,
@@ -59,7 +59,7 @@ function getDateRange(
       return { startDate: fmt(startLW), endDate: fmt(endLW) };
     }
     case "last_7_days":
-      return { startDate: fmt(subDays(today, 7)), endDate: fmt(subDays(today, 1)) };
+      return { startDate: fmt(subDays(today, 6)), endDate: fmt(today) };
     case "last_14_days":
       return { startDate: fmt(subDays(today, 14)), endDate: fmt(subDays(today, 1)) };
     case "last_30_days":
