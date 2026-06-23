@@ -2944,7 +2944,7 @@ function FacebookFormSelectionDialog({
       if (!tenantId) return [];
       const { data, error } = await supabase
         .from("tenant_integrations")
-        .select("id, integration_type, settings, api_key, is_active")
+        .select("id, integration_type, settings, api_key, is_active, shared_from_integration_id")
         .eq("tenant_id", tenantId)
         .eq("integration_type", "facebook_lead_ads")
         .eq("is_active", true);
@@ -2955,7 +2955,30 @@ function FacebookFormSelectionDialog({
   });
 
   const selectedIntegration = fbIntegrations?.find((i) => i.id === selectedIntegrationId);
-  const accessToken = selectedIntegration?.api_key || null;
+
+  // Shared connections (child tenants) carry no api_key of their own — they
+  // reference the source integration's token via shared_from_integration_id.
+  // Resolve that source token so page/form loading works for shared connections
+  // (mirrors FacebookFormMappingSection). Without this, shared tenants get a null
+  // token and the page dropdown stays empty ("doesn't find the page").
+  const { data: sourceToken } = useQuery({
+    queryKey: ["fb-flow-shared-source-token", selectedIntegration?.shared_from_integration_id],
+    queryFn: async () => {
+      const sourceId = selectedIntegration?.shared_from_integration_id;
+      if (!sourceId) return null;
+      const { data, error } = await supabase
+        .from("tenant_integrations")
+        .select("api_key")
+        .eq("id", sourceId)
+        .eq("is_active", true)
+        .maybeSingle();
+      if (error) throw error;
+      return data?.api_key || null;
+    },
+    enabled: !!selectedIntegration?.shared_from_integration_id && !selectedIntegration?.api_key && open,
+  });
+
+  const accessToken = selectedIntegration?.api_key || sourceToken || null;
 
   // Fetch pages
   const { data: pagesData, isLoading: loadingPages } = useQuery({
