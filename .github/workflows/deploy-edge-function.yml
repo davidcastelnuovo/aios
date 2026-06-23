@@ -1,40 +1,35 @@
 name: Deploy Supabase Edge Function
 
-# Manual deploy of a single Supabase Edge Function to the PRODUCTION project,
-# straight from the repository source (zero copy risk).
+# Deploys an edge function from repo source to the PRODUCTION Supabase project.
 #
-# Setup (one-time):
-#   1. Create a Supabase access token: Supabase Dashboard → account menu (top-right)
-#      → "Access Tokens" → Generate new token → copy it.
-#   2. Add it to GitHub: repo → Settings → Secrets and variables → Actions →
-#      "New repository secret" → Name: SUPABASE_ACCESS_TOKEN → paste the token.
+# Auto-runs on merge to main when this workflow or the trigger-automation
+# function changes. Can also be run manually (Actions tab → Run workflow) to
+# deploy any function by name.
 #
-# Usage:
-#   GitHub → Actions tab → "Deploy Supabase Edge Function" → "Run workflow" →
-#   leave the function name as trigger-automation (or type another) → Run.
+# Requires a repo secret named BASE_ACCESS_TOKEN = a Supabase access token (sbp_...).
 
 on:
   workflow_dispatch:
     inputs:
       function_name:
         description: 'Edge function folder name to deploy'
-        required: true
+        required: false
         default: 'trigger-automation'
       verify_jwt:
         description: 'Require a JWT? true for normal functions, false for public webhooks'
-        required: true
+        required: false
         default: 'true'
-        type: choice
-        options:
-          - 'true'
-          - 'false'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/deploy-edge-function.yml'
+      - 'supabase/functions/trigger-automation/**'
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
-      # The GitHub secret is named BASE_ACCESS_TOKEN; the Supabase CLI reads it
-      # from the SUPABASE_ACCESS_TOKEN environment variable.
+      # GitHub secret BASE_ACCESS_TOKEN -> the env var the Supabase CLI expects.
       SUPABASE_ACCESS_TOKEN: ${{ secrets.BASE_ACCESS_TOKEN }}
       PROJECT_REF: zvoijyneresvkadpprel
     steps:
@@ -49,10 +44,9 @@ jobs:
       - name: Deploy function
         run: |
           set -euo pipefail
+          FUNC="${{ github.event.inputs.function_name || 'trigger-automation' }}"
+          VJWT="${{ github.event.inputs.verify_jwt || 'true' }}"
           FLAG=""
-          if [ "${{ github.event.inputs.verify_jwt }}" = "false" ]; then
-            FLAG="--no-verify-jwt"
-          fi
-          echo "Deploying '${{ github.event.inputs.function_name }}' to project $PROJECT_REF (verify_jwt=${{ github.event.inputs.verify_jwt }})"
-          supabase functions deploy "${{ github.event.inputs.function_name }}" \
-            --project-ref "$PROJECT_REF" $FLAG
+          if [ "$VJWT" = "false" ]; then FLAG="--no-verify-jwt"; fi
+          echo "Deploying '$FUNC' to project $PROJECT_REF (verify_jwt=$VJWT)"
+          supabase functions deploy "$FUNC" --project-ref "$PROJECT_REF" $FLAG
