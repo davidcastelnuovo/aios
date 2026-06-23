@@ -520,7 +520,7 @@ export function AddAutomationForm() {
                 <div className="flex gap-2">
                   <Input 
                     readOnly 
-                    value={`https://jnzguisakdtcollxmgzd.supabase.co/functions/v1/webhook-task-intake`}
+                    value={`https://zvoijyneresvkadpprel.supabase.co/functions/v1/webhook-task-intake`}
                     className="font-mono text-xs bg-background"
                   />
                   <Button
@@ -528,7 +528,7 @@ export function AddAutomationForm() {
                     variant="outline"
                     size="icon"
                     onClick={() => {
-                      navigator.clipboard.writeText(`https://jnzguisakdtcollxmgzd.supabase.co/functions/v1/webhook-task-intake`);
+                      navigator.clipboard.writeText(`https://zvoijyneresvkadpprel.supabase.co/functions/v1/webhook-task-intake`);
                       toast({
                         title: "הועתק!",
                         description: "ה-URL הועתק ללוח",
@@ -568,7 +568,7 @@ export function AddAutomationForm() {
                   <div className="flex gap-2">
                     <Input 
                       readOnly 
-                      value={`https://jnzguisakdtcollxmgzd.supabase.co/functions/v1/webhook-maskyoo-intake?tenant_id=${tenantId || 'YOUR_TENANT_ID'}`}
+                      value={`https://zvoijyneresvkadpprel.supabase.co/functions/v1/webhook-maskyoo-intake?tenant_id=${tenantId || 'YOUR_TENANT_ID'}`}
                       className="font-mono text-xs bg-background"
                     />
                     <Button
@@ -576,7 +576,7 @@ export function AddAutomationForm() {
                       variant="outline"
                       size="icon"
                       onClick={() => {
-                        navigator.clipboard.writeText(`https://jnzguisakdtcollxmgzd.supabase.co/functions/v1/webhook-maskyoo-intake?tenant_id=${tenantId || ''}`);
+                        navigator.clipboard.writeText(`https://zvoijyneresvkadpprel.supabase.co/functions/v1/webhook-maskyoo-intake?tenant_id=${tenantId || ''}`);
                         toast({
                           title: "הועתק!",
                           description: "ה-URL הועתק ללוח",
