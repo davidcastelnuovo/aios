@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { chatCompletion } from "../_shared/ai-gateway.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,7 +13,7 @@ Deno.serve(async (req) => {
 
   const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
   const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+  const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
   const GOOGLE_CLIENT_ID = Deno.env.get('GOOGLE_CLIENT_ID');
   const GOOGLE_CLIENT_SECRET = Deno.env.get('GOOGLE_CLIENT_SECRET');
 
@@ -193,23 +194,18 @@ Deno.serve(async (req) => {
     // 6. AI Summary via Lovable AI Gateway
     let summary: string | null = null;
 
-    if (transcription && LOVABLE_API_KEY) {
+    if (transcription && ANTHROPIC_API_KEY) {
       try {
         console.log('Generating AI summary...');
         const meetingName = calendarEventName || recording.meeting_topic || 'פגישה';
 
-        const aiResponse = await fetch('https://ai.lovable.dev/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-          },
-          body: JSON.stringify({
-            model: 'google/gemini-2.5-flash',
-            messages: [
-              {
-                role: 'system',
-                content: `אתה עוזר מקצועי שמסכם פגישות. צור סיכום קצר ומובנה בעברית.
+        const aiData = await chatCompletion({
+          model: 'sonnet',
+          max_tokens: 2000,
+          messages: [
+            {
+              role: 'system',
+              content: `אתה עוזר מקצועי שמסכם פגישות. צור סיכום קצר ומובנה בעברית.
 הסיכום צריך לכלול:
 1. נושא הפגישה
 2. נקודות עיקריות שנדונו (3-5 נקודות)
@@ -217,29 +213,21 @@ Deno.serve(async (req) => {
 4. משימות להמשך (אם יש)
 
 השתמש באימוג'ים מתאימים. הסיכום צריך להיות תמציתי וקריא.`,
-              },
-              {
-                role: 'user',
-                content: `סכם את הפגישה הבאה:
+            },
+            {
+              role: 'user',
+              content: `סכם את הפגישה הבאה:
 שם הפגישה: ${meetingName}
 תאריך: ${recording.start_time || 'לא ידוע'}
 משך: ${recording.duration || 'לא ידוע'} דקות
 
 תמלול:
 ${transcription.substring(0, 15000)}`,
-              },
-            ],
-            max_tokens: 2000,
-          }),
+            },
+          ],
         });
-
-        if (aiResponse.ok) {
-          const aiData = await aiResponse.json();
-          summary = aiData.choices?.[0]?.message?.content || null;
-          console.log(`Summary generated: ${summary?.length || 0} chars`);
-        } else {
-          console.error('AI summary failed:', await aiResponse.text());
-        }
+        summary = aiData.choices?.[0]?.message?.content || null;
+        console.log(`Summary generated: ${summary?.length || 0} chars`);
       } catch (aiErr) {
         console.error('AI summary error:', aiErr);
       }

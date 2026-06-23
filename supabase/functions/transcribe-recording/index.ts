@@ -1,6 +1,5 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { encode as base64Encode } from 'https://deno.land/std@0.168.0/encoding/base64.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -156,8 +155,8 @@ serve(async (req) => {
       });
     }
 
-    // Transcribe via Gemini
-    const text = await transcribeWithGemini(audioBlob, contentType);
+    // Transcribe via OpenAI Whisper
+    const text = await transcribeWithWhisper(audioBlob, contentType);
     await setTranscriptionStatus(supabase, recording_id, 'completed', text);
 
     return new Response(JSON.stringify({ text }), {
@@ -182,50 +181,34 @@ serve(async (req) => {
   }
 });
 
-// ── Transcription via Lovable AI Gateway (Gemini) ────────────────────
-async function transcribeWithGemini(audioBlob: Blob, contentType: string): Promise<string> {
-  const apiKey = Deno.env.get('LOVABLE_API_KEY');
-  if (!apiKey) throw new Error('LOVABLE_API_KEY not configured');
+// ── Transcription via OpenAI Whisper ─────────────────────────────────
+async function transcribeWithWhisper(audioBlob: Blob, contentType: string): Promise<string> {
+  const apiKey = Deno.env.get('OPENAI_API_KEY');
+  if (!apiKey) throw new Error('OPENAI_API_KEY not configured');
 
-  const bytes = new Uint8Array(await audioBlob.arrayBuffer());
-  const base64 = base64Encode(bytes);
-  const format = geminiAudioFormat(contentType);
+  const ext = geminiAudioFormat(contentType);
+  console.log(`🎙️ Sending ${audioBlob.size} bytes to Whisper (format=${ext})`);
 
-  console.log(`🎙️ Sending ${bytes.length} bytes to Gemini (format=${format})`);
+  const form = new FormData();
+  form.append('file', audioBlob, `audio.${ext}`);
+  form.append('model', 'whisper-1');
+  form.append('language', 'he');
+  form.append('response_format', 'json');
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 480_000); // 8 min
 
   let resp: Response;
   try {
-    resp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Lovable-API-Key': apiKey,
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          {
-            role: 'system',
-            content: 'אתה מתמלל מקצועי. תמלל את ההקלטה הבאה בעברית במלואה, בצורה מדויקת ושוטפת, כולל פיסוק נכון. החזר אך ורק את הטקסט המתומלל, ללא הקדמות, הסברים או הערות.',
-          },
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: 'תמלל את ההקלטה הבאה:' },
-              { type: 'input_audio', input_audio: { data: base64, format } },
-            ],
-          },
-        ],
-        temperature: 0.1,
-      }),
+      headers: { 'Authorization': `Bearer ${apiKey}` },
+      body: form,
       signal: controller.signal,
     });
   } catch (err: any) {
     clearTimeout(timeout);
-    if (err.name === 'AbortError') throw new Error('Gemini transcription timed out after 8 minutes');
+    if (err.name === 'AbortError') throw new Error('Whisper transcription timed out after 8 minutes');
     throw err;
   } finally {
     clearTimeout(timeout);
@@ -233,15 +216,14 @@ async function transcribeWithGemini(audioBlob: Blob, contentType: string): Promi
 
   if (!resp.ok) {
     const errText = await resp.text();
-    if (resp.status === 429) throw new Error('Lovable AI rate limit exceeded, please retry shortly');
-    if (resp.status === 402) throw new Error('Lovable AI credits exhausted — add credits in Workspace > Usage');
-    throw new Error(`Gemini transcription failed (${resp.status}): ${errText.slice(0, 300)}`);
+    if (resp.status === 429) throw new Error('OpenAI rate limit exceeded, please retry shortly');
+    throw new Error(`Whisper transcription failed (${resp.status}): ${errText.slice(0, 300)}`);
   }
 
   const data = await resp.json();
-  const text = data?.choices?.[0]?.message?.content;
+  const text = data?.text;
   if (!text || typeof text !== 'string') {
-    throw new Error('Gemini returned empty transcription');
+    throw new Error('Whisper returned empty transcription');
   }
   return text.trim();
 }

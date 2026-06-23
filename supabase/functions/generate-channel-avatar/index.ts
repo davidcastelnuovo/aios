@@ -13,8 +13,8 @@ serve(async (req) => {
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not configured");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -28,58 +28,41 @@ serve(async (req) => {
       });
     }
 
-    // Generate image using AI
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    // Generate image via OpenAI (gpt-image-1) — returns base64.
+    const aiResponse = await fetch("https://api.openai.com/v1/images/generations", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash-image",
-        messages: [
-          {
-            role: "user",
-            content: `Generate a square avatar/icon image for a chat channel. The image should be clean, modern, and work well as a small icon. On a solid white background. Description: ${prompt}`,
-          },
-        ],
-        modalities: ["image", "text"],
+        model: "gpt-image-1",
+        prompt: `A square avatar/icon image for a chat channel. Clean, modern, works well as a small icon, on a solid white background. Description: ${prompt}`,
+        n: 1,
+        size: "1024x1024",
       }),
     });
 
     if (!aiResponse.ok) {
       const errorText = await aiResponse.text();
-      console.error("AI gateway error:", aiResponse.status, errorText);
+      console.error("OpenAI image error:", aiResponse.status, errorText);
       if (aiResponse.status === 429) {
         return new Response(JSON.stringify({ error: "יותר מדי בקשות, נסה שוב בעוד דקה" }), {
           status: 429,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      if (aiResponse.status === 402) {
-        return new Response(JSON.stringify({ error: "נגמרו הקרדיטים, אנא הוסף קרדיטים" }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      throw new Error(`AI gateway error: ${aiResponse.status}`);
+      throw new Error(`OpenAI image error: ${aiResponse.status}`);
     }
 
     const aiData = await aiResponse.json();
-    const imageUrl = aiData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+    const base64Data = aiData?.data?.[0]?.b64_json;
 
-    if (!imageUrl) {
+    if (!base64Data) {
       throw new Error("No image generated from AI");
     }
 
-    // Extract base64 data
-    const base64Match = imageUrl.match(/^data:image\/(png|jpeg|jpg|webp);base64,(.+)$/);
-    if (!base64Match) {
-      throw new Error("Invalid image format from AI");
-    }
-
-    const imageType = base64Match[1];
-    const base64Data = base64Match[2];
+    const imageType = "png";
 
     // Convert base64 to Uint8Array
     const binaryString = atob(base64Data);

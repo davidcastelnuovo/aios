@@ -3,6 +3,7 @@
 // Resume: { run_id, tenant_id }  (called by resume-agent-run after approval)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 import { resolveModelId } from "../_shared/models.ts";
+import { chatCompletion } from "../_shared/ai-gateway.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -11,8 +12,6 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
-const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 
 type Json = Record<string, any>;
 
@@ -152,25 +151,13 @@ async function reconstructMessages(supabase: any, run: RunRow, systemPrompt: str
 
 async function callLLM(model: string, messages: any[], openaiTools: any[]) {
   const t0 = Date.now();
-  const resp = await fetch(AI_GATEWAY_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      tools: openaiTools.length ? openaiTools : undefined,
-      tool_choice: openaiTools.length ? "auto" : undefined,
-    }),
+  const data = await chatCompletion({
+    model,
+    messages,
+    tools: openaiTools.length ? openaiTools : undefined,
+    tool_choice: openaiTools.length ? "auto" : undefined,
   });
   const duration_ms = Date.now() - t0;
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`LLM ${resp.status}: ${text}`);
-  }
-  const data = await resp.json();
   return {
     choice: data.choices?.[0],
     usage: data.usage ?? {},
@@ -241,22 +228,15 @@ async function finalizeRun(
   // Reflection: ask the model to summarize and write episodic memory.
   try {
     if (status === "completed") {
-      const reflectResp = await fetch(AI_GATEWAY_URL, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: run.model ?? "google/gemini-3-flash-preview",
-          messages: [
-            { role: "system", content: "סכם בקצרה (עד 3 משפטים) מה הסוכן השיג והאם יש לקח שכדאי לזכור לעתיד. ענה בעברית." },
-            { role: "user", content: `מטרה: ${run.goal}\nתשובה סופית: ${finalAnswer}` },
-          ],
-        }),
+      const rdata = await chatCompletion({
+        model: run.model ?? undefined,
+        max_tokens: 512,
+        messages: [
+          { role: "system", content: "סכם בקצרה (עד 3 משפטים) מה הסוכן השיג והאם יש לקח שכדאי לזכור לעתיד. ענה בעברית." },
+          { role: "user", content: `מטרה: ${run.goal}\nתשובה סופית: ${finalAnswer}` },
+        ],
       });
-      if (reflectResp.ok) {
-        const rdata = await reflectResp.json();
+      {
         const reflection = rdata.choices?.[0]?.message?.content ?? "";
         if (reflection) {
           await supabase.from("agent_memory").insert({

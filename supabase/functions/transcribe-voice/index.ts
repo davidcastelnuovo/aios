@@ -1,5 +1,4 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { encode as base64Encode } from 'https://deno.land/std@0.168.0/encoding/base64.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -32,53 +31,37 @@ serve(async (req) => {
       });
     }
 
-    const apiKey = Deno.env.get('LOVABLE_API_KEY');
+    const apiKey = Deno.env.get('OPENAI_API_KEY');
     if (!apiKey) {
-      return new Response(JSON.stringify({ error: 'LOVABLE_API_KEY not configured' }), {
+      return new Response(JSON.stringify({ error: 'OPENAI_API_KEY not configured' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    const bytes = new Uint8Array(await audioFile.arrayBuffer());
-    const base64 = base64Encode(bytes);
-    const format = geminiAudioFormat(audioFile.type || 'audio/webm');
-
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 180_000);
 
+    // OpenAI Whisper transcription (multipart upload). Hebrew hinted via language.
+    const whisperForm = new FormData();
+    whisperForm.append('file', audioFile, audioFile.name || `audio.${geminiAudioFormat(audioFile.type || 'audio/webm')}`);
+    whisperForm.append('model', 'whisper-1');
+    whisperForm.append('language', 'he');
+    whisperForm.append('response_format', 'json');
+
     let response: Response;
     try {
-      response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Lovable-API-Key': apiKey,
-        },
-        body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
-          messages: [
-            {
-              role: 'system',
-              content: 'אתה מתמלל מקצועי. תמלל את ההקלטה במלואה בעברית, במדויק וללא תוספות. החזר אך ורק את הטקסט המתומלל, ללא הקדמות או הסברים.',
-            },
-            {
-              role: 'user',
-              content: [
-                { type: 'text', text: 'תמלל את ההקלטה:' },
-                { type: 'input_audio', input_audio: { data: base64, format } },
-              ],
-            },
-          ],
-          temperature: 0.1,
-        }),
+        headers: { 'Authorization': `Bearer ${apiKey}` },
+        body: whisperForm,
         signal: controller.signal,
       });
     } catch (abortErr: any) {
       clearTimeout(timeout);
       const isTimeout = abortErr.name === 'AbortError';
-      const errMsg = isTimeout ? 'Gemini transcription timed out' : (abortErr.message || 'Unknown fetch error');
-      console.error('❌ Gemini fetch error:', errMsg);
+      const errMsg = isTimeout ? 'Whisper transcription timed out' : (abortErr.message || 'Unknown fetch error');
+      console.error('❌ Whisper fetch error:', errMsg);
       return new Response(JSON.stringify({ error: errMsg }), {
         status: 504,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -89,15 +72,10 @@ serve(async (req) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('❌ Gemini transcription error:', response.status, errorText);
+      console.error('❌ Whisper transcription error:', response.status, errorText);
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: 'Rate limit exceeded, please retry' }), {
           status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: 'AI credits exhausted' }), {
-          status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
       return new Response(JSON.stringify({ error: `Transcription failed: ${errorText.slice(0, 300)}` }), {
@@ -107,7 +85,7 @@ serve(async (req) => {
     }
 
     const result = await response.json();
-    const text = (result?.choices?.[0]?.message?.content || '').trim();
+    const text = (result?.text || '').trim();
 
     return new Response(JSON.stringify({ text }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
