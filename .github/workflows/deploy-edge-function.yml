@@ -1,0 +1,56 @@
+name: Deploy Supabase Edge Function
+
+# Manual deploy of a single Supabase Edge Function to the PRODUCTION project,
+# straight from the repository source (zero copy risk).
+#
+# Setup (one-time):
+#   1. Create a Supabase access token: Supabase Dashboard → account menu (top-right)
+#      → "Access Tokens" → Generate new token → copy it.
+#   2. Add it to GitHub: repo → Settings → Secrets and variables → Actions →
+#      "New repository secret" → Name: SUPABASE_ACCESS_TOKEN → paste the token.
+#
+# Usage:
+#   GitHub → Actions tab → "Deploy Supabase Edge Function" → "Run workflow" →
+#   leave the function name as trigger-automation (or type another) → Run.
+
+on:
+  workflow_dispatch:
+    inputs:
+      function_name:
+        description: 'Edge function folder name to deploy'
+        required: true
+        default: 'trigger-automation'
+      verify_jwt:
+        description: 'Require a JWT? true for normal functions, false for public webhooks'
+        required: true
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      PROJECT_REF: zvoijyneresvkadpprel
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Deploy function
+        run: |
+          set -euo pipefail
+          FLAG=""
+          if [ "${{ github.event.inputs.verify_jwt }}" = "false" ]; then
+            FLAG="--no-verify-jwt"
+          fi
+          echo "Deploying '${{ github.event.inputs.function_name }}' to project $PROJECT_REF (verify_jwt=${{ github.event.inputs.verify_jwt }})"
+          supabase functions deploy "${{ github.event.inputs.function_name }}" \
+            --project-ref "$PROJECT_REF" $FLAG
