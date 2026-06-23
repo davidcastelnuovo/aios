@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { chatCompletion } from "../_shared/ai-gateway.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -9,7 +10,6 @@ const corsHeaders = {
 };
 
 const TEXT_MODEL = "google/gemini-3-flash-preview";
-const IMAGE_MODEL = "google/gemini-2.5-flash-image";
 
 // Cost per 1M tokens (rough Gemini Flash pricing for usage display)
 const COST_IN_PER_M = 0.075;
@@ -24,8 +24,7 @@ serve(async (req) => {
   const admin = createClient(supaUrl, supaService);
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("Missing LOVABLE_API_KEY");
+    if (!Deno.env.get("ANTHROPIC_API_KEY")) throw new Error("Missing ANTHROPIC_API_KEY");
 
     const { item_id, stage_id } = await req.json();
     if (!item_id || !stage_id) {
@@ -154,30 +153,29 @@ serve(async (req) => {
     let outputJson: any = {};
 
     if (stageType === "creative") {
-      // Image generation
-      const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      // Image generation via OpenAI (gpt-image-1) — returns base64.
+      const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+      if (!OPENAI_API_KEY) throw new Error("Missing OPENAI_API_KEY");
+      const aiRes = await fetch("https://api.openai.com/v1/images/generations", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: IMAGE_MODEL,
-          messages: [
-            { role: "system", content: systemPrompt || "You are a creative director." },
-            { role: "user", content: userPrompt },
-          ],
-          modalities: ["image", "text"],
+          model: "gpt-image-1",
+          prompt: `${systemPrompt ? systemPrompt + "\n\n" : ""}${userPrompt}`,
+          n: 1,
+          size: "1024x1024",
         }),
       });
       if (!aiRes.ok) {
         const t = await aiRes.text();
-        throw new Error(`AI gateway ${aiRes.status}: ${t}`);
+        throw new Error(`OpenAI image ${aiRes.status}: ${t}`);
       }
       const data = await aiRes.json();
-      const base64 = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-      if (!base64) throw new Error("No image returned");
-      const b64Data = base64.replace(/^data:image\/\w+;base64,/, "");
+      const b64Data = data?.data?.[0]?.b64_json;
+      if (!b64Data) throw new Error("No image returned");
       const bytes = Uint8Array.from(atob(b64Data), (c) => c.charCodeAt(0));
       const fileName = `${Date.now()}-${runRow.id}.png`;
       const filePath = `${item.tenant_id}/marketing/${item_id}/${fileName}`;
@@ -188,34 +186,16 @@ serve(async (req) => {
       const { data: pub } = admin.storage.from("entity-attachments").getPublicUrl(filePath);
       assetUrl = pub.publicUrl;
       assetType = "image";
-      tokensIn = data.usage?.prompt_tokens ?? 0;
-      tokensOut = data.usage?.completion_tokens ?? 0;
       outputJson = { image_url: assetUrl };
     } else {
       // Text generation
-      const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: TEXT_MODEL,
-          messages: [
-            { role: "system", content: systemPrompt || "You are a marketing assistant." },
-            { role: "user", content: userPrompt },
-          ],
-        }),
+      const data = await chatCompletion({
+        model: TEXT_MODEL,
+        messages: [
+          { role: "system", content: systemPrompt || "You are a marketing assistant." },
+          { role: "user", content: userPrompt },
+        ],
       });
-      if (!aiRes.ok) {
-        const t = await aiRes.text();
-        if (aiRes.status === 429)
-          throw new Error("חרגת ממכסת בקשות AI. נסה שוב בעוד מספר דקות.");
-        if (aiRes.status === 402)
-          throw new Error("נגמרו הקרדיטים. הוסף קרדיטים בהגדרות הסביבה.");
-        throw new Error(`AI gateway ${aiRes.status}: ${t}`);
-      }
-      const data = await aiRes.json();
       assetContent = data.choices?.[0]?.message?.content ?? "";
       tokensIn = data.usage?.prompt_tokens ?? 0;
       tokensOut = data.usage?.completion_tokens ?? 0;

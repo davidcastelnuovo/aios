@@ -2,6 +2,7 @@
 // Body: { supervisor_agent_id, goal, context?, tenant_id, user_id? }
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 import { resolveModelId } from "../_shared/models.ts";
+import { chatCompletion } from "../_shared/ai-gateway.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,8 +11,6 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
-const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 
 function jsonResponse(body: any, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -30,20 +29,14 @@ async function route(supervisor: any, children: any[], goal: string, context: an
 
   const prompt = `אתה ה-Supervisor "${supervisor.name}". יש לך את הסוכנים-בנים הבאים:\n${childDescriptions}\n\nמטרה: ${goal}\n${context && Object.keys(context).length ? `קונטקסט: ${JSON.stringify(context)}\n` : ""}\nבחר את הסוכן המתאים ביותר (או יותר מאחד אם חיוני) והחזר JSON בפורמט: {"delegations":[{"agent_id":"<uuid>","sub_goal":"<טקסט>"}]}. אל תוסיף הסבר.`;
 
-  const resp = await fetch(AI_GATEWAY_URL, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: resolveModelId(supervisor.engine ?? "gemini-2.5-flash"),
-      messages: [
-        { role: "system", content: "אתה Supervisor שמנתב משימות לסוכנים מומחים. החזר JSON בלבד." },
-        { role: "user", content: prompt },
-      ],
-      response_format: { type: "json_object" },
-    }),
+  const data = await chatCompletion({
+    model: resolveModelId(supervisor.engine ?? "gemini-2.5-flash"),
+    messages: [
+      { role: "system", content: "אתה Supervisor שמנתב משימות לסוכנים מומחים. החזר JSON בלבד." },
+      { role: "user", content: prompt },
+    ],
+    response_format: { type: "json_object" },
   });
-  if (!resp.ok) throw new Error(`routing LLM ${resp.status}: ${await resp.text()}`);
-  const data = await resp.json();
   const content = data.choices?.[0]?.message?.content ?? "{}";
   let parsed: any;
   try { parsed = JSON.parse(content); } catch { parsed = { delegations: [] }; }

@@ -2,6 +2,7 @@
 // Body: { eval_id, tenant_id, user_id? }
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 import { resolveModelId } from "../_shared/models.ts";
+import { chatCompletion } from "../_shared/ai-gateway.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,8 +11,6 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
-const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 
 function jsonResponse(body: any, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -20,20 +19,19 @@ function jsonResponse(body: any, status = 200) {
 }
 
 async function judge(input: string, expected: string, actual: string): Promise<{ score: number; reasoning: string }> {
-  const resp = await fetch(AI_GATEWAY_URL, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
+  let data: any;
+  try {
+    data = await chatCompletion({
       model: resolveModelId("gemini-2.5-pro"),
       messages: [
         { role: "system", content: "אתה שופט מומחה. השווה תשובה של AI מול תשובה צפויה והחזר JSON: {\"score\": 0-100, \"reasoning\":\"...\"}. ענה ב-JSON בלבד." },
         { role: "user", content: `קלט: ${input}\n\nצפוי: ${expected}\n\nבפועל: ${actual}` },
       ],
       response_format: { type: "json_object" },
-    }),
-  });
-  if (!resp.ok) return { score: 0, reasoning: `judge failed: ${resp.status}` };
-  const data = await resp.json();
+    });
+  } catch (e: any) {
+    return { score: 0, reasoning: `judge failed: ${String(e?.message ?? e)}` };
+  }
   try {
     const parsed = JSON.parse(data.choices?.[0]?.message?.content ?? "{}");
     return { score: Number(parsed.score) || 0, reasoning: String(parsed.reasoning ?? "") };

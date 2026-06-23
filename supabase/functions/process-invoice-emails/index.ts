@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
+import { chatCompletion } from "../_shared/ai-gateway.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -88,7 +89,7 @@ serve(async (req) => {
     const { data: suppliers } = await serviceClient
       .from("suppliers").select("id, name, email").eq("tenant_id", tenantId);
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
     const results: any[] = [];
 
     for (const messageId of messageIds) {
@@ -166,53 +167,45 @@ serve(async (req) => {
             let invoiceAmount = 0;
             let aiExtracted = false;
 
-            if (LOVABLE_API_KEY && (att.mimeType.startsWith("image/") || att.mimeType === "application/pdf")) {
+            if (ANTHROPIC_API_KEY && (att.mimeType.startsWith("image/") || att.mimeType === "application/pdf")) {
               try {
                 const mediaType = att.mimeType === "application/pdf" ? "application/pdf" : att.mimeType;
-                const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-                  method: "POST",
-                  headers: {
-                    Authorization: `Bearer ${LOVABLE_API_KEY}`,
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify({
-                    model: "google/gemini-2.5-flash",
-                    messages: [
-                      {
-                        role: "system",
-                        content: "You are an invoice data extraction assistant. Extract the invoice name/description, total amount, and supplier/vendor name from the provided invoice. The invoice may be in Hebrew or English. Always use the extract_invoice_data tool."
-                      },
-                      {
-                        role: "user",
-                        content: [
-                          { type: "image_url", image_url: { url: `data:${mediaType};base64,${base64Data}` } },
-                          { type: "text", text: "Extract the invoice name/title, total amount, and supplier/vendor name from this invoice." }
-                        ]
+                const aiData = await chatCompletion({
+                  model: "google/gemini-2.5-flash",
+                  messages: [
+                    {
+                      role: "system",
+                      content: "You are an invoice data extraction assistant. Extract the invoice name/description, total amount, and supplier/vendor name from the provided invoice. The invoice may be in Hebrew or English. Always use the extract_invoice_data tool."
+                    },
+                    {
+                      role: "user",
+                      content: [
+                        { type: "image_url", image_url: { url: `data:${mediaType};base64,${base64Data}` } },
+                        { type: "text", text: "Extract the invoice name/title, total amount, and supplier/vendor name from this invoice." }
+                      ]
+                    }
+                  ],
+                  tools: [{
+                    type: "function",
+                    function: {
+                      name: "extract_invoice_data",
+                      description: "Extract invoice data",
+                      parameters: {
+                        type: "object",
+                        properties: {
+                          invoice_name: { type: "string", description: "Invoice name/title/description" },
+                          invoice_amount: { type: "number", description: "Total amount" },
+                          supplier_name: { type: "string", description: "Supplier/vendor name" }
+                        },
+                        required: ["invoice_name", "invoice_amount"],
+                        additionalProperties: false,
                       }
-                    ],
-                    tools: [{
-                      type: "function",
-                      function: {
-                        name: "extract_invoice_data",
-                        description: "Extract invoice data",
-                        parameters: {
-                          type: "object",
-                          properties: {
-                            invoice_name: { type: "string", description: "Invoice name/title/description" },
-                            invoice_amount: { type: "number", description: "Total amount" },
-                            supplier_name: { type: "string", description: "Supplier/vendor name" }
-                          },
-                          required: ["invoice_name", "invoice_amount"],
-                          additionalProperties: false,
-                        }
-                      }
-                    }],
-                    tool_choice: { type: "function", function: { name: "extract_invoice_data" } }
-                  }),
+                    }
+                  }],
+                  tool_choice: { type: "function", function: { name: "extract_invoice_data" } }
                 });
 
-                if (aiResponse.ok) {
-                  const aiData = await aiResponse.json();
+                {
                   const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
                   if (toolCall?.function?.arguments) {
                     const extracted = JSON.parse(toolCall.function.arguments);

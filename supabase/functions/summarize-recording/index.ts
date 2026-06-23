@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { zipSync } from "https://esm.sh/fflate@0.8.2";
+import { chatCompletion } from "../_shared/ai-gateway.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -80,60 +81,42 @@ serve(async (req) => {
     }
 
     // Generate summary using Lovable AI
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
-
-    const aiResponse = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
-          messages: [
-            {
-              role: "system",
-              content: `אתה עוזר מקצועי לסיכום פגישות עסקיות. כתוב סיכומים מקצועיים, ברורים ומאורגנים בעברית.
+    let aiData;
+    try {
+      aiData = await chatCompletion({
+        model: "sonnet",
+        max_tokens: 2000,
+        messages: [
+          {
+            role: "system",
+            content: `אתה עוזר מקצועי לסיכום פגישות עסקיות. כתוב סיכומים מקצועיים, ברורים ומאורגנים בעברית.
 הסיכום צריך להיות מובנה עם כותרות, נקודות מרכזיות, ופסקאות קצרות.
 השתמש בפורמט Markdown.
 אל תמציא מידע - סכם רק מה שמופיע בתמלול.`,
-            },
-            {
-              role: "user",
-              content: `סכם את הפגישה הבאה:
+          },
+          {
+            role: "user",
+            content: `סכם את הפגישה הבאה:
 
 ${recordingInfo ? "פרטי הפגישה:\n" + recordingInfo + "\n\n" : ""}תמלול/הערות:
 ${transcript}${focusPrompt}
 
 אנא כתוב סיכום מקצועי ומובנה של הפגישה.`,
-            },
-          ],
-        }),
-      }
-    );
-
-    if (!aiResponse.ok) {
-      if (aiResponse.status === 429) {
+          },
+        ],
+      });
+    } catch (e) {
+      const m = (e as any)?.message || String(e);
+      if (/\b429\b/.test(m)) {
         return new Response(
           JSON.stringify({ error: "חריגה ממגבלת בקשות, נסה שוב בעוד כמה דקות" }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      if (aiResponse.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "נדרש תשלום - נא להוסיף קרדיטים" }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      const errText = await aiResponse.text();
-      console.error("AI error:", aiResponse.status, errText);
+      console.error("AI error:", m);
       throw new Error("שגיאה ביצירת סיכום AI");
     }
 
-    const aiData = await aiResponse.json();
     const summary = aiData.choices?.[0]?.message?.content;
     if (!summary) throw new Error("לא התקבל סיכום מה-AI");
 

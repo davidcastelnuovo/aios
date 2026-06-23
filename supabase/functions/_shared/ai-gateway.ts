@@ -86,12 +86,18 @@ function toAnthropicContentParts(content: any): any[] {
       const url: string = part.image_url?.url ?? part.image_url ?? '';
       const m = /^data:([^;]+);base64,(.*)$/.exec(url);
       if (m) {
-        blocks.push({ type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } });
+        // Anthropic wants PDFs in a `document` block, images in an `image` block.
+        const kind = m[1] === 'application/pdf' ? 'document' : 'image';
+        blocks.push({ type: kind, source: { type: 'base64', media_type: m[1], data: m[2] } });
       } else if (url) {
-        blocks.push({ type: 'image', source: { type: 'url', url } });
+        const isPdf = /\.pdf($|\?)/i.test(url);
+        blocks.push(isPdf
+          ? { type: 'document', source: { type: 'url', url } }
+          : { type: 'image', source: { type: 'url', url } });
       }
       continue;
     }
+    if (part?.type === 'document' && part.source) { blocks.push(part); continue; }
     if (part?.type === 'image' && part.source) { blocks.push(part); continue; }
   }
   return blocks;

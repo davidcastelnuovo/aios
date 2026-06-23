@@ -1,13 +1,13 @@
 // Carmen Self-Learning — analyzes a closed WhatsApp session and extracts insights
 // into carmen_memory_pointers + carmen_memory_episodes.
 import { svc, embed, upsertPointer, shortText } from "../_shared/carmen-memory.ts";
+import { chatCompletion } from "../_shared/ai-gateway.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 const MODEL = "google/gemini-2.5-flash";
 
 type Insight = {
@@ -105,19 +105,15 @@ function buildSchema() {
 }
 
 async function analyze(history: any[]): Promise<Insight | null> {
-  if (!LOVABLE_API_KEY) return null;
+  if (!Deno.env.get("ANTHROPIC_API_KEY")) return null;
   const trimmed = history.slice(-40);
   const transcript = trimmed
     .map((m: any) => `[${m.role || m.direction || "?"}] ${shortText(m.content || m.message || m.text, 500)}`)
     .join("\n");
 
-  const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-    },
-    body: JSON.stringify({
+  let j: any;
+  try {
+    j = await chatCompletion({
       model: MODEL,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
@@ -134,14 +130,11 @@ async function analyze(history: any[]): Promise<Insight | null> {
         },
       ],
       tool_choice: { type: "function", function: { name: "save_insights" } },
-    }),
-  });
-
-  if (!r.ok) {
-    console.error("[carmen-learn] AI error", r.status, await r.text());
+    });
+  } catch (e) {
+    console.error("[carmen-learn] AI error", e);
     return null;
   }
-  const j = await r.json();
   const args = j?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
   if (!args) return null;
   try {

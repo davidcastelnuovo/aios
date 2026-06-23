@@ -1,11 +1,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { chatCompletion } from "../_shared/ai-gateway.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const GITHUB_API = "https://api.github.com";
 
 interface AgentRequest {
@@ -29,11 +29,11 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-    if (!LOVABLE_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    if (!ANTHROPIC_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       throw new Error('Missing environment variables');
     }
 
@@ -65,13 +65,13 @@ Deno.serve(async (req: Request) => {
 
     switch (action) {
       case 'chat_support':
-        return await handleChatSupport(supabase, request, user.id, tenant_id, LOVABLE_API_KEY, githubToken);
+        return await handleChatSupport(supabase, request, user.id, tenant_id, ANTHROPIC_API_KEY, githubToken);
 
       case 'analyze_error':
-        return await handleAnalyzeError(supabase, request, user.id, tenant_id, LOVABLE_API_KEY, githubToken);
+        return await handleAnalyzeError(supabase, request, user.id, tenant_id, ANTHROPIC_API_KEY, githubToken);
 
       case 'fix_code':
-        return await handleFixCode(supabase, request, user.id, tenant_id, LOVABLE_API_KEY, githubToken);
+        return await handleFixCode(supabase, request, user.id, tenant_id, ANTHROPIC_API_KEY, githubToken);
 
       case 'check_permissions':
         return await handleCheckPermissions(supabase, request, user.id, tenant_id);
@@ -150,24 +150,14 @@ ${JSON.stringify(userContext, null, 2)}
   "severity": "low" | "medium" | "high"
 }`;
 
-  const aiResponse = await fetch(AI_GATEWAY_URL, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'google/gemini-3-flash-preview',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: message }
-      ],
-    }),
+  const aiData = await chatCompletion({
+    model: 'google/gemini-3-flash-preview',
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: message }
+    ],
   });
 
-  if (!aiResponse.ok) throw new Error(`AI error: ${aiResponse.status}`);
-
-  const aiData = await aiResponse.json();
   const content = aiData.choices?.[0]?.message?.content || '';
 
   // Try to parse JSON response
@@ -244,24 +234,14 @@ Return JSON:
   "file_path": "path to fix" or null
 }`;
 
-  const aiResponse = await fetch(AI_GATEWAY_URL, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'google/gemini-3-flash-preview',
-      messages: [
-        { role: 'system', content: 'You are an expert developer analyzing errors in a React + TypeScript + Supabase application.' },
-        { role: 'user', content: analysisPrompt }
-      ],
-    }),
+  const aiData = await chatCompletion({
+    model: 'google/gemini-3-flash-preview',
+    messages: [
+      { role: 'system', content: 'You are an expert developer analyzing errors in a React + TypeScript + Supabase application.' },
+      { role: 'user', content: analysisPrompt }
+    ],
   });
 
-  if (!aiResponse.ok) throw new Error(`AI error: ${aiResponse.status}`);
-
-  const aiData = await aiResponse.json();
   const content = aiData.choices?.[0]?.message?.content || '';
 
   let analysis;

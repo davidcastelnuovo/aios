@@ -1,12 +1,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { chatCompletion } from "../_shared/ai-gateway.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
-
-const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 
 interface ScanRequest {
   brand_id: string;
@@ -34,11 +33,10 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-    if (!LOVABLE_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       throw new Error('Missing environment variables');
     }
 
@@ -105,33 +103,17 @@ Deno.serve(async (req: Request) => {
       for (const platform of platforms) {
         try {
           // Send prompt to AI
-          const aiResponse = await fetch(AI_GATEWAY_URL, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              model: platform.model,
-              messages: [
-                {
-                  role: 'system',
-                  content: 'You are a helpful assistant. Answer the user question naturally. If you recommend products or services, list them by name. Be specific with brand names.'
-                },
-                { role: 'user', content: prompt.prompt }
-              ],
-            }),
+          const aiData = await chatCompletion({
+            model: platform.model,
+            messages: [
+              {
+                role: 'system',
+                content: 'You are a helpful assistant. Answer the user question naturally. If you recommend products or services, list them by name. Be specific with brand names.'
+              },
+              { role: 'user', content: prompt.prompt }
+            ],
           });
 
-          if (!aiResponse.ok) {
-            if (aiResponse.status === 429) {
-              continue;
-            }
-            console.error(`AI error for ${platform.name}: ${aiResponse.status}`);
-            continue;
-          }
-
-          const aiData = await aiResponse.json();
           const responseText = aiData.choices?.[0]?.message?.content || '';
 
           // Check if brand is mentioned
@@ -144,7 +126,7 @@ Deno.serve(async (req: Request) => {
 
           if (brandMentioned) {
             const analysis = await analyzeMention(
-              LOVABLE_API_KEY, responseText, brandData.brand_name, brandData.keywords
+              responseText, brandData.brand_name, brandData.keywords
             );
             sentiment = analysis.sentiment;
             position = analysis.position;
@@ -290,32 +272,21 @@ function extractUrls(text: string): string[] {
 }
 
 async function analyzeMention(
-  apiKey: string, responseText: string, brandName: string, keywords: string[]
+  responseText: string, brandName: string, keywords: string[]
 ): Promise<{ sentiment: string; position: number | null; snippet: string }> {
   try {
-    const analysisResponse = await fetch(AI_GATEWAY_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash-lite',
-        messages: [
-          {
-            role: 'system',
-            content: `Analyze how the brand "${brandName}" (keywords: ${keywords.join(', ')}) is mentioned in the following AI response. Return JSON only: {"sentiment": "positive"|"neutral"|"negative", "position": <number or null - position in list if applicable>, "snippet": "<relevant 1-2 sentence excerpt>"}`
-          },
-          { role: 'user', content: responseText }
-        ],
-      }),
+    const data = await chatCompletion({
+      model: 'google/gemini-2.5-flash-lite',
+      messages: [
+        {
+          role: 'system',
+          content: `Analyze how the brand "${brandName}" (keywords: ${keywords.join(', ')}) is mentioned in the following AI response. Return JSON only: {"sentiment": "positive"|"neutral"|"negative", "position": <number or null - position in list if applicable>, "snippet": "<relevant 1-2 sentence excerpt>"}`
+        },
+        { role: 'user', content: responseText }
+      ],
+      response_format: { type: 'json_object' },
     });
 
-    if (!analysisResponse.ok) {
-      return { sentiment: 'neutral', position: null, snippet: responseText.substring(0, 200) };
-    }
-
-    const data = await analysisResponse.json();
     const content = data.choices?.[0]?.message?.content || '';
 
     // Extract JSON from response

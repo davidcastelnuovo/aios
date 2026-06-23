@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { chatCompletion } from "../_shared/ai-gateway.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,8 +11,6 @@ serve(async (req) => {
 
   try {
     const { brand_name, keywords, competitors, description } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
     const competitorList = (competitors || []).filter(Boolean).join(", ");
     const keywordList = (keywords || []).filter(Boolean).join(", ");
@@ -45,69 +44,43 @@ ${competitorList ? `- מתחרים בשוק: ${competitorList}` : ""}
 
 החזר בדיוק 8 פרומפטים מגוונים וטבעיים.`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "return_prompts",
-              description: "Return generated prompts for AI detection tracking",
-              parameters: {
-                type: "object",
-                properties: {
-                  prompts: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        prompt: { type: "string", description: "The prompt text in Hebrew" },
-                        category: { type: "string", enum: ["recommendation", "comparison", "review", "general"] },
-                      },
-                      required: ["prompt", "category"],
-                      additionalProperties: false,
+    const data = await chatCompletion({
+      model: "google/gemini-3-flash-preview",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "return_prompts",
+            description: "Return generated prompts for AI detection tracking",
+            parameters: {
+              type: "object",
+              properties: {
+                prompts: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      prompt: { type: "string", description: "The prompt text in Hebrew" },
+                      category: { type: "string", enum: ["recommendation", "comparison", "review", "general"] },
                     },
+                    required: ["prompt", "category"],
+                    additionalProperties: false,
                   },
                 },
-                required: ["prompts"],
-                additionalProperties: false,
               },
+              required: ["prompts"],
+              additionalProperties: false,
             },
           },
-        ],
-        tool_choice: { type: "function", function: { name: "return_prompts" } },
-      }),
+        },
+      ],
+      tool_choice: { type: "function", function: { name: "return_prompts" } },
     });
 
-    if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limit exceeded, please try again later." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "Payment required." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const t = await response.text();
-      console.error("AI gateway error:", response.status, t);
-      throw new Error("AI gateway error: " + response.status);
-    }
-
-    const data = await response.json();
     const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
     if (!toolCall) throw new Error("No tool call in response");
 

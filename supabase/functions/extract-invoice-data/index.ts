@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { chatCompletion } from "../_shared/ai-gateway.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -37,8 +38,7 @@ Deno.serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const lovableKey = Deno.env.get("LOVABLE_API_KEY");
-    if (!lovableKey) throw new Error("LOVABLE_API_KEY not configured");
+    if (!Deno.env.get("ANTHROPIC_API_KEY")) throw new Error("ANTHROPIC_API_KEY not configured");
 
     const admin = createClient(supabaseUrl, serviceKey);
 
@@ -62,13 +62,9 @@ Deno.serve(async (req) => {
     const mime = row.mime_type || file.type || "image/jpeg";
     const dataUrl = `data:${mime};base64,${b64}`;
 
-    const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${lovableKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
+    let aiData: any;
+    try {
+      aiData = await chatCompletion({
         model: "google/gemini-2.5-pro",
         messages: [
           {
@@ -86,24 +82,19 @@ Deno.serve(async (req) => {
         ],
         tools: [TOOL],
         tool_choice: { type: "function", function: { name: "extract_invoice" } },
-      }),
-    });
-
-    if (!aiResp.ok) {
-      const text = await aiResp.text();
-      console.error("AI error", aiResp.status, text);
+      });
+    } catch (aiErr: any) {
+      console.error("AI error", aiErr);
       await admin
         .from("invoice_uploads")
-        .update({ status: "failed", error_message: `AI ${aiResp.status}` })
+        .update({ status: "failed", error_message: `AI: ${String(aiErr?.message ?? aiErr)}` })
         .eq("id", invoice_id);
-      const status = aiResp.status === 429 || aiResp.status === 402 ? aiResp.status : 500;
-      return new Response(JSON.stringify({ error: text }), {
-        status,
+      return new Response(JSON.stringify({ error: String(aiErr?.message ?? aiErr) }), {
+        status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const aiData = await aiResp.json();
     const call = aiData.choices?.[0]?.message?.tool_calls?.[0];
     let extracted: any = {};
     if (call?.function?.arguments) {

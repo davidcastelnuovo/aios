@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
+import { chatCompletion } from '../_shared/ai-gateway.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,8 +8,6 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')
-const AI_GATEWAY_URL = 'https://ai.gateway.lovable.dev/v1/chat/completions'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -27,8 +26,8 @@ Deno.serve(async (req) => {
     const body = await req.json()
     const { action, post_id, tenant_id, prompt, style, additional_notes, tone, target_audience, call_to_action, date } = body
 
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY not configured')
+    if (!Deno.env.get('ANTHROPIC_API_KEY')) {
+      throw new Error('ANTHROPIC_API_KEY not configured')
     }
 
     let result: any
@@ -97,28 +96,14 @@ async function generateDayIdeas(params: { date: string; tenant_id: string }, _su
   ]
 }`
 
-  const response = await fetch(AI_GATEWAY_URL, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'google/gemini-2.5-flash',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      temperature: 0.85,
-    }),
+  const data = await chatCompletion({
+    model: 'google/gemini-2.5-flash',
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
   })
 
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`AI Gateway error: ${response.status} - ${errorText}`)
-  }
-
-  const data = await response.json()
   const content = data.choices?.[0]?.message?.content || ''
 
   let parsed
@@ -184,28 +169,14 @@ ${prompt ? `הנחיות נוספות: ${prompt}` : ''}
   ]
 }`
 
-  const response = await fetch(AI_GATEWAY_URL, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'google/gemini-2.5-flash',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      temperature: 0.9,
-    }),
+  const data = await chatCompletion({
+    model: 'google/gemini-2.5-flash',
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
   })
 
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`AI Gateway error: ${response.status} - ${errorText}`)
-  }
-
-  const data = await response.json()
   const content = data.choices?.[0]?.message?.content || ''
 
   let parsed
@@ -279,28 +250,14 @@ ${prompt ? `תיאור: ${prompt}` : ''}
   ]
 }`
 
-  const response = await fetch(AI_GATEWAY_URL, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'google/gemini-2.5-flash',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      temperature: 0.9,
-    }),
+  const data = await chatCompletion({
+    model: 'google/gemini-2.5-flash',
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
   })
 
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`AI Gateway error: ${response.status} - ${errorText}`)
-  }
-
-  const data = await response.json()
   const content = data.choices?.[0]?.message?.content || ''
 
   let parsed
