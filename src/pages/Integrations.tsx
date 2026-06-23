@@ -343,7 +343,37 @@ export default function Integrations() {
     enabled: !!currentTenantId,
   });
 
+  // Check LLM (AI models) integration status
+  const { data: llmIntegration } = useQuery({
+    queryKey: ['llm-integration-card', currentTenantId],
+    queryFn: async () => {
+      if (!currentTenantId) return null;
+      const { data } = await supabase
+        .from('tenant_integrations')
+        .select('id')
+        .eq('tenant_id', currentTenantId)
+        .eq('integration_type', 'llm')
+        .eq('is_active', true)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!currentTenantId,
+  });
+
   const integrations: IntegrationCardProps[] = [
+    {
+      icon: <Brain className="h-6 w-6" />,
+      title: "מודלי AI (LLMs)",
+      description: "חבר את מפתחות ה-API שלך ל-GPT, Claude ו-Gemini — המוח של הסוכנים",
+      features: [
+        "OpenAI (GPT), Anthropic (Claude), Google (Gemini)",
+        "המוח של הסוכנים וכרמן",
+        "המפתחות נשמרים ב-Supabase שלך",
+      ],
+      isConnected: !!llmIntegration,
+      route: "llm-settings",
+      gradient: "bg-gradient-to-r from-violet-600 to-indigo-700",
+    },
     {
       icon: <Webhook className="h-6 w-6" />,
       title: "Webhook",
