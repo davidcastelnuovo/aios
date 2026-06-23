@@ -31,7 +31,12 @@ serve(async (req) => {
     // If no page_id provided, first get the pages the user has access to
     if (!page_id) {
       const allPages: Array<{ id: string; name: string; access_token?: string }> = [];
-      let nextUrl = `https://graph.facebook.com/v21.0/me/accounts?access_token=${access_token}&fields=id,name,access_token&limit=100`;
+      // NOTE: keep this page size small. Tokens that administer a large number of
+      // pages cause Facebook to reject me/accounts with error code 1
+      // ("Please reduce the amount of data you're asking for") when the per-page
+      // access_token field is requested at limit=100. limit=25 returns reliably;
+      // the pagination loop below follows paging.next to collect every page.
+      let nextUrl = `https://graph.facebook.com/v21.0/me/accounts?access_token=${access_token}&fields=id,name,access_token&limit=25`;
       
       // Paginate through all pages
       while (nextUrl) {
