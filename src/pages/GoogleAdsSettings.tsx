@@ -236,7 +236,7 @@ export default function GoogleAdsSettings() {
             integration_type: 'google_ads_via_make',
             is_active: true,
             settings,
-            created_by: user.id
+            user_id: user.id
           });
         if (error) throw error;
       }
@@ -305,7 +305,7 @@ export default function GoogleAdsSettings() {
             integration_type: 'google_ads_make',
             is_active: true,
             settings,
-            created_by: user.id
+            user_id: user.id
           });
         if (error) throw error;
       }
