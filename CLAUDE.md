@@ -40,15 +40,14 @@ Project was migrated **off Lovable** to a private server + private Supabase DB.
 
 ### Remaining Lovable couplings (de-Lovable TODO)
 1. ✅ `supabase/config.toml` `project_id` → new project `zvoijyneresvkadpprel`.
-2. ⏳ **Lovable AI Gateway** (~20 fns): migrate each `fetch(ai.gateway.lovable.dev)` to the
-   gateway above. DONE: `_shared/ai-gateway.ts`, `_shared/models.ts`, `_shared/agent-memory.ts`,
-   `_shared/carmen-memory.ts`. TODO: run-ai-agent(-v2), carmen-learn-from-session, run-agent-eval,
-   run-agent-supervisor, analyze-campaign-data, generate-ai-prompts, social-gantt-generate,
-   marketing-run-stage, ai-detection-scan, github-agent, extract-invoice-data, process-invoice-emails,
-   list-ai-models. OpenAI ones: transcribe-recording, transcribe-voice, process-new-recording,
-   ai-generate-social-image, generate-channel-avatar.
+2. ✅ **Lovable AI Gateway** — DONE. All ~21 fns migrated off `ai.gateway.lovable.dev`:
+   chat/vision → Claude via `_shared/ai-gateway.ts`; embeddings → Google; transcription +
+   image-gen → OpenAI (Whisper / gpt-image-1). Zero `ai.gateway.lovable.dev` refs remain.
+   Still needs live deploy + smoke-test once `ANTHROPIC_API_KEY`/`GOOGLE_API_KEY`/`OPENAI_API_KEY` are set.
 3. 🟠 Hardcoded `after-lead.lovable.app` in invite/chat links (src + functions) — use `SITE_URL`/new domain.
-4. 🟠 `connector-gateway.lovable.dev` for Telegram + TikTok.
+4. 🟠 `connector-gateway.lovable.dev` for Telegram + TikTok — STILL uses `LOVABLE_API_KEY` as auth
+   for the connector (telegram-poll/-send/-verify-bot, trigger-automation, tiktok-connect,
+   sync-tiktok-content). Not the AI gateway; needs its own decision (keep connector vs direct Bot/TikTok API).
 5. 🟡 Edge-function secrets in the new project — MUST set: `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`,
    `OPENAI_API_KEY` (+ existing Google/Meta/Ahrefs/etc.).
 6. 🟡 pg_cron jobs (9) + Storage buckets (9) must exist in the new DB/Storage.
