@@ -33,7 +33,9 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      # The GitHub secret is named BASE_ACCESS_TOKEN; the Supabase CLI reads it
+      # from the SUPABASE_ACCESS_TOKEN environment variable.
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.BASE_ACCESS_TOKEN }}
       PROJECT_REF: zvoijyneresvkadpprel
     steps:
       - name: Checkout repository
