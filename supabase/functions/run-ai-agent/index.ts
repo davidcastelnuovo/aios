@@ -21,6 +21,47 @@ function resolveModel(engine: string): string {
   return resolveModelId(engine)
 }
 
+// ─── Tenant-owned LLM keys (replaces the Lovable gateway) ───
+// Reads the org's own API keys from the "llm" integration and routes each
+// model to its provider's OpenAI-compatible endpoint. No Lovable dependency.
+async function resolveLLMTarget(
+  supabase: any,
+  tenantId: string,
+  model: string,
+): Promise<{ url: string; key: string; model: string }> {
+  const { data } = await supabase
+    .from('tenant_integrations')
+    .select('settings')
+    .eq('tenant_id', tenantId)
+    .eq('integration_type', 'llm')
+    .eq('is_active', true)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const s = (data?.settings || {}) as Record<string, string>
+  const m = String(model || '')
+  const lower = m.toLowerCase()
+
+  if (lower.startsWith('google/') || lower.includes('gemini')) {
+    const key = s.google_api_key
+    if (!key) throw new Error('Google (Gemini) API key חסר באינטגרציית מודלי AI')
+    return {
+      url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+      key,
+      model: m.replace(/^google\//, ''),
+    }
+  }
+  if (lower.startsWith('anthropic/') || lower.includes('claude')) {
+    const key = s.anthropic_api_key
+    if (!key) throw new Error('Anthropic (Claude) API key חסר באינטגרציית מודלי AI')
+    return { url: 'https://api.anthropic.com/v1/chat/completions', key, model: m.replace(/^anthropic\//, '') }
+  }
+  // Default: OpenAI (GPT)
+  const key = s.openai_api_key
+  if (!key) throw new Error('OpenAI (GPT) API key חסר באינטגרציית מודלי AI')
+  return { url: 'https://api.openai.com/v1/chat/completions', key, model: m.replace(/^openai\//, '') }
+}
+
 // ===========================
 // ALL AVAILABLE TOOLS
 // ===========================
@@ -2302,7 +2343,6 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     console.log(`[AGENT] Starting run: agent=${bodyAgentId}, command="${command_text?.substring(0, 80)}", surface=${surface}, stream=${!!emit}`)
 
     if (!command_text) throw new Error('Missing command_text')
-    if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured')
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
@@ -2993,15 +3033,20 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     const toolLog: any[] = []
     const startTime = Date.now()
 
+    // Route to the org's own LLM provider (OpenAI/Google/Anthropic) using the
+    // keys stored in the "llm" integration — Lovable gateway is no longer used.
+    const llm = await resolveLLMTarget(supabase, agent.tenant_id, model)
+    console.log(`[AGENT] LLM target=${llm.url} model=${llm.model}`)
+
     for (let round = 0; round < maxRounds; round++) {
-      const payload: any = { model, messages }
+      const payload: any = { model: llm.model, messages }
       if (safeTemp !== undefined) payload.temperature = safeTemp
       if (toolsForAPI.length > 0) payload.tools = toolsForAPI
 
-      console.log(`[AGENT] Round ${round + 1}/${maxRounds}, model=${model}`)
-      const res = await fetch(AI_GATEWAY_URL, {
+      console.log(`[AGENT] Round ${round + 1}/${maxRounds}, model=${llm.model}`)
+      const res = await fetch(llm.url, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
+        headers: { 'Authorization': `Bearer ${llm.key}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
 
