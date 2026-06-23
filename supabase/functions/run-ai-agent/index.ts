@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
 import { resolveModelId } from '../_shared/models.ts'
+import { chatCompletion, createEmbedding } from '../_shared/ai-gateway.ts'
 import { summarizeAndStoreAgentMemory, recallAgentMemory, recallAgentMemoryFTS, saveAgentMemory } from '../_shared/agent-memory.ts'
 import { buildCarmenV2SystemPrompt, shouldUseV2Prompt } from '../_shared/carmen-prompt-v2.ts'
 import { loadMcpTools } from '../_shared/mcp-tools.ts'
@@ -14,8 +15,7 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')
-const AI_GATEWAY_URL = 'https://ai.gateway.lovable.dev/v1/chat/completions'
+const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')
 
 function resolveModel(engine: string): string {
   return resolveModelId(engine)
@@ -1126,85 +1126,52 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return { success: true, post_id: data.id, title: data.title, content: data.content, media_urls: data.media_urls, status: 'draft', message: 'הפוסט נוצר בהצלחה כטיוטה במודול סושיאל מדיה' }
     }
     case 'generate_ad_image': {
+      if (!OPENAI_API_KEY) return { success: false, error: 'OPENAI_API_KEY is not configured' }
       const imagePrompt = args.prompt
-      const model = 'google/gemini-3.1-flash-image-preview'
-      
-      const imageRes = await fetch(AI_GATEWAY_URL, {
+
+      // Image generation via OpenAI (gpt-image-1) — returns base64.
+      const imageRes = await fetch('https://api.openai.com/v1/images/generations', {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
+        headers: { 'Authorization': `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model,
-          messages: [
-            { role: 'user', content: `Generate an image: ${imagePrompt}. Make it professional, high quality, suitable for a social media advertisement.` }
-          ],
-          modalities: ['image', 'text'],
+          model: 'gpt-image-1',
+          prompt: `${imagePrompt}. Professional, high quality, suitable for a social media advertisement.`,
+          n: 1,
+          size: '1024x1024',
         }),
       })
-      
+
       if (!imageRes.ok) {
         const errText = await imageRes.text()
         throw new Error(`Image generation error: ${errText}`)
       }
-      
+
       const imageData = await imageRes.json()
-      const content = imageData.choices?.[0]?.message?.content || ''
-      
-      // Check for images array in response (Lovable AI Gateway format)
-      const images = imageData.choices?.[0]?.message?.images || []
+      const base64 = imageData?.data?.[0]?.b64_json || ''
       let imageUrl = ''
-      
-      if (images.length > 0 && images[0]?.image_url?.url) {
-        const dataUrl = images[0].image_url.url
-        // Extract base64 data from data URL
-        const base64Match = dataUrl.match(/^data:image\/(png|jpeg|jpg|webp);base64,(.+)$/)
-        if (base64Match) {
-          const mimeType = `image/${base64Match[1]}`
-          const base64 = base64Match[2]
-          const ext = base64Match[1] === 'jpeg' ? 'jpg' : base64Match[1]
-          const fileName = `agent-generated/${tenantId}/${crypto.randomUUID()}.${ext}`
-          
-          const binaryData = Uint8Array.from(atob(base64), c => c.charCodeAt(0))
-          
-          // Ensure bucket exists
-          await supabase.storage.createBucket('social-media', { public: true }).catch(() => {})
-          
-          const { error: uploadError } = await supabase.storage
-            .from('social-media')
-            .upload(fileName, binaryData, { contentType: mimeType, upsert: true })
-          
-          if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`)
-          
-          const { data: urlData } = supabase.storage.from('social-media').getPublicUrl(fileName)
-          imageUrl = urlData.publicUrl
-        }
+
+      if (base64) {
+        const mimeType = 'image/png'
+        const fileName = `agent-generated/${tenantId}/${crypto.randomUUID()}.png`
+        const binaryData = Uint8Array.from(atob(base64), c => c.charCodeAt(0))
+
+        // Ensure bucket exists
+        await supabase.storage.createBucket('social-media', { public: true }).catch(() => {})
+
+        const { error: uploadError } = await supabase.storage
+          .from('social-media')
+          .upload(fileName, binaryData, { contentType: mimeType, upsert: true })
+
+        if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`)
+
+        const { data: urlData } = supabase.storage.from('social-media').getPublicUrl(fileName)
+        imageUrl = urlData.publicUrl
       }
-      
-      // Fallback: check inline_data in parts
+
       if (!imageUrl) {
-        const parts = imageData.choices?.[0]?.message?.parts || []
-        for (const part of parts) {
-          if (part.inline_data) {
-            const base64 = part.inline_data.data
-            const mimeType = part.inline_data.mime_type || 'image/png'
-            const ext = mimeType.includes('jpeg') ? 'jpg' : 'png'
-            const fileName = `agent-generated/${tenantId}/${crypto.randomUUID()}.${ext}`
-            const binaryData = Uint8Array.from(atob(base64), c => c.charCodeAt(0))
-            await supabase.storage.createBucket('social-media', { public: true }).catch(() => {})
-            const { error: uploadError } = await supabase.storage
-              .from('social-media')
-              .upload(fileName, binaryData, { contentType: mimeType, upsert: true })
-            if (uploadError) throw uploadError
-            const { data: urlData } = supabase.storage.from('social-media').getPublicUrl(fileName)
-            imageUrl = urlData.publicUrl
-            break
-          }
-        }
+        return { success: false, error: 'לא הצלחתי ליצור תמונה. נסה שוב עם תיאור אחר.' }
       }
-      
-      if (!imageUrl) {
-        return { success: false, error: 'לא הצלחתי ליצור תמונה. נסה שוב עם תיאור אחר.', raw_content: content }
-      }
-      
+
       return { success: true, image_url: imageUrl, message: 'התמונה נוצרה בהצלחה. השתמש בה ביצירת הפוסט.' }
     }
     // CLIENTS - full CRUD
@@ -1472,15 +1439,8 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     case 'kb_search': {
       // Try semantic via embedding; fall back to text ILIKE on title/summary
       try {
-        const embedRes = await fetch('https://ai.gateway.lovable.dev/v1/embeddings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('LOVABLE_API_KEY')}` },
-          body: JSON.stringify({ model: 'google/gemini-embedding-001', input: args.query, dimensions: 1536 }),
-        })
-        if (embedRes.ok) {
-          const j = await embedRes.json()
-          const vec = j?.data?.[0]?.embedding
-          if (vec) {
+        const vec = await createEmbedding(args.query)
+        if (vec) {
             const sinceFilter = args.since_days ? `,ref_date.gte.${new Date(Date.now() - args.since_days*86400000).toISOString()}` : ''
             const { data, error } = await supabase.rpc('kb_match_pointers', {
               p_tenant_id: tenantId,
@@ -1491,7 +1451,6 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
             })
             if (!error && data) return { count: data.length, results: data, mode: 'semantic' }
           }
-        }
       } catch (_) {/* fall through */}
       // Fallback text search
       let q = supabase.from('carmen_memory_pointers')
@@ -1544,15 +1503,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       // Generate embedding (best-effort)
       let embedding: number[] | null = null
       try {
-        const embedRes = await fetch('https://ai.gateway.lovable.dev/v1/embeddings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('LOVABLE_API_KEY')}` },
-          body: JSON.stringify({ model: 'google/gemini-embedding-001', input: `${args.topic}\n\n${args.summary}`, dimensions: 1536 }),
-        })
-        if (embedRes.ok) {
-          const j = await embedRes.json()
-          embedding = j?.data?.[0]?.embedding || null
-        }
+        embedding = await createEmbedding(`${args.topic}\n\n${args.summary}`)
       } catch (_) {/* ignore */}
       const { data, error } = await supabase.from('carmen_memory_episodes').insert({
         tenant_id: tenantId,
@@ -2302,7 +2253,7 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     console.log(`[AGENT] Starting run: agent=${bodyAgentId}, command="${command_text?.substring(0, 80)}", surface=${surface}, stream=${!!emit}`)
 
     if (!command_text) throw new Error('Missing command_text')
-    if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured')
+    if (!Deno.env.get('ANTHROPIC_API_KEY')) throw new Error('ANTHROPIC_API_KEY is not configured')
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
@@ -2999,20 +2950,16 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
       if (toolsForAPI.length > 0) payload.tools = toolsForAPI
 
       console.log(`[AGENT] Round ${round + 1}/${maxRounds}, model=${model}`)
-      const res = await fetch(AI_GATEWAY_URL, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-
-      if (!res.ok) {
-        const err = await res.text()
-        console.error(`[AGENT] AI error: ${res.status}`, err.substring(0, 200))
-        if (res.status === 429) throw new Error('מגבלת קצב. נסה שוב.')
-        throw new Error(`AI error: ${res.status} ${err}`)
+      let data: any
+      try {
+        data = await chatCompletion(payload)
+      } catch (e) {
+        const errMsg = (e as any)?.message || String(e)
+        console.error(`[AGENT] AI error:`, errMsg.substring(0, 200))
+        if (/\b429\b/.test(errMsg)) throw new Error('מגבלת קצב. נסה שוב.')
+        throw new Error(`AI error: ${errMsg}`)
       }
 
-      const data = await res.json()
       const choice = data.choices?.[0]
       const msg = choice?.message
 
