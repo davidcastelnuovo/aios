@@ -1,20 +1,8 @@
 // Per-agent automatic memory: summarize + embed + store after each non-Carmen run.
-const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-const AI_URL = 'https://ai.gateway.lovable.dev/v1/chat/completions';
-const EMBED_URL = 'https://ai.gateway.lovable.dev/v1/embeddings';
+import { chatCompletion, createEmbedding, responseText } from './ai-gateway.ts';
 
 async function embed(text: string): Promise<number[] | null> {
-  if (!LOVABLE_API_KEY || !text?.trim()) return null;
-  try {
-    const r = await fetch(EMBED_URL, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'google/gemini-embedding-001', input: text.slice(0, 8000), dimensions: 1536 }),
-    });
-    if (!r.ok) return null;
-    const j = await r.json();
-    return j?.data?.[0]?.embedding ?? null;
-  } catch { return null; }
+  return await createEmbedding(text);
 }
 
 export async function summarizeAndStoreAgentMemory(opts: {
@@ -26,7 +14,6 @@ export async function summarizeAndStoreAgentMemory(opts: {
   tools_used: string[];
 }) {
   try {
-    if (!LOVABLE_API_KEY) return;
     const { supabase, tenant_id, agent_id, user_message, assistant_output, tools_used } = opts;
     if (!user_message?.trim() || !assistant_output?.trim()) return;
 
@@ -35,18 +22,16 @@ export async function summarizeAndStoreAgentMemory(opts: {
 סוכן: ${assistant_output.slice(0, 2000)}
 כלים: ${tools_used.join(', ') || 'ללא'}`;
 
-    const r = await fetch(AI_URL, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash-lite',
+    let res;
+    try {
+      res = await chatCompletion({
+        model: 'haiku',
         messages: [{ role: 'user', content: prompt }],
         response_format: { type: 'json_object' },
-      }),
-    });
-    if (!r.ok) return;
-    const j = await r.json();
-    const raw = j?.choices?.[0]?.message?.content || '{}';
+        max_tokens: 512,
+      });
+    } catch { return; }
+    const raw = responseText(res) || '{}';
     let parsed: any = {};
     try { parsed = JSON.parse(raw); } catch { return; }
     if (!parsed.title || !parsed.summary) return;

@@ -29,16 +29,29 @@ Project was migrated **off Lovable** to a private server + private Supabase DB.
 - `supabase/config.toml` → **still old project `jnzguisakdtcollxmgzd`** ⚠️ (mismatch — fix before CLI deploys)
 - `database/schema.sql` (524KB) = full schema export for a fresh DB (DB migration largely done).
 
+### AI provider map (post-Lovable) — DECIDED
+- **Chat / LLM** (Carmen + all agents): **Anthropic Claude** — default `claude-opus-4-8`,
+  mid `claude-sonnet-4-6`, cheap `claude-haiku-4-5`. Secret: `ANTHROPIC_API_KEY`.
+- **Embeddings** (memory, 1536-dim): **Google** (`gemini-embedding-001`). Secret: `GOOGLE_API_KEY`.
+- **Transcription + image generation**: **OpenAI** (Whisper + gpt-image/DALL-E). Secret: `OPENAI_API_KEY`.
+- All chat/embeddings go through **`supabase/functions/_shared/ai-gateway.ts`**
+  (`chatCompletion()` = OpenAI-shaped in/out, native Anthropic underneath; `createEmbedding()` = Google).
+  `_shared/models.ts` is the Claude catalog + `resolveModelId` (legacy gemini/gpt aliases → Claude by tier).
+
 ### Remaining Lovable couplings (de-Lovable TODO)
-1. 🔴 `supabase/config.toml` `project_id` points to OLD project — update it.
-2. 🔴 **Lovable AI Gateway**: 22 fns + all of Carmen/memory/embeddings depend on
-   `ai.gateway.lovable.dev` + `LOVABLE_API_KEY`. Biggest remaining dependency — decide:
-   keep Lovable gateway or switch to a direct provider (Google/OpenAI/Anthropic).
+1. ✅ `supabase/config.toml` `project_id` → new project `zvoijyneresvkadpprel`.
+2. ⏳ **Lovable AI Gateway** (~20 fns): migrate each `fetch(ai.gateway.lovable.dev)` to the
+   gateway above. DONE: `_shared/ai-gateway.ts`, `_shared/models.ts`, `_shared/agent-memory.ts`,
+   `_shared/carmen-memory.ts`. TODO: run-ai-agent(-v2), carmen-learn-from-session, run-agent-eval,
+   run-agent-supervisor, analyze-campaign-data, generate-ai-prompts, social-gantt-generate,
+   marketing-run-stage, ai-detection-scan, github-agent, extract-invoice-data, process-invoice-emails,
+   list-ai-models. OpenAI ones: transcribe-recording, transcribe-voice, process-new-recording,
+   ai-generate-social-image, generate-channel-avatar.
 3. 🟠 Hardcoded `after-lead.lovable.app` in invite/chat links (src + functions) — use `SITE_URL`/new domain.
 4. 🟠 `connector-gateway.lovable.dev` for Telegram + TikTok.
-5. 🟡 ~38 edge-function secrets must exist in the new Supabase project.
-6. 🟡 pg_cron jobs (9) + Storage buckets (9: carmen-media, recordings, invoices, task-attachments,
-   entity-attachments, supplier-invoices, team-chat-files, social-media) must be recreated.
+5. 🟡 Edge-function secrets in the new project — MUST set: `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`,
+   `OPENAI_API_KEY` (+ existing Google/Meta/Ahrefs/etc.).
+6. 🟡 pg_cron jobs (9) + Storage buckets (9) must exist in the new DB/Storage.
 7. 🟢 `lovable-tagger` in vite.config (dev-only) — harmless.
 
 ## Architecture
