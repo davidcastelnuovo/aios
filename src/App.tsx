@@ -92,6 +92,7 @@ const VisualWorkspace = lazy(() => import("./pages/VisualWorkspace"));
 const AgentTasksPage = lazy(() => import("./pages/AgentTasksPage"));
 const SkinsManager = lazy(() => import("./pages/SkinsManager"));
 const CarmenAccess = lazy(() => import("./pages/CarmenAccess"));
+const CarmenStudio = lazy(() => import("./pages/CarmenStudio"));
 const SharedDashboard = lazy(() => import("./pages/SharedDashboard"));
 const SharedTable = lazy(() => import("./pages/SharedTable"));
 
@@ -239,6 +240,7 @@ const App = () => (
                   <Route path="/t/:tenantSlug/agent-tasks" element={<ProtectedRoute><AppLayout><AgentTasksPage /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/skins" element={<ProtectedRoute><AppLayout><SkinsManager /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/carmen-access" element={<ProtectedRoute><AppLayout><CarmenAccess /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/carmen-studio" element={<ProtectedRoute><AppLayout><CarmenStudio /></AppLayout></ProtectedRoute>} />
                   
                   <Route path="/t/:tenantSlug/github-agent" element={<ProtectedRoute><AppLayout><GithubAgent /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/telephony-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><TelephonySettings /></AppLayout></ProtectedRoute>} />
