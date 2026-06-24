@@ -4,7 +4,7 @@ import { resolveModelId } from '../_shared/models.ts'
 import { summarizeAndStoreAgentMemory, recallAgentMemory, recallAgentMemoryFTS, saveAgentMemory } from '../_shared/agent-memory.ts'
 import { buildCarmenV2SystemPrompt, shouldUseV2Prompt } from '../_shared/carmen-prompt-v2.ts'
 import { loadMcpTools } from '../_shared/mcp-tools.ts'
-import { spawnSubagent, getSubagentResult } from '../_shared/subagent.ts'
+import { spawnSubagent, getSubagentResult, spawnSubagentBatch, getBatchResults } from '../_shared/subagent.ts'
 import { resolveActiveSkills, buildSkillsBlockBySlug } from '../_shared/skills/registry.ts'
 import { aiEmbed } from '../_shared/ai.ts'
 
@@ -205,6 +205,8 @@ const ALL_TOOLS = [
   // ===========================
   { name: 'delegate_to_subagent', description: 'יצירת תת-סוכן (subagent) שירוץ ברקע על משימה ממוקדת — מחקר, ניתוח רב-לקוחות, סריקה ארוכה, או כל עבודה שלא חייבת להיענות בשיחה הנוכחית. מחזיר sub_task_id מיידית. השתמשי בכלי הזה במקום delegate_to_manus כשהמשימה היא פנימית למערכת (מצריכה כלים של כרמן עצמה). אסור להשתמש בו לתשובה קצרה שאפשר לענות מיד — רק כשהמשימה תיקח זמן או צריכה לרוץ ברקע במקביל לשיחה.', parameters: { type: 'object', properties: { title: { type: 'string', description: 'כותרת קצרה לתת-המשימה' }, prompt: { type: 'string', description: 'הוראה מפורטת מה לבצע. כתבי כאילו את מדריכה כרמן אחרת — כללי המטרה, היקף, ומה חייב להחזיר בסוף.' }, task_mode: { type: 'string', enum: ['analyst','sales','support','copywriting','scheduler','onboarding'], description: 'מוד פעולה (אופציונלי)' }, task_skills: { type: 'array', items: { type: 'string' }, description: 'סקילים להפעיל בתת-הסוכן' }, priority: { type: 'integer', description: '1-10' } }, required: ['title','prompt'] } },
   { name: 'get_subagent_result', description: 'בדיקת מצב/קבלת תוצאה של תת-סוכן שנוצר ב-delegate_to_subagent. מחזיר status, done, ואם הסתיים — output. אל תקראי לזה בלולאה צמודה; אם done=false פשוט המשיכי בעבודה אחרת או הודיעי למשתמש שהמשימה עדיין רצה.', parameters: { type: 'object', properties: { sub_task_id: { type: 'string', description: 'המזהה שהוחזר מ-delegate_to_subagent' } }, required: ['sub_task_id'] } },
+  { name: 'delegate_parallel', description: 'מולטיטאסק: פיזור כמה תת-משימות עצמאיות שירוצו ברקע במקביל (עד 8). השתמשי בזה כשיש עבודה שמתפצלת לכמה חלקים בלתי-תלויים — למשל ניתוח מספר לקוחות/ערוצים בו-זמנית, או הרצת כמה סקינז במקביל. כל תת-משימה חייבת להיות עצמאית ולא לחפוף לאחרות — תני לכל אחת מטרה ברורה, היקף, ומה להחזיר. מחזיר batch_id + רשימת sub_task_id. אחר כך אספי עם get_batch_results. אל תשתמשי בזה למשימה אחת — לזה יש delegate_to_subagent.', parameters: { type: 'object', properties: { tasks: { type: 'array', description: 'מערך תת-משימות עצמאיות', items: { type: 'object', properties: { title: { type: 'string' }, prompt: { type: 'string', description: 'הוראה עצמאית מלאה — מטרה, היקף, פורמט פלט, ובמפורש "אל תחפפי עם תת-משימות אחרות".' }, task_skills: { type: 'array', items: { type: 'string' }, description: 'סקינז לכפות על תת-משימה זו (למשל ["campaigner"])' } }, required: ['title','prompt'] } } }, required: ['tasks'] } },
+  { name: 'get_batch_results', description: 'איסוף תוצאות של batch שנוצר ב-delegate_parallel. מחזיר לכל תת-משימה status/output (גם אם חלקן נכשלו — בידוד כשל חלקי), וכן total/completed/failed/running ו-all_done. כשהכל הושלם — סנתזי את התוצאות לתשובה אחת.', parameters: { type: 'object', properties: { batch_id: { type: 'string', description: 'ה-batch_id שהוחזר מ-delegate_parallel' } }, required: ['batch_id'] } },
   // ===========================
   // MEDIA LIBRARY (carmen-media bucket + marketing_media_library)
   // ===========================
@@ -2158,6 +2160,38 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return await getSubagentResult(supabase, tenantId, args.sub_task_id)
     }
 
+    case 'delegate_parallel': {
+      const items = Array.isArray(args.tasks) ? args.tasks : []
+      if (items.length === 0) throw new Error('tasks (array of {title, prompt}) is required')
+      if (items.length > 8) throw new Error('עד 8 תת-משימות מקבילות בבת אחת')
+      const cleaned = items
+        .filter((it: any) => it && it.title && it.prompt)
+        .map((it: any) => ({
+          title: String(it.title),
+          prompt: String(it.prompt),
+          taskSkills: Array.isArray(it.task_skills) ? it.task_skills : undefined,
+        }))
+      if (cleaned.length === 0) throw new Error('כל תת-משימה חייבת title ו-prompt')
+      const batchId = crypto.randomUUID()
+      return await spawnSubagentBatch(
+        supabase,
+        {
+          parentAgentId: agentId || null,
+          tenantId,
+          taskMode: 'background',
+          createdBy: userId !== 'system' ? userId : null,
+          notify: waNotify && waNotify.surface === 'whatsapp' ? waNotify : null,
+        },
+        cleaned,
+        batchId,
+      )
+    }
+
+    case 'get_batch_results': {
+      if (!args.batch_id) throw new Error('batch_id is required')
+      return await getBatchResults(supabase, tenantId, args.batch_id)
+    }
+
     // ============ MEDIA LIBRARY ============
     case 'save_media_from_chat': {
       const r = await fetch(`${SUPABASE_URL}/functions/v1/carmen-save-media`, {
@@ -2989,7 +3023,7 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     const userAskedManus = /\b(manus|מנוס|מאנוס|מנואס)\b/i.test(cmd)
     const userAskedGithubAgent = /\b(github|גיטהאב|גיט\s*האב|שגיאת\s*קוד|תמיכה\s*טכנית|אגנט\s*קוד)\b/i.test(cmd)
     if (surface === 'task') {
-      filteredTools = filteredTools.filter(t => t.name !== 'delegate_to_subagent' && t.name !== 'delegate_to_manus' && t.name !== 'delegate_to_github_agent')
+      filteredTools = filteredTools.filter(t => t.name !== 'delegate_to_subagent' && t.name !== 'delegate_parallel' && t.name !== 'delegate_to_manus' && t.name !== 'delegate_to_github_agent')
     } else if (surface === 'aios' || surface === 'whatsapp' || surface === 'internal_chat') {
       // Same default-direct rule for WhatsApp as for AIOS: hide delegation tools unless
       // the user explicitly asked for background work. On WhatsApp this is even more
