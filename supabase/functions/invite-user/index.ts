@@ -334,7 +334,7 @@ serve(async (req: Request) => {
     }
     const invitationLink = `${safeBaseUrl2.replace(/\/+$/, "")}/auth`;
 
-    // Send invitation email via Lovable Auth (standard)
+    // Send invitation email via Supabase Auth
     try {
       const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
         redirectTo: invitationLink,

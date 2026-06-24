@@ -20,9 +20,9 @@ function resolveModel(engine: string): string {
   return resolveModelId(engine)
 }
 
-// ─── Tenant-owned LLM keys (replaces the Lovable gateway) ───
+// ─── Tenant-owned LLM keys ───
 // Reads the org's own API keys from the "llm" integration and routes each
-// model to its provider's OpenAI-compatible endpoint. No Lovable dependency.
+// model to its provider's OpenAI-compatible endpoint.
 async function resolveLLMTarget(
   supabase: any,
   tenantId: string,
@@ -3040,7 +3040,7 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     const startTime = Date.now()
 
     // Route to the org's own LLM provider (OpenAI/Google/Anthropic) using the
-    // keys stored in the "llm" integration — Lovable gateway is no longer used.
+    // keys stored in the "llm" integration.
     const llm = await resolveLLMTarget(supabase, agent.tenant_id, model)
     console.log(`[AGENT] LLM target=${llm.url} model=${llm.model}`)
 

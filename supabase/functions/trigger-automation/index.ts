@@ -1326,11 +1326,8 @@ Deno.serve(async (req) => {
                     telegramChatId = stepData?.chat_id || stepData?.telegram_chat_id || ''
                   }
                   
-                  const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')
-                  const TELEGRAM_API_KEY = Deno.env.get('TELEGRAM_API_KEY')
-                  
-                  if (!OPENAI_API_KEY || !TELEGRAM_API_KEY) {
-                    throw new Error('Telegram integration not configured (missing API keys)')
+                  if (!Deno.env.get('TELEGRAM_BOT_TOKEN')) {
+                    throw new Error('Telegram integration not configured (missing TELEGRAM_BOT_TOKEN)')
                   }
                   if (!telegramChatId) {
                     throw new Error('Telegram chat_id is required')
@@ -1348,14 +1345,11 @@ Deno.serve(async (req) => {
                     throw new Error('לארגון זה אין בוט טלגרם פעיל. יש לחבר בוט בהגדרות הטלגרם או לבקש שיתוף מארגון אחר.')
                   }
                   
-                  const GATEWAY_URL = 'https://connector-gateway.lovable.dev/telegram'
-                  const telegramResponse = await fetch(`${GATEWAY_URL}/sendMessage`, {
+                  const TG_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN')
+                  if (!TG_BOT_TOKEN) throw new Error('TELEGRAM_BOT_TOKEN not configured')
+                  const telegramResponse = await fetch(`https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage`, {
                     method: 'POST',
-                    headers: {
-                      'Authorization': `Bearer ${OPENAI_API_KEY}`,
-                      'X-Connection-Api-Key': TELEGRAM_API_KEY,
-                      'Content-Type': 'application/json',
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                       chat_id: telegramChatId,
                       text: stepConfig.message_template || 'No message configured',

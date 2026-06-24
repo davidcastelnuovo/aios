@@ -6,7 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-const GATEWAY_URL = 'https://connector-gateway.lovable.dev/tiktok';
+const GATEWAY_URL = 'https://open.tiktokapis.com/v2';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -14,9 +14,9 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    const TIKTOK_ACCESS_TOKEN = Deno.env.get('TIKTOK_ACCESS_TOKEN');
     const TIKTOK_API_KEY = Deno.env.get('TIKTOK_API_KEY');
-    if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY not configured');
+    if (!TIKTOK_ACCESS_TOKEN) throw new Error('TIKTOK_ACCESS_TOKEN not configured');
     if (!TIKTOK_API_KEY) throw new Error('TIKTOK_API_KEY not configured — TikTok connector not linked');
 
     const supabase = createClient(
@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
     const userInfoRes = await fetch(`${GATEWAY_URL}/user/info/?fields=${fields}`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Authorization': `Bearer ${TIKTOK_ACCESS_TOKEN}`,
         'X-Connection-Api-Key': TIKTOK_API_KEY,
       },
     });

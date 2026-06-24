@@ -1,13 +1,13 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { encode as base64Encode } from 'https://deno.land/std@0.168.0/encoding/base64.ts';
+import { aiTranscribe } from '../_shared/ai.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-// Gemini via Lovable AI Gateway accepts inline audio. Practical safe ceiling ~150MB
+// Audio is transcribed via OpenAI Whisper (~25MB per request ceiling).
 // (above this we still try; failures bubble up clearly).
 const MAX_INLINE_FILE_SIZE = 150 * 1024 * 1024;
 
@@ -182,68 +182,18 @@ serve(async (req) => {
   }
 });
 
-// ── Transcription via Lovable AI Gateway (Gemini) ────────────────────
+// ── Transcription via OpenAI Whisper ──────────────────────────────────
 async function transcribeWithGemini(audioBlob: Blob, contentType: string): Promise<string> {
-  const apiKey = Deno.env.get('LOVABLE_API_KEY');
-  if (!apiKey) throw new Error('LOVABLE_API_KEY not configured');
-
-  const bytes = new Uint8Array(await audioBlob.arrayBuffer());
-  const base64 = base64Encode(bytes);
-  const format = geminiAudioFormat(contentType);
-
-  console.log(`🎙️ Sending ${bytes.length} bytes to Gemini (format=${format})`);
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 480_000); // 8 min
-
-  let resp: Response;
-  try {
-    resp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Lovable-API-Key': apiKey,
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          {
-            role: 'system',
-            content: 'אתה מתמלל מקצועי. תמלל את ההקלטה הבאה בעברית במלואה, בצורה מדויקת ושוטפת, כולל פיסוק נכון. החזר אך ורק את הטקסט המתומלל, ללא הקדמות, הסברים או הערות.',
-          },
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: 'תמלל את ההקלטה הבאה:' },
-              { type: 'input_audio', input_audio: { data: base64, format } },
-            ],
-          },
-        ],
-        temperature: 0.1,
-      }),
-      signal: controller.signal,
-    });
-  } catch (err: any) {
-    clearTimeout(timeout);
-    if (err.name === 'AbortError') throw new Error('Gemini transcription timed out after 8 minutes');
-    throw err;
-  } finally {
-    clearTimeout(timeout);
+  // Whisper caps a single request at ~25MB; larger recordings must be split upstream.
+  const sizeMB = audioBlob.size / (1024 * 1024);
+  if (sizeMB > 25) {
+    throw new Error(`Recording too large to transcribe in one request (${sizeMB.toFixed(0)}MB > 25MB). Split it into shorter segments.`);
   }
-
-  if (!resp.ok) {
-    const errText = await resp.text();
-    if (resp.status === 429) throw new Error('Lovable AI rate limit exceeded, please retry shortly');
-    if (resp.status === 402) throw new Error('Lovable AI credits exhausted — add credits in Workspace > Usage');
-    throw new Error(`Gemini transcription failed (${resp.status}): ${errText.slice(0, 300)}`);
-  }
-
-  const data = await resp.json();
-  const text = data?.choices?.[0]?.message?.content;
-  if (!text || typeof text !== 'string') {
-    throw new Error('Gemini returned empty transcription');
-  }
-  return text.trim();
+  const ext = geminiAudioFormat(contentType) || 'mp3';
+  console.log(`🎙️ Transcribing ${audioBlob.size} bytes via Whisper (ext=${ext})`);
+  const text = await aiTranscribe(audioBlob, { language: 'he', filename: `recording.${ext}` });
+  if (!text) throw new Error('Whisper returned empty transcription');
+  return text;
 }
 
 // ── Helper: download media from Zoom ──────────────────────────────────
