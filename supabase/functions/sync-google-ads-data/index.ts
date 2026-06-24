@@ -404,8 +404,8 @@ Deno.serve(async (req) => {
             body: JSON.stringify({ query }),
           }
         );
-        const retryData = await retryResponse.json();
-        if (!detectGAError(retryData)) {
+        const retryData = await retryResponse.json().catch(() => null);
+        if (retryData && !detectGAError(retryData)) {
           console.log(`[sync-google-ads] Found working MCC: ${mcc}`);
           return { data: retryData, mcc };
         }
