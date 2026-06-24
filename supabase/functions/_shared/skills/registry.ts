@@ -181,6 +181,33 @@ export async function buildSkillsBlock(
   return '\n\n' + matches.map((s) => s.prompt).join('\n\n')
 }
 
+/**
+ * Resolve skins EXPLICITLY by slug (e.g. an automation node or agent_task that
+ * pins skin "campaigner"), independent of trigger-phrase matching. Unknown slugs
+ * (e.g. legacy hardcoded task_skills like "lead-qualifier") are silently ignored,
+ * so this is safe to call with the existing task_skills array. Additive — does not
+ * alter the trigger-based path above.
+ */
+export async function resolveSkillsBySlug(
+  slugs: string[],
+  tenantId: string | null = null
+): Promise<CarmenSkill[]> {
+  if (!slugs || slugs.length === 0) return []
+  const wanted = new Set(slugs.map((s) => String(s).trim()).filter(Boolean))
+  if (wanted.size === 0) return []
+  const all = await loadSkillsForTenant(tenantId)
+  return all.filter((s) => wanted.has(s.id))
+}
+
+export async function buildSkillsBlockBySlug(
+  slugs: string[],
+  tenantId: string | null = null
+): Promise<string> {
+  const matches = await resolveSkillsBySlug(slugs, tenantId)
+  if (matches.length === 0) return ''
+  return '\n\n' + matches.map((s) => s.prompt).join('\n\n')
+}
+
 /** For warmup or admin tools */
 export function clearSkillsCache() {
   cache.clear()

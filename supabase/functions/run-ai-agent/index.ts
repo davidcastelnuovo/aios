@@ -5,7 +5,7 @@ import { summarizeAndStoreAgentMemory, recallAgentMemory, recallAgentMemoryFTS, 
 import { buildCarmenV2SystemPrompt, shouldUseV2Prompt } from '../_shared/carmen-prompt-v2.ts'
 import { loadMcpTools } from '../_shared/mcp-tools.ts'
 import { spawnSubagent, getSubagentResult } from '../_shared/subagent.ts'
-import { buildSkillsBlock, resolveActiveSkills } from '../_shared/skills/registry.ts'
+import { buildSkillsBlock, resolveActiveSkills, buildSkillsBlockBySlug } from '../_shared/skills/registry.ts'
 import { aiEmbed } from '../_shared/ai.ts'
 
 
@@ -2690,6 +2690,21 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
       const taskSkillPrompts = (task_skills as string[]).map((s: string) => TASK_SKILLS_PROMPTS[s]).filter(Boolean)
       if (taskSkillPrompts.length > 0) {
         systemPrompt += `\n\n=== סקילז למשימה זו ===\n${taskSkillPrompts.join('\n')}`
+      }
+      // Additive (Strangler): any task_skills entry that matches a DB skin slug
+      // (the global skin catalog in ai_skills, e.g. "campaigner"/"seo"/"legal")
+      // is injected explicitly here, independent of trigger-phrase matching.
+      // Legacy hardcoded keys above are ignored by resolveSkillsBySlug, so this
+      // does not change existing behavior — it only adds DB-pinned skins.
+      try {
+        const pinnedTenantId = (agent as any)?.tenant_id || tenant_id || null
+        const pinnedBlock = await buildSkillsBlockBySlug(task_skills as string[], pinnedTenantId)
+        if (pinnedBlock) {
+          systemPrompt += pinnedBlock
+          console.log(`[AGENT] Pinned skins by slug: ${(task_skills as string[]).join(', ')}`)
+        }
+      } catch (e) {
+        console.error('[AGENT] pinned-skin resolution failed (non-fatal):', e)
       }
     }
     // Inject active modes
