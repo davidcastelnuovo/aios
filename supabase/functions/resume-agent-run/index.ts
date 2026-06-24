@@ -40,7 +40,19 @@ Deno.serve(async (req) => {
 
     let executionResult: any = null;
 
-    if (decision === "approved" && approval.tool_name) {
+    if (decision === "approved" && approval.tool_name === "create_automation") {
+      // Carmen authoring: route to carmen-approval-execute, which materializes the
+      // (disabled) flow automation from the approved spec. Kept as an explicit
+      // special-case so no other tool's behavior changes.
+      try {
+        const { data, error } = await supabase.functions.invoke("carmen-approval-execute", {
+          body: { approval_id, approved_by: reviewer_id ?? null },
+        });
+        executionResult = error ? { ok: false, error: String(error?.message ?? error) } : (data ?? { ok: true });
+      } catch (e: any) {
+        executionResult = { ok: false, error: String(e?.message ?? e) };
+      }
+    } else if (decision === "approved" && approval.tool_name) {
       // Look up the tool handler
       const { data: tool } = await supabase
         .from("agent_tools")

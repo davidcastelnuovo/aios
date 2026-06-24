@@ -207,6 +207,20 @@ const ALL_TOOLS = [
   { name: 'get_subagent_result', description: 'בדיקת מצב/קבלת תוצאה של תת-סוכן שנוצר ב-delegate_to_subagent. מחזיר status, done, ואם הסתיים — output. אל תקראי לזה בלולאה צמודה; אם done=false פשוט המשיכי בעבודה אחרת או הודיעי למשתמש שהמשימה עדיין רצה.', parameters: { type: 'object', properties: { sub_task_id: { type: 'string', description: 'המזהה שהוחזר מ-delegate_to_subagent' } }, required: ['sub_task_id'] } },
   { name: 'delegate_parallel', description: 'מולטיטאסק: פיזור כמה תת-משימות עצמאיות שירוצו ברקע במקביל (עד 8). השתמשי בזה כשיש עבודה שמתפצלת לכמה חלקים בלתי-תלויים — למשל ניתוח מספר לקוחות/ערוצים בו-זמנית, או הרצת כמה סקינז במקביל. כל תת-משימה חייבת להיות עצמאית ולא לחפוף לאחרות — תני לכל אחת מטרה ברורה, היקף, ומה להחזיר. מחזיר batch_id + רשימת sub_task_id. אחר כך אספי עם get_batch_results. אל תשתמשי בזה למשימה אחת — לזה יש delegate_to_subagent.', parameters: { type: 'object', properties: { tasks: { type: 'array', description: 'מערך תת-משימות עצמאיות', items: { type: 'object', properties: { title: { type: 'string' }, prompt: { type: 'string', description: 'הוראה עצמאית מלאה — מטרה, היקף, פורמט פלט, ובמפורש "אל תחפפי עם תת-משימות אחרות".' }, task_skills: { type: 'array', items: { type: 'string' }, description: 'סקינז לכפות על תת-משימה זו (למשל ["campaigner"])' } }, required: ['title','prompt'] } } }, required: ['tasks'] } },
   { name: 'get_batch_results', description: 'איסוף תוצאות של batch שנוצר ב-delegate_parallel. מחזיר לכל תת-משימה status/output (גם אם חלקן נכשלו — בידוד כשל חלקי), וכן total/completed/failed/running ו-all_done. כשהכל הושלם — סנתזי את התוצאות לתשובה אחת.', parameters: { type: 'object', properties: { batch_id: { type: 'string', description: 'ה-batch_id שהוחזר מ-delegate_parallel' } }, required: ['batch_id'] } },
+  { name: 'propose_automation', description: 'הצעת אוטומציה חדשה לבנייה — כרמן מתכננת פלואו (טריגר + שלבים) ושולחת לאישור המשתמש. האוטומציה תיווצר כבויה רק לאחר אישור, אז בטוח להציע. השתמשי בזה כשהמשתמש מבקש "תבני/תחברי לי אוטומציה". כל שלב agent יכול לכפות סקין (campaigner/seo/...). מחזיר approval_id; הסבירי למשתמש מה תכננת ובקשי אישור.', parameters: { type: 'object', properties: {
+    name: { type: 'string', description: 'שם האוטומציה' },
+    description: { type: 'string' },
+    trigger_type: { type: 'string', description: 'סוג טריגר, למשל scheduled_daily / lead_created / whatsapp_message_received' },
+    trigger_config: { type: 'object', description: 'הגדרת הטריגר, למשל {"hour":8,"minute":0} ל-scheduled_daily' },
+    steps: { type: 'array', description: 'שלבי הפלואו בסדר לינארי', items: { type: 'object', properties: {
+      type: { type: 'string', enum: ['agent','action','condition','delay','merge'], description: 'סוג השלב' },
+      skin: { type: 'string', description: 'לשלב agent — סקין לכפות (slug)' },
+      instruction: { type: 'string', description: 'לשלב agent — ההוראה לשלב' },
+      action_type: { type: 'string', description: 'לשלב action — למשל notification / send_greenapi_message / create_task' },
+      config: { type: 'object', description: 'הגדרת השלב' },
+      label: { type: 'string' },
+    }, required: ['type'] } },
+  }, required: ['name','trigger_type','steps'] } },
   // ===========================
   // MEDIA LIBRARY (carmen-media bucket + marketing_media_library)
   // ===========================
@@ -2190,6 +2204,49 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     case 'get_batch_results': {
       if (!args.batch_id) throw new Error('batch_id is required')
       return await getBatchResults(supabase, tenantId, args.batch_id)
+    }
+
+    case 'propose_automation': {
+      if (!args.name || !args.trigger_type || !Array.isArray(args.steps) || args.steps.length === 0) {
+        throw new Error('name, trigger_type ו-steps (מערך לא ריק) נדרשים')
+      }
+      const spec = {
+        name: String(args.name),
+        description: args.description ? String(args.description) : null,
+        trigger_type: String(args.trigger_type),
+        trigger_config: (args.trigger_config && typeof args.trigger_config === 'object') ? args.trigger_config : {},
+        steps: (args.steps as any[]).slice(0, 20).map((s) => ({
+          type: String(s.type || 'agent'),
+          skin: s.skin ? String(s.skin) : null,
+          instruction: s.instruction ? String(s.instruction) : null,
+          action_type: s.action_type ? String(s.action_type) : null,
+          config: (s.config && typeof s.config === 'object') ? s.config : {},
+          label: s.label ? String(s.label) : null,
+        })),
+      }
+      const stepSummary = spec.steps
+        .map((s, i) => `${i + 1}. ${s.label || s.type}${s.skin ? ` [${s.skin}]` : ''}`)
+        .join('  ·  ')
+      const { data, error } = await supabase.from('agent_approval_queue').insert({
+        tenant_id: tenantId,
+        agent_id: agentId || null,
+        requested_by: userId,
+        action_type: 'create_automation',
+        title: `בניית אוטומציה: ${spec.name}`,
+        description: `טריגר: ${spec.trigger_type} | שלבים: ${stepSummary}`,
+        tool_name: 'create_automation',
+        tool_input: spec,
+        context: { caller_role: callerRole, caller_phone: callerPhone },
+        status: 'pending',
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      }).select('id').single()
+      if (error) throw error
+      return {
+        pending_approval: true,
+        approval_id: data.id,
+        summary: `אוטומציה "${spec.name}" — ${spec.steps.length} שלבים`,
+        instruction_for_carmen: 'הצג למשתמש את התכנון (טריגר + שלבים) ובקש אישור. האוטומציה תיווצר כבויה רק לאחר אישור; אל תפעילי אותה — המשתמש יבדוק ויפעיל בעצמו.',
+      }
     }
 
     // ============ MEDIA LIBRARY ============
