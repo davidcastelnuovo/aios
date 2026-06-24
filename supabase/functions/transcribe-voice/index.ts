@@ -1,5 +1,5 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { aiTranscribe, hasAiKey } from '../_shared/ai.ts';
+import { aiTranscribe, aiCleanTranscript, hasAiKey } from '../_shared/ai.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -42,7 +42,10 @@ serve(async (req) => {
       });
     }
 
-    return new Response(JSON.stringify({ text }), {
+    // Rewrite garbled Whisper output into clean, sensible Hebrew before returning.
+    const cleaned = await aiCleanTranscript(text);
+
+    return new Response(JSON.stringify({ text: cleaned }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
