@@ -70,6 +70,29 @@ function isShortAck(msg: string): boolean {
   return ACK_VARIANTS.some(k => m === k || m === k + ' כרמן');
 }
 
+// Voice transcription (Whisper) spells the wake-word "כרמן" inconsistently:
+// "קרמן" (kuf↔kaf), "כארמן"/"קארמן" (with an alef). The transcript is also
+// prefixed with a 🎤 marker. Accept any of these so a spoken "כרמן ..." still
+// triggers Carmen instead of being dropped as 'no_keyword'.
+const CARMEN_NAME_VARIANT_RE = /[כק]א?רמן/;
+
+// Resolve the configured trigger keyword(s). Supports a single `trigger_keyword`
+// (legacy) or a `trigger_keywords` array (multiple wake-words), defaulting to "כרמן".
+function resolveTriggerKeywords(cfg: any): string[] {
+  const list = Array.isArray(cfg?.trigger_keywords) && cfg.trigger_keywords.length
+    ? cfg.trigger_keywords
+    : [cfg?.trigger_keyword || 'כרמן'];
+  const out = list.map((k: any) => String(k || '').trim().toLowerCase()).filter(Boolean);
+  return out.length ? out : ['כרמן'];
+}
+
+// True when the message contains any configured wake-word, or any Whisper spelling
+// variant of "כרמן".
+function messageHasTrigger(normalizedMsg: string, triggerKeywords: string[]): boolean {
+  if (triggerKeywords.some(k => normalizedMsg.includes(k))) return true;
+  return CARMEN_NAME_VARIANT_RE.test(normalizedMsg);
+}
+
 // Detect meta-instruction style messages (long lists of "תעני..." rules) that
 // shouldn't be replayed back to the model as a user turn — otherwise the model
 // "answers" the instructions instead of the real question.
@@ -931,9 +954,10 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     return { handled: false, reason: 'group_requires_explicit_scope' };
   }
 
-  const triggerKeyword = (carmenAutomation.configuration?.trigger_keyword || 'כרמן').toLowerCase();
+  const triggerKeywords = resolveTriggerKeywords(carmenAutomation.configuration);
+  const triggerKeyword = triggerKeywords[0]; // primary — used for prompt copy below
   const endKeywordConfig = carmenAutomation.configuration?.end_keyword || 'סיימנו כרמן';
-  if (!normalizedMsg.includes(triggerKeyword)) return { handled: false, reason: 'no_keyword' };
+  if (!messageHasTrigger(normalizedMsg, triggerKeywords)) return { handled: false, reason: 'no_keyword' };
 
   // Resolve agent
   let agentId = carmenAutomation.configuration?.agent_id || null;
@@ -976,7 +1000,13 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     return { handled: true, outcome: 'error' };
   }
 
-  const contentAfterKeyword = messageText.replace(new RegExp(triggerKeyword, 'gi'), '').trim();
+  let contentAfterKeyword = messageText.replace(/🎤/g, ''); // strip the voice-transcript marker
+  for (const k of triggerKeywords) {
+    contentAfterKeyword = contentAfterKeyword.replace(new RegExp(k, 'gi'), '');
+  }
+  contentAfterKeyword = contentAfterKeyword
+    .replace(CARMEN_NAME_VARIANT_RE, '')                 // strip "קרמן"/"כארמן" voice spellings
+    .trim();
 
   // If the user already asked a question after the keyword, answer it directly (single message).
   // Otherwise send a brief greeting only. Either way — save the assistant reply to history

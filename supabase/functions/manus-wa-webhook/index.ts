@@ -426,8 +426,12 @@ Deno.serve(async (req) => {
             ? new Date(activeAliasSession.last_message_at || activeAliasSession.created_at).getTime()
             : 0;
           const hasFreshAliasSession = !!activeAliasSession && (Date.now() - lastActivity) <= idleMin * 60 * 1000;
-          const triggerKeyword = String(cfg.trigger_keyword || 'כרמן').toLowerCase();
-          const hasTriggerKeyword = String(messageText || '').toLowerCase().includes(triggerKeyword);
+          // Support multiple configured wake-words + Whisper spelling variants of "כרמן".
+          const triggerKeywords = (Array.isArray(cfg.trigger_keywords) && cfg.trigger_keywords.length
+            ? cfg.trigger_keywords
+            : [cfg.trigger_keyword || 'כרמן']).map((k: any) => String(k || '').toLowerCase()).filter(Boolean);
+          const lowerMsg = String(messageText || '').toLowerCase();
+          const hasTriggerKeyword = triggerKeywords.some((k: string) => lowerMsg.includes(k)) || /[כק]א?רמן/.test(lowerMsg);
 
           counterpartPhone = aliasPhone;
           counterpartRaw = aliasChatId;
