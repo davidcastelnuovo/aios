@@ -1,3 +1,4 @@
+// redeploy trigger: rebundle _shared/ai.ts OpenAI key fallback (env secret → llm integration) so WhatsApp voice transcription works
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { findCarmenSessionAutomation, handleCarmenMessage } from '../_shared/carmen.ts';
 import { aiTranscribe } from '../_shared/ai.ts';

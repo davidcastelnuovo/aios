@@ -1,3 +1,4 @@
+// redeploy trigger: rebundle _shared/ai.ts OpenAI key fallback (env secret → llm integration)
 // Standalone test harness for sending a Carmen voice note via the Manus WA gateway.
 // Does NOT touch the live reply flow. Generates TTS (OpenAI), uploads it to a
 // public bucket, then probes the likely gateway audio endpoints in order and
