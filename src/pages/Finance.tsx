@@ -18,7 +18,7 @@ export default function Finance() {
 
   // Finance is strictly per active tenant — no cross-tenant sharing.
   const { data: financeRecords, isLoading } = useQuery({
-    queryKey: ["finance", tenantId],
+    queryKey: ["finance", tenantId, selectedAgency],
     queryFn: async () => {
       if (!tenantId) return [];
       const { data, error } = await supabase

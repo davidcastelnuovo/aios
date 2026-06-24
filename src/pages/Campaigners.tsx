@@ -30,7 +30,7 @@ export default function Campaigners() {
   const { selectedAgency } = useAgency();
 
   const { data: campaigners, isLoading } = useQuery({
-    queryKey: ["campaigners", tenantId, "grid", crossTenantAgencyIds.join(",")],
+    queryKey: ["campaigners", tenantId, "grid", crossTenantAgencyIds.join(","), selectedAgency],
     queryFn: async () => {
       if (!tenantId) return [];
 

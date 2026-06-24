@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useAgency } from "@/contexts/AgencyContext";
 import { useTenantPath } from "@/hooks/useTenantPath";
 
 const useBuildPath = () => {
@@ -45,6 +46,7 @@ interface RankProject {
 
 export default function RankTracking() {
   const { tenantId } = useCurrentTenant();
+  const { selectedAgency } = useAgency();
   const tenantPath = useBuildPath();
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -84,7 +86,7 @@ export default function RankTracking() {
 
   // Fetch projects
   const { data: projects, isLoading } = useQuery({
-    queryKey: ["rank-tracking-projects", tenantId],
+    queryKey: ["rank-tracking-projects", tenantId, selectedAgency],
     queryFn: async () => {
       if (!tenantId) return [];
 
@@ -124,6 +126,16 @@ export default function RankTracking() {
     },
     enabled: !!tenantId,
   });
+
+  const filteredProjects = useMemo(() => {
+    let result = projects;
+    if (result && selectedAgency && selectedAgency !== "all") {
+      result = result.filter(
+        (project) => project.agency_id === null || project.agency_id === selectedAgency
+      );
+    }
+    return result;
+  }, [projects, selectedAgency]);
 
   // Fetch clients
   const { data: clients } = useQuery({
@@ -440,9 +452,9 @@ export default function RankTracking() {
         <div className="flex items-center justify-center py-12">
           <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
-      ) : projects && projects.length > 0 ? (
+      ) : filteredProjects && filteredProjects.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {projects.map((project) => (
+          {filteredProjects.map((project) => (
             <Card key={project.id} className="hover:shadow-md transition-shadow">
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between">

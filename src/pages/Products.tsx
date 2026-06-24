@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useAgency } from "@/contexts/AgencyContext";
 import { Building2 } from "lucide-react";
 
 interface Product {
@@ -42,12 +43,13 @@ interface Product {
 export default function Products() {
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
+  const { selectedAgency } = useAgency();
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
 
   const { data: products = [], isLoading } = useQuery({
-    queryKey: ["products", tenantId],
+    queryKey: ["products", tenantId, selectedAgency],
     queryFn: async () => {
       if (!tenantId) return [];
       
@@ -92,6 +94,16 @@ export default function Products() {
     },
     enabled: !!tenantId,
   });
+
+  const filteredProducts = useMemo(() => {
+    let result = products;
+    if (selectedAgency && selectedAgency !== "all") {
+      result = result.filter(
+        (product) => product.agency_id === null || product.agency_id === selectedAgency
+      );
+    }
+    return result;
+  }, [products, selectedAgency]);
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -143,7 +155,7 @@ export default function Products() {
 
       {isLoading ? (
         <div className="text-center py-8">טוען מוצרים...</div>
-      ) : products.length === 0 ? (
+      ) : filteredProducts.length === 0 ? (
         <div className="text-center py-8 text-muted-foreground">
           אין מוצרים. הוסף מוצר חדש כדי להתחיל.
         </div>
@@ -161,7 +173,7 @@ export default function Products() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {products.map((product) => (
+              {filteredProducts.map((product) => (
                 <TableRow key={product.id}>
                   <TableCell className="font-medium">
                     <div className="flex items-center gap-2">
