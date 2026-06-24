@@ -278,6 +278,90 @@ export default function Automations() {
       toast({ title: "שגיאה", description: err.message, variant: "destructive" });
     },
   });
+  // Create the "Campaign Pulse" template — a daily skinned-agent chain.
+  // Built INACTIVE and opened in the visual editor for review. Each agent node
+  // is pre-pinned to a catalog skin (campaigner/seo/analyst) via skin_slugs.
+  // NOTE: this is a linear skeleton on the current engine; true parallel fan-in
+  // synthesis is a planned engine enhancement.
+  const createCampaignPulseMutation = useMutation({
+    mutationFn: async () => {
+      if (!tenantId) throw new Error("No tenant");
+      // Find Carmen (or any active agent) for the agent nodes.
+      const { data: agentsList } = await supabase
+        .from("ai_agents" as any)
+        .select("id,name,active")
+        .eq("tenant_id", tenantId)
+        .eq("active", true);
+      const carmen =
+        (agentsList as any[] || []).find((a) => /כרמן|carmen/i.test(a.name || "")) ||
+        (agentsList as any[] || [])[0];
+      if (!carmen) throw new Error("לא נמצא סוכן פעיל (כרמן). צרי סוכן תחילה.");
+
+      const { data: automation, error: autoErr } = await supabase
+        .from("automations")
+        .insert({
+          name: "Campaign Pulse — בדיקת בוקר",
+          description: "סריקת בוקר יומית: קמפיינרית → SEO → אנליסטית → דוח. תבנית כבויה לעריכה.",
+          tenant_id: tenantId,
+          trigger_type: "scheduled_daily",
+          action_type: "notification",
+          configuration: { hour: 8, minute: 0 },
+          is_flow: true,
+          active: false,
+        } as any)
+        .select()
+        .single();
+      if (autoErr) throw autoErr;
+
+      const aid = automation.id;
+      const mk = (over: any) => ({
+        id: crypto.randomUUID(),
+        automation_id: aid,
+        tenant_id: tenantId,
+        condition_branch: null,
+        label: over.label ?? null,
+        ...over,
+      });
+      const trigger = mk({ step_type: "trigger", action_type: "scheduled_daily", configuration: { hour: 8, minute: 0 }, position_x: 400, position_y: 60, sort_order: 0, parent_step_id: null, label: "כל בוקר 08:00" });
+      const agentNode = (skin: string, label: string, instruction: string, parent: string, y: number, sort: number) =>
+        mk({
+          step_type: "agent",
+          action_type: "agent",
+          configuration: { agent_id: carmen.id, skin_slugs: [skin], step_instruction: instruction },
+          position_x: 400,
+          position_y: y,
+          sort_order: sort,
+          parent_step_id: parent,
+          label,
+        });
+      const campaigner = agentNode("campaigner", "קמפיינרית", "נתחי ביצועי קמפיינים של 7 הימים האחרונים מול השבוע הקודם. זהי חריגות תקציב, anomalies וחשבונות לא תקינים. סכמי בקצרה.", trigger.id, 190, 1);
+      const seo = agentNode("seo", "SEO", "בדקי שינויי דירוג, backlinks חדשים ובעיות audit טכניות מהותיות. סכמי בקצרה.", campaigner.id, 320, 2);
+      const analyst = agentNode("analyst", "אנליסטית — סינתזה", "על סמך ממצאי הקמפיינים וה-SEO שנאספו בשלבים הקודמים ({{agent_output}}), הפיקי 3 תובנות מתועדפות + המלצה אחת לפעולה.", seo.id, 450, 3);
+      const report = mk({
+        step_type: "action",
+        action_type: "notification",
+        configuration: { title: "Campaign Pulse", message: "{{agent_output}}" },
+        position_x: 400,
+        position_y: 580,
+        sort_order: 4,
+        parent_step_id: analyst.id,
+        label: "דוח",
+      });
+
+      const { error: stepErr } = await supabase
+        .from("automation_flow_steps")
+        .insert([trigger, campaigner, seo, analyst, report] as any);
+      if (stepErr) throw stepErr;
+      return automation;
+    },
+    onSuccess: (data) => {
+      toast({ title: "התבנית נוצרה (כבויה)", description: "פתחי, בדקי ובחרי סקינז/הוראות לפני הפעלה." });
+      navigate(buildPath(`automations/flow/${data.id}`));
+    },
+    onError: (err: any) => {
+      toast({ title: "שגיאה ביצירת התבנית", description: err.message, variant: "destructive" });
+    },
+  });
 
   // Create new flow automation
   const createFlowMutation = useMutation({
@@ -374,6 +458,27 @@ export default function Automations() {
           </Button>
         </div>
       )}
+
+      {/* Campaign Pulse template */}
+      <div className="flex items-center gap-3 p-4 rounded-lg border bg-gradient-to-l from-orange-500/10 to-transparent">
+        <div className="p-2 rounded-full bg-orange-500/20">
+          <Zap className="h-5 w-5 text-orange-500" />
+        </div>
+        <div className="flex-1">
+          <p className="font-semibold text-sm">תבנית: Campaign Pulse</p>
+          <p className="text-xs text-muted-foreground">סריקת בוקר יומית עם סקינז — קמפיינרית ← SEO ← אנליסטית ← דוח. נוצרת כבויה לעריכה.</p>
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="shrink-0 border-orange-500 text-orange-600 hover:bg-orange-50"
+          onClick={() => createCampaignPulseMutation.mutate()}
+          disabled={createCampaignPulseMutation.isPending}
+        >
+          <Plus className="h-4 w-4 ml-2" />
+          צור תבנית
+        </Button>
+      </div>
 
       {/* Automations Grid */}
       <div className="grid gap-3 md:gap-4 grid-cols-1 lg:grid-cols-2">
