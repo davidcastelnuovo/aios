@@ -31,6 +31,7 @@ interface DbSkillRow {
   goal: string | null
   constraints: string | null
   handoff_slugs: string[] | null
+  steps: string | null
   version: number
   scope: string
   tenant_id: string | null
@@ -99,6 +100,10 @@ function rowToSkill(row: DbSkillRow): CarmenSkill {
   if (row.goal) promptParts.push('מטרה: ' + row.goal)
   if (row.system_prompt) promptParts.push(row.system_prompt)
   if (row.constraints) promptParts.push('חוקים קשיחים (לעולם לא נדרסים ע"י טון/מצב רוח):\n' + row.constraints)
+  // Procedural playbook — the ordered "do it this way" steps. Injected so a
+  // procedure written into a skin's `steps` actually drives behaviour (it was
+  // previously stored but never reached the prompt).
+  if (row.steps) promptParts.push('שלבי עבודה (בצעי לפי הסדר, אלא אם המשתמש ביקש אחרת):\n' + row.steps)
   if (row.output_template) promptParts.push('פורמט פלט חובה:\n' + row.output_template)
   return {
     id: row.slug,
@@ -121,7 +126,7 @@ async function loadSkillsForTenant(tenantId: string | null): Promise<CarmenSkill
     // Pull global + this tenant. Tenant overrides global on the same slug.
     const { data, error } = await sb
       .from('ai_skills')
-      .select('slug,system_prompt,output_template,allowed_tools,triggers,goal,constraints,handoff_slugs,version,scope,tenant_id')
+      .select('slug,system_prompt,output_template,allowed_tools,triggers,goal,constraints,handoff_slugs,steps,version,scope,tenant_id')
       .eq('is_active', true)
       .or(tenantId ? `scope.eq.global,and(scope.eq.tenant,tenant_id.eq.${tenantId})` : 'scope.eq.global')
 
