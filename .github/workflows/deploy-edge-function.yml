@@ -1,10 +1,10 @@
 name: Deploy Supabase Edge Function
 
-# Deploys an edge function from repo source to the PRODUCTION Supabase project.
+# Deploys edge functions from repo source to the PRODUCTION Supabase project.
 #
-# Auto-runs on merge to main when this workflow or the trigger-automation
-# function changes. Can also be run manually (Actions tab → Run workflow) to
-# deploy any function by name.
+# - On merge to main: auto-deploys every function whose files changed in the
+#   merge (verify_jwt is read per-function from supabase/config.toml).
+# - Manual (Actions tab → Run workflow): deploy any single function by name.
 #
 # Requires a repo secret named BASE_ACCESS_TOKEN = a Supabase access token (sbp_...).
 
@@ -23,30 +23,55 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/deploy-edge-function.yml'
-      - 'supabase/functions/trigger-automation/**'
+      - 'supabase/functions/**'
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
-      # GitHub secret BASE_ACCESS_TOKEN -> the env var the Supabase CLI expects.
       SUPABASE_ACCESS_TOKEN: ${{ secrets.BASE_ACCESS_TOKEN }}
       PROJECT_REF: zvoijyneresvkadpprel
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - name: Install Supabase CLI
         uses: supabase/setup-cli@v1
         with:
           version: latest
 
-      - name: Deploy function
+      - name: Determine functions to deploy
+        id: funcs
         run: |
           set -euo pipefail
-          FUNC="${{ github.event.inputs.function_name || 'trigger-automation' }}"
-          VJWT="${{ github.event.inputs.verify_jwt || 'true' }}"
-          FLAG=""
-          if [ "$VJWT" = "false" ]; then FLAG="--no-verify-jwt"; fi
-          echo "Deploying '$FUNC' to project $PROJECT_REF (verify_jwt=$VJWT)"
-          supabase functions deploy "$FUNC" --project-ref "$PROJECT_REF" $FLAG
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "list=${{ github.event.inputs.function_name }}" >> "$GITHUB_OUTPUT"
+          else
+            # Functions whose files changed in this push.
+            CHANGED=$(git diff --name-only HEAD^ HEAD -- 'supabase/functions/**' \
+              | sed -E 's#supabase/functions/([^/]+)/.*#\1#' \
+              | grep -v '^_shared$' | sort -u | tr '\n' ' ')
+            echo "Changed functions: $CHANGED"
+            echo "list=$CHANGED" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy
+        run: |
+          set -euo pipefail
+          FUNCS="${{ steps.funcs.outputs.list }}"
+          if [ -z "${FUNCS// }" ]; then echo "No functions to deploy."; exit 0; fi
+          for FUNC in $FUNCS; do
+            # Read verify_jwt for this function from config.toml (default true).
+            VJWT=$(awk -v sec="[functions.$FUNC]" '
+              $0==sec {found=1; next}
+              found && /^\[/ {exit}
+              found && /verify_jwt/ {print $3; exit}' supabase/config.toml)
+            VJWT="${VJWT:-true}"
+            FLAG=""
+            if [ "$VJWT" = "false" ]; then FLAG="--no-verify-jwt"; fi
+            echo "::group::Deploying $FUNC (verify_jwt=$VJWT)"
+            supabase functions deploy "$FUNC" --project-ref "$PROJECT_REF" $FLAG
+            echo "::endgroup::"
+          done
