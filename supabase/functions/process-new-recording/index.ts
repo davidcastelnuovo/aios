@@ -12,7 +12,7 @@ Deno.serve(async (req) => {
 
   const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
   const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+  const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
   const GOOGLE_CLIENT_ID = Deno.env.get('GOOGLE_CLIENT_ID');
   const GOOGLE_CLIENT_SECRET = Deno.env.get('GOOGLE_CLIENT_SECRET');
 
@@ -190,22 +190,22 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 6. AI Summary via Lovable AI Gateway
+    // 6. AI Summary via OpenAI
     let summary: string | null = null;
 
-    if (transcription && LOVABLE_API_KEY) {
+    if (transcription && OPENAI_API_KEY) {
       try {
         console.log('Generating AI summary...');
         const meetingName = calendarEventName || recording.meeting_topic || 'פגישה';
 
-        const aiResponse = await fetch('https://ai.lovable.dev/chat/completions', {
+        const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+            'Authorization': `Bearer ${OPENAI_API_KEY}`,
           },
           body: JSON.stringify({
-            model: 'google/gemini-2.5-flash',
+            model: 'gpt-4o-mini',
             messages: [
               {
                 role: 'system',

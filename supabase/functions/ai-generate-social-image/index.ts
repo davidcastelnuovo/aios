@@ -22,29 +22,25 @@ serve(async (req) => {
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY not configured");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY not configured");
     }
 
-    // Generate image using Nano Banana (Gemini Flash Image)
+    // Generate image using OpenAI Images (gpt-image-1)
     const aiResponse = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
+      "https://api.openai.com/v1/images/generations",
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash-image",
-          messages: [
-            {
-              role: "user",
-              content: `Generate a professional social media post image: ${prompt}. Make it visually appealing, modern, and suitable for social media marketing.`,
-            },
-          ],
-          modalities: ["image", "text"],
+          model: "gpt-image-1",
+          prompt: `Professional social media post image: ${prompt}. Visually appealing, modern, suitable for social media marketing.`,
+          n: 1,
+          size: "1024x1024",
         }),
       }
     );
@@ -55,8 +51,8 @@ serve(async (req) => {
     }
 
     const aiData = await aiResponse.json();
-    const base64Image =
-      aiData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+    const b64 = aiData?.data?.[0]?.b64_json;
+    const base64Image = b64 ? `data:image/png;base64,${b64}` : undefined;
 
     if (!base64Image) {
       throw new Error("No image returned from AI");

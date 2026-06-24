@@ -5,7 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
+const AI_GATEWAY_URL = "https://api.openai.com/v1/chat/completions";
 const GITHUB_API = "https://api.github.com";
 
 interface AgentRequest {
@@ -29,11 +29,11 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-    if (!LOVABLE_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    if (!OPENAI_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       throw new Error('Missing environment variables');
     }
 
@@ -65,13 +65,13 @@ Deno.serve(async (req: Request) => {
 
     switch (action) {
       case 'chat_support':
-        return await handleChatSupport(supabase, request, user.id, tenant_id, LOVABLE_API_KEY, githubToken);
+        return await handleChatSupport(supabase, request, user.id, tenant_id, OPENAI_API_KEY, githubToken);
 
       case 'analyze_error':
-        return await handleAnalyzeError(supabase, request, user.id, tenant_id, LOVABLE_API_KEY, githubToken);
+        return await handleAnalyzeError(supabase, request, user.id, tenant_id, OPENAI_API_KEY, githubToken);
 
       case 'fix_code':
-        return await handleFixCode(supabase, request, user.id, tenant_id, LOVABLE_API_KEY, githubToken);
+        return await handleFixCode(supabase, request, user.id, tenant_id, OPENAI_API_KEY, githubToken);
 
       case 'check_permissions':
         return await handleCheckPermissions(supabase, request, user.id, tenant_id);
@@ -157,7 +157,7 @@ ${JSON.stringify(userContext, null, 2)}
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'google/gemini-3-flash-preview',
+      model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: message }
@@ -251,7 +251,7 @@ Return JSON:
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'google/gemini-3-flash-preview',
+      model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: 'You are an expert developer analyzing errors in a React + TypeScript + Supabase application.' },
         { role: 'user', content: analysisPrompt }

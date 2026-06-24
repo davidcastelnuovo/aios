@@ -1326,10 +1326,10 @@ Deno.serve(async (req) => {
                     telegramChatId = stepData?.chat_id || stepData?.telegram_chat_id || ''
                   }
                   
-                  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')
+                  const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')
                   const TELEGRAM_API_KEY = Deno.env.get('TELEGRAM_API_KEY')
                   
-                  if (!LOVABLE_API_KEY || !TELEGRAM_API_KEY) {
+                  if (!OPENAI_API_KEY || !TELEGRAM_API_KEY) {
                     throw new Error('Telegram integration not configured (missing API keys)')
                   }
                   if (!telegramChatId) {
@@ -1352,7 +1352,7 @@ Deno.serve(async (req) => {
                   const telegramResponse = await fetch(`${GATEWAY_URL}/sendMessage`, {
                     method: 'POST',
                     headers: {
-                      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+                      'Authorization': `Bearer ${OPENAI_API_KEY}`,
                       'X-Connection-Api-Key': TELEGRAM_API_KEY,
                       'Content-Type': 'application/json',
                     },
@@ -2589,7 +2589,7 @@ function replaceTemplateVariables(template: string, data: any, tenantSlug?: stri
   const formattedPriority = priorityMap[priorityValue.toLowerCase()] || priorityValue
   
   // Base URL for links - use actual production URL
-  const appUrl = Deno.env.get('APP_URL') || 'https://marketing-captain.lovable.app'
+  const appUrl = Deno.env.get('APP_URL') || 'https://aios.co.il'
   const baseUrl = tenantSlug 
     ? `${appUrl}/t/${tenantSlug}` 
     : appUrl
