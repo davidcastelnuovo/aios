@@ -9,6 +9,9 @@ verify_jwt = false
 [functions.send-manus-wa-voice]
 verify_jwt = false
 
+[functions.carmen-speak]
+verify_jwt = true
+
 [functions.test-facebook-lead-webhook]
 verify_jwt = false
 
