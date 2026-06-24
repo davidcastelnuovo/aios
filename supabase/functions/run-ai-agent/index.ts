@@ -5,7 +5,7 @@ import { summarizeAndStoreAgentMemory, recallAgentMemory, recallAgentMemoryFTS, 
 import { buildCarmenV2SystemPrompt, shouldUseV2Prompt } from '../_shared/carmen-prompt-v2.ts'
 import { loadMcpTools } from '../_shared/mcp-tools.ts'
 import { spawnSubagent, getSubagentResult } from '../_shared/subagent.ts'
-import { buildSkillsBlock, resolveActiveSkills, buildSkillsBlockBySlug } from '../_shared/skills/registry.ts'
+import { resolveActiveSkills, buildSkillsBlockBySlug } from '../_shared/skills/registry.ts'
 import { aiEmbed } from '../_shared/ai.ts'
 
 
@@ -2698,7 +2698,9 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
       // does not change existing behavior — it only adds DB-pinned skins.
       try {
         const pinnedTenantId = (agent as any)?.tenant_id || tenant_id || null
-        const pinnedBlock = await buildSkillsBlockBySlug(task_skills as string[], pinnedTenantId)
+        const disabledForPin = ((agent as any)?.disabled_skins || []) as string[]
+        const pinnableSlugs = (task_skills as string[]).filter((s) => !disabledForPin.includes(s))
+        const pinnedBlock = await buildSkillsBlockBySlug(pinnableSlugs, pinnedTenantId)
         if (pinnedBlock) {
           systemPrompt += pinnedBlock
           console.log(`[AGENT] Pinned skins by slug: ${(task_skills as string[]).join(', ')}`)
@@ -2969,6 +2971,13 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
       ? ALL_TOOLS.filter(t => allowedTools.includes(t.name))
       : ALL_TOOLS
 
+    // Access control (denylist): subtract tools turned OFF in settings. Default
+    // (empty) = no change, so Carmen keeps access to everything by default.
+    const disabledTools = ((agent as any).disabled_tools || []) as string[]
+    if (disabledTools.length > 0) {
+      filteredTools = filteredTools.filter(t => !disabledTools.includes(t.name))
+    }
+
     // 4a. Surface-based delegation guard.
     // - On AIOS: hide delegate_to_subagent unless the user explicitly asked for background work.
     //   This prevents Carmen from answering "I'm working in the background" to ordinary "check report"
@@ -3024,9 +3033,15 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
 
     // ─── Skill resolver: detect active skills from the user message and append their prompts (DB-backed) ───
     const skillTenantId = (agent as any).tenant_id || tenant_id || null
-    const activeSkillsBlock = await buildSkillsBlock(String(command_text || ''), skillTenantId)
-    const _matchedSkills = await resolveActiveSkills(String(command_text || ''), skillTenantId)
+    // Access control: skins turned OFF in settings are excluded even if their
+    // trigger matches. Default (empty) = no change.
+    const disabledSkins = ((agent as any).disabled_skins || []) as string[]
+    const _matchedSkills = (await resolveActiveSkills(String(command_text || ''), skillTenantId))
+      .filter(s => !disabledSkins.includes(s.id))
     const matchedSkills = _matchedSkills.map(s => s.id)
+    const activeSkillsBlock = _matchedSkills.length > 0
+      ? '\n\n' + _matchedSkills.map(s => s.prompt).join('\n\n')
+      : ''
     if (activeSkillsBlock) {
       systemPrompt += activeSkillsBlock
       console.log(`[AGENT] Active skills (${surface}): ${matchedSkills.join(', ')} | sources: ${_matchedSkills.map(s => s.source).join(',')}`)
