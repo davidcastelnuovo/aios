@@ -6,7 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
+const AI_GATEWAY_URL = "https://api.openai.com/v1/chat/completions";
 
 interface ScanRequest {
   brand_id: string;
@@ -34,11 +34,11 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-    if (!LOVABLE_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    if (!OPENAI_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       throw new Error('Missing environment variables');
     }
 
@@ -92,9 +92,9 @@ Deno.serve(async (req: Request) => {
 
     // Scan each prompt against each platform model
     const platforms = [
-      { name: 'chatgpt', model: 'openai/gpt-5-mini' },
-      { name: 'gemini', model: 'google/gemini-2.5-flash' },
-      { name: 'perplexity', model: 'google/gemini-2.5-pro' },
+      { name: 'chatgpt', model: 'gpt-4o-mini' },
+      { name: 'gemini', model: 'gpt-4o-mini' },
+      { name: 'perplexity', model: 'gpt-4o-mini' },
     ];
 
     const scanId = `scan_${Date.now()}_${Math.random().toString(36).substring(7)}`;
@@ -108,7 +108,7 @@ Deno.serve(async (req: Request) => {
           const aiResponse = await fetch(AI_GATEWAY_URL, {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+              'Authorization': `Bearer ${OPENAI_API_KEY}`,
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
@@ -144,7 +144,7 @@ Deno.serve(async (req: Request) => {
 
           if (brandMentioned) {
             const analysis = await analyzeMention(
-              LOVABLE_API_KEY, responseText, brandData.brand_name, brandData.keywords
+              OPENAI_API_KEY, responseText, brandData.brand_name, brandData.keywords
             );
             sentiment = analysis.sentiment;
             position = analysis.position;
@@ -300,7 +300,7 @@ async function analyzeMention(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash-lite',
+        model: 'gpt-4o-mini',
         messages: [
           {
             role: 'system',

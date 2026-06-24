@@ -1,3 +1,4 @@
+// (provider migrated to OpenAI via _shared — touch to force redeploy)
 // Carmen Memory Backfill — seed knowledge kingdom from existing data
 // Idempotent. Run per-tenant or for all tenants.
 import { svc, upsertPointer, shortText } from "../_shared/carmen-memory.ts";

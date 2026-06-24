@@ -323,7 +323,7 @@ serve(async (req: Request) => {
 
 
     // Build simple invitation link to auth page
-    const baseUrlInput2 = baseUrl || "https://after-lead.lovable.app";
+    const baseUrlInput2 = baseUrl || "https://aios.co.il";
     let safeBaseUrl2: string;
     try {
       const u = new URL(baseUrlInput2);
@@ -334,7 +334,7 @@ serve(async (req: Request) => {
     }
     const invitationLink = `${safeBaseUrl2.replace(/\/+$/, "")}/auth`;
 
-    // Send invitation email via Lovable Auth (standard)
+    // Send invitation email via Supabase Auth
     try {
       const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
         redirectTo: invitationLink,

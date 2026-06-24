@@ -1,3 +1,4 @@
+// (provider migrated to OpenAI via _shared — touch to force redeploy)
 // Carmen Memory Worker — processes outbox into pointers/episodes
 // Idempotent, batch-based, durable (failed rows get retried)
 import { svc, upsertPointer, shortText } from "../_shared/carmen-memory.ts";

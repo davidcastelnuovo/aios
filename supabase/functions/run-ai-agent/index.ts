@@ -5,6 +5,7 @@ import { buildCarmenV2SystemPrompt, shouldUseV2Prompt } from '../_shared/carmen-
 import { loadMcpTools } from '../_shared/mcp-tools.ts'
 import { spawnSubagent, getSubagentResult } from '../_shared/subagent.ts'
 import { buildSkillsBlock, resolveActiveSkills } from '../_shared/skills/registry.ts'
+import { aiEmbed } from '../_shared/ai.ts'
 
 
 const corsHeaders = {
@@ -14,16 +15,14 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')
-const AI_GATEWAY_URL = 'https://ai.gateway.lovable.dev/v1/chat/completions'
 
 function resolveModel(engine: string): string {
   return resolveModelId(engine)
 }
 
-// ─── Tenant-owned LLM keys (replaces the Lovable gateway) ───
+// ─── Tenant-owned LLM keys ───
 // Reads the org's own API keys from the "llm" integration and routes each
-// model to its provider's OpenAI-compatible endpoint. No Lovable dependency.
+// model to its provider's OpenAI-compatible endpoint.
 async function resolveLLMTarget(
   supabase: any,
   tenantId: string,
@@ -1168,17 +1167,15 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     }
     case 'generate_ad_image': {
       const imagePrompt = args.prompt
-      const model = 'google/gemini-3.1-flash-image-preview'
-      
-      const imageRes = await fetch(AI_GATEWAY_URL, {
+
+      const imageRes = await fetch('https://api.openai.com/v1/images/generations', {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
+        headers: { 'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model,
-          messages: [
-            { role: 'user', content: `Generate an image: ${imagePrompt}. Make it professional, high quality, suitable for a social media advertisement.` }
-          ],
-          modalities: ['image', 'text'],
+          model: 'gpt-image-1',
+          prompt: `${imagePrompt}. Professional, high quality, suitable for a social media advertisement.`,
+          n: 1,
+          size: '1024x1024',
         }),
       })
       
@@ -1190,8 +1187,9 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const imageData = await imageRes.json()
       const content = imageData.choices?.[0]?.message?.content || ''
       
-      // Check for images array in response (Lovable AI Gateway format)
-      const images = imageData.choices?.[0]?.message?.images || []
+      // OpenAI Images API returns base64 PNG; adapt to the downstream extractor.
+      const b64 = imageData?.data?.[0]?.b64_json || ''
+      const images = b64 ? [{ image_url: { url: `data:image/png;base64,${b64}` } }] : []
       let imageUrl = ''
       
       if (images.length > 0 && images[0]?.image_url?.url) {
@@ -1513,25 +1511,16 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     case 'kb_search': {
       // Try semantic via embedding; fall back to text ILIKE on title/summary
       try {
-        const embedRes = await fetch('https://ai.gateway.lovable.dev/v1/embeddings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('LOVABLE_API_KEY')}` },
-          body: JSON.stringify({ model: 'google/gemini-embedding-001', input: args.query, dimensions: 1536 }),
-        })
-        if (embedRes.ok) {
-          const j = await embedRes.json()
-          const vec = j?.data?.[0]?.embedding
-          if (vec) {
-            const sinceFilter = args.since_days ? `,ref_date.gte.${new Date(Date.now() - args.since_days*86400000).toISOString()}` : ''
-            const { data, error } = await supabase.rpc('kb_match_pointers', {
-              p_tenant_id: tenantId,
-              p_query_embedding: vec,
-              p_category: args.category || null,
-              p_since_days: args.since_days || null,
-              p_limit: args.limit || 20,
-            })
-            if (!error && data) return { count: data.length, results: data, mode: 'semantic' }
-          }
+        const vec = await aiEmbed(args.query)
+        if (vec) {
+          const { data, error } = await supabase.rpc('kb_match_pointers', {
+            p_tenant_id: tenantId,
+            p_query_embedding: vec,
+            p_category: args.category || null,
+            p_since_days: args.since_days || null,
+            p_limit: args.limit || 20,
+          })
+          if (!error && data) return { count: data.length, results: data, mode: 'semantic' }
         }
       } catch (_) {/* fall through */}
       // Fallback text search
@@ -1585,15 +1574,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       // Generate embedding (best-effort)
       let embedding: number[] | null = null
       try {
-        const embedRes = await fetch('https://ai.gateway.lovable.dev/v1/embeddings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('LOVABLE_API_KEY')}` },
-          body: JSON.stringify({ model: 'google/gemini-embedding-001', input: `${args.topic}\n\n${args.summary}`, dimensions: 1536 }),
-        })
-        if (embedRes.ok) {
-          const j = await embedRes.json()
-          embedding = j?.data?.[0]?.embedding || null
-        }
+        embedding = await aiEmbed(`${args.topic}\n\n${args.summary}`)
       } catch (_) {/* ignore */}
       const { data, error } = await supabase.from('carmen_memory_episodes').insert({
         tenant_id: tenantId,
@@ -2941,6 +2922,31 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     }
     } // ─── end V1 PROMPT BUILDING (else branch of shouldUseV2Prompt) ───
 
+    // ─── Mood / persona modulation (swappable tone layer) ───
+    // ai_agents.mood ∈ {'fun','focused','tired','angry','random'} | null.
+    // Colours TONE ONLY — it never overrides the hard rules (accuracy, anti-bluff,
+    // privacy/scope, no-loop) or the duty to actually complete the task.
+    // 'random' rotates deterministically every 3 days, seeded by the agent id so
+    // different agents land on different moods.
+    {
+      const MOODS: Record<string, string> = {
+        fun: '😄 **מצב רוח: כיפי ומצחיק.** דברי באנרגיה גבוהה, עם הומור קליל, בדיחות ופאנצ׳ים ואימוג׳ים במידה. תהיי משעשעת וקלילה — בלי לפגוע בדיוק, בקיצור או בביצוע בפועל.',
+        focused: '🎯 **מצב רוח: רציני ויעיל.** ישר לעניין, בלי הומור ובלי קישוטים. משפטים קצרים וממוקדי-תוצאה. קודם מבצעת, אחר כך מאשרת בקצרה מה נעשה.',
+        tired: '😴 **מצב רוח: עייפה.** אנרגיה נמוכה, משפטים קצרים וחסכוניים, בלי התלהבות מיותרת (מותרת אנחה קלה). עדיין מבצעת את המשימה במלואה ובדייקנות — פשוט בלי דרמה.',
+        angry: '😤 **מצב רוח: עצבני.** טון בוטה, חסר-סבלנות וישיר מאוד, בלי נימוסים מיותרים. דוחפת קדימה בלי לרכך — אבל אסור להעליב את המשתמש, לסרב לעבודה או לרדת ברמת הדיוק. הכעס מתועל לאסרטיביות ולביצוע מהיר.',
+      }
+      const ROT = ['fun', 'focused', 'tired', 'angry']
+      let moodKey = ((agent as any).mood as string | null | undefined) || ''
+      if (moodKey === 'random') {
+        const seed = (agent.id || '').split('').reduce((a: number, c: string) => a + c.charCodeAt(0), 0)
+        const windowIdx = Math.floor(Date.now() / (86400000 * 3)) // new mood every 3 days
+        moodKey = ROT[(windowIdx + seed) % ROT.length]
+      }
+      if (moodKey && MOODS[moodKey]) {
+        systemPrompt += `\n\n${MOODS[moodKey]}`
+      }
+    }
+
     // 4. Filter tools
     const allowedTools = (agent.allowed_tools || []) as string[]
     let filteredTools = allowedTools.length > 0
@@ -3034,7 +3040,7 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     const startTime = Date.now()
 
     // Route to the org's own LLM provider (OpenAI/Google/Anthropic) using the
-    // keys stored in the "llm" integration — Lovable gateway is no longer used.
+    // keys stored in the "llm" integration.
     const llm = await resolveLLMTarget(supabase, agent.tenant_id, model)
     console.log(`[AGENT] LLM target=${llm.url} model=${llm.model}`)
 

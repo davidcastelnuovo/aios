@@ -29,11 +29,8 @@ import { LinkFileToEntityDialog } from "@/components/chat/LinkFileToEntityDialog
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 
 const getPublicOrigin = () => {
-  const origin = window.location.origin;
-  if (origin.includes("lovableproject.com") || origin.includes("id-preview--")) {
-    return "https://after-lead.lovable.app";
-  }
-  return origin;
+  // Use the app's own origin in the browser; fall back to the canonical domain.
+  return window.location.origin || "https://aios.co.il";
 };
 
 // Types

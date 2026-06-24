@@ -15,7 +15,7 @@ import { useAgentKnowledge } from "@/hooks/useAgentKnowledge";
 import { useAgentMemoryTree, useCarmenMemoryTree } from "@/hooks/useAgentMemory";
 import {
   IdCard, Sparkles, Heart, Wrench, Settings, Save, Target,
-  BookOpen, Brain, Crown, AlertCircle,
+  BookOpen, Brain, Crown, AlertCircle, Smile, Volume2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -138,6 +138,12 @@ export function ProfileTab({ agent }: { agent: any }) {
         </div>
       </Card>
 
+      {/* ===== Mood ===== */}
+      <MoodCard agent={agent} />
+
+      {/* ===== Voice ===== */}
+      <VoiceCard agent={agent} />
+
       {/* ===== System Prompt override ===== */}
       <Card className="p-5">
         <SectionHeader
@@ -247,6 +253,129 @@ export function ProfileTab({ agent }: { agent: any }) {
         </Card>
       </div>
     </div>
+  );
+}
+
+// =========================================================================
+// Mood selector — swappable persona tone. Self-contained save (its own
+// mutation), so it persists independently of the main profile form.
+// =========================================================================
+const MOOD_OPTIONS: { value: string; label: string; emoji: string; desc: string }[] = [
+  { value: "none", label: "ברירת מחדל", emoji: "🙂", desc: "ללא מצב רוח — האישיות הבסיסית." },
+  { value: "fun", label: "כיפי ומצחיק", emoji: "😄", desc: "אנרגטית, הומור קליל, בדיחות ואימוג׳ים." },
+  { value: "focused", label: "רציני ויעיל", emoji: "🎯", desc: "ישר לעניין, בלי הומור, ממוקדת תוצאה." },
+  { value: "tired", label: "עייף ואין כוח", emoji: "😴", desc: "אנרגיה נמוכה, קצר וחסכוני — עדיין מבצעת הכול." },
+  { value: "angry", label: "כועס", emoji: "😤", desc: "בוטה, חסר סבלנות וישיר — בלי להעליב או לרדת בדיוק." },
+  { value: "random", label: "רנדומלי", emoji: "🎲", desc: "מתחלף לבד כל כמה ימים בין כל מצבי הרוח." },
+];
+
+function MoodCard({ agent }: { agent: any }) {
+  const qc = useQueryClient();
+  const [saving, setSaving] = useState(false);
+  const current = agent.mood || "none";
+
+  const onChange = async (v: string) => {
+    setSaving(true);
+    const { error } = await supabase
+      .from("ai_agents")
+      .update({ mood: v === "none" ? null : v } as any)
+      .eq("id", agent.id);
+    setSaving(false);
+    if (error) { toast.error(error.message); return; }
+    qc.invalidateQueries({ queryKey: ["ai-agents"] });
+    const opt = MOOD_OPTIONS.find(o => o.value === v);
+    toast.success(`מצב הרוח עודכן: ${opt?.emoji} ${opt?.label}`);
+  };
+
+  const active = MOOD_OPTIONS.find(o => o.value === current) ?? MOOD_OPTIONS[0];
+
+  return (
+    <Card className="p-5">
+      <SectionHeader
+        icon={Smile}
+        title="מצב רוח"
+        subtitle="טון מתחלף — משנה איך הסוכן מדבר, בלי לפגוע בדיוק או בביצוע המשימה"
+      />
+      <div className="grid grid-cols-1 sm:grid-cols-[2fr_3fr] gap-4 items-start">
+        <Field label="מצב הרוח הנוכחי" hint={saving ? "שומר..." : "נשמר מיד עם הבחירה"}>
+          <Select value={current} onValueChange={onChange}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {MOOD_OPTIONS.map(o => (
+                <SelectItem key={o.value} value={o.value}>{o.emoji} {o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+        <div className="rounded-lg border bg-muted/30 p-3">
+          <div className="font-medium text-sm mb-1">{active.emoji} {active.label}</div>
+          <p className="text-xs text-muted-foreground">{active.desc}</p>
+          {current === "random" && (
+            <p className="text-[11px] text-muted-foreground mt-2">🎲 המצב מתחלף אוטומטית כל 3 ימים.</p>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+// =========================================================================
+// Voice selector — Carmen's spoken voice for voice-note replies (OpenAI TTS).
+// Self-contained save. NULL = text only.
+// =========================================================================
+const VOICE_OPTIONS: { value: string; label: string }[] = [
+  { value: "none", label: "🔇 ללא קול (טקסט בלבד)" },
+  { value: "shimmer", label: "🎙️ Shimmer — נשי, חם (מומלץ לעברית)" },
+  { value: "nova", label: "🎙️ Nova — נשי, אנרגטי" },
+  { value: "coral", label: "🎙️ Coral — נשי, רך" },
+  { value: "sage", label: "🎙️ Sage — נשי, רגוע" },
+  { value: "alloy", label: "🎙️ Alloy — ניטרלי" },
+  { value: "fable", label: "🎙️ Fable — חם, מספר סיפורים" },
+  { value: "echo", label: "🎙️ Echo — גברי" },
+  { value: "onyx", label: "🎙️ Onyx — גברי, עמוק" },
+];
+
+function VoiceCard({ agent }: { agent: any }) {
+  const qc = useQueryClient();
+  const [saving, setSaving] = useState(false);
+  const current = agent.voice || "none";
+
+  const onChange = async (v: string) => {
+    setSaving(true);
+    const { error } = await supabase
+      .from("ai_agents")
+      .update({ voice: v === "none" ? null : v } as any)
+      .eq("id", agent.id);
+    setSaving(false);
+    if (error) { toast.error(error.message); return; }
+    qc.invalidateQueries({ queryKey: ["ai-agents"] });
+    toast.success(v === "none" ? "קול כובה — תשובות בטקסט בלבד" : "הקול עודכן");
+  };
+
+  return (
+    <Card className="p-5">
+      <SectionHeader
+        icon={Volume2}
+        title="קול"
+        subtitle="הקול שבו כרמן תשיב בהודעות קוליות (TTS). דורש הפעלת מענה קולי בערוץ."
+      />
+      <div className="grid grid-cols-1 sm:grid-cols-[2fr_3fr] gap-4 items-start">
+        <Field label="קול הסוכן" hint={saving ? "שומר..." : "נשמר מיד עם הבחירה"}>
+          <Select value={current} onValueChange={onChange}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {VOICE_OPTIONS.map(o => (
+                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+        <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+          כרמן יכולה גם <strong>להבין</strong> הודעות קוליות שתשלח לה (תמלול אוטומטי).
+          מענה קולי מופעל פר-ערוץ; כשהוא פעיל, כרמן תשיב בהקלטה בקול שנבחר.
+        </div>
+      </div>
+    </Card>
   );
 }
 
