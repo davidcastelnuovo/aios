@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { findCarmenSessionAutomation, handleCarmenMessage } from '../_shared/carmen.ts';
+import { aiTranscribe } from '../_shared/ai.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -9,6 +10,43 @@ const corsHeaders = {
 // Last 9 digits — matches existing lead/client matching policy
 function normalizePhone(p: string): string {
   return (p || '').replace(/\D/g, '').slice(-9);
+}
+
+// ── Incoming voice notes → transcript (OpenAI Whisper) ────────────────
+// Graceful: any failure falls back to the '[מדיה]' placeholder, so behaviour
+// never regresses for non-audio media or when transcription is unavailable.
+const _AUDIO_URL_FIELDS = ['media_url', 'mediaUrl', 'url', 'fileUrl', 'file_url', 'downloadUrl', 'downloadURL'];
+function pickAudioUrl(payload: any, msgContainer: any): string | null {
+  for (const f of _AUDIO_URL_FIELDS) {
+    const v = payload?.[f];
+    if (typeof v === 'string' && /^https?:\/\//.test(v)) return v;
+  }
+  const u = msgContainer?.audioMessage?.url;
+  return typeof u === 'string' && /^https?:\/\//.test(u) ? u : null;
+}
+function looksAudio(payload: any, msgContainer: any, url: string | null): boolean {
+  if (msgContainer?.audioMessage) return true;
+  const mime = (payload?.mimeType || payload?.mime_type || msgContainer?.audioMessage?.mimetype || '').toString().toLowerCase();
+  if (/audio|ogg|opus|voice|ptt|mpeg/.test(mime)) return true;
+  return !!url && /\.(ogg|opus|mp3|m4a|wav|aac|amr)(\?|$)/i.test(url);
+}
+async function resolveMessageText(payload: any, msgContainer: any): Promise<string> {
+  if (payload?.body && String(payload.body).trim()) return String(payload.body);
+  if (!payload?.hasMedia) return '';
+  try {
+    const url = pickAudioUrl(payload, msgContainer);
+    if (url && looksAudio(payload, msgContainer, url)) {
+      const r = await fetch(url);
+      if (r.ok) {
+        const blob = await r.blob();
+        if (blob.size > 0 && blob.size <= 25 * 1024 * 1024) {
+          const t = await aiTranscribe(blob, { language: 'he', filename: 'voice.ogg' });
+          if (t && t.trim()) return t.trim();
+        }
+      }
+    }
+  } catch (_) { /* fall through to placeholder */ }
+  return '[מדיה]';
 }
 
 function ok(body: Record<string, unknown>, status = 200) {
@@ -203,7 +241,7 @@ Deno.serve(async (req) => {
     let counterpartRaw = isOutgoingFromPhone ? toRaw : fromRaw;
     let counterpartPhone = counterpartRaw.split('@')[0];
     let normalized = normalizePhone(counterpartPhone);
-    const messageText = payload.body || (payload.hasMedia ? '[מדיה]' : '');
+    const messageText = await resolveMessageText(payload, msgContainer);
     const messageId = String(payload.id || '');
 
     // ===== ATOMIC DEDUP =====
@@ -472,7 +510,7 @@ Deno.serve(async (req) => {
         groupIdRaw.endsWith('@g.us') ? groupIdRaw :
         (chatIdRaw || groupIdRaw || toRaw)
       );
-      const messageText = payload.body || (payload.hasMedia ? '[מדיה]' : '');
+      const messageText = await resolveMessageText(payload, msgContainer);
       const senderName = (payload.senderName || payload.fromName || payload.authorName || null) as string | null;
 
       // Extract the REAL sender phone from author/participant fields.
