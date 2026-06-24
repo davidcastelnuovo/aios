@@ -5,6 +5,7 @@ import { buildCarmenV2SystemPrompt, shouldUseV2Prompt } from '../_shared/carmen-
 import { loadMcpTools } from '../_shared/mcp-tools.ts'
 import { spawnSubagent, getSubagentResult } from '../_shared/subagent.ts'
 import { buildSkillsBlock, resolveActiveSkills } from '../_shared/skills/registry.ts'
+import { aiEmbed } from '../_shared/ai.ts'
 
 
 const corsHeaders = {
@@ -14,8 +15,6 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')
-const AI_GATEWAY_URL = 'https://ai.gateway.lovable.dev/v1/chat/completions'
 
 function resolveModel(engine: string): string {
   return resolveModelId(engine)
@@ -1168,17 +1167,15 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     }
     case 'generate_ad_image': {
       const imagePrompt = args.prompt
-      const model = 'google/gemini-3.1-flash-image-preview'
-      
-      const imageRes = await fetch(AI_GATEWAY_URL, {
+
+      const imageRes = await fetch('https://api.openai.com/v1/images/generations', {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
+        headers: { 'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model,
-          messages: [
-            { role: 'user', content: `Generate an image: ${imagePrompt}. Make it professional, high quality, suitable for a social media advertisement.` }
-          ],
-          modalities: ['image', 'text'],
+          model: 'gpt-image-1',
+          prompt: `${imagePrompt}. Professional, high quality, suitable for a social media advertisement.`,
+          n: 1,
+          size: '1024x1024',
         }),
       })
       
@@ -1190,8 +1187,9 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const imageData = await imageRes.json()
       const content = imageData.choices?.[0]?.message?.content || ''
       
-      // Check for images array in response (Lovable AI Gateway format)
-      const images = imageData.choices?.[0]?.message?.images || []
+      // OpenAI Images API returns base64 PNG; adapt to the downstream extractor.
+      const b64 = imageData?.data?.[0]?.b64_json || ''
+      const images = b64 ? [{ image_url: { url: `data:image/png;base64,${b64}` } }] : []
       let imageUrl = ''
       
       if (images.length > 0 && images[0]?.image_url?.url) {
@@ -1513,25 +1511,16 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     case 'kb_search': {
       // Try semantic via embedding; fall back to text ILIKE on title/summary
       try {
-        const embedRes = await fetch('https://ai.gateway.lovable.dev/v1/embeddings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('LOVABLE_API_KEY')}` },
-          body: JSON.stringify({ model: 'google/gemini-embedding-001', input: args.query, dimensions: 1536 }),
-        })
-        if (embedRes.ok) {
-          const j = await embedRes.json()
-          const vec = j?.data?.[0]?.embedding
-          if (vec) {
-            const sinceFilter = args.since_days ? `,ref_date.gte.${new Date(Date.now() - args.since_days*86400000).toISOString()}` : ''
-            const { data, error } = await supabase.rpc('kb_match_pointers', {
-              p_tenant_id: tenantId,
-              p_query_embedding: vec,
-              p_category: args.category || null,
-              p_since_days: args.since_days || null,
-              p_limit: args.limit || 20,
-            })
-            if (!error && data) return { count: data.length, results: data, mode: 'semantic' }
-          }
+        const vec = await aiEmbed(args.query)
+        if (vec) {
+          const { data, error } = await supabase.rpc('kb_match_pointers', {
+            p_tenant_id: tenantId,
+            p_query_embedding: vec,
+            p_category: args.category || null,
+            p_since_days: args.since_days || null,
+            p_limit: args.limit || 20,
+          })
+          if (!error && data) return { count: data.length, results: data, mode: 'semantic' }
         }
       } catch (_) {/* fall through */}
       // Fallback text search
@@ -1585,15 +1574,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       // Generate embedding (best-effort)
       let embedding: number[] | null = null
       try {
-        const embedRes = await fetch('https://ai.gateway.lovable.dev/v1/embeddings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('LOVABLE_API_KEY')}` },
-          body: JSON.stringify({ model: 'google/gemini-embedding-001', input: `${args.topic}\n\n${args.summary}`, dimensions: 1536 }),
-        })
-        if (embedRes.ok) {
-          const j = await embedRes.json()
-          embedding = j?.data?.[0]?.embedding || null
-        }
+        embedding = await aiEmbed(`${args.topic}\n\n${args.summary}`)
       } catch (_) {/* ignore */}
       const { data, error } = await supabase.from('carmen_memory_episodes').insert({
         tenant_id: tenantId,
