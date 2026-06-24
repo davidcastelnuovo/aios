@@ -3014,7 +3014,8 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     // 4b. Load MCP tools for this tenant + agent (Phase 3)
     let mcpExecutors = new Map<string, (args: any) => Promise<any>>()
     try {
-      const mcp = await loadMcpTools(supabase, resolvedTenantId, agent_id)
+      const disabledIntegrations = ((agent as any).disabled_integrations || []) as string[]
+      const mcp = await loadMcpTools(supabase, resolvedTenantId, agent_id, disabledIntegrations)
       if (mcp.toolDefs.length > 0) {
         for (const t of mcp.toolDefs) {
           toolsForAPI.push({ type: 'function', function: t as any })
