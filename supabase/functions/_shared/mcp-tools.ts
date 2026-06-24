@@ -47,9 +47,11 @@ export async function loadMcpTools(
   supabase: any,
   tenantId: string,
   agentId?: string | null,
+  disabledIntegrations: string[] = [],
 ): Promise<McpLoaded> {
   const empty: McpLoaded = { toolDefs: [], executors: new Map(), connectionsCount: 0 }
   if (!tenantId) return empty
+  const disabledSet = new Set((disabledIntegrations || []).map((s) => String(s)))
 
   let q = supabase
     .from('agent_mcp_connections')
@@ -69,6 +71,8 @@ export async function loadMcpTools(
   const executors = new Map<string, (args: any) => Promise<any>>()
 
   for (const conn of data as McpConnRow[]) {
+    // Access control: skip integrations turned OFF for this agent.
+    if (disabledSet.has(conn.name)) continue
     const tools = Array.isArray(conn.available_tools) ? conn.available_tools : []
     const bearer = conn.oauth_tokens?.bearer as string | undefined
     const connSlug = sanitizeToolName(conn.name || conn.id.slice(0, 6))

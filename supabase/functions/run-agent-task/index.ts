@@ -1,8 +1,21 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
+import { advanceDangerLane } from '../_shared/subagent.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+// When a dangerous batch subtask reaches a terminal state, advance its tenant's
+// serial lane so the next queued dangerous subtask runs. Best-effort.
+async function maybeAdvanceLane(supabase: any, task: any) {
+  try {
+    if (task?.batch_id && task?.is_dangerous) {
+      await advanceDangerLane(supabase, task.tenant_id)
+    }
+  } catch (e: any) {
+    console.error('[run-agent-task] advanceDangerLane failed:', e?.message)
+  }
 }
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
@@ -95,6 +108,7 @@ Deno.serve(async (req) => {
         result: { error: 'Agent not found' },
         completed_at: new Date().toISOString(),
       }).eq('id', task_id)
+      await maybeAdvanceLane(supabase, task)
       throw new Error('Agent not found')
     }
 
@@ -157,6 +171,7 @@ Deno.serve(async (req) => {
         completed_at: new Date().toISOString(),
       }).eq('id', task_id)
 
+      await maybeAdvanceLane(supabase, task)
       return new Response(JSON.stringify({ success: false, error: 'Max retries exceeded' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500,
       })
@@ -227,6 +242,9 @@ Deno.serve(async (req) => {
       },
       completed_at: new Date().toISOString(),
     }).eq('id', task_id)
+
+    // Serial lane: let the next queued dangerous subtask run.
+    await maybeAdvanceLane(supabase, task)
 
     // Push the final output back to the user's WhatsApp chat if this subagent
     // was spawned from a WA conversation. Best-effort — failures are logged

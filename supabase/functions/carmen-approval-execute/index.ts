@@ -45,7 +45,10 @@ Deno.serve(async (req) => {
   try {
     const supabase = createClient(SB_URL, SB_SERVICE);
     const body = await req.json().catch(() => ({}));
-    const { approval_id, approved_by } = body;
+    // Accept `_approval_id` too: resume-agent-run (the UI approval path) invokes
+    // this function with {...tool_input, _approval_id} when routing via agent_tools.
+    const approval_id = body.approval_id || body._approval_id;
+    const approved_by = body.approved_by;
     if (!approval_id) return new Response(JSON.stringify({ error: 'approval_id required' }), { status: 400, headers: corsHeaders });
 
     const { data: row, error } = await supabase.from('agent_approval_queue').select('*').eq('id', approval_id).maybeSingle();
@@ -81,6 +84,64 @@ Deno.serve(async (req) => {
         execution_result: result,
       }).eq('id', approval_id);
       return new Response(JSON.stringify({ success: !schedErr, result, approval_id }), { status: schedErr ? 400 : 200, headers: corsHeaders });
+    }
+
+    // Carmen authoring: build a (disabled) flow automation from the approved spec.
+    if (row.tool_name === 'create_automation') {
+      const spec = (row.tool_input as any) || {};
+      const steps = Array.isArray(spec.steps) ? spec.steps : [];
+      if (!spec.name || !spec.trigger_type || steps.length === 0) {
+        await supabase.from('agent_approval_queue').update({ status: 'failed', executed_at: new Date().toISOString(), execution_result: { error: 'invalid_spec' } }).eq('id', approval_id);
+        return new Response(JSON.stringify({ error: 'invalid_spec' }), { status: 400, headers: corsHeaders });
+      }
+      // Carmen (or any active agent) for agent steps.
+      const { data: agents } = await supabase.from('ai_agents').select('id,name').eq('tenant_id', row.tenant_id).eq('active', true);
+      const carmen = (agents as any[] || []).find((a) => /כרמן|carmen/i.test(a.name || '')) || (agents as any[] || [])[0];
+
+      const { data: automation, error: aErr } = await supabase.from('automations').insert({
+        name: String(spec.name),
+        description: spec.description || null,
+        tenant_id: row.tenant_id,
+        trigger_type: String(spec.trigger_type),
+        action_type: 'notification',
+        configuration: spec.trigger_config || {},
+        is_flow: true,
+        active: false,
+      }).select('id').single();
+      if (aErr || !automation) {
+        await supabase.from('agent_approval_queue').update({ status: 'failed', executed_at: new Date().toISOString(), execution_result: { error: aErr?.message || 'automation_insert_failed' } }).eq('id', approval_id);
+        return new Response(JSON.stringify({ error: aErr?.message || 'automation_insert_failed' }), { status: 400, headers: corsHeaders });
+      }
+
+      const stepRows: any[] = [];
+      const trigId = crypto.randomUUID();
+      stepRows.push({ id: trigId, automation_id: automation.id, tenant_id: row.tenant_id, step_type: 'trigger', action_type: String(spec.trigger_type), configuration: spec.trigger_config || {}, position_x: 400, position_y: 60, sort_order: 0, parent_step_id: null, condition_branch: null, label: 'טריגר' });
+      let parent = trigId, sort = 0, y = 60;
+      for (const s of steps.slice(0, 20)) {
+        sort++; y += 130;
+        const id = crypto.randomUUID();
+        const type = String(s.type || 'agent');
+        let action_type: string | null = null;
+        let config = (s.config && typeof s.config === 'object') ? { ...s.config } : {};
+        if (type === 'agent') {
+          action_type = 'agent';
+          config = { agent_id: carmen?.id || null, skin_slugs: s.skin ? [String(s.skin)] : [], step_instruction: s.instruction || '', ...config };
+        } else if (type === 'action') {
+          action_type = s.action_type ? String(s.action_type) : 'notification';
+        }
+        stepRows.push({ id, automation_id: automation.id, tenant_id: row.tenant_id, step_type: type, action_type, configuration: config, position_x: 400, position_y: y, sort_order: sort, parent_step_id: parent, condition_branch: null, label: s.label || type });
+        parent = id;
+      }
+      const { error: sErr } = await supabase.from('automation_flow_steps').insert(stepRows);
+      const result = sErr ? { error: sErr.message, automation_id: automation.id } : { automation_id: automation.id, steps: stepRows.length, active: false };
+      await supabase.from('agent_approval_queue').update({
+        status: sErr ? 'failed' : 'executed',
+        approved_by: approved_by || row.requested_by,
+        approved_at: row.approved_at || new Date().toISOString(),
+        executed_at: new Date().toISOString(),
+        execution_result: result,
+      }).eq('id', approval_id);
+      return new Response(JSON.stringify({ success: !sErr, result, approval_id }), { status: sErr ? 400 : 200, headers: corsHeaders });
     }
 
     const route = TOOL_TO_FUNCTION[row.tool_name];

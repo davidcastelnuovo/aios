@@ -1205,6 +1205,18 @@ Deno.serve(async (req) => {
                         ),
                       },
                     }
+                    // Pin a skin on this agent node (Strangler-additive): a flow
+                    // node may set configuration.skin_slugs (array) or .skin
+                    // (string) to force a specific skin from the ai_skills catalog
+                    // (e.g. "campaigner"/"seo"/"analyst"). Passed through as
+                    // task_skills, which run-ai-agent resolves by slug. If unset,
+                    // behavior is unchanged.
+                    const nodeSkins: string[] = Array.isArray(stepConfig.skin_slugs)
+                      ? stepConfig.skin_slugs
+                      : (stepConfig.skin ? [stepConfig.skin] : [])
+                    if (nodeSkins.length > 0) {
+                      agentBody.task_skills = nodeSkins
+                    }
                     // Pass conversation history for Carmen sessions
                     if (carmenHistory.length > 0) {
                       agentBody.conversation_history = carmenHistory

@@ -4,8 +4,8 @@ import { resolveModelId } from '../_shared/models.ts'
 import { summarizeAndStoreAgentMemory, recallAgentMemory, recallAgentMemoryFTS, saveAgentMemory } from '../_shared/agent-memory.ts'
 import { buildCarmenV2SystemPrompt, shouldUseV2Prompt } from '../_shared/carmen-prompt-v2.ts'
 import { loadMcpTools } from '../_shared/mcp-tools.ts'
-import { spawnSubagent, getSubagentResult } from '../_shared/subagent.ts'
-import { buildSkillsBlock, resolveActiveSkills } from '../_shared/skills/registry.ts'
+import { spawnSubagent, getSubagentResult, spawnSubagentBatch, getBatchResults } from '../_shared/subagent.ts'
+import { resolveActiveSkills, buildSkillsBlockBySlug } from '../_shared/skills/registry.ts'
 import { aiEmbed } from '../_shared/ai.ts'
 
 
@@ -205,6 +205,22 @@ const ALL_TOOLS = [
   // ===========================
   { name: 'delegate_to_subagent', description: 'יצירת תת-סוכן (subagent) שירוץ ברקע על משימה ממוקדת — מחקר, ניתוח רב-לקוחות, סריקה ארוכה, או כל עבודה שלא חייבת להיענות בשיחה הנוכחית. מחזיר sub_task_id מיידית. השתמשי בכלי הזה במקום delegate_to_manus כשהמשימה היא פנימית למערכת (מצריכה כלים של כרמן עצמה). אסור להשתמש בו לתשובה קצרה שאפשר לענות מיד — רק כשהמשימה תיקח זמן או צריכה לרוץ ברקע במקביל לשיחה.', parameters: { type: 'object', properties: { title: { type: 'string', description: 'כותרת קצרה לתת-המשימה' }, prompt: { type: 'string', description: 'הוראה מפורטת מה לבצע. כתבי כאילו את מדריכה כרמן אחרת — כללי המטרה, היקף, ומה חייב להחזיר בסוף.' }, task_mode: { type: 'string', enum: ['analyst','sales','support','copywriting','scheduler','onboarding'], description: 'מוד פעולה (אופציונלי)' }, task_skills: { type: 'array', items: { type: 'string' }, description: 'סקילים להפעיל בתת-הסוכן' }, priority: { type: 'integer', description: '1-10' } }, required: ['title','prompt'] } },
   { name: 'get_subagent_result', description: 'בדיקת מצב/קבלת תוצאה של תת-סוכן שנוצר ב-delegate_to_subagent. מחזיר status, done, ואם הסתיים — output. אל תקראי לזה בלולאה צמודה; אם done=false פשוט המשיכי בעבודה אחרת או הודיעי למשתמש שהמשימה עדיין רצה.', parameters: { type: 'object', properties: { sub_task_id: { type: 'string', description: 'המזהה שהוחזר מ-delegate_to_subagent' } }, required: ['sub_task_id'] } },
+  { name: 'delegate_parallel', description: 'מולטיטאסק: פיזור כמה תת-משימות עצמאיות לרקע (עד 8). משימות קריאה/ניתוח/מחקר (side_effects=false) רצות במקביל; משימות שמשנות משהו/שולחות החוצה (side_effects=true, ברירת מחדל) נכנסות לתור סדרתי ורצות אחת-בכל-רגע — לעולם לא שתיים מסוכנות יחד. סמני side_effects נכון לכל תת-משימה. כל תת-משימה עצמאית ולא חופפת. מחזיר batch_id; אספי עם get_batch_results וסנתזי. אל תשתמשי בזה למשימה אחת — לזה יש delegate_to_subagent.', parameters: { type: 'object', properties: { tasks: { type: 'array', description: 'מערך תת-משימות עצמאיות', items: { type: 'object', properties: { title: { type: 'string' }, prompt: { type: 'string', description: 'הוראה עצמאית מלאה — מטרה, היקף, פורמט פלט, ובמפורש "אל תחפפי עם תת-משימות אחרות".' }, task_skills: { type: 'array', items: { type: 'string' }, description: 'סקינז לכפות על תת-משימה זו (למשל ["campaigner"])' }, side_effects: { type: 'boolean', description: 'true = משנה/שולח (תור סדרתי) · false = קריאה/ניתוח בלבד (מקבילי). ברירת מחדל true.' } }, required: ['title','prompt'] } } }, required: ['tasks'] } },
+  { name: 'get_batch_results', description: 'איסוף תוצאות של batch שנוצר ב-delegate_parallel. מחזיר לכל תת-משימה status/output (גם אם חלקן נכשלו — בידוד כשל חלקי), וכן total/completed/failed/running ו-all_done. כשהכל הושלם — סנתזי את התוצאות לתשובה אחת.', parameters: { type: 'object', properties: { batch_id: { type: 'string', description: 'ה-batch_id שהוחזר מ-delegate_parallel' } }, required: ['batch_id'] } },
+  { name: 'propose_automation', description: 'הצעת אוטומציה חדשה לבנייה — כרמן מתכננת פלואו (טריגר + שלבים) ושולחת לאישור המשתמש. האוטומציה תיווצר כבויה רק לאחר אישור, אז בטוח להציע. השתמשי בזה כשהמשתמש מבקש "תבני/תחברי לי אוטומציה". כל שלב agent יכול לכפות סקין (campaigner/seo/...). מחזיר approval_id; הסבירי למשתמש מה תכננת ובקשי אישור.', parameters: { type: 'object', properties: {
+    name: { type: 'string', description: 'שם האוטומציה' },
+    description: { type: 'string' },
+    trigger_type: { type: 'string', description: 'סוג טריגר, למשל scheduled_daily / lead_created / whatsapp_message_received' },
+    trigger_config: { type: 'object', description: 'הגדרת הטריגר, למשל {"hour":8,"minute":0} ל-scheduled_daily' },
+    steps: { type: 'array', description: 'שלבי הפלואו בסדר לינארי', items: { type: 'object', properties: {
+      type: { type: 'string', enum: ['agent','action','condition','delay','merge'], description: 'סוג השלב' },
+      skin: { type: 'string', description: 'לשלב agent — סקין לכפות (slug)' },
+      instruction: { type: 'string', description: 'לשלב agent — ההוראה לשלב' },
+      action_type: { type: 'string', description: 'לשלב action — למשל notification / send_greenapi_message / create_task' },
+      config: { type: 'object', description: 'הגדרת השלב' },
+      label: { type: 'string' },
+    }, required: ['type'] } },
+  }, required: ['name','trigger_type','steps'] } },
   // ===========================
   // MEDIA LIBRARY (carmen-media bucket + marketing_media_library)
   // ===========================
@@ -2158,6 +2174,84 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return await getSubagentResult(supabase, tenantId, args.sub_task_id)
     }
 
+    case 'delegate_parallel': {
+      const items = Array.isArray(args.tasks) ? args.tasks : []
+      if (items.length === 0) throw new Error('tasks (array of {title, prompt}) is required')
+      if (items.length > 8) throw new Error('עד 8 תת-משימות מקבילות בבת אחת')
+      const cleaned = items
+        .filter((it: any) => it && it.title && it.prompt)
+        .map((it: any) => ({
+          title: String(it.title),
+          prompt: String(it.prompt),
+          taskSkills: Array.isArray(it.task_skills) ? it.task_skills : undefined,
+          // Routing: read-only subtasks (side_effects:false) run in parallel;
+          // mutating ones (default) run one-at-a-time in the serial lane.
+          sideEffects: typeof it.side_effects === 'boolean' ? it.side_effects : undefined,
+        }))
+      if (cleaned.length === 0) throw new Error('כל תת-משימה חייבת title ו-prompt')
+      const batchId = crypto.randomUUID()
+      return await spawnSubagentBatch(
+        supabase,
+        {
+          parentAgentId: agentId || null,
+          tenantId,
+          taskMode: 'background',
+          createdBy: userId !== 'system' ? userId : null,
+          notify: waNotify && waNotify.surface === 'whatsapp' ? waNotify : null,
+        },
+        cleaned,
+        batchId,
+      )
+    }
+
+    case 'get_batch_results': {
+      if (!args.batch_id) throw new Error('batch_id is required')
+      return await getBatchResults(supabase, tenantId, args.batch_id)
+    }
+
+    case 'propose_automation': {
+      if (!args.name || !args.trigger_type || !Array.isArray(args.steps) || args.steps.length === 0) {
+        throw new Error('name, trigger_type ו-steps (מערך לא ריק) נדרשים')
+      }
+      const spec = {
+        name: String(args.name),
+        description: args.description ? String(args.description) : null,
+        trigger_type: String(args.trigger_type),
+        trigger_config: (args.trigger_config && typeof args.trigger_config === 'object') ? args.trigger_config : {},
+        steps: (args.steps as any[]).slice(0, 20).map((s) => ({
+          type: String(s.type || 'agent'),
+          skin: s.skin ? String(s.skin) : null,
+          instruction: s.instruction ? String(s.instruction) : null,
+          action_type: s.action_type ? String(s.action_type) : null,
+          config: (s.config && typeof s.config === 'object') ? s.config : {},
+          label: s.label ? String(s.label) : null,
+        })),
+      }
+      const stepSummary = spec.steps
+        .map((s, i) => `${i + 1}. ${s.label || s.type}${s.skin ? ` [${s.skin}]` : ''}`)
+        .join('  ·  ')
+      const { data, error } = await supabase.from('agent_approval_queue').insert({
+        tenant_id: tenantId,
+        agent_id: agentId || null,
+        requested_by: userId,
+        action_type: 'create_automation',
+        title: `בניית אוטומציה: ${spec.name}`,
+        description: `טריגר: ${spec.trigger_type} | שלבים: ${stepSummary}`,
+        tool_name: 'create_automation',
+        tool_input: spec,
+        context: { caller_role: callerRole, caller_phone: callerPhone },
+        status: 'pending',
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      }).select('id').single()
+      if (error) throw error
+      return {
+        pending_approval: true,
+        approval_id: data.id,
+        summary: `אוטומציה "${spec.name}" — ${spec.steps.length} שלבים`,
+        instruction_for_carmen: 'הצג למשתמש את התכנון (טריגר + שלבים) ובקש אישור. האוטומציה תיווצר כבויה רק לאחר אישור; אל תפעילי אותה — המשתמש יבדוק ויפעיל בעצמו.',
+      }
+    }
+
     // ============ MEDIA LIBRARY ============
     case 'save_media_from_chat': {
       const r = await fetch(`${SUPABASE_URL}/functions/v1/carmen-save-media`, {
@@ -2691,6 +2785,23 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
       if (taskSkillPrompts.length > 0) {
         systemPrompt += `\n\n=== סקילז למשימה זו ===\n${taskSkillPrompts.join('\n')}`
       }
+      // Additive (Strangler): any task_skills entry that matches a DB skin slug
+      // (the global skin catalog in ai_skills, e.g. "campaigner"/"seo"/"legal")
+      // is injected explicitly here, independent of trigger-phrase matching.
+      // Legacy hardcoded keys above are ignored by resolveSkillsBySlug, so this
+      // does not change existing behavior — it only adds DB-pinned skins.
+      try {
+        const pinnedTenantId = (agent as any)?.tenant_id || tenant_id || null
+        const disabledForPin = ((agent as any)?.disabled_skins || []) as string[]
+        const pinnableSlugs = (task_skills as string[]).filter((s) => !disabledForPin.includes(s))
+        const pinnedBlock = await buildSkillsBlockBySlug(pinnableSlugs, pinnedTenantId)
+        if (pinnedBlock) {
+          systemPrompt += pinnedBlock
+          console.log(`[AGENT] Pinned skins by slug: ${(task_skills as string[]).join(', ')}`)
+        }
+      } catch (e) {
+        console.error('[AGENT] pinned-skin resolution failed (non-fatal):', e)
+      }
     }
     // Inject active modes
     const activeModes: string[] = (agent as any).active_modes || []
@@ -2957,6 +3068,13 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
       ? ALL_TOOLS.filter(t => allowedTools.includes(t.name))
       : ALL_TOOLS
 
+    // Access control (denylist): subtract tools turned OFF in settings. Default
+    // (empty) = no change, so Carmen keeps access to everything by default.
+    const disabledTools = ((agent as any).disabled_tools || []) as string[]
+    if (disabledTools.length > 0) {
+      filteredTools = filteredTools.filter(t => !disabledTools.includes(t.name))
+    }
+
     // 4a. Surface-based delegation guard.
     // - On AIOS: hide delegate_to_subagent unless the user explicitly asked for background work.
     //   This prevents Carmen from answering "I'm working in the background" to ordinary "check report"
@@ -2968,7 +3086,7 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     const userAskedManus = /\b(manus|מנוס|מאנוס|מנואס)\b/i.test(cmd)
     const userAskedGithubAgent = /\b(github|גיטהאב|גיט\s*האב|שגיאת\s*קוד|תמיכה\s*טכנית|אגנט\s*קוד)\b/i.test(cmd)
     if (surface === 'task') {
-      filteredTools = filteredTools.filter(t => t.name !== 'delegate_to_subagent' && t.name !== 'delegate_to_manus' && t.name !== 'delegate_to_github_agent')
+      filteredTools = filteredTools.filter(t => t.name !== 'delegate_to_subagent' && t.name !== 'delegate_parallel' && t.name !== 'delegate_to_manus' && t.name !== 'delegate_to_github_agent')
     } else if (surface === 'aios' || surface === 'whatsapp' || surface === 'internal_chat') {
       // Same default-direct rule for WhatsApp as for AIOS: hide delegation tools unless
       // the user explicitly asked for background work. On WhatsApp this is even more
@@ -2993,7 +3111,8 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     // 4b. Load MCP tools for this tenant + agent (Phase 3)
     let mcpExecutors = new Map<string, (args: any) => Promise<any>>()
     try {
-      const mcp = await loadMcpTools(supabase, resolvedTenantId, agent_id)
+      const disabledIntegrations = ((agent as any).disabled_integrations || []) as string[]
+      const mcp = await loadMcpTools(supabase, resolvedTenantId, agent_id, disabledIntegrations)
       if (mcp.toolDefs.length > 0) {
         for (const t of mcp.toolDefs) {
           toolsForAPI.push({ type: 'function', function: t as any })
@@ -3012,9 +3131,15 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
 
     // ─── Skill resolver: detect active skills from the user message and append their prompts (DB-backed) ───
     const skillTenantId = (agent as any).tenant_id || tenant_id || null
-    const activeSkillsBlock = await buildSkillsBlock(String(command_text || ''), skillTenantId)
-    const _matchedSkills = await resolveActiveSkills(String(command_text || ''), skillTenantId)
+    // Access control: skins turned OFF in settings are excluded even if their
+    // trigger matches. Default (empty) = no change.
+    const disabledSkins = ((agent as any).disabled_skins || []) as string[]
+    const _matchedSkills = (await resolveActiveSkills(String(command_text || ''), skillTenantId))
+      .filter(s => !disabledSkins.includes(s.id))
     const matchedSkills = _matchedSkills.map(s => s.id)
+    const activeSkillsBlock = _matchedSkills.length > 0
+      ? '\n\n' + _matchedSkills.map(s => s.prompt).join('\n\n')
+      : ''
     if (activeSkillsBlock) {
       systemPrompt += activeSkillsBlock
       console.log(`[AGENT] Active skills (${surface}): ${matchedSkills.join(', ')} | sources: ${_matchedSkills.map(s => s.source).join(',')}`)

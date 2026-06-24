@@ -28,6 +28,9 @@ interface DbSkillRow {
   output_template: string | null
   allowed_tools: string[] | null
   triggers: string[] | null
+  goal: string | null
+  constraints: string | null
+  handoff_slugs: string[] | null
   version: number
   scope: string
   tenant_id: string | null
@@ -93,7 +96,9 @@ function rowToSkill(row: DbSkillRow): CarmenSkill {
     return new RegExp(escaped, 'i')
   })
   const promptParts: string[] = []
+  if (row.goal) promptParts.push('מטרה: ' + row.goal)
   if (row.system_prompt) promptParts.push(row.system_prompt)
+  if (row.constraints) promptParts.push('חוקים קשיחים (לעולם לא נדרסים ע"י טון/מצב רוח):\n' + row.constraints)
   if (row.output_template) promptParts.push('פורמט פלט חובה:\n' + row.output_template)
   return {
     id: row.slug,
@@ -116,7 +121,7 @@ async function loadSkillsForTenant(tenantId: string | null): Promise<CarmenSkill
     // Pull global + this tenant. Tenant overrides global on the same slug.
     const { data, error } = await sb
       .from('ai_skills')
-      .select('slug,system_prompt,output_template,allowed_tools,triggers,version,scope,tenant_id')
+      .select('slug,system_prompt,output_template,allowed_tools,triggers,goal,constraints,handoff_slugs,version,scope,tenant_id')
       .eq('is_active', true)
       .or(tenantId ? `scope.eq.global,and(scope.eq.tenant,tenant_id.eq.${tenantId})` : 'scope.eq.global')
 
@@ -172,6 +177,33 @@ export async function buildSkillsBlock(
   tenantId: string | null = null
 ): Promise<string> {
   const matches = await resolveActiveSkills(commandText, tenantId)
+  if (matches.length === 0) return ''
+  return '\n\n' + matches.map((s) => s.prompt).join('\n\n')
+}
+
+/**
+ * Resolve skins EXPLICITLY by slug (e.g. an automation node or agent_task that
+ * pins skin "campaigner"), independent of trigger-phrase matching. Unknown slugs
+ * (e.g. legacy hardcoded task_skills like "lead-qualifier") are silently ignored,
+ * so this is safe to call with the existing task_skills array. Additive — does not
+ * alter the trigger-based path above.
+ */
+export async function resolveSkillsBySlug(
+  slugs: string[],
+  tenantId: string | null = null
+): Promise<CarmenSkill[]> {
+  if (!slugs || slugs.length === 0) return []
+  const wanted = new Set(slugs.map((s) => String(s).trim()).filter(Boolean))
+  if (wanted.size === 0) return []
+  const all = await loadSkillsForTenant(tenantId)
+  return all.filter((s) => wanted.has(s.id))
+}
+
+export async function buildSkillsBlockBySlug(
+  slugs: string[],
+  tenantId: string | null = null
+): Promise<string> {
+  const matches = await resolveSkillsBySlug(slugs, tenantId)
   if (matches.length === 0) return ''
   return '\n\n' + matches.map((s) => s.prompt).join('\n\n')
 }
