@@ -768,6 +768,26 @@ Deno.serve(async (req) => {
       });
     }
 
+    // 🔁 IDEMPOTENCY: Green API can deliver the same message event more than once.
+    // The message insert dedups the row, but Carmen was still invoked twice →
+    // duplicate replies. If we already stored this idMessage, stop here.
+    const incomingIdMessage = webhookData.idMessage;
+    if (incomingIdMessage) {
+      const { data: dupMsg } = await supabaseClient
+        .from('chat_messages')
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .eq('connection_user_id', connectionUserId)
+        .eq('raw_provider_data->>idMessage', incomingIdMessage)
+        .limit(1)
+        .maybeSingle();
+      if (dupMsg) {
+        return new Response(JSON.stringify({ received: true, duplicate: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     const messageData = webhookData.messageData;
     const senderData = webhookData.senderData;
     
