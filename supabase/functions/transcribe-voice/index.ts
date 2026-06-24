@@ -23,8 +23,8 @@ serve(async (req) => {
       });
     }
 
-    if (!hasAiKey()) {
-      return new Response(JSON.stringify({ error: 'OPENAI_API_KEY not configured' }), {
+    if (!(await hasAiKey())) {
+      return new Response(JSON.stringify({ error: 'OpenAI key not configured (env secret or llm integration)' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

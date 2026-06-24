@@ -12,7 +12,7 @@ export async function summarizeAndStoreAgentMemory(opts: {
   tools_used: string[];
 }) {
   try {
-    if (!hasAiKey()) return;
+    if (!(await hasAiKey())) return;
     const { supabase, tenant_id, agent_id, user_message, assistant_output, tools_used } = opts;
     if (!user_message?.trim() || !assistant_output?.trim()) return;
 
