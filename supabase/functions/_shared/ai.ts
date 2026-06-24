@@ -1,4 +1,4 @@
-// Shared AI helpers — OpenAI (replaces the former Lovable AI gateway).
+// Shared AI helpers — OpenAI. Single place to configure the AI provider.
 // The OpenAI endpoints are wire-compatible with what the gateway exposed, so
 // callers keep parsing `choices[0].message.content` and `data[0].embedding`.
 //

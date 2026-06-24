@@ -1,7 +1,7 @@
 # AIOS — project notes for Claude
 
 ## Stack / hosting
-- **Frontend hosting: Vercel** (migrated off Lovable). Do NOT reference Lovable.
+- **Frontend hosting: Vercel** (migrated off Lovable). Canonical domain: `https://aios.co.il`. Do NOT reference Lovable — it is fully removed from the codebase.
 - **Backend: Supabase** (Postgres + Edge Functions). Production project ref: `zvoijyneresvkadpprel` (AfterLead).
 - Edge functions deploy via the `deploy-edge-function.yml` GitHub Action (auto on merge to `main`, or manual run).
 
@@ -11,7 +11,9 @@ We use the org's own connected models. Standardized helper: `supabase/functions/
 - **Embeddings:** OpenAI `text-embedding-3-small`, **1536 dims** — must match the `summary_embedding` vector columns on `carmen_memory_pointers` / `agent_memory`.
 - **Image gen:** OpenAI Images `gpt-image-1` (`/v1/images/generations`, returns base64 PNG).
 - Per-tenant LLM keys for the main agent live in the `llm` row of `tenant_integrations` (see `resolveLLMTarget` in `run-ai-agent`).
-- ⚠️ Lovable removal is in progress — `LOVABLE_API_KEY` / `ai.gateway.lovable.dev` / `connector-gateway.lovable.dev` must be replaced everywhere. Carmen's memory cluster is done; other functions (transcription, telegram, invoices, image, marketing, app URLs) still pending.
+- **Transcription:** OpenAI Whisper (`whisper-1`). **TTS:** OpenAI (`gpt-4o-mini-tts`). Helpers `aiTranscribe`/`aiSpeak` in `_shared/ai.ts`.
+- **Telegram:** direct Telegram Bot API via the `TELEGRAM_BOT_TOKEN` secret (no connector).
+- ✅ Lovable removal COMPLETE — zero `lovable` references in app code. Required secrets: `OPENAI_API_KEY`, `TELEGRAM_BOT_TOKEN`. TikTok (`tiktok-connect`/`sync-tiktok-content`) is gated on `TIKTOK_ACCESS_TOKEN` and needs a proper direct TikTok integration to re-enable.
 
 ## Carmen memory architecture
 - `carmen_memory_pointers` = a **pointer map** (category/path/title/summary/importance + `summary_embedding`). Content is fetched live on demand — not one big blob.
