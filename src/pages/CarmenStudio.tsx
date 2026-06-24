@@ -9,10 +9,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Save, Bot, Sparkles, ShieldCheck, Smile } from "lucide-react";
+import { Loader2, Save, Bot, Sparkles, ShieldCheck, Smile, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import SkinsManager from "./SkinsManager";
 import CarmenAccess from "./CarmenAccess";
+import { CloneToOrgDialog } from "@/components/sharing/CloneToOrgDialog";
 
 // Unified Carmen Studio — the separate "agent-building" module. One screen for
 // who Carmen is (Core + mood), what she can use (Access), and the roles she
@@ -31,6 +32,7 @@ function CoreTab() {
   const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
   const [form, setForm] = useState<any>(null);
+  const [cloneOpen, setCloneOpen] = useState(false);
 
   const { data: agent, isLoading } = useQuery({
     queryKey: ["carmen-studio-core", tenantId],
@@ -121,13 +123,27 @@ function CoreTab() {
           <Label>סגנון כתיבה</Label>
           <Input value={form.writing_style || ""} onChange={(e) => setForm({ ...form, writing_style: e.target.value })} className="text-right" />
         </div>
-        <div className="flex justify-start">
+        <div className="flex justify-start gap-2">
           <Button onClick={() => save.mutate()} disabled={save.isPending} className="gap-1.5">
             {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             שמור
           </Button>
+          <Button variant="outline" onClick={() => setCloneOpen(true)} className="gap-1.5">
+            <Building2 className="h-4 w-4" />
+            שכפל לארגון אחר
+          </Button>
         </div>
       </Card>
+
+      {form?.id && (
+        <CloneToOrgDialog
+          entityType="agent"
+          entityId={form.id}
+          entityName={form.name || "כרמן"}
+          open={cloneOpen}
+          onOpenChange={setCloneOpen}
+        />
+      )}
     </div>
   );
 }
