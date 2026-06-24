@@ -159,6 +159,7 @@ export const MENU_TABS: MenuTab[] = [
           { key: "automations", label: "אוטומציות", route: "/automations", icon: Zap },
           { key: "agents", label: "סוכני AI", route: "/agents", icon: Bot },
           { key: "skins", label: "הסקינז של כרמן", route: "/skins", icon: Sparkles },
+          { key: "carmen-access", label: "גישות של כרמן", route: "/carmen-access", icon: Bot },
           { key: "carmen-insights", label: "למידה של כרמן", route: "/carmen-insights", icon: Brain },
           { key: "visual-workspace", label: "Visual Workspace", route: "/visual-workspace", icon: Sparkles },
         ],

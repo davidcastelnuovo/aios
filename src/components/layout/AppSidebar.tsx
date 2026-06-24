@@ -146,6 +146,7 @@ const modulePermissions: Record<string, string> = {
   automations: "automations",
   agents: "agents",
   skins: "agents",
+  "carmen-access": "agents",
   "carmen-insights": "agents",
   "visual-workspace": "agents",
   // ── אינטגרציות ──────────────────────────────────────────────────────
