@@ -798,7 +798,10 @@ Deno.serve(async (req) => {
       const downloadUrl = messageData.fileMessageData?.downloadUrl;
       let transcription = '';
 
-      if (downloadUrl && isIncoming) {
+      // Transcribe both inbound voice AND the operator's own voice notes sent
+      // from the connected account (manual-outgoing) — that's how David talks to
+      // Carmen, so skipping manual-outgoing left his requests as '[הודעת קול]'.
+      if (downloadUrl && (isIncoming || isManualOutgoing)) {
         try {
           const audioResponse = await fetch(downloadUrl);
           if (audioResponse.ok) {
