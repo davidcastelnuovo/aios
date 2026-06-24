@@ -8,7 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { Bot, Send, Plus, Loader2, Wrench, Menu, Sparkles, Zap, MessageSquare, Users, Target, Mic, MicOff, Square, PlayCircle, CheckCircle2, XCircle, Clock } from "lucide-react";
+import { Bot, Send, Plus, Loader2, Wrench, Menu, Sparkles, Zap, MessageSquare, Users, Target, Mic, MicOff, Square, PlayCircle, CheckCircle2, XCircle, Clock, Volume2, VolumeX } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -60,10 +60,12 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
+  const [speakingIdx, setSpeakingIdx] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const speakAudioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
   const { userId } = useCurrentUser();
   const { tenantId } = useCurrentTenant();
@@ -434,6 +436,69 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
     }
   }, []);
 
+  // Carmen voice-OUT: play an assistant message as speech (toggle on/off).
+  const speakMessage = useCallback(async (idx: number, text: string) => {
+    // Clicking the speaker on the message that's already playing stops it.
+    if (speakAudioRef.current) {
+      speakAudioRef.current.pause();
+      speakAudioRef.current = null;
+      if (speakingIdx === idx) { setSpeakingIdx(null); return; }
+    }
+    if (!text?.trim()) return;
+
+    setSpeakingIdx(idx);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/carmen-speak`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ text }),
+        }
+      );
+      if (!res.ok) throw new Error('TTS failed');
+
+      const blob = await res.blob();
+      const audioUrl = URL.createObjectURL(blob);
+      const audio = new Audio(audioUrl);
+      speakAudioRef.current = audio;
+      audio.onended = () => {
+        URL.revokeObjectURL(audioUrl);
+        if (speakAudioRef.current === audio) speakAudioRef.current = null;
+        setSpeakingIdx(prev => (prev === idx ? null : prev));
+      };
+      audio.onerror = () => {
+        URL.revokeObjectURL(audioUrl);
+        if (speakAudioRef.current === audio) speakAudioRef.current = null;
+        setSpeakingIdx(prev => (prev === idx ? null : prev));
+      };
+      await audio.play();
+    } catch (err: any) {
+      console.error('Speak error:', err);
+      setSpeakingIdx(null);
+      toast({
+        title: "שגיאה בהשמעה",
+        description: "לא הצלחנו להשמיע את התשובה. נסה שוב.",
+        variant: "destructive",
+      });
+    }
+  }, [speakingIdx, toast]);
+
+  // Stop any playback when the dialog closes.
+  useEffect(() => {
+    if (!open && speakAudioRef.current) {
+      speakAudioRef.current.pause();
+      speakAudioRef.current = null;
+      setSpeakingIdx(null);
+    }
+  }, [open]);
+
   const sendMessageWithText = async (text: string) => {
     if (!text.trim() || isStreaming) return;
 
@@ -772,10 +837,23 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
                     </div>
                   ) : (
                     <div className="flex justify-start">
-                      <Card className="p-2.5 max-w-[85%] bg-card border">
+                      <Card className="p-2.5 max-w-[85%] bg-card border group relative">
                         <div dir="rtl" className="prose prose-sm dark:prose-invert max-w-none text-sm text-right [&>p]:mb-1 [&>ul]:my-1 [&>ol]:my-1 [&_table]:my-2 [&_table]:w-full [&_table]:border-collapse [&_th]:border [&_th]:border-border [&_th]:px-2 [&_th]:py-1 [&_th]:bg-muted [&_th]:font-semibold [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1">
                           <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content || ''}</ReactMarkdown>
                         </div>
+                        {(msg.content || '').trim() && (
+                          <button
+                            onClick={() => speakMessage(idx, msg.content || '')}
+                            className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary transition-colors"
+                            title={speakingIdx === idx ? "עצור השמעה" : "השמע בקול"}
+                          >
+                            {speakingIdx === idx ? (
+                              <><VolumeX className="h-3.5 w-3.5" /> עצור</>
+                            ) : (
+                              <><Volume2 className="h-3.5 w-3.5" /> השמע</>
+                            )}
+                          </button>
+                        )}
                       </Card>
                     </div>
                   )}
