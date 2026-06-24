@@ -1,3 +1,4 @@
+// redeploy trigger: rebundle _shared/carmen.ts (multi-keyword + voice "קרמן" wake-word matching)
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { handleCarmenMessage } from '../_shared/carmen.ts';
 import { aiTranscribe } from '../_shared/ai.ts';
