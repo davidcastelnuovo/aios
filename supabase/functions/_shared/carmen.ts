@@ -243,6 +243,23 @@ export async function findCarmenAgent(supabase: any, tenantId: string): Promise<
   return data || null;
 }
 
+// Fetch client + team (campaigner) names for the tenant. Used to help the voice
+// transcript rewriter correct garbled names ("וילה סול" → "וילאסון"). Best-effort.
+export async function fetchKnownEntityNames(supabase: any, tenantId: string): Promise<string[]> {
+  try {
+    const [clientsRes, teamRes] = await Promise.all([
+      supabase.from('clients').select('name').eq('tenant_id', tenantId).limit(500),
+      supabase.from('campaigners').select('full_name').eq('tenant_id', tenantId).limit(200),
+    ]);
+    const names = new Set<string>();
+    for (const c of (clientsRes.data || [])) { if (c?.name) names.add(String(c.name).trim()); }
+    for (const t of (teamRes.data || [])) { if (t?.full_name) names.add(String(t.full_name).trim()); }
+    return [...names].filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 // Find the Carmen session automation for a tenant.
 // Only flow-based triggers (step_type='trigger', action_type='carmen_whatsapp_session') are
 // considered. The legacy `whatsapp_message_received` + `carmen_session_mode=true` form is
