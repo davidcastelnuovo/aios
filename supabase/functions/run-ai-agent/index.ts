@@ -261,6 +261,105 @@ const ALL_TOOLS = [
 // ===========================
 // TOOL EXECUTOR
 // ===========================
+
+// ── Live Meta (Facebook) reads ──────────────────────────────────────────────
+// The campaigner skill demands a LIVE audit before recommending, but the synced
+// CRM tables can lag (some accounts were stuck months behind). These helpers read
+// straight from the Graph API so list/get tools reflect the real account state,
+// with a synced-table fallback so nothing regresses when live read isn't possible.
+const FB_GRAPH_VERSION = 'v21.0'
+
+async function fbResolveClientAdAccount(supabase: any, tenantId: string, clientId: string): Promise<string | null> {
+  // clients.* ad-account fields are empty in practice — the act_ id lives in the
+  // client's Meta sync table config (crm_tables.integration_settings).
+  const { data } = await supabase
+    .from('crm_tables')
+    .select('integration_settings, last_sync_at')
+    .eq('tenant_id', tenantId)
+    .eq('client_id', clientId)
+    .in('integration_type', ['facebook_insights', 'facebook_ecommerce'])
+    .order('last_sync_at', { ascending: false, nullsFirst: false })
+  for (const t of (data || [])) {
+    const s = t?.integration_settings || {}
+    const acc = s.ad_account_id || s.account_id || s.meta_account_id
+    if (acc) return String(acc).replace(/^act_/, '')
+  }
+  return null
+}
+
+async function fbGetToken(supabase: any, tenantId: string): Promise<string | null> {
+  let { data } = await supabase
+    .from('tenant_integrations')
+    .select('api_key, shared_from_integration_id')
+    .in('integration_type', ['facebook', 'facebook_lead_ads'])
+    .eq('tenant_id', tenantId)
+    .eq('is_active', true)
+    .limit(1).maybeSingle()
+  if (data && !data.api_key && data.shared_from_integration_id) {
+    const { data: src } = await supabase.from('tenant_integrations').select('api_key').eq('id', data.shared_from_integration_id).maybeSingle()
+    if (src?.api_key) data = { ...data, api_key: src.api_key }
+  }
+  return data?.api_key || null
+}
+
+// Pull the lead count out of an insights row's `actions` array (Meta reports leads
+// under a few action types depending on the form/CAPI setup).
+function fbLeadsFromActions(actions: any[]): number {
+  if (!Array.isArray(actions)) return 0
+  let leads = 0
+  for (const a of actions) {
+    const t = String(a?.action_type || '')
+    if (t === 'lead' || t === 'leadgen.other' || t === 'onsite_conversion.lead_grouped' || t.endsWith('.lead')) {
+      leads += Number(a?.value || 0)
+    }
+  }
+  return leads
+}
+
+/** Live campaign list (id/name/status/objective). Returns null on any failure. */
+async function fbLiveCampaignList(supabase: any, tenantId: string, clientId: string): Promise<any[] | null> {
+  try {
+    const acct = await fbResolveClientAdAccount(supabase, tenantId, clientId)
+    const token = await fbGetToken(supabase, tenantId)
+    if (!acct || !token) return null
+    const url = `https://graph.facebook.com/${FB_GRAPH_VERSION}/act_${acct}/campaigns?fields=id,name,effective_status,objective&limit=300&access_token=${token}`
+    const r = await fetch(url)
+    const j = await r.json()
+    if (!r.ok || j?.error || !Array.isArray(j?.data)) return null
+    return j.data.map((c: any) => ({
+      campaign_id: c.id, campaign_name: c.name,
+      status: c.effective_status, effective_status: c.effective_status, objective: c.objective,
+    }))
+  } catch { return null }
+}
+
+/** Live campaign-level insights (spend/leads/etc.) over a day window. Null on failure. */
+async function fbLiveCampaignInsights(supabase: any, tenantId: string, clientId: string, days: number): Promise<any[] | null> {
+  try {
+    const acct = await fbResolveClientAdAccount(supabase, tenantId, clientId)
+    const token = await fbGetToken(supabase, tenantId)
+    if (!acct || !token) return null
+    const preset = days <= 1 ? 'yesterday' : days <= 7 ? 'last_7d' : days <= 14 ? 'last_14d' : days <= 30 ? 'last_30d' : days <= 90 ? 'last_90d' : 'maximum'
+    const fields = 'campaign_id,campaign_name,impressions,clicks,spend,actions,cpc,cpm,ctr,reach'
+    const url = `https://graph.facebook.com/${FB_GRAPH_VERSION}/act_${acct}/insights?level=campaign&date_preset=${preset}&fields=${fields}&limit=500&access_token=${token}`
+    const r = await fetch(url)
+    const j = await r.json()
+    if (!r.ok || j?.error || !Array.isArray(j?.data)) return null
+    return j.data.map((d: any) => {
+      const leads = fbLeadsFromActions(d.actions)
+      const spend = Number(d.spend || 0)
+      return {
+        campaign_id: d.campaign_id ?? null, campaign_name: d.campaign_name ?? null,
+        impressions: Number(d.impressions || 0), clicks: Number(d.clicks || 0),
+        spend, leads_count: leads,
+        cpc: d.cpc ? Number(d.cpc) : null, cpm: d.cpm ? Number(d.cpm) : null, ctr: d.ctr ? Number(d.ctr) : null,
+        reach: d.reach ? Number(d.reach) : null,
+        cost_per_lead: leads > 0 ? Number((spend / leads).toFixed(2)) : null,
+      }
+    })
+  } catch { return null }
+}
+
 async function getAccessibleTenantIds(supabase: any, tenantId: string): Promise<string[]> {
   try {
     const { data } = await supabase
@@ -698,7 +797,13 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         return { error: 'client_id_required', message: 'יש להעביר client_id' }
       }
 
-      // Find campaign tables for this client (CRM dynamic tables that hold FB insights)
+      // LIVE first: pull campaign-level insights straight from Meta (synced tables can lag days/weeks).
+      const liveInsights = await fbLiveCampaignInsights(supabase, accessibleTenantIds[0], args.client_id, daysBack)
+      if (liveInsights) {
+        return { count: liveInsights.length, campaigns: liveInsights, period: `${daysBack} days`, source: 'live_meta' }
+      }
+
+      // Fallback: CRM dynamic tables that hold synced FB insights.
       const { data: campaignTables, error: rpcErr } = await supabase
         .rpc('find_campaign_tables', { p_client_ids: [args.client_id] })
       if (rpcErr) throw rpcErr
@@ -739,7 +844,14 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (!args.client_id) {
         return { error: 'client_id_required', message: 'יש להעביר client_id' }
       }
-      // Find campaign tables for this client (CRM dynamic tables hold FB insights with status)
+      // LIVE first: read campaign status straight from Meta (synced tables can lag).
+      const liveList = await fbLiveCampaignList(supabase, accessibleTenantIds[0], args.client_id)
+      if (liveList) {
+        const search = (args.name_search || '').toString().toLowerCase()
+        const campaigns = search ? liveList.filter((c: any) => String(c.campaign_name || '').toLowerCase().includes(search)) : liveList
+        return { count: campaigns.length, campaigns, source: 'live_meta' }
+      }
+      // Fallback: CRM dynamic tables that hold synced FB insights with status.
       const { data: campaignTables, error: rpcErr } = await supabase
         .rpc('find_campaign_tables', { p_client_ids: [args.client_id] })
       if (rpcErr) throw rpcErr
@@ -1093,6 +1205,11 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
           synced: synced_clients.length,
           not_connected: not_connected_clients.length,
         },
+        // Portfolio trend scan runs off the synced CRM tables (needs the daily history for the
+        // 7d-vs-prior comparison). For live, up-to-the-minute status/leads on a single client use
+        // get_facebook_campaign_data / list_facebook_campaigns (source: 'live_meta'). Per-client
+        // `last_data_date` shows how fresh each row is.
+        data_source: 'synced_crm',
         synced_clients,
         not_connected_clients,
         instructions_to_agent: not_connected_clients.length > 0
