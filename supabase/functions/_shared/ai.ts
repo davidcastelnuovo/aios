@@ -112,12 +112,23 @@ export async function aiChatJSON<T = any>(prompt: string, model?: string): Promi
 // Rewrite a raw voice transcript into clean, sensible Hebrew. Whisper output
 // often contains homophones / garbled words (e.g. "קרמן"→"כרמן",
 // "דיבור"→"דיוור", mangled names). Fixes obvious transcription errors while
-// strictly preserving the original meaning and intent. Best-effort: returns the
-// original text on any failure or when the key is missing.
-export async function aiCleanTranscript(text: string): Promise<string> {
+// strictly preserving the original meaning and intent. When `knownNames` is
+// supplied (clients + team members), a garbled name is mapped to the closest
+// real entity. Best-effort: returns the original text on any failure.
+export async function aiCleanTranscript(
+  text: string,
+  opts?: { knownNames?: string[] },
+): Promise<string> {
   const raw = (text || "").trim();
   if (raw.length < 2) return raw;
-  const prompt = `אתה מתקן תמלולים של הודעות קוליות בעברית. קיבלת תמלול גולמי שעלול להכיל שגיאות תמלול, הומופונים ומילים משובשות (למשל "קרמן" במקום "כרמן", "דיבור" במקום "דיוור", שמות משובשים). שכתב אותו לטקסט הכי הגיוני, ברור ותקני — תוך שמירה מוחלטת על המשמעות והכוונה המקורית. אל תוסיף מידע, אל תענה על התוכן, אל תקצר ואל תרחיב — רק תקן שגיאות תמלול. אם הטקסט כבר תקין, החזר אותו כמו שהוא. החזר אך ורק את הטקסט המתוקן, בלי הקדמות ובלי מרכאות.
+  const names = (opts?.knownNames || [])
+    .map((n) => String(n || "").trim())
+    .filter(Boolean)
+    .slice(0, 400);
+  const namesBlock = names.length
+    ? `\n\nרשימת שמות אמיתיים במערכת (לקוחות וחברי צוות). אם בתמלול מופיע שם שנשמע דומה לאחד מהם אך משובש — תקן אותו לשם המדויק מהרשימה. אל תמציא שם שלא ברשימה:\n${names.join(", ")}`
+    : "";
+  const prompt = `אתה מתקן תמלולים של הודעות קוליות בעברית. קיבלת תמלול גולמי שעלול להכיל שגיאות תמלול, הומופונים ומילים משובשות (למשל "קרמן" במקום "כרמן", "דיבור" במקום "דיוור", שמות משובשים). שכתב אותו לטקסט הכי הגיוני, ברור ותקני — תוך שמירה מוחלטת על המשמעות והכוונה המקורית. אל תוסיף מידע, אל תענה על התוכן, אל תקצר ואל תרחיב — רק תקן שגיאות תמלול. אם הטקסט כבר תקין, החזר אותו כמו שהוא. החזר אך ורק את הטקסט המתוקן, בלי הקדמות ובלי מרכאות.${namesBlock}
 
 תמלול גולמי:
 ${raw}`;
