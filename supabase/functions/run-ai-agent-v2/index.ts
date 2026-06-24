@@ -11,8 +11,8 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
-const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
+const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY")!;
+const AI_GATEWAY_URL = "https://api.openai.com/v1/chat/completions";
 
 type Json = Record<string, any>;
 
@@ -155,7 +155,7 @@ async function callLLM(model: string, messages: any[], openaiTools: any[]) {
   const resp = await fetch(AI_GATEWAY_URL, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -244,11 +244,11 @@ async function finalizeRun(
       const reflectResp = await fetch(AI_GATEWAY_URL, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: run.model ?? "google/gemini-3-flash-preview",
+          model: run.model ?? 'gpt-4o-mini',
           messages: [
             { role: "system", content: "סכם בקצרה (עד 3 משפטים) מה הסוכן השיג והאם יש לקח שכדאי לזכור לעתיד. ענה בעברית." },
             { role: "user", content: `מטרה: ${run.goal}\nתשובה סופית: ${finalAnswer}` },

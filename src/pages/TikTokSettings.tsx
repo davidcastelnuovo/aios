@@ -82,7 +82,7 @@ export default function TikTokSettings() {
         <Alert>
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            החיבור נעשה דרך הקונקטור של Lovable — לא נדרש App Review של TikTok.
+            חיבור ישיר ל-TikTok (דורש TIKTOK_ACCESS_TOKEN).
             כרגע נתמך מידע אורגני בלבד (פרופיל וסרטונים). נתוני TikTok Ads (קמפיינים בתשלום) ידרשו אינטגרציה נפרדת.
           </AlertDescription>
         </Alert>

@@ -7,8 +7,8 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')
-const AI_GATEWAY_URL = 'https://ai.gateway.lovable.dev/v1/chat/completions'
+const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')
+const AI_GATEWAY_URL = 'https://api.openai.com/v1/chat/completions'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -27,8 +27,8 @@ Deno.serve(async (req) => {
     const body = await req.json()
     const { action, post_id, tenant_id, prompt, style, additional_notes, tone, target_audience, call_to_action, date } = body
 
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY not configured')
+    if (!OPENAI_API_KEY) {
+      throw new Error('OPENAI_API_KEY not configured')
     }
 
     let result: any
@@ -100,11 +100,11 @@ async function generateDayIdeas(params: { date: string; tenant_id: string }, _su
   const response = await fetch(AI_GATEWAY_URL, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+      'Authorization': `Bearer ${OPENAI_API_KEY}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'google/gemini-2.5-flash',
+      model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
@@ -187,11 +187,11 @@ ${prompt ? `הנחיות נוספות: ${prompt}` : ''}
   const response = await fetch(AI_GATEWAY_URL, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+      'Authorization': `Bearer ${OPENAI_API_KEY}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'google/gemini-2.5-flash',
+      model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
@@ -282,11 +282,11 @@ ${prompt ? `תיאור: ${prompt}` : ''}
   const response = await fetch(AI_GATEWAY_URL, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+      'Authorization': `Bearer ${OPENAI_API_KEY}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'google/gemini-2.5-flash',
+      model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },

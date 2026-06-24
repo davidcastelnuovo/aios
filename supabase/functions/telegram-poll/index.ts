@@ -1,17 +1,14 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const GATEWAY_URL = 'https://connector-gateway.lovable.dev/telegram';
+const TELEGRAM_API = 'https://api.telegram.org';
 const MAX_RUNTIME_MS = 55_000;
 const MIN_REMAINING_MS = 5_000;
 
 Deno.serve(async () => {
   const startTime = Date.now();
 
-  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-  if (!LOVABLE_API_KEY) return new Response(JSON.stringify({ error: 'LOVABLE_API_KEY not configured' }), { status: 500 });
-
-  const TELEGRAM_API_KEY = Deno.env.get('TELEGRAM_API_KEY');
-  if (!TELEGRAM_API_KEY) return new Response(JSON.stringify({ error: 'TELEGRAM_API_KEY not configured' }), { status: 500 });
+  const BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN');
+  if (!BOT_TOKEN) return new Response(JSON.stringify({ error: 'TELEGRAM_BOT_TOKEN not configured' }), { status: 500 });
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -47,13 +44,9 @@ Deno.serve(async () => {
       if (timeout < 1) break;
 
       try {
-        const response = await fetch(`${GATEWAY_URL}/getUpdates`, {
+        const response = await fetch(`${TELEGRAM_API}/bot${BOT_TOKEN}/getUpdates`, {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-            'X-Connection-Api-Key': TELEGRAM_API_KEY,
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             offset: currentOffset,
             timeout,

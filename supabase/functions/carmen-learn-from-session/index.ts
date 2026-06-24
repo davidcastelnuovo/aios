@@ -7,8 +7,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-const MODEL = "google/gemini-2.5-flash";
+const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+const MODEL = "gpt-4o-mini";
 
 type Insight = {
   what_worked: { observation: string; example?: string }[];
@@ -105,17 +105,17 @@ function buildSchema() {
 }
 
 async function analyze(history: any[]): Promise<Insight | null> {
-  if (!LOVABLE_API_KEY) return null;
+  if (!OPENAI_API_KEY) return null;
   const trimmed = history.slice(-40);
   const transcript = trimmed
     .map((m: any) => `[${m.role || m.direction || "?"}] ${shortText(m.content || m.message || m.text, 500)}`)
     .join("\n");
 
-  const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const r = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+      "Authorization": `Bearer ${OPENAI_API_KEY}`,
     },
     body: JSON.stringify({
       model: MODEL,

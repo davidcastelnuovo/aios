@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
       })
     }
 
-    const baseUrl = Deno.env.get('SITE_URL') || 'https://after-lead.lovable.app'
+    const baseUrl = Deno.env.get('SITE_URL') || 'https://aios.co.il'
     const slug = tenantSlug || ''
     const chatLink = slug ? `${baseUrl}/t/${slug}/team-chat` : `${baseUrl}/team-chat`
 

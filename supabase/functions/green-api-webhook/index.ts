@@ -1,5 +1,7 @@
+// redeploy trigger: rebundle _shared/carmen.ts (wake-word variants + bare "תודה" no longer closes session)
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { handleCarmenMessage } from '../_shared/carmen.ts';
+import { aiTranscribe, aiCleanTranscript } from '../_shared/ai.ts';
 
 
 const corsHeaders = {
@@ -766,6 +768,26 @@ Deno.serve(async (req) => {
       });
     }
 
+    // 🔁 IDEMPOTENCY: Green API can deliver the same message event more than once.
+    // The message insert dedups the row, but Carmen was still invoked twice →
+    // duplicate replies. If we already stored this idMessage, stop here.
+    const incomingIdMessage = webhookData.idMessage;
+    if (incomingIdMessage) {
+      const { data: dupMsg } = await supabaseClient
+        .from('chat_messages')
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .eq('connection_user_id', connectionUserId)
+        .eq('raw_provider_data->>idMessage', incomingIdMessage)
+        .limit(1)
+        .maybeSingle();
+      if (dupMsg) {
+        return new Response(JSON.stringify({ received: true, duplicate: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     const messageData = webhookData.messageData;
     const senderData = webhookData.senderData;
     
@@ -790,47 +812,31 @@ Deno.serve(async (req) => {
     } else if (messageType === 'videoMessage') {
       messageText = messageData.fileMessageData?.caption || '[וידאו]';
     } else if (messageType === 'audioMessage') {
-      // Try to transcribe voice messages
+      // Transcribe voice messages via the shared Whisper helper, which resolves
+      // the OpenAI key from the env secret OR the tenant llm integration. (The
+      // old inline call read only Deno.env.get('OPENAI_API_KEY'), which is unset
+      // on this project, so every voice note silently became '[הודעת קול]'.)
       const downloadUrl = messageData.fileMessageData?.downloadUrl;
       let transcription = '';
-      
-      if (downloadUrl && isIncoming) {
+
+      // Transcribe both inbound voice AND the operator's own voice notes sent
+      // from the connected account (manual-outgoing) — that's how David talks to
+      // Carmen, so skipping manual-outgoing left his requests as '[הודעת קול]'.
+      if (downloadUrl && (isIncoming || isManualOutgoing)) {
         try {
-          
-          // Download the audio file
           const audioResponse = await fetch(downloadUrl);
           if (audioResponse.ok) {
             const audioBlob = await audioResponse.blob();
-            
-            // Send to OpenAI Whisper for transcription
-            const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
-            if (openaiApiKey) {
-              const formData = new FormData();
-              formData.append('file', audioBlob, 'audio.ogg');
-              formData.append('model', 'whisper-1');
-              formData.append('language', 'he');
-              
-              const transcribeResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${openaiApiKey}`,
-                },
-                body: formData,
-              });
-              
-              if (transcribeResponse.ok) {
-                const result = await transcribeResponse.json();
-                transcription = result.text || '';
-              } else {
-                console.error('❌ Transcription failed:', await transcribeResponse.text());
-              }
+            if (audioBlob.size > 0 && audioBlob.size <= 25 * 1024 * 1024) {
+              const t = await aiTranscribe(audioBlob, { language: 'he', filename: 'audio.ogg' });
+              if (t && t.trim()) transcription = (await aiCleanTranscript(t)).trim();
             }
           }
         } catch (transcribeError) {
           console.error('❌ Error transcribing voice message:', transcribeError);
         }
       }
-      
+
       messageText = transcription ? `🎤 ${transcription}` : '[הודעת קול]';
     } else if (messageType === 'documentMessage') {
       messageText = messageData.fileMessageData?.caption || `[מסמך: ${messageData.fileMessageData?.fileName || 'קובץ'}]`;

@@ -33,18 +33,21 @@ async function logCarmenAutomationRun(
 }
 
 // Permissive end-keywords — any of these closes the session, even without "כרמן".
+// NOTE: bare "תודה"/"thanks" are deliberately NOT here — a plain thank-you is
+// usually mid-conversation politeness, and closing on it dropped the user's very
+// next request (e.g. "תודה כרמן" then "בדיקת דופק" → request lost). Only explicit
+// closers ("סיימנו", "די", "ביי", "stop"…) end the session.
 const END_KEYWORD_VARIANTS = [
-  'סיימנו', 'תודה סיימנו', 'תודה כרמן', 'תודה', 'תפסיקי', 'די כרמן', 'די תודה',
+  'סיימנו', 'תודה סיימנו', 'תפסיקי', 'די כרמן', 'די תודה', 'די',
   'עצרי', 'עצרי כרמן', 'מספיק', 'מספיק כרמן', 'ביי כרמן', 'ביי', 'להתראות כרמן', 'להתראות',
-  'stop', 'stop carmen', 'end', 'bye carmen', 'thanks carmen', 'thanks', 'thank you', 'bye',
+  'stop', 'stop carmen', 'end', 'bye carmen', 'bye',
 ];
 
 // Short "thanks/acknowledgement" messages that should NOT trigger an AI reply
-// inside an active session (prevents Carmen→thanks→Carmen loops).
-// Note: "תודה"/"thanks"/"ביי" intentionally moved to END_KEYWORD_VARIANTS per
-// product decision — these phrases cleanly close the session instead of staying
-// silent. Keep this list to "minimal acks Carmen herself echoes back".
+// inside an active session, but also must NOT close it (prevents
+// Carmen→thanks→Carmen loops while keeping the session open for the next request).
 const ACK_VARIANTS = [
+  'תודה', 'תודה כרמן', 'thanks', 'thank you', 'thanks carmen',
   'מעולה', 'מעולה תודה', 'סבבה', 'סבבה תודה',
   'אוקיי', 'אוקי', 'ok', 'okay', 'great', 'cool', '👍', '🙏',
   // Carmen's own minimal acks — if mirrored back as inbound, never reply
@@ -68,6 +71,29 @@ function isShortAck(msg: string): boolean {
   if (!m) return false;
   if (m.length > 20) return false;
   return ACK_VARIANTS.some(k => m === k || m === k + ' כרמן');
+}
+
+// Voice transcription (Whisper) spells the wake-word "כרמן" inconsistently:
+// "קרמן" (kuf↔kaf), "כארמן"/"קארמן" (with an alef). The transcript is also
+// prefixed with a 🎤 marker. Accept any of these so a spoken "כרמן ..." still
+// triggers Carmen instead of being dropped as 'no_keyword'.
+const CARMEN_NAME_VARIANT_RE = /[כק]א?רמן/;
+
+// Resolve the configured trigger keyword(s). Supports a single `trigger_keyword`
+// (legacy) or a `trigger_keywords` array (multiple wake-words), defaulting to "כרמן".
+function resolveTriggerKeywords(cfg: any): string[] {
+  const list = Array.isArray(cfg?.trigger_keywords) && cfg.trigger_keywords.length
+    ? cfg.trigger_keywords
+    : [cfg?.trigger_keyword || 'כרמן'];
+  const out = list.map((k: any) => String(k || '').trim().toLowerCase()).filter(Boolean);
+  return out.length ? out : ['כרמן'];
+}
+
+// True when the message contains any configured wake-word, or any Whisper spelling
+// variant of "כרמן".
+function messageHasTrigger(normalizedMsg: string, triggerKeywords: string[]): boolean {
+  if (triggerKeywords.some(k => normalizedMsg.includes(k))) return true;
+  return CARMEN_NAME_VARIANT_RE.test(normalizedMsg);
 }
 
 // Detect meta-instruction style messages (long lists of "תעני..." rules) that
@@ -931,9 +957,10 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     return { handled: false, reason: 'group_requires_explicit_scope' };
   }
 
-  const triggerKeyword = (carmenAutomation.configuration?.trigger_keyword || 'כרמן').toLowerCase();
+  const triggerKeywords = resolveTriggerKeywords(carmenAutomation.configuration);
+  const triggerKeyword = triggerKeywords[0]; // primary — used for prompt copy below
   const endKeywordConfig = carmenAutomation.configuration?.end_keyword || 'סיימנו כרמן';
-  if (!normalizedMsg.includes(triggerKeyword)) return { handled: false, reason: 'no_keyword' };
+  if (!messageHasTrigger(normalizedMsg, triggerKeywords)) return { handled: false, reason: 'no_keyword' };
 
   // Resolve agent
   let agentId = carmenAutomation.configuration?.agent_id || null;
@@ -976,7 +1003,13 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     return { handled: true, outcome: 'error' };
   }
 
-  const contentAfterKeyword = messageText.replace(new RegExp(triggerKeyword, 'gi'), '').trim();
+  let contentAfterKeyword = messageText.replace(/🎤/g, ''); // strip the voice-transcript marker
+  for (const k of triggerKeywords) {
+    contentAfterKeyword = contentAfterKeyword.replace(new RegExp(k, 'gi'), '');
+  }
+  contentAfterKeyword = contentAfterKeyword
+    .replace(CARMEN_NAME_VARIANT_RE, '')                 // strip "קרמן"/"כארמן" voice spellings
+    .trim();
 
   // If the user already asked a question after the keyword, answer it directly (single message).
   // Otherwise send a brief greeting only. Either way — save the assistant reply to history

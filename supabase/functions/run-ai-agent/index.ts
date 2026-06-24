@@ -1,3 +1,4 @@
+// redeploy trigger: rebundle _shared/ai.ts OpenAI key fallback (env secret → llm integration) so embeddings work
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
 import { resolveModelId } from '../_shared/models.ts'
 import { summarizeAndStoreAgentMemory, recallAgentMemory, recallAgentMemoryFTS, saveAgentMemory } from '../_shared/agent-memory.ts'
@@ -5,6 +6,7 @@ import { buildCarmenV2SystemPrompt, shouldUseV2Prompt } from '../_shared/carmen-
 import { loadMcpTools } from '../_shared/mcp-tools.ts'
 import { spawnSubagent, getSubagentResult } from '../_shared/subagent.ts'
 import { buildSkillsBlock, resolveActiveSkills } from '../_shared/skills/registry.ts'
+import { aiEmbed } from '../_shared/ai.ts'
 
 
 const corsHeaders = {
@@ -14,11 +16,50 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')
-const AI_GATEWAY_URL = 'https://ai.gateway.lovable.dev/v1/chat/completions'
 
 function resolveModel(engine: string): string {
   return resolveModelId(engine)
+}
+
+// ─── Tenant-owned LLM keys ───
+// Reads the org's own API keys from the "llm" integration and routes each
+// model to its provider's OpenAI-compatible endpoint.
+async function resolveLLMTarget(
+  supabase: any,
+  tenantId: string,
+  model: string,
+): Promise<{ url: string; key: string; model: string }> {
+  const { data } = await supabase
+    .from('tenant_integrations')
+    .select('settings')
+    .eq('tenant_id', tenantId)
+    .eq('integration_type', 'llm')
+    .eq('is_active', true)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const s = (data?.settings || {}) as Record<string, string>
+  const m = String(model || '')
+  const lower = m.toLowerCase()
+
+  if (lower.startsWith('google/') || lower.includes('gemini')) {
+    const key = s.google_api_key
+    if (!key) throw new Error('Google (Gemini) API key חסר באינטגרציית מודלי AI')
+    return {
+      url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+      key,
+      model: m.replace(/^google\//, ''),
+    }
+  }
+  if (lower.startsWith('anthropic/') || lower.includes('claude')) {
+    const key = s.anthropic_api_key
+    if (!key) throw new Error('Anthropic (Claude) API key חסר באינטגרציית מודלי AI')
+    return { url: 'https://api.anthropic.com/v1/chat/completions', key, model: m.replace(/^anthropic\//, '') }
+  }
+  // Default: OpenAI (GPT)
+  const key = s.openai_api_key
+  if (!key) throw new Error('OpenAI (GPT) API key חסר באינטגרציית מודלי AI')
+  return { url: 'https://api.openai.com/v1/chat/completions', key, model: m.replace(/^openai\//, '') }
 }
 
 // ===========================
@@ -1127,17 +1168,15 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     }
     case 'generate_ad_image': {
       const imagePrompt = args.prompt
-      const model = 'google/gemini-3.1-flash-image-preview'
-      
-      const imageRes = await fetch(AI_GATEWAY_URL, {
+
+      const imageRes = await fetch('https://api.openai.com/v1/images/generations', {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
+        headers: { 'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model,
-          messages: [
-            { role: 'user', content: `Generate an image: ${imagePrompt}. Make it professional, high quality, suitable for a social media advertisement.` }
-          ],
-          modalities: ['image', 'text'],
+          model: 'gpt-image-1',
+          prompt: `${imagePrompt}. Professional, high quality, suitable for a social media advertisement.`,
+          n: 1,
+          size: '1024x1024',
         }),
       })
       
@@ -1149,8 +1188,9 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const imageData = await imageRes.json()
       const content = imageData.choices?.[0]?.message?.content || ''
       
-      // Check for images array in response (Lovable AI Gateway format)
-      const images = imageData.choices?.[0]?.message?.images || []
+      // OpenAI Images API returns base64 PNG; adapt to the downstream extractor.
+      const b64 = imageData?.data?.[0]?.b64_json || ''
+      const images = b64 ? [{ image_url: { url: `data:image/png;base64,${b64}` } }] : []
       let imageUrl = ''
       
       if (images.length > 0 && images[0]?.image_url?.url) {
@@ -1472,25 +1512,16 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     case 'kb_search': {
       // Try semantic via embedding; fall back to text ILIKE on title/summary
       try {
-        const embedRes = await fetch('https://ai.gateway.lovable.dev/v1/embeddings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('LOVABLE_API_KEY')}` },
-          body: JSON.stringify({ model: 'google/gemini-embedding-001', input: args.query, dimensions: 1536 }),
-        })
-        if (embedRes.ok) {
-          const j = await embedRes.json()
-          const vec = j?.data?.[0]?.embedding
-          if (vec) {
-            const sinceFilter = args.since_days ? `,ref_date.gte.${new Date(Date.now() - args.since_days*86400000).toISOString()}` : ''
-            const { data, error } = await supabase.rpc('kb_match_pointers', {
-              p_tenant_id: tenantId,
-              p_query_embedding: vec,
-              p_category: args.category || null,
-              p_since_days: args.since_days || null,
-              p_limit: args.limit || 20,
-            })
-            if (!error && data) return { count: data.length, results: data, mode: 'semantic' }
-          }
+        const vec = await aiEmbed(args.query)
+        if (vec) {
+          const { data, error } = await supabase.rpc('kb_match_pointers', {
+            p_tenant_id: tenantId,
+            p_query_embedding: vec,
+            p_category: args.category || null,
+            p_since_days: args.since_days || null,
+            p_limit: args.limit || 20,
+          })
+          if (!error && data) return { count: data.length, results: data, mode: 'semantic' }
         }
       } catch (_) {/* fall through */}
       // Fallback text search
@@ -1544,15 +1575,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       // Generate embedding (best-effort)
       let embedding: number[] | null = null
       try {
-        const embedRes = await fetch('https://ai.gateway.lovable.dev/v1/embeddings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('LOVABLE_API_KEY')}` },
-          body: JSON.stringify({ model: 'google/gemini-embedding-001', input: `${args.topic}\n\n${args.summary}`, dimensions: 1536 }),
-        })
-        if (embedRes.ok) {
-          const j = await embedRes.json()
-          embedding = j?.data?.[0]?.embedding || null
-        }
+        embedding = await aiEmbed(`${args.topic}\n\n${args.summary}`)
       } catch (_) {/* ignore */}
       const { data, error } = await supabase.from('carmen_memory_episodes').insert({
         tenant_id: tenantId,
@@ -2302,7 +2325,6 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     console.log(`[AGENT] Starting run: agent=${bodyAgentId}, command="${command_text?.substring(0, 80)}", surface=${surface}, stream=${!!emit}`)
 
     if (!command_text) throw new Error('Missing command_text')
-    if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured')
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
@@ -2871,6 +2893,9 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
       systemPrompt += `\n\n🛑 **לא ללופ:** אל תשלחי הודעת המשך מיוזמתך. אל תוסיפי שאלות "האם תרצה ש...". אם המשתמש כתב "סיימנו"/"די"/"תפסיקי"/"תודה" — אל תעני בכלל; המערכת תסגור את הסשן.`
       systemPrompt += `\n\n💬 **סגנון WhatsApp:** קצר, ישיר, ידידותי. בלי markdown, בלי כותרות, בלי רשימות ארוכות.`
       systemPrompt += `\n\n📩 **הודעה אחת לשאלה אחת (חובה):** עני בהודעה אחת בלבד לכל הודעת משתמש. אל תפצלי תשובה אחת לכמה הודעות רצופות. אם המשתמש שאל שתי שאלות באותה הודעה — עני על שתיהן ביחד באותה הודעה אחת (אפשר בשתי שורות). אסור לשלוח הודעת המשך עצמאית אחרי שכבר ענית.`
+      systemPrompt += `\n\n🎧 **פרשנות תמלול קולי (חובה):** חלק מההודעות מגיעות מתמלול קולי (לרוב מסומנות ב-🎤) ועלולות להכיל שגיאות תמלול והומופונים — למשל "דיבור"↔"דיוור", "קרמן"↔"כרמן", או שמות לקוחות משובשים. אל תיקחי את התמלול כפשוטו: הביני מה המשתמש *באמת* התכוון מתוך ההקשר והשיחה. אם הכוונה ברורה מספיק — פעלי לפיה. רק אם יש אי-בהירות אמיתית שמשנה את הפעולה (איזה לקוח, מה בדיוק לעדכן) — שאלי שאלת הבהרה אחת קצרה *לפני* שאת מבצעת, במקום לבצע פעולה שגויה.`
+      systemPrompt += `\n\n✅ **בדיקה עצמית לפני שליחה (חובה):** לפני כל תשובה עצרי שנייה ובדקי: (1) האם אני עונה על הבקשה *האחרונה* של המשתמש — ולא על משהו קודם בשיחה? (2) אם קראתי לכלי — האם קראתי את התוצאה בפועל והיא הצליחה, או שאני מניחה? (3) האם התשובה שלי באמת *מבצעת* את מה שביקשו, או רק מדברת עליו? אם המשתמש חוזר על אותה בקשה — סימן שפספסת: בצעי אותה עכשיו. אם ביקשו פעולה (בדיקת דופק, עדכון, תזכורת) — בצעי אותה ממש עם הכלים; אסור לכתוב "בוצע/עודכן/נשלח" בלי שבאמת קראת לכלי המתאים וראית שהצליח.`
+      systemPrompt += `\n\n🚀 **ראש פרואקטיבי (חובה):** את מנהלת AI עם גישה מלאה למערכת ולכל הכלים — ברירת המחדל שלך היא לבצע ולפתור, לא להתחמק. כשנותנים לך משימה, השתמשי בכלים הדרושים והשלימי אותה מקצה לקצה. אם חסר מידע — חפשי אותו בעצמך (list_*, search_*, kb_*) לפני שאת אומרת "לא מצאתי" או "אין לי גישה". אם דרך אחת נכשלה — נסי דרך אחרת לפני שאת מוותרת. תהיי יוזמת, מעשית ומדויקת.`
       systemPrompt += `\n\n📚 **ממלכת הידע (Knowledge Base):** יש לך גישה למפת הידע המלאה של הארגון דרך הכלים kb_*:
 - kb_list_folder — דפדוף בתיקיות (clients/, team/, messages/<date>/, conversations/, system_map/).
 - kb_search — חיפוש סמנטי לפי שאילתה כשלא יודעים את הנתיב המדויק.
@@ -2900,6 +2925,31 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
       }
     }
     } // ─── end V1 PROMPT BUILDING (else branch of shouldUseV2Prompt) ───
+
+    // ─── Mood / persona modulation (swappable tone layer) ───
+    // ai_agents.mood ∈ {'fun','focused','tired','angry','random'} | null.
+    // Colours TONE ONLY — it never overrides the hard rules (accuracy, anti-bluff,
+    // privacy/scope, no-loop) or the duty to actually complete the task.
+    // 'random' rotates deterministically every 3 days, seeded by the agent id so
+    // different agents land on different moods.
+    {
+      const MOODS: Record<string, string> = {
+        fun: '😄 **מצב רוח: כיפי ומצחיק.** דברי באנרגיה גבוהה, עם הומור קליל, בדיחות ופאנצ׳ים ואימוג׳ים במידה. תהיי משעשעת וקלילה — בלי לפגוע בדיוק, בקיצור או בביצוע בפועל.',
+        focused: '🎯 **מצב רוח: רציני ויעיל.** ישר לעניין, בלי הומור ובלי קישוטים. משפטים קצרים וממוקדי-תוצאה. קודם מבצעת, אחר כך מאשרת בקצרה מה נעשה.',
+        tired: '😴 **מצב רוח: עייפה.** אנרגיה נמוכה, משפטים קצרים וחסכוניים, בלי התלהבות מיותרת (מותרת אנחה קלה). עדיין מבצעת את המשימה במלואה ובדייקנות — פשוט בלי דרמה.',
+        angry: '😤 **מצב רוח: עצבני.** טון בוטה, חסר-סבלנות וישיר מאוד, בלי נימוסים מיותרים. דוחפת קדימה בלי לרכך — אבל אסור להעליב את המשתמש, לסרב לעבודה או לרדת ברמת הדיוק. הכעס מתועל לאסרטיביות ולביצוע מהיר.',
+      }
+      const ROT = ['fun', 'focused', 'tired', 'angry']
+      let moodKey = ((agent as any).mood as string | null | undefined) || ''
+      if (moodKey === 'random') {
+        const seed = (agent.id || '').split('').reduce((a: number, c: string) => a + c.charCodeAt(0), 0)
+        const windowIdx = Math.floor(Date.now() / (86400000 * 3)) // new mood every 3 days
+        moodKey = ROT[(windowIdx + seed) % ROT.length]
+      }
+      if (moodKey && MOODS[moodKey]) {
+        systemPrompt += `\n\n${MOODS[moodKey]}`
+      }
+    }
 
     // 4. Filter tools
     const allowedTools = (agent.allowed_tools || []) as string[]
@@ -2993,15 +3043,20 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     const toolLog: any[] = []
     const startTime = Date.now()
 
+    // Route to the org's own LLM provider (OpenAI/Google/Anthropic) using the
+    // keys stored in the "llm" integration.
+    const llm = await resolveLLMTarget(supabase, agent.tenant_id, model)
+    console.log(`[AGENT] LLM target=${llm.url} model=${llm.model}`)
+
     for (let round = 0; round < maxRounds; round++) {
-      const payload: any = { model, messages }
+      const payload: any = { model: llm.model, messages }
       if (safeTemp !== undefined) payload.temperature = safeTemp
       if (toolsForAPI.length > 0) payload.tools = toolsForAPI
 
-      console.log(`[AGENT] Round ${round + 1}/${maxRounds}, model=${model}`)
-      const res = await fetch(AI_GATEWAY_URL, {
+      console.log(`[AGENT] Round ${round + 1}/${maxRounds}, model=${llm.model}`)
+      const res = await fetch(llm.url, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
+        headers: { 'Authorization': `Bearer ${llm.key}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
 

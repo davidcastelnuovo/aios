@@ -1,5 +1,6 @@
 // Shared helpers for Carmen Memory Kingdom
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { aiEmbed } from "./ai.ts";
 
 export function svc() {
   return createClient(
@@ -9,30 +10,9 @@ export function svc() {
   );
 }
 
-const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-
-export async function embed(text: string): Promise<number[] | null> {
-  if (!LOVABLE_API_KEY || !text?.trim()) return null;
-  try {
-    const r = await fetch("https://ai.gateway.lovable.dev/v1/embeddings", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "google/gemini-embedding-001",
-        input: text.slice(0, 8000),
-        dimensions: 1536,
-      }),
-    });
-    if (!r.ok) return null;
-    const j = await r.json();
-    return j?.data?.[0]?.embedding ?? null;
-  } catch {
-    return null;
-  }
-}
+// Embeddings via OpenAI (text-embedding-3-small, 1536 dims). Re-exported under
+// the historical name so existing callers keep working.
+export const embed = aiEmbed;
 
 export async function upsertPointer(supabase: any, p: {
   tenant_id: string;

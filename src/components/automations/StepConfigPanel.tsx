@@ -1901,18 +1901,26 @@ function CarmenSessionConfig({
         )}
       </div>
 
-      {/* ── מילת הפעלה ── */}
+      {/* ── מילות הפעלה ── */}
       <div className="space-y-2">
-        <Label className="text-right block font-semibold">מילת הפעלה</Label>
+        <Label className="text-right block font-semibold">מילות הפעלה</Label>
         <Input
-          value={configuration?.trigger_keyword || "כרמן"}
-          onChange={(e) => onConfigChange("trigger_keyword", e.target.value)}
-          placeholder="כרמן"
+          value={
+            Array.isArray(configuration?.trigger_keywords) && configuration.trigger_keywords.length
+              ? configuration.trigger_keywords.join(", ")
+              : (configuration?.trigger_keyword || "כרמן")
+          }
+          onChange={(e) => {
+            const list = e.target.value.split(",").map((s) => s.trim()).filter(Boolean);
+            onConfigChange("trigger_keywords", list);
+            onConfigChange("trigger_keyword", list[0] || ""); // keep legacy field in sync
+          }}
+          placeholder="כרמן, קרמן"
           className="text-right"
           dir="rtl"
         />
         <p className="text-xs text-muted-foreground text-right">
-          כשהודעה מכילה מילה זו — הסוכן יפעל
+          כשהודעה מכילה אחת מהמילים האלה — הסוכן יפעל. אפשר כמה מילים מופרדות בפסיק (למשל: כרמן, קרמן).
         </p>
       </div>
 

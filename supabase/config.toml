@@ -1,10 +1,16 @@
-project_id = "jnzguisakdtcollxmgzd"
+project_id = "zvoijyneresvkadpprel"
 
 
 
 
 [functions.run-agent-task]
 verify_jwt = false
+
+[functions.send-manus-wa-voice]
+verify_jwt = false
+
+[functions.carmen-speak]
+verify_jwt = true
 
 [functions.test-facebook-lead-webhook]
 verify_jwt = false
@@ -216,4 +222,18 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.test-wordpress-connection]
+verify_jwt = true
+
+# Public webhook — Manus WhatsApp Gateway authenticates via its own webhook
+# secret (x-webhook-secret), not a Supabase JWT. Must stay false.
+[functions.manus-wa-webhook]
+verify_jwt = false
+
+[functions.manus-wa-status]
+verify_jwt = true
+
+[functions.trigger-automation]
+verify_jwt = true
+
+[functions.run-ai-agent-v2]
 verify_jwt = true

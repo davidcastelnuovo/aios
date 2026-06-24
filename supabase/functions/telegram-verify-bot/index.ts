@@ -1,7 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from 'https://esm.sh/@supabase/supabase-js@2/cors';
 
-const GATEWAY_URL = 'https://connector-gateway.lovable.dev/telegram';
+const TELEGRAM_API = 'https://api.telegram.org';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -9,12 +9,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY not configured');
-
-    const TELEGRAM_API_KEY = Deno.env.get('TELEGRAM_API_KEY');
-    if (!TELEGRAM_API_KEY) throw new Error('TELEGRAM_API_KEY not configured');
-
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -28,14 +22,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Verify bot by calling getMe through the gateway
-    const response = await fetch(`${GATEWAY_URL}/getMe`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'X-Connection-Api-Key': TELEGRAM_API_KEY,
-        'Content-Type': 'application/json',
-      },
+    // Verify bot by calling getMe directly with the provided token
+    const response = await fetch(`${TELEGRAM_API}/bot${bot_token}/getMe`, {
+      method: 'GET',
     });
 
     const data = await response.json();

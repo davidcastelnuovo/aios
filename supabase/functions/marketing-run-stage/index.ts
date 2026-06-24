@@ -8,8 +8,8 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const TEXT_MODEL = "google/gemini-3-flash-preview";
-const IMAGE_MODEL = "google/gemini-2.5-flash-image";
+const TEXT_MODEL = 'gpt-4o-mini';
+const IMAGE_MODEL = 'gpt-4o-mini';
 
 // Cost per 1M tokens (rough Gemini Flash pricing for usage display)
 const COST_IN_PER_M = 0.075;
@@ -24,8 +24,8 @@ serve(async (req) => {
   const admin = createClient(supaUrl, supaService);
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("Missing LOVABLE_API_KEY");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) throw new Error("Missing OPENAI_API_KEY");
 
     const { item_id, stage_id } = await req.json();
     if (!item_id || !stage_id) {
@@ -155,10 +155,10 @@ serve(async (req) => {
 
     if (stageType === "creative") {
       // Image generation
-      const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -193,10 +193,10 @@ serve(async (req) => {
       outputJson = { image_url: assetUrl };
     } else {
       // Text generation
-      const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({

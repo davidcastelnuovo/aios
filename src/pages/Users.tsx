@@ -642,7 +642,7 @@ export default function Users() {
           campaignerId,
           salesPersonId,
           tenantId,
-          baseUrl: "https://after-lead.lovable.app",
+          baseUrl: "https://aios.co.il",
         },
         headers: {
           Authorization: `Bearer ${session.access_token}`,
@@ -736,7 +736,7 @@ export default function Users() {
         body: { 
           email,
           resend: true,
-          baseUrl: "https://after-lead.lovable.app",
+          baseUrl: "https://aios.co.il",
         },
         headers: {
           Authorization: `Bearer ${session.access_token}`,
