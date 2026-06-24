@@ -323,7 +323,7 @@ serve(async (req: Request) => {
 
 
     // Build simple invitation link to auth page
-    const baseUrlInput2 = baseUrl || "https://after-lead.lovable.app";
+    const baseUrlInput2 = baseUrl || "https://aios.co.il";
     let safeBaseUrl2: string;
     try {
       const u = new URL(baseUrlInput2);

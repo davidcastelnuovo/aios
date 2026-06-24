@@ -64,3 +64,56 @@ export async function aiChatJSON<T = any>(prompt: string, model?: string): Promi
     return null;
   }
 }
+
+// Speech-to-text (OpenAI Whisper). Accepts an audio Blob/File; returns the
+// transcript text or null. Defaults to Hebrew.
+export async function aiTranscribe(
+  audio: Blob,
+  opts?: { language?: string; filename?: string },
+): Promise<string | null> {
+  if (!OPENAI_API_KEY) return null;
+  try {
+    const form = new FormData();
+    form.append("file", audio, opts?.filename || "audio.ogg");
+    form.append("model", "whisper-1");
+    form.append("language", opts?.language || "he");
+    const r = await fetch(`${OPENAI_BASE}/audio/transcriptions`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${OPENAI_API_KEY}` }, // let fetch set the multipart boundary
+      body: form,
+    });
+    if (!r.ok) return null;
+    const j = await r.json();
+    return (j?.text ?? "").toString().trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+// OpenAI TTS voices usable for Carmen. 'shimmer'/'nova' read Hebrew well.
+export const AI_VOICES = ["alloy", "echo", "fable", "onyx", "nova", "shimmer", "coral", "sage"] as const;
+
+// Text-to-speech (OpenAI). Returns raw audio bytes (default opus/ogg, ideal for
+// WhatsApp voice notes) or null.
+export async function aiSpeak(
+  text: string,
+  opts?: { voice?: string; model?: string; format?: "opus" | "mp3" | "aac" | "flac" | "wav" },
+): Promise<Uint8Array | null> {
+  if (!OPENAI_API_KEY || !text?.trim()) return null;
+  try {
+    const r = await fetch(`${OPENAI_BASE}/audio/speech`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: opts?.model || "gpt-4o-mini-tts",
+        voice: opts?.voice || "shimmer",
+        input: text.slice(0, 4000),
+        response_format: opts?.format || "opus",
+      }),
+    });
+    if (!r.ok) return null;
+    return new Uint8Array(await r.arrayBuffer());
+  } catch {
+    return null;
+  }
+}
