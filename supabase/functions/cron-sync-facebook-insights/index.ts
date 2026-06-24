@@ -390,23 +390,17 @@ Deno.serve(async (req) => {
         const fieldNames = ['תאריך', 'שם הקמפיין', 'מזהה קמפיין', 'חשיפות', 'קליקים', 'צפיות LP / פתיחות טופס', 'עלות ל-1000 חשיפות', 'אחוז קליקים', 'לידים', 'לידים מטופס', 'עלות לליד', 'הוצאה', 'רכישות', 'ערך רכישות', 'הוספות לעגלה', 'ROAS', 'מטרת קמפיין', 'סוג קמפיין', 'סטטוס בפועל', 'סטטוס מוגדר'];
         const fieldTypes = ['date', 'text', 'text', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'text', 'text', 'text', 'text'];
         
-        for (let i = 0; i < fieldKeys.length; i++) {
-          const { data: existingField } = await supabase
-            .from('crm_fields')
-            .select('id')
-            .eq('table_id', table.id)
-            .eq('key', fieldKeys[i])
-            .single();
-          
-          if (!existingField) {
-            await supabase.from('crm_fields').insert({
-              table_id: table.id,
-              key: fieldKeys[i],
-              name: fieldNames[i],
-              type: fieldTypes[i],
-              position: i,
-            });
-          }
+        // Bulk-ensure fields exist: one read for all keys, one insert for the missing ones.
+        const { data: existingFields } = await supabase
+          .from('crm_fields')
+          .select('key')
+          .eq('table_id', table.id);
+        const existingFieldKeys = new Set((existingFields || []).map((f: any) => f.key));
+        const fieldsToInsert = fieldKeys
+          .map((key, i) => ({ table_id: table.id, key, name: fieldNames[i], type: fieldTypes[i], position: i }))
+          .filter((f) => !existingFieldKeys.has(f.key));
+        if (fieldsToInsert.length > 0) {
+          await supabase.from('crm_fields').insert(fieldsToInsert);
         }
 
         // Delete old records and insert new ones
@@ -416,13 +410,20 @@ Deno.serve(async (req) => {
           .eq('table_id', table.id)
           .eq('tenant_id', table.tenant_id);
 
-        // Insert new records
-        for (const insight of insights) {
-          await supabase.from('crm_records').insert({
+        // Bulk insert new records (one round-trip per chunk instead of one per row)
+        if (insights.length > 0) {
+          const recordRows = insights.map((insight) => ({
             table_id: table.id,
             tenant_id: table.tenant_id,
             data: insight,
-          });
+          }));
+          const INSERT_CHUNK = 500;
+          for (let i = 0; i < recordRows.length; i += INSERT_CHUNK) {
+            const { error: insertError } = await supabase
+              .from('crm_records')
+              .insert(recordRows.slice(i, i + INSERT_CHUNK));
+            if (insertError) throw insertError;
+          }
         }
 
         // Update last_sync_at and account status
