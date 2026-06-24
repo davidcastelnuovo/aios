@@ -340,9 +340,33 @@ Deno.serve(async (req) => {
       }
     );
 
-    let searchData = await searchResponse.json();
+    const _rawText = await searchResponse.text();
+    let searchData: any = null;
+    try { searchData = JSON.parse(_rawText); } catch { searchData = null; }
     console.log(`[sync-google-ads] table=${table_id} customer=${customerId} login=${loginCustomerId} status=${searchResponse.status} dateRange=${startDate.toISOString().split('T')[0]}..${endDate.toISOString().split('T')[0]}`);
-    console.log(`[sync-google-ads] response preview:`, JSON.stringify(searchData).slice(0, 800));
+    console.log(`[sync-google-ads] response preview:`, _rawText.slice(0, 800));
+    // DIAG: persist exactly what Google returned on the first call so failures are debuggable from the DB.
+    // Records HTTP status, whether the developer-token secret is present (boolean only, never the value),
+    // the login-customer-id used, and the first 1500 chars of the response body.
+    try {
+      await supabaseAdmin
+        .from('crm_tables')
+        .update({
+          integration_settings: {
+            ...settings,
+            last_sync_diag: {
+              at: new Date().toISOString(),
+              http_status: searchResponse.status,
+              dev_token_present: !!DEVELOPER_TOKEN,
+              client_id_present: !!GOOGLE_CLIENT_ID,
+              login_customer_id: loginCustomerId,
+              customer_id: customerId,
+              body: _rawText.slice(0, 1500),
+            },
+          },
+        })
+        .eq('id', table_id);
+    } catch (_e) { /* diagnostics are best-effort */ }
 
     // If still 401 after a refresh attempt — refresh_token is bad/revoked
     if (searchResponse.status === 401) {
