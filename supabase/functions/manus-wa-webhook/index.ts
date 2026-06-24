@@ -1,7 +1,7 @@
 // redeploy trigger: rebundle _shared/carmen.ts (wake-word variants + bare "תודה" no longer closes session)
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { findCarmenSessionAutomation, handleCarmenMessage } from '../_shared/carmen.ts';
-import { aiTranscribe } from '../_shared/ai.ts';
+import { aiTranscribe, aiCleanTranscript } from '../_shared/ai.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -42,7 +42,7 @@ async function resolveMessageText(payload: any, msgContainer: any): Promise<stri
         const blob = await r.blob();
         if (blob.size > 0 && blob.size <= 25 * 1024 * 1024) {
           const t = await aiTranscribe(blob, { language: 'he', filename: 'voice.ogg' });
-          if (t && t.trim()) return t.trim();
+          if (t && t.trim()) return (await aiCleanTranscript(t)).trim();
         }
       }
     }

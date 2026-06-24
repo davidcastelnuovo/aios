@@ -109,6 +109,29 @@ export async function aiChatJSON<T = any>(prompt: string, model?: string): Promi
   }
 }
 
+// Rewrite a raw voice transcript into clean, sensible Hebrew. Whisper output
+// often contains homophones / garbled words (e.g. "קרמן"→"כרמן",
+// "דיבור"→"דיוור", mangled names). Fixes obvious transcription errors while
+// strictly preserving the original meaning and intent. Best-effort: returns the
+// original text on any failure or when the key is missing.
+export async function aiCleanTranscript(text: string): Promise<string> {
+  const raw = (text || "").trim();
+  if (raw.length < 2) return raw;
+  const prompt = `אתה מתקן תמלולים של הודעות קוליות בעברית. קיבלת תמלול גולמי שעלול להכיל שגיאות תמלול, הומופונים ומילים משובשות (למשל "קרמן" במקום "כרמן", "דיבור" במקום "דיוור", שמות משובשים). שכתב אותו לטקסט הכי הגיוני, ברור ותקני — תוך שמירה מוחלטת על המשמעות והכוונה המקורית. אל תוסיף מידע, אל תענה על התוכן, אל תקצר ואל תרחיב — רק תקן שגיאות תמלול. אם הטקסט כבר תקין, החזר אותו כמו שהוא. החזר אך ורק את הטקסט המתוקן, בלי הקדמות ובלי מרכאות.
+
+תמלול גולמי:
+${raw}`;
+  try {
+    const cleaned = await aiChat(prompt);
+    const out = (cleaned || "").trim();
+    // Guard against the model echoing nothing or over-expanding (>3x length).
+    if (!out || out.length > raw.length * 3 + 40) return raw;
+    return out;
+  } catch {
+    return raw;
+  }
+}
+
 // Speech-to-text (OpenAI Whisper). Accepts an audio Blob/File; returns the
 // transcript text or null. Defaults to Hebrew.
 export async function aiTranscribe(
