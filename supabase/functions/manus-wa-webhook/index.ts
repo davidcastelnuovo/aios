@@ -1,4 +1,4 @@
-// redeploy trigger: rebundle _shared/ai.ts OpenAI key fallback (env secret → llm integration) so WhatsApp voice transcription works
+// redeploy trigger: rebundle _shared/carmen.ts (wake-word variants + bare "תודה" no longer closes session)
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { findCarmenSessionAutomation, handleCarmenMessage } from '../_shared/carmen.ts';
 import { aiTranscribe } from '../_shared/ai.ts';
