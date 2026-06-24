@@ -1417,6 +1417,37 @@ function AgentStepConfig({
 
   const selectedAgent = agents?.find((a: any) => a.id === configuration?.agent_id);
 
+  // Skin catalog (ai_skills): global skins + this tenant's overrides. Pinning a
+  // skin on the node forces that persona for this step (campaigner/seo/...).
+  const { data: skins } = useQuery({
+    queryKey: ["ai-skins", tenantId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ai_skills" as any)
+        .select("slug,name,scope")
+        .eq("is_active", true)
+        .or(tenantId ? `scope.eq.global,and(scope.eq.tenant,tenant_id.eq.${tenantId})` : "scope.eq.global");
+      if (error) return [];
+      // De-dupe by slug, tenant override wins.
+      const bySlug = new Map<string, any>();
+      for (const row of (data as any[]) || []) {
+        if (!row.slug) continue;
+        const existing = bySlug.get(row.slug);
+        if (!existing || row.scope === "tenant") bySlug.set(row.slug, row);
+      }
+      return Array.from(bySlug.values()).sort((a, b) => a.name.localeCompare(b.name, "he"));
+    },
+    enabled: true,
+  });
+
+  const pinnedSkins: string[] = Array.isArray(configuration?.skin_slugs) ? configuration.skin_slugs : [];
+  const toggleSkin = (slug: string) => {
+    const next = pinnedSkins.includes(slug)
+      ? pinnedSkins.filter((s) => s !== slug)
+      : [...pinnedSkins, slug];
+    onConfigChange("skin_slugs", next);
+  };
+
   const insertVariableToInstruction = (fieldKey: string) => {
     const variable = `{{${fieldKey}}}`;
     const currentValue = configuration?.step_instruction || "";
@@ -1496,6 +1527,34 @@ function AgentStepConfig({
             <p>מנוע: {AI_ENGINES.find(e => e.value === selectedAgent.engine)?.label || selectedAgent.engine}</p>
             {selectedAgent.personality && <p>אופי: {selectedAgent.personality.slice(0, 60)}...</p>}
             {selectedAgent.talent && <p>טלנט: {selectedAgent.talent.slice(0, 60)}...</p>}
+          </div>
+        </div>
+      )}
+
+      {/* Skin picker — pin a persona/skill for this step */}
+      {selectedAgent && skins && skins.length > 0 && (
+        <div className="space-y-2 border-t pt-4">
+          <Label className="text-right block font-medium">סקין לשלב זה (אופציונלי)</Label>
+          <p className="text-[11px] text-muted-foreground text-right">
+            כפה תפקיד ספציפי על הסוכן בשלב זה. צמתים מקבילים יכולים כל אחד לטעון סקין אחר.
+          </p>
+          <div className="flex flex-wrap gap-1.5 justify-end">
+            {skins.map((skin: any) => {
+              const active = pinnedSkins.includes(skin.slug);
+              return (
+                <Button
+                  key={skin.slug}
+                  type="button"
+                  variant={active ? "default" : "outline"}
+                  size="sm"
+                  className="text-xs h-7 px-2.5"
+                  onClick={() => toggleSkin(skin.slug)}
+                >
+                  {active && <Sparkles className="h-3 w-3 ml-1" />}
+                  {skin.name}
+                </Button>
+              );
+            })}
           </div>
         </div>
       )}
