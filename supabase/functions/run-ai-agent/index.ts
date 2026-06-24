@@ -2941,6 +2941,31 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     }
     } // ─── end V1 PROMPT BUILDING (else branch of shouldUseV2Prompt) ───
 
+    // ─── Mood / persona modulation (swappable tone layer) ───
+    // ai_agents.mood ∈ {'fun','focused','tired','angry','random'} | null.
+    // Colours TONE ONLY — it never overrides the hard rules (accuracy, anti-bluff,
+    // privacy/scope, no-loop) or the duty to actually complete the task.
+    // 'random' rotates deterministically every 3 days, seeded by the agent id so
+    // different agents land on different moods.
+    {
+      const MOODS: Record<string, string> = {
+        fun: '😄 **מצב רוח: כיפי ומצחיק.** דברי באנרגיה גבוהה, עם הומור קליל, בדיחות ופאנצ׳ים ואימוג׳ים במידה. תהיי משעשעת וקלילה — בלי לפגוע בדיוק, בקיצור או בביצוע בפועל.',
+        focused: '🎯 **מצב רוח: רציני ויעיל.** ישר לעניין, בלי הומור ובלי קישוטים. משפטים קצרים וממוקדי-תוצאה. קודם מבצעת, אחר כך מאשרת בקצרה מה נעשה.',
+        tired: '😴 **מצב רוח: עייפה.** אנרגיה נמוכה, משפטים קצרים וחסכוניים, בלי התלהבות מיותרת (מותרת אנחה קלה). עדיין מבצעת את המשימה במלואה ובדייקנות — פשוט בלי דרמה.',
+        angry: '😤 **מצב רוח: עצבני.** טון בוטה, חסר-סבלנות וישיר מאוד, בלי נימוסים מיותרים. דוחפת קדימה בלי לרכך — אבל אסור להעליב את המשתמש, לסרב לעבודה או לרדת ברמת הדיוק. הכעס מתועל לאסרטיביות ולביצוע מהיר.',
+      }
+      const ROT = ['fun', 'focused', 'tired', 'angry']
+      let moodKey = ((agent as any).mood as string | null | undefined) || ''
+      if (moodKey === 'random') {
+        const seed = (agent.id || '').split('').reduce((a: number, c: string) => a + c.charCodeAt(0), 0)
+        const windowIdx = Math.floor(Date.now() / (86400000 * 3)) // new mood every 3 days
+        moodKey = ROT[(windowIdx + seed) % ROT.length]
+      }
+      if (moodKey && MOODS[moodKey]) {
+        systemPrompt += `\n\n${MOODS[moodKey]}`
+      }
+    }
+
     // 4. Filter tools
     const allowedTools = (agent.allowed_tools || []) as string[]
     let filteredTools = allowedTools.length > 0
