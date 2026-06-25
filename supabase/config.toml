@@ -12,6 +12,9 @@ verify_jwt = false
 [functions.claude-notify]
 verify_jwt = false
 
+[functions.carmen-admin-mcp]
+verify_jwt = false
+
 [functions.send-manus-wa-voice]
 verify_jwt = false
 
