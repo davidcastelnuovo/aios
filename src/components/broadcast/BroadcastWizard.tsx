@@ -98,7 +98,7 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tenant_integrations")
-        .select("id, settings, user_id, integration_type")
+        .select("id, settings, user_id, integration_type, display_name")
         .eq("tenant_id", tenantId)
         .in("integration_type", ["green_api", "manus_wa"])
         .eq("is_active", true);
