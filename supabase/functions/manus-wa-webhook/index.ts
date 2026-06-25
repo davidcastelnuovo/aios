@@ -515,6 +515,25 @@ Deno.serve(async (req) => {
         groupIdRaw.endsWith('@g.us') ? groupIdRaw :
         (chatIdRaw || groupIdRaw || toRaw)
       );
+
+      // Per-group tenant routing (shared bot): a single WhatsApp bot may sit in groups
+      // that belong to DIFFERENT organizations. Resolve the owning tenant from the
+      // group's chat id so Carmen answers for the right org (and scopes to its clients).
+      // Falls back to the bot's own tenant when the group isn't registered.
+      let groupTenantId = tenantId;
+      try {
+        const { data: wgRow } = await supabase
+          .from('whatsapp_groups')
+          .select('tenant_id')
+          .eq('group_chat_id', groupChatId)
+          .limit(1)
+          .maybeSingle();
+        if (wgRow?.tenant_id) groupTenantId = wgRow.tenant_id as string;
+      } catch (_e) { /* fall back to bot tenant */ }
+      if (groupTenantId !== tenantId) {
+        console.log('[manus-wa group] routed by group → tenant', { groupChatId, botTenant: tenantId, groupTenant: groupTenantId });
+      }
+
       const messageText = await resolveMessageText(payload, msgContainer);
       const senderName = (payload.senderName || payload.fromName || payload.authorName || null) as string | null;
 
@@ -557,7 +576,7 @@ Deno.serve(async (req) => {
       try {
         const result = await handleCarmenMessage({
           supabase,
-          tenantId,
+          tenantId: groupTenantId,
           integrationId: integ.id,
           connectionUserId,
           chatId: groupChatId,
