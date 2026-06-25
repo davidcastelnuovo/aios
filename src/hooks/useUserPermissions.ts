@@ -32,6 +32,7 @@ export type ModulePermission =
   | "products"
   // ── שיווק ואנליטיקס ───────────────────────────────────────────────────
   | "social_media"
+  | "broadcast"
   | "reports"
   | "dynamic_tables"
   | "site_analytics"

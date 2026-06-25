@@ -119,6 +119,7 @@ export const MENU_TABS: MenuTab[] = [
       {
         label: "תקשורת",
         items: [
+          { key: "broadcast", label: "דיוור", route: "/broadcast", icon: Send },
           { key: "gmail", label: "Gmail", route: "/gmail", icon: Mail },
           { key: "signatures", label: "חתימות", route: "/signatures", icon: PenLine },
         ],

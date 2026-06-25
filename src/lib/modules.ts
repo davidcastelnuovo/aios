@@ -177,6 +177,12 @@ export const PERMISSION_CATEGORIES: PermissionCategory[] = [
         category: "marketing",
       },
       {
+        id: "broadcast",
+        label: "דיוור",
+        description: "שליחת דיוור המוני ללקוחות, לידים וצוות בערוצי WhatsApp",
+        category: "marketing",
+      },
+      {
         id: "reports",
         label: "דוחות",
         description: "צפייה בדוחות ואנליטיקה",

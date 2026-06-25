@@ -45,6 +45,7 @@ const Tenants = lazy(() => import("./pages/Tenants"));
 const Automations = lazy(() => import("./pages/Automations"));
 const MarketingDepartment = lazy(() => import("./pages/MarketingDepartment"));
 const CampaignAlerts = lazy(() => import("./pages/CampaignAlerts"));
+const Broadcast = lazy(() => import("./pages/Broadcast"));
 const Products = lazy(() => import("./pages/Products"));
 const AccountingIntegrations = lazy(() => import("./pages/AccountingIntegrations"));
 const AccountingSettings = lazy(() => import("./pages/AccountingSettings"));
@@ -187,6 +188,7 @@ const App = () => (
                   <Route path="/t/:tenantSlug/lead-integrations" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><LeadIntegrations /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/tenants" element={<ProtectedRoute requiredPermission="tenants"><AppLayout><Tenants /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/automations" element={<ProtectedRoute requiredPermission="automations"><AppLayout><Automations /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/broadcast" element={<ProtectedRoute requiredPermission="broadcast"><AppLayout><Broadcast /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/carmen-insights" element={<ProtectedRoute><AppLayout><CarmenInsights /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/visual-workspace" element={<ProtectedRoute><AppLayout><VisualWorkspace /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/marketing" element={<ProtectedRoute><MarketingDepartment /></ProtectedRoute>} />
