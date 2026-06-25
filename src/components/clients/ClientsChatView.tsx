@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import ChatViewComponent from "@/components/chat/ChatView";
 import { User, Phone, PhoneCall, Building2, Clock, Search, Mail, Globe, CheckSquare, Trash2, MessageSquare, FileText, DollarSign, X, Edit, Pencil, Check, Users, Plus, UserPlus, BarChart3, FolderOpen, Link, KeyRound, Calendar as CalendarIcon, Copy, Loader2 } from "lucide-react";
 import { DuplicateClientDialog } from "@/components/forms/DuplicateClientDialog";
+import { CreateOrgForClientDialog } from "@/components/forms/CreateOrgForClientDialog";
 import { AssignPhoneFromWhatsAppDialog } from "@/components/chat/AssignPhoneFromWhatsAppDialog";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -74,6 +75,7 @@ export function ClientsChatView({
   const [listSearch, setListSearch] = useState("");
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
+  const [createOrgOpen, setCreateOrgOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<string>(initialTab ?? "details");
 
   // Guard: redirect away from "business" tab if user lacks finance view permission
@@ -708,6 +710,16 @@ export function ClientsChatView({
                   variant="outline"
                   size="icon"
                   className="h-8 w-8"
+                  onClick={() => setCreateOrgOpen(true)}
+                  title="צור ארגון ללקוח"
+                >
+                  <Building2 className="h-4 w-4" />
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
                   onClick={() => setDuplicateDialogOpen(true)}
                   title="שכפל לקוח"
                 >
@@ -727,7 +739,7 @@ export function ClientsChatView({
             </div>
 
             {/* Inline action area — forms/confirmations render here instead of as popups */}
-            {(pendingDeleteId === selectedClient.id || duplicateDialogOpen || changeAgencyOpen) && (
+            {(pendingDeleteId === selectedClient.id || duplicateDialogOpen || changeAgencyOpen || createOrgOpen) && (
               <div className="px-4 pt-3 space-y-3">
                 {pendingDeleteId === selectedClient.id && (
                   <div className="flex items-center justify-between gap-3 rounded-lg border border-destructive/40 bg-destructive/5 p-3">
@@ -763,6 +775,19 @@ export function ClientsChatView({
                   currentAgencyId={selectedClient.agency_id}
                   contactName={selectedClient.name}
                   onSuccess={() => queryClient.invalidateQueries({ queryKey: ["clients"] })}
+                />
+                <CreateOrgForClientDialog
+                  inline
+                  open={createOrgOpen}
+                  onOpenChange={setCreateOrgOpen}
+                  client={{
+                    id: selectedClient.id,
+                    name: selectedClient.name,
+                    contact_name: selectedClient.contact_name,
+                    email: selectedClient.email,
+                    tenant_id: selectedClient.tenant_id,
+                  }}
+                  onSuccess={() => queryClient.invalidateQueries({ queryKey: ["tenants"] })}
                 />
               </div>
             )}

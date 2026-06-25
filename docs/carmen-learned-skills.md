@@ -33,6 +33,18 @@ logged.
 
 <!-- New entries go below this line, newest first. -->
 
+### 2026-06-25 — ad creative brief from CRM data
+- **Skin slug:** `ad_creative_brief` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Given a client name and performance data (CPL, spend, lead count), pull the last 10 client updates from CRM, identify which campaigns are working, and produce: 3 structured creative angles (concept + visual + why it works), 3 Hebrew copy hooks, and tactical recommendations (CPL fix, lead qualification, followup SLA). All in Hebrew, ready to hand to a copywriter/creative.
+- **How:** `get_client_details` → `get_client_updates` (last 10) → analyse active campaigns, CPL issues, audience segments, known sales-process blockers → structured markdown output with the 3+3+tactics format.
+- **Origin:** Carmen escalated creative brief request for רווה קולינריה נוזלית (CPL +86.6%). Root insights came from CRM weekly updates which revealed workshops vs. weddings split, a known followup problem, and which specific creative had worked historically.
+
+### 2026-06-25 — create organization for client (one-click tenant spin-up)
+- **Skin slug:** `create_org_for_client` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Given a client name or ID, spin up a full tenant organisation for that client in one call — with an owner (found or invited by email), shared integrations, social pages and WordPress sites, and an optional Carmen + automations clone.
+- **How:** Call `create_org_for_client` tool with `{ client_id, clone_carmen: true, share_llm: false }`. Integrations are shared as mirror rows via `shared_from_integration_id`. Social pages and WP sites are registered in `social_pages_shared_tenants` / `wordpress_sites_shared_tenants`. Cloned automations are created **inactive** (must be activated manually). Report the summary back to the user including owner status (existing user / invited / no email).
+- **Origin:** Carmen escalated "לא עשיתי" ("not done") after the plan document `docs/plan-create-org-for-client.md` was created but the implementation was never built. PR #31 implements Stages 0–2 (DB + edge function + frontend).
+
 ### 2026-06-25 — escalate-to-Claude + teach-back loop
 - **Skin slug:** `claude_escalation` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** When stuck on any task she cannot do independently, Carmen escalates to Claude via MCP (`mcp_Claude__ask_claude` / `mcp_Claude__request_dev_task`), relays the session URL to the user, and then learns from the solution so she can act independently next time.
