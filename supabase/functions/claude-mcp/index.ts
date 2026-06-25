@@ -41,7 +41,7 @@ const corsHeaders = {
 
 const ANTHROPIC_BETA = Deno.env.get("CLAUDE_ROUTINE_BETA") || "experimental-cc-routine-2026-04-01";
 const ANTHROPIC_VERSION = "2023-06-01";
-const SERVER_INFO = { name: "claude-mcp", version: "1.3.0" };
+const SERVER_INFO = { name: "claude-mcp", version: "1.4.0" };
 const PROTOCOL_VERSION = "2024-11-05";
 const MAX_TEXT = 65_536; // Routines /fire hard limit on the `text` field.
 
@@ -207,7 +207,10 @@ function teachingBlock(tenantId: string | null, agentId: string | null): string 
     `   2. Remember it for your future sessions: append a short dated entry to docs/carmen-learned-skills.md and include it in your PR.\n` +
     `B) UPDATE DAVID: when you finish, make sure David is updated with the result. ${callbackLine}\n` +
     `C) FIX-ON-FAIL: if this request says a capability you previously taught Carmen FAILED in practice, that is the priority — ` +
-    `diagnose the failure, fix the ai_skills skin and/or the underlying code, verify it works, and report exactly what you changed so Carmen can retry.`
+    `diagnose the failure, fix the ai_skills skin and/or the underlying code, verify it works, and report exactly what you changed so Carmen can retry.\n` +
+    `D) SAFETY (hard rules — see CLAUDE.md "Safety rules for autonomous fixes"): never widen anyone's access beyond their existing role/scope; ` +
+    `no destructive or policy-widening SQL live (use a migration + PR); only safe scoped fixes autonomously. Log every autonomous prod change to ` +
+    `public.claude_carmen_audit and report it. If a request would breach these, refuse and tell David.`
   );
 }
 

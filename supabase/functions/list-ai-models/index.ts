@@ -1,5 +1,6 @@
 // Returns the catalog of AI models available for selection as an agent "brain".
 // Served from the curated MODEL_CATALOG (no external gateway).
+// (redeploy touch: Claude models added to the catalog — see _shared/models.ts)
 import { corsHeaders } from '../_shared/cors.ts';
 import { MODEL_CATALOG } from '../_shared/models.ts';
 

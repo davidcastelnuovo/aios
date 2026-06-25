@@ -1,4 +1,4 @@
-// redeploy trigger: rebundle _shared/ai.ts OpenAI key fallback (env secret → llm integration) so embeddings work
+// redeploy trigger: rebundle _shared/models.ts — Claude (Anthropic) brains added to the catalog
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
 import { resolveModelId } from '../_shared/models.ts'
 import { summarizeAndStoreAgentMemory, recallAgentMemory, recallAgentMemoryFTS, saveAgentMemory } from '../_shared/agent-memory.ts'
