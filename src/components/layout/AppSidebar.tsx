@@ -135,6 +135,7 @@ const modulePermissions: Record<string, string> = {
   products: "products",
   // ── שיווק ואנליטיקס ─────────────────────────────────────────────────
   marketing: "social_media",
+  broadcast: "broadcast",
   reports: "finance",
   "dynamic-tables": "dynamic_tables",
   // ── ניהול ארגון ─────────────────────────────────────────────────────
