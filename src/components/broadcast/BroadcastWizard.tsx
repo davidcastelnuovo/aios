@@ -5,6 +5,7 @@ import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useLeadStatuses } from "@/hooks/useLeadStatuses";
 import { useBroadcasts, type AudienceFilter } from "@/hooks/useBroadcasts";
 import { useBroadcastLists } from "@/hooks/useBroadcastLists";
+import { useBroadcastDomains } from "@/hooks/useBroadcastDomains";
 import { WaProviderConnectionPicker } from "@/components/forms/WaProviderConnectionPicker";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -30,10 +31,6 @@ const CLIENT_STATUSES = [
 
 const STEPS = ["ערוץ", "חיבור", "קהל יעד", "תוכן", "תזמון"];
 
-// Domains verified in Resend (add more here once verified in the Resend dashboard).
-const VERIFIED_DOMAINS = ["aios.co.il"];
-const DEFAULT_FROM = "noreply@aios.co.il";
-
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -45,6 +42,9 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
   const { statuses: leadStatuses } = useLeadStatuses();
   const { create, update, previewAudience, launch } = useBroadcasts();
   const { lists } = useBroadcastLists();
+  const { list: domainsQ } = useBroadcastDomains();
+  const domains = domainsQ.data || [];
+  const defaultDomain = domains.find((d) => d.is_default) || domains[0];
 
   const [step, setStep] = useState(0);
   const [name, setName] = useState("דיוור חדש");
@@ -53,7 +53,7 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
   const [fromMode, setFromMode] = useState<"default" | "custom">("default");
   const [fromName, setFromName] = useState("");
   const [fromLocal, setFromLocal] = useState("");
-  const [fromDomain, setFromDomain] = useState(VERIFIED_DOMAINS[0]);
+  const [fromDomain, setFromDomain] = useState("");
   const [replyTo, setReplyTo] = useState("");
   const [integrationId, setIntegrationId] = useState<string | undefined>();
   const [source, setSource] = useState<AudienceFilter["source"]>("leads");
@@ -77,7 +77,7 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
   useEffect(() => {
     if (open) {
       setStep(0); setName("דיוור חדש"); setChannel("whatsapp"); setSubject("");
-      setFromMode("default"); setFromName(""); setFromLocal(""); setFromDomain(VERIFIED_DOMAINS[0]); setReplyTo("");
+      setFromMode("default"); setFromName(""); setFromLocal(""); setFromDomain(defaultDomain?.domain || ""); setReplyTo("");
       setIntegrationId(undefined); setSource("leads");
       setClientStatuses([]); setLeadStatusKeys([]); setTagIds([]); setActiveOnly(true);
       setListId(undefined); setPickMode(false); setSelectedIds([]); setCandidateSearch("");
@@ -85,6 +85,12 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
       setSendMode("now"); setScheduledAt("");
     }
   }, [open]);
+
+  // Default the sending domain once the tenant's domains load
+  useEffect(() => {
+    if (open && !fromDomain && defaultDomain) setFromDomain(defaultDomain.domain);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, defaultDomain?.domain]);
 
   const { data: integrations } = useQuery({
     queryKey: ["wa-integrations", tenantId],
@@ -173,13 +179,13 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
     set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
 
   const canNext = () => {
-    if (step === 1) return channel === "email" ? true : !!integrationId;
+    if (step === 1) return channel === "email" ? domains.length > 0 : !!integrationId;
     if (step === 2) return (audienceCount ?? 0) > 0;
     if (step === 3) {
       if (bodyText.trim().length === 0) return false;
       if (channel === "email") {
         if (subject.trim().length === 0) return false;
-        if (fromMode === "custom" && !/^[a-zA-Z0-9._%+-]+$/.test(fromLocal)) return false;
+        if (fromMode === "custom" && (!/^[a-zA-Z0-9._%+-]+$/.test(fromLocal) || !fromDomain)) return false;
       }
       return true;
     }
@@ -195,8 +201,14 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
         name, channel, provider: selectedProvider,
         integration_id: channel === "email" ? null : integrationId,
         subject: channel === "email" ? subject : null,
-        from_email: channel === "email" && fromMode === "custom" ? `${fromLocal}@${fromDomain}` : null,
-        from_name: channel === "email" && fromMode === "custom" && fromName.trim() ? fromName.trim() : null,
+        from_email: channel === "email"
+          ? (fromMode === "custom"
+              ? `${fromLocal}@${fromDomain}`
+              : defaultDomain ? `${defaultDomain.default_local}@${defaultDomain.domain}` : null)
+          : null,
+        from_name: channel === "email"
+          ? (fromMode === "custom" ? (fromName.trim() || null) : (defaultDomain?.from_name || null))
+          : null,
         reply_to: channel === "email" && replyTo.trim() ? replyTo.trim() : null,
         body_text: bodyText, audience_filter: buildFilter(),
       });
@@ -276,9 +288,16 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
           channel === "email" ? (
             <div className="rounded-lg border p-4 text-sm space-y-1">
               <div className="flex items-center gap-2 font-medium"><Mail className="h-4 w-4" /> שליחה דרך Resend</div>
-              <p className="text-muted-foreground">
-                האימיילים נשלחים דרך Resend מהדומיין המאומת. ודא שהדומיין אומת ושמפתח ה-API מוגדר במערכת.
-              </p>
+              {domains.length === 0 ? (
+                <p className="text-destructive">
+                  לארגון זה עדיין לא הוגדר דומיין שליחה. עבור לטאב "הגדרות שולח" והוסף דומיין מאומת ב-Resend.
+                </p>
+              ) : (
+                <p className="text-muted-foreground">
+                  שולח מהדומיין: <strong dir="ltr">{defaultDomain?.domain}</strong>
+                  {domains.length > 1 ? ` (ועוד ${domains.length - 1})` : ""}. ניתן לבחור כתובת ספציפית בשלב התוכן.
+                </p>
+              )}
             </div>
           ) : (
             <WaProviderConnectionPicker
@@ -423,31 +442,39 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
                 </div>
                 <div className="space-y-2 rounded-lg border p-3">
                   <Label className="text-xs">כתובת שולח (From)</Label>
-                  <div className="flex gap-2 text-sm">
-                    <button type="button" onClick={() => setFromMode("default")}
-                      className={`rounded border px-2 py-1 ${fromMode === "default" ? "bg-primary text-primary-foreground" : ""}`}>
-                      ברירת מחדל ({DEFAULT_FROM})
-                    </button>
-                    <button type="button" onClick={() => setFromMode("custom")}
-                      className={`rounded border px-2 py-1 ${fromMode === "custom" ? "bg-primary text-primary-foreground" : ""}`}>
-                      כתובת מותאמת
-                    </button>
-                  </div>
-                  {fromMode === "custom" && (
-                    <div className="space-y-2">
-                      <Input value={fromName} onChange={(e) => setFromName(e.target.value)} placeholder="שם השולח (לדוגמה: AfterLead)" />
-                      <div className="flex items-center gap-1">
-                        <Input value={fromLocal} onChange={(e) => setFromLocal(e.target.value)} placeholder="info" className="flex-1" />
-                        <span className="text-muted-foreground">@</span>
-                        <Select value={fromDomain} onValueChange={setFromDomain}>
-                          <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-                          <SelectContent className="bg-background z-[100]">
-                            {VERIFIED_DOMAINS.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
+                  {domains.length === 0 ? (
+                    <p className="text-xs text-destructive">
+                      לא הוגדר דומיין שליחה לארגון. הוסף דומיין מאומת בטאב "הגדרות שולח" לפני שליחת אימייל.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="flex gap-2 text-sm">
+                        <button type="button" onClick={() => setFromMode("default")}
+                          className={`rounded border px-2 py-1 ${fromMode === "default" ? "bg-primary text-primary-foreground" : ""}`}>
+                          ברירת מחדל ({defaultDomain ? `${defaultDomain.default_local}@${defaultDomain.domain}` : ""})
+                        </button>
+                        <button type="button" onClick={() => setFromMode("custom")}
+                          className={`rounded border px-2 py-1 ${fromMode === "custom" ? "bg-primary text-primary-foreground" : ""}`}>
+                          כתובת מותאמת
+                        </button>
                       </div>
-                      <p className="text-xs text-muted-foreground">ניתן לשלוח רק מדומיין מאומת ב-Resend.</p>
-                    </div>
+                      {fromMode === "custom" && (
+                        <div className="space-y-2">
+                          <Input value={fromName} onChange={(e) => setFromName(e.target.value)} placeholder="שם השולח (לדוגמה: AfterLead)" />
+                          <div className="flex items-center gap-1">
+                            <Input value={fromLocal} onChange={(e) => setFromLocal(e.target.value)} placeholder="info" className="flex-1" />
+                            <span className="text-muted-foreground">@</span>
+                            <Select value={fromDomain} onValueChange={setFromDomain}>
+                              <SelectTrigger className="w-44"><SelectValue placeholder="דומיין" /></SelectTrigger>
+                              <SelectContent className="bg-background z-[100]">
+                                {domains.map((d) => <SelectItem key={d.id} value={d.domain}>{d.domain}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <p className="text-xs text-muted-foreground">ניתן לשלוח רק מדומיין מאומת ב-Resend.</p>
+                        </div>
+                      )}
+                    </>
                   )}
                   <div>
                     <Label className="text-xs">Reply-To (לאן יגיעו התשובות — אופציונלי)</Label>

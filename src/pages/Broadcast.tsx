@@ -9,7 +9,8 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { BroadcastLists } from "@/components/broadcast/BroadcastLists";
-import { Send, Plus, Trash2, MessageSquare, Loader2, Users } from "lucide-react";
+import { BroadcastDomainSettings } from "@/components/broadcast/BroadcastDomainSettings";
+import { Send, Plus, Trash2, MessageSquare, Loader2, Users, Globe } from "lucide-react";
 import { toast } from "sonner";
 
 const STATUS_LABEL: Record<BroadcastStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -49,6 +50,7 @@ export default function Broadcast() {
         <TabsList>
           <TabsTrigger value="broadcasts"><Send className="ml-1 h-4 w-4" />דיוורים</TabsTrigger>
           <TabsTrigger value="lists"><Users className="ml-1 h-4 w-4" />רשימות תפוצה</TabsTrigger>
+          <TabsTrigger value="settings"><Globe className="ml-1 h-4 w-4" />הגדרות שולח</TabsTrigger>
         </TabsList>
 
         <TabsContent value="broadcasts" className="space-y-4">
@@ -124,6 +126,10 @@ export default function Broadcast() {
 
         <TabsContent value="lists">
           <BroadcastLists />
+        </TabsContent>
+
+        <TabsContent value="settings">
+          <BroadcastDomainSettings />
         </TabsContent>
       </Tabs>
 
