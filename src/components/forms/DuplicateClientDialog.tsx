@@ -1,14 +1,7 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { InlineDialog } from "@/components/ui/inline-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,6 +14,8 @@ interface DuplicateClientDialogProps {
   onOpenChange: (open: boolean) => void;
   client: { id: string; name: string } | null;
   onDuplicated?: (newClientId: string) => void;
+  /** Render embedded in the page flow instead of as a modal overlay. */
+  inline?: boolean;
 }
 
 export function DuplicateClientDialog({
@@ -28,6 +23,7 @@ export function DuplicateClientDialog({
   onOpenChange,
   client,
   onDuplicated,
+  inline = false,
 }: DuplicateClientDialogProps) {
   const queryClient = useQueryClient();
   const [newName, setNewName] = useState("");
@@ -78,18 +74,38 @@ export function DuplicateClientDialog({
   });
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md" dir="rtl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Copy className="h-5 w-5" />
-            שכפול לקוח
-          </DialogTitle>
-          <DialogDescription>
-            יצירת לקוח חדש על בסיס <strong>{client?.name}</strong> עם כל הפרטים שתבחר.
-          </DialogDescription>
-        </DialogHeader>
-
+    <InlineDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      inline={inline}
+      className="max-w-md"
+      title={
+        <span className="flex items-center gap-2">
+          <Copy className="h-5 w-5" />
+          שכפול לקוח
+        </span>
+      }
+      description={
+        <>
+          יצירת לקוח חדש על בסיס <strong>{client?.name}</strong> עם כל הפרטים שתבחר.
+        </>
+      }
+      footer={
+        <>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>
+            ביטול
+          </Button>
+          <Button
+            onClick={() => mutation.mutate()}
+            disabled={!newName.trim() || mutation.isPending}
+          >
+            {mutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+            <Copy className="ml-2 h-4 w-4" />
+            שכפל לקוח
+          </Button>
+        </>
+      }
+    >
         <div className="space-y-4 py-2">
           <div className="space-y-2">
             <Label htmlFor="dup-name">שם הלקוח החדש</Label>
@@ -148,21 +164,6 @@ export function DuplicateClientDialog({
             </label>
           </div>
         </div>
-
-        <DialogFooter className="gap-2 sm:gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>
-            ביטול
-          </Button>
-          <Button
-            onClick={() => mutation.mutate()}
-            disabled={!newName.trim() || mutation.isPending}
-          >
-            {mutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
-            <Copy className="ml-2 h-4 w-4" />
-            שכפל לקוח
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    </InlineDialog>
   );
 }
