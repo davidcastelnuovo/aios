@@ -18,7 +18,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Users, Image as ImageIcon, Send, CalendarClock, Loader2, MessageSquare } from "lucide-react";
+import { Users, Image as ImageIcon, Send, CalendarClock, Loader2, MessageSquare, Mail } from "lucide-react";
 
 const CLIENT_STATUSES = [
   { key: "active", label: "פעיל" },
@@ -42,7 +42,8 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
 
   const [step, setStep] = useState(0);
   const [name, setName] = useState("דיוור חדש");
-  const channel: "whatsapp" = "whatsapp"; // Phase 1: unofficial WhatsApp only
+  const [channel, setChannel] = useState<"whatsapp" | "email">("whatsapp");
+  const [subject, setSubject] = useState("");
   const [integrationId, setIntegrationId] = useState<string | undefined>();
   const [source, setSource] = useState<AudienceFilter["source"]>("leads");
   const [clientStatuses, setClientStatuses] = useState<string[]>([]);
@@ -60,7 +61,8 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
   // Reset when reopened
   useEffect(() => {
     if (open) {
-      setStep(0); setName("דיוור חדש"); setIntegrationId(undefined); setSource("leads");
+      setStep(0); setName("דיוור חדש"); setChannel("whatsapp"); setSubject("");
+      setIntegrationId(undefined); setSource("leads");
       setClientStatuses([]); setLeadStatusKeys([]); setTagIds([]); setActiveOnly(true);
       setBodyText(""); setMediaFile(null); setAudienceCount(null);
       setSendMode("now"); setScheduledAt("");
@@ -93,10 +95,11 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
     },
   });
 
-  const selectedProvider = useMemo(() => {
+  const selectedProvider = useMemo<"green_api" | "manus_wa" | "resend">(() => {
+    if (channel === "email") return "resend";
     const i = (integrations || []).find((x: any) => x.id === integrationId);
     return (i?.integration_type as "green_api" | "manus_wa") || "green_api";
-  }, [integrations, integrationId]);
+  }, [integrations, integrationId, channel]);
 
   const buildFilter = (): AudienceFilter => {
     if (source === "clients") return { source, statuses: clientStatuses, tagIds };
@@ -127,9 +130,9 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
     set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
 
   const canNext = () => {
-    if (step === 1) return !!integrationId;
+    if (step === 1) return channel === "email" ? true : !!integrationId;
     if (step === 2) return (audienceCount ?? 0) > 0;
-    if (step === 3) return bodyText.trim().length > 0;
+    if (step === 3) return bodyText.trim().length > 0 && (channel !== "email" || subject.trim().length > 0);
     return true;
   };
 
@@ -139,7 +142,9 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
     try {
       // 1) create draft
       const draft = await create.mutateAsync({
-        name, channel, provider: selectedProvider, integration_id: integrationId,
+        name, channel, provider: selectedProvider,
+        integration_id: channel === "email" ? null : integrationId,
+        subject: channel === "email" ? subject : null,
         body_text: bodyText, audience_filter: buildFilter(),
       });
 
@@ -200,22 +205,35 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
             <Input value={name} onChange={(e) => setName(e.target.value)} />
             <Label className="mt-2 block">ערוץ</Label>
             <div className="grid grid-cols-3 gap-2">
-              <button className="rounded-lg border-2 border-primary p-3 text-center text-sm font-medium">
+              <button onClick={() => setChannel("whatsapp")}
+                className={`rounded-lg border-2 p-3 text-center text-sm font-medium ${channel === "whatsapp" ? "border-primary" : "border-muted"}`}>
                 <MessageSquare className="mx-auto mb-1 h-5 w-5" /> WhatsApp לא-רשמי
               </button>
               <button disabled className="rounded-lg border p-3 text-center text-sm text-muted-foreground opacity-50">WhatsApp רשמי (בקרוב)</button>
-              <button disabled className="rounded-lg border p-3 text-center text-sm text-muted-foreground opacity-50">אימייל (בקרוב)</button>
+              <button onClick={() => setChannel("email")}
+                className={`rounded-lg border-2 p-3 text-center text-sm font-medium ${channel === "email" ? "border-primary" : "border-muted"}`}>
+                <Mail className="mx-auto mb-1 h-5 w-5" /> אימייל
+              </button>
             </div>
           </div>
         )}
 
         {/* Step 1 — connection */}
         {step === 1 && (
-          <WaProviderConnectionPicker
-            integrations={integrations as any}
-            value={integrationId}
-            onChange={setIntegrationId}
-          />
+          channel === "email" ? (
+            <div className="rounded-lg border p-4 text-sm space-y-1">
+              <div className="flex items-center gap-2 font-medium"><Mail className="h-4 w-4" /> שליחה דרך Resend</div>
+              <p className="text-muted-foreground">
+                האימיילים נשלחים דרך Resend מהדומיין המאומת. ודא שהדומיין אומת ושמפתח ה-API מוגדר במערכת.
+              </p>
+            </div>
+          ) : (
+            <WaProviderConnectionPicker
+              integrations={integrations as any}
+              value={integrationId}
+              onChange={setIntegrationId}
+            />
+          )
         )}
 
         {/* Step 2 — audience */}
@@ -291,6 +309,12 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
         {/* Step 3 — content */}
         {step === 3 && (
           <div className="space-y-3">
+            {channel === "email" && (
+              <div>
+                <Label>נושא האימייל</Label>
+                <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="נושא ההודעה" />
+              </div>
+            )}
             <Label>תוכן ההודעה</Label>
             <div className="flex flex-wrap gap-2 text-xs">
               {["{{contact_name}}", "{{phone}}"].map((v) => (
@@ -300,12 +324,16 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
             </div>
             <Textarea rows={6} value={bodyText} onChange={(e) => setBodyText(e.target.value)}
               placeholder="שלום {{contact_name}}, ..." />
-            <div>
-              <Label className="mb-1 flex items-center gap-1"><ImageIcon className="h-4 w-4" /> תמונה (אופציונלי)</Label>
-              <Input type="file" accept="image/*" onChange={(e) => setMediaFile(e.target.files?.[0] || null)} />
-            </div>
+            {channel !== "email" && (
+              <div>
+                <Label className="mb-1 flex items-center gap-1"><ImageIcon className="h-4 w-4" /> תמונה (אופציונלי)</Label>
+                <Input type="file" accept="image/*" onChange={(e) => setMediaFile(e.target.files?.[0] || null)} />
+              </div>
+            )}
             <p className="text-xs text-muted-foreground">
-              מומלץ להוסיף בסוף ההודעה אפשרות הסרה (למשל: "להסרה השב הסר") — נדרש על פי חוק.
+              {channel === "email"
+                ? "קישור הסרה מהרשימה (unsubscribe) יתווסף אוטומטית לתחתית כל אימייל — נדרש על פי חוק."
+                : 'מומלץ להוסיף בסוף ההודעה אפשרות הסרה (למשל: "להסרה השב הסר") — נדרש על פי חוק.'}
             </p>
           </div>
         )}
@@ -328,9 +356,15 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
               </div>
             )}
             <div className="rounded-lg bg-muted p-3 text-sm space-y-1">
-              <div>ערוץ: WhatsApp ({selectedProvider === "manus_wa" ? "Manus" : "Green API"})</div>
+              <div>
+                ערוץ: {channel === "email"
+                  ? "אימייל (Resend)"
+                  : `WhatsApp (${selectedProvider === "manus_wa" ? "Manus" : "Green API"})`}
+              </div>
               <div>נמענים: <Badge variant="secondary">{audienceCount ?? 0}</Badge></div>
-              <div className="text-xs text-muted-foreground">שליחה בקצב מבוקר (12–20 שניות בין הודעות) כדי להימנע מחסימה.</div>
+              {channel !== "email" && (
+                <div className="text-xs text-muted-foreground">שליחה בקצב מבוקר (12–20 שניות בין הודעות) כדי להימנע מחסימה.</div>
+              )}
             </div>
           </div>
         )}

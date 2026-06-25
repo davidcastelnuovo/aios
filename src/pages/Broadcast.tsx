@@ -80,7 +80,11 @@ export default function Broadcast() {
                   return (
                     <TableRow key={b.id}>
                       <TableCell className="font-medium">{b.name}</TableCell>
-                      <TableCell>WhatsApp · {b.provider === "manus_wa" ? "Manus" : "Green API"}</TableCell>
+                      <TableCell>
+                        {b.channel === "email"
+                          ? "אימייל · Resend"
+                          : `WhatsApp · ${b.provider === "manus_wa" ? "Manus" : "Green API"}`}
+                      </TableCell>
                       <TableCell><Badge variant={st.variant}>{st.label}</Badge></TableCell>
                       <TableCell>{b.stats?.total ?? 0}</TableCell>
                       <TableCell>{b.stats?.sent ?? 0}</TableCell>

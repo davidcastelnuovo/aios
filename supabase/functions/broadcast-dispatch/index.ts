@@ -39,6 +39,17 @@ function applyVars(template: string, r: any): string {
     .replace(/\{\{\s*phone\s*\}\}/g, r.phone || '');
 }
 
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// Plain message body → simple, safe HTML (escape + newlines to <br>).
+function textToHtml(body: string): string {
+  return `<div style="font-family:system-ui,Arial,sans-serif;font-size:15px;line-height:1.6;color:#222" dir="rtl">${escapeHtml(body).replace(/\n/g, '<br/>')}</div>`;
+}
+
 async function invokeEdgeFn(name: string, payload: any) {
   const res = await fetch(`${SB_URL}/functions/v1/${name}`, {
     method: 'POST',
@@ -104,6 +115,31 @@ async function greenApiSendImage(
 
 async function sendOne(db: any, b: any, r: any): Promise<{ ok: boolean; messageId?: string; error?: string }> {
   const body = applyVars(b.body_text || '', r);
+
+  // ── Email (Resend) ──
+  if (b.channel === 'email') {
+    if (!r.email) return { ok: false, error: 'missing_email' };
+    const unsubUrl = `${SB_URL}/functions/v1/broadcast-unsubscribe?r=${r.id}`;
+    const html =
+      `${textToHtml(body)}` +
+      `<hr style="margin-top:24px;border:none;border-top:1px solid #eee"/>` +
+      `<p style="font-family:system-ui,Arial,sans-serif;font-size:12px;color:#999" dir="rtl">` +
+      `אם אינך מעוניין/ת לקבל דיוורים, ניתן <a href="${unsubUrl}">להסיר את עצמך מהרשימה</a>.</p>`;
+    const res = await invokeEdgeFn('send-resend-email', {
+      to: r.email,
+      subject: b.subject || b.name,
+      html,
+      text: body,
+      headers: {
+        'List-Unsubscribe': `<${unsubUrl}>`,
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      },
+      tags: [{ name: 'broadcast_id', value: b.id }],
+    });
+    return res.ok ? { ok: true, messageId: res.json?.id } : { ok: false, error: JSON.stringify(res.json).slice(0, 300) };
+  }
+
+  // ── WhatsApp (Green API / Manus) ──
   const hasMedia = !!b.media_url;
   const senderUserId = b.created_by;
 
@@ -224,9 +260,13 @@ Deno.serve(async (req) => {
         }
 
         idx++;
-        // Pace the next send (skip the wait after the last allowed one)
+        // Pace the next send (skip the wait after the last allowed one).
+        // WhatsApp uses the configured anti-ban gap; email needs only a light gap.
         if (remainingCap > 0 && Date.now() - startedAt < MAX_RUN_MS) {
-          await sleep(jitter(b.throttle_min_seconds, b.throttle_max_seconds, idx + Math.floor(startedAt / 1000)));
+          const gapMs = b.channel === 'email'
+            ? 600 + (idx % 3) * 200
+            : jitter(b.throttle_min_seconds, b.throttle_max_seconds, idx + Math.floor(startedAt / 1000));
+          await sleep(gapMs);
         }
       }
 
