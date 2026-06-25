@@ -2,13 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
+import { InlineDialog } from "@/components/ui/inline-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -22,6 +16,8 @@ import { toast } from "sonner";
 interface ChangeAgencyDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** When true, renders embedded in the page flow instead of as a modal overlay. */
+  inline?: boolean;
   contactId: string;
   contactType: "client" | "lead" | "group";
   currentAgencyId: string | null;
@@ -32,6 +28,7 @@ interface ChangeAgencyDialogProps {
 export function ChangeAgencyDialog({
   open,
   onOpenChange,
+  inline = false,
   contactId,
   contactType,
   currentAgencyId,
@@ -89,41 +86,39 @@ export function ChangeAgencyDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent dir="rtl" className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>שינוי סוכנות</DialogTitle>
-          <DialogDescription>
-            שינוי הסוכנות המשויכת ל: {contactName}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4">
-          <Select value={selectedAgencyId} onValueChange={setSelectedAgencyId}>
-            <SelectTrigger>
-              <SelectValue placeholder="בחר סוכנות" />
-            </SelectTrigger>
-            <SelectContent>
-              {agencies?.map((agency) => (
-                <SelectItem key={agency.id} value={agency.id}>
-                  {agency.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <div className="flex gap-2">
-            <Button
-              onClick={handleSave}
-              disabled={mutation.isPending || !selectedAgencyId || selectedAgencyId === currentAgencyId}
-              className="flex-1"
-            >
-              {mutation.isPending ? "שומר..." : "שמור"}
-            </Button>
-            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>
-              ביטול
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+    <InlineDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      inline={inline}
+      title="שינוי סוכנות"
+      description={`שינוי הסוכנות המשויכת ל: ${contactName}`}
+      className="sm:max-w-md"
+      footer={
+        <>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>
+            ביטול
+          </Button>
+          <Button
+            onClick={handleSave}
+            disabled={mutation.isPending || !selectedAgencyId || selectedAgencyId === currentAgencyId}
+          >
+            {mutation.isPending ? "שומר..." : "שמור"}
+          </Button>
+        </>
+      }
+    >
+      <Select value={selectedAgencyId} onValueChange={setSelectedAgencyId}>
+        <SelectTrigger>
+          <SelectValue placeholder="בחר סוכנות" />
+        </SelectTrigger>
+        <SelectContent>
+          {agencies?.map((agency) => (
+            <SelectItem key={agency.id} value={agency.id}>
+              {agency.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </InlineDialog>
   );
 }

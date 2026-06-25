@@ -5,9 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { Megaphone, Phone, Mail, Briefcase, ChevronDown, ChevronUp, LayoutGrid, MessageSquare } from "lucide-react";
+import { Megaphone, Phone, Mail, Briefcase, ChevronDown, ChevronUp, LayoutGrid, MessageSquare, Pencil } from "lucide-react";
 import { AddCampaignerForm } from "@/components/forms/AddCampaignerForm";
-import { EditCampaignerDialog } from "@/components/forms/EditCampaignerDialog";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { toast } from "sonner";
@@ -21,6 +20,13 @@ type ViewMode = "chat" | "grid";
 
 export default function Campaigners() {
   const [viewMode, setViewMode] = useState<ViewMode>("chat");
+  const [pendingChatCampaignerId, setPendingChatCampaignerId] = useState<string | null>(null);
+
+  // Editing a campaigner opens the chat view focused on that campaigner, instead of a modal dialog.
+  const openCampaignerInChat = (campaignerId: string) => {
+    setPendingChatCampaignerId(campaignerId);
+    setViewMode("chat");
+  };
   const [expandedCampaigner, setExpandedCampaigner] = useState<string | null>(null);
   const [tempAmounts, setTempAmounts] = useState<Record<string, number>>({});
   const { canViewFinance } = useUserPermissions();
@@ -153,7 +159,10 @@ export default function Campaigners() {
       </div>
 
       {viewMode === "chat" ? (
-        <CampaignersChatView />
+        <CampaignersChatView
+          key={pendingChatCampaignerId ?? "chat"}
+          initialCampaignerId={pendingChatCampaignerId ?? undefined}
+        />
       ) : isLoading ? (
         <div className="flex justify-center p-8">טוען...</div>
       ) : (
@@ -186,7 +195,15 @@ export default function Campaigners() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <EditCampaignerDialog campaigner={campaigner} />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        title="ערוך קמפיינר"
+                        onClick={() => openCampaignerInChat(campaigner.id)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
                       <Badge variant="outline" className={campaigner.active ? "bg-success/10 text-success border-success/20" : "bg-muted"}>
                         {campaigner.active ? "פעיל" : "לא פעיל"}
                       </Badge>

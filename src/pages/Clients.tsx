@@ -10,7 +10,6 @@ import { AddClientForm } from "@/components/forms/AddClientForm";
 import { ImportClientsSheet } from "@/components/forms/ImportClientsSheet";
 import { ImportClientsCSV } from "@/components/forms/ImportClientsCSV";
 import { DuplicateClientDialog } from "@/components/forms/DuplicateClientDialog";
-import { EditClientDialog } from "@/components/forms/EditClientDialog";
 import AddTaskForm from "@/components/forms/AddTaskForm";
 import { ClientsChatView } from "@/components/clients/ClientsChatView";
 import { ClientsMultiSelectToolbar } from "@/components/clients/ClientsMultiSelectToolbar";
@@ -78,7 +77,13 @@ export default function Clients() {
   const deepLinkClientId = searchParams.get("clientId") ?? undefined;
   const deepLinkTab = (searchParams.get("tab") as "updates" | "details" | undefined) ?? undefined;
   const [viewMode, setViewMode] = useState<"grid" | "table" | "chat">("chat");
-  const [editingClient, setEditingClient] = useState<any>(null);
+  const [pendingChatClientId, setPendingChatClientId] = useState<string | null>(null);
+
+  // Editing a client opens the chat view focused on that client, instead of a modal dialog.
+  const openClientInChat = (clientId: string) => {
+    setPendingChatClientId(clientId);
+    setViewMode("chat");
+  };
   const [hideInactive, setHideInactive] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
@@ -776,11 +781,12 @@ export default function Clients() {
       <div className={viewMode === "chat" ? "flex-1 min-h-0 overflow-hidden" : "flex-1 min-h-0 overflow-y-auto"}>
       {viewMode === "chat" ? (
         <ClientsChatView
+          key={pendingChatClientId ?? deepLinkClientId ?? "chat"}
           clients={visibleClients || []}
           agencies={agencies}
           canViewFinance={canViewFinance()}
           getClientFinancialData={getClientFinancialData}
-          initialClientId={deepLinkClientId}
+          initialClientId={pendingChatClientId ?? deepLinkClientId}
           initialTab={deepLinkTab}
         />
       ) : viewMode === "grid" ? (
@@ -789,7 +795,7 @@ export default function Clients() {
           <Card 
             key={client.id} 
             className="shadow-card hover:shadow-lg transition-all hover:scale-[1.02] cursor-pointer group relative"
-            onClick={() => setEditingClient(client)}
+            onClick={() => openClientInChat(client.id)}
           >
             <div className="absolute top-4 left-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
               <Button size="sm" variant="secondary">
@@ -1110,7 +1116,7 @@ export default function Clients() {
                       <Button 
                         size="sm" 
                         variant="ghost"
-                        onClick={() => setEditingClient(client)}
+                        onClick={() => openClientInChat(client.id)}
                         className="h-8 w-8 p-0 hover:bg-accent/20"
                       >
                         <Edit className="h-4 w-4" />
@@ -1327,17 +1333,6 @@ export default function Clients() {
         </Card>
       )}
       
-      {editingClient && (
-        <EditClientDialog
-          client={editingClient}
-          open={!!editingClient}
-          onOpenChange={(open) => !open && setEditingClient(null)}
-          onDuplicate={() => {
-            setDuplicatingClient({ id: editingClient.id, name: editingClient.name });
-            setEditingClient(null);
-          }}
-        />
-      )}
 
       <DuplicateClientDialog
         open={!!duplicatingClient}

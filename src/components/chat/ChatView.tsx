@@ -852,6 +852,24 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
         </Collapsible>
       </div>
 
+      {/* Inline action area — renders below header without covering messages */}
+      {changeAgencyDialogOpen && (
+        <div className="px-3 pt-3 border-b">
+          <ChangeAgencyDialog
+            inline
+            open={changeAgencyDialogOpen}
+            onOpenChange={setChangeAgencyDialogOpen}
+            contactId={contactId}
+            contactType={contactType as "client" | "lead" | "group"}
+            currentAgencyId={contact?.agency_id}
+            contactName={contact?.name || ""}
+            onSuccess={() => {
+              queryClient.invalidateQueries({ queryKey: ["contact", contactId, contactType] });
+            }}
+          />
+        </div>
+      )}
+
       {/* Messages area - גלילה פנימית */}
       <div className="flex-1 min-h-0 overflow-y-auto bg-[#e5ddd5]">
         <ChatMessageList
@@ -936,19 +954,6 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
         </>
       )}
 
-      {contactType !== 'unknown' && contactType !== 'telegram' && (
-        <ChangeAgencyDialog
-          open={changeAgencyDialogOpen}
-          onOpenChange={setChangeAgencyDialogOpen}
-          contactId={contactId}
-          contactType={contactType}
-          currentAgencyId={contact?.agency_id}
-          contactName={contact?.name || ""}
-          onSuccess={() => {
-            queryClient.invalidateQueries({ queryKey: ["contact", contactId, contactType] });
-          }}
-        />
-      )}
     </div>
   );
 }

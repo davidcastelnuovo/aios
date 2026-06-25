@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import ChatViewComponent from "@/components/chat/ChatView";
-import { User, Phone, PhoneCall, Building2, Clock, Search, Mail, Globe, CheckSquare, Trash2, MessageSquare, FileText, DollarSign, X, Edit, Pencil, Check, Users, Plus, UserPlus, BarChart3, FolderOpen, Link, KeyRound, Calendar as CalendarIcon, Copy } from "lucide-react";
+import { User, Phone, PhoneCall, Building2, Clock, Search, Mail, Globe, CheckSquare, Trash2, MessageSquare, FileText, DollarSign, X, Edit, Pencil, Check, Users, Plus, UserPlus, BarChart3, FolderOpen, Link, KeyRound, Calendar as CalendarIcon, Copy, Loader2 } from "lucide-react";
 import { DuplicateClientDialog } from "@/components/forms/DuplicateClientDialog";
 import { AssignPhoneFromWhatsAppDialog } from "@/components/chat/AssignPhoneFromWhatsAppDialog";
 import { Calendar } from "@/components/ui/calendar";
@@ -88,6 +88,8 @@ export function ClientsChatView({
   const [callDialogOpen, setCallDialogOpen] = useState(false);
   const [changeAgencyOpen, setChangeAgencyOpen] = useState(false);
   const [assignPhoneDialogOpen, setAssignPhoneDialogOpen] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [confirmingBulkDelete, setConfirmingBulkDelete] = useState(false);
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
 
@@ -182,9 +184,7 @@ export function ClientsChatView({
     [selectedClient, getClientDisplayName]
   );
 
-  const handleDelete = async (id: string) => {
-    const confirmed = window.confirm("האם למחוק את הלקוח?");
-    if (!confirmed) return;
+  const performDelete = async (id: string) => {
     try {
       const { error } = await supabase.from("clients").delete().eq("id", id);
       if (error) throw error;
@@ -195,6 +195,8 @@ export function ClientsChatView({
       queryClient.invalidateQueries({ queryKey: ["clients"] });
     } catch (error: any) {
       toast.error("שגיאה במחיקת לקוח: " + error.message);
+    } finally {
+      setPendingDeleteId(null);
     }
   };
 
@@ -218,12 +220,11 @@ export function ClientsChatView({
   const exitMultiSelect = useCallback(() => {
     setMultiSelectMode(false);
     setSelectedClientIds(new Set());
+    setConfirmingBulkDelete(false);
   }, []);
 
   const handleBulkDelete = async () => {
     if (selectedClientIds.size === 0) return;
-    const confirmed = window.confirm(`האם למחוק ${selectedClientIds.size} לקוחות?`);
-    if (!confirmed) return;
     setBulkActionLoading(true);
     try {
       const { error } = await supabase.from("clients").delete().in("id", Array.from(selectedClientIds));
@@ -238,6 +239,7 @@ export function ClientsChatView({
       toast.error("שגיאה במחיקה: " + error.message);
     } finally {
       setBulkActionLoading(false);
+      setConfirmingBulkDelete(false);
     }
   };
 
@@ -484,12 +486,40 @@ export function ClientsChatView({
                   size="sm"
                   variant="destructive"
                   className="h-7 text-[11px] gap-1"
-                  onClick={handleBulkDelete}
+                  onClick={() => setConfirmingBulkDelete(true)}
                   disabled={bulkActionLoading}
                 >
                   <Trash2 className="h-3 w-3" />
                   מחק
                 </Button>
+              </div>
+            )}
+            {confirmingBulkDelete && selectedClientIds.size > 0 && (
+              <div className="flex items-center justify-between gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-2">
+                <span className="text-[11px] text-destructive">
+                  למחוק {selectedClientIds.size} לקוחות? פעולה זו אינה הפיכה.
+                </span>
+                <div className="flex gap-1 shrink-0">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-[11px]"
+                    onClick={() => setConfirmingBulkDelete(false)}
+                    disabled={bulkActionLoading}
+                  >
+                    ביטול
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    className="h-7 text-[11px] gap-1"
+                    onClick={handleBulkDelete}
+                    disabled={bulkActionLoading}
+                  >
+                    {bulkActionLoading && <Loader2 className="h-3 w-3 animate-spin" />}
+                    אישור מחיקה
+                  </Button>
+                </div>
               </div>
             )}
           </div>
@@ -688,19 +718,54 @@ export function ClientsChatView({
                   variant="outline"
                   size="icon"
                   className="h-8 w-8 text-destructive hover:text-destructive"
-                  onClick={() => handleDelete(selectedClient.id)}
+                  onClick={() => setPendingDeleteId(selectedClient.id)}
                   title="מחק לקוח"
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
-
-                <DuplicateClientDialog
-                  open={duplicateDialogOpen}
-                  onOpenChange={setDuplicateDialogOpen}
-                  client={selectedClient ? { id: selectedClient.id, name: selectedClient.name } : null}
-                />
               </div>
             </div>
+
+            {/* Inline action area — forms/confirmations render here instead of as popups */}
+            {(pendingDeleteId === selectedClient.id || duplicateDialogOpen || changeAgencyOpen) && (
+              <div className="px-4 pt-3 space-y-3">
+                {pendingDeleteId === selectedClient.id && (
+                  <div className="flex items-center justify-between gap-3 rounded-lg border border-destructive/40 bg-destructive/5 p-3">
+                    <span className="text-sm text-destructive">
+                      למחוק את הלקוח "{selectedClientDisplayName}"? פעולה זו אינה הפיכה.
+                    </span>
+                    <div className="flex gap-2 shrink-0">
+                      <Button size="sm" variant="ghost" onClick={() => setPendingDeleteId(null)}>
+                        ביטול
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => performDelete(selectedClient.id)}
+                      >
+                        מחק
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                <DuplicateClientDialog
+                  inline
+                  open={duplicateDialogOpen}
+                  onOpenChange={setDuplicateDialogOpen}
+                  client={{ id: selectedClient.id, name: selectedClient.name }}
+                />
+                <ChangeAgencyDialog
+                  inline
+                  open={changeAgencyOpen}
+                  onOpenChange={setChangeAgencyOpen}
+                  contactId={selectedClient.id}
+                  contactType="client"
+                  currentAgencyId={selectedClient.agency_id}
+                  contactName={selectedClient.name}
+                  onSuccess={() => queryClient.invalidateQueries({ queryKey: ["clients"] })}
+                />
+              </div>
+            )}
 
             {/* Detail tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -1175,6 +1240,7 @@ export function ClientsChatView({
                         חפש שיחה בוואטסאפ ושייך מספר
                       </Button>
                       <AssignPhoneFromWhatsAppDialog
+                        inline
                         open={assignPhoneDialogOpen}
                         onOpenChange={setAssignPhoneDialogOpen}
                         clientId={selectedClient.id}
@@ -1210,18 +1276,6 @@ export function ClientsChatView({
         />
       )}
 
-      {/* Change Agency dialog */}
-      {selectedClient && (
-        <ChangeAgencyDialog
-          open={changeAgencyOpen}
-          onOpenChange={setChangeAgencyOpen}
-          contactId={selectedClient.id}
-          contactType="client"
-          currentAgencyId={selectedClient.agency_id}
-          contactName={selectedClient.name}
-          onSuccess={() => queryClient.invalidateQueries({ queryKey: ["clients"] })}
-        />
-      )}
     </div>
   );
 }

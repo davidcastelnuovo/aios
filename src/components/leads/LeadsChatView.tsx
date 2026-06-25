@@ -37,6 +37,7 @@ interface LeadsChatViewProps {
   onFollowUpDateUpdate?: (leadId: string, newDate: string | null) => void;
   isCompanyNameVisible: boolean;
   searchQuery: string;
+  initialLeadId?: string;
 }
 
 function getStatusColor(statusKey: string | null, statuses: Array<{ status_key: string; color: string }>) {
@@ -56,9 +57,10 @@ export function LeadsChatView({
   onFollowUpDateUpdate,
   isCompanyNameVisible,
   searchQuery,
+  initialLeadId,
 }: LeadsChatViewProps) {
   const isMobile = useIsMobile();
-  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(initialLeadId ?? null);
   const [listSearch, setListSearch] = useState("");
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<any>(null);

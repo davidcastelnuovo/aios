@@ -34,7 +34,7 @@ function getInitials(name: string) {
     .toUpperCase();
 }
 
-export function CampaignersChatView() {
+export function CampaignersChatView({ initialCampaignerId }: { initialCampaignerId?: string } = {}) {
   const { tenantId } = useCurrentTenant();
   const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
   const { selectedAgency } = useAgency();
@@ -42,7 +42,7 @@ export function CampaignersChatView() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>("all");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialCampaignerId ?? null);
   const [editOpen, setEditOpen] = useState(false);
 
   const { data: agenciesList } = useQuery({

@@ -3,12 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { toast } from "sonner";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { InlineDialog } from "@/components/ui/inline-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -18,6 +13,8 @@ import { Search, Loader2, Phone, MessageSquare } from "lucide-react";
 interface AssignPhoneFromWhatsAppDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** When true, renders embedded in the page flow instead of as a modal overlay. */
+  inline?: boolean;
   clientId: string;
   clientName: string;
   onSuccess?: () => void;
@@ -26,6 +23,7 @@ interface AssignPhoneFromWhatsAppDialogProps {
 export function AssignPhoneFromWhatsAppDialog({
   open,
   onOpenChange,
+  inline = false,
   clientId,
   clientName,
   onSuccess,
@@ -103,15 +101,15 @@ export function AssignPhoneFromWhatsAppDialog({
   });
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[480px] max-h-[80vh]" dir="rtl">
-        <DialogHeader>
-          <DialogTitle className="text-right">שיוך מספר טלפון מוואטסאפ</DialogTitle>
-          <p className="text-sm text-muted-foreground text-right">
-            חפש שיחה מוואטסאפ ושייך את המספר ל-{clientName}
-          </p>
-        </DialogHeader>
-
+    <InlineDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      inline={inline}
+      title="שיוך מספר טלפון מוואטסאפ"
+      description={`חפש שיחה מוואטסאפ ושייך את המספר ל-${clientName}`}
+      className={inline ? undefined : "sm:max-w-[480px] max-h-[80vh]"}
+    >
+      <div className="space-y-2">
         <div className="relative">
           <Search className="absolute right-3 top-3 h-4 w-4 text-muted-foreground" />
           <Input
@@ -123,7 +121,7 @@ export function AssignPhoneFromWhatsAppDialog({
           />
         </div>
 
-        <ScrollArea className="h-[400px]">
+        <ScrollArea className={inline ? "h-[240px]" : "h-[400px]"}>
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -170,7 +168,7 @@ export function AssignPhoneFromWhatsAppDialog({
             </div>
           )}
         </ScrollArea>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </InlineDialog>
   );
 }
