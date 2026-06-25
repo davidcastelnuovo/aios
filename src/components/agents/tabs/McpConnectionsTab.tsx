@@ -11,6 +11,9 @@ import { Plug, Trash2, Plus, CheckCircle2, XCircle, Wrench } from "lucide-react"
 import { toast } from "sonner";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
+// Production Supabase project ref (AfterLead). Used to prefill the Claude MCP URL.
+const SUPABASE_PROJECT_REF = "zvoijyneresvkadpprel";
+
 export function McpConnectionsTab({ agent }: { agent: any }) {
   const qc = useQueryClient();
   const { tenantId } = useCurrentTenant();
@@ -72,6 +75,21 @@ export function McpConnectionsTab({ agent }: { agent: any }) {
           <DialogContent>
             <DialogHeader><DialogTitle>חיבור MCP Server</DialogTitle></DialogHeader>
             <div className="space-y-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => {
+                  setName("Claude");
+                  setUrl(`https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1/claude-mcp`);
+                }}
+              >
+                ⚡ הוסף את Claude (כרמן תוכל לבקש ממנו משימות פיתוח)
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                ממלא שם + URL אוטומטית. הזן את ה-Bearer (ערך CLAUDE_MCP_BEARER) ולחץ התחבר.
+              </p>
               <div>
                 <Label>שם</Label>
                 <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="לדוגמה: Notion" />

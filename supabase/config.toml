@@ -6,6 +6,9 @@ project_id = "zvoijyneresvkadpprel"
 [functions.run-agent-task]
 verify_jwt = false
 
+[functions.claude-mcp]
+verify_jwt = false
+
 [functions.send-manus-wa-voice]
 verify_jwt = false
 
