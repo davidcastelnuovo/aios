@@ -25,6 +25,11 @@ We use the org's own connected models. Standardized helper: `supabase/functions/
 - `ai_agents` has a swappable `mood` column: `fun|focused|tired|angry|random|NULL` (tone-only; never overrides hard rules). Edited in the agent Profile tab; read by `run-ai-agent`.
 - `ai_agents.voice` holds Carmen's TTS voice (default `shimmer`); set in Profile → VoiceCard.
 
+## Carmen → Claude bridge (Carmen can ask Claude for help)
+- Carmen talks to Claude over MCP via the `claude-mcp` edge function (an MCP server). It exposes `request_dev_task` + `ask_claude`, and each call fires a real Claude Code on the web session via the Routines `/fire` API. See `supabase/functions/claude-mcp/README.md`.
+- When Carmen can't do something herself, she escalates to Claude (always-on instruction in `ai_memory` + the `claude_escalation` skin). The request Claude receives also asks Claude to **teach Carmen**: write a reusable skin into `ai_skills` (`scope='tenant'`, `created_by_agent=true`) so she's independent next time.
+- **Claude's own memory of what it taught Carmen lives in `docs/carmen-learned-skills.md`.** When you (a Claude session) solve a Carmen escalation that yields a reusable capability, append an entry there and create/update the matching `ai_skills` skin. Consult that file to avoid re-deriving capabilities Carmen already has.
+
 ## Carmen voice (ALWAYS support both surfaces)
 Carmen must support voice on **both** her surfaces — keep this true going forward:
 1. **WhatsApp "Carmen direct" automation** (triggers on "כרמן"):
