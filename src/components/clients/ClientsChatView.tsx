@@ -727,7 +727,7 @@ export function ClientsChatView({
             </div>
 
             {/* Inline action area — forms/confirmations render here instead of as popups */}
-            {(pendingDeleteId === selectedClient.id || duplicateDialogOpen) && (
+            {(pendingDeleteId === selectedClient.id || duplicateDialogOpen || changeAgencyOpen) && (
               <div className="px-4 pt-3 space-y-3">
                 {pendingDeleteId === selectedClient.id && (
                   <div className="flex items-center justify-between gap-3 rounded-lg border border-destructive/40 bg-destructive/5 p-3">
@@ -753,6 +753,16 @@ export function ClientsChatView({
                   open={duplicateDialogOpen}
                   onOpenChange={setDuplicateDialogOpen}
                   client={{ id: selectedClient.id, name: selectedClient.name }}
+                />
+                <ChangeAgencyDialog
+                  inline
+                  open={changeAgencyOpen}
+                  onOpenChange={setChangeAgencyOpen}
+                  contactId={selectedClient.id}
+                  contactType="client"
+                  currentAgencyId={selectedClient.agency_id}
+                  contactName={selectedClient.name}
+                  onSuccess={() => queryClient.invalidateQueries({ queryKey: ["clients"] })}
                 />
               </div>
             )}
@@ -1230,6 +1240,7 @@ export function ClientsChatView({
                         חפש שיחה בוואטסאפ ושייך מספר
                       </Button>
                       <AssignPhoneFromWhatsAppDialog
+                        inline
                         open={assignPhoneDialogOpen}
                         onOpenChange={setAssignPhoneDialogOpen}
                         clientId={selectedClient.id}
@@ -1265,18 +1276,6 @@ export function ClientsChatView({
         />
       )}
 
-      {/* Change Agency dialog */}
-      {selectedClient && (
-        <ChangeAgencyDialog
-          open={changeAgencyOpen}
-          onOpenChange={setChangeAgencyOpen}
-          contactId={selectedClient.id}
-          contactType="client"
-          currentAgencyId={selectedClient.agency_id}
-          contactName={selectedClient.name}
-          onSuccess={() => queryClient.invalidateQueries({ queryKey: ["clients"] })}
-        />
-      )}
     </div>
   );
 }
