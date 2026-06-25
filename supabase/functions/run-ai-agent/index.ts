@@ -261,6 +261,214 @@ const ALL_TOOLS = [
 // ===========================
 // TOOL EXECUTOR
 // ===========================
+
+// ── Live Meta (Facebook) reads ──────────────────────────────────────────────
+// The campaigner skill demands a LIVE audit before recommending, but the synced
+// CRM tables can lag (some accounts were stuck months behind). These helpers read
+// straight from the Graph API so list/get tools reflect the real account state,
+// with a synced-table fallback so nothing regresses when live read isn't possible.
+const FB_GRAPH_VERSION = 'v21.0'
+
+async function fbResolveClientAdAccount(supabase: any, tenantId: string, clientId: string): Promise<string | null> {
+  // clients.* ad-account fields are empty in practice — the act_ id lives in the
+  // client's Meta sync table config (crm_tables.integration_settings).
+  const { data } = await supabase
+    .from('crm_tables')
+    .select('integration_settings, last_sync_at')
+    .eq('tenant_id', tenantId)
+    .eq('client_id', clientId)
+    .in('integration_type', ['facebook_insights', 'facebook_ecommerce'])
+    .order('last_sync_at', { ascending: false, nullsFirst: false })
+  for (const t of (data || [])) {
+    const s = t?.integration_settings || {}
+    const acc = s.ad_account_id || s.account_id || s.meta_account_id
+    if (acc) return String(acc).replace(/^act_/, '')
+  }
+  return null
+}
+
+async function fbGetToken(supabase: any, tenantId: string): Promise<string | null> {
+  let { data } = await supabase
+    .from('tenant_integrations')
+    .select('api_key, shared_from_integration_id')
+    .in('integration_type', ['facebook', 'facebook_lead_ads'])
+    .eq('tenant_id', tenantId)
+    .eq('is_active', true)
+    .limit(1).maybeSingle()
+  if (data && !data.api_key && data.shared_from_integration_id) {
+    const { data: src } = await supabase.from('tenant_integrations').select('api_key').eq('id', data.shared_from_integration_id).maybeSingle()
+    if (src?.api_key) data = { ...data, api_key: src.api_key }
+  }
+  return data?.api_key || null
+}
+
+// Pull the lead count out of an insights row's `actions` array (Meta reports leads
+// under a few action types depending on the form/CAPI setup).
+function fbLeadsFromActions(actions: any[]): number {
+  if (!Array.isArray(actions)) return 0
+  let leads = 0
+  for (const a of actions) {
+    const t = String(a?.action_type || '')
+    if (t === 'lead' || t === 'leadgen.other' || t === 'onsite_conversion.lead_grouped' || t.endsWith('.lead')) {
+      leads += Number(a?.value || 0)
+    }
+  }
+  return leads
+}
+
+/** Live campaign list (id/name/status/objective). Returns null on any failure. */
+async function fbLiveCampaignList(supabase: any, tenantId: string, clientId: string): Promise<any[] | null> {
+  try {
+    const acct = await fbResolveClientAdAccount(supabase, tenantId, clientId)
+    const token = await fbGetToken(supabase, tenantId)
+    if (!acct || !token) return null
+    const url = `https://graph.facebook.com/${FB_GRAPH_VERSION}/act_${acct}/campaigns?fields=id,name,effective_status,objective&limit=300&access_token=${token}`
+    const r = await fetch(url)
+    const j = await r.json()
+    if (!r.ok || j?.error || !Array.isArray(j?.data)) return null
+    return j.data.map((c: any) => ({
+      campaign_id: c.id, campaign_name: c.name,
+      status: c.effective_status, effective_status: c.effective_status, objective: c.objective,
+    }))
+  } catch { return null }
+}
+
+/** Live campaign-level insights (spend/leads/etc.) over a day window. Null on failure. */
+async function fbLiveCampaignInsights(supabase: any, tenantId: string, clientId: string, days: number): Promise<any[] | null> {
+  try {
+    const acct = await fbResolveClientAdAccount(supabase, tenantId, clientId)
+    const token = await fbGetToken(supabase, tenantId)
+    if (!acct || !token) return null
+    const preset = days <= 1 ? 'yesterday' : days <= 7 ? 'last_7d' : days <= 14 ? 'last_14d' : days <= 30 ? 'last_30d' : days <= 90 ? 'last_90d' : 'maximum'
+    const fields = 'campaign_id,campaign_name,impressions,clicks,spend,actions,cpc,cpm,ctr,reach'
+    const url = `https://graph.facebook.com/${FB_GRAPH_VERSION}/act_${acct}/insights?level=campaign&date_preset=${preset}&fields=${fields}&limit=500&access_token=${token}`
+    const r = await fetch(url)
+    const j = await r.json()
+    if (!r.ok || j?.error || !Array.isArray(j?.data)) return null
+    return j.data.map((d: any) => {
+      const leads = fbLeadsFromActions(d.actions)
+      const spend = Number(d.spend || 0)
+      return {
+        campaign_id: d.campaign_id ?? null, campaign_name: d.campaign_name ?? null,
+        impressions: Number(d.impressions || 0), clicks: Number(d.clicks || 0),
+        spend, leads_count: leads,
+        cpc: d.cpc ? Number(d.cpc) : null, cpm: d.cpm ? Number(d.cpm) : null, ctr: d.ctr ? Number(d.ctr) : null,
+        reach: d.reach ? Number(d.reach) : null,
+        cost_per_lead: leads > 0 ? Number((spend / leads).toFixed(2)) : null,
+      }
+    })
+  } catch { return null }
+}
+
+function fbDatePreset(days: number): string {
+  return days <= 1 ? 'yesterday' : days <= 7 ? 'last_7d' : days <= 14 ? 'last_14d' : days <= 30 ? 'last_30d' : days <= 90 ? 'last_90d' : 'maximum'
+}
+
+/** All ad accounts the token can see (id without act_ prefix + name). Null on failure. */
+async function fbListAccessibleAdAccounts(token: string): Promise<Array<{ id: string; name: string; status: number | null }> | null> {
+  try {
+    const url = `https://graph.facebook.com/${FB_GRAPH_VERSION}/me/adaccounts?fields=account_id,name,account_status&limit=500&access_token=${token}`
+    const r = await fetch(url)
+    const j = await r.json()
+    if (!r.ok || j?.error || !Array.isArray(j?.data)) return null
+    return j.data.map((a: any) => ({
+      id: String(a.account_id || a.id || '').replace(/^act_/, ''),
+      name: String(a.name || ''),
+      status: a.account_status != null ? Number(a.account_status) : null,
+    })).filter((a: any) => a.id)
+  } catch { return null }
+}
+
+// Conservative name match: normalize (lowercase, strip punctuation/whitespace) and
+// accept only a strong match — exact, or one side fully contains the other with a
+// length ratio >= 0.6 (so "fly" won't grab "flyaway studio"). Returns best or null.
+function fbStrongMatchAccount(
+  accounts: Array<{ id: string; name: string; status: number | null }>,
+  clientName: string,
+): { id: string; name: string } | null {
+  const norm = (s: string) => String(s || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '')
+  const c = norm(clientName)
+  if (c.length < 3) return null
+  let best: { id: string; name: string; score: number } | null = null
+  for (const a of accounts) {
+    const n = norm(a.name)
+    if (!n) continue
+    let score = 0
+    if (n === c) score = 1
+    else if (n.includes(c) || c.includes(n)) {
+      const ratio = Math.min(n.length, c.length) / Math.max(n.length, c.length)
+      if (ratio >= 0.6) score = ratio
+    }
+    if (score > 0 && (!best || score > best.score)) best = { id: a.id, name: a.name, score }
+  }
+  return best ? { id: best.id, name: best.name } : null
+}
+
+/** Account-level live summary (spend/leads/cpl over a window). Null on failure. */
+async function fbAccountInsights(token: string, acct: string, days: number): Promise<any | null> {
+  try {
+    const preset = fbDatePreset(days)
+    const url = `https://graph.facebook.com/${FB_GRAPH_VERSION}/act_${acct}/insights?level=account&date_preset=${preset}&fields=spend,impressions,clicks,actions,reach&limit=1&access_token=${token}`
+    const r = await fetch(url)
+    const j = await r.json()
+    if (!r.ok || j?.error || !Array.isArray(j?.data)) return null
+    const d = j.data[0]
+    if (!d) return { spend: 0, leads_count: 0, impressions: 0, clicks: 0, cost_per_lead: null, no_delivery: true }
+    const leads = fbLeadsFromActions(d.actions)
+    const spend = Number(d.spend || 0)
+    return {
+      spend, leads_count: leads,
+      impressions: Number(d.impressions || 0), clicks: Number(d.clicks || 0),
+      reach: d.reach ? Number(d.reach) : null,
+      cost_per_lead: leads > 0 ? Number((spend / leads).toFixed(2)) : null,
+    }
+  } catch { return null }
+}
+
+// Try-to-connect pass: for every client we could NOT report from synced data,
+// attempt a LIVE pull. Mapped-but-stale clients resolve via their crm config;
+// truly-unmapped clients are matched by name against the token's ad accounts
+// (strong match only, flagged matched_by:'name' for human verification). Returns
+// the clients we connected live vs the ones that still need manual linking.
+async function fbTryConnectClients(
+  supabase: any,
+  tenantId: string,
+  notConnected: Array<{ client_id: string; client_name: string; reason: string }>,
+  days: number,
+): Promise<{ connected: any[]; stillNotConnected: any[] }> {
+  const connected: any[] = []
+  const stillNotConnected: any[] = []
+  const token = await fbGetToken(supabase, tenantId)
+  let accounts: Array<{ id: string; name: string; status: number | null }> | null = null
+  for (const nc of notConnected) {
+    let acct = await fbResolveClientAdAccount(supabase, tenantId, nc.client_id)
+    let matchedBy: 'config' | 'name' | null = acct ? 'config' : null
+    let matchedName: string | null = null
+    if (!acct && token) {
+      if (accounts === null) accounts = (await fbListAccessibleAdAccounts(token)) || []
+      const m = fbStrongMatchAccount(accounts, nc.client_name)
+      if (m) { acct = m.id; matchedBy = 'name'; matchedName = m.name }
+    }
+    if (acct && token) {
+      const ins = await fbAccountInsights(token, acct, days)
+      if (ins) {
+        connected.push({
+          client_id: nc.client_id, client_name: nc.client_name,
+          ad_account: `act_${acct}`, matched_by: matchedBy, matched_account_name: matchedName,
+          ...ins, source: 'live_meta',
+        })
+        continue
+      }
+    }
+    stillNotConnected.push({
+      client_id: nc.client_id, client_name: nc.client_name,
+      reason: nc.reason,
+      connect_attempt: !token ? 'no_fb_token' : (acct ? 'account_found_but_no_data' : 'no_matching_ad_account'),
+    })
+  }
+  return { connected, stillNotConnected }
+}
+
 async function getAccessibleTenantIds(supabase: any, tenantId: string): Promise<string[]> {
   try {
     const { data } = await supabase
@@ -698,7 +906,13 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         return { error: 'client_id_required', message: 'יש להעביר client_id' }
       }
 
-      // Find campaign tables for this client (CRM dynamic tables that hold FB insights)
+      // LIVE first: pull campaign-level insights straight from Meta (synced tables can lag days/weeks).
+      const liveInsights = await fbLiveCampaignInsights(supabase, accessibleTenantIds[0], args.client_id, daysBack)
+      if (liveInsights) {
+        return { count: liveInsights.length, campaigns: liveInsights, period: `${daysBack} days`, source: 'live_meta' }
+      }
+
+      // Fallback: CRM dynamic tables that hold synced FB insights.
       const { data: campaignTables, error: rpcErr } = await supabase
         .rpc('find_campaign_tables', { p_client_ids: [args.client_id] })
       if (rpcErr) throw rpcErr
@@ -739,7 +953,14 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (!args.client_id) {
         return { error: 'client_id_required', message: 'יש להעביר client_id' }
       }
-      // Find campaign tables for this client (CRM dynamic tables hold FB insights with status)
+      // LIVE first: read campaign status straight from Meta (synced tables can lag).
+      const liveList = await fbLiveCampaignList(supabase, accessibleTenantIds[0], args.client_id)
+      if (liveList) {
+        const search = (args.name_search || '').toString().toLowerCase()
+        const campaigns = search ? liveList.filter((c: any) => String(c.campaign_name || '').toLowerCase().includes(search)) : liveList
+        return { count: campaigns.length, campaigns, source: 'live_meta' }
+      }
+      // Fallback: CRM dynamic tables that hold synced FB insights with status.
       const { data: campaignTables, error: rpcErr } = await supabase
         .rpc('find_campaign_tables', { p_client_ids: [args.client_id] })
       if (rpcErr) throw rpcErr
@@ -1082,6 +1303,18 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
 
       synced_clients.sort((a: any, b: any) => (b.spend_change_pct || 0) - (a.spend_change_pct || 0))
 
+      // Try-to-connect pass: for every client we couldn't report from synced data,
+      // attempt a LIVE pull straight from Meta. Connects mapped-but-stale clients via
+      // their config and truly-unmapped clients via a strong name match — so "not
+      // connected" becomes real live numbers wherever possible, and whatever still
+      // can't connect is surfaced explicitly (never silently dropped, never faked).
+      const { connected: newly_connected_clients, stillNotConnected: still_not_connected_clients } =
+        not_connected_clients.length > 0
+          ? await fbTryConnectClients(supabase, accessibleTenantIds[0], not_connected_clients, 7)
+          : { connected: [], stillNotConnected: [] }
+
+      const hasNameMatch = newly_connected_clients.some((c: any) => c.matched_by === 'name')
+
       return {
         scope: {
           agency_name: agencyNameLabel,
@@ -1091,13 +1324,29 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         },
         coverage_summary: {
           synced: synced_clients.length,
-          not_connected: not_connected_clients.length,
+          connected_live: newly_connected_clients.length,
+          still_not_connected: still_not_connected_clients.length,
         },
+        // Portfolio trend scan runs off the synced CRM tables (needs the daily history for the
+        // 7d-vs-prior comparison). For live, up-to-the-minute status/leads on a single client use
+        // get_facebook_campaign_data / list_facebook_campaigns (source: 'live_meta'). Per-client
+        // `last_data_date` shows how fresh each row is.
+        data_source: 'synced_crm+live_meta',
         synced_clients,
-        not_connected_clients,
-        instructions_to_agent: not_connected_clients.length > 0
-          ? 'דווחי על שני הסלוטים: גם synced_clients וגם not_connected_clients. אסור לטעון "אין נתונים" כשיש synced_clients. עבור not_connected_clients הציעי למשתמש לפתוח משימת חיבור פייסבוק (אל תיצרי משימה ללא אישור).'
-          : 'כל הלקוחות בסקופ מסונכרנים. דווחי על synced_clients עם המספרים המדויקים בלבד.',
+        // Clients that had no synced data but we connected LIVE this run (7d window).
+        // matched_by:'name' means auto-matched by name — needs human verification.
+        newly_connected_clients,
+        // Clients we still couldn't connect — these need manual linking; tell the user.
+        still_not_connected_clients,
+        instructions_to_agent:
+          'דווחי על שלושת הסלוטים: synced_clients (היסטורי), newly_connected_clients (משכתי חי עכשיו) ו-still_not_connected_clients. ' +
+          'אסור לטעון "אין נתונים" כשיש נתונים. עבור newly_connected_clients הציגי את המספרים החיים (spend/leads/CPL ל-7 ימים). ' +
+          (hasNameMatch
+            ? 'חלק מהלקוחות חוברו לפי התאמת שם (matched_by="name") — ציַני זאת במפורש לדויד ובקשי אישור שהחשבון נכון לפני שמסתמכים על המספרים. '
+            : '') +
+          (still_not_connected_clients.length > 0
+            ? 'עבור still_not_connected_clients — נסיתי לחבר אוטומטית ולא הצלחתי; אמרי לדויד במפורש אילו לקוחות לא הצלחתי לחבר ומה הסיבה (connect_attempt), והציעי חיבור ידני. אל תמציאי מספרים עבורם.'
+            : 'כל הלקוחות חוברו (מסונכרן או חי).'),
       }
     }
     case 'update_client_health': {

@@ -568,20 +568,34 @@ Deno.serve(async (req) => {
           isManualOutgoing: isOutgoingFromPhone,
           isGroup: true,
           sendMessage: async (_chatId: string, message: string) => {
+            const settingsAny = (integ.settings as any) || {};
+            const baseUrl = settingsAny.gateway_url || 'https://whatsappgw-pzpyrrww.manus.space';
+            const instanceId = settingsAny.instance_id;
+            const apiKey = integ.api_key;
+            if (!instanceId || !apiKey) return false;
+            // IMPORTANT: bound the gateway call with a timeout. Without it, a stalled Manus
+            // connection hangs this whole function and the WhatsApp message is stuck on "sending".
+            // No retry on abort: the message may already have been delivered, so a retry risks a duplicate.
+            const FETCH_TIMEOUT_MS = 60000;
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+            const started = Date.now();
             try {
-              const settingsAny = (integ.settings as any) || {};
-              const baseUrl = settingsAny.gateway_url || 'https://whatsappgw-pzpyrrww.manus.space';
-              const instanceId = settingsAny.instance_id;
-              const apiKey = integ.api_key;
-              if (!instanceId || !apiKey) return false;
               const res = await fetch(`${baseUrl}/api/v1/instances/${instanceId}/send/group`, {
                 method: 'POST',
                 headers: { 'X-Api-Key': apiKey, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ groupId: groupChatId, body: message }),
+                signal: controller.signal,
               });
+              clearTimeout(timer);
+              console.log('[manus-wa Carmen group send]', { groupChatId, status: res.status, ok: res.ok, elapsedMs: Date.now() - started });
               return res.ok;
-            } catch (err) {
-              console.error('manus-wa Carmen group sendMessage error:', err);
+            } catch (err: any) {
+              clearTimeout(timer);
+              const isAbort = err?.name === 'AbortError';
+              console.error('manus-wa Carmen group sendMessage error:', isAbort
+                ? `aborted after ${Date.now() - started}ms (gateway timeout) — not retried to avoid duplicate delivery`
+                : err);
               return false;
             }
           },

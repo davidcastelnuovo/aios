@@ -583,7 +583,12 @@ export async function findActiveCarmenSession(
   connectionUserId: string,
   idleMinutes: number = CARMEN_SESSION_IDLE_MINUTES_DEFAULT,
 ): Promise<any | null> {
-  const phone = chatId.split('@')[0];
+  // Key the lookup on chat_id only — it uniquely identifies the conversation
+  // (a 1:1 "<phone>@c.us" or a group "<id>@g.us"). We must NOT also filter on
+  // `phone`: in groups the session row stores the individual sender's phone
+  // (often empty), while this lookup would derive the GROUP id from chatId.
+  // That mismatch meant a group session was never found, so every inbound
+  // group message spawned a brand-new "active" session (duplicate sessions).
   const { data } = await supabase
     .from('carmen_whatsapp_sessions')
     .select('*')
@@ -591,7 +596,6 @@ export async function findActiveCarmenSession(
     .eq('status', 'active')
     .eq('connection_user_id', connectionUserId)
     .eq('chat_id', chatId)
-    .eq('phone', phone)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -665,7 +669,6 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
   // (from a deleted/legacy automation or a different integration) is still marked active.
   // Auto-end any such stale sessions so they can't keep the channel "warm".
   if (!earlyAutomation) {
-    const phoneOnly = chatId.split('@')[0];
     const { data: stale } = await supabase
       .from('carmen_whatsapp_sessions')
       .select('id')
@@ -673,7 +676,6 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
       .eq('status', 'active')
       .eq('connection_user_id', connectionUserId)
       .eq('chat_id', chatId)
-      .eq('phone', phoneOnly)
       .limit(5);
     if (stale && stale.length > 0) {
       const ids = stale.map((s: any) => s.id);
@@ -1015,6 +1017,21 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     .single();
 
   if (sessionError || !newSession) {
+    // 23505 = unique_violation on the "one active session per chat" partial index:
+    // another concurrent webhook invocation already opened the session for this chat.
+    // Treat that as success and let the existing session take this turn — never create
+    // a duplicate or surface an error to the user.
+    if ((sessionError as any)?.code === '23505') {
+      const existing = await findActiveCarmenSession(supabase, tenantId, chatId, connectionUserId, idleMinutes);
+      if (existing) {
+        console.log('[carmen] Lost create race — deferring to existing active session', { session: existing.id, chatId });
+        await supabase
+          .from('carmen_whatsapp_sessions')
+          .update({ last_message_at: new Date().toISOString() })
+          .eq('id', existing.id);
+        return { handled: true, outcome: 'active' };
+      }
+    }
     console.error('Failed to create Carmen session:', sessionError);
     await routedSend(chatId, 'מצטערת, אירעה שגיאה בהפעלת השיחה. נסה שוב בעוד מספר שניות.');
     return { handled: true, outcome: 'error' };
