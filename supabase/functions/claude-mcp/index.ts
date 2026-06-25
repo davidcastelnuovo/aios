@@ -13,11 +13,12 @@
 //   - request_dev_task : code/feature/bugfix work → Claude implements + opens a PR
 //   - ask_claude       : any general request (research, analysis, writing, planning)
 //
-// When Carmen asks for help, the request also instructs Claude to TEACH her:
-// after solving, Claude writes a reusable skin into public.ai_skills (so Carmen
-// can do it herself next time) and records the capability for its own future
-// sessions in docs/carmen-learned-skills.md. The target tenant is resolved
-// server-side from the caller's bearer (no UUID has to be passed by the model).
+// When Carmen asks for help, the request also instructs Claude to: TEACH her
+// (write a reusable skin into public.ai_skills so she can do it herself next
+// time + record it in docs/carmen-learned-skills.md), KEEP DAVID UPDATED with
+// the result, and FIX-ON-FAIL (if a previously-taught skin failed, fix it and
+// let her retry). The tenant + agent are resolved server-side from the caller's
+// bearer (no UUID has to be passed by the model).
 //
 // Required Supabase secrets:
 //   CLAUDE_ROUTINE_ID     trig_… id of the routine created at claude.ai/code/routines
@@ -40,7 +41,7 @@ const corsHeaders = {
 
 const ANTHROPIC_BETA = Deno.env.get("CLAUDE_ROUTINE_BETA") || "experimental-cc-routine-2026-04-01";
 const ANTHROPIC_VERSION = "2023-06-01";
-const SERVER_INFO = { name: "claude-mcp", version: "1.1.0" };
+const SERVER_INFO = { name: "claude-mcp", version: "1.2.0" };
 const PROTOCOL_VERSION = "2024-11-05";
 const MAX_TEXT = 65_536; // Routines /fire hard limit on the `text` field.
 
@@ -154,50 +155,62 @@ function resolveRoutine(kind: "dev" | "general"): { id: string; token: string } 
   return { id: generalId, token: generalToken };
 }
 
-// Resolve which tenant is asking, from the caller's bearer. All "Claude"
+// Resolve who is asking (tenant + agent), from the caller's bearer. All "Claude"
 // connections share the same CLAUDE_MCP_BEARER, so this only disambiguates when
 // a single ready connection matches; otherwise we fall back to the configured
-// default tenant (or leave it unknown). The model never has to pass a UUID.
-async function resolveTenant(bearer: string | undefined): Promise<string | null> {
-  const fallback = Deno.env.get("CLAUDE_DEFAULT_TENANT_ID") || null;
+// default tenant. The model never has to pass a UUID.
+async function resolveContext(bearer: string | undefined): Promise<{ tenantId: string | null; agentId: string | null }> {
+  const fallback = { tenantId: Deno.env.get("CLAUDE_DEFAULT_TENANT_ID") || null, agentId: null as string | null };
   if (!bearer || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return fallback;
   try {
     const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
     const { data } = await sb
       .from("agent_mcp_connections")
-      .select("tenant_id")
+      .select("tenant_id, agent_id")
       .eq("state", "ready")
       .filter("oauth_tokens->>bearer", "eq", bearer);
-    const tenants = Array.from(new Set((data || []).map((r: any) => r.tenant_id).filter(Boolean)));
-    if (tenants.length === 1) return tenants[0] as string;
+    const rows = (data || []) as Array<{ tenant_id: string | null; agent_id: string | null }>;
+    const tenants = Array.from(new Set(rows.map((r) => r.tenant_id).filter(Boolean)));
+    if (tenants.length === 1) {
+      const agents = Array.from(new Set(rows.map((r) => r.agent_id).filter(Boolean)));
+      return { tenantId: tenants[0] as string, agentId: agents.length === 1 ? (agents[0] as string) : null };
+    }
     return fallback;
   } catch {
     return fallback;
   }
 }
 
-// Appended to every help request so Claude not only solves the task but makes
-// Carmen independent next time — and remembers the capability for itself.
-function teachingBlock(tenantId: string | null): string {
+// Appended to every help request so Claude (a) solves the task, (b) makes Carmen
+// independent next time, (c) keeps David in the loop with the result, and (d)
+// treats a failed previously-taught skin as a fix-and-retry job. Carmen's side
+// mirrors this in her always-on instruction + the `claude_escalation` skin.
+function teachingBlock(tenantId: string | null, agentId: string | null): string {
   const tenantLine = tenantId
     ? `Target tenant_id for the skin: ${tenantId}`
     : `Target tenant: UNKNOWN — skip the ai_skills write and only record to the repo doc.`;
+  const callbackLine = (tenantId && agentId)
+    ? `To update David, you can call Carmen back: POST ${SUPABASE_URL}/functions/v1/run-ai-agent ` +
+      `with {"agent_id":"${agentId}","tenant_id":"${tenantId}","surface":"whatsapp","command_text":"<your update for David>"} ` +
+      `(service-role auth) so she relays it to David through her own channel. If that is not possible, put the summary + PR link in your PR description.`
+    : `Make sure David ends up informed — put a clear summary + PR link in your PR description.`;
   return (
-    `\n\n--- TEACH CARMEN & REMEMBER (do this after solving) ---\n` +
-    `This came from Carmen, an autonomous agent, because she couldn't do it herself.\n` +
+    `\n\n--- TEACH CARMEN, KEEP DAVID UPDATED & FIX-ON-FAIL ---\n` +
+    `This came from Carmen, an autonomous agent, because she could not do it herself.\n` +
     `${tenantLine}\n` +
-    `If — and only if — this is a genuinely reusable capability (not a trivial one-off):\n` +
-    `1. Make Carmen independent: insert a concise skin row into public.ai_skills via the Supabase connector with ` +
+    `A) TEACH (only if genuinely reusable, not a trivial one-off):\n` +
+    `   1. Make Carmen independent: insert a concise skin row into public.ai_skills via the Supabase connector with ` +
     `scope='tenant', tenant_id=<above>, is_active=true, created_by_agent=true, a short name + description, ` +
-    `clear operational \`steps\`, a snake_case \`slug\`, a \`system_prompt\` with the exact procedure (which tools to call, in what order), ` +
-    `and \`triggers\` (Hebrew + English phrases that should activate it). Keep it tight and actionable.\n` +
-    `2. Remember it for your own future sessions: append a short dated entry to docs/carmen-learned-skills.md in the repo ` +
-    `(create the file if missing) noting the capability and the skin slug, and include that file change in your pull request.\n` +
-    `If the request was trivial (a simple acknowledgement or a one-off answer), skip both steps.`
+    `clear operational \`steps\`, a snake_case \`slug\`, a \`system_prompt\` with the exact procedure (which tools, in what order), ` +
+    `and \`triggers\` (Hebrew + English phrases). Keep it tight and actionable.\n` +
+    `   2. Remember it for your future sessions: append a short dated entry to docs/carmen-learned-skills.md and include it in your PR.\n` +
+    `B) UPDATE DAVID: when you finish, make sure David is updated with the result. ${callbackLine}\n` +
+    `C) FIX-ON-FAIL: if this request says a capability you previously taught Carmen FAILED in practice, that is the priority — ` +
+    `diagnose the failure, fix the ai_skills skin and/or the underlying code, verify it works, and report exactly what you changed so Carmen can retry.`
   );
 }
 
-async function handleToolCall(name: string, args: Record<string, any>, tenantId: string | null): Promise<string> {
+async function handleToolCall(name: string, args: Record<string, any>, ctx: { tenantId: string | null; agentId: string | null }): Promise<string> {
   if (name === "request_dev_task") {
     const task = String(args?.task ?? "").trim();
     if (!task) throw new Error("request_dev_task requires a non-empty 'task'.");
@@ -212,7 +225,7 @@ async function handleToolCall(name: string, args: Record<string, any>, tenantId:
       (branch ? `\nBase/target branch: ${branch}\n` : ``) +
       (context ? `\nContext:\n${context}\n` : ``) +
       `\nPlease implement this in the AIOS codebase and open a pull request when done.` +
-      teachingBlock(tenantId);
+      teachingBlock(ctx.tenantId, ctx.agentId);
     const url = await fireRoutine(id, token, text);
     return `✅ Dispatched the dev task to Claude Code. Claude is now working on it and will open a pull request when finished.\nSession: ${url}`;
   }
@@ -228,7 +241,7 @@ async function handleToolCall(name: string, args: Record<string, any>, tenantId:
       `Requested by Carmen (AIOS agent), on behalf of David.\n\n` +
       `${request}\n` +
       (context ? `\nContext:\n${context}\n` : ``) +
-      teachingBlock(tenantId);
+      teachingBlock(ctx.tenantId, ctx.agentId);
     const url = await fireRoutine(id, token, text);
     return `✅ Sent your request to Claude. A Claude Code session is now running on it.\nSession: ${url}`;
   }
@@ -287,8 +300,8 @@ Deno.serve(async (req) => {
         const name = params?.name as string;
         const args = (params?.arguments ?? {}) as Record<string, any>;
         try {
-          const tenantId = await resolveTenant(bearerFrom(req));
-          const text = await handleToolCall(name, args, tenantId);
+          const ctx = await resolveContext(bearerFrom(req));
+          const text = await handleToolCall(name, args, ctx);
           return rpcResult(id, { content: [{ type: "text", text }] });
         } catch (e: any) {
           // Surface tool failures as an MCP tool error so the agent sees them.
