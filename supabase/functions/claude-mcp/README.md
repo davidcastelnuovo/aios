@@ -55,15 +55,26 @@ returned session URL is what Carmen reports back so David can watch the run.
 | `CLAUDE_ROUTINE_BETA` | optional | override the experimental beta header |
 | `CLAUDE_DEFAULT_TENANT_ID` | optional | fallback tenant for the "teach Carmen a skin" step when it can't be resolved from the caller's bearer |
 
-## Teaching loop (Carmen becomes independent)
+## Teach + update + fix-on-fail loop
 
-Every help request also instructs Claude to **teach Carmen**: after solving, if
-the task is a reusable capability, Claude writes a skin into `public.ai_skills`
-(`scope='tenant'`, `created_by_agent=true`) so Carmen can do it herself next
-time, and records the capability in `docs/carmen-learned-skills.md` (Claude's own
-cross-session memory). The target tenant is resolved server-side from the
-caller's bearer (falling back to `CLAUDE_DEFAULT_TENANT_ID`), so the model never
-has to pass a UUID. Trivial one-off requests are skipped.
+Every help request appends a block instructing Claude to:
+
+- **Teach Carmen** — after solving, if the task is a reusable capability, write a
+  skin into `public.ai_skills` (`scope='tenant'`, `created_by_agent=true`) so
+  Carmen can do it herself next time, and record it in
+  `docs/carmen-learned-skills.md` (Claude's own cross-session memory). Trivial
+  one-offs are skipped.
+- **Keep David updated** — when Claude finishes, make sure David is informed of
+  the result (call Carmen back via `run-ai-agent` so she relays it, or put the
+  summary + PR link in the PR description). Carmen's own instruction also tells
+  her to update David at hand-off (with the session link) and again on
+  completion.
+- **Fix-on-fail** — if the request says a previously-taught skin failed in
+  practice, Claude treats fixing it as the priority (diagnose → fix the skin
+  and/or code → verify → report) so Carmen can retry.
+
+The tenant + agent are resolved server-side from the caller's bearer (tenant
+falls back to `CLAUDE_DEFAULT_TENANT_ID`), so the model never has to pass a UUID.
 
 ```bash
 supabase secrets set \
