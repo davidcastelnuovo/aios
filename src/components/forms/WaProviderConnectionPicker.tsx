@@ -13,6 +13,7 @@ interface Integration {
   id: string;
   integration_type: string;
   settings?: any;
+  display_name?: string | null;
   owner_name?: string | null;
 }
 
@@ -96,11 +97,17 @@ export function WaProviderConnectionPicker({ integrations, value, onChange }: Pr
                   i.settings?.idInstance?.slice(-4) ||
                   i.settings?.instance_id?.slice(-4) ||
                   i.settings?.instanceId?.slice(-4) ||
-                  "לא ידוע";
-                const name = i.settings?.instance_name || i.settings?.connection_name || i.owner_name || "חיבור";
+                  "";
+                const providerLabel = i.integration_type === "manus_wa" ? "Manus" : "Green API";
+                const name =
+                  (i.display_name && String(i.display_name).trim()) ||
+                  i.settings?.instance_name ||
+                  i.settings?.connection_name ||
+                  i.owner_name ||
+                  providerLabel;
                 return (
                   <SelectItem key={i.id} value={i.id}>
-                    {name} ({idShort})
+                    {name}{idShort ? ` (··${idShort})` : ""}
                   </SelectItem>
                 );
               })
