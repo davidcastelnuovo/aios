@@ -111,7 +111,7 @@ serve(async (req) => {
 
     // SEO report tables are backed by ahrefs_reports. They should refresh from
     // stored snapshots instead of calling the older Site Explorer endpoints.
-    if (settings.data_source === 'ahrefs_reports') {
+    if (settings.data_source === 'ahrefs_reports' || settings.data_source === 'seo_unified') {
       const clientId = settings.clientId || settings.client_id || tableRow.client_id;
       if (!clientId) {
         return new Response(

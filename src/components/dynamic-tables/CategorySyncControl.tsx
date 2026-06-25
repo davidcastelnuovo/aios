@@ -7,6 +7,7 @@ import { he } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { isSeoReportSource } from "@/lib/seoReports";
 
 interface CategoryTable {
   id: string;
@@ -276,7 +277,7 @@ export function CategorySyncControl({ category, tables }: Props) {
   );
 
   const ahrefsReportTables = useMemo(
-    () => tables.filter((t) => t.integration_type === "ahrefs" && t.integration_settings?.data_source === "ahrefs_reports"),
+    () => tables.filter((t) => t.integration_type === "ahrefs" && isSeoReportSource(t.integration_settings?.data_source)),
     [tables]
   );
 
@@ -310,7 +311,7 @@ export function CategorySyncControl({ category, tables }: Props) {
     await runWithConcurrency(syncableTables, 2, async (t) => {
       const fnName = FN_BY_TYPE[t.integration_type as string];
       try {
-        if (t.integration_type === "ahrefs" && t.integration_settings?.data_source === "ahrefs_reports") {
+        if (t.integration_type === "ahrefs" && isSeoReportSource(t.integration_settings?.data_source)) {
           await syncStoredAhrefsReportTable(t);
           success++;
           return;

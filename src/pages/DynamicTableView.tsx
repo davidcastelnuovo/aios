@@ -56,6 +56,7 @@ import { MaskyooSiblingCard } from "@/components/dynamic-tables/MaskyooSiblingCa
 import { CURRENCY_OPTIONS, getCurrencySymbol, type CurrencyCode } from "@/lib/currency";
 import { LinkTableToClientDialog } from "@/components/dynamic-tables/LinkTableToClientDialog";
 import { getLeadsFromData } from "@/lib/adsMetrics";
+import { isSeoReportSource } from "@/lib/seoReports";
 import { ManualROICard } from "@/components/dynamic-tables/ManualROICard";
 
 // Google Ads icon component
@@ -1011,7 +1012,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       const settings = table.integration_settings || {};
 
       // If data_source is ahrefs_reports, fetch fresh from Ahrefs API then rebuild from DB
-      if (settings.data_source === 'ahrefs_reports') {
+      if (isSeoReportSource(settings.data_source)) {
         const clientId = (settings.clientId || settings.client_id || table.client_id) as string;
         if (!clientId) throw new Error('Missing client ID for SEO report');
 
@@ -1949,8 +1950,8 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                 <RefreshCw className={`h-4 w-4 ${syncAhrefsMutation.isPending ? 'animate-spin' : ''}`} />
                 {syncAhrefsMutation.isPending 
                   ? 'מסנכרן...' 
-                  : table?.integration_settings?.data_source === 'ahrefs_reports' 
-                    ? 'סנכרן מדוחות SEO' 
+                  : isSeoReportSource(table?.integration_settings?.data_source)
+                    ? 'סנכרן מדוחות SEO'
                     : 'סנכרן Ahrefs'}
               </Button>
             </div>
@@ -2980,7 +2981,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       )}
 
       {/* SEO (Ahrefs) Dashboard with GSC & Analytics tabs */}
-      {!summaryOnly && hasAhrefs && table?.integration_settings?.data_source === 'ahrefs_reports' && (table?.integration_settings?.clientId || table?.integration_settings?.client_id || table?.client_id) && table?.tenant_id && (
+      {!summaryOnly && hasAhrefs && isSeoReportSource(table?.integration_settings?.data_source) && (table?.integration_settings?.clientId || table?.integration_settings?.client_id || table?.client_id) && table?.tenant_id && (
         <SeoReportTabs 
           tenantId={table.tenant_id} 
           clientId={table.integration_settings?.clientId || table.integration_settings?.client_id || table.client_id} 
@@ -2988,7 +2989,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       )}
       </div>
 
-      {!summaryOnly && (hasAhrefs && table?.integration_settings?.data_source === 'ahrefs_reports' ? null : isLoading ? (
+      {!summaryOnly && (hasAhrefs && isSeoReportSource(table?.integration_settings?.data_source) ? null : isLoading ? (
         <Skeleton className="h-96 w-full" />
       ) : (
         <div className="border rounded-lg overflow-hidden bg-background shadow-sm">
