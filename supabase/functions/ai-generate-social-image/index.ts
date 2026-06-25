@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveOpenAIKey } from "../_shared/ai.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -22,9 +23,9 @@ serve(async (req) => {
       );
     }
 
-    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-    if (!OPENAI_API_KEY) {
-      throw new Error("OPENAI_API_KEY not configured");
+    const openaiKey = await resolveOpenAIKey();
+    if (!openaiKey) {
+      throw new Error("OPENAI_API_KEY not configured — set the Supabase secret or add the key in Settings → Integrations → LLM");
     }
 
     // Generate image using OpenAI Images (gpt-image-1)
@@ -33,7 +34,7 @@ serve(async (req) => {
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${OPENAI_API_KEY}`,
+          Authorization: `Bearer ${openaiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -41,6 +42,7 @@ serve(async (req) => {
           prompt: `Professional social media post image: ${prompt}. Visually appealing, modern, suitable for social media marketing.`,
           n: 1,
           size: "1024x1024",
+          output_format: "png",
         }),
       }
     );
