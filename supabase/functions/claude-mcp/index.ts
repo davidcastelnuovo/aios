@@ -41,7 +41,7 @@ const corsHeaders = {
 
 const ANTHROPIC_BETA = Deno.env.get("CLAUDE_ROUTINE_BETA") || "experimental-cc-routine-2026-04-01";
 const ANTHROPIC_VERSION = "2023-06-01";
-const SERVER_INFO = { name: "claude-mcp", version: "1.2.0" };
+const SERVER_INFO = { name: "claude-mcp", version: "1.3.0" };
 const PROTOCOL_VERSION = "2024-11-05";
 const MAX_TEXT = 65_536; // Routines /fire hard limit on the `text` field.
 
@@ -189,10 +189,11 @@ function teachingBlock(tenantId: string | null, agentId: string | null): string 
   const tenantLine = tenantId
     ? `Target tenant_id for the skin: ${tenantId}`
     : `Target tenant: UNKNOWN — skip the ai_skills write and only record to the repo doc.`;
-  const callbackLine = (tenantId && agentId)
-    ? `To update David, you can call Carmen back: POST ${SUPABASE_URL}/functions/v1/run-ai-agent ` +
-      `with {"agent_id":"${agentId}","tenant_id":"${tenantId}","surface":"whatsapp","command_text":"<your update for David>"} ` +
-      `(service-role auth) so she relays it to David through her own channel. If that is not possible, put the summary + PR link in your PR description.`
+  const callbackLine = tenantId
+    ? `To update David directly on WhatsApp, run this one line via your Supabase connector (execute_sql): ` +
+      `select public.claude_notify_david('<your concise update for David>', '${tenantId}'::uuid); ` +
+      `— it pushes the message to David's WhatsApp, guaranteed, independent of Carmen's live session. ` +
+      `Also keep a clear summary + PR link in your PR description.`
     : `Make sure David ends up informed — put a clear summary + PR link in your PR description.`;
   return (
     `\n\n--- TEACH CARMEN, KEEP DAVID UPDATED & FIX-ON-FAIL ---\n` +
