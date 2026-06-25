@@ -237,3 +237,11 @@ verify_jwt = true
 
 [functions.run-ai-agent-v2]
 verify_jwt = true
+
+# Broadcast module — public endpoints (no Supabase JWT):
+# unsubscribe is clicked from an email; resend-webhook is called by Resend.
+[functions.broadcast-unsubscribe]
+verify_jwt = false
+
+[functions.resend-webhook]
+verify_jwt = false
