@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical, ChevronDown, ChevronUp, User, Calendar as CalendarIcon, Search, X, Settings2, CheckSquare, Download, Clock, Tag, Filter, FileSpreadsheet, MessageCircle } from "lucide-react";
+import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical, ChevronDown, ChevronUp, User, Calendar as CalendarIcon, Search, X, Settings2, CheckSquare, Download, Clock, Tag, Filter, FileSpreadsheet, MessageCircle, Pencil } from "lucide-react";
 import confetti from "canvas-confetti";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -52,7 +52,7 @@ import {
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useState, ReactNode, useRef, useEffect, useMemo } from "react";
+import { useState, ReactNode, useRef, useEffect, useMemo, createContext, useContext } from "react";
 import {
   Collapsible,
   CollapsibleContent,
@@ -77,6 +77,9 @@ import { ImportLeadsSheet } from "@/components/forms/ImportLeadsSheet";
 import { FollowUpDatePicker } from "@/components/leads/FollowUpDatePicker";
 import { LeadsChatView } from "@/components/leads/LeadsChatView";
 
+
+// Lets nested cards/table rows ask the page to open a lead in the chat view (instead of a modal).
+const LeadEditContext = createContext<((leadId: string) => void) | null>(null);
 
 const DROP_ANIMATION_MS = 220;
 
@@ -213,6 +216,7 @@ function LeadCardContent({
   innerRef?: React.Ref<HTMLDivElement>;
 }) {
   const { toast } = useToast();
+  const openLeadInChat = useContext(LeadEditContext);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [stageSelectOpen, setStageSelectOpen] = useState(false);
   const [responseSelectOpen, setResponseSelectOpen] = useState(false);
@@ -253,7 +257,8 @@ function LeadCardContent({
             className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer hover:opacity-70 transition-opacity"
             onClick={(e) => {
               e.stopPropagation();
-              setEditDialogOpen(true);
+              if (openLeadInChat) openLeadInChat(lead.id);
+              else setEditDialogOpen(true);
             }}
           >
             <User className="h-4 w-4 text-primary shrink-0" />
@@ -680,6 +685,13 @@ export default function Leads() {
     try {
       window.localStorage.setItem("leads-view-mode", mode);
     } catch {}
+  };
+  const [pendingChatLeadId, setPendingChatLeadId] = useState<string | null>(null);
+
+  // Editing a lead opens the chat view focused on that lead, instead of a modal dialog.
+  const openLeadInChat = (leadId: string) => {
+    setPendingChatLeadId(leadId);
+    setViewMode("chat");
   };
   const [openTables, setOpenTables] = useState<Record<string, boolean>>({});
   const [selectedMobileStage, setSelectedMobileStage] = useState<string>("");
@@ -2115,6 +2127,7 @@ export default function Leads() {
   }
 
   return (
+    <LeadEditContext.Provider value={openLeadInChat}>
     <div className="space-y-6 p-3 md:p-6">
       {/* View As Banner - shows when viewing as another user */}
       {isViewingAs && (
@@ -2743,6 +2756,8 @@ export default function Leads() {
         </>
       ) : viewMode === "chat" ? (
         <LeadsChatView
+          key={pendingChatLeadId ?? "chat"}
+          initialLeadId={pendingChatLeadId ?? undefined}
           leads={filteredLeads || []}
           pipelineStages={PIPELINE_STAGES}
           leadStatuses={leadStatuses}
@@ -2827,18 +2842,20 @@ export default function Leads() {
 
       {/* Auto-open lead dialog from URL parameter */}
       {autoOpenLead && (
-        <EditLeadDialog 
+        <EditLeadDialog
           lead={autoOpenLead}
           open={!!autoOpenLeadId}
           onOpenChange={(open) => !open && setAutoOpenLeadId(null)}
         />
       )}
     </div>
+    </LeadEditContext.Provider>
   );
 }
 
 function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount }: { stageLeads: any[]; totalLeadsCount?: number; overallTotalCount?: number }) {
   const { toast } = useToast();
+  const openLeadInChat = useContext(LeadEditContext);
   const queryClient = useQueryClient();
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
   const [selectAllMode, setSelectAllMode] = useState<'page' | 'all' | null>(null);
@@ -3521,7 +3538,19 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
               width: 120,
               render: (lead: any) => (
                 <div className="flex justify-center gap-1">
-                  <EditLeadDialog lead={lead} />
+                  {openLeadInChat ? (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      title="ערוך ליד"
+                      onClick={() => openLeadInChat(lead.id)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  ) : (
+                    <EditLeadDialog lead={lead} />
+                  )}
                   <AddTaskForm
                     leadId={lead.id}
                     agencyId={lead.agency_id || undefined}
