@@ -33,6 +33,14 @@ logged.
 
 <!-- New entries go below this line, newest first. -->
 
+### 2026-06-25 — async session result handling + save to memory (behavior instruction)
+- **Skin slug:** `save_agent_memory` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:**
+  1. **Save behavior instructions to `ai_memory`** correctly — using `user_id = ac7b2493-dcfa-47d8-80cc-b3900a406c46` (David's UUID). The previous failure used the string `"system"` which is not a valid UUID.
+  2. **Handle async Claude session results**: always retrieve the session result before replying; never say "no update" without checking; deliver the actual answer directly to the user.
+- **How:** `save_agent_memory` skin: INSERT into `ai_memory` with the owner's UUID, ON CONFLICT upsert. The behavior instruction is already saved to `ai_memory` under `category=behavior`, `key=async_session_result_handling`.
+- **Origin:** Carmen request — "define instruction for async session result handling + save it; previous save failed with uuid 'system' error."
+
 ### 2026-06-25 — צור ארגון ללקוח (create org for client)
 - **Skin slug:** `create_org_for_client` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** In one step, provision a fully-wired new tenant from an existing client record — creates the org, invites the primary contact as owner, shares all integrations (via `shared_from_integration_id` mirror rows), shares social pages + WP sites (via junction tables), and clones Carmen + automations + pipelines.
