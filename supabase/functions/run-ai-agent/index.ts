@@ -6,7 +6,7 @@ import { buildCarmenV2SystemPrompt, shouldUseV2Prompt } from '../_shared/carmen-
 import { loadMcpTools } from '../_shared/mcp-tools.ts'
 import { spawnSubagent, getSubagentResult, spawnSubagentBatch, getBatchResults } from '../_shared/subagent.ts'
 import { resolveActiveSkills, buildSkillsBlockBySlug } from '../_shared/skills/registry.ts'
-import { aiEmbed } from '../_shared/ai.ts'
+import { aiEmbed, resolveOpenAIKey } from '../_shared/ai.ts'
 
 
 const corsHeaders = {
@@ -1434,14 +1434,20 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     case 'generate_ad_image': {
       const imagePrompt = args.prompt
 
+      const openaiKey = await resolveOpenAIKey()
+      if (!openaiKey) {
+        return { error: 'מפתח OpenAI לא מוגדר. יש להגדיר OPENAI_API_KEY בסודות Supabase, או להוסיף מפתח OpenAI בהגדרות האינטגרציות (LLM).', suggestion: 'פנה למנהל המערכת להגדרת המפתח.' }
+      }
+
       const imageRes = await fetch('https://api.openai.com/v1/images/generations', {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`, 'Content-Type': 'application/json' },
+        headers: { 'Authorization': `Bearer ${openaiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'gpt-image-1',
           prompt: `${imagePrompt}. Professional, high quality, suitable for a social media advertisement.`,
           n: 1,
           size: '1024x1024',
+          output_format: 'png',
         }),
       })
       
