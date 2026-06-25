@@ -34,8 +34,8 @@ function normalizePhone(input: string | null | undefined, cc = '972'): string | 
 }
 
 type Recipient = {
-  entity_type: 'client' | 'lead' | 'campaigner';
-  entity_id: string;
+  entity_type: 'client' | 'lead' | 'campaigner' | 'manual';
+  entity_id: string | null;
   phone: string | null;
   email: string | null;
   contact_name: string | null;
@@ -88,6 +88,27 @@ Deno.serve(async (req) => {
 
     const source: string = filter.source;
     let recipients: Recipient[] = [];
+
+    // ── Source: saved mailing list (short-circuits CRM resolution) ──
+    if (source === 'list') {
+      if (!filter.listId) {
+        return new Response(JSON.stringify({ error: 'missing_listId' }), { status: 400, headers: corsHeaders });
+      }
+      const { data: members, error } = await db
+        .from('broadcast_list_members')
+        .select('entity_type, entity_id, name, phone, email')
+        .eq('tenant_id', tenantId)
+        .eq('list_id', filter.listId);
+      if (error) throw error;
+      recipients = (members || []).map((m: any) => ({
+        entity_type: (m.entity_type || 'manual') as Recipient['entity_type'],
+        entity_id: m.entity_id || null,
+        phone: m.phone || null,
+        email: m.email || null,
+        contact_name: m.name || null,
+      }));
+      return finalizeReach(recipients, channel, db, tenantId, dryRun, broadcastId);
+    }
 
     // ── Tag prefilter (chat_contact_tags maps tags → client_id / lead_id) ──
     let tagEntityIds: Set<string> | null = null;
@@ -160,37 +181,56 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'unknown_source' }), { status: 400, headers: corsHeaders });
     }
 
-    // ── Channel reachability: whatsapp needs phone, email needs email ──
-    const reachable = recipients.filter((r) => (channel === 'email' ? !!r.email : !!r.phone));
-
-    // ── Normalize + dedup by phone (whatsapp) or email (email) ──
-    const seen = new Set<string>();
-    const deduped: Recipient[] = [];
-    for (const r of reachable) {
-      const key = channel === 'email' ? (r.email || '').toLowerCase() : normalizePhone(r.phone);
-      if (!key || seen.has(key)) continue;
-      seen.add(key);
-      deduped.push({ ...r, phone: channel === 'email' ? r.phone : (key as string) });
+    // ── Manual include / exclude specific contacts by entity id ──
+    if (Array.isArray(filter.includeIds) && filter.includeIds.length > 0) {
+      const inc = new Set(filter.includeIds);
+      recipients = recipients.filter((r) => r.entity_id && inc.has(r.entity_id));
+    }
+    if (Array.isArray(filter.excludeIds) && filter.excludeIds.length > 0) {
+      const exc = new Set(filter.excludeIds);
+      recipients = recipients.filter((r) => !r.entity_id || !exc.has(r.entity_id));
     }
 
-    // ── Remove opt-outs ──
-    const { data: optOuts } = await db
-      .from('broadcast_opt_outs')
-      .select('phone, email, channel')
-      .eq('tenant_id', tenantId)
-      .in('channel', [channel, 'all']);
-    const optPhones = new Set((optOuts || []).map((o: any) => o.phone).filter(Boolean));
-    const optEmails = new Set((optOuts || []).map((o: any) => (o.email || '').toLowerCase()).filter(Boolean));
-    const finalRecipients = deduped.filter((r) =>
-      channel === 'email' ? !optEmails.has((r.email || '').toLowerCase()) : !optPhones.has(r.phone || ''),
-    );
-
-    return finalize(finalRecipients, { dryRun, broadcastId, db, tenantId, channel });
+    return finalizeReach(recipients, channel, db, tenantId, dryRun, broadcastId);
   } catch (e: any) {
     console.error('[broadcast-enqueue]', e);
     return new Response(JSON.stringify({ error: String(e?.message || e) }), { status: 500, headers: corsHeaders });
   }
 });
+
+// Shared tail: channel reachability + normalize/dedup + opt-out removal + finalize.
+async function finalizeReach(
+  recipients: Recipient[],
+  channel: string,
+  db: any,
+  tenantId: string,
+  dryRun: boolean | undefined,
+  broadcastId: string | undefined,
+) {
+  const reachable = recipients.filter((r) => (channel === 'email' ? !!r.email : !!r.phone));
+
+  const seen = new Set<string>();
+  const deduped: Recipient[] = [];
+  for (const r of reachable) {
+    const key = channel === 'email' ? (r.email || '').toLowerCase() : normalizePhone(r.phone);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    deduped.push({ ...r, phone: channel === 'email' ? r.phone : (key as string) });
+  }
+
+  const { data: optOuts } = await db
+    .from('broadcast_opt_outs')
+    .select('phone, email, channel')
+    .eq('tenant_id', tenantId)
+    .in('channel', [channel, 'all']);
+  const optPhones = new Set((optOuts || []).map((o: any) => o.phone).filter(Boolean));
+  const optEmails = new Set((optOuts || []).map((o: any) => (o.email || '').toLowerCase()).filter(Boolean));
+  const finalRecipients = deduped.filter((r) =>
+    channel === 'email' ? !optEmails.has((r.email || '').toLowerCase()) : !optPhones.has(r.phone || ''),
+  );
+
+  return finalize(finalRecipients, { dryRun, broadcastId, db, tenantId, channel });
+}
 
 async function finalize(
   recipients: Recipient[],

@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useLeadStatuses } from "@/hooks/useLeadStatuses";
 import { useBroadcasts, type AudienceFilter } from "@/hooks/useBroadcasts";
+import { useBroadcastLists } from "@/hooks/useBroadcastLists";
 import { WaProviderConnectionPicker } from "@/components/forms/WaProviderConnectionPicker";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -43,6 +44,7 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
   const { tenantId } = useCurrentTenant();
   const { statuses: leadStatuses } = useLeadStatuses();
   const { create, update, previewAudience, launch } = useBroadcasts();
+  const { lists } = useBroadcastLists();
 
   const [step, setStep] = useState(0);
   const [name, setName] = useState("דיוור חדש");
@@ -59,6 +61,10 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
   const [leadStatusKeys, setLeadStatusKeys] = useState<string[]>([]);
   const [tagIds, setTagIds] = useState<string[]>([]);
   const [activeOnly, setActiveOnly] = useState(true);
+  const [listId, setListId] = useState<string | undefined>();
+  const [pickMode, setPickMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [candidateSearch, setCandidateSearch] = useState("");
   const [bodyText, setBodyText] = useState("");
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [audienceCount, setAudienceCount] = useState<number | null>(null);
@@ -74,6 +80,7 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
       setFromMode("default"); setFromName(""); setFromLocal(""); setFromDomain(VERIFIED_DOMAINS[0]); setReplyTo("");
       setIntegrationId(undefined); setSource("leads");
       setClientStatuses([]); setLeadStatusKeys([]); setTagIds([]); setActiveOnly(true);
+      setListId(undefined); setPickMode(false); setSelectedIds([]); setCandidateSearch("");
       setBodyText(""); setMediaFile(null); setAudienceCount(null);
       setSendMode("now"); setScheduledAt("");
     }
@@ -112,10 +119,36 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
   }, [integrations, integrationId, channel]);
 
   const buildFilter = (): AudienceFilter => {
-    if (source === "clients") return { source, statuses: clientStatuses, tagIds };
-    if (source === "leads") return { source, statusKeys: leadStatusKeys, tagIds };
-    return { source: "campaigners", activeOnly };
+    if (source === "list") return { source: "list", listId };
+    const include = pickMode ? { includeIds: selectedIds } : {};
+    if (source === "clients") return { source, statuses: clientStatuses, tagIds, ...include };
+    if (source === "leads") return { source, statusKeys: leadStatusKeys, tagIds, ...include };
+    return { source: "campaigners", activeOnly, ...include };
   };
+
+  // Candidate contacts for manual selection (base-table filters; tags applied server-side otherwise)
+  const candidates = useQuery({
+    queryKey: ["broadcast-candidates", tenantId, source, clientStatuses, leadStatusKeys, activeOnly],
+    enabled: !!tenantId && open && pickMode && source !== "list",
+    queryFn: async () => {
+      if (source === "clients") {
+        let q = supabase.from("clients").select("id, contact_name, name, phone, email").eq("tenant_id", tenantId);
+        if (clientStatuses.length) q = q.in("status", clientStatuses);
+        const { data } = await q.limit(1000);
+        return (data || []).map((c: any) => ({ id: c.id, label: c.contact_name || c.name || c.phone, phone: c.phone, email: c.email }));
+      }
+      if (source === "leads") {
+        let q = supabase.from("leads").select("id, contact_name, company_name, phone, email").eq("tenant_id", tenantId);
+        if (leadStatusKeys.length) q = q.in("status", leadStatusKeys);
+        const { data } = await q.limit(1000);
+        return (data || []).map((l: any) => ({ id: l.id, label: l.contact_name || l.company_name || l.phone, phone: l.phone, email: l.email }));
+      }
+      let q = supabase.from("campaigners").select("id, full_name, phone, email").eq("tenant_id", tenantId);
+      if (activeOnly) q = q.eq("active", true);
+      const { data } = await q.limit(1000);
+      return (data || []).map((c: any) => ({ id: c.id, label: c.full_name || c.phone, phone: c.phone, email: c.email }));
+    },
+  });
 
   const runPreview = async () => {
     setPreviewing(true);
@@ -132,9 +165,9 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
 
   // Recompute count when audience criteria change (on the audience step)
   useEffect(() => {
-    if (step === 2 && open) runPreview();
+    if (step === 2 && open && (source !== "list" || listId)) runPreview();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, source, clientStatuses, leadStatusKeys, tagIds, activeOnly]);
+  }, [step, source, clientStatuses, leadStatusKeys, tagIds, activeOnly, listId, pickMode, selectedIds]);
 
   const toggle = (arr: string[], v: string, set: (x: string[]) => void) =>
     set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
@@ -267,9 +300,27 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
                   <SelectItem value="leads">לידים</SelectItem>
                   <SelectItem value="clients">לקוחות</SelectItem>
                   <SelectItem value="campaigners">צוות</SelectItem>
+                  <SelectItem value="list">רשימת תפוצה</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+
+            {source === "list" && (
+              <div>
+                <Label>בחר רשימה</Label>
+                <Select value={listId} onValueChange={setListId}>
+                  <SelectTrigger><SelectValue placeholder="בחר רשימת תפוצה..." /></SelectTrigger>
+                  <SelectContent className="bg-background z-[100]">
+                    {(lists.data || []).map((l) => (
+                      <SelectItem key={l.id} value={l.id}>{l.name} ({l.member_count})</SelectItem>
+                    ))}
+                    {(lists.data || []).length === 0 && (
+                      <div className="px-3 py-2 text-sm text-muted-foreground">אין רשימות — צור בטאב "רשימות תפוצה"</div>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {source === "clients" && (
               <div>
@@ -316,6 +367,41 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
                     </button>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {source !== "list" && (
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm">
+                  <Checkbox checked={pickMode} onCheckedChange={(v) => { setPickMode(!!v); setSelectedIds([]); }} />
+                  בחירת נמענים ספציפית
+                </label>
+                {pickMode && (
+                  <div className="rounded-lg border p-2 space-y-2">
+                    <Input value={candidateSearch} onChange={(e) => setCandidateSearch(e.target.value)} placeholder="חיפוש..." className="h-8" />
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>נבחרו {selectedIds.length}</span>
+                      <button type="button" className="underline" onClick={() => {
+                        const all = (candidates.data || []).map((c: any) => c.id);
+                        setSelectedIds(selectedIds.length === all.length ? [] : all);
+                      }}>בחר/נקה הכל</button>
+                    </div>
+                    <div className="max-h-48 overflow-y-auto space-y-1">
+                      {candidates.isLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin mx-auto" />
+                      ) : (candidates.data || [])
+                        .filter((c: any) => !candidateSearch || (c.label || "").includes(candidateSearch) || (c.phone || "").includes(candidateSearch))
+                        .slice(0, 300)
+                        .map((c: any) => (
+                          <label key={c.id} className="flex items-center gap-2 text-sm">
+                            <Checkbox checked={selectedIds.includes(c.id)} onCheckedChange={() => toggle(selectedIds, c.id, setSelectedIds)} />
+                            <span className="truncate">{c.label}</span>
+                            <span className="text-xs text-muted-foreground" dir="ltr">{c.phone || c.email}</span>
+                          </label>
+                        ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
