@@ -7,7 +7,7 @@ export type BroadcastStatus =
   | "draft" | "scheduled" | "sending" | "sent" | "paused" | "failed" | "canceled";
 
 export interface AudienceFilter {
-  source: "clients" | "leads" | "campaigners";
+  source: "clients" | "leads" | "campaigners" | "list";
   statuses?: string[];     // clients
   serviceTags?: string[];  // clients
   statusKeys?: string[];   // leads
@@ -15,6 +15,9 @@ export interface AudienceFilter {
   tagIds?: string[];       // clients/leads
   roles?: string[];        // campaigners
   activeOnly?: boolean;    // campaigners
+  listId?: string;         // source = list
+  includeIds?: string[];   // manual selection within a source
+  excludeIds?: string[];
 }
 
 export interface Broadcast {

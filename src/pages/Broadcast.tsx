@@ -7,7 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Send, Plus, Trash2, MessageSquare, Loader2 } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { BroadcastLists } from "@/components/broadcast/BroadcastLists";
+import { Send, Plus, Trash2, MessageSquare, Loader2, Users } from "lucide-react";
 import { toast } from "sonner";
 
 const STATUS_LABEL: Record<BroadcastStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -38,17 +40,24 @@ export default function Broadcast() {
 
   return (
     <div className="container mx-auto p-4 space-y-4" dir="rtl">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Send className="h-6 w-6 text-primary" />
-          <h1 className="text-2xl font-bold">דיוור</h1>
-        </div>
-        <Button onClick={() => setWizardOpen(true)}>
-          <Plus className="ml-1 h-4 w-4" /> דיוור חדש
-        </Button>
+      <div className="flex items-center gap-2">
+        <Send className="h-6 w-6 text-primary" />
+        <h1 className="text-2xl font-bold">דיוור</h1>
       </div>
 
-      <Card>
+      <Tabs defaultValue="broadcasts">
+        <TabsList>
+          <TabsTrigger value="broadcasts"><Send className="ml-1 h-4 w-4" />דיוורים</TabsTrigger>
+          <TabsTrigger value="lists"><Users className="ml-1 h-4 w-4" />רשימות תפוצה</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="broadcasts" className="space-y-4">
+          <div className="flex justify-end">
+            <Button onClick={() => setWizardOpen(true)}>
+              <Plus className="ml-1 h-4 w-4" /> דיוור חדש
+            </Button>
+          </div>
+          <Card>
         <CardHeader>
           <CardTitle className="text-base">דיוורים</CardTitle>
         </CardHeader>
@@ -111,6 +120,12 @@ export default function Broadcast() {
           )}
         </CardContent>
       </Card>
+        </TabsContent>
+
+        <TabsContent value="lists">
+          <BroadcastLists />
+        </TabsContent>
+      </Tabs>
 
       <BroadcastWizard open={wizardOpen} onOpenChange={setWizardOpen} onDone={() => list.refetch()} />
     </div>
