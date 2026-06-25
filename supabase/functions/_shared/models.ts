@@ -35,6 +35,10 @@ export const MODEL_CATALOG: ModelDef[] = [
   { id: 'openai/gpt-5.4-pro', alias: 'gpt-5.4-pro', label: 'GPT-5.4 Pro', family: 'openai', isLatest: true, capabilities: ['text','vision','tools'] },
   { id: 'openai/gpt-5.5', alias: 'gpt-5.5', label: 'GPT-5.5', family: 'openai', isLatest: true, capabilities: ['text','vision','tools'] },
   { id: 'openai/gpt-5.5-pro', alias: 'gpt-5.5-pro', label: 'GPT-5.5 Pro', family: 'openai', isLatest: true, capabilities: ['text','vision','tools'] },
+  // ===== Anthropic Claude (via the tenant's anthropic_api_key, OpenAI-compatible endpoint) =====
+  { id: 'anthropic/claude-sonnet-4-6', alias: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', family: 'anthropic', context_window: 200_000, capabilities: ['text','vision','tools'], isLatest: true, recommended: true },
+  { id: 'anthropic/claude-opus-4-8', alias: 'claude-opus-4-8', label: 'Claude Opus 4.8', family: 'anthropic', context_window: 200_000, capabilities: ['text','vision','tools'], isLatest: true },
+  { id: 'anthropic/claude-haiku-4-5-20251001', alias: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', family: 'anthropic', context_window: 200_000, capabilities: ['text','tools'], cheap: true },
 ];
 
 /**
@@ -56,7 +60,7 @@ export function resolveModelId(engine: string | null | undefined): string {
     'manus-1.6': 'google/gemini-3-flash-preview',
     'manus-1.6-max': 'google/gemini-2.5-pro',
     'manus-1.6-lite': 'google/gemini-2.5-flash-lite',
-    'claude-sonnet': 'google/gemini-3-flash-preview',
+    'claude-sonnet': 'anthropic/claude-sonnet-4-6',
   };
   return legacy[engine] || 'google/gemini-3-flash-preview';
 }
