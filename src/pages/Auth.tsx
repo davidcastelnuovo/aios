@@ -32,131 +32,69 @@ export default function Auth() {
 const [searchParams] = useSearchParams();
 
 
+// Single, deterministic auth-callback handler.
+//
+// The OAuth/recovery `?code=` is exchanged exactly once by supabase-js itself
+// (detectSessionInUrl is on by default). We must NOT call exchangeCodeForSession
+// manually as well — a PKCE code is single-use, so a second exchange fails and
+// bounces the user back to the login screen (the "log in twice" bug). Here we
+// only react to the resulting auth state and navigate once, to /tasks.
 useEffect(() => {
-  const init = async () => {
-    const type = searchParams.get("type");
-    const code = searchParams.get("code");
+  const isRecovery = searchParams.get("type") === "recovery";
+  let navigated = false;
 
-    // Check for recovery type FIRST - even if there's a code
-    if (type === "recovery") {
-      setUpdatePasswordMode(true);
-      // If there's a code, exchange it for session but stay on update password screen
-      if (code) {
-        await supabase.auth.exchangeCodeForSession(code);
-      }
-      return; // Don't navigate away if in recovery mode
+  const goToApp = async (session: { user: { id: string }; access_token: string }) => {
+    if (navigated || isRecovery) return;
+    navigated = true;
+
+    // Process pending invitation (no-op when there isn't one)
+    try {
+      const { error } = await supabase.functions.invoke("process-user-invitation", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (error) console.error("Error processing invitation:", error);
+    } catch (e) {
+      console.error("Exception processing invitation:", e);
     }
 
-    // If we have a code param (but NOT recovery type), try to exchange it for a session
-    if (code) {
-      const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-      if (error) {
-        console.error("exchangeCodeForSession error:", error);
-        toast({ title: "שגיאה", description: error.message, variant: "destructive" });
-      } else if (data?.session) {
-        const slug = await resolveTenantSlug(data.session.user.id);
-        if (slug) {
-          // Check user role to determine landing page
-          const { data: roleData } = await (supabase as any)
-            .from("user_roles")
-            .select("role")
-            .eq("user_id", data.session.user.id)
-            .in("role", ["owner", "admin"])
-            .maybeSingle();
-          
-          // Owners and admins go to dashboard, others go to my-profile
-          const landingPage = roleData ? "dashboard" : "my-profile";
-          navigate(buildTenantPath(slug, landingPage));
-        } else {
-          toast({
-            title: "שגיאה",
-            description: "לא נמצא tenant עבור המשתמש. נא לפנות לתמיכה.",
-            variant: "destructive",
-          });
-        }
-        return;
-      }
-    }
-
-    // Check if user is already authenticated (only if not in recovery mode)
-    // Skip navigation if there's a code param - onAuthStateChange will handle it
-    if (!code) {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (session?.user) {
-        const slug = await resolveTenantSlug(session.user.id);
-        if (slug) {
-          // Navigate to tasks page (consistent with onAuthStateChange)
-          navigate(buildTenantPath(slug, "tasks"), { replace: true });
-        } else {
-          toast({
-            title: "שגיאה",
-            description: "לא נמצא tenant עבור המשתמש. נא לפנות לתמיכה.",
-            variant: "destructive",
-          });
-        }
-        return;
-      }
+    const slug = await resolveTenantSlug(session.user.id, 5);
+    if (slug) {
+      // All users land on the tasks module by default.
+      navigate(buildTenantPath(slug, "tasks"), { replace: true });
+    } else {
+      navigated = false; // allow a later event to retry
+      toast({
+        title: "שגיאה",
+        description: "לא נמצא ארגון עבור המשתמש. נא לפנות לתמיכה.",
+        variant: "destructive",
+      });
     }
   };
 
-  init();
-}, [searchParams, navigate, toast]);
-
-// Ensure we auto-redirect when a session becomes available (e.g., after Google OAuth)
-useEffect(() => {
-  const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-    // Only handle SIGNED_IN events to avoid duplicate navigations
-    if (event === 'SIGNED_IN' && session?.user) {
-      
-      // Try to process invitation if exists
-      try {
-        const { data, error } = await supabase.functions.invoke("process-user-invitation", {
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        });
-        
-        if (error) {
-          console.error("Error processing invitation:", error);
-        } else if (data?.error === "NO_INVITATION") {
-          console.info("No invitation found, continuing regular login flow.");
-        }
-      } catch (e) {
-        console.error("Exception processing invitation:", e);
-      }
-      
-      // Resolve tenant with retries
-      const slug = await resolveTenantSlug(session.user.id, 5);
-      if (slug) {
-        // Check user roles to determine landing page
-        const { data: rolesData } = await (supabase as any)
-          .from("user_roles")
-          .select("role")
-          .eq("user_id", session.user.id)
-          .eq("tenant_id", (await (supabase as any)
-            .from("tenants")
-            .select("id")
-            .eq("slug", slug)
-            .single()).data.id);
-        
-        const roles = rolesData?.map((r: any) => r.role) || [];
-        
-        // All users go to tasks page by default
-        const landingPage = "tasks";
-        
-        navigate(`/t/${slug}/${landingPage}`, { replace: true });
-      } else {
-        toast({
-          title: "שגיאה",
-          description: "לא נמצא ארגון עבור המשתמש. נא לפנות לתמיכה.",
-          variant: "destructive",
-        });
-      }
+  // Subscribe BEFORE checking the current session so we never miss the
+  // SIGNED_IN that fires once supabase-js finishes the URL code exchange.
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    if (event === "PASSWORD_RECOVERY" || isRecovery) {
+      setUpdatePasswordMode(true);
+      return;
+    }
+    if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session?.user) {
+      goToApp(session as any);
     }
   });
+
+  // Covers the "already authenticated, landed on /auth" case.
+  (async () => {
+    if (isRecovery) {
+      setUpdatePasswordMode(true);
+      return;
+    }
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) goToApp(session as any);
+  })();
+
   return () => subscription.unsubscribe();
-}, [navigate, toast]);
+}, [searchParams, navigate, toast]);
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
