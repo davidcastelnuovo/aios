@@ -29,6 +29,10 @@ const CLIENT_STATUSES = [
 
 const STEPS = ["ערוץ", "חיבור", "קהל יעד", "תוכן", "תזמון"];
 
+// Domains verified in Resend (add more here once verified in the Resend dashboard).
+const VERIFIED_DOMAINS = ["aios.co.il"];
+const DEFAULT_FROM = "noreply@aios.co.il";
+
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -44,6 +48,11 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
   const [name, setName] = useState("דיוור חדש");
   const [channel, setChannel] = useState<"whatsapp" | "email">("whatsapp");
   const [subject, setSubject] = useState("");
+  const [fromMode, setFromMode] = useState<"default" | "custom">("default");
+  const [fromName, setFromName] = useState("");
+  const [fromLocal, setFromLocal] = useState("");
+  const [fromDomain, setFromDomain] = useState(VERIFIED_DOMAINS[0]);
+  const [replyTo, setReplyTo] = useState("");
   const [integrationId, setIntegrationId] = useState<string | undefined>();
   const [source, setSource] = useState<AudienceFilter["source"]>("leads");
   const [clientStatuses, setClientStatuses] = useState<string[]>([]);
@@ -62,6 +71,7 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
   useEffect(() => {
     if (open) {
       setStep(0); setName("דיוור חדש"); setChannel("whatsapp"); setSubject("");
+      setFromMode("default"); setFromName(""); setFromLocal(""); setFromDomain(VERIFIED_DOMAINS[0]); setReplyTo("");
       setIntegrationId(undefined); setSource("leads");
       setClientStatuses([]); setLeadStatusKeys([]); setTagIds([]); setActiveOnly(true);
       setBodyText(""); setMediaFile(null); setAudienceCount(null);
@@ -132,7 +142,14 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
   const canNext = () => {
     if (step === 1) return channel === "email" ? true : !!integrationId;
     if (step === 2) return (audienceCount ?? 0) > 0;
-    if (step === 3) return bodyText.trim().length > 0 && (channel !== "email" || subject.trim().length > 0);
+    if (step === 3) {
+      if (bodyText.trim().length === 0) return false;
+      if (channel === "email") {
+        if (subject.trim().length === 0) return false;
+        if (fromMode === "custom" && !/^[a-zA-Z0-9._%+-]+$/.test(fromLocal)) return false;
+      }
+      return true;
+    }
     return true;
   };
 
@@ -145,6 +162,9 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
         name, channel, provider: selectedProvider,
         integration_id: channel === "email" ? null : integrationId,
         subject: channel === "email" ? subject : null,
+        from_email: channel === "email" && fromMode === "custom" ? `${fromLocal}@${fromDomain}` : null,
+        from_name: channel === "email" && fromMode === "custom" && fromName.trim() ? fromName.trim() : null,
+        reply_to: channel === "email" && replyTo.trim() ? replyTo.trim() : null,
         body_text: bodyText, audience_filter: buildFilter(),
       });
 
@@ -310,10 +330,45 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
         {step === 3 && (
           <div className="space-y-3">
             {channel === "email" && (
-              <div>
-                <Label>נושא האימייל</Label>
-                <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="נושא ההודעה" />
-              </div>
+              <>
+                <div>
+                  <Label>נושא האימייל</Label>
+                  <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="נושא ההודעה" />
+                </div>
+                <div className="space-y-2 rounded-lg border p-3">
+                  <Label className="text-xs">כתובת שולח (From)</Label>
+                  <div className="flex gap-2 text-sm">
+                    <button type="button" onClick={() => setFromMode("default")}
+                      className={`rounded border px-2 py-1 ${fromMode === "default" ? "bg-primary text-primary-foreground" : ""}`}>
+                      ברירת מחדל ({DEFAULT_FROM})
+                    </button>
+                    <button type="button" onClick={() => setFromMode("custom")}
+                      className={`rounded border px-2 py-1 ${fromMode === "custom" ? "bg-primary text-primary-foreground" : ""}`}>
+                      כתובת מותאמת
+                    </button>
+                  </div>
+                  {fromMode === "custom" && (
+                    <div className="space-y-2">
+                      <Input value={fromName} onChange={(e) => setFromName(e.target.value)} placeholder="שם השולח (לדוגמה: AfterLead)" />
+                      <div className="flex items-center gap-1">
+                        <Input value={fromLocal} onChange={(e) => setFromLocal(e.target.value)} placeholder="info" className="flex-1" />
+                        <span className="text-muted-foreground">@</span>
+                        <Select value={fromDomain} onValueChange={setFromDomain}>
+                          <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+                          <SelectContent className="bg-background z-[100]">
+                            {VERIFIED_DOMAINS.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <p className="text-xs text-muted-foreground">ניתן לשלוח רק מדומיין מאומת ב-Resend.</p>
+                    </div>
+                  )}
+                  <div>
+                    <Label className="text-xs">Reply-To (לאן יגיעו התשובות — אופציונלי)</Label>
+                    <Input type="email" value={replyTo} onChange={(e) => setReplyTo(e.target.value)} placeholder="david@gmail.com" />
+                  </div>
+                </div>
+              </>
             )}
             <Label>תוכן ההודעה</Label>
             <div className="flex flex-wrap gap-2 text-xs">

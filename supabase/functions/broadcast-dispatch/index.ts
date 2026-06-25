@@ -130,6 +130,9 @@ async function sendOne(db: any, b: any, r: any): Promise<{ ok: boolean; messageI
       subject: b.subject || b.name,
       html,
       text: body,
+      fromEmail: b.from_email || undefined,
+      fromName: b.from_name || undefined,
+      replyTo: b.reply_to || undefined,
       headers: {
         'List-Unsubscribe': `<${unsubUrl}>`,
         'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',

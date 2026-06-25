@@ -28,6 +28,9 @@ export interface Broadcast {
   body_text: string | null;
   media_url: string | null;
   subject: string | null;
+  from_email: string | null;
+  from_name: string | null;
+  reply_to: string | null;
   audience_filter: AudienceFilter;
   status: BroadcastStatus;
   scheduled_at: string | null;
@@ -35,7 +38,7 @@ export interface Broadcast {
   throttle_min_seconds: number;
   throttle_max_seconds: number;
   daily_cap: number;
-  stats: { total?: number; sent?: number; delivered?: number; failed?: number };
+  stats: { total?: number; sent?: number; delivered?: number; failed?: number; opened?: number; clicked?: number };
   started_at: string | null;
   completed_at: string | null;
   last_error: string | null;
@@ -76,6 +79,9 @@ export function useBroadcasts() {
           body_text: payload.body_text ?? null,
           media_url: payload.media_url ?? null,
           subject: payload.subject ?? null,
+          from_email: payload.from_email ?? null,
+          from_name: payload.from_name ?? null,
+          reply_to: payload.reply_to ?? null,
           audience_filter: (payload.audience_filter ?? { source: "leads" }) as any,
           scheduled_at: payload.scheduled_at ?? null,
           throttle_min_seconds: payload.throttle_min_seconds ?? 12,

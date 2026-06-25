@@ -69,6 +69,9 @@ export default function Broadcast() {
                   <TableHead className="text-right">סטטוס</TableHead>
                   <TableHead className="text-right">נמענים</TableHead>
                   <TableHead className="text-right">נשלחו</TableHead>
+                  <TableHead className="text-right">נמסר</TableHead>
+                  <TableHead className="text-right">נפתח</TableHead>
+                  <TableHead className="text-right">קליקים</TableHead>
                   <TableHead className="text-right">נכשלו</TableHead>
                   <TableHead className="text-right">נוצר</TableHead>
                   <TableHead></TableHead>
@@ -88,6 +91,9 @@ export default function Broadcast() {
                       <TableCell><Badge variant={st.variant}>{st.label}</Badge></TableCell>
                       <TableCell>{b.stats?.total ?? 0}</TableCell>
                       <TableCell>{b.stats?.sent ?? 0}</TableCell>
+                      <TableCell>{b.channel === "email" ? (b.stats?.delivered ?? 0) : "—"}</TableCell>
+                      <TableCell>{b.channel === "email" ? (b.stats?.opened ?? 0) : "—"}</TableCell>
+                      <TableCell>{b.channel === "email" ? (b.stats?.clicked ?? 0) : "—"}</TableCell>
                       <TableCell>{b.stats?.failed ? <span className="text-destructive">{b.stats.failed}</span> : 0}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">
                         {new Date(b.created_at).toLocaleDateString("he-IL")}
