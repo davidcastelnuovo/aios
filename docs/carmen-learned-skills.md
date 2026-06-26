@@ -101,3 +101,43 @@ mentioned "קלוד" incidentally at the end (e.g. "…קלוד אומר שזה 
 **Remaining manual step:** For Ana ("אנה") routing, create an  row for Ana and
 a flow-builder automation with . The switch guard will then route
 her messages correctly without any further code changes.
+
+---
+
+## 2026-06-26 — Outbound-to-Third-Party Guard
+
+**Tenant:** AfterLead (`2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+**PR:** [#54](https://github.com/davidcastelnuovo/aios/pull/54) — `fix/carmen-outbound-third-party`
+**ai_skills slug:** `outbound-third-party-guard`
+
+**Problem:** When David sends a message from his connected phone to a third party (e.g. Ana),
+the Manus gateway delivers the webhook with `fromMe=true`. Two bugs caused Carmen to
+respond incorrectly:
+
+1. **LID resolver ran for outbound events** — the resolver searched for an active Carmen
+   session and overwrote `counterpartPhone` with Carmen's session phone, mis-attributing
+   "Hi Ana" to Carmen's own chat thread.
+
+2. **No explicit outbound-to-third-party guard** — `handleCarmenMessage` found the active
+   session and processed the message (the active-session path has no keyword requirement).
+
+**Fixes (`manus-wa-webhook/index.ts`):**
+
+1. **Fix 1** (~line 336): Added `&& !fromMeFlag` to the LID resolution block guard.
+   When `fromMeFlag=true`, `to` already contains the real recipient phone — the LID
+   resolver must not overwrite it with a Carmen session phone.
+
+2. **Fix 2** (before `handleCarmenMessage` call): Explicit guard:
+   - Fires when `isOutgoingFromPhone && !pairedFromGreenApi && !isGroup`
+   - Checks for trigger keyword (`כרמן/קלוד/carmen/claude`) in first 80 chars (PR #47)
+   - If no keyword: queries `carmen_whatsapp_sessions` for active session on this `chatId`
+   - If no session: returns `{ received: true, ignored: "outbound_third_party" }` — Carmen skipped
+
+**What is preserved:**
+- PR #47: trigger keyword detection in first 80 chars unchanged
+- Active Carmen session continuation: outbound in Carmen's own thread → Carmen continues
+- Group / Green API pairing / inbound messages: guards are no-ops
+
+**Regression tests:** `supabase/functions/manus-wa-webhook/index.test.ts`
+— 16 Deno tests covering scenarios A (skip), B (continue-with-session), C (keyword routing),
+  PR #47 80-char window, inbound/group/green-api passthroughs, and Fix 1 LID gate.
