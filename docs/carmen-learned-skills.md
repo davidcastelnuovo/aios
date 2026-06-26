@@ -32,6 +32,13 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-06-26 — grant_module_permission (הענקת גישה למודול)
+- **Skin slug:** `grant_module_permission` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Grant a user (campaigner, team_manager, etc.) explicit access to a restricted AIOS UI module (e.g. `integrations`, `accounting_integrations`) by upserting a row in `user_permissions`. Verifies the user is within their existing role scope before granting — refuses out-of-scope elevations. Logs to `claude_carmen_audit`.
+- **How:** (1) `search_entities(entity_type=user)` to resolve user_id; (2) verify role in `user_roles`; (3) `INSERT INTO user_permissions (user_id, module, can_access) VALUES (?, ?, true) ON CONFLICT (user_id, module) DO UPDATE SET can_access=true`; (4) log to `claude_carmen_audit`; (5) confirm in Hebrew.
+- **Key context:** `restrictedModules` in `src/hooks/useUserPermissions.ts` lists modules that require explicit `can_access=true` even for owners. The `integrations` module is the parent screen — a user can have `lead_integrations=true` but still see a blank integrations screen if the parent `integrations` row is missing.
+- **Origin:** Carmen escalated — Ana (Anna Relin, `adamchik2301@gmail.com`) had `lead_integrations=true` but no `integrations` row, so she saw no integrations screen. Fix applied live (safe-fix: missing row, no role elevation).
+
 ### 2026-06-26 — ניתוח קמפיינים פייסבוק (facebook campaign analysis)
 - **Skin slug:** `facebook-campaign-analysis` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** Fetch live Facebook/Meta campaign data for any client, list campaigns with their IDs, analyze a specific campaign in depth (CPL/CTR/frequency vs 30d/7d/today), and check ad account health — all via live Meta API, no CRM sync table required.
