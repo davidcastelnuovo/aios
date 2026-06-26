@@ -25,6 +25,9 @@ export interface ChannelTable {
   integrationType: string; // crm_tables.integration_type
   syncFunction: string;    // edge function name
   requiresField: ChannelFieldKey;
+  tableLabel: string;      // display name prefix (client name appended at runtime)
+  /** Map from integration_type to integration_settings keys populated from client fields */
+  settingsKey: string;     // the integration_settings key for the requiresField value
 }
 
 export interface ClientChannel {
@@ -49,7 +52,7 @@ export const CLIENT_CHANNELS: ClientChannel[] = [
       { key: "ga_property_id", label: "Google Analytics (GA4) Property", placeholder: "properties/123456789" },
     ],
     tables: [
-      { integrationType: "google_analytics", syncFunction: "sync-google-analytics-data", requiresField: "ga_property_id" },
+      { integrationType: "google_analytics", syncFunction: "sync-google-analytics-data", requiresField: "ga_property_id", tableLabel: "Google Analytics", settingsKey: "property_id" },
     ],
   },
   {
@@ -60,7 +63,7 @@ export const CLIENT_CHANNELS: ClientChannel[] = [
       { key: "google_ads_account_id", label: "Google Ads Account ID", placeholder: "123-456-7890" },
     ],
     tables: [
-      { integrationType: "google_ads", syncFunction: "sync-google-ads-data", requiresField: "google_ads_account_id" },
+      { integrationType: "google_ads", syncFunction: "sync-google-ads-data", requiresField: "google_ads_account_id", tableLabel: "Google Ads", settingsKey: "customer_id" },
     ],
   },
   {
@@ -72,7 +75,7 @@ export const CLIENT_CHANNELS: ClientChannel[] = [
     ],
     showFacebookPages: true,
     tables: [
-      { integrationType: "facebook_insights", syncFunction: "sync-facebook-insights", requiresField: "meta_ads_account_id" },
+      { integrationType: "facebook_insights", syncFunction: "sync-facebook-insights", requiresField: "meta_ads_account_id", tableLabel: "Facebook Insights", settingsKey: "ad_account_id" },
     ],
   },
   {
@@ -84,8 +87,8 @@ export const CLIENT_CHANNELS: ClientChannel[] = [
       { key: "gsc_site_url", label: "Search Console Site", placeholder: "sc-domain:example.com" },
     ],
     tables: [
-      { integrationType: "ahrefs", syncFunction: "sync-ahrefs-data", requiresField: "ahrefs_domain" },
-      { integrationType: "google_search_console", syncFunction: "sync-google-search-console-data", requiresField: "gsc_site_url" },
+      { integrationType: "ahrefs", syncFunction: "sync-ahrefs-data", requiresField: "ahrefs_domain", tableLabel: "Ahrefs SEO", settingsKey: "targetDomain" },
+      { integrationType: "google_search_console", syncFunction: "sync-google-search-console-data", requiresField: "gsc_site_url", tableLabel: "Search Console", settingsKey: "site_url" },
     ],
   },
 ];
