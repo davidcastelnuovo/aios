@@ -19,6 +19,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { EditClientDialog } from "@/components/forms/EditClientDialog";
 import { ClientConnectionsTab } from "@/components/clients/ClientConnectionsTab";
+import { useProvisionClientChannels } from "@/components/clients/useProvisionClientChannels";
 import { ClientUpdatesTab } from "@/components/clients/ClientUpdatesTab";
 import { ClientTablesTab } from "@/components/clients/ClientTablesTab";
 import { ClientLinkedFiles } from "@/components/clients/ClientLinkedFiles";
@@ -95,6 +96,7 @@ export function ClientsChatView({
   const [confirmingBulkDelete, setConfirmingBulkDelete] = useState(false);
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
+  const { provision, provisioning } = useProvisionClientChannels();
 
   const { data: whatsappGroups = [] } = useQuery({
     queryKey: ["whatsapp-groups", tenantId],
@@ -725,6 +727,26 @@ export function ClientsChatView({
                   title="צור ארגון ללקוח"
                 >
                   <Building2 className="h-4 w-4" />
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  disabled={provisioning}
+                  onClick={async () => {
+                    const summary = await provision(selectedClient.id);
+                    const parts: string[] = [];
+                    if (summary.created.length) parts.push(`נוצרו: ${summary.created.join(", ")}`);
+                    if (summary.updated.length) parts.push(`עודכנו: ${summary.updated.join(", ")}`);
+                    if (summary.dashboardCreated) parts.push("דשבורד נוצר");
+                    if (summary.skipped.length) parts.push(`דולגו: ${summary.skipped.join(", ")}`);
+                    toast.success(parts.length ? parts.join(" · ") : "אין ערוצים עם מזהים להקמה");
+                    setActiveTab("report");
+                  }}
+                  title="צור טבלאות ודשבורד לכל הערוצים"
+                >
+                  {provisioning ? <Loader2 className="h-4 w-4 animate-spin" /> : <BarChart3 className="h-4 w-4" />}
                 </Button>
 
                 <Button
