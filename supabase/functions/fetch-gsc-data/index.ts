@@ -1,3 +1,6 @@
+// Live GSC data fetch for the Search Console dashboard tab. Must be deployed to
+// production — the SEO dashboard calls it directly; when it is missing the tab
+// shows an "edge function" error (404 on the OPTIONS preflight).
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
