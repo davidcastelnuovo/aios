@@ -121,3 +121,21 @@ Claude Code health-check skill written to `ai_skills` (scope=tenant, created_by_
 - #61 MERGED ✅ — re-deploy good version (placeholder overwrote v40)
 - Open drafts needing attention: #49, #50, #51, #52, #54
 
+## 2026-06-26 — grant_module_permission (הענקת גישה למודול)
+
+**Skill slug:** `grant_module_permission`  
+**Trigger phrases:** אין גישה למודול, לא רואה עמוד, אין גישה לאינטגרציות, צריך גישה ל
+
+**What Carmen can now do:** Grant a user/campaigner access to a specific AIOS module by updating their `user_permissions` row — no need to escalate to Claude.
+
+**How:**
+1. Find the profile: `SELECT id FROM profiles WHERE email = '<email>';`
+2. Map the route to the permission module (from App.tsx `requiredPermission`):
+   - `/integrations` → `lead_integrations`
+   - `/lead-integrations` → `lead_integrations`
+   - `/chat-integrations` → `chat_integrations`
+   - `/accounting-integrations` → `accounting_integrations`
+3. Update: `UPDATE user_permissions SET can_access = true, updated_at = now() WHERE user_id = '<profile_id>' AND module = '<module>';`
+4. Log to `claude_carmen_audit` and notify David via `claude_notify_david`.
+
+**Origin:** Anna Relin (campaigner) had no access to `/integrations`. Root cause: the route is gated by `lead_integrations` permission in App.tsx, and her row had `can_access=false`. Fixed live as a safe-fix (targeted UPDATE with precise WHERE). Dispatched twice before this session completed it.
