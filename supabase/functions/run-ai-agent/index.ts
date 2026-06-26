@@ -1,7 +1,7 @@
 // redeploy trigger: rebundle _shared/models.ts — Claude (Anthropic) brains added to the catalog
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
 import { resolveModelId } from '../_shared/models.ts'
-import { assertCallerCanAccessClient } from '../_shared/auth-helpers.ts'
+import { assertCallerCanAccessClient, assertCallerCanAccessEntityClient } from '../_shared/auth-helpers.ts'
 import { summarizeAndStoreAgentMemory, recallAgentMemory, recallAgentMemoryFTS, saveAgentMemory } from '../_shared/agent-memory.ts'
 import { buildCarmenV2SystemPrompt, shouldUseV2Prompt } from '../_shared/carmen-prompt-v2.ts'
 import { loadMcpTools } from '../_shared/mcp-tools.ts'
@@ -703,6 +703,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return { count: data.length, tasks: data.map((t: any) => ({ ...t, client_name: t.clients?.name, lead_name: t.leads?.company_name, campaigner_name: t.campaigners?.full_name })) }
     }
     case 'update_task_status': {
+      await assertCallerCanAccessEntityClient(supabase, 'tasks', args.task_id, callerScope)
       const { data, error } = await supabase.from('tasks').update({ status: args.status }).eq('id', args.task_id).in('tenant_id', accessibleTenantIds).select('id, title, status').single()
       if (error) throw error
       return data
@@ -901,6 +902,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     }
 
     case 'get_facebook_campaign_data': {
+      if (args.client_id) await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
       const daysBack = args.days || 30
       const sinceDate = new Date()
       sinceDate.setDate(sinceDate.getDate() - daysBack)
@@ -954,6 +956,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return { count: rows.length, campaigns: rows, period: `${daysBack} days` }
     }
     case 'list_facebook_campaigns': {
+      if (args.client_id) await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
       if (!args.client_id) {
         return { error: 'client_id_required', message: 'יש להעביר client_id' }
       }
@@ -1104,6 +1107,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return await r.json()
     }
     case 'publish_social_post': {
+      await assertCallerCanAccessEntityClient(supabase, 'social_pages', args.page_id, callerScope)
       if (args.confirmed !== true) return { error: 'not_confirmed', message: 'אישור משתמש מפורש נדרש (confirmed=true)' }
       const targetTenantId = accessibleTenantIds[0]
       const r = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/social-publish`, {
@@ -1138,6 +1142,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     }
     case 'reply_to_social_comment':
     case 'hide_social_comment': {
+      await assertCallerCanAccessEntityClient(supabase, 'social_comments', args.comment_row_id, callerScope)
       if (args.confirmed !== true) return { error: 'not_confirmed', message: 'אישור משתמש מפורש נדרש' }
       const targetTenantId = accessibleTenantIds[0]
       const action = name === 'reply_to_social_comment' ? 'reply' : 'hide'
@@ -1574,6 +1579,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     }
     // TASKS - full CRUD
     case 'update_task': {
+      await assertCallerCanAccessEntityClient(supabase, 'tasks', args.task_id, callerScope)
       const updates: Record<string, any> = {}
       if (args.title) updates.title = args.title
       if (args.due_date !== undefined) updates.due_date = args.due_date
@@ -1590,11 +1596,13 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return data
     }
     case 'delete_task': {
+      await assertCallerCanAccessEntityClient(supabase, 'tasks', args.task_id, callerScope)
       const { error } = await supabase.from('tasks').delete().eq('id', args.task_id).in('tenant_id', accessibleTenantIds)
       if (error) throw error
       return { success: true, deleted_id: args.task_id }
     }
     case 'add_task_update': {
+      await assertCallerCanAccessEntityClient(supabase, 'tasks', args.task_id, callerScope)
       const { data, error } = await supabase.from('task_updates').insert({ task_id: args.task_id, user_id: userId, tenant_id: tenantId, content: args.content }).select('id').single()
       if (error) throw error
       return { update_id: data.id }
