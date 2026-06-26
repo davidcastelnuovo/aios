@@ -101,3 +101,33 @@ mentioned "קלוד" incidentally at the end (e.g. "…קלוד אומר שזה 
 **Remaining manual step:** For Ana ("אנה") routing, create an  row for Ana and
 a flow-builder automation with . The switch guard will then route
 her messages correctly without any further code changes.
+---
+
+## 2026-06-26 — Outbound owner message routing guard
+
+**Problem diagnosed:** Carmen was responding to messages that were NOT addressed to her.
+Because David's personal phone is connected to AIOS, Carmen receives ALL his WhatsApp
+threads — including conversations with human team members like Ana. Two code paths
+in `handleCarmenMessage` allowed `isManualOutgoing` messages (David typing in WA app)
+to trigger AI replies:
+
+1. **Active session path** (line 805): outbound messages passed straight through to AI
+   execution and sent a reply, hijacking private chats.
+2. **New session path** (line 1026): outbound messages with a trigger keyword could create
+   new Carmen sessions in third-party threads, again hijacking the chat.
+
+**Fixes (PR #52):**
+
+Added two outbound guards in `supabase/functions/_shared/carmen.ts`:
+
+1. **Active session guard** (inserted after `if (activeSession) {`): when `isManualOutgoing
+   && !isIncoming`, update `session.last_message_at` to keep the session warm for the
+   next inbound, then return `{ handled: true, outcome: 'active' }` — no AI, no reply.
+
+2. **New session guard** (inserted before trigger-keyword check): when `isManualOutgoing
+   && !isIncoming`, return `{ handled: false, reason: 'outbound_no_new_session' }` — no
+   session is ever created from an owner's outbound message.
+
+**Invariant enforced:** Only *inbound* messages (counterpart → David's number) can start
+or advance a Carmen session. David's own outgoing messages are context-only: they keep
+the session clock warm but never produce an agent reply.
