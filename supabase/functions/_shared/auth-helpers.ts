@@ -67,20 +67,42 @@ export async function assertCallerCanAccessClient(
   return;
 }
 
-/**
- * Resolve the client_id a Facebook campaign belongs to (for scope checks on
- * campaign tools that only receive a campaign_id). Returns null if not found.
- */
-export async function clientIdForFacebookCampaign(
+// Resolve the owning client_id for an entity that a scoped tool receives by id,
+// so we can run assertCallerCanAccessClient on it. Returns null if not found.
+async function clientIdFrom(
   supabase: any,
-  campaignId: string,
+  table: string,
+  id: string,
   accessibleTenantIds: string[],
 ): Promise<string | null> {
+  if (!id) return null;
   const { data } = await supabase
-    .from('facebook_campaigns')
+    .from(table)
     .select('client_id')
-    .eq('campaign_id', String(campaignId))
+    .eq('id', id)
     .in('tenant_id', accessibleTenantIds)
     .maybeSingle();
   return data?.client_id ?? null;
+}
+
+export const clientIdForSocialPage = (sb: any, pageId: string, t: string[]) => clientIdFrom(sb, 'social_pages', pageId, t);
+export const clientIdForSocialComment = (sb: any, commentId: string, t: string[]) => clientIdFrom(sb, 'social_comments', commentId, t);
+export const clientIdForTask = (sb: any, taskId: string, t: string[]) => clientIdFrom(sb, 'tasks', taskId, t);
+
+/**
+ * Guard a tool that operates on an entity owning a client_id. Resolves the
+ * entity's client and asserts caller access. If the entity has no client
+ * (e.g. a general task) the call is allowed — scope only applies to client-owned
+ * rows. Throws AccessDeniedError if the entity isn't found in the caller's tenant.
+ */
+export async function assertCallerCanAccessEntityClient(
+  supabase: any,
+  table: string,
+  entityId: string,
+  scope: CallerScope,
+): Promise<void> {
+  if (scope.isManagerRole) return;
+  const clientId = await clientIdFrom(supabase, table, entityId, scope.accessibleTenantIds);
+  if (clientId === null) return; // not found-or-no-client → don't block (avoids false denials)
+  await assertCallerCanAccessClient(supabase, clientId, scope);
 }

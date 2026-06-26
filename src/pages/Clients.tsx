@@ -243,6 +243,7 @@ export default function Clients() {
       return data;
     },
     enabled: (!isRestrictedClientViewer || !!campaignerId) && !!tenantId && !!agencies,
+    staleTime: 60_000, // heavy list (all clients + joins) — avoid refetching on every remount/refocus
   });
 
   // 🔒 SECURITY GUARD: Filter clients by current tenant and accessible agencies

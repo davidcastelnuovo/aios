@@ -89,6 +89,19 @@ export function CRMSettingsSection({ client, onUpdate }: CRMSettingsSectionProps
     enabled: !!client.id && hasSeo,
   });
 
+  // Optimistically patch one field of this client across all cached ["clients", ...] lists,
+  // so toggles feel instant and we avoid refetching the whole (heavy) clients list per click.
+  const patchClientInCache = (patch: Record<string, any>) => {
+    const snapshot = queryClient.getQueriesData({ queryKey: ["clients"] });
+    queryClient.setQueriesData({ queryKey: ["clients"] }, (old: any) =>
+      Array.isArray(old) ? old.map((c: any) => (c.id === client.id ? { ...c, ...patch } : c)) : old
+    );
+    return snapshot;
+  };
+  const restoreClientsCache = (snapshot: [readonly unknown[], unknown][] | undefined) => {
+    snapshot?.forEach(([key, data]) => queryClient.setQueryData(key, data));
+  };
+
   // ── Mutation: update tier ───────────────────────────────────────────────────
   const updateTierMutation = useMutation({
     mutationFn: async (tier: string) => {
@@ -98,12 +111,14 @@ export function CRMSettingsSection({ client, onUpdate }: CRMSettingsSectionProps
         .eq("id", client.id);
       if (error) throw error;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
-      onUpdate?.();
-      toast.success("Tier עודכן");
+    onMutate: async (tier: string) => {
+      await queryClient.cancelQueries({ queryKey: ["clients"] });
+      return { snapshot: patchClientInCache({ tier }) };
     },
-    onError: () => toast.error("שגיאה בעדכון Tier"),
+    onError: (_e, _v, ctx) => {
+      restoreClientsCache(ctx?.snapshot);
+      toast.error("שגיאה בעדכון Tier");
+    },
   });
 
   // ── Mutation: toggle service ────────────────────────────────────────────────
@@ -115,11 +130,14 @@ export function CRMSettingsSection({ client, onUpdate }: CRMSettingsSectionProps
         .eq("id", client.id);
       if (error) throw error;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
-      onUpdate?.();
+    onMutate: async (services: string[]) => {
+      await queryClient.cancelQueries({ queryKey: ["clients"] });
+      return { snapshot: patchClientInCache({ services }) };
     },
-    onError: () => toast.error("שגיאה בעדכון שירותים"),
+    onError: (_e, _v, ctx) => {
+      restoreClientsCache(ctx?.snapshot);
+      toast.error("שגיאה בעדכון שירותים");
+    },
   });
 
   function toggleService(val: string) {
