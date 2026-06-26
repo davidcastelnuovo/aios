@@ -77,46 +77,61 @@ Deno.serve(async (req) => {
     }
 
     const accessToken = integration.api_key;
-    
-    // Fetch ad accounts from Facebook Graph API with pagination
-    let allAdAccounts: any[] = [];
-    let nextUrl = `https://graph.facebook.com/v21.0/me/adaccounts?fields=id,name,account_status,currency,amount_spent&limit=100&access_token=${accessToken}`;
-    
-    while (nextUrl) {
-      const response = await fetch(nextUrl);
-      const contentType = response.headers.get('content-type') || '';
-      if (!contentType.includes('application/json')) {
-        const text = await response.text();
-        console.error('Facebook returned non-JSON response:', text.substring(0, 200));
-        throw new Error('Facebook API returned an unexpected response. The token may need to be refreshed.');
-      }
-      const data = await response.json();
-      
-      if (data.error) {
-        console.error('Facebook API error:', data.error);
-        return new Response(JSON.stringify({ 
-          error: 'Facebook API error',
-          details: data.error.message
-        }), {
-          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
-      }
-      
-      if (data.data) {
-        allAdAccounts = [...allAdAccounts, ...data.data];
-      }
-      
-      nextUrl = data.paging?.next || null;
+    const FIELDS = 'id,name,account_status,currency,amount_spent';
+
+    // Paginate a Graph edge, returning all rows. Never throws — a missing permission on
+    // one edge must not break discovery via the others.
+    const fetchEdge = async (url: string): Promise<any[]> => {
+      const out: any[] = [];
+      let next: string | null = url;
+      try {
+        while (next) {
+          const r = await fetch(next);
+          if (!(r.headers.get('content-type') || '').includes('application/json')) break;
+          const d: any = await r.json();
+          if (d.error) { console.warn('FB edge error:', d.error?.message); break; }
+          if (Array.isArray(d.data)) out.push(...d.data);
+          next = d.paging?.next || null;
+        }
+      } catch (e: any) { console.warn('FB edge fetch failed:', e?.message); }
+      return out;
+    };
+
+    // 1) Ad accounts the token user OWNS directly.
+    const owned = await fetchEdge(`https://graph.facebook.com/v21.0/me/adaccounts?fields=${FIELDS}&limit=100&access_token=${accessToken}`);
+
+    // 2) Agency case: accounts shared via Business Manager. me/adaccounts does NOT surface
+    //    accounts a Business merely has access to (client accounts), so walk each business the
+    //    user belongs to and pull both client_ad_accounts and owned_ad_accounts.
+    const businesses = await fetchEdge(`https://graph.facebook.com/v21.0/me/businesses?fields=id,name&limit=100&access_token=${accessToken}`);
+    const bmAccounts: any[] = [];
+    for (const biz of businesses) {
+      const [clientAcc, ownedAcc] = await Promise.all([
+        fetchEdge(`https://graph.facebook.com/v21.0/${biz.id}/client_ad_accounts?fields=${FIELDS}&limit=200&access_token=${accessToken}`),
+        fetchEdge(`https://graph.facebook.com/v21.0/${biz.id}/owned_ad_accounts?fields=${FIELDS}&limit=200&access_token=${accessToken}`),
+      ]);
+      for (const a of [...clientAcc, ...ownedAcc]) bmAccounts.push({ ...a, business_id: biz.id, business_name: biz.name });
     }
 
+    // Merge + dedupe by account id (owned-direct first, then Business Manager).
+    const byId = new Map<string, any>();
+    for (const a of [...owned, ...bmAccounts]) {
+      if (!a?.id) continue;
+      if (!byId.has(a.id)) byId.set(a.id, a);
+    }
+    const allAdAccounts = [...byId.values()];
 
-    return new Response(JSON.stringify({ 
+    console.log('FB ad-account discovery:', { owned: owned.length, businesses: businesses.length, viaBusinessManager: bmAccounts.length, total: allAdAccounts.length });
+
+    return new Response(JSON.stringify({
       ad_accounts: allAdAccounts.map(acc => ({
         id: acc.id,
         name: acc.name,
         account_status: acc.account_status,
         currency: acc.currency,
-        amount_spent: acc.amount_spent
+        amount_spent: acc.amount_spent,
+        business_id: acc.business_id || null,
+        business_name: acc.business_name || null,
       }))
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
