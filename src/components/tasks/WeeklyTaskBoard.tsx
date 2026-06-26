@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useSidebar } from "@/components/ui/sidebar";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -181,7 +181,7 @@ export function WeeklyTaskBoard() {
   }, [currentDate, viewMode]);
 
   // Fetch user profile to get campaigner_id / sales_person_id for "mine" filter
-  const { data: userProfile, isFetched: isUserProfileFetched } = useQuery({
+  const { data: userProfile } = useQuery({
     queryKey: ["user-profile-for-tasks", user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -195,19 +195,9 @@ export function WeeklyTaskBoard() {
     enabled: !!user?.id,
   });
 
-  // If user has no campaigner/sales profile, default to "all" so tasks are visible
-  const didInitFiltersRef = useRef(false);
-  useEffect(() => {
-    if (didInitFiltersRef.current) return;
-    if (!tenantId || !user?.id || !isUserProfileFetched) return;
-
-    const hasMineIdentity = !!userProfile?.campaigner_id || !!userProfile?.sales_person_id;
-    if (!hasMineIdentity) {
-      setFilters((prev) => (prev.campaignerId === "mine" ? { ...prev, campaignerId: "all" } : prev));
-    }
-
-    didInitFiltersRef.current = true;
-  }, [tenantId, user?.id, isUserProfileFetched, userProfile?.campaigner_id, userProfile?.sales_person_id]);
+  // Default view = "my tasks only" (campaignerId: "mine"). For users without a
+  // campaigner/sales identity (e.g. owners), "mine" resolves to tasks they created
+  // (see the "mine" branch in the tasks query below), so it stays meaningful.
 
   // Fetch Google Calendar events
   const { data: calendarEvents = [] } = useQuery({
@@ -245,7 +235,7 @@ export function WeeklyTaskBoard() {
   });
 
   // Fetch tasks for the current view + overdue tasks
-  const { data: fetchedTasks = [], isLoading } = useQuery({
+  const { data: fetchedTasks = [], isLoading, isFetching } = useQuery({
     queryKey: ["tasks", tenantId, crossTenantAgencyIds, format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd"), filters, viewMode, userProfile?.campaigner_id, selectedAgency],
     enabled: !!tenantId && !!user?.id,
     queryFn: async () => {
@@ -365,13 +355,17 @@ export function WeeklyTaskBoard() {
   const [localTasks, setLocalTasks] = useState<FullTask[]>([]);
   
   useEffect(() => {
-    if (fetchedTasks && fetchedTasks.length > 0) {
-      setLocalTasks(fetchedTasks);
-    }
-  }, [JSON.stringify(fetchedTasks?.map(t => `${t.id}_${t.duration_minutes}_${t.status}_${t.campaigner_id}_${t.client_id}`))]);
-  
-  // Use localTasks for rendering, fallback to fetchedTasks if empty
-  const tasks = localTasks.length > 0 ? localTasks : (fetchedTasks || []);
+    // Don't clobber the current list while a refetch is in flight (avoids an empty flash).
+    if (isFetching) return;
+    // Sync with the settled server result, INCLUDING an empty list. This is critical:
+    // when a filter (campaigner / agency / type / association / date) matches no tasks,
+    // we must clear the board. The old `length > 0` guard kept the previous (broader) set,
+    // which made filters look like they were ignored and showed all tasks.
+    setLocalTasks(fetchedTasks ?? []);
+  }, [isFetching, JSON.stringify(fetchedTasks?.map(t => `${t.id}_${t.duration_minutes}_${t.status}_${t.campaigner_id}_${t.client_id}`))]);
+
+  // localTasks is the source of truth for rendering (kept in sync with the filtered query above).
+  const tasks = localTasks;
 
   // Filter out calendar events that are actually synced tasks (to avoid duplicates)
   // Also hide calendar events when filtering by a specific campaigner (not "mine" or "all")
@@ -1524,10 +1518,7 @@ export function WeeklyTaskBoard() {
         open={filtersDialogOpen}
         onOpenChange={setFiltersDialogOpen}
         currentFilters={filters}
-        onApply={(next) => {
-          const hasMineIdentity = !!userProfile?.campaigner_id || !!userProfile?.sales_person_id;
-          setFilters(!hasMineIdentity && next.campaignerId === "mine" ? { ...next, campaignerId: "all" } : next);
-        }}
+        onApply={(next) => setFilters(next)}
       />
 
       {/* Quick Add Task Dialog (double-click on slot) */}
