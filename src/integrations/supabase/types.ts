@@ -3129,7 +3129,10 @@ export type Database = {
           end_date: string | null
           folder_link: string | null
           folder_links: Json
+          ga_property_id: string | null
           google_ads_account_id: string | null
+          gsc_site_url: string | null
+          ahrefs_domain: string | null
           health_score: number | null
           id: string
           industry: string | null
@@ -3168,7 +3171,10 @@ export type Database = {
           end_date?: string | null
           folder_link?: string | null
           folder_links?: Json
+          ga_property_id?: string | null
           google_ads_account_id?: string | null
+          gsc_site_url?: string | null
+          ahrefs_domain?: string | null
           health_score?: number | null
           id?: string
           industry?: string | null
@@ -3207,7 +3213,10 @@ export type Database = {
           end_date?: string | null
           folder_link?: string | null
           folder_links?: Json
+          ga_property_id?: string | null
           google_ads_account_id?: string | null
+          gsc_site_url?: string | null
+          ahrefs_domain?: string | null
           health_score?: number | null
           id?: string
           industry?: string | null

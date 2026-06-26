@@ -8,7 +8,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Trash2, Globe, Megaphone, Share2 } from "lucide-react";
+import { Plus, Trash2, Megaphone, Share2, Link2 } from "lucide-react";
+import {
+  CLIENT_CHANNELS,
+  isChannelActive,
+  ALL_CHANNEL_FIELD_KEYS,
+  type ChannelFieldKey,
+} from "@/config/clientChannels";
 
 interface Props {
   clientId: string;
@@ -18,9 +24,9 @@ interface Props {
 export function ClientConnectionsTab({ clientId, tenantId }: Props) {
   const conns = useClientConnections(clientId);
 
-  const [website, setWebsite] = useState<string | null>(null);
-  const [metaAcct, setMetaAcct] = useState<string | null>(null);
-  const [googleAcct, setGoogleAcct] = useState<string | null>(null);
+  // Local edits keyed by client column; falls back to the saved value when untouched.
+  const [edits, setEdits] = useState<Partial<Record<ChannelFieldKey, string>>>({});
+  const [saving, setSaving] = useState(false);
 
   const [newPagePlatform, setNewPagePlatform] = useState("facebook");
   const [newPageId, setNewPageId] = useState("");
@@ -28,22 +34,28 @@ export function ClientConnectionsTab({ clientId, tenantId }: Props) {
 
   if (conns.isLoading || !conns.data) return <div className="p-4 text-sm text-muted-foreground">טוען חיבורים...</div>;
 
-  const c = conns.data.client;
-  const websiteVal = website ?? c?.website ?? "";
-  const metaVal = metaAcct ?? c?.meta_ads_account_id ?? "";
-  const googleVal = googleAcct ?? c?.google_ads_account_id ?? "";
+  const c = conns.data.client as Record<string, any> | null;
+  const services: string[] = Array.isArray(c?.services) ? c!.services : [];
+  const activeChannels = CLIENT_CHANNELS.filter((ch) => isChannelActive(ch, services));
+
+  const fieldValue = (key: ChannelFieldKey): string => edits[key] ?? (c?.[key] ?? "") ?? "";
+  const setFieldValue = (key: ChannelFieldKey, value: string) => setEdits((prev) => ({ ...prev, [key]: value }));
 
   const saveClientFields = async () => {
-    const { error } = await supabase
-      .from("clients")
-      .update({
-        website: websiteVal || null,
-        meta_ads_account_id: metaVal || null,
-        google_ads_account_id: googleVal || null,
-      })
-      .eq("id", clientId);
+    setSaving(true);
+    // Only persist fields belonging to channels currently active for this client.
+    const activeKeys = new Set<ChannelFieldKey>(activeChannels.flatMap((ch) => ch.fields.map((f) => f.key)));
+    const payload: Record<string, string | null> = {};
+    for (const key of ALL_CHANNEL_FIELD_KEYS) {
+      if (!activeKeys.has(key)) continue;
+      const val = fieldValue(key).trim();
+      payload[key] = val || null;
+    }
+    const { error } = await supabase.from("clients").update(payload as never).eq("id", clientId);
+    setSaving(false);
     if (error) return toast.error(error.message);
     toast.success("נשמר");
+    setEdits({});
     conns.invalidate();
   };
 
@@ -76,78 +88,93 @@ export function ClientConnectionsTab({ clientId, tenantId }: Props) {
     conns.invalidate();
   };
 
+  const showFacebookPages = activeChannels.some((ch) => ch.showFacebookPages);
+
   return (
     <div className="space-y-4" dir="rtl">
-      {/* Website + Ads accounts */}
-      <Card className="p-4 space-y-3">
-        <div className="flex items-center gap-2 font-semibold text-sm">
-          <Globe className="h-4 w-4" /> אתר וחשבונות מודעות
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div>
-            <Label>אתר ראשי לקידום</Label>
-            <Input value={websiteVal} onChange={(e) => setWebsite(e.target.value)} placeholder="https://" />
-          </div>
-          <div>
-            <Label>Meta Ads Account ID</Label>
-            <Input value={metaVal} onChange={(e) => setMetaAcct(e.target.value)} placeholder="act_..." />
-          </div>
-          <div>
-            <Label>Google Ads Account ID</Label>
-            <Input value={googleVal} onChange={(e) => setGoogleAcct(e.target.value)} placeholder="123-456-7890" />
-          </div>
-        </div>
-        <Button size="sm" onClick={saveClientFields}>שמור</Button>
-      </Card>
-
-      {/* Social pages */}
-      <Card className="p-4 space-y-3">
-        <div className="flex items-center gap-2 font-semibold text-sm">
-          <Share2 className="h-4 w-4" /> עמודי סושיאל מחוברים
-        </div>
-        {conns.data.socialPages.length === 0 ? (
-          <p className="text-xs text-muted-foreground">אין עמודים מחוברים</p>
-        ) : (
-          <div className="space-y-2">
-            {conns.data.socialPages.map((p) => (
-              <div key={p.id} className="flex items-center justify-between rounded border p-2">
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline">{p.platform}</Badge>
-                  <span className="text-sm font-medium">{p.page_name || p.page_id}</span>
-                  <span className="text-xs text-muted-foreground">{p.page_id}</span>
-                </div>
-                <Button size="icon" variant="ghost" onClick={() => removePage(p.id)}>
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
+      {/* Per-channel connection fields — only channels the client is marked for */}
+      {activeChannels.map((ch) => {
+        const missing = ch.fields.some((f) => !fieldValue(f.key).trim());
+        return (
+          <Card key={ch.id} className="p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 font-semibold text-sm">
+                <Link2 className="h-4 w-4" /> {ch.label}
               </div>
-            ))}
+              {missing && (
+                <Badge variant="outline" className="text-amber-600 border-amber-300">חסר חיבור</Badge>
+              )}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {ch.fields.map((f) => (
+                <div key={f.key}>
+                  <Label>{f.label}</Label>
+                  <Input
+                    value={fieldValue(f.key)}
+                    onChange={(e) => setFieldValue(f.key, e.target.value)}
+                    placeholder={f.placeholder}
+                  />
+                </div>
+              ))}
+            </div>
+          </Card>
+        );
+      })}
+
+      <Button size="sm" onClick={saveClientFields} disabled={saving}>
+        {saving ? "שומר..." : "שמור חיבורים"}
+      </Button>
+
+      {/* Social pages — shown only when a channel that uses Facebook pages is active */}
+      {showFacebookPages && (
+        <Card className="p-4 space-y-3">
+          <div className="flex items-center gap-2 font-semibold text-sm">
+            <Share2 className="h-4 w-4" /> עמודי סושיאל מחוברים
           </div>
-        )}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-end">
-          <div>
-            <Label>פלטפורמה</Label>
-            <Select value={newPagePlatform} onValueChange={setNewPagePlatform}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="facebook">Facebook</SelectItem>
-                <SelectItem value="instagram">Instagram</SelectItem>
-                <SelectItem value="tiktok">TikTok</SelectItem>
-                <SelectItem value="linkedin">LinkedIn</SelectItem>
-                <SelectItem value="youtube">YouTube</SelectItem>
-              </SelectContent>
-            </Select>
+          {conns.data.socialPages.length === 0 ? (
+            <p className="text-xs text-muted-foreground">אין עמודים מחוברים</p>
+          ) : (
+            <div className="space-y-2">
+              {conns.data.socialPages.map((p) => (
+                <div key={p.id} className="flex items-center justify-between rounded border p-2">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">{p.platform}</Badge>
+                    <span className="text-sm font-medium">{p.page_name || p.page_id}</span>
+                    <span className="text-xs text-muted-foreground">{p.page_id}</span>
+                  </div>
+                  <Button size="icon" variant="ghost" onClick={() => removePage(p.id)}>
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-end">
+            <div>
+              <Label>פלטפורמה</Label>
+              <Select value={newPagePlatform} onValueChange={setNewPagePlatform}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="facebook">Facebook</SelectItem>
+                  <SelectItem value="instagram">Instagram</SelectItem>
+                  <SelectItem value="tiktok">TikTok</SelectItem>
+                  <SelectItem value="linkedin">LinkedIn</SelectItem>
+                  <SelectItem value="youtube">YouTube</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Page ID</Label>
+              <Input value={newPageId} onChange={(e) => setNewPageId(e.target.value)} />
+            </div>
+            <div>
+              <Label>שם</Label>
+              <Input value={newPageName} onChange={(e) => setNewPageName(e.target.value)} />
+            </div>
+            <Button size="sm" onClick={addPage}><Plus className="ml-1 h-4 w-4" /> הוסף</Button>
           </div>
-          <div>
-            <Label>Page ID</Label>
-            <Input value={newPageId} onChange={(e) => setNewPageId(e.target.value)} />
-          </div>
-          <div>
-            <Label>שם</Label>
-            <Input value={newPageName} onChange={(e) => setNewPageName(e.target.value)} />
-          </div>
-          <Button size="sm" onClick={addPage}><Plus className="ml-1 h-4 w-4" /> הוסף</Button>
-        </div>
-      </Card>
+        </Card>
+      )}
 
       {/* WordPress sites */}
       <Card className="p-4 space-y-3">

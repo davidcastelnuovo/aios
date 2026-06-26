@@ -893,6 +893,9 @@ CREATE TABLE public.clients (
   active_flags jsonb DEFAULT '[]'::jsonb,
   meta_ads_account_id text,
   google_ads_account_id text,
+  ga_property_id text,
+  gsc_site_url text,
+  ahrefs_domain text,
   monthly_fixed_expense numeric NOT NULL DEFAULT 0,
   is_ecommerce boolean NOT NULL DEFAULT false
 );

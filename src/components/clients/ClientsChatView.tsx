@@ -18,6 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { EditClientDialog } from "@/components/forms/EditClientDialog";
+import { ClientConnectionsTab } from "@/components/clients/ClientConnectionsTab";
 import { ClientUpdatesTab } from "@/components/clients/ClientUpdatesTab";
 import { ClientTablesTab } from "@/components/clients/ClientTablesTab";
 import { ClientLinkedFiles } from "@/components/clients/ClientLinkedFiles";
@@ -787,10 +788,14 @@ export function ClientsChatView({
 
             {/* Detail tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0 flex flex-col overflow-hidden">
-              <TabsList className={cn("mx-4 mt-3 grid w-auto max-w-4xl h-9 bg-muted/50 mr-4 ml-auto", canViewFinance ? "grid-cols-10" : "grid-cols-9")}>
+              <TabsList className={cn("mx-4 mt-3 grid w-auto max-w-4xl h-9 bg-muted/50 mr-4 ml-auto", canViewFinance ? "grid-cols-11" : "grid-cols-10")}>
                 <TabsTrigger value="details" className="text-xs gap-1">
                   <FileText className="h-3.5 w-3.5" />
                   פרטי לקוח
+                </TabsTrigger>
+                <TabsTrigger value="connections" className="text-xs gap-1">
+                  <Link className="h-3.5 w-3.5" />
+                  חיבורים
                 </TabsTrigger>
                 {canViewFinance && (
                   <TabsTrigger value="business" className="text-xs gap-1">
@@ -1173,6 +1178,10 @@ export function ClientsChatView({
                   {/* ── CRM Settings ──────────────────────────────────────────── */}
                   <CRMSettingsSection client={selectedClient} onUpdate={() => queryClient.invalidateQueries({ queryKey: ["clients"] })} />
 
+                </TabsContent>
+
+                <TabsContent value="connections" className="mt-0">
+                  {tenantId && <ClientConnectionsTab clientId={selectedClient.id} tenantId={tenantId} />}
                 </TabsContent>
 
                 {canViewFinance && (
