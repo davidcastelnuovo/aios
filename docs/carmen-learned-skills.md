@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-06-26 — תיקון גישת קמפיינר (fix campaigner access)
+- **Skin slug:** `fix-campaigner-access` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** When a campaigner reports they cannot see a client that should be accessible, Carmen calls `fix_campaigner_access` via the `carmen-admin-mcp` MCP connection. The tool checks that the campaigner already belongs to the client's agency before granting access — refuses out-of-scope requests. Returns a Hebrew outcome: *granted / already_assigned / refused_out_of_scope*. Every call is logged to `claude_carmen_audit`.
+- **How:** Use connection `carmen-admin-mcp` (id `64ce6fdc-dd23-45f3-ab5b-a12db3a7e509`, bearer `aios-admin-mcp-4e7k3m9p2x1r`). Steps: (1) resolve `campaigner_id` via `search_entities`, (2) resolve `client_id` via `list_clients`, (3) call `fix_campaigner_access`, (4) relay the Hebrew outcome to the user.
+- **Origin:** Carmen escalated (PR #36 WIP); completed 2026-06-26 after data audit confirmed the agency check is real (51 assignments / 23 campaigners / 12 agencies — not all-to-all). SQL function `carmen_fix_campaigner_access` (SECURITY DEFINER) was already deployed; this session deployed the edge function and registered the MCP connection.
+
 
 ### 2026-06-25 — async session result handling + save to memory (behavior instruction)
 - **Skin slug:** `save_agent_memory` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
