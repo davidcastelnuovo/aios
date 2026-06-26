@@ -280,21 +280,27 @@ export function WeeklyTaskBoard() {
         );
       }
 
-      // Apply "mine" filter - tasks assigned to me (campaigner or sales) OR created by me
+      // Apply "mine" filter - tasks ASSIGNED to me (campaigner or sales person).
+      // We intentionally do NOT include `created_by` here: an admin/owner creates
+      // most of the team's tasks, so OR-ing on created_by made "mine" show nearly
+      // everything. "Mine" = what I'm responsible for, not what I authored.
       if (filters.campaignerId === "mine") {
         const myCampaignerId = userProfile?.campaigner_id;
         const mySalesPersonId = userProfile?.sales_person_id;
         const myUserId = user?.id;
 
-        // Build OR conditions: campaigner_id, sales_person_id, or created_by
-        const conditions: string[] = [];
-        if (myCampaignerId) conditions.push(`campaigner_id.eq.${myCampaignerId}`);
-        if (mySalesPersonId) conditions.push(`sales_person_id.eq.${mySalesPersonId}`);
-        if (myUserId) conditions.push(`created_by.eq.${myUserId}`);
+        const assignmentConditions: string[] = [];
+        if (myCampaignerId) assignmentConditions.push(`campaigner_id.eq.${myCampaignerId}`);
+        if (mySalesPersonId) assignmentConditions.push(`sales_person_id.eq.${mySalesPersonId}`);
 
-        if (conditions.length > 0) {
+        if (assignmentConditions.length > 0) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          query = (query as any).or(conditions.join(','));
+          query = (query as any).or(assignmentConditions.join(','));
+        } else if (myUserId) {
+          // User has no campaigner/sales identity → fall back to tasks they created,
+          // scoped to created_by (never an unfiltered "show everything").
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          query = (query as any).eq("created_by", myUserId);
         }
       } else if (filters.campaignerId === "none") {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
