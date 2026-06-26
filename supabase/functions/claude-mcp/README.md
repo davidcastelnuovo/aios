@@ -111,6 +111,28 @@ curl -X POST "https://zvoijyneresvkadpprel.supabase.co/functions/v1/mcp-connect"
   }'
 ```
 
+## Visibility & memory (dispatch log)
+
+Every `request_dev_task` / `ask_claude` call is recorded and surfaced so David can
+see what Carmen asked and follow the running session — and so a fresh session
+isn't blind to what came before:
+
+- **Durable record.** Each fired session is written to `public.claude_dispatches`
+  (tool, request text, context, session URL, status). This is the record behind a
+  future "Carmen ↔ Claude" view and the source for the memory recall below.
+- **Immediate WhatsApp ping.** Right after firing, David gets a guaranteed
+  WhatsApp message — *what Carmen asked* + the **live session link** — via the
+  `claude-notify` path, independent of Carmen's async session. Together with the
+  on-completion `claude_notify_david()` ping, David sees both ends: start (what +
+  where to watch) and finish (result + PR).
+- **Cross-session memory.** Before firing, the last few dispatches for the tenant
+  are read back into the prompt (a "what Carmen already asked" block) plus an
+  instruction to read `docs/carmen-learned-skills.md`, so a new routine session
+  builds on prior work instead of starting from scratch.
+
+All three are best-effort and never block a dispatch: a logging/notify failure is
+swallowed and the session still fires.
+
 ## Notes & limits
 
 - **Async only.** `/fire` returns once the session is *created*; it does not
