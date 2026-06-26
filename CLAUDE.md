@@ -1,5 +1,11 @@
 # AIOS — project notes for Claude
 
+## Working mode / autonomy (David's standing preference)
+- **Default to action — do not ask for confirmation on obvious, low-risk fixes or clearly-requested work.** Implement → commit → open PR → merge to `main` → verify the deploy, end-to-end, without pausing to ask at each step.
+- After merging an edge-function change, confirm the `deploy-edge-function.yml` run went green.
+- **Only pause and ask** when the change is genuinely ambiguous (several valid interpretations), architecturally significant or irreversible, destructive (possible data loss), or external-facing in a way David wouldn't expect.
+- Report what was done concisely afterward; don't narrate every intermediate step.
+
 ## Stack / hosting
 - **Frontend hosting: Vercel** (migrated off Lovable). Canonical domain: `https://aios.co.il`. Do NOT reference Lovable — it is fully removed from the codebase.
 - **Backend: Supabase** (Postgres + Edge Functions). Production project ref: `zvoijyneresvkadpprel` (AfterLead).
