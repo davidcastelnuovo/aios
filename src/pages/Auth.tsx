@@ -27,6 +27,9 @@ export default function Auth() {
   const [mfaRequired, setMfaRequired] = useState(false);
   const [factorId, setFactorId] = useState<string | null>(null);
   const [mfaCode, setMfaCode] = useState("");
+  // While true we are still checking for / forwarding an existing session,
+  // so we show a spinner instead of flashing the login form on every visit.
+  const [checkingSession, setCheckingSession] = useState(true);
   const navigate = useNavigate();
   const { toast } = useToast();
 const [searchParams] = useSearchParams();
@@ -41,11 +44,23 @@ const [searchParams] = useSearchParams();
 // only react to the resulting auth state and navigate once, to /tasks.
 useEffect(() => {
   const isRecovery = searchParams.get("type") === "recovery";
+  // On an OAuth/recovery return the URL carries a `?code=` that supabase-js
+  // exchanges asynchronously. Until that finishes a session-less
+  // INITIAL_SESSION can fire, so we must keep the spinner up (not flash the
+  // form) while a code is pending.
+  const hasOAuthCode = !!searchParams.get("code");
   let navigated = false;
+
+  // Safety net: never leave the user stuck on the spinner if no auth event
+  // ever resolves (e.g. an already-used PKCE code).
+  const spinnerTimeout = setTimeout(() => setCheckingSession(false), 4000);
 
   const goToApp = async (session: { user: { id: string }; access_token: string }) => {
     if (navigated || isRecovery) return;
     navigated = true;
+    // We have a session — keep the clean spinner up while we resolve the
+    // tenant, instead of showing the login form behind it.
+    setCheckingSession(true);
 
     // Process pending invitation (no-op when there isn't one)
     try {
@@ -63,6 +78,7 @@ useEffect(() => {
       navigate(buildTenantPath(slug, "tasks"), { replace: true });
     } else {
       navigated = false; // allow a later event to retry
+      setCheckingSession(false); // drop the spinner so the user isn't stuck
       toast({
         title: "שגיאה",
         description: "לא נמצא ארגון עבור המשתמש. נא לפנות לתמיכה.",
@@ -76,10 +92,14 @@ useEffect(() => {
   const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
     if (event === "PASSWORD_RECOVERY" || isRecovery) {
       setUpdatePasswordMode(true);
+      setCheckingSession(false);
       return;
     }
     if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session?.user) {
       goToApp(session as any);
+    } else if ((event === "INITIAL_SESSION" && !hasOAuthCode) || event === "SIGNED_OUT") {
+      // No session to forward and nothing pending — show the login form.
+      setCheckingSession(false);
     }
   });
 
@@ -87,13 +107,21 @@ useEffect(() => {
   (async () => {
     if (isRecovery) {
       setUpdatePasswordMode(true);
+      setCheckingSession(false);
       return;
     }
     const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user) goToApp(session as any);
+    if (session?.user) {
+      goToApp(session as any);
+    } else if (!hasOAuthCode) {
+      setCheckingSession(false);
+    }
   })();
 
-  return () => subscription.unsubscribe();
+  return () => {
+    clearTimeout(spinnerTimeout);
+    subscription.unsubscribe();
+  };
 }, [searchParams, navigate, toast]);
 
   const handleSignUp = async (e: React.FormEvent) => {
@@ -382,6 +410,16 @@ useEffect(() => {
     }
     setLoading(false);
   };
+
+  // While we still don't know whether there's an existing session (or we're
+  // forwarding one), show a spinner instead of flashing the login form.
+  if (checkingSession && !updatePasswordMode) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-secondary p-4">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-secondary p-4">

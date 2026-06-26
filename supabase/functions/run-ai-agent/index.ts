@@ -96,10 +96,10 @@ const ALL_TOOLS = [
   { name: 'delegate_to_manus', description: 'שליחת משימה מורכבת ל-Manus AI לביצוע ברקע (מחקר שוק, ניתוח קמפיינים, יצירת תוכן, ניתוח נתונים). המשימה רצה ברקע ועשויה לקחת דקות עד שעות.', parameters: { type: 'object', properties: { prompt: { type: 'string', description: 'תיאור מפורט של המשימה לביצוע' }, context_data: { type: 'string', description: 'נתוני הקשר רלוונטיים (למשל נתוני קמפיינים)' } }, required: ['prompt'] } },
   { name: 'get_facebook_campaign_data', description: 'שליפת נתוני קמפיינים מפייסבוק לצורך ניתוח', parameters: { type: 'object', properties: { client_id: { type: 'string' }, days: { type: 'integer', description: 'מספר ימים אחורה (ברירת מחדל 30)' } } } },
   { name: 'list_facebook_campaigns', description: 'רשימת קמפיינים פעילים/מושבתים של לקוח עם campaign_id, שם וסטטוס. השתמש כדי למצוא את ה-campaign_id לפני toggle.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, name_search: { type: 'string', description: 'חיפוש חלקי בשם הקמפיין' } }, required: ['client_id'] } },
-  { name: 'toggle_facebook_campaign', description: 'הפעלה (ACTIVE) או השהיה (PAUSED) של קמפיין פייסבוק לפי campaign_id. דורש אישור מפורש של המשתמש לפני הפעלה — אל תקרא לכלי לפני שהמשתמש אישר את הפעולה הספציפית.', parameters: { type: 'object', properties: { campaign_id: { type: 'string', description: 'Facebook campaign ID (מספרי, לא שם)' }, status: { type: 'string', enum: ['ACTIVE', 'PAUSED'] }, confirmed: { type: 'boolean', description: 'חובה true — מאשר שהמשתמש אישר במפורש את הפעולה' } }, required: ['campaign_id', 'status', 'confirmed'] } },
-  { name: 'analyze_facebook_campaign', description: 'ניתוח עומק של קמפיין פייסבוק יחיד: השוואת היום מול 7 ימים מול 30 ימים, מטריקות (CPL, CTR, frequency, spend), זיהוי חריגות והמלצות לפעולה. השתמש לפני שמציעים פעולה כדי לבסס המלצה.', parameters: { type: 'object', properties: { campaign_id: { type: 'string' } }, required: ['campaign_id'] } },
-  { name: 'update_facebook_budget', description: 'עדכון תקציב יומי או כולל לקמפיין פייסבוק. דורש אישור מפורש של המשתמש (confirmed=true). חריגה של מעל 20% או מעל 500 ש"ח דורשת התרעה מפורשת.', parameters: { type: 'object', properties: { campaign_id: { type: 'string' }, daily_budget: { type: 'number', description: 'תקציב יומי בשקלים (לא במיקרו-יחידות)' }, lifetime_budget: { type: 'number' }, confirmed: { type: 'boolean' } }, required: ['campaign_id', 'confirmed'] } },
-  { name: 'duplicate_facebook_campaign', description: 'שכפול קמפיין פייסבוק (במצב PAUSED) לצורך ניסיון בקהל/יצירה אחרים. דורש אישור.', parameters: { type: 'object', properties: { campaign_id: { type: 'string' }, name_suffix: { type: 'string' }, confirmed: { type: 'boolean' } }, required: ['campaign_id', 'confirmed'] } },
+  { name: 'toggle_facebook_campaign', description: 'הפעלה (ACTIVE) או השהיה (PAUSED) של קמפיין פייסבוק לפי campaign_id. דורש אישור מפורש של המשתמש לפני הפעלה — אל תקרא לכלי לפני שהמשתמש אישר את הפעולה הספציפית.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string', description: 'Facebook campaign ID (מספרי, לא שם)' }, status: { type: 'string', enum: ['ACTIVE', 'PAUSED'] }, confirmed: { type: 'boolean', description: 'חובה true — מאשר שהמשתמש אישר במפורש את הפעולה' } }, required: ['client_id', 'campaign_id', 'status', 'confirmed'] } },
+  { name: 'analyze_facebook_campaign', description: 'ניתוח עומק של קמפיין פייסבוק יחיד: השוואת היום מול 7 ימים מול 30 ימים, מטריקות (CPL, CTR, frequency, spend), זיהוי חריגות והמלצות לפעולה. השתמש לפני שמציעים פעולה כדי לבסס המלצה.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string' } }, required: ['client_id', 'campaign_id'] } },
+  { name: 'update_facebook_budget', description: 'עדכון תקציב יומי או כולל לקמפיין פייסבוק. דורש אישור מפורש של המשתמש (confirmed=true). חריגה של מעל 20% או מעל 500 ש"ח דורשת התרעה מפורשת.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string' }, daily_budget: { type: 'number', description: 'תקציב יומי בשקלים (לא במיקרו-יחידות)' }, lifetime_budget: { type: 'number' }, confirmed: { type: 'boolean' } }, required: ['client_id', 'campaign_id', 'confirmed'] } },
+  { name: 'duplicate_facebook_campaign', description: 'שכפול קמפיין פייסבוק (במצב PAUSED) לצורך ניסיון בקהל/יצירה אחרים. דורש אישור.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string' }, name_suffix: { type: 'string' }, confirmed: { type: 'boolean' } }, required: ['client_id', 'campaign_id', 'confirmed'] } },
   { name: 'get_campaign_alerts', description: 'שליפת התראות פתוחות על קמפיינים (קמפיין נעצר, מודעה לא מאושרת, CPL חורג, frequency גבוה). השתמש בתחילת בדיקת דופק או כשהמשתמש שואל על מצב הקמפיינים.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, severity: { type: 'string', enum: ['info', 'warning', 'critical'] }, only_open: { type: 'boolean', description: 'ברירת מחדל true' } } } },
   { name: 'acknowledge_campaign_alert', description: 'סימון התראת קמפיין כטופלה.', parameters: { type: 'object', properties: { alert_id: { type: 'string' } }, required: ['alert_id'] } },
   { name: 'list_social_pages', description: 'רשימת עמודים מחוברים (פייסבוק/אינסטגרם) של הטננט. שימושי לפני פרסום או טיפול בתגובות.', parameters: { type: 'object', properties: { platform: { type: 'string', enum: ['facebook', 'instagram'] }, client_id: { type: 'string' } } } },
@@ -273,8 +273,7 @@ const ALL_TOOLS = [
 const FB_GRAPH_VERSION = 'v21.0'
 
 async function fbResolveClientAdAccount(supabase: any, tenantId: string, clientId: string): Promise<string | null> {
-  // clients.* ad-account fields are empty in practice — the act_ id lives in the
-  // client's Meta sync table config (crm_tables.integration_settings).
+  // 1. crm_tables (clients connected via the facebook sync/report-table flow).
   const { data } = await supabase
     .from('crm_tables')
     .select('integration_settings, last_sync_at')
@@ -287,6 +286,14 @@ async function fbResolveClientAdAccount(supabase: any, tenantId: string, clientI
     const acc = s.ad_account_id || s.account_id || s.meta_account_id
     if (acc) return String(acc).replace(/^act_/, '')
   }
+  // 2. Fallback: clients.meta_ads_account_id (the ad account set directly on the client record).
+  const { data: cl } = await supabase
+    .from('clients')
+    .select('meta_ads_account_id')
+    .eq('id', clientId)
+    .eq('tenant_id', tenantId)
+    .maybeSingle()
+  if (cl?.meta_ads_account_id) return String(cl.meta_ads_account_id).replace(/^act_/, '')
   return null
 }
 
@@ -699,7 +706,16 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     case 'list_tasks': {
       let query = supabase.from('tasks').select('id, title, status, priority, due_date, due_time, duration_minutes, clients(name), leads(company_name), campaigners(full_name)').in('tenant_id', accessibleTenantIds).order('priority', { ascending: false }).limit(args.limit || 20)
       if (args.status) query = query.eq('status', args.status)
-      if (args.client_id) query = query.eq('client_id', args.client_id)
+      if (args.client_id) {
+        if (callerCampaignerId && !bypassCampaignerScope) await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
+        query = query.eq('client_id', args.client_id)
+      } else if (callerCampaignerId && !bypassCampaignerScope) {
+        const { data: links } = await supabase.from('client_team').select('client_id').eq('campaigner_id', callerCampaignerId)
+        const ids = (links || []).map((l: any) => l.client_id)
+        query = ids.length > 0
+          ? query.or(`client_id.is.null,client_id.in.(${ids.join(',')})`)
+          : query.is('client_id', null)
+      }
       const { data, error } = await query
       if (error) throw error
       return { count: data.length, tasks: data.map((t: any) => ({ ...t, client_name: t.clients?.name, lead_name: t.leads?.company_name, campaigner_name: t.campaigners?.full_name })) }
@@ -1014,6 +1030,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (args.confirmed !== true) {
         return { error: 'not_confirmed', message: 'אישור משתמש מפורש נדרש. שאל את המשתמש לפני קריאה לכלי הזה ושלח confirmed=true רק אחרי שהוא אישר.' }
       }
+      await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
       const targetTenantId = accessibleTenantIds[0]
       const fnUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/toggle-facebook-campaign`
       const res = await fetch(fnUrl, {
@@ -1033,6 +1050,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return { success: true, campaign_id: args.campaign_id, new_status: args.status, fb: json }
     }
     case 'analyze_facebook_campaign': {
+      await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
       const targetTenantId = accessibleTenantIds[0]
       const fnUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/fb-campaign-analyze`
       const res = await fetch(fnUrl, {
@@ -1049,6 +1067,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (args.confirmed !== true) {
         return { error: 'not_confirmed', message: 'אישור משתמש מפורש נדרש (confirmed=true).' }
       }
+      await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
       const targetTenantId = accessibleTenantIds[0]
       const action = name === 'update_facebook_budget' ? 'update_budget' : 'duplicate'
       const fnUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/fb-campaign-control`
@@ -2096,7 +2115,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       // 1. Resolve client scope
       let clientsQuery = supabase
         .from('clients')
-        .select('id, name, agency_id, agencies(name)')
+        .select('id, name, agency_id, meta_ads_account_id, agencies(name)')
         .in('tenant_id', accessibleTenantIds)
         .in('status', ['active', 'onboarding'])
         .order('name')
@@ -2189,7 +2208,8 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       let healthy = 0
       for (const c of (scopeClients || [])) {
         const settings = settingsByClient.get(c.id)
-        const adAccountId = settings?.ad_account_id || null
+        const adAccountId = settings?.ad_account_id
+          || (c.meta_ads_account_id ? String(c.meta_ads_account_id).replace(/^act_/, '') : null)
         const flags: string[] = []
         let status: string = 'unknown'
         let hasSpend7 = false

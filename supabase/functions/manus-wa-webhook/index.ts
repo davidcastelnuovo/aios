@@ -333,7 +333,10 @@ Deno.serve(async (req) => {
     // For a direct Carmen flow pinned to this Manus integration and scoped to exactly
     // one phone, resolve the LID to that configured phone so the Carmen trigger/session
     // can match instead of being blocked by the random LID number.
-    if (!isGroup && !pairedFromGreenApi && isLidEvent) {
+    // fromMeFlag guard: when David sends OUTBOUND to a third party (e.g. Ana), the
+    // to-field is already a real phone and the LID resolver must NOT overwrite it with
+    // a Carmen session phone — that is the root cause of Carmen responding to "Hi Ana".
+    if (!isGroup && !pairedFromGreenApi && isLidEvent && !fromMeFlag) {
       try {
         const carmenAutomation = await findCarmenSessionAutomation(supabase, tenantId, integ.id, {
           isGroup: false,
@@ -688,6 +691,33 @@ Deno.serve(async (req) => {
       : counterpartPhone;
     const chatIdForCarmen = `${carmenTargetPhone}@c.us`;
     const senderName = (payload.senderName || payload.fromName || null) as string | null;
+
+    // OUTBOUND-TO-THIRD-PARTY GUARD: David's phone is the Manus gateway, so every
+    // outbound message he sends to any contact flows through this webhook. If the
+    // message is outbound, has no trigger keyword, and there is no existing Carmen
+    // session for this specific chat, Carmen must not respond. The LID resolver above
+    // may have already (incorrectly) attributed the message to Carmen's chat_id before
+    // this guard was added; this check is the definitive safety net.
+    if (isOutgoingFromPhone && !pairedFromGreenApi && !isGroup) {
+      const msgPrefix = String(messageText || '').toLowerCase().replace(/^\s*🎤\s*/, '').trim().slice(0, 80);
+      const hasOwnerTrigger = /[כק]א?רמן|carmen|קלוד|claude/i.test(msgPrefix);
+      if (!hasOwnerTrigger) {
+        const { data: existingCarmenSession } = await supabase
+          .from('carmen_whatsapp_sessions')
+          .select('id')
+          .eq('tenant_id', tenantId)
+          .eq('status', 'active')
+          .eq('connection_user_id', connectionUserId)
+          .eq('chat_id', chatIdForCarmen)
+          .maybeSingle();
+        if (!existingCarmenSession) {
+          console.log('[manus-wa] outbound-to-third-party: no trigger keyword + no active carmen session → skip', {
+            chatIdForCarmen, carmenTargetPhone, bodyPreview: String(messageText).slice(0, 60),
+          });
+          return ok({ received: true, ignored: 'outbound_third_party' });
+        }
+      }
+    }
 
     let carmenOutcome: string | null = null;
     try {

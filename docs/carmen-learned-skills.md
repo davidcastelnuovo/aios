@@ -32,6 +32,13 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-06-26 — ניתוח קמפיינים פייסבוק (facebook campaign analysis)
+- **Skin slug:** `facebook-campaign-analysis` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Fetch live Facebook/Meta campaign data for any client, list campaigns with their IDs, analyze a specific campaign in depth (CPL/CTR/frequency vs 30d/7d/today), and check ad account health — all via live Meta API, no CRM sync table required.
+- **How:** (1) `list_clients` or `search_entities` to get `client_id`; (2) `get_facebook_campaign_data(client_id)` for insights; (3) `list_facebook_campaigns(client_id)` for campaign IDs; (4) `analyze_facebook_campaign(campaign_id)` for deep analysis; (5) `check_ad_accounts_health()` for status. If tools return `fb_not_connected` the Facebook token has expired — report to David.
+- **Bug fixed (PR #37):** `fbResolveClientAdAccount` in `run-ai-agent` was ignoring `clients.meta_ads_account_id` and only checking `crm_tables.integration_settings`. 50 clients had their Meta account ID set directly on the client record but no linked facebook_insights crm_table — all live FB calls silently returned empty. Fixed by adding a fallback to `clients.meta_ads_account_id` in both `fbResolveClientAdAccount` and `check_ad_accounts_health`.
+- **Origin:** Carmen escalated — `analyze_campaign` failing for "רווה קולינריה נוזלית" (`meta_ads_account_id=685779550291000`).
+
 ### 2026-06-26 — תיקון גישת קמפיינר (fix campaigner access)
 - **Skin slug:** `fix-campaigner-access` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** When a campaigner reports they cannot see a client that should be accessible, Carmen calls `fix_campaigner_access` via the `carmen-admin-mcp` MCP connection. The tool checks that the campaigner already belongs to the client's agency before granting access — refuses out-of-scope requests. Returns a Hebrew outcome: *granted / already_assigned / refused_out_of_scope*. Every call is logged to `claude_carmen_audit`.
@@ -102,6 +109,46 @@ mentioned "קלוד" incidentally at the end (e.g. "…קלוד אומר שזה 
 a flow-builder automation with . The switch guard will then route
 her messages correctly without any further code changes.
 
+## 2026-06-26 — Outbound-to-Third-Party Guard
+
+**Tenant:** AfterLead (`2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+**PR:** [#54](https://github.com/davidcastelnuovo/aios/pull/54) — `fix/carmen-outbound-third-party`
+**ai_skills slug:** `outbound-third-party-guard`
+
+**Problem:** When David sends a message from his connected phone to a third party (e.g. Ana),
+the Manus gateway delivers the webhook with `fromMe=true`. Two bugs caused Carmen to
+respond incorrectly:
+
+1. **LID resolver ran for outbound events** — the resolver searched for an active Carmen
+   session and overwrote `counterpartPhone` with Carmen's session phone, mis-attributing
+   "Hi Ana" to Carmen's own chat thread.
+
+2. **No explicit outbound-to-third-party guard** — `handleCarmenMessage` found the active
+   session and processed the message (the active-session path has no keyword requirement).
+
+**Fixes (`manus-wa-webhook/index.ts`):**
+
+1. **Fix 1** (~line 336): Added `&& !fromMeFlag` to the LID resolution block guard.
+   When `fromMeFlag=true`, `to` already contains the real recipient phone — the LID
+   resolver must not overwrite it with a Carmen session phone.
+
+2. **Fix 2** (before `handleCarmenMessage` call): Explicit guard:
+   - Fires when `isOutgoingFromPhone && !pairedFromGreenApi && !isGroup`
+   - Checks for trigger keyword (`כרמן/קלוד/carmen/claude`) in first 80 chars (PR #47)
+   - If no keyword: queries `carmen_whatsapp_sessions` for active session on this `chatId`
+   - If no session: returns `{ received: true, ignored: "outbound_third_party" }` — Carmen skipped
+
+**What is preserved:**
+- PR #47: trigger keyword detection in first 80 chars unchanged
+- Active Carmen session continuation: outbound in Carmen's own thread → Carmen continues
+- Group / Green API pairing / inbound messages: guards are no-ops
+
+**Regression tests:** `supabase/functions/manus-wa-webhook/index.test.ts`
+— 16 Deno tests covering scenarios A (skip), B (continue-with-session), C (keyword routing),
+  PR #47 80-char window, inbound/group/green-api passthroughs, and Fix 1 LID gate.
+
+---
+
 ## 2026-06-26 — claude_health_check
 
 **Skill slug:** `claude_health_check`
@@ -112,30 +159,3 @@ Claude Code health-check skill written to `ai_skills` (scope=tenant, created_by_
 **What it does:** Confirms Claude Code is operational by checking Supabase DB and GitHub API accessibility, listing open/pending PRs in the AIOS repo, marking any pending `claude_dispatches` row as completed, logging to `claude_carmen_audit`, and notifying David via `claude_notify_david`.
 
 **Note on git clone:** This container's egress policy blocks `github.com` git traffic (403 from local proxy at port 41729). Code reads use the GitHub API instead; code writes require a session with git clone access enabled.
-
-**Current PR status at time of check:**
-- #47 MERGED ✅ (Carmen keyword routing + agent-switch guard)
-- #53 CLOSED draft (superseded by #54)
-- #54 OPEN draft — Carmen outbound third-party guard (Ana guard) — needs merge
-- #60 MERGED ✅ — run-ai-agent hotfix
-- #61 MERGED ✅ — re-deploy good version (placeholder overwrote v40)
-- Open drafts needing attention: #49, #50, #51, #52, #54
-
-## 2026-06-26 — grant_module_permission (הענקת גישה למודול)
-
-**Skill slug:** `grant_module_permission`  
-**Trigger phrases:** אין גישה למודול, לא רואה עמוד, אין גישה לאינטגרציות, צריך גישה ל
-
-**What Carmen can now do:** Grant a user/campaigner access to a specific AIOS module by updating their `user_permissions` row — no need to escalate to Claude.
-
-**How:**
-1. Find the profile: `SELECT id FROM profiles WHERE email = '<email>';`
-2. Map the route to the permission module (from App.tsx `requiredPermission`):
-   - `/integrations` → `lead_integrations`
-   - `/lead-integrations` → `lead_integrations`
-   - `/chat-integrations` → `chat_integrations`
-   - `/accounting-integrations` → `accounting_integrations`
-3. Update: `UPDATE user_permissions SET can_access = true, updated_at = now() WHERE user_id = '<profile_id>' AND module = '<module>';`
-4. Log to `claude_carmen_audit` and notify David via `claude_notify_david`.
-
-**Origin:** Anna Relin (campaigner) had no access to `/integrations`. Root cause: the route is gated by `lead_integrations` permission in App.tsx, and her row had `can_access=false`. Fixed live as a safe-fix (targeted UPDATE with precise WHERE). Dispatched twice before this session completed it.
