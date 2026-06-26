@@ -1,4 +1,6 @@
-// redeploy trigger: rebundle _shared/models.ts — Claude (Anthropic) brains added to the catalog
+// redeploy trigger: restore the ai_agents-based run-ai-agent (a direct prod deploy had shipped a
+// broken rewrite querying a non-existent `agents` table → every agent call 404'd). This is the
+// known-good monolithic version from main; CI redeploys it via the Supabase CLI.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
 import { resolveModelId } from '../_shared/models.ts'
 import { assertCallerCanAccessClient, assertCallerCanAccessEntityClient } from '../_shared/auth-helpers.ts'
