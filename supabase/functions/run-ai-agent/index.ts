@@ -1,6 +1,7 @@
 // redeploy trigger: rebundle _shared/models.ts — Claude (Anthropic) brains added to the catalog
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
 import { resolveModelId } from '../_shared/models.ts'
+import { assertCallerCanAccessClient } from '../_shared/auth-helpers.ts'
 import { summarizeAndStoreAgentMemory, recallAgentMemory, recallAgentMemoryFTS, saveAgentMemory } from '../_shared/agent-memory.ts'
 import { buildCarmenV2SystemPrompt, shouldUseV2Prompt } from '../_shared/carmen-prompt-v2.ts'
 import { loadMcpTools } from '../_shared/mcp-tools.ts'
@@ -490,6 +491,8 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
   const managedAgencyIds = Array.isArray(callerManagedAgencyIds) ? callerManagedAgencyIds : []
   // Effective scope flag — true means "do not narrow to a single caller campaigner"
   const bypassCampaignerScope = isManagerRole || (isTeamManager && managedAgencyIds.length > 0)
+  // Caller-scope bundle for assertCallerCanAccessClient (client-scoped mutations).
+  const callerScope = { callerCampaignerId, isManagerRole, isTeamManager, managedAgencyIds, accessibleTenantIds }
   switch (name) {
     case 'create_lead': {
       const { data: agency } = await supabase.from('agencies').select('id').in('tenant_id', accessibleTenantIds).limit(1).single()
@@ -803,6 +806,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return data
     }
     case 'add_client_update': {
+      await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
       const { data, error } = await supabase.from('client_updates').insert({ client_id: args.client_id, user_id: userId, tenant_id: tenantId, content: args.content }).select('id').single()
       if (error) throw error
       return { update_id: data.id }
@@ -1350,6 +1354,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       }
     }
     case 'update_client_health': {
+      await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
       // Resolve an actor user for audit/update visibility even in background "system" runs
       let effectiveUserId = userId !== 'system' ? userId : null
       if (!effectiveUserId) {
@@ -1530,6 +1535,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return { client_id: data.id, name: data.name, status: data.status }
     }
     case 'update_client': {
+      await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
       const updates: Record<string, any> = {}
       if (args.name) updates.name = args.name
       if (args.contact_name !== undefined) updates.contact_name = args.contact_name
@@ -1542,6 +1548,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return data
     }
     case 'update_client_status': {
+      await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
       const { data, error } = await supabase.from('clients').update({ status: args.status }).eq('id', args.client_id).in('tenant_id', accessibleTenantIds).select('id, name, status').single()
       if (error) throw error
       return data
