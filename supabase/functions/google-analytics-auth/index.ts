@@ -271,10 +271,10 @@ serve(async (req) => {
 
       let accessToken = integration.api_key;
       const settings = integration.settings as any;
+      const ownerEmail = settings?.google_email || null;
 
-      // Check if token needs refresh
-      if (settings?.expires_at && new Date(settings.expires_at) < new Date()) {
-        
+      const refreshAccessToken = async (): Promise<{ ok: boolean; reason?: string }> => {
+        if (!settings?.refresh_token) return { ok: false, reason: 'missing_refresh_token' };
         const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -285,13 +285,10 @@ serve(async (req) => {
             grant_type: 'refresh_token',
           }),
         });
-
-        const refreshData = await refreshResponse.json();
-        
+        const refreshData = await refreshResponse.json().catch(() => ({}));
         if (refreshData.access_token) {
           accessToken = refreshData.access_token;
           const newExpiresAt = new Date(Date.now() + (refreshData.expires_in * 1000)).toISOString();
-          
           await supabase
             .from('tenant_integrations')
             .update({
@@ -299,21 +296,81 @@ serve(async (req) => {
               settings: { ...settings, expires_at: newExpiresAt },
             })
             .eq('id', integrationId);
+          return { ok: true };
         }
+        return { ok: false, reason: refreshData.error || 'refresh_failed' };
+      };
+
+      // Proactive refresh if expired
+      if (settings?.expires_at && new Date(settings.expires_at) < new Date()) {
+        await refreshAccessToken();
       }
 
       // Fetch GA4 properties using Admin API
-      const accountsResponse = await fetch(
-        'https://analyticsadmin.googleapis.com/v1beta/accountSummaries',
-        {
+      const fetchAccounts = () =>
+        fetch('https://analyticsadmin.googleapis.com/v1beta/accountSummaries', {
           headers: { Authorization: `Bearer ${accessToken}` },
+        });
+
+      let accountsResponse = await fetchAccounts();
+      let accountsData: any = await accountsResponse.json().catch(() => ({}));
+
+      // If credentials invalid, try one forced refresh and retry once.
+      const looksUnauthorized =
+        accountsResponse.status === 401 ||
+        accountsData?.error?.code === 401 ||
+        /invalid.*credential|invalid_grant|unauthorized/i.test(accountsData?.error?.message || '');
+
+      if (looksUnauthorized) {
+        const refreshResult = await refreshAccessToken();
+        if (refreshResult.ok) {
+          accountsResponse = await fetchAccounts();
+          accountsData = await accountsResponse.json().catch(() => ({}));
+        } else {
+          return new Response(
+            JSON.stringify({
+              properties: [],
+              needs_reconnect: true,
+              owner_email: ownerEmail,
+              reason: refreshResult.reason || 'token_revoked',
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
         }
-      );
+      }
 
-      const accountsData = await accountsResponse.json();
-
-      if (accountsData.error) {
-        throw new Error(accountsData.error.message);
+      if (accountsData?.error) {
+        const stillUnauthorized =
+          accountsData.error.code === 401 ||
+          /invalid.*credential|invalid_grant|unauthorized/i.test(accountsData.error.message || '');
+        if (stillUnauthorized) {
+          return new Response(
+            JSON.stringify({
+              properties: [],
+              needs_reconnect: true,
+              owner_email: ownerEmail,
+              reason: 'token_revoked',
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        // Non-auth Google error (e.g. 403 / API not enabled / quota). Do NOT crash
+        // with an opaque 500 — log the full error for diagnosis and fall back to any
+        // previously cached property list so the UI stays usable.
+        console.error('GA get_properties Google API error:', JSON.stringify(accountsData.error));
+        const cachedOnError = Array.isArray(settings?.available_properties) ? settings.available_properties : [];
+        return new Response(
+          JSON.stringify({
+            properties: cachedOnError,
+            needs_reconnect: cachedOnError.length === 0,
+            owner_email: ownerEmail,
+            reason: 'google_api_error',
+            error_detail: accountsData.error.message || String(accountsData.error),
+            error_code: accountsData.error.code ?? null,
+            error_status: accountsData.error.status ?? null,
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
 
       // Extract properties from account summaries
@@ -332,8 +389,18 @@ serve(async (req) => {
         }
       }
 
+      // Cache the fresh list so the UI can fall back to it if a future call fails.
+      try {
+        await supabase
+          .from('tenant_integrations')
+          .update({
+            settings: { ...settings, available_properties: properties },
+          })
+          .eq('id', integrationId);
+      } catch (_e) { /* non-fatal */ }
+
       return new Response(
-        JSON.stringify({ properties }),
+        JSON.stringify({ properties, owner_email: ownerEmail }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
   } catch (error: any) {
