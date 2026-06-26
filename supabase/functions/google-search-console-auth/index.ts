@@ -112,7 +112,9 @@ serve(async (req) => {
         stateTenantId = parsed.tenantId || null;
       } catch { /* noop */ }
     }
-    const APP_BASE = stateOrigin || Deno.env.get('APP_URL') || 'https://after-lead.com';
+    // Strip any trailing slash so `${APP_BASE}/t/...` never produces a double slash
+    // (e.g. https://www.aios.co.il//t/... → ERR_FAILED).
+    const APP_BASE = (stateOrigin || Deno.env.get('APP_URL') || 'https://after-lead.com').replace(/\/+$/, '');
 
     if (error) {
       const slug = stateTenantId ? await getTenantSlug(stateTenantId) : 'app';
