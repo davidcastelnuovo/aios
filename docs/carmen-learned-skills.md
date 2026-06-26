@@ -101,3 +101,23 @@ mentioned "קלוד" incidentally at the end (e.g. "…קלוד אומר שזה 
 **Remaining manual step:** For Ana ("אנה") routing, create an  row for Ana and
 a flow-builder automation with . The switch guard will then route
 her messages correctly without any further code changes.
+
+## 2026-06-26 — claude_health_check
+
+**Skill slug:** `claude_health_check`
+**Trigger phrases:** health check, בדיקת תקינות, status check, are you operational, confirm operational, האם קלוד פועל
+
+Claude Code health-check skill written to `ai_skills` (scope=tenant, created_by_agent=true).
+
+**What it does:** Confirms Claude Code is operational by checking Supabase DB and GitHub API accessibility, listing open/pending PRs in the AIOS repo, marking any pending `claude_dispatches` row as completed, logging to `claude_carmen_audit`, and notifying David via `claude_notify_david`.
+
+**Note on git clone:** This container's egress policy blocks `github.com` git traffic (403 from local proxy at port 41729). Code reads use the GitHub API instead; code writes require a session with git clone access enabled.
+
+**Current PR status at time of check:**
+- #47 MERGED ✅ (Carmen keyword routing + agent-switch guard)
+- #53 CLOSED draft (superseded by #54)
+- #54 OPEN draft — Carmen outbound third-party guard (Ana guard) — needs merge
+- #60 MERGED ✅ — run-ai-agent hotfix
+- #61 MERGED ✅ — re-deploy good version (placeholder overwrote v40)
+- Open drafts needing attention: #49, #50, #51, #52, #54
+
