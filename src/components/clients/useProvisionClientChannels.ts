@@ -53,10 +53,26 @@ const TABLE_META: Record<
   },
 };
 
+// Mirrors getSyncFunction in ClientReportPanel: only these integrations have a
+// sync-to-records function. GA/Ahrefs/Search Console load their data live on
+// render, so there is nothing to pre-sync for them.
+function syncFunctionFor(integrationType: string): string | null {
+  switch (integrationType) {
+    case "facebook_insights":
+    case "facebook_ecommerce":
+      return "sync-facebook-insights";
+    case "google_ads":
+      return "sync-google-ads-data";
+    default:
+      return null;
+  }
+}
+
 export interface ProvisionSummary {
   created: string[];
   updated: string[];
   skipped: string[];
+  synced: string[];
   dashboardCreated: boolean;
 }
 
@@ -66,7 +82,9 @@ export function useProvisionClientChannels() {
 
   const provision = async (clientId: string): Promise<ProvisionSummary> => {
     setProvisioning(true);
-    const summary: ProvisionSummary = { created: [], updated: [], skipped: [], dashboardCreated: false };
+    const summary: ProvisionSummary = { created: [], updated: [], skipped: [], synced: [], dashboardCreated: false };
+    // Tables provisioned this run, to trigger an initial sync for the ones that support it.
+    const provisioned: Array<{ id: string; integrationType: string; label: string }> = [];
     try {
       const { data: client, error: clientErr } = await supabase
         .from("clients")
@@ -123,7 +141,10 @@ export function useProvisionClientChannels() {
               body: { table_id: found.id, integration_settings: settings },
             });
             if (patch.error) summary.skipped.push(`${meta.label}: ${patch.error.message}`);
-            else summary.updated.push(meta.label);
+            else {
+              summary.updated.push(meta.label);
+              provisioned.push({ id: found.id, integrationType: tbl.integrationType, label: meta.label });
+            }
             continue;
           }
 
@@ -142,7 +163,24 @@ export function useProvisionClientChannels() {
             },
           });
           if (create.error) summary.skipped.push(`${meta.label}: ${create.error.message}`);
-          else summary.created.push(meta.label);
+          else {
+            summary.created.push(meta.label);
+            const newId = (create.data as any)?.id;
+            if (newId) provisioned.push({ id: newId, integrationType: tbl.integrationType, label: meta.label });
+          }
+        }
+      }
+
+      // Best-effort initial sync for integrations that support it (Facebook / Google Ads).
+      // Failures here never fail provisioning — the table still exists and can be synced later.
+      for (const p of provisioned) {
+        const syncFn = syncFunctionFor(p.integrationType);
+        if (!syncFn) continue;
+        try {
+          const res = await supabase.functions.invoke(syncFn, { body: { tableId: p.id, tenantId } });
+          if (!res.error) summary.synced.push(p.label);
+        } catch {
+          // ignore — manual sync remains available in the report panel
         }
       }
 

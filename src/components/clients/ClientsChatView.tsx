@@ -739,6 +739,7 @@ export function ClientsChatView({
                     const parts: string[] = [];
                     if (summary.created.length) parts.push(`נוצרו: ${summary.created.join(", ")}`);
                     if (summary.updated.length) parts.push(`עודכנו: ${summary.updated.join(", ")}`);
+                    if (summary.synced.length) parts.push(`סונכרנו: ${summary.synced.join(", ")}`);
                     if (summary.dashboardCreated) parts.push("דשבורד נוצר");
                     if (summary.skipped.length) parts.push(`דולגו: ${summary.skipped.join(", ")}`);
                     toast.success(parts.length ? parts.join(" · ") : "אין ערוצים עם מזהים להקמה");
