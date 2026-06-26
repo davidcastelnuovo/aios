@@ -184,6 +184,37 @@ export function ClientsChatView({
     return clients.find(c => c.id === selectedClientId) || null;
   }, [clients, selectedClientId]);
 
+  // Progressive rendering of the (potentially long) client list: render a growing
+  // window instead of all rows at once, so the sidebar mounts fast even with 300+ clients.
+  const LIST_PAGE = 50;
+  const listScrollRef = useRef<HTMLDivElement>(null);
+  const listSentinelRef = useRef<HTMLDivElement>(null);
+  const [visibleCount, setVisibleCount] = useState(LIST_PAGE);
+  const visibleClients = useMemo(
+    () => filteredClients.slice(0, visibleCount),
+    [filteredClients, visibleCount]
+  );
+  // Reset the window when the search narrows/changes the result set.
+  useEffect(() => {
+    setVisibleCount(LIST_PAGE);
+    if (listScrollRef.current) listScrollRef.current.scrollTop = 0;
+  }, [listSearch]);
+  // Grow the window as the sentinel near the bottom scrolls into view.
+  useEffect(() => {
+    const sentinel = listSentinelRef.current;
+    if (!sentinel) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setVisibleCount((n) => (n < filteredClients.length ? n + LIST_PAGE : n));
+        }
+      },
+      { root: listScrollRef.current ?? null, rootMargin: "300px" }
+    );
+    io.observe(sentinel);
+    return () => io.disconnect();
+  }, [filteredClients.length]);
+
   const selectedClientDisplayName = useMemo(
     () => (selectedClient ? getClientDisplayName(selectedClient) : "ללא שם"),
     [selectedClient, getClientDisplayName]
@@ -531,9 +562,9 @@ export function ClientsChatView({
         )}
 
         {/* Client list */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0" dir="rtl">
+        <div ref={listScrollRef} className="flex-1 overflow-y-auto overflow-x-hidden min-h-0" dir="rtl">
           <div className="divide-y w-full">
-            {filteredClients.map((client) => {
+            {visibleClients.map((client) => {
               const isSelected = client.id === selectedClientId;
               const isChecked = selectedClientIds.has(client.id);
               const statusInfo = getStatusInfo(client.status);
@@ -601,6 +632,12 @@ export function ClientsChatView({
             {filteredClients.length === 0 && (
               <div className="p-8 text-center text-muted-foreground text-sm">
                 לא נמצאו לקוחות
+              </div>
+            )}
+            {/* Sentinel: scrolling near it loads the next page of the list */}
+            {visibleCount < filteredClients.length && (
+              <div ref={listSentinelRef} className="p-3 text-center text-xs text-muted-foreground">
+                טוען עוד… ({visibleClients.length}/{filteredClients.length})
               </div>
             )}
           </div>
