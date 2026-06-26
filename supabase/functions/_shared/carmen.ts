@@ -89,11 +89,15 @@ function resolveTriggerKeywords(cfg: any): string[] {
   return out.length ? out : ['כרמן'];
 }
 
-// True when the message contains any configured wake-word, or any Whisper spelling
-// variant of "כרמן".
+// True when a configured wake-word (or a Whisper spelling variant of "כרמן") appears
+// as a DIRECT ADDRESS — within the first 80 characters of the message after stripping
+// the 🎤 voice-transcript prefix. A keyword that appears only mid-message or at the
+// end is an incidental mention ("...Carmen said that..."), not an invocation.
 function messageHasTrigger(normalizedMsg: string, triggerKeywords: string[]): boolean {
-  if (triggerKeywords.some(k => normalizedMsg.includes(k))) return true;
-  return CARMEN_NAME_VARIANT_RE.test(normalizedMsg);
+  const msgContent = normalizedMsg.replace(/^\s*🎤\s*/, '').trim();
+  const prefix = msgContent.slice(0, 80);
+  if (triggerKeywords.some(k => prefix.includes(k))) return true;
+  return CARMEN_NAME_VARIANT_RE.test(prefix);
 }
 
 // Detect meta-instruction style messages (long lists of "תעני..." rules) that
@@ -322,20 +326,22 @@ export async function findCarmenSessionAutomation(
   const chatIdBare = chatId ? chatId.split('@')[0] : '';
   // Keyword-aware preference: when several automations match the same channel/phone
   // (e.g. a "כרמן" line and a "קלוד" line both scoped to David's phone), prefer the
-  // one whose configured trigger keyword is actually present in this message. This
-  // dominates the scope score so each keyword routes to its own agent. Backward
-  // compatible: if messageText isn't supplied, no bonus is applied.
+  // one whose configured trigger keyword is actually present as a DIRECT ADDRESS.
+  // Only the first 80 characters (after the 🎤 voice marker) count — a keyword that
+  // appears only mid-message or at the end is an incidental mention, not an invocation.
+  // Backward compatible: if messageText isn't supplied, no bonus is applied.
   const msgLower = String(ctx?.messageText || '').toLowerCase();
+  const msgPrefix = msgLower.replace(/^\s*🎤\s*/, '').trim().slice(0, 80);
   const stepKeywordHit = (cfg: any): boolean => {
-    if (!msgLower) return false;
+    if (!msgPrefix) return false;
     const kws: string[] = (Array.isArray(cfg?.trigger_keywords) && cfg.trigger_keywords.length
       ? cfg.trigger_keywords
       : [cfg?.trigger_keyword || 'כרמן'])
       .map((k: any) => String(k || '').toLowerCase()).filter(Boolean);
-    if (kws.some((k) => msgLower.includes(k))) return true;
+    if (kws.some((k) => msgPrefix.includes(k))) return true;
     // The generic Carmen-name variants only count for default/Carmen automations.
     const hasCarmenDefault = kws.some((k) => /[כק]א?רמן/.test(k));
-    return hasCarmenDefault && /[כק]א?רמן/.test(msgLower);
+    return hasCarmenDefault && /[כק]א?רמן/.test(msgPrefix);
   };
   const scoreStep = (s: any): number => {
     const cfg = s?.configuration || {};
@@ -735,7 +741,27 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     return { handled: true, outcome: 'active' };
   }
 
-  const activeSession = await findActiveCarmenSession(supabase, tenantId, chatId, connectionUserId, idleMinutes);
+  let activeSession = await findActiveCarmenSession(supabase, tenantId, chatId, connectionUserId, idleMinutes);
+
+  // Agent-switch guard: if there is an active session for a DIFFERENT automation and
+  // the current message explicitly triggers the new automation's keyword (within the
+  // first 80-char direct-address window), end the old session so the correct agent can
+  // start a fresh one. Example: Carmen session open → user says "קלוד, check X" → Claude
+  // session should start instead of Carmen continuing.
+  if (activeSession && earlyAutomation && activeSession.automation_id !== earlyAutomation.id) {
+    const switchKeywords = resolveTriggerKeywords(earlyAutomation.configuration || {});
+    if (messageHasTrigger(normalizedMsg, switchKeywords)) {
+      console.log('[carmen] Agent switch: ending session for incoming keyword', {
+        oldSession: activeSession.id, oldAutomation: activeSession.automation_id,
+        newAutomation: earlyAutomation.id,
+      });
+      await supabase
+        .from('carmen_whatsapp_sessions')
+        .update({ status: 'ended', ended_at: new Date().toISOString() })
+        .eq('id', activeSession.id);
+      activeSession = null; // fall through to new-session creation for the correct agent
+    }
+  }
 
   // Outbound routing: prefer the automation's configured action step (send_manus_message /
   // send_green_api_message) so the reply goes through the module the user picked, regardless

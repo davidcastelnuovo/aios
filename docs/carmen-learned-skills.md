@@ -70,3 +70,34 @@ logged.
 - **What Carmen can now do:** Full systematic scan of all active clients in an agency — campaign performance vs. prior week, account status, integration disconnections, ecommerce metrics (ROAS, purchases, cost-per-purchase) — with per-client `add_client_update` entries and a sorted WhatsApp summary.
 - **How:** `analyze_campaign_performance` per client → `delegate_to_background` when >5 clients → `add_client_update` + `batch_update_client_health`. Output sorted worst-first (churn\_risk → wavering → happy).
 - **Origin:** Carmen asked Claude "how to do a proper pulse check for clients" after David reported the Campaigner skin references `pulse_check` by slug but the skill had `slug=null`. Fix: set `slug='pulse_check'`, added `system_prompt` and `triggers` to the existing `בדיקת דופק` ai_skill (`id: 007384e7-c62c-42f8-b0d8-0187eb378eaa`).
+
+---
+
+## 2026-06-26 — Agent routing: position-aware keyword matching + session switching
+
+**Problem Carmen reported:** Carmen was responding to messages addressed to other agents
+(e.g. "אנה"). Separately, the Claude agent was hijacking Carmen sessions when messages
+mentioned "קלוד" incidentally at the end (e.g. "…קלוד אומר שזה תוקן").
+
+**Root causes ():**
+
+1.  and  used  on the full message text —
+   any keyword occurrence anywhere triggered that agent. A mention at the very end of a
+   sentence addressed to Carmen would spin up the wrong agent.
+
+2. Active-session continuity had no agent-switch mechanism — once session A was open, all
+   messages in that chat went to agent A even if the user explicitly addressed agent B.
+
+**Fixes (PR #46):**
+
+1. Both functions now only treat a keyword as a direct-address trigger when it appears
+   within the **first 80 characters** of the message (after stripping the voice marker).
+   Keywords appearing only mid-message or at the end are ignored for routing.
+
+2. **Agent-switch guard** added in : when an active session for
+   automation A exists but the message triggers automation B's keyword in the prefix,
+   session A is ended silently and session B starts fresh on the same message.
+
+**Remaining manual step:** For Ana ("אנה") routing, create an  row for Ana and
+a flow-builder automation with . The switch guard will then route
+her messages correctly without any further code changes.
