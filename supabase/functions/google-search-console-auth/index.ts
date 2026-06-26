@@ -354,7 +354,24 @@ serve(async (req) => {
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
-        throw new Error(sitesData.error.message);
+        // Non-auth Google error (e.g. 403 insufficientPermissions / API not
+        // enabled / quota). Do NOT crash with an opaque 500 — log the full error
+        // for diagnosis and fall back to any previously cached site list so the
+        // UI stays usable instead of looping on "reconnect".
+        console.error('GSC get_sites Google API error:', JSON.stringify(sitesData.error));
+        const cachedOnError = Array.isArray(settings?.available_sites) ? settings.available_sites : [];
+        return new Response(
+          JSON.stringify({
+            sites: cachedOnError,
+            needs_reconnect: cachedOnError.length === 0,
+            owner_email: ownerEmail,
+            reason: 'google_api_error',
+            error_detail: sitesData.error.message || String(sitesData.error),
+            error_code: sitesData.error.code ?? null,
+            error_status: sitesData.error.status ?? null,
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
 
       const sites = (sitesData.siteEntry || []).map((site: any) => ({
