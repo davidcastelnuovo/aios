@@ -28,6 +28,8 @@
 //   CLAUDE_DEV_ROUTINE_ID / CLAUDE_DEV_ROUTINE_TOKEN  separate routine for dev tasks
 //   CLAUDE_ROUTINE_BETA   override the experimental beta header (defaults below)
 //   CLAUDE_DEFAULT_TENANT_ID  fallback tenant when one can't be resolved from the bearer
+// redeploy: revert to the original claude-mcp (no dispatch WhatsApp ping) so Carmen's own
+// session-URL relay is the single message — the extra ping had caused duplicate messages.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
