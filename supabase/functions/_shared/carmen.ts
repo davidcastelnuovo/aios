@@ -803,6 +803,19 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
 
 
   if (activeSession) {
+
+    // OUTBOUND GUARD: owner outgoing messages must never trigger agent replies.
+    // isManualOutgoing means the phone owner (David) is sending OUT to a third party.
+    // We keep the session warm so the next inbound message resumes normally,
+    // but we do NOT run AI or reply — doing so would hijack private conversations.
+    if (isManualOutgoing && !isIncoming) {
+      await supabase
+        .from('carmen_whatsapp_sessions')
+        .update({ last_message_at: new Date().toISOString() })
+        .eq('id', activeSession.id);
+      console.log('[carmen] Outbound owner message in active session — context recorded, no reply', { chatId, session: activeSession.id });
+      return { handled: true, outcome: 'active' };
+    }
     const configuredEnd = activeSession.end_keyword || cfg.end_keyword || 'סיימנו כרמן';
     if (messageRequestsEnd(messageText, configuredEnd)) {
       await supabase
@@ -1021,6 +1034,15 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
   // automation actually silences Carmen in groups.
   if (isGroup && scopeMode !== 'specific_group') {
     return { handled: false, reason: 'group_requires_explicit_scope' };
+  }
+
+  // OUTBOUND GUARD: owner outgoing messages must never create new Carmen sessions.
+  // Only inbound messages (counterpart → owner) can open a session — this prevents
+  // Carmen from hijacking David's private chats when a trigger keyword appears in
+  // an outbound message to Ana or any other third party.
+  if (isManualOutgoing && !isIncoming) {
+    console.log('[carmen] Outbound owner message — no session created', { chatId, phoneNumber });
+    return { handled: false, reason: 'outbound_no_new_session' };
   }
 
   const triggerKeywords = resolveTriggerKeywords(carmenAutomation.configuration);
