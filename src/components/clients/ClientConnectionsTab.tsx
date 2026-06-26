@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useClientConnections } from "@/components/marketing/lib/useClientConnections";
+import { useProvisionClientChannels } from "@/components/clients/useProvisionClientChannels";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Trash2, Megaphone, Share2, Link2 } from "lucide-react";
+import { Plus, Trash2, Megaphone, Share2, Link2, Loader2, LayoutDashboard } from "lucide-react";
 import {
   CLIENT_CHANNELS,
   isChannelActive,
@@ -19,10 +20,12 @@ import {
 interface Props {
   clientId: string;
   tenantId: string;
+  onProvisioned?: () => void;
 }
 
-export function ClientConnectionsTab({ clientId, tenantId }: Props) {
+export function ClientConnectionsTab({ clientId, tenantId, onProvisioned }: Props) {
   const conns = useClientConnections(clientId);
+  const { provision, provisioning } = useProvisionClientChannels();
 
   // Local edits keyed by client column; falls back to the saved value when untouched.
   const [edits, setEdits] = useState<Partial<Record<ChannelFieldKey, string>>>({});
@@ -57,6 +60,21 @@ export function ClientConnectionsTab({ clientId, tenantId }: Props) {
     toast.success("נשמר");
     setEdits({});
     conns.invalidate();
+  };
+
+  const handleProvision = async () => {
+    try {
+      const summary = await provision(clientId);
+      const parts: string[] = [];
+      if (summary.created.length) parts.push(`נוצרו: ${summary.created.join(", ")}`);
+      if (summary.updated.length) parts.push(`עודכנו: ${summary.updated.join(", ")}`);
+      if (summary.dashboardCreated) parts.push("דשבורד נוצר");
+      if (summary.skipped.length) parts.push(`דולגו: ${summary.skipped.join(", ")}`);
+      toast.success(parts.length ? parts.join(" · ") : "אין ערוצים עם מזהים להקמה");
+      onProvisioned?.();
+    } catch (err: unknown) {
+      toast.error((err as Error)?.message || "שגיאה בהקצאת ערוצים");
+    }
   };
 
   const addPage = async () => {
@@ -121,9 +139,15 @@ export function ClientConnectionsTab({ clientId, tenantId }: Props) {
         );
       })}
 
-      <Button size="sm" onClick={saveClientFields} disabled={saving}>
-        {saving ? "שומר..." : "שמור חיבורים"}
-      </Button>
+      <div className="flex gap-2">
+        <Button size="sm" onClick={saveClientFields} disabled={saving}>
+          {saving ? "שומר..." : "שמור חיבורים"}
+        </Button>
+        <Button size="sm" variant="secondary" onClick={handleProvision} disabled={provisioning}>
+          {provisioning ? <Loader2 className="ml-1 h-4 w-4 animate-spin" /> : <LayoutDashboard className="ml-1 h-4 w-4" />}
+          {provisioning ? "מקצה..." : "צור טבלאות + דשבורד"}
+        </Button>
+      </div>
 
       {/* Social pages — shown only when a channel that uses Facebook pages is active */}
       {showFacebookPages && (
