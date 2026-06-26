@@ -270,8 +270,7 @@ const ALL_TOOLS = [
 const FB_GRAPH_VERSION = 'v21.0'
 
 async function fbResolveClientAdAccount(supabase: any, tenantId: string, clientId: string): Promise<string | null> {
-  // clients.* ad-account fields are empty in practice — the act_ id lives in the
-  // client's Meta sync table config (crm_tables.integration_settings).
+  // 1. crm_tables (clients connected via the facebook sync/report-table flow).
   const { data } = await supabase
     .from('crm_tables')
     .select('integration_settings, last_sync_at')
@@ -284,6 +283,14 @@ async function fbResolveClientAdAccount(supabase: any, tenantId: string, clientI
     const acc = s.ad_account_id || s.account_id || s.meta_account_id
     if (acc) return String(acc).replace(/^act_/, '')
   }
+  // 2. Fallback: clients.meta_ads_account_id (the ad account set directly on the client record).
+  const { data: cl } = await supabase
+    .from('clients')
+    .select('meta_ads_account_id')
+    .eq('id', clientId)
+    .eq('tenant_id', tenantId)
+    .maybeSingle()
+  if (cl?.meta_ads_account_id) return String(cl.meta_ads_account_id).replace(/^act_/, '')
   return null
 }
 
@@ -2079,7 +2086,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       // 1. Resolve client scope
       let clientsQuery = supabase
         .from('clients')
-        .select('id, name, agency_id, agencies(name)')
+        .select('id, name, agency_id, meta_ads_account_id, agencies(name)')
         .in('tenant_id', accessibleTenantIds)
         .in('status', ['active', 'onboarding'])
         .order('name')
@@ -2172,7 +2179,8 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       let healthy = 0
       for (const c of (scopeClients || [])) {
         const settings = settingsByClient.get(c.id)
-        const adAccountId = settings?.ad_account_id || null
+        const adAccountId = settings?.ad_account_id
+          || (c.meta_ads_account_id ? String(c.meta_ads_account_id).replace(/^act_/, '') : null)
         const flags: string[] = []
         let status: string = 'unknown'
         let hasSpend7 = false
