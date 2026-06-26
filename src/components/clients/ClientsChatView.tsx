@@ -18,6 +18,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { EditClientDialog } from "@/components/forms/EditClientDialog";
+import { ClientConnectionsTab } from "@/components/clients/ClientConnectionsTab";
+import { useProvisionClientChannels } from "@/components/clients/useProvisionClientChannels";
 import { ClientUpdatesTab } from "@/components/clients/ClientUpdatesTab";
 import { ClientTablesTab } from "@/components/clients/ClientTablesTab";
 import { ClientLinkedFiles } from "@/components/clients/ClientLinkedFiles";
@@ -94,6 +96,7 @@ export function ClientsChatView({
   const [confirmingBulkDelete, setConfirmingBulkDelete] = useState(false);
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
+  const { provision, provisioning } = useProvisionClientChannels();
 
   const { data: whatsappGroups = [] } = useQuery({
     queryKey: ["whatsapp-groups", tenantId],
@@ -729,6 +732,26 @@ export function ClientsChatView({
                 <Button
                   variant="outline"
                   size="icon"
+                  className="h-8 w-8"
+                  disabled={provisioning}
+                  onClick={async () => {
+                    const summary = await provision(selectedClient.id);
+                    const parts: string[] = [];
+                    if (summary.created.length) parts.push(`נוצרו: ${summary.created.join(", ")}`);
+                    if (summary.updated.length) parts.push(`עודכנו: ${summary.updated.join(", ")}`);
+                    if (summary.dashboardCreated) parts.push("דשבורד נוצר");
+                    if (summary.skipped.length) parts.push(`דולגו: ${summary.skipped.join(", ")}`);
+                    toast.success(parts.length ? parts.join(" · ") : "אין ערוצים עם מזהים להקמה");
+                    setActiveTab("report");
+                  }}
+                  title="צור טבלאות ודשבורד לכל הערוצים"
+                >
+                  {provisioning ? <Loader2 className="h-4 w-4 animate-spin" /> : <BarChart3 className="h-4 w-4" />}
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="icon"
                   className="h-8 w-8 text-destructive hover:text-destructive"
                   onClick={() => setPendingDeleteId(selectedClient.id)}
                   title="מחק לקוח"
@@ -787,10 +810,14 @@ export function ClientsChatView({
 
             {/* Detail tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0 flex flex-col overflow-hidden">
-              <TabsList className={cn("mx-4 mt-3 grid w-auto max-w-4xl h-9 bg-muted/50 mr-4 ml-auto", canViewFinance ? "grid-cols-10" : "grid-cols-9")}>
+              <TabsList className={cn("mx-4 mt-3 grid w-auto max-w-4xl h-9 bg-muted/50 mr-4 ml-auto", canViewFinance ? "grid-cols-11" : "grid-cols-10")}>
                 <TabsTrigger value="details" className="text-xs gap-1">
                   <FileText className="h-3.5 w-3.5" />
                   פרטי לקוח
+                </TabsTrigger>
+                <TabsTrigger value="connections" className="text-xs gap-1">
+                  <Link className="h-3.5 w-3.5" />
+                  חיבורים
                 </TabsTrigger>
                 {canViewFinance && (
                   <TabsTrigger value="business" className="text-xs gap-1">
@@ -1173,6 +1200,10 @@ export function ClientsChatView({
                   {/* ── CRM Settings ──────────────────────────────────────────── */}
                   <CRMSettingsSection client={selectedClient} onUpdate={() => queryClient.invalidateQueries({ queryKey: ["clients"] })} />
 
+                </TabsContent>
+
+                <TabsContent value="connections" className="mt-0">
+                  {tenantId && <ClientConnectionsTab clientId={selectedClient.id} tenantId={tenantId} onProvisioned={() => setActiveTab("report")} />}
                 </TabsContent>
 
                 {canViewFinance && (

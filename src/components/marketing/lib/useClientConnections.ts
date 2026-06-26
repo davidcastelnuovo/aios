@@ -5,9 +5,13 @@ export interface ClientConnections {
   client: {
     id: string;
     name: string;
+    services: string[] | null;
     website: string | null;
     meta_ads_account_id: string | null;
     google_ads_account_id: string | null;
+    ga_property_id: string | null;
+    gsc_site_url: string | null;
+    ahrefs_domain: string | null;
   } | null;
   socialPages: Array<{
     id: string;
@@ -32,7 +36,7 @@ export function useClientConnections(clientId: string | null | undefined) {
     queryFn: async (): Promise<ClientConnections> => {
       const clientRes = await supabase
         .from("clients")
-        .select("id, name, website, meta_ads_account_id, google_ads_account_id")
+        .select("id, name, services, website, meta_ads_account_id, google_ads_account_id, ga_property_id, gsc_site_url, ahrefs_domain")
         .eq("id", clientId!)
         .maybeSingle();
       const pagesRes = await supabase
