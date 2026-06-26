@@ -1,4 +1,4 @@
-// redeploy trigger: rebundle _shared/carmen.ts (keyword-aware automation routing — "קלוד" line vs "כרמן" line)
+// redeploy trigger: rebundle _shared/carmen.ts keyword-aware routing (retry — esm.sh 522 aborted prior deploy)
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { handleCarmenMessage, fetchKnownEntityNames } from '../_shared/carmen.ts';
 import { aiTranscribe, aiCleanTranscript } from '../_shared/ai.ts';
