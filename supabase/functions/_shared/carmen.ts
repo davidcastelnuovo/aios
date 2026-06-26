@@ -273,7 +273,7 @@ export async function findCarmenSessionAutomation(
   supabase: any,
   tenantId: string,
   integrationId?: string | null,
-  ctx?: { isGroup?: boolean; chatId?: string | null; phoneNumber?: string | null },
+  ctx?: { isGroup?: boolean; chatId?: string | null; phoneNumber?: string | null; messageText?: string | null },
 ): Promise<any | null> {
   const { data: flowSteps } = await supabase
     .from('automation_flow_steps')
@@ -320,8 +320,26 @@ export async function findCarmenSessionAutomation(
   const chatId = ctx?.chatId || '';
   const phoneDigits = (ctx?.phoneNumber || '').replace(/\D/g, '');
   const chatIdBare = chatId ? chatId.split('@')[0] : '';
+  // Keyword-aware preference: when several automations match the same channel/phone
+  // (e.g. a "כרמן" line and a "קלוד" line both scoped to David's phone), prefer the
+  // one whose configured trigger keyword is actually present in this message. This
+  // dominates the scope score so each keyword routes to its own agent. Backward
+  // compatible: if messageText isn't supplied, no bonus is applied.
+  const msgLower = String(ctx?.messageText || '').toLowerCase();
+  const stepKeywordHit = (cfg: any): boolean => {
+    if (!msgLower) return false;
+    const kws: string[] = (Array.isArray(cfg?.trigger_keywords) && cfg.trigger_keywords.length
+      ? cfg.trigger_keywords
+      : [cfg?.trigger_keyword || 'כרמן'])
+      .map((k: any) => String(k || '').toLowerCase()).filter(Boolean);
+    if (kws.some((k) => msgLower.includes(k))) return true;
+    // The generic Carmen-name variants only count for default/Carmen automations.
+    const hasCarmenDefault = kws.some((k) => /[כק]א?רמן/.test(k));
+    return hasCarmenDefault && /[כק]א?רמן/.test(msgLower);
+  };
   const scoreStep = (s: any): number => {
     const cfg = s?.configuration || {};
+    const kwBonus = stepKeywordHit(cfg) ? 1000 : 0;
     const mode = cfg.carmen_scope_mode || 'all';
     const allowedGroups: string[] = Array.isArray(cfg.carmen_allowed_group_ids) && cfg.carmen_allowed_group_ids.length > 0
       ? cfg.carmen_allowed_group_ids
@@ -333,18 +351,21 @@ export async function findCarmenSessionAutomation(
 
     const groupMatch = allowedGroups.some((g: string) => g === chatId || (chatIdBare && g === chatIdBare));
 
-    if (isGroup) {
-      if (mode === 'specific_group' && groupMatch) return 100;
-      if (mode === 'specific_group') return 40; // group-mode but this chat isn't listed
+    const base = (() => {
+      if (isGroup) {
+        if (mode === 'specific_group' && groupMatch) return 100;
+        if (mode === 'specific_group') return 40; // group-mode but this chat isn't listed
+        if (mode === 'all') return 20;
+        // specific_phone in a group context → unusable
+        return -50;
+      }
+      if (mode === 'specific_phone' && phoneDigits && allowedPhones.some(p => p && (p === phoneDigits || phoneDigits.endsWith(p) || p.endsWith(phoneDigits)))) return 100;
+      if (mode === 'specific_phone') return 40;
       if (mode === 'all') return 20;
-      // specific_phone in a group context → unusable
+      // specific_group in a 1:1 context → unusable
       return -50;
-    }
-    if (mode === 'specific_phone' && phoneDigits && allowedPhones.some(p => p && (p === phoneDigits || phoneDigits.endsWith(p) || p.endsWith(phoneDigits)))) return 100;
-    if (mode === 'specific_phone') return 40;
-    if (mode === 'all') return 20;
-    // specific_group in a 1:1 context → unusable
-    return -50;
+    })();
+    return base + kwBonus;
   };
 
   ranked.sort((a, b) => scoreStep(b) - scoreStep(a));
@@ -662,7 +683,7 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
 
   // Read configured timeout (defaults to 5 minutes). We need it both for find-active and start-session paths.
   // Look up the relevant automation up-front to get session_timeout_minutes & end_keyword.
-  const earlyAutomation = await findCarmenSessionAutomation(supabase, tenantId, integrationId, { isGroup, chatId, phoneNumber });
+  const earlyAutomation = await findCarmenSessionAutomation(supabase, tenantId, integrationId, { isGroup, chatId, phoneNumber, messageText });
 
   // HARD GUARD: if no flow-based Carmen automation is pinned to this integration,
   // Carmen must stay completely silent on this channel — even if a stale session
