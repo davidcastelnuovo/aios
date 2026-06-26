@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-06-26 — save_memory engine fix (UUID sentinel)
+- **Skin slug:** n/a (engine bug fix — no new Carmen skill needed)
+- **What changed:** `run-ai-agent` was crashing with `invalid input syntax for type uuid: "system"` whenever `save_memory` was called without a logged-in user (e.g. WhatsApp automations). `ai_memory.user_id` is `NOT NULL uuid` but the fallback was the literal string `'system'`. Fixed in PR #65: introduced `SYSTEM_USER_UUID = '00000000-0000-0000-0000-000000000000'` and replaced both broken sites (save_memory tool + auto-instruction-capture path). Carmen no longer needs any workaround — the engine handles it.
+- **Key context:** The 2026-06-25 `save_agent_memory` skin was a symptom workaround (using David's hardcoded UUID). The root fix is now in the engine.
+- **Origin:** Carmen escalated — `save_memory` failing for WhatsApp automation sessions.
+
 ### 2026-06-26 — grant_module_permission (הענקת גישה למודול)
 - **Skin slug:** `grant_module_permission` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** Grant a user (campaigner, team_manager, etc.) explicit access to a restricted AIOS UI module (e.g. `integrations`, `accounting_integrations`) by upserting a row in `user_permissions`. Verifies the user is within their existing role scope before granting — refuses out-of-scope elevations. Logs to `claude_carmen_audit`.
