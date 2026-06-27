@@ -9,6 +9,11 @@ verify_jwt = false
 [functions.claude-mcp]
 verify_jwt = false
 
+# Manus MCP server — called by mcp-connect with a custom bearer token,
+# not a Supabase JWT. Must stay false.
+[functions.manus-mcp]
+verify_jwt = false
+
 [functions.claude-notify]
 verify_jwt = false
 
