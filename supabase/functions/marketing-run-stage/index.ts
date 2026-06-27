@@ -9,7 +9,7 @@ const corsHeaders = {
 };
 
 const TEXT_MODEL = 'gpt-4o-mini';
-const IMAGE_MODEL = 'gpt-4o-mini';
+const IMAGE_MODEL = 'dall-e-3';
 
 // Cost per 1M tokens (rough Gemini Flash pricing for usage display)
 const COST_IN_PER_M = 0.075;
@@ -154,8 +154,33 @@ serve(async (req) => {
     let outputJson: any = {};
 
     if (stageType === "creative") {
-      // Image generation
-      const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
+      // Image generation via DALL-E 3
+      // First, generate a detailed image prompt using text model
+      const promptRes = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: TEXT_MODEL,
+          messages: [
+            { role: "system", content: systemPrompt || "You are a creative director. Generate concise DALL-E image prompts in English." },
+            { role: "user", content: userPrompt + "\n\nGenerate a concise DALL-E 3 image prompt (max 200 words) in English for this marketing creative. Focus on visual elements, style, and composition." },
+          ],
+          max_tokens: 300,
+        }),
+      });
+      let imagePrompt = item.title ?? "Professional marketing creative";
+      if (promptRes.ok) {
+        const promptData = await promptRes.json();
+        imagePrompt = promptData.choices?.[0]?.message?.content ?? imagePrompt;
+        tokensIn += promptData.usage?.prompt_tokens ?? 0;
+        tokensOut += promptData.usage?.completion_tokens ?? 0;
+      }
+
+      // Generate image with DALL-E 3
+      const aiRes = await fetch("https://api.openai.com/v1/images/generations", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${OPENAI_API_KEY}`,
@@ -163,21 +188,19 @@ serve(async (req) => {
         },
         body: JSON.stringify({
           model: IMAGE_MODEL,
-          messages: [
-            { role: "system", content: systemPrompt || "You are a creative director." },
-            { role: "user", content: userPrompt },
-          ],
-          modalities: ["image", "text"],
+          prompt: imagePrompt,
+          n: 1,
+          size: "1024x1024",
+          response_format: "b64_json",
         }),
       });
       if (!aiRes.ok) {
         const t = await aiRes.text();
-        throw new Error(`AI gateway ${aiRes.status}: ${t}`);
+        throw new Error(`Image generation ${aiRes.status}: ${t}`);
       }
       const data = await aiRes.json();
-      const base64 = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-      if (!base64) throw new Error("No image returned");
-      const b64Data = base64.replace(/^data:image\/\w+;base64,/, "");
+      const b64Data = data.data?.[0]?.b64_json;
+      if (!b64Data) throw new Error("No image returned from DALL-E");
       const bytes = Uint8Array.from(atob(b64Data), (c) => c.charCodeAt(0));
       const fileName = `${Date.now()}-${runRow.id}.png`;
       const filePath = `${item.tenant_id}/marketing/${item_id}/${fileName}`;
@@ -188,8 +211,6 @@ serve(async (req) => {
       const { data: pub } = admin.storage.from("entity-attachments").getPublicUrl(filePath);
       assetUrl = pub.publicUrl;
       assetType = "image";
-      tokensIn = data.usage?.prompt_tokens ?? 0;
-      tokensOut = data.usage?.completion_tokens ?? 0;
       outputJson = { image_url: assetUrl };
     } else {
       // Text generation

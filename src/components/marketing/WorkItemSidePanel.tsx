@@ -158,14 +158,30 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
       const { data, error } = await supabase.functions.invoke("marketing-run-pipeline", {
         body: { item_id: itemId },
       });
-      if (error) throw error;
-      if ((data as any)?.error) throw new Error((data as any).error);
-      toast({ title: "✓ ה-Pipeline הופעל" });
+      // Always refresh UI regardless of outcome
       refetchRuns();
       refetchAssets();
       loadItem();
       queryClient.invalidateQueries({ queryKey: ["marketing-items-calendar"] });
+      if (error) throw error;
+      if ((data as any)?.error) {
+        toast({ title: "שגיאה בהרצת הפייפליין", description: (data as any).error, variant: "destructive" });
+        return;
+      }
+      if ((data as any)?.awaiting_approval) {
+        toast({ title: "⏸ ממתין לאישורך", description: "שלב הסתיים ומחכה לאישור להמשיך" });
+        return;
+      }
+      if ((data as any)?.completed) {
+        toast({ title: "✓ הפייפליין הושלם!", description: "כל השלבים הורצו בהצלחה" });
+        return;
+      }
+      toast({ title: "✓ ה-Pipeline הופעל" });
     } catch (e: any) {
+      // Still refresh even on error
+      refetchRuns();
+      refetchAssets();
+      loadItem();
       toast({ title: "שגיאה", description: e.message, variant: "destructive" });
     } finally {
       setRunning(null);
