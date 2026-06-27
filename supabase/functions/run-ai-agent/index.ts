@@ -3410,11 +3410,21 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
       const disabledIntegrations = ((agent as any).disabled_integrations || []) as string[]
       const mcp = await loadMcpTools(supabase, resolvedTenantId, agent_id, disabledIntegrations)
       if (mcp.toolDefs.length > 0) {
+        // 4b-i. Escalation agent filter
+        // If metadata.escalation_agent is set, only expose MCP tools for the chosen escalation agent.
+        // 'claude'  → block mcp_Manus__ tools (keep Claude MCP tools only)
+        // 'manus'   → block mcp_Claude__ tools (keep Manus MCP tools only)
+        // 'none'    → block both (no escalation to external AI)
+        // 'all'/unset → keep everything (default, backward-compatible)
+        const escalationAgent: string = (agent as any).metadata?.escalation_agent || 'all'
         for (const t of mcp.toolDefs) {
+          if (escalationAgent === 'claude' && t.name.startsWith('mcp_Manus__')) continue
+          if (escalationAgent === 'manus'  && t.name.startsWith('mcp_Claude__')) continue
+          if (escalationAgent === 'none'   && (t.name.startsWith('mcp_Claude__') || t.name.startsWith('mcp_Manus__'))) continue
           toolsForAPI.push({ type: 'function', function: t as any })
         }
         mcpExecutors = mcp.executors
-        console.log(`[AGENT] Loaded ${mcp.toolDefs.length} MCP tools from ${mcp.connectionsCount} connections`)
+        console.log(`[AGENT] Loaded ${mcp.toolDefs.length} MCP tools from ${mcp.connectionsCount} connections (escalation=${escalationAgent})`)
       }
     } catch (e: any) {
       console.error('[AGENT] MCP load failed:', e?.message)
