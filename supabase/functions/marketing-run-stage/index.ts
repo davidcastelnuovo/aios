@@ -24,8 +24,31 @@ serve(async (req) => {
   const admin = createClient(supaUrl, supaService);
 
   try {
-    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-    if (!OPENAI_API_KEY) throw new Error("Missing OPENAI_API_KEY");
+    // Get OpenAI API key from tenant_integrations (same as run-ai-agent)
+    const getOpenAIKey = async (tenantId: string): Promise<string> => {
+      const { data } = await admin
+        .from('tenant_integrations')
+        .select('settings, shared_from_integration_id')
+        .eq('tenant_id', tenantId)
+        .eq('integration_type', 'llm')
+        .eq('is_active', true)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      let settings = (data?.settings || {}) as Record<string, string>;
+      // If shared, load from source
+      if (data?.shared_from_integration_id && !settings.openai_api_key) {
+        const { data: src } = await admin
+          .from('tenant_integrations')
+          .select('settings')
+          .eq('id', data.shared_from_integration_id)
+          .maybeSingle();
+        if (src?.settings) settings = src.settings as Record<string, string>;
+      }
+      const key = settings.openai_api_key;
+      if (!key) throw new Error('OpenAI API key חסר — הגדר אותו בהגדרות האינטגרציות');
+      return key;
+    };
 
     const { item_id, stage_id } = await req.json();
     if (!item_id || !stage_id) {
@@ -102,6 +125,9 @@ serve(async (req) => {
       .single();
     if (runErr || !runRow) throw new Error("Failed to create run: " + runErr?.message);
     runId = runRow.id;
+
+    // Get OpenAI API key from tenant_integrations
+    const OPENAI_API_KEY = await getOpenAIKey(item.tenant_id);
 
     const cfg = (stage.configuration as any) ?? {};
     const instructions: string = cfg.instructions ?? "";
