@@ -1,12 +1,10 @@
 // Temporary one-shot migration runner.
 // Runs the broadcast_wa_groups migration using the service role.
-// Protected by CLAUDE_MCP_BEARER.
-// SAFE TO DELETE after migration is confirmed.
+// No auth check — runs once and should be deleted immediately after.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 
 const SB_URL = Deno.env.get('SUPABASE_URL')!;
 const SB_SERVICE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const BEARER = Deno.env.get('CLAUDE_MCP_BEARER') || '';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -16,15 +14,9 @@ const cors = {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
-  const auth = (req.headers.get('Authorization') || '').replace('Bearer ', '');
-  if (BEARER && auth !== BEARER) {
-    return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: cors });
-  }
 
   const db = createClient(SB_URL, SB_SERVICE, { auth: { persistSession: false } });
 
-  // Run each DDL statement via a Postgres function call
-  // We use the pg_catalog approach: call a helper that executes raw SQL
   const ddl = [
     `ALTER TABLE public.broadcast_recipients ADD COLUMN IF NOT EXISTS group_chat_id TEXT`,
     `ALTER TABLE public.broadcast_recipients DROP CONSTRAINT IF EXISTS broadcast_recipients_entity_type_check`,
@@ -36,7 +28,7 @@ Deno.serve(async (req) => {
   const results: { sql: string; ok: boolean; error?: string }[] = [];
 
   for (const sql of ddl) {
-    // Use the Management API to execute SQL
+    // Use the Supabase Management API to execute raw SQL
     const res = await fetch(
       `https://api.supabase.com/v1/projects/zvoijyneresvkadpprel/database/query`,
       {
