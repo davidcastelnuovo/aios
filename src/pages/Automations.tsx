@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Zap, Activity, Trash2, Edit, TestTube, Workflow, MessageCircle, Bot, Share2, Copy, Building2, ArrowRight } from "lucide-react";
+import { Plus, Zap, Activity, Trash2, Edit, TestTube, Workflow, MessageCircle, Bot, Share2, Copy, Building2, ArrowRight, Cpu } from "lucide-react";
 import { NodeIconDisplay } from "@/components/automations/nodeIcons";
 import { useToast } from "@/hooks/use-toast";
 import { AddAutomationForm } from "@/components/forms/AddAutomationForm";
@@ -250,6 +250,72 @@ export default function Automations() {
     },
   });
 
+  // Create Manus direct WhatsApp channel
+  const createManusFlowMutation = useMutation({
+    mutationFn: async () => {
+      if (!tenantId) throw new Error("No tenant");
+      const { data: agentsList } = await supabase
+        .from("ai_agents" as any)
+        .select("id,name,active")
+        .eq("tenant_id", tenantId)
+        .eq("active", true);
+      const manusAgent = (agentsList as any[] || []).find((a) => /manus/i.test(a.name || ""));
+      if (!manusAgent) throw new Error("לא נמצא סוכן Manus פעיל. ודא שסוכן Manus קיים.");
+      const { data, error } = await supabase
+        .from("automations")
+        .insert({
+          name: "מנוס / ישיר",
+          description: "ערוץ ישיר לדוד עם Manus דרך WhatsApp — מילת הפעלה: מנוס",
+          tenant_id: tenantId,
+          trigger_type: "carmen_whatsapp_session",
+          action_type: "notification",
+          configuration: {},
+          is_flow: true,
+          active: true,
+        } as any)
+        .select()
+        .single();
+      if (error) throw error;
+      const { data: waInt } = await supabase
+        .from("tenant_integrations" as any)
+        .select("id")
+        .eq("tenant_id", tenantId)
+        .eq("integration_type", "manus_wa")
+        .eq("is_active", true)
+        .limit(1)
+        .maybeSingle();
+      const { data: gaInt } = await supabase
+        .from("tenant_integrations" as any)
+        .select("id")
+        .eq("tenant_id", tenantId)
+        .eq("integration_type", "green_api")
+        .eq("is_active", true)
+        .limit(1)
+        .maybeSingle();
+      const mk = (over: any) => ({
+        id: crypto.randomUUID(),
+        automation_id: data.id,
+        tenant_id: tenantId,
+        condition_branch: null,
+        ...over,
+      });
+      const steps = [
+        mk({ step_type: "action", action_type: "carmen_whatsapp_session", label: "סשן WhatsApp - Manus", configuration: { agent_id: manusAgent.id, trigger_keyword: "מנוס", trigger_keywords: ["מנוס", "manus"], carmen_scope_mode: "specific_phone", carmen_allowed_phones: ["972507677613"], carmen_integration_id: waInt?.id || null, session_timeout_minutes: 15 }, position_x: 0, position_y: 0, sort_order: 0 }),
+        mk({ step_type: "action", action_type: null, label: "הפעל Manus", configuration: { agent_id: manusAgent.id, output_format: "single_reply", step_instruction: "{{message_text}}" }, position_x: 0, position_y: 150, sort_order: 1 }),
+        mk({ step_type: "action", action_type: "send_manus_message", label: "שלח תשובה", configuration: { recipients: [{ type: "phone_manual", phone: "972507677613" }], green_api_mode: "tenant", message_template: "{{agent_output}}", green_api_integration_id: gaInt?.id || null }, position_x: 0, position_y: 300, sort_order: 2 }),
+      ];
+      await supabase.from("automation_flow_steps" as any).insert(steps);
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["automations"] });
+      navigate(buildPath(`automations/flow/${data.id}`));
+    },
+    onError: (err: any) => {
+      toast({ title: "שגיאה", description: err.message, variant: "destructive" });
+    },
+  });
+
   // Create new Carmen WhatsApp session automation
   const createCarmenFlowMutation = useMutation({
     mutationFn: async () => {
@@ -458,6 +524,30 @@ export default function Automations() {
           >
             <MessageCircle className="h-4 w-4 ml-2" />
             צור שיחת כרמן
+          </Button>
+        </div>
+      )}
+
+      {/* Manus Direct Channel Banner */}
+      {!automations?.some((a: any) => (a.name || "").includes("מנוס / ישיר")) && (
+        <div className="rounded-xl border border-blue-500/30 bg-gradient-to-l from-blue-500/5 to-transparent p-4 flex flex-col md:flex-row items-start md:items-center gap-4">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-blue-500/15 flex items-center justify-center shrink-0">
+              <Cpu className="h-5 w-5 text-blue-400" />
+            </div>
+            <div>
+              <p className="font-semibold text-sm">ערוץ ישיר ל-Manus ב-WhatsApp</p>
+              <p className="text-xs text-muted-foreground">שלח "מנוס" ב-WhatsApp לשיחה ישירה עם Manus AI — מחקר, קוד, ניתוח ועוד</p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            className="md:mr-auto bg-blue-600 hover:bg-blue-700 text-white shrink-0"
+            onClick={() => createManusFlowMutation.mutate()}
+            disabled={createManusFlowMutation.isPending}
+          >
+            <Cpu className="h-4 w-4 ml-2" />
+            צור ערוץ Manus
           </Button>
         </div>
       )}
