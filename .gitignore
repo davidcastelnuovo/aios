@@ -25,3 +25,6 @@ dist-ssr
 
 # Claude Code personal settings (autonomous mode)
 .claude/settings.local.json
+
+# Claude Code worktrees (temporary, session-scoped)
+.claude/worktrees/

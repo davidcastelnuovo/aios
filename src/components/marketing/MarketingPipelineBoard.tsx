@@ -1,14 +1,9 @@
 /**
  * MarketingPipelineBoard
  * ─────────────────────
- * Replaces the ReactFlow canvas with a rich, horizontal Kanban-style pipeline.
- * Each stage is a "department card" with:
- *   - Color-coded header with icon + department name
- *   - Agent avatar + name
- *   - Approval mode badge
- *   - List of work items in that stage (clickable cards)
- *   - Quick-run button per item
- *   - "New item" shortcut
+ * Immersive "department" cards replacing the old narrow Kanban columns.
+ * Each stage is a large visual entity with gradient banner, icon, agent info,
+ * status bar, scrollable work items, and a "כנס למחלקה" CTA.
  */
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -32,11 +27,11 @@ import {
   Plus,
   Play,
   Loader2,
-  ChevronRight,
   Zap,
   Clock,
   Hand,
-  ArrowLeft,
+  DoorOpen,
+  ChevronLeft,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
@@ -46,74 +41,74 @@ const STAGE_CONFIG: Record<
   {
     icon: any;
     label: string;
-    color: string;
-    headerBg: string;
+    gradient: string;
     dotColor: string;
     agentRole: string;
+    emptyHint: string;
   }
 > = {
   strategy: {
     icon: Lightbulb,
     label: "אסטרטגיה ובריף",
-    color: "border-amber-400/60",
-    headerBg: "bg-gradient-to-l from-amber-500/20 to-amber-500/5",
+    gradient: "from-amber-600 to-amber-500",
     dotColor: "bg-amber-400",
     agentRole: "אסטרטגיסטית",
+    emptyHint: "הוסף בריף ראשון",
   },
   copy: {
     icon: PenLine,
     label: "כתיבת תוכן",
-    color: "border-sky-400/60",
-    headerBg: "bg-gradient-to-l from-sky-500/20 to-sky-500/5",
+    gradient: "from-sky-600 to-sky-500",
     dotColor: "bg-sky-400",
     agentRole: "קופירייטרית",
+    emptyHint: "הוסף פריט תוכן",
   },
   creative: {
     icon: ImageIcon,
     label: "קריאייטיב",
-    color: "border-fuchsia-400/60",
-    headerBg: "bg-gradient-to-l from-fuchsia-500/20 to-fuchsia-500/5",
+    gradient: "from-fuchsia-600 to-fuchsia-500",
     dotColor: "bg-fuchsia-400",
     agentRole: "מעצבת",
+    emptyHint: "הוסף נכס ויזואלי",
   },
   target_paid: {
     icon: Megaphone,
     label: "קמפיין ממומן",
-    color: "border-rose-400/60",
-    headerBg: "bg-gradient-to-l from-rose-500/20 to-rose-500/5",
+    gradient: "from-rose-600 to-rose-500",
     dotColor: "bg-rose-400",
     agentRole: "קמפיינרית",
+    emptyHint: "הוסף קמפיין",
   },
   target_seo: {
     icon: Search,
     label: "SEO / GEO",
-    color: "border-emerald-400/60",
-    headerBg: "bg-gradient-to-l from-emerald-500/20 to-emerald-500/5",
+    gradient: "from-emerald-600 to-emerald-500",
     dotColor: "bg-emerald-400",
     agentRole: "מומחית SEO",
+    emptyHint: "הוסף מילות מפתח",
   },
   target_organic: {
     icon: Share2,
     label: "פרסום אורגני",
-    color: "border-violet-400/60",
-    headerBg: "bg-gradient-to-l from-violet-500/20 to-violet-500/5",
+    gradient: "from-violet-600 to-violet-500",
     dotColor: "bg-violet-400",
     agentRole: "מנהלת סושיאל",
+    emptyHint: "הוסף פוסט",
   },
   measurement: {
     icon: BarChart3,
     label: "מדידה ודיווח",
-    color: "border-blue-400/60",
-    headerBg: "bg-gradient-to-l from-blue-500/20 to-blue-500/5",
+    gradient: "from-blue-600 to-blue-500",
     dotColor: "bg-blue-400",
     agentRole: "אנליסטית",
+    emptyHint: "הוסף דוח",
   },
 };
 
 const APPROVAL_CONFIG: Record<string, { icon: any; label: string; color: string }> = {
-  auto: { icon: Zap, label: "אוטומטי", color: "text-emerald-600 bg-emerald-50 border-emerald-200" },
-  hybrid: { icon: Clock, label: "חצי אוטומטי", color: "text-amber-600 bg-amber-50 border-amber-200" },
-  manual: { icon: Hand, label: "ידני", color: "text-gray-600 bg-gray-50 border-gray-200" },
+  auto: { icon: Zap, label: "אוטומטי", color: "text-emerald-100 bg-emerald-700/40 border-emerald-300/30" },
+  hybrid: { icon: Clock, label: "חצי אוטומטי", color: "text-amber-100 bg-amber-700/40 border-amber-300/30" },
+  manual: { icon: Hand, label: "ידני", color: "text-gray-100 bg-gray-700/40 border-gray-300/30" },
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -132,7 +127,7 @@ const STATUS_LABELS: Record<string, string> = {
   failed: "נכשל",
 };
 
-// ─── WorkItem mini-card ───────────────────────────────────────────────────────
+// ─── WorkItem card (compact, inside department) ───────────────────────────────
 function WorkItemCard({
   item,
   stageId,
@@ -152,7 +147,7 @@ function WorkItemCard({
 
   return (
     <div
-      className="group relative cursor-pointer rounded-xl border border-border/60 bg-card shadow-sm transition-all hover:shadow-md hover:border-border"
+      className="group relative cursor-pointer rounded-xl border border-border/60 bg-card shadow-sm transition-all hover:shadow-md hover:border-primary/30 hover:scale-[1.01]"
       onClick={onSelect}
       dir="rtl"
     >
@@ -160,12 +155,12 @@ function WorkItemCard({
         <img
           src={imageUrl}
           alt={item.title ?? ""}
-          className="h-28 w-full rounded-t-xl object-cover"
+          className="h-20 w-full rounded-t-xl object-cover"
         />
       )}
       <div className="p-3">
         <div className="flex items-start justify-between gap-2">
-          <span className="flex-1 text-sm font-medium leading-snug line-clamp-2">
+          <span className="flex-1 text-sm font-medium leading-snug line-clamp-1">
             {item.title ?? "ללא כותרת"}
           </span>
           <span
@@ -178,17 +173,17 @@ function WorkItemCard({
           </span>
         </div>
         {item.scheduled_date && (
-          <div className="mt-1.5 text-[11px] text-muted-foreground">
+          <div className="mt-1 text-[11px] text-muted-foreground">
             📅 {new Date(item.scheduled_date).toLocaleDateString("he-IL")}
           </div>
         )}
         {item.payload?.copy_text && (
-          <p className="mt-1.5 line-clamp-2 text-[11px] text-muted-foreground">
+          <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">
             {item.payload.copy_text}
           </p>
         )}
       </div>
-      {/* Quick run button */}
+      {/* Hover run button */}
       <button
         className="absolute bottom-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary opacity-0 transition-opacity group-hover:opacity-100 hover:bg-primary/20"
         onClick={(e) => {
@@ -207,13 +202,65 @@ function WorkItemCard({
   );
 }
 
-// ─── Stage Department Column ──────────────────────────────────────────────────
-function StageColumn({
+// ─── Status bar ───────────────────────────────────────────────────────────────
+function StatusBar({ items }: { items: any[] }) {
+  const running = items.filter((i) => i.status === "in_progress").length;
+  const waiting = items.filter((i) => i.status === "awaiting_approval").length;
+  const done = items.filter((i) => i.status === "completed").length;
+  const draft = items.filter((i) => i.status === "draft").length;
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className="flex items-center gap-1.5 border-b border-border/40 px-4 py-2 text-[11px]">
+      {running > 0 && (
+        <span className="flex items-center gap-0.5 rounded-full bg-blue-100 px-2 py-0.5 font-medium text-blue-700">
+          <Loader2 className="h-2.5 w-2.5 animate-spin" />
+          {running} רץ
+        </span>
+      )}
+      {waiting > 0 && (
+        <span className="flex items-center gap-0.5 rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-700">
+          <Clock className="h-2.5 w-2.5" />
+          {waiting} ממתין
+        </span>
+      )}
+      {done > 0 && (
+        <span className="flex items-center gap-0.5 rounded-full bg-emerald-100 px-2 py-0.5 font-medium text-emerald-700">
+          <CheckCircle2 className="h-2.5 w-2.5" />
+          {done} הושלם
+        </span>
+      )}
+      {draft > 0 && (
+        <span className="flex items-center gap-0.5 rounded-full bg-gray-100 px-2 py-0.5 font-medium text-gray-600">
+          {draft} טיוטה
+        </span>
+      )}
+      <span className="mr-auto text-muted-foreground">{items.length} פריטים</span>
+    </div>
+  );
+}
+
+// ─── Flow connector between cards ────────────────────────────────────────────
+function FlowConnector({ hasRunning }: { hasRunning: boolean }) {
+  return (
+    <div className="flex items-center self-center shrink-0">
+      <div className="h-px w-6 bg-border/60" />
+      <div className="relative flex items-center">
+        <ChevronLeft className="h-4 w-4 text-muted-foreground/40" />
+        {hasRunning && (
+          <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-2 w-2 rounded-full bg-blue-400 animate-ping opacity-75" />
+        )}
+      </div>
+      <div className="h-px w-6 bg-border/60" />
+    </div>
+  );
+}
+
+// ─── Department Card ──────────────────────────────────────────────────────────
+function DepartmentCard({
   stage,
   items,
-  tenantId,
-  clientId,
-  track,
   onSelectItem,
   onOpenConfig,
   onOpenWorkspace,
@@ -223,9 +270,6 @@ function StageColumn({
 }: {
   stage: any;
   items: any[];
-  tenantId: string;
-  clientId: string;
-  track: string;
   onSelectItem: (id: string) => void;
   onOpenConfig: (stage: any) => void;
   onOpenWorkspace: (stage: any) => void;
@@ -237,104 +281,50 @@ function StageColumn({
   const Icon = cfg.icon;
   const approvalCfg = APPROVAL_CONFIG[stage.approval_mode] ?? APPROVAL_CONFIG.manual;
   const ApprovalIcon = approvalCfg.icon;
-  const awaitingCount = items.filter((i) => i.status === "awaiting_approval").length;
-  const runningCount = items.filter((i) => i.status === "in_progress").length;
-  const completedCount = items.filter((i) => i.status === "completed").length;
 
   return (
     <div
-      className={cn(
-        "flex h-full w-72 shrink-0 flex-col rounded-2xl border-2 bg-card/60 shadow-sm backdrop-blur-sm",
-        cfg.color
-      )}
+      className="flex h-full min-w-[320px] max-w-[360px] shrink-0 flex-col rounded-2xl border-2 border-border/50 bg-card/60 shadow backdrop-blur-sm transition-all hover:shadow-lg hover:border-primary/30"
       dir="rtl"
     >
-      {/* Column header */}
-      <div
-        className={cn(
-          "flex items-center gap-2 rounded-t-2xl px-3 py-3",
-          cfg.headerBg
-        )}
-      >
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-background/70 shadow-sm">
-          <Icon className="h-4 w-4" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className="text-sm font-bold truncate">{stage.name}</span>
-            {awaitingCount > 0 && (
-              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[9px] font-bold text-white" title="ממתין לאישור">
-                {awaitingCount}
-              </span>
-            )}
-            {runningCount > 0 && (
-              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[9px] font-bold text-white animate-pulse" title="רץ עכשיו">
-                {runningCount}
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
-            <Bot className="h-3 w-3" />
-            <span>{stage.ai_agents?.name ?? "ללא סוכן"}</span>
-            {stage.ai_agents?.name && (
-              <span className="opacity-60">· {cfg.agentRole}</span>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => onOpenWorkspace(stage)}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground"
-            title="פתח מחלקה"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-          </button>
-          <button
-            onClick={() => onOpenConfig(stage)}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground"
-            title="הגדרות שלב"
-          >
-            <Settings2 className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </div>
-
-      {/* Approval mode + item count bar */}
-      <div className="flex items-center gap-2 border-b border-border/40 px-3 py-1.5">
-        <span
-          className={cn(
-            "flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium",
-            approvalCfg.color
-          )}
+      {/* Gradient banner */}
+      <div className={cn("relative bg-gradient-to-br p-6 text-white rounded-t-2xl", cfg.gradient)} style={{ minHeight: 140 }}>
+        <div className="absolute inset-0 bg-black/10 rounded-t-2xl" />
+        {/* Settings button */}
+        <button
+          onClick={() => onOpenConfig(stage)}
+          className="absolute top-3 left-3 flex h-7 w-7 items-center justify-center rounded-lg bg-white/10 text-white/70 transition-colors hover:bg-white/20 hover:text-white z-10"
+          title="הגדרות שלב"
         >
-          <ApprovalIcon className="h-2.5 w-2.5" />
-          {approvalCfg.label}
-        </span>
-        <div className="ms-auto flex items-center gap-1.5">
-          {runningCount > 0 && (
-            <span className="flex items-center gap-0.5 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
-              <Loader2 className="h-2.5 w-2.5 animate-spin" />
-              {runningCount}
-            </span>
-          )}
-          {awaitingCount > 0 && (
-            <span className="flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
-              <Clock className="h-2.5 w-2.5" />
-              {awaitingCount}
-            </span>
-          )}
-          {completedCount > 0 && (
-            <span className="flex items-center gap-0.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
-              <CheckCircle2 className="h-2.5 w-2.5" />
-              {completedCount}
-            </span>
-          )}
-          <span className="text-[11px] text-muted-foreground">{items.length}</span>
+          <Settings2 className="h-3.5 w-3.5" />
+        </button>
+
+        <div className="relative">
+          <Icon className="h-16 w-16 opacity-90 mb-3" />
+          <h2 className="text-xl font-bold leading-tight">{stage.name}</h2>
+          <p className="text-sm opacity-80 mt-0.5 flex items-center gap-1">
+            <Bot className="h-3.5 w-3.5 flex-shrink-0" />
+            {stage.ai_agents?.name ?? "ללא סוכן"}
+            {stage.ai_agents?.name && <span className="opacity-70">· {cfg.agentRole}</span>}
+          </p>
+          {/* Approval mode badge */}
+          <span
+            className={cn(
+              "mt-2 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium",
+              approvalCfg.color
+            )}
+          >
+            <ApprovalIcon className="h-2.5 w-2.5" />
+            {approvalCfg.label}
+          </span>
         </div>
       </div>
 
-      {/* Items list */}
-      <div className="flex-1 overflow-y-auto p-2 space-y-2">
+      {/* Status summary bar */}
+      <StatusBar items={items} />
+
+      {/* Items list - scrollable */}
+      <div className="flex-1 overflow-y-auto p-3 space-y-2">
         {items.map((item) => (
           <WorkItemCard
             key={item.id}
@@ -346,20 +336,29 @@ function StageColumn({
           />
         ))}
         {items.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-8 text-center">
-            <div className="mb-2 h-10 w-10 rounded-full bg-muted/50 flex items-center justify-center">
-              <Icon className="h-5 w-5 text-muted-foreground/50" />
+          <div className="flex flex-col items-center justify-center py-10 text-center">
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted/50">
+              <Icon className="h-6 w-6 text-muted-foreground/40" />
             </div>
             <p className="text-xs text-muted-foreground">אין פריטים בשלב זה</p>
+            <p className="text-[11px] text-muted-foreground/60 mt-1">{cfg.emptyHint}</p>
           </div>
         )}
       </div>
 
-      {/* Add item footer */}
-      <div className="border-t border-border/40 p-2">
+      {/* Footer */}
+      <div className="p-3 border-t border-border/40 space-y-2">
+        <Button
+          onClick={() => onOpenWorkspace(stage)}
+          className="w-full gap-2"
+          size="sm"
+        >
+          <DoorOpen className="h-4 w-4" />
+          כנס למחלקה
+        </Button>
         <button
           onClick={() => onNewItem(stage.id)}
-          className="flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
         >
           <Plus className="h-3.5 w-3.5" />
           הוסף פריט
@@ -455,7 +454,6 @@ export function MarketingPipelineBoard({
   };
 
   const handleRun = async (stageId: string) => {
-    // Find first item in this stage
     const stageItems = itemsByStage[stageId] ?? [];
     if (stageItems.length === 0) {
       toast({ title: "אין פריטים בשלב זה", description: "הוסף פריט תחילה", variant: "destructive" });
@@ -478,44 +476,31 @@ export function MarketingPipelineBoard({
     }
   };
 
+  const stageList = stages ?? [];
+
   return (
     <div className="flex h-full flex-col" dir="rtl">
-      {/* Pipeline flow indicator */}
-      <div className="flex items-center gap-1 px-4 py-2 text-xs text-muted-foreground border-b bg-muted/20">
-        <span className="font-medium text-foreground">פס ייצור:</span>
-        {(stages ?? []).map((s: any, i: number) => {
-          const cfg = STAGE_CONFIG[s.stage_type];
-          const Icon = cfg?.icon ?? Lightbulb;
+      {/* Department cards with flow connectors */}
+      <div className="flex flex-1 min-h-0 items-stretch gap-0 overflow-x-auto p-4">
+        {stageList.map((stage: any, i: number) => {
+          const stageItems = itemsByStage[stage.id] ?? [];
+          const hasRunning = stageItems.some((item) => item.status === "in_progress");
           return (
-            <span key={s.id} className="flex items-center gap-1">
-              {i > 0 && <ChevronRight className="h-3 w-3 opacity-40" />}
-              <span className="flex items-center gap-0.5">
-                <Icon className="h-3 w-3" />
-                {s.name}
-              </span>
-            </span>
+            <div key={stage.id} className="flex items-stretch">
+              {i > 0 && <FlowConnector hasRunning={hasRunning} />}
+              <DepartmentCard
+                stage={stage}
+                items={stageItems}
+                onSelectItem={onSelectItem}
+                onOpenConfig={(s) => setOpenStageId(s.id)}
+                onOpenWorkspace={(s) => setWorkspaceStage(s)}
+                onNewItem={handleNewItem}
+                running={running}
+                onRun={handleRun}
+              />
+            </div>
           );
         })}
-      </div>
-
-      {/* Kanban columns */}
-      <div className="flex flex-1 min-h-0 gap-3 overflow-x-auto p-4">
-        {(stages ?? []).map((stage: any) => (
-          <StageColumn
-            key={stage.id}
-            stage={stage}
-            items={itemsByStage[stage.id] ?? []}
-            tenantId={tenantId}
-            clientId={clientId}
-            track={track}
-            onSelectItem={onSelectItem}
-            onOpenConfig={(s) => setOpenStageId(s.id)}
-            onOpenWorkspace={(s) => setWorkspaceStage(s)}
-            onNewItem={handleNewItem}
-            running={running}
-            onRun={handleRun}
-          />
-        ))}
       </div>
 
       {/* Stage config dialog */}
