@@ -172,3 +172,23 @@ Claude Code health-check skill written to `ai_skills` (scope=tenant, created_by_
 **What it does:** Confirms Claude Code is operational by checking Supabase DB and GitHub API accessibility, listing open/pending PRs in the AIOS repo, marking any pending `claude_dispatches` row as completed, logging to `claude_carmen_audit`, and notifying David via `claude_notify_david`.
 
 **Note on git clone:** This container's egress policy blocks `github.com` git traffic (403 from local proxy at port 41729). Code reads use the GitHub API instead; code writes require a session with git clone access enabled.
+
+---
+
+## 2026-06-27 — list_google_ad_accounts + connect_google_ads_account
+
+**Capability:** שליפת חשבונות Google Ads המחוברים לטננט ושיוכם ללקוחות ב-CRM.
+
+**What was built:**
+- שני כלים חדשים ב-`run-ai-agent/index.ts`:
+  1. `list_google_ad_accounts(client_id?)` — קורא ל-Google Ads API (`listAccessibleCustomers` + GAQL לפרטי לקוח), ומחזיר עבור כל חשבון: `customer_id, name, status, is_manager, client_id, client_name`. תומך בפרמטר `client_id` לסינון. קורא ל-`clients.google_ads_account_id` לשיוך.
+  2. `connect_google_ads_account(client_id, customer_id)` — מעדכן `clients.google_ads_account_id` ומתעד ב-`agent_action_log`.
+- Auth: `settings.refresh_token` מ-`tenant_integrations` (integration_type=`google_ads`, is_active=true) + exchange ל-access_token via `oauth2.googleapis.com/token` + env vars `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_ADS_DEVELOPER_TOKEN`.
+- **Skin עודכן:** `campaigner` (slug=`campaigner`) — נוסף ל-`system_prompt` ול-`steps` הסבר על שימוש ב-`list_google_ad_accounts` ו-`connect_google_ads_account`.
+
+**How to use:**
+- "תראי לי את חשבונות Google Ads" → `list_google_ad_accounts()`
+- "תחברי את לקוח X לחשבון Google Ads 1234567890" → `connect_google_ads_account(client_id=..., customer_id=...)`
+- סינון לפי לקוח: `list_google_ad_accounts(client_id=...)`
+
+**PR:** [יתעדכן עם מספר PR]
