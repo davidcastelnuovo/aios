@@ -20,9 +20,9 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-// Nil UUID used as the system/agent sentinel when no real user_id is present.
-// ai_memory.user_id is NOT NULL uuid — 'system' string must never reach the DB.
-const SYSTEM_USER_UUID = '00000000-0000-0000-0000-000000000000'
+// ai_memory.user_id is nullable — NULL means system/agent write (no real user).
+// The unique index uses COALESCE(user_id, '00000000-0000-0000-0000-000000000000') for dedup.
+const SYSTEM_USER_UUID = '00000000-0000-0000-0000-000000000000' // kept for reference only
 
 function resolveModel(engine: string): string {
   return resolveModelId(engine)
@@ -1805,8 +1805,8 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     case 'save_memory': {
       const cat = args.category || 'general'
       const { data, error } = await supabase.from('ai_memory').upsert({
-        tenant_id: tenantId, user_id: (userId && userId !== 'system') ? userId : SYSTEM_USER_UUID, key: args.key, content: args.content, category: cat,
-      }, { onConflict: 'user_id,tenant_id,category,key' }).select('key, category').single()
+        tenant_id: tenantId, user_id: (userId && userId !== 'system') ? userId : null, key: args.key, content: args.content, category: cat,
+      }, { onConflict: 'user_id,tenant_id,category,key', ignoreDuplicates: false }).select('key, category').single()
       if (error) throw error
       // Mirror to agent_memory (Hermes FTS layer) for cross-conversation recall
       const importanceMap: Record<string, number> = {
@@ -3041,11 +3041,11 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
         const keyBase = `instr_${Math.abs(h).toString(36)}`
         await supabase.from('ai_memory').upsert({
           tenant_id: resolvedTenantId,
-          user_id: callerUserId || (resolvedUserId !== 'system' ? resolvedUserId : null) || SYSTEM_USER_UUID,
+          user_id: callerUserId || (resolvedUserId !== 'system' ? resolvedUserId : null) || null,
           key: keyBase,
           content: sentence,
           category: 'instructions',
-        }, { onConflict: 'user_id,tenant_id,category,key' })
+        }, { onConflict: 'user_id,tenant_id,category,key', ignoreDuplicates: false })
         // Mirror to Hermes FTS layer (agent_memory) so cross-conversation recall sees it.
         try {
           await saveAgentMemory({
