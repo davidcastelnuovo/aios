@@ -44,7 +44,7 @@ export default function MarketingDepartment() {
   const clientId = routeClientId ?? null;
 
   // ── Load ALL 3 pipelines in parallel ──────────────────────────────────────
-  const { data: campaignsPipeline, refetch: refetchCampaigns } = useQuery({
+  const { data: campaignsPipeline, isLoading: loadingCampaigns, refetch: refetchCampaigns } = useQuery({
     queryKey: ["marketing-pipeline", clientId, "campaigns"],
     enabled: !!clientId && !!tenantId,
     queryFn: async () => {
@@ -53,7 +53,7 @@ export default function MarketingDepartment() {
     },
   });
 
-  const { data: seoPipeline, refetch: refetchSeo } = useQuery({
+  const { data: seoPipeline, isLoading: loadingSeo, refetch: refetchSeo } = useQuery({
     queryKey: ["marketing-pipeline", clientId, "seo_geo"],
     enabled: !!clientId && !!tenantId,
     queryFn: async () => {
@@ -62,7 +62,7 @@ export default function MarketingDepartment() {
     },
   });
 
-  const { data: socialPipeline, refetch: refetchSocial } = useQuery({
+  const { data: socialPipeline, isLoading: loadingSocial, refetch: refetchSocial } = useQuery({
     queryKey: ["marketing-pipeline", clientId, "social_organic"],
     enabled: !!clientId && !!tenantId,
     queryFn: async () => {
@@ -219,8 +219,8 @@ export default function MarketingDepartment() {
 
             {/* ── Campaigns track ─────────────────────────────────────── */}
             <TabsContent value="campaigns" className="flex-1 min-h-0 m-0">
-              {!campaignsPipeline ? (
-                <LoadingPipeline />
+              {loadingCampaigns || !campaignsPipeline ? (
+                <LoadingPipeline loading={loadingCampaigns} onRetry={refetchCampaigns} />
               ) : (
                 <MarketingPipelineBoard
                   pipelineId={campaignsPipeline.id}
@@ -234,8 +234,8 @@ export default function MarketingDepartment() {
 
             {/* ── SEO/GEO track ────────────────────────────────────────── */}
             <TabsContent value="seo_geo" className="flex-1 min-h-0 m-0">
-              {!seoPipeline ? (
-                <LoadingPipeline />
+              {loadingSeo || !seoPipeline ? (
+                <LoadingPipeline loading={loadingSeo} onRetry={refetchSeo} />
               ) : (
                 <MarketingPipelineBoard
                   pipelineId={seoPipeline.id}
@@ -249,8 +249,8 @@ export default function MarketingDepartment() {
 
             {/* ── Social organic track ─────────────────────────────────── */}
             <TabsContent value="social_organic" className="flex-1 min-h-0 m-0">
-              {!socialPipeline ? (
-                <LoadingPipeline />
+              {loadingSocial || !socialPipeline ? (
+                <LoadingPipeline loading={loadingSocial} onRetry={refetchSocial} />
               ) : (
                 <MarketingPipelineBoard
                   pipelineId={socialPipeline.id}
@@ -286,7 +286,7 @@ export default function MarketingDepartment() {
                       className="flex-1 min-h-0 m-0 overflow-auto"
                     >
                       {!pip ? (
-                        <LoadingPipeline />
+                        <LoadingPipeline loading={false} onRetry={() => { refetchCampaigns(); refetchSeo(); refetchSocial(); }} />
                       ) : value === "social_organic" ? (
                         <SocialContentGantt
                           pipelineId={pip.id}
@@ -370,12 +370,23 @@ export default function MarketingDepartment() {
   );
 }
 
-function LoadingPipeline() {
+function LoadingPipeline({ loading = true, onRetry }: { loading?: boolean; onRetry?: () => void }) {
   return (
     <div className="flex flex-1 h-full items-center justify-center">
       <div className="flex flex-col items-center gap-3 text-muted-foreground">
-        <Loader2 className="h-8 w-8 animate-spin text-primary/40" />
-        <span className="text-sm">טוען פס ייצור...</span>
+        {loading ? (
+          <>
+            <Loader2 className="h-8 w-8 animate-spin text-primary/40" />
+            <span className="text-sm">טוען פס ייצור...</span>
+          </>
+        ) : (
+          <>
+            <span className="text-sm text-destructive">לא ניתן לטעון את פס הייצור</span>
+            {onRetry && (
+              <Button size="sm" variant="outline" onClick={onRetry}>נסה שוב</Button>
+            )}
+          </>
+        )}
       </div>
     </div>
   );

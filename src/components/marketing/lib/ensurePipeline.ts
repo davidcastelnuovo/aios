@@ -47,7 +47,8 @@ export async function ensurePipelineForClient({
   tenantId: string;
   track: MarketingTrack;
 }) {
-  const { data: existing } = await supabase
+  // First try to find existing pipeline
+  const { data: existing, error: selectError } = await supabase
     .from("marketing_pipelines")
     .select("*")
     .eq("client_id", clientId)
@@ -56,12 +57,25 @@ export async function ensurePipelineForClient({
 
   if (existing) return existing;
 
+  // If select failed (e.g. RLS timing), try upsert approach
   const { data: created, error } = await supabase
     .from("marketing_pipelines")
     .insert({ client_id: clientId, tenant_id: tenantId, track })
     .select("*")
     .single();
-  if (error) throw error;
+
+  // If insert failed (e.g. duplicate), try fetching again
+  if (error) {
+    const { data: retry } = await supabase
+      .from("marketing_pipelines")
+      .select("*")
+      .eq("client_id", clientId)
+      .eq("track", track)
+      .maybeSingle();
+    if (retry) return retry;
+    console.error("ensurePipeline error:", error);
+    return null;
+  }
 
   // Load tenant-level templates for this track
   const { data: templates } = await supabase
