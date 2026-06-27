@@ -3464,6 +3464,34 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     const toolLog: any[] = []
     const startTime = Date.now()
 
+    // If the agent's engine is Manus — delegate the entire conversation to Manus AI
+    // and return the result directly (no tool loop needed here).
+    if (model === 'manus/manus-1' || model === 'manus-1') {
+      const manusBody: any = {
+        action: 'create_task',
+        tenantId: agent.tenant_id,
+        prompt: command_text,
+      }
+      const manusRes = await fetch(`${SUPABASE_URL}/functions/v1/manus-api`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+        body: JSON.stringify(manusBody),
+      })
+      if (!manusRes.ok) {
+        const errText = await manusRes.text()
+        const detail = (() => { try { return JSON.parse(errText)?.error } catch { return errText } })()
+        if (/not configured|key not found|api_key/i.test(String(detail))) {
+          throw new Error('Manus API key חסר — הגדר אותו בהגדרות אינטגרציות')
+        }
+        throw new Error(`Manus API error [${manusRes.status}]: ${detail}`)
+      }
+      const manusData = await manusRes.json()
+      const taskUrl = manusData.task_url || manusData.share_url || ''
+      finalOutput = `✅ משימה נשלחה ל-Manus AI${taskUrl ? `\n🔗 ${taskUrl}` : ''}\nמזהה: ${manusData.task_id || '—'}`
+      if (emit) emit({ type: 'token', content: finalOutput })
+      return finalOutput
+    }
+
     // Route to the org's own LLM provider (OpenAI/Google/Anthropic) using the
     // keys stored in the "llm" integration.
     const llm = await resolveLLMTarget(supabase, agent.tenant_id, model)

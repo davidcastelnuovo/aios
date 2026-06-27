@@ -26,6 +26,7 @@ const FAMILY_LABEL: Record<string, string> = {
   google: "🔵 Google (Gemini)",
   openai: "🟢 OpenAI (GPT)",
   anthropic: "🟠 Anthropic (Claude)",
+  manus: "🤖 Manus AI",
 };
 
 function ModelItem({ m }: { m: AiModel }) {
@@ -81,7 +82,8 @@ export function BrainSelector({ value, onChange, disabled, showAll = false }: Br
     !current ||
     (current.family === "google" && connected?.google) ||
     (current.family === "openai" && connected?.openai) ||
-    (current.family === "anthropic" && connected?.anthropic);
+    (current.family === "anthropic" && connected?.anthropic) ||
+    (current.family === "manus" && connected?.manus);
 
   return (
     <div className="space-y-1.5" dir="rtl">
