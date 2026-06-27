@@ -138,6 +138,7 @@ export default function LLMSettings() {
       toast({ title: "נשמר בהצלחה", description: "מפתחות ה-AI עודכנו" });
       setForm({ openai_api_key: "", anthropic_api_key: "", google_api_key: "" });
       queryClient.invalidateQueries({ queryKey: ["llm-integration", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["llm-connected-providers", tenantId] });
     },
     onError: (e: Error) =>
       toast({ variant: "destructive", title: "שגיאה", description: e.message }),
