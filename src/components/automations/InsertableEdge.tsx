@@ -44,13 +44,14 @@ export function InsertableEdge({
           <Button
             variant="outline"
             size="icon"
-            className="h-6 w-6 rounded-full bg-background border-border shadow-md hover:bg-primary hover:text-primary-foreground transition-all opacity-60 hover:opacity-100"
+            className="h-5 w-5 rounded-full bg-background border-primary/40 shadow-md hover:bg-primary hover:text-primary-foreground hover:border-primary hover:scale-110 transition-all opacity-0 group-hover:opacity-100"
             onClick={(e) => {
               e.stopPropagation();
               data?.onInsert?.(source, target);
             }}
+            title="הוסף צעד כאן"
           >
-            <Plus className="h-3 w-3" />
+            <Plus className="h-2.5 w-2.5" />
           </Button>
         </div>
       </EdgeLabelRenderer>

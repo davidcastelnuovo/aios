@@ -7,7 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Zap, Activity, Trash2, Edit, TestTube, Workflow, MessageCircle, Bot, Share2, Copy, Building2 } from "lucide-react";
+import { Plus, Zap, Activity, Trash2, Edit, TestTube, Workflow, MessageCircle, Bot, Share2, Copy, Building2, ArrowRight } from "lucide-react";
+import { NodeIconDisplay } from "@/components/automations/nodeIcons";
 import { useToast } from "@/hooks/use-toast";
 import { AddAutomationForm } from "@/components/forms/AddAutomationForm";
 import { EditAutomationDialog } from "@/components/forms/EditAutomationDialog";
@@ -486,57 +487,84 @@ export default function Automations() {
       <div className="grid gap-3 md:gap-4 grid-cols-1 lg:grid-cols-2">
         {automations?.map((automation) => {
           const isMirror = (automation as any)._isSharedMirror === true;
+          const isCarmenMode = (automation as any).configuration?.carmen_session_mode === true;
+          const isFlow = (automation as any).is_flow;
+          const triggerType = automation.trigger_type;
+          const actionType = automation.action_type;
           return (
           <Card
             key={automation.id}
             className={cn(
+              "group transition-all duration-200",
               automation.active ? "" : "opacity-60",
-              (automation as any).is_flow && "cursor-pointer hover:border-primary/50 transition-colors",
-              (automation as any).configuration?.carmen_session_mode === true && "border-purple-500/40 bg-purple-500/5",
+              isFlow && "cursor-pointer hover:border-primary/50 hover:shadow-md",
+              isCarmenMode && "border-purple-500/40 bg-purple-500/5",
               isMirror && "border-dashed border-amber-500/40 bg-amber-500/5"
             )}
-            onClick={() => (automation as any).is_flow && navigate(buildPath(`automations/flow/${automation.id}`))}
+            onClick={() => isFlow && navigate(buildPath(`automations/flow/${automation.id}`))}
           >
-            <CardHeader className="pb-3">
-              <div className="flex items-start justify-between gap-2">
+            <CardHeader className="pb-2">
+              <div className="flex items-start justify-between gap-3">
+                {/* Trigger icon badge */}
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border"
+                  style={{ backgroundColor: "rgba(var(--muted), 0.5)" }}
+                >
+                  <NodeIconDisplay
+                    stepType="trigger"
+                    actionType={triggerType}
+                    size={20}
+                  />
+                </div>
+
                 <div className="flex-1 min-w-0">
-                  <CardTitle className="text-base md:text-lg truncate flex items-center gap-2">
-                     {(automation as any).configuration?.carmen_session_mode === true ? (
-                      <Bot className="h-4 w-4 shrink-0 text-purple-400" />
-                    ) : (automation as any).is_flow ? (
-                      <Workflow className="h-4 w-4 shrink-0 text-primary" />
-                    ) : null}
-                    {automation.name}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <CardTitle className="text-sm font-semibold truncate">
+                      {automation.name}
+                    </CardTitle>
                     {isMirror && (
-                      <Badge variant="outline" className="text-[10px] border-amber-500/50 text-amber-600 dark:text-amber-400">
-                        מראה משותפת (צפייה בלבד)
+                      <Badge variant="outline" className="text-[10px] border-amber-500/50 text-amber-600 dark:text-amber-400 shrink-0">
+                        מראה
                       </Badge>
                     )}
-                  </CardTitle>
+                    {isCarmenMode && (
+                      <Badge variant="outline" className="text-[10px] border-purple-500/50 text-purple-600 dark:text-purple-400 shrink-0">
+                        כרמן
+                      </Badge>
+                    )}
+                  </div>
+                  {/* Trigger → Action summary */}
+                  <div className="flex items-center gap-1 mt-1">
+                    <span className="text-[11px] text-muted-foreground">
+                      {TRIGGER_LABELS[triggerType] || triggerType}
+                    </span>
+                    {actionType && (
+                      <>
+                        <ArrowRight className="h-2.5 w-2.5 text-muted-foreground/50 shrink-0" />
+                        <span className="text-[11px] text-muted-foreground">
+                          {ACTION_LABELS[actionType] || actionType}
+                        </span>
+                      </>
+                    )}
+                  </div>
                   {automation.description && (
-                    <CardDescription className="text-xs mt-1 line-clamp-2">
+                    <CardDescription className="text-xs mt-0.5 line-clamp-1">
                       {automation.description}
                     </CardDescription>
                   )}
                 </div>
+
                 <Switch
                   checked={automation.active}
                   disabled={isMirror}
                   onCheckedChange={(checked) =>
                     !isMirror && toggleActiveMutation.mutate({ id: automation.id, active: checked })
                   }
+                  onClick={(e) => e.stopPropagation()}
                 />
               </div>
             </CardHeader>
-            <CardContent className="pt-0 space-y-3">
-              <div className="flex flex-wrap gap-2 text-xs">
-                <Badge variant="outline">
-                  {TRIGGER_LABELS[automation.trigger_type] || automation.trigger_type}
-                </Badge>
-                <Badge variant="secondary">
-                  {ACTION_LABELS[automation.action_type] || automation.action_type}
-                </Badge>
-              </div>
+            <CardContent className="pt-0 space-y-2">
 
               {(automation.configuration as any)?.url && (
                 <p className="text-xs text-muted-foreground truncate">
@@ -556,79 +584,87 @@ export default function Automations() {
                 </p>
               )}
 
-              <div className="flex flex-wrap gap-2 pt-2">
+              <div className="flex flex-wrap gap-1.5 pt-1">
                 <Button
                   size="sm"
-                  variant="outline"
+                  variant="ghost"
                   onClick={(e) => { e.stopPropagation(); handleViewLogs(automation.id); }}
-                  className="flex-1 min-w-0"
+                  className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
                 >
                   <Activity className="h-3 w-3 ml-1" />
                   לוגים
                 </Button>
                 {!isMirror && (
                   <>
+                    {!isFlow && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={(e) => { e.stopPropagation(); handleTest(automation); }}
+                        className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        <TestTube className="h-3 w-3 ml-1" />
+                        בדיקה
+                      </Button>
+                    )}
                     <Button
                       size="sm"
-                      variant="outline"
-                      onClick={(e) => { e.stopPropagation(); handleTest(automation); }}
-                    >
-                      <TestTube className="h-3 w-3 ml-1" />
-                      בדיקה
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
+                      variant="ghost"
                       onClick={(e) => { e.stopPropagation(); handleEdit(automation); }}
+                      className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
                     >
                       <Edit className="h-3 w-3 ml-1" />
                       עריכה
                     </Button>
                     <Button
                       size="sm"
-                      variant="outline"
+                      variant="ghost"
                       onClick={(e) => {
                         e.stopPropagation();
                         setSelectedAutomation(automation);
                         setShareDialogOpen(true);
                       }}
                       title="שתף כמראה (read-only) עם ארגון אחר"
+                      className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
                     >
                       <Share2 className="h-3 w-3 ml-1" />
                       שתף
                     </Button>
                     <Button
                       size="sm"
-                      variant="outline"
+                      variant="ghost"
                       onClick={(e) => { e.stopPropagation(); duplicateMutation.mutate(automation.id); }}
                       disabled={duplicateMutation.isPending}
                       title="שכפל אוטומציה בארגון הנוכחי"
+                      className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
                     >
                       <Copy className="h-3 w-3 ml-1" />
                       שכפל
                     </Button>
                     <Button
                       size="sm"
-                      variant="outline"
+                      variant="ghost"
                       onClick={(e) => {
                         e.stopPropagation();
                         setSelectedAutomation(automation);
                         setCloneOrgOpen(true);
                       }}
                       title="שכפל עותק עצמאי לארגון אחר"
+                      className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
                     >
                       <Building2 className="h-3 w-3 ml-1" />
                       שכפל לארגון
                     </Button>
                     <Button
                       size="sm"
-                      variant="destructive"
+                      variant="ghost"
                       onClick={(e) => {
                         e.stopPropagation();
                         if (confirm("האם למחוק אוטומציה זו?")) {
                           deleteMutation.mutate(automation.id);
                         }
                       }}
+                      className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 mr-auto"
                     >
                       <Trash2 className="h-3 w-3" />
                     </Button>
