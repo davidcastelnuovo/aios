@@ -396,7 +396,7 @@ export function MarketingPipelineBoard({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("marketing_pipeline_stages")
-        .select("id, name, stage_type, sort_order, approval_mode, agent_id, system_prompt")
+        .select("id, name, stage_type, sort_order, approval_mode, agent_id, configuration, ai_agents(id, name)")
         .eq("pipeline_id", pipelineId)
         .order("sort_order");
       if (error) {
