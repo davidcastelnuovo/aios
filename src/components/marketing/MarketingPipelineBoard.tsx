@@ -392,25 +392,34 @@ export function MarketingPipelineBoard({
 
   const { data: stages, refetch: refetchStages } = useQuery({
     queryKey: ["marketing-stages", pipelineId],
+    enabled: !!pipelineId,
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("marketing_pipeline_stages")
-        .select("*, ai_agents(name)")
+        .select("id, name, stage_type, sort_order, approval_mode, agent_id, system_prompt")
         .eq("pipeline_id", pipelineId)
         .order("sort_order");
+      if (error) {
+        console.error("[MarketingPipelineBoard] stages query error:", error);
+        throw error;
+      }
       return data ?? [];
     },
   });
 
   const { data: items, refetch: refetchItems } = useQuery({
     queryKey: ["marketing-items", pipelineId],
+    enabled: !!pipelineId,
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("marketing_work_items")
         .select("id, title, status, current_stage_id, scheduled_date, payload")
         .eq("pipeline_id", pipelineId)
         .order("created_at", { ascending: false })
         .limit(100);
+      if (error) {
+        console.error("[MarketingPipelineBoard] items query error:", error);
+      }
       return data ?? [];
     },
   });
