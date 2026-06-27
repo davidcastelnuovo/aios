@@ -322,6 +322,9 @@ export function WeeklyTaskBoard() {
         query = query.not("lead_id", "is", null);
       } else if (filters.association === "general") {
         query = query.is("client_id", null).is("lead_id", null);
+      } else if (filters.association === "unassigned") {
+        // Tasks not linked to any client (may still have a lead).
+        query = query.is("client_id", null);
       }
 
       // Apply agency filter from header
@@ -331,18 +334,17 @@ export function WeeklyTaskBoard() {
           .from("clients")
           .select("id")
           .eq("agency_id", selectedAgency);
-        
+
         const clientIds = agencyClients?.map(c => c.id) || [];
-        
+
+        // Show tasks linked to a client in this agency, OR tasks assigned directly
+        // to the agency with no client. Tasks of other agencies and client-less
+        // tasks of other agencies are excluded — those only show under "all agencies".
+        const orParts = [`and(client_id.is.null,agency_id.eq.${selectedAgency})`];
         if (clientIds.length > 0) {
-          // Show tasks where client belongs to agency OR task itself belongs to agency (for non-client tasks)
-          query = query.or(
-            `client_id.in.(${clientIds.join(",")}),and(client_id.is.null,agency_id.eq.${selectedAgency})`
-          );
-        } else {
-          // No clients in this agency, only show tasks directly assigned to agency
-          query = query.is("client_id", null).eq("agency_id", selectedAgency);
+          orParts.unshift(`client_id.in.(${clientIds.join(",")})`);
         }
+        query = query.or(orParts.join(","));
       }
 
 
