@@ -87,8 +87,20 @@ export function McpConnectionsTab({ agent }: { agent: any }) {
               >
                 ⚡ הוסף את Claude (כרמן תוכל לבקש ממנו משימות פיתוח)
               </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => {
+                  setName("Manus");
+                  setUrl(`https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1/manus-mcp`);
+                }}
+              >
+                🤖 הוסף את Manus (כרמן תוכל להאציל לו משימות מורכבות)
+              </Button>
               <p className="text-xs text-muted-foreground">
-                ממלא שם + URL אוטומטית. הזן את ה-Bearer (ערך CLAUDE_MCP_BEARER) ולחץ התחבר.
+                ממלא שם + URL אוטומטית. הזן את ה-Bearer (ערך MANUS_MCP_BEARER) ולחץ התחבר.
               </p>
               <div>
                 <Label>שם</Label>
