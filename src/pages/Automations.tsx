@@ -259,8 +259,10 @@ export default function Automations() {
         .select("id,name,active")
         .eq("tenant_id", tenantId)
         .eq("active", true);
-      const manusAgent = (agentsList as any[] || []).find((a) => /manus/i.test(a.name || ""));
-      if (!manusAgent) throw new Error("לא נמצא סוכן Manus פעיל. ודא שסוכן Manus קיים.");
+      // Use Carmen as the routing agent — she has manus-mcp connected and will
+      // forward the request to Manus via ask_manus / request_dev_task tools.
+      const carmenAgent = (agentsList as any[] || []).find((a) => /כרמן|carmen/i.test(a.name || "")) || (agentsList as any[] || [])[0];
+      if (!carmenAgent) throw new Error("לא נמצאה כרמן פעילה. ודא שסוכן כרמן קיים.");
       const { data, error } = await supabase
         .from("automations")
         .insert({
@@ -300,9 +302,12 @@ export default function Automations() {
         ...over,
       });
       const steps = [
-        mk({ step_type: "action", action_type: "carmen_whatsapp_session", label: "סשן WhatsApp - Manus", configuration: { agent_id: manusAgent.id, trigger_keyword: "מנוס", trigger_keywords: ["מנוס", "manus"], carmen_scope_mode: "specific_phone", carmen_allowed_phones: ["972507677613"], carmen_integration_id: waInt?.id || null, session_timeout_minutes: 15 }, position_x: 0, position_y: 0, sort_order: 0 }),
-        mk({ step_type: "action", action_type: null, label: "הפעל Manus", configuration: { agent_id: manusAgent.id, output_format: "single_reply", step_instruction: "{{message_text}}" }, position_x: 0, position_y: 150, sort_order: 1 }),
-        mk({ step_type: "action", action_type: "send_manus_message", label: "שלח תשובה", configuration: { recipients: [{ type: "phone_manual", phone: "972507677613" }], green_api_mode: "tenant", message_template: "{{agent_output}}", green_api_integration_id: gaInt?.id || null }, position_x: 0, position_y: 300, sort_order: 2 }),
+        // Step 1: WhatsApp session — keyword "מנוס" triggers the channel
+        mk({ step_type: "action", action_type: "carmen_whatsapp_session", label: "סשן WhatsApp - מנוס ישיר", configuration: { agent_id: carmenAgent.id, trigger_keyword: "מנוס", trigger_keywords: ["מנוס", "manus", "Manus"], carmen_scope_mode: "specific_phone", carmen_allowed_phones: ["972507677613"], carmen_integration_id: waInt?.id || null, session_timeout_minutes: 60 }, position_x: 0, position_y: 0, sort_order: 0 }),
+        // Step 2: Carmen routes to Manus via manus-mcp (ask_manus or request_dev_task)
+        mk({ step_type: "action", action_type: null, label: "כרמן מנתבת ל-Manus", configuration: { agent_id: carmenAgent.id, output_format: "single_reply", step_instruction: "המשתמש שלח בקשה לערוץ מנוס ישיר. השתמשי בכלי ask_manus או request_dev_task כדי להעביר את הבקשה הבאה ל-Manus AI. העברי את הבקשה כמו שהיא, ללא עיבוד. אם הבקשה עוסקת בקוד/פיתוח/גיטהאב — השתמשי ב-request_dev_task. אחרת — השתמשי ב-ask_manus. החזירי לדוד את ה-task URL שקיבלת מ-Manus (בדרך כלל: Manus עובד וישלח אישור בסיום בנפרד). הבקשה: {{message_text}}" }, position_x: 0, position_y: 150, sort_order: 1 }),
+        // Step 3: Send the task URL confirmation back to WhatsApp
+        mk({ step_type: "action", action_type: "send_manus_message", label: "שלח אישור ל-WhatsApp", configuration: { recipients: [{ type: "phone_manual", phone: "972507677613" }], green_api_mode: "tenant", message_template: "{{agent_output}}", green_api_integration_id: gaInt?.id || null }, position_x: 0, position_y: 300, sort_order: 2 }),
       ];
       await supabase.from("automation_flow_steps" as any).insert(steps);
       return data;
