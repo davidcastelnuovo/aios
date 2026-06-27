@@ -1,0 +1,38 @@
+-- Reports module: the agency filter wasn't filtering because most crm_tables rows
+-- had agency_id = NULL while being linked to a client that DOES belong to an agency.
+-- The frontend filter keeps every NULL-agency row visible under every agency, so
+-- those reports leaked into all agency views. Backfill the missing agency_id from
+-- the linked client, and add a trigger so future rows stay in sync automatically.
+
+-- 1) Backfill: copy each linked client's agency onto its tables (only where missing).
+UPDATE public.crm_tables t
+SET agency_id = c.agency_id
+FROM public.clients c
+WHERE t.client_id = c.id
+  AND t.agency_id IS NULL
+  AND c.agency_id IS NOT NULL;
+
+-- 2) Keep agency_id in sync going forward: when a table is linked to a client but
+--    has no agency, derive the agency from that client. Never overrides an
+--    explicitly-set agency_id (only fills when NULL), so it cannot widen scope.
+CREATE OR REPLACE FUNCTION public.crm_tables_fill_agency_from_client()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NEW.agency_id IS NULL AND NEW.client_id IS NOT NULL THEN
+    SELECT c.agency_id INTO NEW.agency_id
+    FROM public.clients c
+    WHERE c.id = NEW.client_id;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS crm_tables_fill_agency ON public.crm_tables;
+CREATE TRIGGER crm_tables_fill_agency
+BEFORE INSERT OR UPDATE OF client_id, agency_id ON public.crm_tables
+FOR EACH ROW
+EXECUTE FUNCTION public.crm_tables_fill_agency_from_client();
