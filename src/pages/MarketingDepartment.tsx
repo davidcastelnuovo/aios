@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Plus, Workflow, CalendarRange, ArrowRight, Megaphone, Search, Share2, Coins, Palette, Settings2 } from "lucide-react";
+import { Plus, Workflow, CalendarRange, ArrowRight, Megaphone, Search, Share2, Coins, Palette, Settings2, BarChart2, ExternalLink } from "lucide-react";
 import { ClientSelector } from "@/components/marketing/ClientSelector";
 import { ClientConnectionsBar } from "@/components/marketing/ClientConnectionsBar";
 import { MarketingPipelineBoard } from "@/components/marketing/MarketingPipelineBoard";
@@ -37,14 +37,30 @@ export default function MarketingDepartment() {
   const { tenant } = useCurrentTenant();
   const tenantId = tenant?.id;
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [topTab, setTopTab] = useState<MarketingTrack | "calendar" | "creative" | "usage">("campaigns");
+  const [topTab, setTopTab] = useState<MarketingTrack | "calendar" | "creative" | "usage" | "dashboard">("campaigns");
   const [calendarTrack, setCalendarTrack] = useState<MarketingTrack>("campaigns");
   const [globalSettingsOpen, setGlobalSettingsOpen] = useState(false);
   const track: MarketingTrack = topTab === "calendar"
     ? calendarTrack
-    : (topTab === "creative" || topTab === "usage" ? "campaigns" : topTab);
+    : (topTab === "creative" || topTab === "usage" || topTab === "dashboard" ? "campaigns" : topTab);
 
   const clientId = routeClientId ?? null;
+
+  // Load the client's linked crm_dashboard for the iframe embed
+  const { data: clientDashboard } = useQuery({
+    queryKey: ["client-dashboard-for-marketing", clientId],
+    enabled: !!clientId && topTab === "dashboard",
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("crm_dashboards")
+        .select("id, name, dashboard_type")
+        .eq("client_id", clientId!)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data;
+    },
+  });
 
   const { data: pipeline, refetch: refetchPipeline } = useQuery({
     queryKey: ["marketing-pipeline", clientId, track],
@@ -161,6 +177,10 @@ export default function MarketingDepartment() {
                 <Coins className="ml-1 h-4 w-4" />
                 שימוש בטוקנים
               </TabsTrigger>
+              <TabsTrigger value="dashboard">
+                <BarChart2 className="ml-1 h-4 w-4" />
+                דשבורד
+              </TabsTrigger>
             </TabsList>
 
             {!pipeline ? (
@@ -222,6 +242,45 @@ export default function MarketingDepartment() {
                 </TabsContent>
                 <TabsContent value="creative" className="flex-1 min-h-0 m-0 overflow-auto">
                   <CreativeBoard clientId={clientId} onSelectItem={setSelectedItemId} />
+                </TabsContent>
+                <TabsContent value="dashboard" className="flex-1 min-h-0 m-0 overflow-hidden">
+                  {clientDashboard ? (
+                    <div className="flex h-full flex-col">
+                      <div className="flex items-center gap-2 border-b bg-muted/30 px-4 py-2 text-sm">
+                        <BarChart2 className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium">{clientDashboard.name}</span>
+                        <a
+                          href={`/t/${tenantSlug}/dashboard/${clientDashboard.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="ms-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                          פתח בחלון נפרד
+                        </a>
+                      </div>
+                      <iframe
+                        src={`/t/${tenantSlug}/dashboard/${clientDashboard.id}`}
+                        className="flex-1 w-full border-0"
+                        title={`דשבורד — ${clientDashboard.name}`}
+                        allow="fullscreen"
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex h-full flex-col items-center justify-center gap-4 text-muted-foreground">
+                      <BarChart2 className="h-12 w-12 opacity-30" />
+                      <div className="text-center">
+                        <p className="text-sm font-medium">אין דשבורד מקושר ללקוח זה</p>
+                        <p className="mt-1 text-xs">צור דשבורד חדש מתוך עמוד הלקוח ויופיע כאן אוטומטית</p>
+                      </div>
+                      <a
+                        href={`/t/${tenantSlug}/clients`}
+                        className="text-xs text-primary hover:underline"
+                      >
+                        עבור לניהול לקוחות ←
+                      </a>
+                    </div>
+                  )}
                 </TabsContent>
               </>
             )}
