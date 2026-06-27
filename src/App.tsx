@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useSessionRefresh } from "@/hooks/useSessionRefresh";
 import { AppLayout } from "./components/layout/AppLayout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
@@ -88,12 +88,9 @@ const SignDocument = lazy(() => import("./pages/SignDocument"));
 const ManusSettings = lazy(() => import("./pages/ManusSettings"));
 const ManusTasksPage = lazy(() => import("./pages/ManusTasksPage"));
 const AgentHub = lazy(() => import("./pages/AgentHub"));
-const CarmenInsights = lazy(() => import("./pages/CarmenInsights"));
 const VisualWorkspace = lazy(() => import("./pages/VisualWorkspace"));
 const AgentTasksPage = lazy(() => import("./pages/AgentTasksPage"));
 const SkinsManager = lazy(() => import("./pages/SkinsManager"));
-const CarmenAccess = lazy(() => import("./pages/CarmenAccess"));
-const CarmenStudio = lazy(() => import("./pages/CarmenStudio"));
 const SharedDashboard = lazy(() => import("./pages/SharedDashboard"));
 const SharedTable = lazy(() => import("./pages/SharedTable"));
 
@@ -189,7 +186,7 @@ const App = () => (
                   <Route path="/t/:tenantSlug/tenants" element={<ProtectedRoute requiredPermission="tenants"><AppLayout><Tenants /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/automations" element={<ProtectedRoute requiredPermission="automations"><AppLayout><Automations /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/broadcast" element={<ProtectedRoute requiredPermission="broadcast"><AppLayout><Broadcast /></AppLayout></ProtectedRoute>} />
-                  <Route path="/t/:tenantSlug/carmen-insights" element={<ProtectedRoute><AppLayout><CarmenInsights /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/carmen-insights" element={<Navigate to="../agents?tab=learning" replace />} />
                   <Route path="/t/:tenantSlug/visual-workspace" element={<ProtectedRoute><AppLayout><VisualWorkspace /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/marketing" element={<ProtectedRoute><MarketingDepartment /></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/marketing/:clientId" element={<ProtectedRoute><MarketingDepartment /></ProtectedRoute>} />
@@ -241,8 +238,8 @@ const App = () => (
                   <Route path="/t/:tenantSlug/agents" element={<ProtectedRoute><AppLayout><AgentHub /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/agent-tasks" element={<ProtectedRoute><AppLayout><AgentTasksPage /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/skins" element={<ProtectedRoute><AppLayout><SkinsManager /></AppLayout></ProtectedRoute>} />
-                  <Route path="/t/:tenantSlug/carmen-access" element={<ProtectedRoute><AppLayout><CarmenAccess /></AppLayout></ProtectedRoute>} />
-                  <Route path="/t/:tenantSlug/carmen-studio" element={<ProtectedRoute><AppLayout><CarmenStudio /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/carmen-access" element={<Navigate to="../agents?tab=access" replace />} />
+                  <Route path="/t/:tenantSlug/carmen-studio" element={<Navigate to="../agents" replace />} />
                   
                   <Route path="/t/:tenantSlug/github-agent" element={<ProtectedRoute><AppLayout><GithubAgent /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/telephony-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><TelephonySettings /></AppLayout></ProtectedRoute>} />

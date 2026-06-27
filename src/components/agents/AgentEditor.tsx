@@ -17,6 +17,9 @@ import { RunsTab } from "./tabs/RunsTab";
 import { SupervisorTab } from "./tabs/SupervisorTab";
 import { McpConnectionsTab } from "./tabs/McpConnectionsTab";
 import { EvalsTab } from "./tabs/EvalsTab";
+import { AgentAccessTab } from "./tabs/AgentAccessTab";
+import { AgentLearningTab } from "./tabs/AgentLearningTab";
+import SkinsManager from "@/pages/SkinsManager";
 
 import { Crown, Bot, Settings, ListTodo, ChevronDown } from "lucide-react";
 import { useSearchParams, useNavigate } from "react-router-dom";
@@ -80,7 +83,6 @@ export function AgentEditor({ agent }: { agent: any }) {
         <div className="w-full md:w-72">
           <BrainSelector value={agent.engine} onChange={(v) => updateEngine.mutate(v)} />
         </div>
-
       </div>
 
       <AgentTabsWithUrl agent={agent} />
@@ -122,6 +124,14 @@ function AgentTabsWithUrl({ agent }: { agent: any }) {
         { value: "knowledge", label: "📖 ידע" },
         { value: "memory", label: "🧠 זיכרון" },
         { value: "user-profiles", label: "👥 פרופילי משתמשים" },
+      ],
+    },
+    {
+      label: "זהות והתפתחות",
+      items: [
+        { value: "skins", label: "🎭 סקינז" },
+        { value: "access", label: "🛡️ גישות" },
+        { value: "learning", label: "🧬 למידה עצמית" },
       ],
     },
   ];
@@ -191,9 +201,11 @@ function AgentTabsWithUrl({ agent }: { agent: any }) {
         <TabsContent value="approvals" className="mt-0"><ApprovalsTab agent={agent} /></TabsContent>
         <TabsContent value="user-profiles" className="mt-0"><UserProfilesTab agent={agent} /></TabsContent>
         <TabsContent value="cost" className="mt-0"><CostTab agent={agent} /></TabsContent>
+        {/* Identity & growth — available for every agent */}
+        <TabsContent value="skins" className="mt-0"><SkinsManager /></TabsContent>
+        <TabsContent value="access" className="mt-0"><AgentAccessTab agent={agent} /></TabsContent>
+        <TabsContent value="learning" className="mt-0"><AgentLearningTab agent={agent} /></TabsContent>
       </div>
     </Tabs>
   );
 }
-
-
