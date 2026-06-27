@@ -210,12 +210,88 @@ ${transcript}${focusPrompt}
         .eq("id", recording_id);
     }
 
+    // ─── Auto-detect marketing needs and create a brief work item ───
+    let marketingBriefCreated = false;
+    let marketingWorkItemId: string | null = null;
+    if (target_type === "client" && target_id && tenant_id) {
+      try {
+        const briefDetectRes = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "gpt-4o-mini",
+            response_format: { type: "json_object" },
+            messages: [
+              {
+                role: "system",
+                content: `אתה מנתח פגישות שיווקיות. קרא את סיכום הפגישה וזהה אם יש צרכי שיווק (קמפיינים, תוכן, SEO, סושיאל, קופי, גרפיקה, מודעות). אם יש — החזר JSON בפורמט: {"has_marketing_needs": true, "brief_title": "כותרת", "brief_content": "תיאור צרכים", "tracks": ["campaigns","social_organic","seo_geo"]}. אם אין — {"has_marketing_needs": false}.`,
+              },
+              { role: "user", content: `סיכום הפגישה:\n${summary}` },
+            ],
+          }),
+        });
+        if (briefDetectRes.ok) {
+          const briefData = await briefDetectRes.json();
+          const briefJson = JSON.parse(briefData.choices?.[0]?.message?.content ?? "{}");
+          if (briefJson.has_marketing_needs && briefJson.brief_title) {
+            // Find the campaigns pipeline for this client
+            const { data: pipeline } = await admin
+              .from("marketing_pipelines")
+              .select("id")
+              .eq("client_id", target_id)
+              .eq("tenant_id", tenant_id)
+              .eq("track", "campaigns")
+              .maybeSingle();
+            if (pipeline) {
+              const { data: briefStage } = await admin
+                .from("marketing_pipeline_stages")
+                .select("id")
+                .eq("pipeline_id", pipeline.id)
+                .eq("stage_type", "strategy")
+                .maybeSingle();
+              if (briefStage) {
+                const { data: workItem } = await admin
+                  .from("marketing_work_items")
+                  .insert({
+                    pipeline_id: pipeline.id,
+                    tenant_id,
+                    client_id: target_id,
+                    current_stage_id: briefStage.id,
+                    title: briefJson.brief_title,
+                    status: "draft",
+                    payload: {
+                      brief_text: briefJson.brief_content ?? "",
+                      source: "zoom_meeting",
+                      source_recording_id: recording_id ?? null,
+                      source_summary_url: fileUrl,
+                      tracks: briefJson.tracks ?? ["campaigns"],
+                      meeting_date: new Date().toISOString(),
+                    },
+                  })
+                  .select("id")
+                  .single();
+                if (workItem) {
+                  marketingBriefCreated = true;
+                  marketingWorkItemId = workItem.id;
+                  console.log(`[MARKETING] Auto-brief created: ${workItem.id}`);
+                }
+              }
+            }
+          }
+        }
+      } catch (briefErr) {
+        console.error("[MARKETING] Auto-brief failed (non-fatal):", briefErr);
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
         summary,
         file_url: fileUrl,
         file_name: newAttachment.name,
+        marketing_brief_created: marketingBriefCreated,
+        marketing_work_item_id: marketingWorkItemId,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

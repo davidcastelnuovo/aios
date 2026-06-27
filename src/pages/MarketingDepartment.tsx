@@ -20,6 +20,7 @@ import {
 } from "@/components/marketing/lib/ensurePipeline";
 import { toast } from "@/hooks/use-toast";
 import { MarketingCalendarView } from "@/components/marketing/MarketingCalendarView";
+import { SocialContentGantt } from "@/components/marketing/SocialContentGantt";
 
 const TRACKS: { value: MarketingTrack; icon: typeof Megaphone }[] = [
   { value: "campaigns", icon: Megaphone },
@@ -202,7 +203,16 @@ export default function MarketingDepartment() {
                         value={value}
                         className="flex-1 min-h-0 m-0 overflow-auto"
                       >
-                        <MarketingCalendarView pipelineId={pipeline.id} clientId={clientId} onSelectItem={setSelectedItemId} />
+                        {value === "social_organic" ? (
+                          <SocialContentGantt
+                            pipelineId={pipeline.id}
+                            tenantId={tenantId!}
+                            clientId={clientId!}
+                            onSelectItem={setSelectedItemId}
+                          />
+                        ) : (
+                          <MarketingCalendarView pipelineId={pipeline.id} clientId={clientId} onSelectItem={setSelectedItemId} />
+                        )}
                       </TabsContent>
                     ))}
                   </Tabs>
