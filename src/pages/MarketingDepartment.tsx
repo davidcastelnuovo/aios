@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Plus, Workflow, CalendarRange, ArrowRight, Megaphone, Search, Share2, Coins, Palette, Settings2, BarChart2, ExternalLink } from "lucide-react";
+import { Plus, Workflow, CalendarRange, ArrowRight, Megaphone, Search, Share2, Coins, Palette, Settings2, BarChart2, ExternalLink, Loader2 } from "lucide-react";
 import { ClientSelector } from "@/components/marketing/ClientSelector";
 import { ClientConnectionsBar } from "@/components/marketing/ClientConnectionsBar";
 import { MarketingPipelineBoard } from "@/components/marketing/MarketingPipelineBoard";
@@ -40,11 +40,53 @@ export default function MarketingDepartment() {
   const [topTab, setTopTab] = useState<MarketingTrack | "calendar" | "creative" | "usage" | "dashboard">("campaigns");
   const [calendarTrack, setCalendarTrack] = useState<MarketingTrack>("campaigns");
   const [globalSettingsOpen, setGlobalSettingsOpen] = useState(false);
-  const track: MarketingTrack = topTab === "calendar"
-    ? calendarTrack
-    : (topTab === "creative" || topTab === "usage" || topTab === "dashboard" ? "campaigns" : topTab);
 
   const clientId = routeClientId ?? null;
+
+  // ── Load ALL 3 pipelines in parallel ──────────────────────────────────────
+  const { data: campaignsPipeline, refetch: refetchCampaigns } = useQuery({
+    queryKey: ["marketing-pipeline", clientId, "campaigns"],
+    enabled: !!clientId && !!tenantId,
+    queryFn: async () => {
+      if (!clientId || !tenantId) return null;
+      return await ensurePipelineForClient({ clientId, tenantId, track: "campaigns" });
+    },
+  });
+
+  const { data: seoPipeline, refetch: refetchSeo } = useQuery({
+    queryKey: ["marketing-pipeline", clientId, "seo_geo"],
+    enabled: !!clientId && !!tenantId,
+    queryFn: async () => {
+      if (!clientId || !tenantId) return null;
+      return await ensurePipelineForClient({ clientId, tenantId, track: "seo_geo" });
+    },
+  });
+
+  const { data: socialPipeline, refetch: refetchSocial } = useQuery({
+    queryKey: ["marketing-pipeline", clientId, "social_organic"],
+    enabled: !!clientId && !!tenantId,
+    queryFn: async () => {
+      if (!clientId || !tenantId) return null;
+      return await ensurePipelineForClient({ clientId, tenantId, track: "social_organic" });
+    },
+  });
+
+  const pipelineByTrack: Record<MarketingTrack, any> = {
+    campaigns: campaignsPipeline,
+    seo_geo: seoPipeline,
+    social_organic: socialPipeline,
+  };
+
+  const allLoaded = !!campaignsPipeline && !!seoPipeline && !!socialPipeline;
+
+  // Current active track pipeline (for "פריט חדש" button)
+  const activeTrack: MarketingTrack =
+    topTab === "calendar"
+      ? calendarTrack
+      : topTab === "creative" || topTab === "usage" || topTab === "dashboard"
+      ? "campaigns"
+      : (topTab as MarketingTrack);
+  const activePipeline = pipelineByTrack[activeTrack];
 
   // Load the client's linked crm_dashboard for the iframe embed
   const { data: clientDashboard } = useQuery({
@@ -62,32 +104,23 @@ export default function MarketingDepartment() {
     },
   });
 
-  const { data: pipeline, refetch: refetchPipeline } = useQuery({
-    queryKey: ["marketing-pipeline", clientId, track],
-    enabled: !!clientId && !!tenantId,
-    queryFn: async () => {
-      if (!clientId || !tenantId) return null;
-      return await ensurePipelineForClient({ clientId, tenantId, track });
-    },
-  });
-
   const handleSelectClient = (id: string) => {
     navigate(`/t/${tenantSlug}/marketing/${id}`);
   };
 
   const handleNewItem = async () => {
-    if (!pipeline || !tenantId || !clientId) return;
+    if (!activePipeline || !tenantId || !clientId) return;
     const { data: stages } = await supabase
       .from("marketing_pipeline_stages")
       .select("id, sort_order")
-      .eq("pipeline_id", pipeline.id)
+      .eq("pipeline_id", activePipeline.id)
       .order("sort_order", { ascending: true })
       .limit(1);
     const firstStageId = stages?.[0]?.id ?? null;
     const { data, error } = await supabase
       .from("marketing_work_items")
       .insert({
-        pipeline_id: pipeline.id,
+        pipeline_id: activePipeline.id,
         tenant_id: tenantId,
         client_id: clientId,
         current_stage_id: firstStageId,
@@ -101,7 +134,9 @@ export default function MarketingDepartment() {
       return;
     }
     setSelectedItemId(data.id);
-    refetchPipeline();
+    refetchCampaigns();
+    refetchSeo();
+    refetchSocial();
   };
 
   return (
@@ -121,7 +156,7 @@ export default function MarketingDepartment() {
           </>
         )}
         <div className="ms-auto flex items-center gap-2">
-          {pipeline && (
+          {activePipeline && (
             <Button onClick={handleNewItem} size="sm" variant="outline" className="gap-1">
               <Plus className="h-4 w-4" />
               פריט חדש
@@ -152,7 +187,6 @@ export default function MarketingDepartment() {
         </div>
       ) : (
         <div className="flex flex-1 min-h-0 flex-col">
-          {/* Top-level tabs: 3 tracks + content calendar */}
           <Tabs
             value={topTab}
             onValueChange={(v) => setTopTab(v as any)}
@@ -183,111 +217,145 @@ export default function MarketingDepartment() {
               </TabsTrigger>
             </TabsList>
 
-            {!pipeline ? (
-              <div className="flex flex-1 items-center justify-center">
-                <div className="flex flex-col items-center gap-3 text-muted-foreground">
-                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted border-t-primary" />
-                  <span className="text-sm">טוען פס ייצור...</span>
+            {/* ── Campaigns track ─────────────────────────────────────── */}
+            <TabsContent value="campaigns" className="flex-1 min-h-0 m-0">
+              {!campaignsPipeline ? (
+                <LoadingPipeline />
+              ) : (
+                <MarketingPipelineBoard
+                  pipelineId={campaignsPipeline.id}
+                  tenantId={tenantId!}
+                  clientId={clientId}
+                  track="campaigns"
+                  onSelectItem={setSelectedItemId}
+                />
+              )}
+            </TabsContent>
+
+            {/* ── SEO/GEO track ────────────────────────────────────────── */}
+            <TabsContent value="seo_geo" className="flex-1 min-h-0 m-0">
+              {!seoPipeline ? (
+                <LoadingPipeline />
+              ) : (
+                <MarketingPipelineBoard
+                  pipelineId={seoPipeline.id}
+                  tenantId={tenantId!}
+                  clientId={clientId}
+                  track="seo_geo"
+                  onSelectItem={setSelectedItemId}
+                />
+              )}
+            </TabsContent>
+
+            {/* ── Social organic track ─────────────────────────────────── */}
+            <TabsContent value="social_organic" className="flex-1 min-h-0 m-0">
+              {!socialPipeline ? (
+                <LoadingPipeline />
+              ) : (
+                <MarketingPipelineBoard
+                  pipelineId={socialPipeline.id}
+                  tenantId={tenantId!}
+                  clientId={clientId}
+                  track="social_organic"
+                  onSelectItem={setSelectedItemId}
+                />
+              )}
+            </TabsContent>
+
+            {/* ── Calendar ─────────────────────────────────────────────── */}
+            <TabsContent value="calendar" className="flex-1 min-h-0 m-0 flex flex-col">
+              <Tabs
+                value={calendarTrack}
+                onValueChange={(v) => setCalendarTrack(v as MarketingTrack)}
+                className="flex flex-1 min-h-0 flex-col"
+              >
+                <TabsList className="mx-4 my-2 w-fit">
+                  {TRACKS.map(({ value, icon: Icon }) => (
+                    <TabsTrigger key={value} value={value}>
+                      <Icon className="ml-1 h-4 w-4" />
+                      {TRACK_LABELS[value]}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+                {TRACKS.map(({ value }) => {
+                  const pip = pipelineByTrack[value];
+                  return (
+                    <TabsContent
+                      key={value}
+                      value={value}
+                      className="flex-1 min-h-0 m-0 overflow-auto"
+                    >
+                      {!pip ? (
+                        <LoadingPipeline />
+                      ) : value === "social_organic" ? (
+                        <SocialContentGantt
+                          pipelineId={pip.id}
+                          tenantId={tenantId!}
+                          clientId={clientId!}
+                          onSelectItem={setSelectedItemId}
+                        />
+                      ) : (
+                        <MarketingCalendarView pipelineId={pip.id} clientId={clientId} onSelectItem={setSelectedItemId} />
+                      )}
+                    </TabsContent>
+                  );
+                })}
+              </Tabs>
+            </TabsContent>
+
+            {/* ── Usage ────────────────────────────────────────────────── */}
+            <TabsContent value="usage" className="flex-1 min-h-0 m-0 overflow-auto">
+              <UsagePanel tenantId={tenantId!} clientId={clientId} />
+            </TabsContent>
+
+            {/* ── Creative ─────────────────────────────────────────────── */}
+            <TabsContent value="creative" className="flex-1 min-h-0 m-0 overflow-auto">
+              <CreativeBoard clientId={clientId} onSelectItem={setSelectedItemId} />
+            </TabsContent>
+
+            {/* ── Dashboard iframe ─────────────────────────────────────── */}
+            <TabsContent value="dashboard" className="flex-1 min-h-0 m-0 overflow-hidden">
+              {clientDashboard ? (
+                <div className="flex h-full flex-col">
+                  <div className="flex items-center gap-2 border-b bg-muted/30 px-4 py-2 text-sm">
+                    <BarChart2 className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-medium">{clientDashboard.name}</span>
+                    <a
+                      href={`/t/${tenantSlug}/dashboard/${clientDashboard.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ms-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      פתח בחלון נפרד
+                    </a>
+                  </div>
+                  <iframe
+                    src={`/t/${tenantSlug}/dashboard/${clientDashboard.id}`}
+                    className="flex-1 w-full border-0"
+                    title={`דשבורד — ${clientDashboard.name}`}
+                    allow="fullscreen"
+                  />
                 </div>
-              </div>
-            ) : (
-              <>
-                {TRACKS.map(({ value }) => (
-                  <TabsContent key={value} value={value} className="flex-1 min-h-0 m-0">
-                    <MarketingPipelineBoard
-                      pipelineId={pipeline.id}
-                      tenantId={tenantId!}
-                      clientId={clientId}
-                      track={value}
-                      onSelectItem={setSelectedItemId}
-                    />
-                  </TabsContent>
-                ))}
-                <TabsContent value="calendar" className="flex-1 min-h-0 m-0 flex flex-col">
-                  <Tabs
-                    value={calendarTrack}
-                    onValueChange={(v) => setCalendarTrack(v as MarketingTrack)}
-                    className="flex flex-1 min-h-0 flex-col"
+              ) : (
+                <div className="flex h-full flex-col items-center justify-center gap-4 text-muted-foreground">
+                  <BarChart2 className="h-12 w-12 opacity-30" />
+                  <div className="text-center">
+                    <p className="text-sm font-medium">אין דשבורד מקושר ללקוח זה</p>
+                    <p className="mt-1 text-xs">צור דשבורד חדש מתוך עמוד הלקוח ויופיע כאן אוטומטית</p>
+                  </div>
+                  <a
+                    href={`/t/${tenantSlug}/clients`}
+                    className="text-xs text-primary hover:underline"
                   >
-                    <TabsList className="mx-4 my-2 w-fit">
-                      {TRACKS.map(({ value, icon: Icon }) => (
-                        <TabsTrigger key={value} value={value}>
-                          <Icon className="ml-1 h-4 w-4" />
-                          {TRACK_LABELS[value]}
-                        </TabsTrigger>
-                      ))}
-                    </TabsList>
-                    {TRACKS.map(({ value }) => (
-                      <TabsContent
-                        key={value}
-                        value={value}
-                        className="flex-1 min-h-0 m-0 overflow-auto"
-                      >
-                        {value === "social_organic" ? (
-                          <SocialContentGantt
-                            pipelineId={pipeline.id}
-                            tenantId={tenantId!}
-                            clientId={clientId!}
-                            onSelectItem={setSelectedItemId}
-                          />
-                        ) : (
-                          <MarketingCalendarView pipelineId={pipeline.id} clientId={clientId} onSelectItem={setSelectedItemId} />
-                        )}
-                      </TabsContent>
-                    ))}
-                  </Tabs>
-                </TabsContent>
-                <TabsContent value="usage" className="flex-1 min-h-0 m-0 overflow-auto">
-                  <UsagePanel tenantId={tenantId!} clientId={clientId} />
-                </TabsContent>
-                <TabsContent value="creative" className="flex-1 min-h-0 m-0 overflow-auto">
-                  <CreativeBoard clientId={clientId} onSelectItem={setSelectedItemId} />
-                </TabsContent>
-                <TabsContent value="dashboard" className="flex-1 min-h-0 m-0 overflow-hidden">
-                  {clientDashboard ? (
-                    <div className="flex h-full flex-col">
-                      <div className="flex items-center gap-2 border-b bg-muted/30 px-4 py-2 text-sm">
-                        <BarChart2 className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium">{clientDashboard.name}</span>
-                        <a
-                          href={`/t/${tenantSlug}/dashboard/${clientDashboard.id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="ms-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                        >
-                          <ExternalLink className="h-3 w-3" />
-                          פתח בחלון נפרד
-                        </a>
-                      </div>
-                      <iframe
-                        src={`/t/${tenantSlug}/dashboard/${clientDashboard.id}`}
-                        className="flex-1 w-full border-0"
-                        title={`דשבורד — ${clientDashboard.name}`}
-                        allow="fullscreen"
-                      />
-                    </div>
-                  ) : (
-                    <div className="flex h-full flex-col items-center justify-center gap-4 text-muted-foreground">
-                      <BarChart2 className="h-12 w-12 opacity-30" />
-                      <div className="text-center">
-                        <p className="text-sm font-medium">אין דשבורד מקושר ללקוח זה</p>
-                        <p className="mt-1 text-xs">צור דשבורד חדש מתוך עמוד הלקוח ויופיע כאן אוטומטית</p>
-                      </div>
-                      <a
-                        href={`/t/${tenantSlug}/clients`}
-                        className="text-xs text-primary hover:underline"
-                      >
-                        עבור לניהול לקוחות ←
-                      </a>
-                    </div>
-                  )}
-                </TabsContent>
-              </>
-            )}
+                    עבור לניהול לקוחות ←
+                  </a>
+                </div>
+              )}
+            </TabsContent>
           </Tabs>
         </div>
       )}
-
 
       <WorkItemSidePanel itemId={selectedItemId} onClose={() => setSelectedItemId(null)} />
 
@@ -298,6 +366,17 @@ export default function MarketingDepartment() {
           tenantId={tenantId}
         />
       )}
+    </div>
+  );
+}
+
+function LoadingPipeline() {
+  return (
+    <div className="flex flex-1 h-full items-center justify-center">
+      <div className="flex flex-col items-center gap-3 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin text-primary/40" />
+        <span className="text-sm">טוען פס ייצור...</span>
+      </div>
     </div>
   );
 }
