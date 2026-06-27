@@ -130,6 +130,8 @@ const ACTION_OPTIONS = [
   { value: "webhook", label: "Webhook" },
   { value: "email", label: "אימייל" },
   { value: "notification", label: "התראה" },
+  { value: "run_manus_task", label: "🤖 הרץ משימת Manus (ברקע)" },
+  { value: "send_manus_direct", label: "💬 שלח הודעה ישירה ל-Manus" },
 ];
 
 
@@ -989,6 +991,80 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [], 
               availableFields={availableFields}
               onConfigChange={handleConfigChange}
             />
+          )}
+
+          {/* Manus Task config */}
+          {node.action_type === "run_manus_task" && (
+            <div className="space-y-4" dir="rtl">
+              <div className="rounded-lg border border-blue-200 bg-blue-50/50 p-3 text-right">
+                <p className="text-xs text-blue-700 font-medium">🤖 Manus יצור משימה חדשה ברקע ויחזיר task_id. התוצאה תישמר ב-manus_tasks.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-right block">פרומפט למשימה *</Label>
+                <Textarea
+                  value={node.configuration?.prompt_template || ""}
+                  onChange={(e) => handleConfigChange("prompt_template", e.target.value)}
+                  placeholder="תאר את המשימה... ניתן להשתמש ב-{{contact_name}}, {{company_name}} וכו'"
+                  className="text-right min-h-[100px]"
+                  rows={4}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-right block">פרופיל סוכן</Label>
+                <Select
+                  value={node.configuration?.agent_profile || "manus-1.6"}
+                  onValueChange={(v) => handleConfigChange("agent_profile", v)}
+                >
+                  <SelectTrigger className="text-right">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="manus-1.6">Manus 1.6 (סטנדרט)</SelectItem>
+                    <SelectItem value="manus-lite">Manus Lite (מהיר)</SelectItem>
+                    <SelectItem value="manus-max">Manus Max (עוצמתי)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2 justify-end">
+                <Checkbox
+                  id="include_context"
+                  checked={node.configuration?.include_context ?? false}
+                  onCheckedChange={(v) => handleConfigChange("include_context", !!v)}
+                />
+                <Label htmlFor="include_context" className="text-sm cursor-pointer">צרף נתוני הטריגר לפרומפט</Label>
+              </div>
+            </div>
+          )}
+
+          {/* Manus Direct Message config */}
+          {node.action_type === "send_manus_direct" && (
+            <div className="space-y-4" dir="rtl">
+              <div className="rounded-lg border border-purple-200 bg-purple-50/50 p-3 text-right">
+                <p className="text-xs text-purple-700 font-medium">💬 שליחת הודעה ישירה ל-Manus agent-default. אם לא מוגדר task_id ישתמש ב-agent-default-main_task.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-right block">הודעה *</Label>
+                <Textarea
+                  value={node.configuration?.message_template || ""}
+                  onChange={(e) => handleConfigChange("message_template", e.target.value)}
+                  placeholder="תוכן ההודעה... ניתן להשתמש ב-{{contact_name}}, {{company_name}} וכו'"
+                  className="text-right min-h-[80px]"
+                  rows={3}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-right block">Task ID (אופציונלי)</Label>
+                <Input
+                  value={node.configuration?.task_id || ""}
+                  onChange={(e) => handleConfigChange("task_id", e.target.value)}
+                  placeholder="agent-default-main_task (ברירת מחדל)"
+                  className="text-right font-mono text-sm"
+                  dir="ltr"
+                />
+              </div>
+            </div>
           )}
 
           {/* Status update config */}

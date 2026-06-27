@@ -98,6 +98,7 @@ const ALL_TOOLS = [
   { name: 'search_entities', description: 'חיפוש סוכנויות, לקוחות, קמפיינרים או לידים לפי שם. עבור client: אם הקורא הוא קמפיינר WhatsApp, התוצאות מוגבלות אוטומטית ללקוחות שלו אלא אם הועבר all_scopes=true. ניתן לסנן clients/leads לפי agency_id.', parameters: { type: 'object', properties: { entity_type: { type: 'string', enum: ['agency', 'client', 'campaigner', 'lead'] }, search_term: { type: 'string' }, agency_id: { type: 'string', description: 'הגבלה לסוכנות מסוימת (רלוונטי ל-client/lead)' }, all_scopes: { type: 'boolean', description: 'דרוס את סקופ הקמפיינר והחזר תוצאות מכל הארגון.' } }, required: ['entity_type', 'search_term'] } },
   // MANUS AI - Complex task delegation
   { name: 'delegate_to_manus', description: 'שליחת משימה מורכבת ל-Manus AI לביצוע ברקע (מחקר שוק, ניתוח קמפיינים, יצירת תוכן, ניתוח נתונים). המשימה רצה ברקע ועשויה לקחת דקות עד שעות.', parameters: { type: 'object', properties: { prompt: { type: 'string', description: 'תיאור מפורט של המשימה לביצוע' }, context_data: { type: 'string', description: 'נתוני הקשר רלוונטיים (למשל נתוני קמפיינים)' } }, required: ['prompt'] } },
+  { name: 'send_message_to_manus', description: 'שליחת הודעה ישירה ל-Manus agent פעיל (תקשורת ישירה). משמש לשאלות, עדכונים, או המשך שיחה עם Manus על משימה קיימת. מחזיר מיידית ללא המתנה לתשובה.', parameters: { type: 'object', properties: { message: { type: 'string', description: 'ההודעה לשליחה ל-Manus' }, task_id: { type: 'string', description: 'מזהה המשימה הקיימת (אופציונלי — אם לא מוגדר ישתמש ב-agent-default)' } }, required: ['message'] } },
   { name: 'get_facebook_campaign_data', description: 'שליפת נתוני קמפיינים מפייסבוק לצורך ניתוח', parameters: { type: 'object', properties: { client_id: { type: 'string' }, days: { type: 'integer', description: 'מספר ימים אחורה (ברירת מחדל 30)' } } } },
   { name: 'list_facebook_campaigns', description: 'רשימת קמפיינים פעילים/מושבתים של לקוח עם campaign_id, שם וסטטוס. השתמש כדי למצוא את ה-campaign_id לפני toggle.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, name_search: { type: 'string', description: 'חיפוש חלקי בשם הקמפיין' } }, required: ['client_id'] } },
   { name: 'toggle_facebook_campaign', description: 'הפעלה (ACTIVE) או השהיה (PAUSED) של קמפיין פייסבוק לפי campaign_id. דורש אישור מפורש של המשתמש לפני הפעלה — אל תקרא לכלי לפני שהמשתמש אישר את הפעולה הספציפית.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string', description: 'Facebook campaign ID (מספרי, לא שם)' }, status: { type: 'string', enum: ['ACTIVE', 'PAUSED'] }, confirmed: { type: 'boolean', description: 'חובה true — מאשר שהמשתמש אישר במפורש את הפעולה' } }, required: ['client_id', 'campaign_id', 'status', 'confirmed'] } },
@@ -920,6 +921,34 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         task_url: manusData.task_url,
         share_url: manusData.share_url,
         message: 'המשימה נשלחה ל-Manus AI ורצה ברקע. תוכל לעקוב אחריה בהגדרות Manus.',
+      }
+    }
+
+    case 'send_message_to_manus': {
+      const manusApiUrl = `${SUPABASE_URL}/functions/v1/manus-api`
+      const msgBody: any = {
+        action: 'send_message',
+        tenantId,
+        message: args.message,
+      }
+      if (args.task_id) msgBody.task_id = args.task_id
+      const msgRes = await fetch(manusApiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+        body: JSON.stringify(msgBody),
+      })
+      if (!msgRes.ok) {
+        const errText = await msgRes.text()
+        throw new Error(`Manus send_message error [${msgRes.status}]: ${errText}`)
+      }
+      const msgData = await msgRes.json()
+      return {
+        success: true,
+        task_id: msgData.task_id,
+        message: 'ההודעה נשלחה ל-Manus בהצלחה.',
       }
     }
 

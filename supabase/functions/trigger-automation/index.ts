@@ -1431,9 +1431,14 @@ Deno.serve(async (req) => {
                     // IMPORTANT: do NOT overwrite previousStepOutput — keep agent output for send step
                     // previousStepOutput stays as the agent's output so send_greenapi_message uses it
                   }
+                } else if (effectiveActionType === 'run_manus_task') {
+                  stepResponse = await executeRunManusTask(supabase, stepConfig, stepData, tenantId)
+                  previousStepOutput = stepResponse
+                } else if (effectiveActionType === 'send_manus_direct') {
+                  stepResponse = await executeSendManusMessage(supabase, stepConfig, stepData, tenantId)
+                  previousStepOutput = stepResponse
                 } else {
                 }
-
                 // Store output for downstream nodes
                 nodeOutputs[step.id] = {
                   ...stepData,
@@ -3784,4 +3789,40 @@ async function executeCreateLead(supabase: any, config: any, data: any, tenantId
     company_name: companyName,
     phone: phone,
   }
+}
+
+// ─── Manus AI Direct Communication ────────────────────────────────────────────
+
+async function executeRunManusTask(supabase: any, config: any, data: any, tenantId: string) {
+  const { data: tenant } = await supabase.from('tenants').select('slug').eq('id', tenantId).single()
+  const tenantSlug = tenant?.slug || ''
+  let prompt = replaceTemplateVariables(config.prompt_template || 'בצע משימה עבור הטננט', data, tenantSlug)
+  if (config.include_context) {
+    prompt += `\n\n--- נתוני הקשר ---\n${JSON.stringify(data, null, 2)}`
+  }
+  const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
+  const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/manus-api`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SERVICE_KEY}` },
+    body: JSON.stringify({ action: 'create_task', tenantId, prompt, agentProfile: config.agent_profile || 'manus-1.6', taskMode: config.task_mode || undefined }),
+  })
+  if (!res.ok) { const err = await res.text(); throw new Error(`Manus task creation failed [${res.status}]: ${err}`) }
+  const result = await res.json()
+  return { success: true, task_id: result.task_id, task_url: result.task_url, share_url: result.share_url, message: `משימת Manus נוצרה: ${result.task_id}` }
+}
+
+async function executeSendManusMessage(supabase: any, config: any, data: any, tenantId: string) {
+  const { data: tenant } = await supabase.from('tenants').select('slug').eq('id', tenantId).single()
+  const tenantSlug = tenant?.slug || ''
+  const message = replaceTemplateVariables(config.message_template || 'שלום Manus, יש לנו בקשה חדשה.', data, tenantSlug)
+  const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
+  const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/manus-api`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SERVICE_KEY}` },
+    body: JSON.stringify({ action: 'send_message', tenantId, taskId: config.task_id || 'agent-default-main_task', message, agentProfile: config.agent_profile || undefined }),
+  })
+  if (!res.ok) { const err = await res.text(); throw new Error(`Manus send_message failed [${res.status}]: ${err}`) }
+  return { success: true, task_id: config.task_id || 'agent-default-main_task', message: 'הודעה נשלחה ל-Manus בהצלחה' }
 }
