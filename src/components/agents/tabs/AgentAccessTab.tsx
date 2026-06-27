@@ -49,15 +49,17 @@ export function AgentAccessTab({ agent }: { agent: any }) {
   });
 
   const { data: integrations } = useQuery({
-    queryKey: ["agent-access-integrations", agent.id],
+    queryKey: ["agent-access-integrations", agent.id, tenantId],
     queryFn: async () => {
+      // Load both: connections scoped to this agent AND tenant-wide connections (agent_id = null)
       const { data } = await supabase
         .from("agent_mcp_connections" as any)
-        .select("id,name,state")
-        .eq("agent_id", agent.id);
+        .select("id,name,state,agent_id")
+        .eq("tenant_id", tenantId)
+        .or(`agent_id.eq.${agent.id},agent_id.is.null`);
       return (data as any[]) || [];
     },
-    enabled: !!agent.id,
+    enabled: !!agent.id && !!tenantId,
   });
 
   const toolGroups = useMemo(() => {
