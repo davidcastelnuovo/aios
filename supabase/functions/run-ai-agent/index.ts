@@ -258,6 +258,15 @@ const ALL_TOOLS = [
   { name: 'list_campaign_schedules', description: 'רשימת תזמונים פעילים של פעולות על קמפיינים (כיבוי/הדלקה).', parameters: { type: 'object', properties: { client_id: { type: 'string' }, only_enabled: { type: 'boolean' }, limit: { type: 'integer' } } } },
   { name: 'cancel_campaign_schedule', description: 'ביטול תזמון קיים.', parameters: { type: 'object', properties: { schedule_id: { type: 'string' } }, required: ['schedule_id'] } },
   // ===========================
+  // BROADCAST (דיוור)
+  // ===========================
+  { name: 'list_broadcasts', description: 'רשימת דיוורים קיימים (broadcasts). מחזיר שם, ערוץ, סטטוס, תאריך תזמון וסטטיסטיקות שליחה. השתמש כדי לראות מה קיים לפני יצירה חדשה.', parameters: { type: 'object', properties: { status: { type: 'string', enum: ['draft','scheduled','sending','sent','paused','failed','canceled'], description: 'סינון לפי סטטוס (אופציונלי)' }, limit: { type: 'integer', description: 'ברירת מחדל 20' } } } },
+  { name: 'create_broadcast', description: 'יצירת דיוור WhatsApp חדש לקהל יעד (לקוחות / לידים / קמפיינרים / רשימה / קבוצות וואטסאפ). דורש אישור לפני שליחה. אחרי יצירה — שאל "לשלוח עכשיו או לתזמן?".', parameters: { type: 'object', properties: { name: { type: 'string', description: 'שם הדיוור' }, body_text: { type: 'string', description: 'תוכן ההודעה. אפשר להשתמש ב-{{contact_name}} כמשתנה.' }, audience_source: { type: 'string', enum: ['clients','leads','campaigners','wa_groups'], description: 'מקור הקהל' }, audience_filter: { type: 'object', description: 'פרמטרים נוספים לפי source: clients→{statuses,tagIds}, leads→{statusKeys,salesPersonIds}, campaigners→{roles}, wa_groups→{groupIds:["uuid1",...]}' }, scheduled_at: { type: 'string', description: 'תאריך ושעה לתזמון ב-ISO UTC (אופציונלי — ריק = שלח מיד אחרי אישור)' }, integration_id: { type: 'string', description: 'UUID של חיבור WhatsApp לשימוש (אופציונלי — ישתמש בברירת מחדל)' } }, required: ['name', 'body_text', 'audience_source'] } },
+  { name: 'send_broadcast_now', description: 'שליחה מיידית של דיוור קיים (status=draft/scheduled). דורש אישור. מעביר לסטטוס sending ומתחיל לשלוח.', parameters: { type: 'object', properties: { broadcast_id: { type: 'string', description: 'מזהה הדיוור' } }, required: ['broadcast_id'] } },
+  { name: 'schedule_broadcast', description: 'תזמון דיוור קיים לשליחה בזמן עתידי. דורש אישור. מעביר לסטטוס scheduled.', parameters: { type: 'object', properties: { broadcast_id: { type: 'string', description: 'מזהה הדיוור' }, scheduled_at: { type: 'string', description: 'תאריך ושעה ב-ISO UTC (לדוגמה 2026-07-01T18:00:00Z עבור 21:00 שעון ישראל)' } }, required: ['broadcast_id', 'scheduled_at'] } },
+  { name: 'cancel_broadcast', description: 'ביטול דיוור מתוזמן או עצירת דיוור פעיל. דורש אישור.', parameters: { type: 'object', properties: { broadcast_id: { type: 'string' } }, required: ['broadcast_id'] } },
+  { name: 'list_wa_groups', description: 'רשימת קבוצות וואטסאפ הזמינות לדיוור (לא חסומות). מחזיר id, group_name, group_chat_id. השתמש כדי לקבל groupIds לפני יצירת דיוור לקבוצות.', parameters: { type: 'object', properties: { name_search: { type: 'string', description: 'חיפוש חלקי בשם הקבוצה (אופציונלי)' }, limit: { type: 'integer', description: 'ברירת מחדל 50' } } } },
+  // ===========================
   // APPROVAL FLOW
   // ===========================
   { name: 'list_pending_approvals', description: 'רשימת בקשות אישור פתוחות (פעולות שכרמן ביקשה לבצע ומחכות לאישור משתמש). השתמש כשהמשתמש שולח "אשרי"/"כן" כדי למצוא איזו בקשה לבצע.', parameters: { type: 'object', properties: { limit: { type: 'integer' } } } },
@@ -2715,6 +2724,176 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const { error } = await supabase.from('campaign_schedules').update({ enabled: false }).eq('id', args.schedule_id).eq('tenant_id', tenantId)
       if (error) throw error
       return { success: true, schedule_id: args.schedule_id, enabled: false }
+    }
+
+    // ===========================
+    // BROADCAST (דיוור)
+    // ===========================
+    case 'list_broadcasts': {
+      let q = supabase
+        .from('broadcasts')
+        .select('id, name, channel, status, scheduled_at, stats, created_at, body_text')
+        .eq('tenant_id', tenantId)
+        .order('created_at', { ascending: false })
+        .limit(args.limit || 20)
+      if (args.status) q = q.eq('status', args.status)
+      const { data, error } = await q
+      if (error) throw error
+      return { count: data.length, broadcasts: data }
+    }
+    case 'create_broadcast': {
+      // Build audience_filter from source + extra filter
+      const audience_filter: Record<string, any> = {
+        source: args.audience_source,
+        ...(args.audience_filter || {}),
+      }
+      // Determine provider from tenant's default WA integration
+      let provider = 'green_api'
+      let integration_id = args.integration_id || null
+      if (!integration_id) {
+        const { data: integ } = await supabase
+          .from('tenant_integrations')
+          .select('id, integration_type')
+          .eq('tenant_id', tenantId)
+          .in('integration_type', ['green_api', 'manus_wa'])
+          .eq('is_active', true)
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (integ) {
+          integration_id = integ.id
+          provider = integ.integration_type
+        }
+      } else {
+        const { data: integ } = await supabase
+          .from('tenant_integrations')
+          .select('integration_type')
+          .eq('id', integration_id)
+          .maybeSingle()
+        if (integ) provider = integ.integration_type
+      }
+      const insertData: Record<string, any> = {
+        tenant_id: tenantId,
+        created_by: callerId || null,
+        name: args.name,
+        channel: 'whatsapp',
+        provider,
+        integration_id,
+        body_text: args.body_text,
+        audience_filter,
+        status: 'draft',
+      }
+      if (args.scheduled_at) {
+        insertData.scheduled_at = args.scheduled_at
+        insertData.status = 'scheduled'
+      }
+      const { data: bc, error } = await supabase.from('broadcasts').insert(insertData).select('id, name, status, scheduled_at').single()
+      if (error) throw error
+      return {
+        pending_approval: true,
+        approval_id: null,
+        broadcast_id: bc.id,
+        summary: `דיוור חדש "${bc.name}" נוצר (${bc.status}). קהל: ${args.audience_source}. ${args.scheduled_at ? 'מתוזמן ל-' + args.scheduled_at : 'טרם נשלח — שאל את המשתמש לאישור ושליחה.'}`,
+        instruction_for_carmen: 'הצג סיכום של הדיוור (שם, קהל, תוכן) ושאל "לשלוח עכשיו או לתזמן למועד מסוים?". אסור לשלוח בלי אישור מפורש.',
+      }
+    }
+    case 'send_broadcast_now': {
+      const { data: bc, error: bcErr } = await supabase
+        .from('broadcasts')
+        .select('id, name, status, tenant_id')
+        .eq('id', args.broadcast_id)
+        .eq('tenant_id', tenantId)
+        .single()
+      if (bcErr || !bc) throw new Error('דיוור לא נמצא')
+      if (!['draft','scheduled'].includes(bc.status)) throw new Error(`אי אפשר לשלוח דיוור בסטטוס ${bc.status}`)
+      const { data: aq, error: aqErr } = await supabase.from('agent_approval_queue').insert({
+        tenant_id: tenantId,
+        agent_id: agentId || null,
+        requested_by: userId,
+        action_type: 'send_broadcast_now',
+        title: `שליחת דיוור: ${bc.name}`,
+        description: 'שליחת דיוור WhatsApp מיידית',
+        tool_name: 'send_broadcast_now',
+        tool_input: { broadcast_id: bc.id },
+        status: 'pending',
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      }).select('id').single()
+      if (aqErr) throw aqErr
+      return {
+        pending_approval: true,
+        approval_id: aq.id,
+        summary: `שליחת דיוור "${bc.name}" מיידית לכל הנמענים.`,
+        instruction_for_carmen: 'הצג סיכום ובקש אישור. אחרי אישור — קרא ל-execute_pending_approval.',
+      }
+    }
+    case 'schedule_broadcast': {
+      const { data: bc, error: bcErr } = await supabase
+        .from('broadcasts')
+        .select('id, name, status')
+        .eq('id', args.broadcast_id)
+        .eq('tenant_id', tenantId)
+        .single()
+      if (bcErr || !bc) throw new Error('דיוור לא נמצא')
+      const { data: aq, error: aqErr } = await supabase.from('agent_approval_queue').insert({
+        tenant_id: tenantId,
+        agent_id: agentId || null,
+        requested_by: userId,
+        action_type: 'schedule_broadcast',
+        title: `תזמון דיוור: ${bc.name}`,
+        description: `תזמון ל-${args.scheduled_at}`,
+        tool_name: 'schedule_broadcast',
+        tool_input: { broadcast_id: bc.id, scheduled_at: args.scheduled_at },
+        status: 'pending',
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      }).select('id').single()
+      if (aqErr) throw aqErr
+      return {
+        pending_approval: true,
+        approval_id: aq.id,
+        summary: `תזמון דיוור "${bc.name}" ל-${args.scheduled_at}.`,
+        instruction_for_carmen: 'הצג סיכום ובקש אישור. אחרי אישור — קרא ל-execute_pending_approval.',
+      }
+    }
+    case 'cancel_broadcast': {
+      const { data: bc, error: bcErr } = await supabase
+        .from('broadcasts')
+        .select('id, name, status')
+        .eq('id', args.broadcast_id)
+        .eq('tenant_id', tenantId)
+        .single()
+      if (bcErr || !bc) throw new Error('דיוור לא נמצא')
+      const { data: aq, error: aqErr } = await supabase.from('agent_approval_queue').insert({
+        tenant_id: tenantId,
+        agent_id: agentId || null,
+        requested_by: userId,
+        action_type: 'cancel_broadcast',
+        title: `ביטול דיוור: ${bc.name}`,
+        description: `ביטול דיוור בסטטוס ${bc.status}`,
+        tool_name: 'cancel_broadcast',
+        tool_input: { broadcast_id: bc.id },
+        status: 'pending',
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      }).select('id').single()
+      if (aqErr) throw aqErr
+      return {
+        pending_approval: true,
+        approval_id: aq.id,
+        summary: `ביטול דיוור "${bc.name}" (${bc.status}).`,
+        instruction_for_carmen: 'הצג סיכום ובקש אישור. אחרי אישור — קרא ל-execute_pending_approval.',
+      }
+    }
+    case 'list_wa_groups': {
+      let q = supabase
+        .from('whatsapp_groups')
+        .select('id, group_name, group_chat_id, created_at')
+        .eq('tenant_id', tenantId)
+        .eq('is_blocked', false)
+        .order('group_name', { ascending: true })
+        .limit(args.limit || 50)
+      if (args.name_search) q = q.ilike('group_name', `%${args.name_search}%`)
+      const { data, error } = await q
+      if (error) throw error
+      return { count: data.length, groups: data }
     }
 
     default:

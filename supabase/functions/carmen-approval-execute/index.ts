@@ -144,6 +144,67 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ success: !sErr, result, approval_id }), { status: sErr ? 400 : 200, headers: corsHeaders });
     }
 
+    // ── Broadcast actions ──────────────────────────────────────────────────────
+    if (row.tool_name === 'send_broadcast_now') {
+      const inp = (row.tool_input as any) || {};
+      if (!inp.broadcast_id) {
+        await supabase.from('agent_approval_queue').update({ status: 'failed', executed_at: new Date().toISOString(), execution_result: { error: 'missing_broadcast_id' } }).eq('id', approval_id);
+        return new Response(JSON.stringify({ error: 'missing_broadcast_id' }), { status: 400, headers: corsHeaders });
+      }
+      // 1. Enqueue recipients via broadcast-enqueue
+      const enqRes = await fetch(`${SB_URL}/functions/v1/broadcast-enqueue`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${SB_SERVICE}`, 'Content-Type': 'application/json', 'apikey': SB_SERVICE },
+        body: JSON.stringify({ broadcastId: inp.broadcast_id, dryRun: false }),
+      });
+      const enqJson = await enqRes.json().catch(() => ({}));
+      if (!enqRes.ok) {
+        await supabase.from('agent_approval_queue').update({ status: 'failed', executed_at: new Date().toISOString(), execution_result: enqJson }).eq('id', approval_id);
+        return new Response(JSON.stringify({ error: 'enqueue_failed', detail: enqJson }), { status: 400, headers: corsHeaders });
+      }
+      // 2. Set status=sending + started_at
+      await supabase.from('broadcasts').update({ status: 'sending', started_at: new Date().toISOString() }).eq('id', inp.broadcast_id);
+      const result = { success: true, broadcast_id: inp.broadcast_id, recipients: enqJson.total ?? enqJson.count ?? '?' };
+      await supabase.from('agent_approval_queue').update({
+        status: 'executed', approved_by: approved_by || row.requested_by,
+        approved_at: row.approved_at || new Date().toISOString(),
+        executed_at: new Date().toISOString(), execution_result: result,
+      }).eq('id', approval_id);
+      return new Response(JSON.stringify({ success: true, result, approval_id }), { headers: corsHeaders });
+    }
+
+    if (row.tool_name === 'schedule_broadcast') {
+      const inp = (row.tool_input as any) || {};
+      if (!inp.broadcast_id || !inp.scheduled_at) {
+        await supabase.from('agent_approval_queue').update({ status: 'failed', executed_at: new Date().toISOString(), execution_result: { error: 'missing_params' } }).eq('id', approval_id);
+        return new Response(JSON.stringify({ error: 'missing_params' }), { status: 400, headers: corsHeaders });
+      }
+      const { error: upErr } = await supabase.from('broadcasts').update({ status: 'scheduled', scheduled_at: inp.scheduled_at }).eq('id', inp.broadcast_id);
+      const result = upErr ? { error: upErr.message } : { success: true, broadcast_id: inp.broadcast_id, scheduled_at: inp.scheduled_at };
+      await supabase.from('agent_approval_queue').update({
+        status: upErr ? 'failed' : 'executed', approved_by: approved_by || row.requested_by,
+        approved_at: row.approved_at || new Date().toISOString(),
+        executed_at: new Date().toISOString(), execution_result: result,
+      }).eq('id', approval_id);
+      return new Response(JSON.stringify({ success: !upErr, result, approval_id }), { status: upErr ? 400 : 200, headers: corsHeaders });
+    }
+
+    if (row.tool_name === 'cancel_broadcast') {
+      const inp = (row.tool_input as any) || {};
+      if (!inp.broadcast_id) {
+        await supabase.from('agent_approval_queue').update({ status: 'failed', executed_at: new Date().toISOString(), execution_result: { error: 'missing_broadcast_id' } }).eq('id', approval_id);
+        return new Response(JSON.stringify({ error: 'missing_broadcast_id' }), { status: 400, headers: corsHeaders });
+      }
+      const { error: upErr } = await supabase.from('broadcasts').update({ status: 'canceled' }).eq('id', inp.broadcast_id);
+      const result = upErr ? { error: upErr.message } : { success: true, broadcast_id: inp.broadcast_id, status: 'canceled' };
+      await supabase.from('agent_approval_queue').update({
+        status: upErr ? 'failed' : 'executed', approved_by: approved_by || row.requested_by,
+        approved_at: row.approved_at || new Date().toISOString(),
+        executed_at: new Date().toISOString(), execution_result: result,
+      }).eq('id', approval_id);
+      return new Response(JSON.stringify({ success: !upErr, result, approval_id }), { status: upErr ? 400 : 200, headers: corsHeaders });
+    }
+
     const route = TOOL_TO_FUNCTION[row.tool_name];
     if (!route) return new Response(JSON.stringify({ error: 'unknown_tool', tool_name: row.tool_name }), { status: 400, headers: corsHeaders });
 

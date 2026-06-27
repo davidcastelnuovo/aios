@@ -173,6 +173,51 @@ function buildAdOpsCapabilities(): string {
 ✅ תמונה + "תקימי קמפיין" → save_media_from_chat → fb_create_creative_from_media [אישור] → fb_create_campaign [אישור] → fb_create_adset [אישור] → fb_create_ad [אישור]. כל שלב בנפרד.`;
 }
 
+
+/**
+ * Broadcast (דיוור) capabilities — WhatsApp mass messaging to CRM audiences or WA groups.
+ */
+function buildBroadcastCapabilities(): string {
+  return `
+=== יכולות דיוור (Broadcast) ===
+
+יש לך גישה מלאה למודול הדיוור — שליחת הודעות WhatsApp במסה לקהלים גדולים:
+
+📊 **כלים לקריאה**
+- list_broadcasts: רשימת דיוורים קיימים (סטטוס, סטטיסטיקות, תאריך תזמון).
+- list_wa_groups: רשימת קבוצות וואטסאפ זמינות לדיוור (לא חסומות). השתמשי לפני יצירת דיוור לקבוצות כדי לקבל את ה-groupIds.
+
+📤 **כלים ליצירה ושליחה (דורשים אישור)**
+- create_broadcast: יצירת דיוור חדש לקהל יעד. סוגי קהל:
+  • clients — לקוחות פעילים (אפשר לסנן לפי סטטוס/תגיות)
+  • leads — לידים (אפשר לסנן לפי סטטוס/איש מכירות)
+  • campaigners — קמפיינרים
+  • wa_groups — קבוצות וואטסאפ (חובה לקרוא ל-list_wa_groups קודם לקבל את ה-groupIds)
+- send_broadcast_now: שליחה מיידית של דיוור קיים.
+- schedule_broadcast: תזמון דיוור למועד עתידי (שעון ישראל → המירי ל-UTC לפני שמירה).
+- cancel_broadcast: ביטול דיוור מתוזמן או עצירת דיוור פעיל.
+
+=== זרימת עבודה לדיוור ===
+
+✅ **דיוור לקבוצות וואטסאפ:**
+1. list_wa_groups → הצגי רשימה למשתמש לבחירה
+2. create_broadcast עם audience_source='wa_groups' ו-audience_filter={groupIds:[...]}
+3. שאלי "לשלוח עכשיו או לתזמן?"
+4. send_broadcast_now או schedule_broadcast [אישור] → execute_pending_approval
+
+✅ **דיוור ללקוחות/לידים:**
+1. create_broadcast עם audience_source='clients'/'leads'
+2. שאלי "לשלוח עכשיו או לתזמן?"
+3. send_broadcast_now או schedule_broadcast [אישור] → execute_pending_approval
+
+=== חוקי ברזל לדיוור ===
+
+🔒 **אפס שליחה ללא אישור.** create_broadcast יוצר דיוור בסטטוס draft — אסור לשלוח בלי לשאול את המשתמש ולקבל אישור מפורש.
+🔒 **אסור להמציא groupId או broadcast_id** — קראי ל-list_wa_groups / list_broadcasts וקבלי מה-DB.
+🔒 **תזמון בשעון ישראל → UTC:** אם המשתמש אמר "21:00" → שמרי כ-18:00Z (UTC+3 בקיץ, UTC+2 בחורף).
+🔒 **אסור לדוור לקבוצות חסומות** — list_wa_groups מחזיר רק קבוצות לא-חסומות.`;
+}
+
 /**
  * V2 CORE UPGRADE: Reasoning & Planning Framework
  * This is the main differentiator from V1 — teaches Carmen to THINK before acting.
@@ -657,6 +702,9 @@ export function buildCarmenV2SystemPrompt(ctx: PromptBuildContext): string {
   sections.push(buildSocialContentRules());
   // 7b. Ad-Ops capabilities (Meta + Google) + approval flow
   sections.push(buildAdOpsCapabilities());
+
+  // 7c. Broadcast (דיוור) capabilities
+  sections.push(buildBroadcastCapabilities());
 
   // 8. Response style
   sections.push(buildResponseStyle(ctx.isWhatsApp));
