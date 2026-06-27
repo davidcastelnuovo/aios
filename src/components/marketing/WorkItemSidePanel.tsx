@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { Play, Loader2, Check, X, RotateCw, Image as ImageIcon, Megaphone, Search } from "lucide-react";
+import { Play, Loader2, Check, X, RotateCw, Image as ImageIcon, Megaphone, Search, AlertCircle, ChevronRight, Sparkles } from "lucide-react";
 import { CampaignLauncher } from "./CampaignLauncher";
 import { SEOPublishPanel } from "./SEOPublishPanel";
 
@@ -281,30 +281,75 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
               </div>
             )}
 
-            {/* Awaiting approval */}
-            {(runs ?? [])
-              .filter((r: any) => r.status === "awaiting_approval")
-              .map((r: any) => (
-                <div
-                  key={r.id}
-                  className="rounded-md border-2 border-amber-500/60 bg-amber-500/10 p-3"
-                >
-                  <div className="mb-2 text-sm font-medium">
-                    ממתין לאישור — {r.marketing_pipeline_stages?.name}
+            {/* Awaiting approval — prominent banner */}
+            {(() => {
+              const pendingRuns = (runs ?? []).filter((r: any) => r.status === "awaiting_approval");
+              if (pendingRuns.length === 0) return null;
+              return (
+                <div className="rounded-xl border-2 border-amber-400 bg-gradient-to-b from-amber-50 to-amber-50/40 shadow-md overflow-hidden">
+                  {/* Banner header */}
+                  <div className="flex items-center gap-2 bg-amber-400/20 px-4 py-2.5 border-b border-amber-300">
+                    <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
+                    <span className="text-sm font-bold text-amber-800">נדרש אישורך להמשך</span>
+                    <span className="ms-auto rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                      {pendingRuns.length} ממתינים
+                    </span>
                   </div>
-                  <div className="flex gap-2">
-                    <Button size="sm" onClick={() => approveRun(r.id, r.stage_id)}>
-                      <Check className="ml-1 h-3 w-3" /> אשר והמשך
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => runStage(r.stage_id)}>
-                      <RotateCw className="ml-1 h-3 w-3" /> הרץ מחדש
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => rejectRun(r.id)}>
-                      <X className="ml-1 h-3 w-3" /> דחה
-                    </Button>
+                  {/* Each pending run */}
+                  <div className="divide-y divide-amber-200/60">
+                    {pendingRuns.map((r: any) => {
+                      const stageName = r.marketing_pipeline_stages?.name ?? "שלב";
+                      const nextStageIdx = stages.findIndex((s: any) => s.id === r.stage_id);
+                      const nextStageName = nextStageIdx >= 0 && nextStageIdx < stages.length - 1
+                        ? stages[nextStageIdx + 1]?.name
+                        : null;
+                      return (
+                        <div key={r.id} className="px-4 py-3">
+                          <div className="mb-2 flex items-center gap-1.5 text-sm">
+                            <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                            <span className="font-medium text-amber-900">{stageName}</span>
+                            {nextStageName && (
+                              <>
+                                <ChevronRight className="h-3 w-3 text-amber-400" />
+                                <span className="text-amber-600 text-xs">{nextStageName}</span>
+                              </>
+                            )}
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              className="flex-1 bg-amber-500 hover:bg-amber-600 text-white shadow-sm"
+                              onClick={() => approveRun(r.id, r.stage_id)}
+                            >
+                              <Check className="ml-1 h-3.5 w-3.5" />
+                              {nextStageName ? `אשר ועבור ל${nextStageName}` : "אשר וסיים"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-amber-300 hover:bg-amber-100"
+                              onClick={() => runStage(r.stage_id)}
+                              title="הרץ מחדש"
+                            >
+                              <RotateCw className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-red-500 hover:bg-red-50"
+                              onClick={() => rejectRun(r.id)}
+                              title="דחה"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-              ))}
+              );
+            })()}
 
             {/* Campaign Launcher — shown for target_paid stage */}
             {(() => {

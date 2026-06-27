@@ -238,6 +238,8 @@ function StageColumn({
   const approvalCfg = APPROVAL_CONFIG[stage.approval_mode] ?? APPROVAL_CONFIG.manual;
   const ApprovalIcon = approvalCfg.icon;
   const awaitingCount = items.filter((i) => i.status === "awaiting_approval").length;
+  const runningCount = items.filter((i) => i.status === "in_progress").length;
+  const completedCount = items.filter((i) => i.status === "completed").length;
 
   return (
     <div
@@ -261,8 +263,13 @@ function StageColumn({
           <div className="flex items-center gap-1.5">
             <span className="text-sm font-bold truncate">{stage.name}</span>
             {awaitingCount > 0 && (
-              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[9px] font-bold text-white">
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[9px] font-bold text-white" title="ממתין לאישור">
                 {awaitingCount}
+              </span>
+            )}
+            {runningCount > 0 && (
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[9px] font-bold text-white animate-pulse" title="רץ עכשיו">
+                {runningCount}
               </span>
             )}
           </div>
@@ -303,9 +310,27 @@ function StageColumn({
           <ApprovalIcon className="h-2.5 w-2.5" />
           {approvalCfg.label}
         </span>
-        <span className="ms-auto text-[11px] text-muted-foreground">
-          {items.length} פריטים
-        </span>
+        <div className="ms-auto flex items-center gap-1.5">
+          {runningCount > 0 && (
+            <span className="flex items-center gap-0.5 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+              <Loader2 className="h-2.5 w-2.5 animate-spin" />
+              {runningCount}
+            </span>
+          )}
+          {awaitingCount > 0 && (
+            <span className="flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+              <Clock className="h-2.5 w-2.5" />
+              {awaitingCount}
+            </span>
+          )}
+          {completedCount > 0 && (
+            <span className="flex items-center gap-0.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+              <CheckCircle2 className="h-2.5 w-2.5" />
+              {completedCount}
+            </span>
+          )}
+          <span className="text-[11px] text-muted-foreground">{items.length}</span>
+        </div>
       </div>
 
       {/* Items list */}

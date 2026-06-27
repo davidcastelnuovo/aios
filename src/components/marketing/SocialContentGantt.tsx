@@ -156,6 +156,41 @@ function PostChip({ item, onClick }: { item: WorkItem; onClick: () => void }) {
 
 // ─── Post detail dialog ───────────────────────────────────────────────────────
 
+// ─── Peak hours by channel (Israel timezone, best practices) ────────────────
+const PEAK_HOURS: Record<string, number[]> = {
+  instagram: [8, 12, 17, 20],   // morning, lunch, after work, evening
+  facebook:  [9, 13, 19],       // morning, lunch, evening
+  twitter:   [8, 12, 17],       // morning, lunch, after work
+  linkedin:  [8, 12, 17],       // professional hours
+  tiktok:    [7, 12, 19, 21],   // morning, lunch, evening, night
+  general:   [9, 12, 18],
+};
+
+function getSmartScheduleDate(channel: string): string {
+  const now = new Date();
+  const hours = PEAK_HOURS[channel] ?? PEAK_HOURS.general;
+  // Find next upcoming peak hour (within next 7 days)
+  for (let dayOffset = 0; dayOffset <= 7; dayOffset++) {
+    const candidate = new Date(now);
+    candidate.setDate(now.getDate() + dayOffset);
+    for (const h of hours) {
+      candidate.setHours(h, 0, 0, 0);
+      if (candidate > now) {
+        // Prefer Tue–Thu for B2B, Sun–Mon for B2C (Israeli market)
+        const dow = candidate.getDay(); // 0=Sun
+        if (dayOffset === 0 || [0, 1, 2, 3, 4].includes(dow)) {
+          return candidate.toISOString().slice(0, 10);
+        }
+      }
+    }
+  }
+  // Fallback: tomorrow at first peak
+  const tomorrow = new Date(now);
+  tomorrow.setDate(now.getDate() + 1);
+  tomorrow.setHours(hours[0], 0, 0, 0);
+  return tomorrow.toISOString().slice(0, 10);
+}
+
 function PostDetailDialog({
   item,
   open,
@@ -242,6 +277,21 @@ function PostDetailDialog({
               />
             </div>
           </div>
+
+          {/* Smart schedule button */}
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full border-violet-300 text-violet-700 hover:bg-violet-50"
+            onClick={() => {
+              const smartDate = getSmartScheduleDate(channel);
+              setEditDate(smartDate);
+              toast.success(`שעת פיק ל-${chCfg.label}: ${smartDate}`);
+            }}
+          >
+            <Sparkles className="ml-1 h-3.5 w-3.5" />
+            תזמן בשעת פיק אוטומטית
+          </Button>
 
           <Button
             size="sm"
