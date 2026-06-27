@@ -131,6 +131,7 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
         .from("whatsapp_groups")
         .select("id, group_name, group_chat_id, description")
         .eq("tenant_id", tenantId)
+        .eq("is_blocked", false)
         .order("group_name", { ascending: true });
       if (error) throw error;
       return data || [];
