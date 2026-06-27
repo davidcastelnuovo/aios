@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Trash2, Megaphone, Share2, Link2, Loader2, LayoutDashboard } from "lucide-react";
+import { Plus, Trash2, Megaphone, Share2, Link2, Loader2, LayoutDashboard, Wand2, CheckCircle2, AlertCircle } from "lucide-react";
 import {
   CLIENT_CHANNELS,
   ALL_CHANNEL_FIELD_KEYS,
@@ -22,6 +22,14 @@ interface Props {
   onProvisioned?: () => void;
 }
 
+interface ResolvedPage {
+  page_id: string;
+  page_name: string | null;
+  ig_id: string | null;
+  ig_username: string | null;
+  source: string;
+}
+
 export function ClientConnectionsTab({ clientId, tenantId, onProvisioned }: Props) {
   const conns = useClientConnections(clientId);
   const { provision, provisioning } = useProvisionClientChannels();
@@ -29,6 +37,10 @@ export function ClientConnectionsTab({ clientId, tenantId, onProvisioned }: Prop
   // Local edits keyed by client column; falls back to the saved value when untouched.
   const [edits, setEdits] = useState<Partial<Record<ChannelFieldKey, string>>>({});
   const [saving, setSaving] = useState(false);
+
+  // Meta auto-resolve state
+  const [resolving, setResolving] = useState(false);
+  const [resolvedPage, setResolvedPage] = useState<ResolvedPage | null>(null);
 
   const [newPagePlatform, setNewPagePlatform] = useState("facebook");
   const [newPageId, setNewPageId] = useState("");
@@ -42,7 +54,11 @@ export function ClientConnectionsTab({ clientId, tenantId, onProvisioned }: Prop
   const allChannels = CLIENT_CHANNELS;
 
   const fieldValue = (key: ChannelFieldKey): string => edits[key] ?? (c?.[key] ?? "") ?? "";
-  const setFieldValue = (key: ChannelFieldKey, value: string) => setEdits((prev) => ({ ...prev, [key]: value }));
+  const setFieldValue = (key: ChannelFieldKey, value: string) => {
+    setEdits((prev) => ({ ...prev, [key]: value }));
+    // Clear resolved page preview when meta_ads_account_id changes
+    if (key === "meta_ads_account_id") setResolvedPage(null);
+  };
 
   const saveClientFields = async () => {
     setSaving(true);
@@ -58,6 +74,43 @@ export function ClientConnectionsTab({ clientId, tenantId, onProvisioned }: Prop
     toast.success("נשמר");
     setEdits({});
     conns.invalidate();
+  };
+
+  /**
+   * Call the edge function to resolve the Facebook Page from the Meta Ads Account ID.
+   * Upserts the page into social_pages and shows a preview for confirmation.
+   */
+  const resolveMetaPage = async () => {
+    const adAccountId = fieldValue("meta_ads_account_id").trim();
+    if (!adAccountId) {
+      toast.error("יש להזין Meta Ads Account ID תחילה");
+      return;
+    }
+    setResolving(true);
+    setResolvedPage(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("resolve-meta-page-from-ad-account", {
+        body: {
+          tenant_id: tenantId,
+          client_id: clientId,
+          ad_account_id: adAccountId,
+          auto_upsert: true,
+        },
+      });
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.message || data.error);
+
+      setResolvedPage(data as ResolvedPage);
+      toast.success(
+        `עמוד נמצא ושויך: ${data.page_name || data.page_id}` +
+          (data.ig_username ? ` + @${data.ig_username}` : ""),
+      );
+      conns.invalidate();
+    } catch (err: unknown) {
+      toast.error((err as Error)?.message || "שגיאה בשיוך עמוד");
+    } finally {
+      setResolving(false);
+    }
   };
 
   const handleProvision = async () => {
@@ -108,6 +161,7 @@ export function ClientConnectionsTab({ clientId, tenantId, onProvisioned }: Prop
     <div className="space-y-4" dir="rtl">
       {/* All channels — shown unconditionally regardless of client services */}
       {allChannels.map((ch) => {
+        const isMetaChannel = ch.id === "meta_ads";
         const missing = ch.fields.some((f) => !fieldValue(f.key).trim());
         return (
           <Card key={ch.id} className="p-4 space-y-3">
@@ -131,6 +185,39 @@ export function ClientConnectionsTab({ clientId, tenantId, onProvisioned }: Prop
                 </div>
               ))}
             </div>
+
+            {/* Meta Ads: auto-resolve button + result preview */}
+            {isMetaChannel && (
+              <div className="space-y-2 pt-1">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={resolveMetaPage}
+                  disabled={resolving || !fieldValue("meta_ads_account_id").trim()}
+                  className="gap-2"
+                >
+                  {resolving
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <Wand2 className="h-3.5 w-3.5" />}
+                  {resolving ? "מאתר עמוד..." : "שייך עמוד אוטומטית מחשבון המודעות"}
+                </Button>
+
+                {resolvedPage && (
+                  <div className="flex items-start gap-2 rounded-md border border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-800 p-3 text-sm">
+                    <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
+                    <div className="space-y-0.5">
+                      <p className="font-medium text-green-800 dark:text-green-300">
+                        {resolvedPage.page_name || resolvedPage.page_id}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Page ID: {resolvedPage.page_id}
+                        {resolvedPage.ig_username && ` · Instagram: @${resolvedPage.ig_username}`}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </Card>
         );
       })}
@@ -150,49 +237,50 @@ export function ClientConnectionsTab({ clientId, tenantId, onProvisioned }: Prop
         <div className="flex items-center gap-2 font-semibold text-sm">
           <Share2 className="h-4 w-4" /> עמודי סושיאל מחוברים
         </div>
-          {conns.data.socialPages.length === 0 ? (
-            <p className="text-xs text-muted-foreground">אין עמודים מחוברים</p>
-          ) : (
-            <div className="space-y-2">
-              {conns.data.socialPages.map((p) => (
-                <div key={p.id} className="flex items-center justify-between rounded border p-2">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline">{p.platform}</Badge>
-                    <span className="text-sm font-medium">{p.page_name || p.page_id}</span>
-                    <span className="text-xs text-muted-foreground">{p.page_id}</span>
-                  </div>
-                  <Button size="icon" variant="ghost" onClick={() => removePage(p.id)}>
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
+        {conns.data.socialPages.length === 0 ? (
+          <p className="text-xs text-muted-foreground">אין עמודים מחוברים</p>
+        ) : (
+          <div className="space-y-2">
+            {conns.data.socialPages.map((p) => (
+              <div key={p.id} className="flex items-center justify-between rounded border p-2">
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">{p.platform}</Badge>
+                  <span className="text-sm font-medium">{p.page_name || p.page_id}</span>
+                  <span className="text-xs text-muted-foreground">{p.page_id}</span>
                 </div>
-              ))}
-            </div>
-          )}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-end">
-            <div>
-              <Label>פלטפורמה</Label>
-              <Select value={newPagePlatform} onValueChange={setNewPagePlatform}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="facebook">Facebook</SelectItem>
-                  <SelectItem value="instagram">Instagram</SelectItem>
-                  <SelectItem value="tiktok">TikTok</SelectItem>
-                  <SelectItem value="linkedin">LinkedIn</SelectItem>
-                  <SelectItem value="youtube">YouTube</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Page ID</Label>
-              <Input value={newPageId} onChange={(e) => setNewPageId(e.target.value)} />
-            </div>
-            <div>
-              <Label>שם</Label>
-              <Input value={newPageName} onChange={(e) => setNewPageName(e.target.value)} />
-            </div>
-            <Button size="sm" onClick={addPage}><Plus className="ml-1 h-4 w-4" /> הוסף</Button>
+                <Button size="icon" variant="ghost" onClick={() => removePage(p.id)}>
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </Button>
+              </div>
+            ))}
           </div>
-        </Card>
+        )}
+        {/* Manual add */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-end pt-1">
+          <div>
+            <Label>פלטפורמה</Label>
+            <Select value={newPagePlatform} onValueChange={setNewPagePlatform}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="facebook">Facebook</SelectItem>
+                <SelectItem value="instagram">Instagram</SelectItem>
+                <SelectItem value="tiktok">TikTok</SelectItem>
+                <SelectItem value="linkedin">LinkedIn</SelectItem>
+                <SelectItem value="youtube">YouTube</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Page ID</Label>
+            <Input value={newPageId} onChange={(e) => setNewPageId(e.target.value)} />
+          </div>
+          <div>
+            <Label>שם</Label>
+            <Input value={newPageName} onChange={(e) => setNewPageName(e.target.value)} />
+          </div>
+          <Button size="sm" onClick={addPage}><Plus className="ml-1 h-4 w-4" /> הוסף ידנית</Button>
+        </div>
+      </Card>
 
       {/* WordPress sites */}
       <Card className="p-4 space-y-3">

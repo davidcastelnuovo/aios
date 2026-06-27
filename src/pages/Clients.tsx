@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, Building2, Globe, Coins, Phone, Mail, LayoutGrid, Table as TableIcon, MessageCircle, Edit, Search, Plus, Trash2, FolderOpen, ExternalLink, Download, Filter, FileSpreadsheet, Upload, Copy } from "lucide-react";
+import { Users, Building2, Globe, Coins, Phone, Mail, LayoutGrid, Table as TableIcon, MessageCircle, Edit, Search, Plus, Trash2, FolderOpen, ExternalLink, Download, Filter, FileSpreadsheet, Upload, Copy, Wand2, CheckCircle2, XCircle, Loader2 as Loader2Icon } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AddClientForm } from "@/components/forms/AddClientForm";
 import { ImportClientsSheet } from "@/components/forms/ImportClientsSheet";
@@ -100,6 +100,66 @@ export default function Clients() {
   const [showImportCSV, setShowImportCSV] = useState(false);
   const [showImportSheet, setShowImportSheet] = useState(false);
   const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
+
+  // Bulk Meta page sync
+  const [showBulkMetaSync, setShowBulkMetaSync] = useState(false);
+  const [bulkMetaSyncRunning, setBulkMetaSyncRunning] = useState(false);
+  const [bulkMetaSyncResults, setBulkMetaSyncResults] = useState<Array<{
+    clientId: string;
+    clientName: string;
+    status: 'success' | 'error' | 'skipped';
+    message: string;
+  }>>([]);
+
+  const runBulkMetaSync = async () => {
+    if (!tenantId || !clients) return;
+    const withMeta = clients.filter((c: any) => c.meta_ads_account_id?.trim());
+    if (withMeta.length === 0) {
+      toast.info("אין לקוחות עם Meta Ads Account ID");
+      return;
+    }
+    setBulkMetaSyncRunning(true);
+    setBulkMetaSyncResults([]);
+    const results: typeof bulkMetaSyncResults = [];
+    for (const client of withMeta) {
+      try {
+        const { data, error } = await supabase.functions.invoke("resolve-meta-page-from-ad-account", {
+          body: {
+            tenant_id: tenantId,
+            client_id: client.id,
+            ad_account_id: client.meta_ads_account_id,
+            auto_upsert: true,
+          },
+        });
+        if (error || data?.error) {
+          results.push({
+            clientId: client.id,
+            clientName: client.name,
+            status: 'error',
+            message: data?.message || error?.message || 'שגיאה לא ידועה',
+          });
+        } else {
+          results.push({
+            clientId: client.id,
+            clientName: client.name,
+            status: 'success',
+            message: `${data.page_name || data.page_id}${data.ig_username ? ` + @${data.ig_username}` : ''}`,
+          });
+        }
+      } catch (err: unknown) {
+        results.push({
+          clientId: client.id,
+          clientName: client.name,
+          status: 'error',
+          message: (err as Error)?.message || 'שגיאה',
+        });
+      }
+      setBulkMetaSyncResults([...results]);
+    }
+    setBulkMetaSyncRunning(false);
+    const successCount = results.filter(r => r.status === 'success').length;
+    toast.success(`שויכו ${successCount} מתוך ${withMeta.length} לקוחות`);
+  };
 
   // Track active filter count for badge
   const activeFilterCount = [
@@ -635,6 +695,12 @@ export default function Clients() {
                 <FileSpreadsheet className="ml-2 h-4 w-4" />
                 ייבוא מגוגל שיטס
               </DropdownMenuItem>
+              {(isOwner || isSuperAdmin || isTeamManager) && (
+                <DropdownMenuItem onSelect={() => { setBulkMetaSyncResults([]); setShowBulkMetaSync(true); }}>
+                  <Wand2 className="ml-2 h-4 w-4" />
+                  שייך עמודי Meta לכל הלקוחות
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -1340,6 +1406,60 @@ export default function Clients() {
         onOpenChange={(open) => !open && setDuplicatingClient(null)}
         client={duplicatingClient}
       />
+
+      {/* Bulk Meta Page Sync Dialog */}
+      <Dialog open={showBulkMetaSync} onOpenChange={(open) => { if (!bulkMetaSyncRunning) setShowBulkMetaSync(open); }}>
+        <DialogContent dir="rtl" className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wand2 className="h-5 w-5" />
+              שיוך עמודי Meta לכל הלקוחות
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              הפעולה תעבור על כל הלקוחות שיש להם Meta Ads Account ID ותשייך אוטומטית את עמוד הפייסבוק/אינסטגרם המתאים.
+            </p>
+            {bulkMetaSyncResults.length === 0 && !bulkMetaSyncRunning && (
+              <div className="text-sm text-muted-foreground">
+                לקוחות עם Meta Ads Account ID:{" "}
+                <strong>{(clients || []).filter((c: any) => c.meta_ads_account_id?.trim()).length}</strong>
+              </div>
+            )}
+            {(bulkMetaSyncRunning || bulkMetaSyncResults.length > 0) && (
+              <div className="max-h-72 overflow-y-auto space-y-1 rounded-md border p-2">
+                {bulkMetaSyncResults.map((r) => (
+                  <div key={r.clientId} className="flex items-start gap-2 text-sm py-1">
+                    {r.status === 'success'
+                      ? <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
+                      : <XCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />}
+                    <div>
+                      <span className="font-medium">{r.clientName}</span>
+                      <span className="text-muted-foreground mr-2 text-xs">{r.message}</span>
+                    </div>
+                  </div>
+                ))}
+                {bulkMetaSyncRunning && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground py-1">
+                    <Loader2Icon className="h-4 w-4 animate-spin" />
+                    מעבד...
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setShowBulkMetaSync(false)} disabled={bulkMetaSyncRunning}>
+                סגור
+              </Button>
+              <Button onClick={runBulkMetaSync} disabled={bulkMetaSyncRunning} className="gap-2">
+                {bulkMetaSyncRunning
+                  ? <><Loader2Icon className="h-4 w-4 animate-spin" /> מעבד...</>
+                  : <><Wand2 className="h-4 w-4" /> הפעל שיוך</>}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={!!deletingClient} onOpenChange={(open) => !open && setDeletingClient(null)}>
         <AlertDialogContent>
