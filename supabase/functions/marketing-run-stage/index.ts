@@ -263,6 +263,76 @@ serve(async (req) => {
       })
       .eq("id", runRow.id);
 
+    // ── Send approval notification when stage needs approval (semi mode) ──
+    if (finalStatus === "awaiting_approval") {
+      try {
+        // Find tenant owner/admin email + phone
+        const { data: tenantOwners } = await admin
+          .from("tenant_users")
+          .select("user_id, role")
+          .eq("tenant_id", item.tenant_id)
+          .in("role", ["owner", "admin"])
+          .limit(3);
+
+        for (const owner of tenantOwners ?? []) {
+          const { data: profile } = await admin
+            .from("profiles")
+            .select("email, phone, full_name")
+            .eq("id", owner.user_id)
+            .maybeSingle();
+
+          if (!profile) continue;
+
+          const stageName = stage.name ?? stageType;
+          const itemTitle = item.title ?? "פריט תוכן";
+          const approvalUrl = `https://aios.co.il/marketing`;
+          const msgText = `✅ *שלב "${stageName}" הושלם*\n\nפריט: ${itemTitle}\n\nהתוכן מחכה לאישורך כדי להמשיך לשלב הבא.\n\n🔗 ${approvalUrl}`;
+
+          // Send email
+          if (profile.email) {
+            await fetch(`${supaUrl}/functions/v1/send-resend-email`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${supaService}`,
+              },
+              body: JSON.stringify({
+                to: profile.email,
+                subject: `[AIOS Marketing] שלב "${stageName}" מחכה לאישורך`,
+                html: `<div dir="rtl" style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+  <h2 style="color:#f59e0b">✅ שלב הושלם — נדרש אישורך</h2>
+  <p><strong>פריט:</strong> ${itemTitle}</p>
+  <p><strong>שלב שהושלם:</strong> ${stageName}</p>
+  <p>התוכן שנוצר על ידי קרמן מחכה לאישורך כדי להמשיך לשלב הבא בפייפליין.</p>
+  <a href="${approvalUrl}" style="display:inline-block;background:#f59e0b;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;margin-top:16px">עבור לאישור</a>
+</div>`,
+              }),
+            }).catch((e) => console.error("Email notification failed:", e));
+          }
+
+          // Send WhatsApp if phone available
+          if (profile.phone) {
+            await fetch(`${supaUrl}/functions/v1/send-manus-wa-message`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${supaService}`,
+              },
+              body: JSON.stringify({
+                tenantId: item.tenant_id,
+                phoneNumber: profile.phone,
+                message: msgText,
+                senderUserId: owner.user_id,
+              }),
+            }).catch((e) => console.error("WhatsApp notification failed:", e));
+          }
+        }
+      } catch (notifErr) {
+        // Notifications are best-effort — don't fail the run
+        console.error("Approval notification error:", notifErr);
+      }
+    }
+
     // ── Server-side auto-advance: if mode is "auto", move to next stage ──
     let nextStageId: string | null = null;
     if (approvalMode === "auto") {

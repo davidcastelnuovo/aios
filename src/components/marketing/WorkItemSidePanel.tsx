@@ -12,6 +12,7 @@ import { toast } from "@/hooks/use-toast";
 import { Play, Loader2, Check, X, RotateCw, Image as ImageIcon, Megaphone, Search, AlertCircle, ChevronRight, Sparkles } from "lucide-react";
 import { CampaignLauncher } from "./CampaignLauncher";
 import { SEOPublishPanel } from "./SEOPublishPanel";
+import { ABTestPanel } from "./ABTestPanel";
 
 interface Props {
   itemId: string | null;
@@ -349,6 +350,34 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
                   </div>
                 </div>
               );
+            })()}
+
+            {/* AB Test Panel — shown for copy stage */}
+            {(() => {
+              const currentStage = stages.find((s) => s.id === item?.current_stage_id);
+              if (currentStage?.stage_type === "copy") {
+                const brief = item.payload?.brief_text ?? item.payload?.notes ?? item.title ?? "";
+                // Infer channel from pipeline track (stored in item payload or default to meta)
+                const channel = item.payload?.channel ?? "meta";
+                return (
+                  <ABTestPanel
+                    workItemId={item.id}
+                    tenantId={item.tenant_id}
+                    brief={brief}
+                    channel={channel}
+                    onVariantSelected={(variant) => {
+                      // Advance to next stage after selecting winner
+                      const idx = stages.findIndex((s) => s.id === item.current_stage_id);
+                      if (idx >= 0 && idx < stages.length - 1) {
+                        const nextStage = stages[idx + 1];
+                        save({ current_stage_id: nextStage.id, status: "in_progress" });
+                      }
+                      loadItem();
+                    }}
+                  />
+                );
+              }
+              return null;
             })()}
 
             {/* Campaign Launcher — shown for target_paid stage */}
