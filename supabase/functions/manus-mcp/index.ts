@@ -3,9 +3,17 @@
 //
 // It speaks JSON-RPC 2.0 over HTTP (same dialect as claude-mcp), so Carmen
 // connects to it like any other MCP server. Each tools/call fires a real
-// Manus task via the Manus API and returns the task URL + share URL.
+// Manus task via the Manus API v2 and returns the task URL + share URL.
 // Manus then works autonomously (with GitHub, Supabase, and all connectors)
 // and can notify David via manus-notify when finished.
+//
+// Key behaviours:
+//   - All tasks are created inside the AfterLead Manus project (MANUS_PROJECT_ID)
+//     so Manus automatically receives the full project context + all credentials.
+//   - Session continuity: if there is already an active (pending/running) Manus
+//     task from the same tenant created within the last 24 h, new requests are
+//     sent as follow-up messages to that task (task.sendMessage) rather than
+//     opening a new task — keeping the full conversation context alive.
 //
 // Tools exposed:
 //   - ask_manus        : any general request (research, analysis, writing, planning, code)
@@ -15,6 +23,7 @@
 //   MANUS_MCP_BEARER   shared secret Carmen's MCP client must present
 // Optional:
 //   MANUS_DEFAULT_TENANT_ID  fallback tenant when one can't be resolved from the bearer
+//   MANUS_PROJECT_ID         Manus project ID to attach tasks to (default: oGUi7vCRzcPqA52KetUXnL)
 //
 // The Manus API key is read from tenant_integrations (integration_type='manus').
 
@@ -22,7 +31,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-const MANUS_API_URL = "https://api.manus.ai/v1";
+const MANUS_API_BASE = "https://api.manus.ai";
+// AfterLead project — tasks created here automatically inherit all project instructions + credentials.
+const MANUS_PROJECT_ID = Deno.env.get("MANUS_PROJECT_ID") || "oGUi7vCRzcPqA52KetUXnL";
+// How long (ms) an active task is considered "continuable" for session reuse.
+const SESSION_REUSE_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -30,7 +43,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
-const SERVER_INFO = { name: "manus-mcp", version: "2.0.0" };
+const SERVER_INFO = { name: "manus-mcp", version: "2.1.0" };
 const PROTOCOL_VERSION = "2024-11-05";
 
 // ─── MCP Tools ───────────────────────────────────────────────────────────────
@@ -174,37 +187,96 @@ async function getManusApiKey(tenantId: string | null): Promise<string> {
   throw new Error("Manus API key לא מוגדר — הגדר אותו בהגדרות אינטגרציות");
 }
 
-// Fire a Manus task and return task_url + share_url
-async function fireManusTask(
+// Create a new Manus task (API v2) inside the AfterLead project.
+async function createManusTask(
   apiKey: string,
   prompt: string,
-  agentProfile = "manus-1.6"
+  agentProfile = "manus-1.6",
+  title?: string
 ): Promise<{ taskId: string; taskUrl: string; shareUrl: string }> {
-  const res = await fetch(`${MANUS_API_URL}/tasks`, {
+  const body: Record<string, any> = {
+    message: { text: prompt },
+    project_id: MANUS_PROJECT_ID,
+    agent_profile: agentProfile,
+    share_visibility: "team",
+  };
+  if (title) body.title = title.slice(0, 200);
+  const res = await fetch(`${MANUS_API_BASE}/v2/task.create`, {
     method: "POST",
     headers: {
-      "API_KEY": apiKey,
+      "x-manus-api-key": apiKey,
       "Content-Type": "application/json",
       "accept": "application/json",
     },
-    body: JSON.stringify({ prompt, agentProfile }),
+    body: JSON.stringify(body),
   });
   const raw = await res.text();
   if (!res.ok) {
     let detail = raw.slice(0, 500);
-    try { detail = JSON.parse(raw)?.error || detail; } catch { /* keep raw */ }
+    try { detail = JSON.parse(raw)?.error?.message || JSON.parse(raw)?.error || detail; } catch { /* keep raw */ }
     throw new Error(`Manus API error [${res.status}]: ${detail}`);
   }
   let data: any = {};
   try { data = JSON.parse(raw); } catch { /* ignore */ }
-  return {
-    taskId: data?.task_id || data?.id || "—",
-    taskUrl: data?.task_url || data?.url || `https://manus.ai/tasks/${data?.task_id || ""}`,
-    shareUrl: data?.share_url || data?.task_url || data?.url || "",
-  };
+  const taskId = data?.data?.task_id || data?.task_id || data?.id || "—";
+  const taskUrl = data?.data?.task_url || data?.task_url || `https://manus.im/t/${taskId}`;
+  const shareUrl = data?.data?.share_url || data?.share_url || taskUrl;
+  return { taskId, taskUrl, shareUrl };
 }
 
-// Log the dispatch to manus_tasks table for history + context
+// Send a follow-up message to an existing Manus task (session continuity).
+async function sendManusMessage(
+  apiKey: string,
+  taskId: string,
+  prompt: string,
+  agentProfile = "manus-1.6"
+): Promise<{ taskId: string; taskUrl: string; shareUrl: string }> {
+  const res = await fetch(`${MANUS_API_BASE}/v2/task.sendMessage`, {
+    method: "POST",
+    headers: {
+      "x-manus-api-key": apiKey,
+      "Content-Type": "application/json",
+      "accept": "application/json",
+    },
+    body: JSON.stringify({ task_id: taskId, message: { text: prompt }, agent_profile: agentProfile }),
+  });
+  const raw = await res.text();
+  if (!res.ok) {
+    // If the task no longer exists or is stopped, fall back to creating a new one.
+    console.warn(`[manus-mcp] sendMessage failed for task ${taskId} [${res.status}] — will create new task`);
+    return { taskId: "", taskUrl: "", shareUrl: "" }; // signal caller to retry with create
+  }
+  let data: any = {};
+  try { data = JSON.parse(raw); } catch { /* ignore */ }
+  const taskUrl = data?.data?.task_url || `https://manus.im/t/${taskId}`;
+  const shareUrl = data?.data?.share_url || taskUrl;
+  return { taskId, taskUrl, shareUrl };
+}
+
+// Find an active (pending/running) task for this tenant created within SESSION_REUSE_WINDOW_MS.
+async function findActiveTask(tenantId: string): Promise<{ taskId: string; taskUrl: string } | null> {
+  const sb = sbClient();
+  if (!sb) return null;
+  try {
+    const cutoff = new Date(Date.now() - SESSION_REUSE_WINDOW_MS).toISOString();
+    const { data } = await sb
+      .from("manus_tasks")
+      .select("task_id, task_url")
+      .eq("tenant_id", tenantId)
+      .in("status", ["pending", "running"])
+      .gte("created_at", cutoff)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const row = (data || [])[0] as any;
+    if (row?.task_id) return { taskId: row.task_id, taskUrl: row.task_url || `https://manus.im/t/${row.task_id}` };
+  } catch (e) {
+    console.error("[manus-mcp] findActiveTask failed:", (e as any)?.message ?? e);
+  }
+  return null;
+}
+
+// Log the dispatch to manus_tasks table for history + context.
+// If it's a continued session (same task_id already exists), update the record instead.
 async function logDispatch(args: {
   tenantId: string;
   agentId: string | null;
@@ -212,19 +284,28 @@ async function logDispatch(args: {
   prompt: string;
   taskUrl: string;
   shareUrl: string;
+  continued?: boolean;
 }): Promise<void> {
   const sb = sbClient();
   if (!sb) return;
   try {
-    await sb.from("manus_tasks").insert({
-      tenant_id: args.tenantId,
-      task_id: args.taskId,
-      title: args.prompt.substring(0, 100),
-      prompt: args.prompt,
-      status: "pending",
-      task_url: args.taskUrl,
-      share_url: args.shareUrl,
-    });
+    if (args.continued) {
+      // Just update updated_at so we know the task is still active
+      await sb.from("manus_tasks")
+        .update({ updated_at: new Date().toISOString() })
+        .eq("tenant_id", args.tenantId)
+        .eq("task_id", args.taskId);
+    } else {
+      await sb.from("manus_tasks").insert({
+        tenant_id: args.tenantId,
+        task_id: args.taskId,
+        title: args.prompt.substring(0, 100),
+        prompt: args.prompt,
+        status: "pending",
+        task_url: args.taskUrl,
+        share_url: args.shareUrl,
+      });
+    }
   } catch (e) {
     console.error("[manus-mcp] logDispatch failed:", (e as any)?.message ?? e);
   }
@@ -277,11 +358,13 @@ async function handleToolCall(
   const apiKey = await getManusApiKey(ctx.tenantId);
   const recentCtx = await recentDispatchContext(ctx.tenantId);
 
-  // Notify instruction — Manus will call manus-notify when done
+  // Notify instruction — Manus will call manus-notify when done.
+  // The bearer token is stored in MANUS_MCP_BEARER edge-function secret.
+  const BEARER = Deno.env.get("MANUS_MCP_BEARER") || "<MANUS_MCP_BEARER>";
   const notifyInstruction =
     `\n\nWhen you finish, please notify David on WhatsApp by calling:\n` +
     `POST ${SUPABASE_URL}/functions/v1/manus-notify\n` +
-    `Headers: { "Authorization": "Bearer <MANUS_MCP_BEARER>", "Content-Type": "application/json" }\n` +
+    `Headers: { "Authorization": "Bearer ${BEARER}", "Content-Type": "application/json" }\n` +
     `Body: { "tenant_id": "${ctx.tenantId}", "message": "<your concise result summary with task link>" }`;
 
   if (name === "ask_manus") {
@@ -298,11 +381,27 @@ async function handleToolCall(
       recentCtx +
       notifyInstruction;
 
-    const { taskId, taskUrl, shareUrl } = await fireManusTask(apiKey, prompt, agentProfile);
-    await logDispatch({ tenantId: ctx.tenantId, agentId: ctx.agentId, taskId, prompt: request, taskUrl, shareUrl });
+    // Session continuity: reuse active task if available
+    const activeTask = await findActiveTask(ctx.tenantId);
+    let taskId: string, taskUrl: string, shareUrl: string, continued = false;
+    if (activeTask) {
+      const result = await sendManusMessage(apiKey, activeTask.taskId, prompt, agentProfile);
+      if (result.taskId) {
+        // Successfully continued existing session
+        ({ taskId, taskUrl, shareUrl } = result);
+        continued = true;
+      } else {
+        // sendMessage failed — create a new task
+        ({ taskId, taskUrl, shareUrl } = await createManusTask(apiKey, prompt, agentProfile, request.slice(0, 120)));
+      }
+    } else {
+      ({ taskId, taskUrl, shareUrl } = await createManusTask(apiKey, prompt, agentProfile, request.slice(0, 120)));
+    }
+    await logDispatch({ tenantId: ctx.tenantId, agentId: ctx.agentId, taskId, prompt: request, taskUrl, shareUrl, continued });
 
+    const sessionNote = continued ? " (continued existing session)" : " (new task in AfterLead project)";
     return (
-      `✅ Dispatched your request to Manus. Manus is now working on it and will notify David on WhatsApp when finished.\n` +
+      `✅ Dispatched your request to Manus${sessionNote}. Manus is now working on it and will notify David on WhatsApp when finished.\n` +
       `Task: ${taskUrl}\n` +
       (shareUrl && shareUrl !== taskUrl ? `Share: ${shareUrl}` : ``)
     ).trim();
@@ -325,11 +424,12 @@ async function handleToolCall(
       `\n\nPlease implement this in the AIOS codebase and open a pull request when done.` +
       notifyInstruction;
 
-    const { taskId, taskUrl, shareUrl } = await fireManusTask(apiKey, prompt, "manus-1.6");
+    // Dev tasks always open a fresh task (each PR needs its own context)
+    const { taskId, taskUrl, shareUrl } = await createManusTask(apiKey, prompt, "manus-1.6", task.slice(0, 120));
     await logDispatch({ tenantId: ctx.tenantId, agentId: ctx.agentId, taskId, prompt: task, taskUrl, shareUrl });
 
     return (
-      `✅ Dispatched the dev task to Manus. Manus is now working on it and will open a pull request when finished.\n` +
+      `✅ Dispatched the dev task to Manus (new task in AfterLead project). Manus is now working on it and will open a pull request when finished.\n` +
       `Task: ${taskUrl}\n` +
       (shareUrl && shareUrl !== taskUrl ? `Share: ${shareUrl}` : ``)
     ).trim();
