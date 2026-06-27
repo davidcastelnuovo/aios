@@ -232,6 +232,29 @@ export function ProfileTab({ agent }: { agent: any }) {
             </Select>
           </Field>
         </div>
+        {carmen && (
+          <div className="mt-4 pt-4 border-t">
+            <Field
+              label="סוכן Escalation (בשעת משבר)"
+              hint="כשכרמן לא יודעת מה לעשות — למי לפנות? בחר סוכן אחד כדי למנוע כפילויות."
+            >
+              <Select
+                value={form.metadata?.escalation_agent || "all"}
+                onValueChange={v => update({ metadata: { ...form.metadata, escalation_agent: v } })}
+              >
+                <SelectTrigger className="w-full max-w-xs">
+                  <SelectValue placeholder="בחר סוכן escalation" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">🔀 שניהם (ברירת מחדל)</SelectItem>
+                  <SelectItem value="claude">⚡ Claude בלבד</SelectItem>
+                  <SelectItem value="manus">🤖 Manus בלבד</SelectItem>
+                  <SelectItem value="none">🚫 ללא escalation</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+          </div>
+        )}
       </Card>
 
       {/* ===== Sticky save bar ===== */}
