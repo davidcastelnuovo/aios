@@ -172,3 +172,27 @@ Claude Code health-check skill written to `ai_skills` (scope=tenant, created_by_
 **What it does:** Confirms Claude Code is operational by checking Supabase DB and GitHub API accessibility, listing open/pending PRs in the AIOS repo, marking any pending `claude_dispatches` row as completed, logging to `claude_carmen_audit`, and notifying David via `claude_notify_david`.
 
 **Note on git clone:** This container's egress policy blocks `github.com` git traffic (403 from local proxy at port 41729). Code reads use the GitHub API instead; code writes require a session with git clone access enabled.
+
+---
+
+## 2026-06-27 — check_dispatch_before_redispatch
+
+**Skill slug:** `check_dispatch_before_redispatch`
+**Trigger phrases:** PR כבר בוצע?, merge כפול, check before dispatch, האם ה-PR כבר מוזג?, dispatch dedup, PR already merged?
+
+**Problem solved:** Carmen dispatched the same PR #65 merge task to Claude twice (across two routine fires) because she didn't check whether the prior dispatch had already completed. PR had in fact been merged at 04:26 UTC before either dispatch arrived.
+
+**What it does:** Before sending a `request_dev_task` for a PR merge/deploy, Carmen queries `claude_dispatches` for prior rows whose `request_text` ILIKE matches the PR number or URL:
+- `status = 'completed'` → skip dispatch, notify David that it's already done
+- `status = 'dispatched'` → already in progress, do not duplicate
+- No row or all `failed` → proceed with new dispatch
+
+**Steps (verbatim in skill):**
+```sql
+SELECT status, session_url
+FROM public.claude_dispatches
+WHERE request_text ILIKE '%PR #65%' OR request_text ILIKE '%pull/65%'
+ORDER BY created_at DESC LIMIT 3;
+```
+
+**Scope:** tenant `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`, `created_by_agent=true`.
