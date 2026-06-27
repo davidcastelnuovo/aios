@@ -2,11 +2,11 @@
  * StageWorkspace
  * ──────────────
  * Full-screen "department" overlay for a single pipeline stage.
- * Left panel: Carmen chat (with stage-specific role/skin)
- * Right panel: Work items list + asset previews + run controls
+ * RIGHT panel (60%): Carmen chat with stage skin
+ * LEFT panel (40%): Work items + assets + approval controls
  */
 import { useState, useRef, useEffect } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -34,17 +34,34 @@ import {
   Sparkles,
   ChevronDown,
   ChevronUp,
+  Check,
+  Zap,
+  Hand,
+  Edit,
 } from "lucide-react";
 
 // ─── Stage identity ───────────────────────────────────────────────────────────
-const STAGE_CONFIG: Record<string, { icon: any; label: string; agentRole: string; headerBg: string; accentColor: string; systemHint: string }> = {
+const STAGE_CONFIG: Record<
+  string,
+  {
+    icon: any;
+    label: string;
+    agentRole: string;
+    headerBg: string;
+    accentColor: string;
+    systemHint: string;
+    quickPrompts: string[];
+  }
+> = {
   strategy: {
     icon: Lightbulb,
     label: "מחלקת אסטרטגיה",
     agentRole: "אסטרטגיסטית שיווקית",
     headerBg: "from-amber-600 to-amber-500",
     accentColor: "amber",
-    systemHint: "את אסטרטגיסטית שיווקית מנוסה. תפקידך לבנות בריף שיווקי מפורט המבוסס על מידע הלקוח.",
+    systemHint:
+      "את אסטרטגיסטית שיווקית מנוסה. תפקידך לבנות בריף שיווקי מפורט המבוסס על מידע הלקוח.",
+    quickPrompts: ["בנה בריף מלא", "ניתוח מתחרים", "הגדר קהל יעד"],
   },
   copy: {
     icon: PenLine,
@@ -52,7 +69,9 @@ const STAGE_CONFIG: Record<string, { icon: any; label: string; agentRole: string
     agentRole: "קופירייטרית",
     headerBg: "from-sky-600 to-sky-500",
     accentColor: "sky",
-    systemHint: "את קופירייטרית מוכשרת. תפקידך לכתוב תוכן שיווקי מרתק ומשכנע.",
+    systemHint:
+      "את קופירייטרית מוכשרת. תפקידך לכתוב תוכן שיווקי מרתק ומשכנע.",
+    quickPrompts: ["כתוב קופי לפייסבוק", "כתוב קופי לאינסטגרם", "3 גרסאות שונות"],
   },
   creative: {
     icon: ImageIcon,
@@ -60,7 +79,9 @@ const STAGE_CONFIG: Record<string, { icon: any; label: string; agentRole: string
     agentRole: "מעצבת גרפית",
     headerBg: "from-fuchsia-600 to-fuchsia-500",
     accentColor: "fuchsia",
-    systemHint: "את מעצבת גרפית יצירתית. תפקידך ליצור פרומפטים לתמונות ולתאר ויז'ואלים מרשימים.",
+    systemHint:
+      "את מעצבת גרפית יצירתית. תפקידך ליצור פרומפטים לתמונות ולתאר ויז'ואלים מרשימים.",
+    quickPrompts: ["תאר ויז'ואל לבאנר", "פרומפט לתמונה", "פלטת צבעים"],
   },
   target_paid: {
     icon: Megaphone,
@@ -68,7 +89,9 @@ const STAGE_CONFIG: Record<string, { icon: any; label: string; agentRole: string
     agentRole: "מנהלת קמפיינים",
     headerBg: "from-rose-600 to-rose-500",
     accentColor: "rose",
-    systemHint: "את מנהלת קמפיינים ממומנים מנוסה ב-Meta ו-Google Ads.",
+    systemHint:
+      "את מנהלת קמפיינים ממומנים מנוסה ב-Meta ו-Google Ads.",
+    quickPrompts: ["הגדרות קמפיין Meta", "תקציב ומיקוד", "מבנה אד-סט"],
   },
   target_seo: {
     icon: Search,
@@ -76,7 +99,9 @@ const STAGE_CONFIG: Record<string, { icon: any; label: string; agentRole: string
     agentRole: "מומחית SEO/GEO",
     headerBg: "from-emerald-600 to-emerald-500",
     accentColor: "emerald",
-    systemHint: "את מומחית SEO ו-GEO. תפקידך לבנות אסטרטגיית תוכן לקידום אורגני.",
+    systemHint:
+      "את מומחית SEO ו-GEO. תפקידך לבנות אסטרטגיית תוכן לקידום אורגני.",
+    quickPrompts: ["מילות מפתח ראשיות", "מבנה כתבה SEO", "מטא-תיאור"],
   },
   target_organic: {
     icon: Share2,
@@ -84,7 +109,9 @@ const STAGE_CONFIG: Record<string, { icon: any; label: string; agentRole: string
     agentRole: "מנהלת מדיה חברתית",
     headerBg: "from-violet-600 to-violet-500",
     accentColor: "violet",
-    systemHint: "את מנהלת מדיה חברתית מנוסה. תפקידך לתכנן ולפרסם תוכן אורגני.",
+    systemHint:
+      "את מנהלת מדיה חברתית מנוסה. תפקידך לתכנן ולפרסם תוכן אורגני.",
+    quickPrompts: ["קפשן לאינסטגרם", "תזמון אידאלי", "האשטגים"],
   },
   measurement: {
     icon: BarChart3,
@@ -92,37 +119,83 @@ const STAGE_CONFIG: Record<string, { icon: any; label: string; agentRole: string
     agentRole: "אנליסטית שיווקית",
     headerBg: "from-blue-600 to-blue-500",
     accentColor: "blue",
-    systemHint: "את אנליסטית שיווקית. תפקידך לנתח ביצועים ולהפיק תובנות.",
+    systemHint:
+      "את אנליסטית שיווקית. תפקידך לנתח ביצועים ולהפיק תובנות.",
+    quickPrompts: ["סיכום ביצועים", "המלצות לשיפור", "השוואה לחודש קודם"],
   },
 };
 
-const STATUS_CONFIG: Record<string, { label: string; icon: any; color: string }> = {
-  draft: { label: "טיוטה", icon: Clock, color: "text-gray-500" },
-  in_progress: { label: "בעבודה", icon: Loader2, color: "text-blue-500" },
-  awaiting_approval: { label: "ממתין לאישור", icon: AlertCircle, color: "text-amber-500" },
-  completed: { label: "הושלם", icon: CheckCircle2, color: "text-emerald-500" },
-  failed: { label: "נכשל", icon: AlertCircle, color: "text-red-500" },
+const STATUS_CONFIG: Record<string, { label: string; icon: any; color: string; borderColor: string }> = {
+  draft: { label: "טיוטה", icon: Clock, color: "text-gray-500", borderColor: "border-border/60" },
+  in_progress: { label: "בעבודה", icon: Loader2, color: "text-blue-500", borderColor: "border-blue-400" },
+  awaiting_approval: { label: "ממתין לאישור", icon: AlertCircle, color: "text-amber-500", borderColor: "border-amber-400" },
+  completed: { label: "הושלם", icon: CheckCircle2, color: "text-emerald-500", borderColor: "border-emerald-400" },
+  failed: { label: "נכשל", icon: AlertCircle, color: "text-red-500", borderColor: "border-red-400" },
 };
 
+// ─── Mode Toggle ──────────────────────────────────────────────────────────────
+function ModeToggle({
+  stage,
+  onUpdate,
+}: {
+  stage: any;
+  onUpdate: (mode: string) => void;
+}) {
+  const current = stage.approval_mode ?? "semi";
+  const modes = [
+    { key: "auto", label: "אוטומטי", icon: Zap, activeClass: "bg-emerald-500 text-white" },
+    { key: "semi", label: "חצי", icon: Clock, activeClass: "bg-amber-500 text-white" },
+    { key: "manual", label: "ידני", icon: Hand, activeClass: "bg-gray-500 text-white" },
+  ];
+
+  return (
+    <div className="flex rounded-lg overflow-hidden border border-white/30 bg-white/10 text-xs font-medium shrink-0">
+      {modes.map((m) => {
+        const MIcon = m.icon;
+        const active = current === m.key;
+        return (
+          <button
+            key={m.key}
+            onClick={() => onUpdate(m.key)}
+            className={cn(
+              "flex items-center gap-1 px-2.5 py-1.5 transition-all",
+              active ? m.activeClass : "text-white/70 hover:bg-white/10"
+            )}
+          >
+            <MIcon className="h-3 w-3" />
+            {m.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Chat Message ─────────────────────────────────────────────────────────────
-function ChatMessage({ msg }: { msg: { role: "user" | "assistant"; content: string; ts: number } }) {
+function ChatMessage({
+  msg,
+}: {
+  msg: { role: "user" | "assistant"; content: string; ts: number };
+}) {
   const isUser = msg.role === "user";
   return (
-    <div className={cn("flex gap-2 mb-3", isUser ? "flex-row-reverse" : "flex-row")} dir="rtl">
+    <div className={cn("flex gap-3 mb-4", isUser ? "flex-row-reverse" : "flex-row")} dir="rtl">
       <div
         className={cn(
-          "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white text-xs font-bold",
-          isUser ? "bg-primary" : "bg-gradient-to-br from-violet-500 to-fuchsia-500"
+          "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white text-xs font-bold shadow-sm",
+          isUser
+            ? "bg-primary"
+            : "bg-gradient-to-br from-violet-500 to-fuchsia-500"
         )}
       >
-        {isUser ? <User className="h-3.5 w-3.5" /> : <Bot className="h-3.5 w-3.5" />}
+        {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
       </div>
       <div
         className={cn(
-          "max-w-[75%] rounded-2xl px-3 py-2 text-sm leading-relaxed",
+          "max-w-[78%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm",
           isUser
             ? "bg-primary text-primary-foreground rounded-tr-sm"
-            : "bg-muted/70 text-foreground rounded-tl-sm"
+            : "bg-card/80 border border-border/50 text-foreground rounded-tl-sm"
         )}
       >
         {msg.content}
@@ -131,81 +204,164 @@ function ChatMessage({ msg }: { msg: { role: "user" | "assistant"; content: stri
   );
 }
 
-// ─── Work Item Row ────────────────────────────────────────────────────────────
-function WorkItemRow({
+// ─── Work Item Card ───────────────────────────────────────────────────────────
+function WorkItemCard({
   item,
   stage,
   onSelect,
   onRun,
+  onApprove,
+  onReject,
   running,
 }: {
   item: any;
   stage: any;
   onSelect: () => void;
   onRun: () => void;
+  onApprove: () => void;
+  onReject: () => void;
   running: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const statusCfg = STATUS_CONFIG[item.status] ?? STATUS_CONFIG.draft;
   const StatusIcon = statusCfg.icon;
+  const isRunning = item.status === "in_progress" || running;
+  const isAwaiting = item.status === "awaiting_approval";
 
   return (
-    <div className="rounded-xl border border-border/60 bg-card/80 overflow-hidden" dir="rtl">
-      <div
-        className="flex items-center gap-2 p-3 cursor-pointer hover:bg-muted/30"
-        onClick={() => setExpanded(!expanded)}
-      >
-        <StatusIcon className={cn("h-4 w-4 shrink-0", statusCfg.color, item.status === "in_progress" && "animate-spin")} />
-        <span className="flex-1 text-sm font-medium truncate">{item.title ?? "ללא כותרת"}</span>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-7 w-7 p-0 shrink-0"
-          onClick={(e) => {
-            e.stopPropagation();
-            onRun();
-          }}
-          disabled={running}
-          title="הרץ שלב"
+    <div
+      className={cn(
+        "rounded-2xl border bg-card/60 shadow backdrop-blur-sm overflow-hidden transition-all",
+        isRunning
+          ? "border-blue-400 animate-pulse"
+          : isAwaiting
+          ? "border-amber-400"
+          : statusCfg.borderColor,
+        "hover:shadow-lg hover:border-primary/30 hover:scale-[1.01]"
+      )}
+      dir="rtl"
+    >
+      {/* Thumbnail */}
+      {item.payload?.image_url && (
+        <img
+          src={item.payload.image_url}
+          alt=""
+          className="w-full h-32 object-cover"
+        />
+      )}
+
+      <div className="p-3 space-y-2">
+        {/* Title row */}
+        <div
+          className="flex items-center gap-2 cursor-pointer"
+          onClick={() => setExpanded(!expanded)}
         >
-          {running ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <StatusIcon
+            className={cn(
+              "h-4 w-4 shrink-0",
+              statusCfg.color,
+              (item.status === "in_progress" || running) && "animate-spin"
+            )}
+          />
+          <span className="flex-1 text-sm font-bold truncate">
+            {item.title ?? "ללא כותרת"}
+          </span>
+          <Badge
+            variant="outline"
+            className={cn("text-[10px] px-1.5 py-0 border-current", statusCfg.color)}
+          >
+            {statusCfg.label}
+          </Badge>
+          {expanded ? (
+            <ChevronUp className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           ) : (
-            <Play className="h-3.5 w-3.5" />
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           )}
-        </Button>
-        <button
-          className="text-muted-foreground"
-          onClick={(e) => {
-            e.stopPropagation();
-            setExpanded(!expanded);
-          }}
-        >
-          {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-        </button>
-      </div>
-      {expanded && (
-        <div className="border-t border-border/40 p-3 space-y-2">
-          {item.payload?.brief && (
-            <div>
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">בריף</div>
-              <p className="text-xs text-foreground/80 leading-relaxed whitespace-pre-wrap">{item.payload.brief}</p>
-            </div>
-          )}
-          {item.payload?.copy_text && (
-            <div>
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">קופי</div>
-              <p className="text-xs text-foreground/80 leading-relaxed whitespace-pre-wrap">{item.payload.copy_text}</p>
-            </div>
-          )}
-          {item.payload?.image_url && (
-            <img src={item.payload.image_url} alt="" className="w-full rounded-lg object-cover max-h-40" />
-          )}
-          <Button size="sm" variant="outline" className="w-full text-xs" onClick={onSelect}>
-            פתח פריט מלא
+        </div>
+
+        {/* Copy preview (2 lines) */}
+        {(item.payload?.brief || item.payload?.copy_text) && (
+          <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+            {item.payload?.copy_text ?? item.payload?.brief}
+          </p>
+        )}
+
+        {/* Action buttons */}
+        <div className="flex gap-2 pt-1">
+          <Button
+            size="sm"
+            variant="outline"
+            className="flex-1 h-7 text-xs gap-1"
+            onClick={onRun}
+            disabled={running}
+          >
+            {running ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Play className="h-3.5 w-3.5" />
+            )}
+            הרץ שלב
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 w-7 p-0 shrink-0"
+            onClick={onSelect}
+            title="ערוך"
+          >
+            <Edit className="h-3.5 w-3.5" />
           </Button>
         </div>
-      )}
+
+        {/* Approval buttons */}
+        {isAwaiting && (
+          <div className="flex gap-2 mt-1">
+            <Button
+              size="sm"
+              onClick={onApprove}
+              className="flex-1 h-7 text-xs bg-emerald-600 hover:bg-emerald-700 gap-1"
+            >
+              <Check className="h-3.5 w-3.5" />
+              אשר
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={onReject}
+              className="flex-1 h-7 text-xs gap-1"
+            >
+              <X className="h-3.5 w-3.5" />
+              דחה
+            </Button>
+          </div>
+        )}
+
+        {/* Expanded details */}
+        {expanded && (
+          <div className="border-t border-border/40 pt-2 space-y-2">
+            {item.payload?.brief && (
+              <div>
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
+                  בריף
+                </div>
+                <p className="text-xs text-foreground/80 leading-relaxed whitespace-pre-wrap">
+                  {item.payload.brief}
+                </p>
+              </div>
+            )}
+            {item.payload?.copy_text && (
+              <div>
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
+                  קופי
+                </div>
+                <p className="text-xs text-foreground/80 leading-relaxed whitespace-pre-wrap">
+                  {item.payload.copy_text}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -235,11 +391,14 @@ export function StageWorkspace({
   const queryClient = useQueryClient();
   const cfg = STAGE_CONFIG[stage.stage_type] ?? STAGE_CONFIG.strategy;
   const Icon = cfg.icon;
+  const agentName = stage.ai_agents?.name ?? "כרמן";
 
-  const [messages, setMessages] = useState<{ role: "user" | "assistant"; content: string; ts: number }[]>([
+  const [messages, setMessages] = useState<
+    { role: "user" | "assistant"; content: string; ts: number }[]
+  >([
     {
       role: "assistant",
-      content: `שלום! אני כרמן, ${cfg.agentRole} שלך. אני כאן כדי לעזור לך עם ${cfg.label.replace("מחלקת ", "")}. איך אוכל לעזור?`,
+      content: `שלום! אני ${agentName}, ${cfg.agentRole} שלך. אני כאן כדי לעזור לך עם ${cfg.label.replace("מחלקת ", "")}. איך אוכל לעזור?`,
       ts: Date.now(),
     },
   ]);
@@ -260,7 +419,6 @@ export function StageWorkspace({
     setChatLoading(true);
 
     try {
-      // Build context from stage + items
       const itemsSummary = items
         .slice(0, 3)
         .map((i) => `- ${i.title}: ${i.payload?.brief ?? i.payload?.copy_text ?? ""}`)
@@ -273,7 +431,6 @@ ${itemsSummary ? `פריטי תוכן נוכחיים:\n${itemsSummary}` : ""}
 
       const history = messages.slice(-6).map((m) => ({ role: m.role, content: m.content }));
 
-      // Build conversation history as context prefix
       const historyText = history
         .map((m) => `${m.role === "user" ? "משתמש" : "כרמן"}: ${m.content}`)
         .join("\n");
@@ -294,7 +451,8 @@ ${itemsSummary ? `פריטי תוכן נוכחיים:\n${itemsSummary}` : ""}
       });
 
       if (error) throw error;
-      const reply = data?.output ?? data?.reply ?? data?.message ?? "לא הצלחתי לעבד את הבקשה.";
+      const reply =
+        data?.output ?? data?.reply ?? data?.message ?? "לא הצלחתי לעבד את הבקשה.";
       setMessages((prev) => [...prev, { role: "assistant", content: reply, ts: Date.now() }]);
     } catch (e: any) {
       setMessages((prev) => [
@@ -323,68 +481,102 @@ ${itemsSummary ? `פריטי תוכן נוכחיים:\n${itemsSummary}` : ""}
     }
   };
 
+  const handleApprove = async (itemId: string) => {
+    try {
+      await supabase
+        .from("marketing_work_items")
+        .update({ status: "approved" })
+        .eq("id", itemId);
+      queryClient.invalidateQueries({ queryKey: ["marketing-items", pipelineId] });
+      toast({ title: "הפריט אושר" });
+    } catch (e: any) {
+      toast({ title: "שגיאה באישור", description: e.message, variant: "destructive" });
+    }
+  };
+
+  const handleReject = async (itemId: string) => {
+    try {
+      await supabase
+        .from("marketing_work_items")
+        .update({ status: "draft" })
+        .eq("id", itemId);
+      queryClient.invalidateQueries({ queryKey: ["marketing-items", pipelineId] });
+      toast({ title: "הפריט נדחה וחזר לטיוטה" });
+    } catch (e: any) {
+      toast({ title: "שגיאה בדחייה", description: e.message, variant: "destructive" });
+    }
+  };
+
+  const handleUpdateMode = async (mode: string) => {
+    try {
+      await supabase
+        .from("pipeline_stages")
+        .update({ approval_mode: mode })
+        .eq("id", stage.id);
+      toast({ title: `מצב עדכן ל-${mode}` });
+    } catch (e: any) {
+      toast({ title: "שגיאה בעדכון מצב", description: e.message, variant: "destructive" });
+    }
+  };
+
   return (
-    <div
-      className="fixed inset-0 z-50 flex flex-col bg-background/95 backdrop-blur-md"
-      dir="rtl"
-    >
+    <div className="fixed inset-0 z-50 flex flex-col bg-background/95 backdrop-blur-md" dir="rtl">
       {/* Header */}
-      <div className={cn("flex items-center gap-3 px-4 py-3 bg-gradient-to-l text-white", cfg.headerBg)}>
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/20">
-          <Icon className="h-5 w-5" />
+      <header
+        className={cn(
+          "bg-gradient-to-l text-white px-6 py-4 flex items-center gap-4 shrink-0 shadow-lg",
+          cfg.headerBg
+        )}
+      >
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/20 shrink-0">
+          <Icon className="h-7 w-7" />
         </div>
-        <div>
-          <h2 className="text-base font-bold">{cfg.label}</h2>
-          <p className="text-xs text-white/70">
-            {stage.ai_agents?.name ?? "כרמן"} · {cfg.agentRole}
+        <div className="flex-1 min-w-0">
+          <h1 className="text-2xl font-bold leading-tight">{cfg.label}</h1>
+          <p className="text-sm opacity-80">
+            {agentName} · {cfg.agentRole}
           </p>
         </div>
-        <div className="ms-auto flex items-center gap-2">
-          <Badge variant="secondary" className="bg-white/20 text-white border-0 text-xs">
-            {items.length} פריטים
-          </Badge>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-white hover:bg-white/20"
-            onClick={onClose}
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
+        <ModeToggle stage={stage} onUpdate={handleUpdateMode} />
+        <button
+          onClick={onClose}
+          className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/20 hover:bg-white/30 transition-colors shrink-0"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </header>
 
-      {/* Body: Chat (right) + Items (left) */}
+      {/* Body */}
       <div className="flex flex-1 min-h-0">
-        {/* Chat panel (right side in RTL = visual right) */}
-        <div className="flex flex-1 flex-col border-l border-border/40 min-w-0">
-          {/* Chat messages */}
-          <div className="flex-1 overflow-y-auto p-4">
+        {/* RIGHT panel: Carmen Chat (60%) */}
+        <div className="flex flex-[3] flex-col border-l border-border/40 min-w-0">
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto p-5 space-y-1">
             {messages.map((msg) => (
               <ChatMessage key={msg.ts} msg={msg} />
             ))}
             {chatLoading && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3" dir="rtl">
-                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500">
-                  <Bot className="h-3.5 w-3.5 text-white" />
+              <div className="flex items-center gap-3 mb-3" dir="rtl">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 shadow-sm">
+                  <Bot className="h-4 w-4 text-white" />
                 </div>
-                <div className="flex gap-1">
-                  <span className="animate-bounce" style={{ animationDelay: "0ms" }}>●</span>
-                  <span className="animate-bounce" style={{ animationDelay: "150ms" }}>●</span>
-                  <span className="animate-bounce" style={{ animationDelay: "300ms" }}>●</span>
+                <div className="flex gap-1 items-center bg-card/80 border border-border/50 rounded-2xl rounded-tl-sm px-4 py-3">
+                  <span className="animate-bounce text-muted-foreground" style={{ animationDelay: "0ms" }}>●</span>
+                  <span className="animate-bounce text-muted-foreground" style={{ animationDelay: "150ms" }}>●</span>
+                  <span className="animate-bounce text-muted-foreground" style={{ animationDelay: "300ms" }}>●</span>
                 </div>
               </div>
             )}
             <div ref={chatEndRef} />
           </div>
 
-          {/* Quick prompts */}
-          <div className="flex gap-2 overflow-x-auto px-4 pb-2" dir="rtl">
-            {["צור בריף", "כתוב קופי", "הצע רעיונות", "נתח ביצועים"].map((prompt) => (
+          {/* Quick prompt chips */}
+          <div className="flex gap-2 overflow-x-auto px-5 pb-2 shrink-0" dir="rtl">
+            {cfg.quickPrompts.map((prompt) => (
               <button
                 key={prompt}
                 onClick={() => setInput(prompt)}
-                className="shrink-0 flex items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-3 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="shrink-0 flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/40 px-3.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <Sparkles className="h-3 w-3" />
                 {prompt}
@@ -392,65 +584,87 @@ ${itemsSummary ? `פריטי תוכן נוכחיים:\n${itemsSummary}` : ""}
             ))}
           </div>
 
-          {/* Chat input */}
-          <div className="border-t border-border/40 p-3" dir="rtl">
-            <div className="flex gap-2">
+          {/* Input area */}
+          <div className="border-t border-border/40 p-4 shrink-0" dir="rtl">
+            <div className="flex gap-2 items-end">
               <Textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
+                  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
                     e.preventDefault();
                     sendMessage();
                   }
                 }}
-                placeholder={`שאל את כרמן (${cfg.agentRole})...`}
-                className="min-h-[40px] max-h-[120px] resize-none text-sm"
+                placeholder={`שאל את ${agentName} (${cfg.agentRole})...`}
+                className="min-h-[44px] max-h-[140px] resize-none text-sm"
                 rows={1}
               />
               <Button
-                size="sm"
-                className="h-10 w-10 shrink-0 p-0"
+                className="h-11 w-24 shrink-0 gap-1.5 text-xs"
                 onClick={sendMessage}
                 disabled={!input.trim() || chatLoading}
               >
-                <Send className="h-4 w-4" />
+                <Send className="h-3.5 w-3.5" />
+                שלח
               </Button>
             </div>
+            <p className="text-[10px] text-muted-foreground mt-1.5 text-left opacity-60">
+              Ctrl+Enter לשליחה מהירה
+            </p>
           </div>
         </div>
 
-        {/* Items panel (left side in RTL = visual left) */}
-        <div className="w-80 shrink-0 flex flex-col border-r border-border/40 bg-muted/10">
-          <div className="flex items-center justify-between border-b border-border/40 px-3 py-2">
-            <span className="text-sm font-semibold">פריטי תוכן</span>
-            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={onNewItem}>
-              <Plus className="h-3 w-3" />
-              חדש
-            </Button>
+        {/* LEFT panel: Work Items (40%) */}
+        <div className="flex-[2] shrink-0 flex flex-col border-r border-border/40 bg-muted/10 min-w-0">
+          {/* Panel header */}
+          <div className="flex items-center justify-between border-b border-border/40 px-4 py-3 shrink-0">
+            <span className="text-sm font-bold">פריטי תוכן</span>
+            <Badge variant="outline" className="text-xs">
+              {items.length} פריטים
+            </Badge>
           </div>
-          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+
+          {/* Items list */}
+          <div className="flex-1 overflow-y-auto p-3 space-y-3">
             {items.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <Icon className="h-8 w-8 text-muted-foreground/40 mb-2" />
-                <p className="text-xs text-muted-foreground">אין פריטים בשלב זה</p>
-                <Button size="sm" variant="outline" className="mt-3 text-xs" onClick={onNewItem}>
-                  <Plus className="h-3 w-3 ml-1" />
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted/50 mb-3">
+                  <Icon className="h-7 w-7 text-muted-foreground/50" />
+                </div>
+                <p className="text-sm font-medium text-muted-foreground mb-1">אין פריטים בשלב זה</p>
+                <p className="text-xs text-muted-foreground/60 mb-4">לחץ להוספת פריט חדש</p>
+                <Button size="sm" variant="outline" className="text-xs gap-1" onClick={onNewItem}>
+                  <Plus className="h-3.5 w-3.5" />
                   הוסף פריט
                 </Button>
               </div>
             ) : (
               items.map((item) => (
-                <WorkItemRow
+                <WorkItemCard
                   key={item.id}
                   item={item}
                   stage={stage}
                   onSelect={() => onSelectItem(item.id)}
                   onRun={() => handleRun(item.id)}
+                  onApprove={() => handleApprove(item.id)}
+                  onReject={() => handleReject(item.id)}
                   running={running === item.id}
                 />
               ))
             )}
+          </div>
+
+          {/* New item button */}
+          <div className="border-t border-border/40 p-3 shrink-0">
+            <Button
+              variant="outline"
+              className="w-full text-sm gap-2 h-10"
+              onClick={onNewItem}
+            >
+              <Plus className="h-4 w-4" />
+              פריט חדש
+            </Button>
           </div>
         </div>
       </div>
