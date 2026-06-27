@@ -9,7 +9,9 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { Play, Loader2, Check, X, RotateCw, Image as ImageIcon } from "lucide-react";
+import { Play, Loader2, Check, X, RotateCw, Image as ImageIcon, Megaphone, Search } from "lucide-react";
+import { CampaignLauncher } from "./CampaignLauncher";
+import { SEOPublishPanel } from "./SEOPublishPanel";
 
 interface Props {
   itemId: string | null;
@@ -174,7 +176,15 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
     // advance to next stage
     const idx = stages.findIndex((s) => s.id === stageId);
     if (idx >= 0 && idx < stages.length - 1) {
-      await save({ current_stage_id: stages[idx + 1].id });
+      const nextStage = stages[idx + 1];
+      await save({ current_stage_id: nextStage.id, status: "in_progress" });
+      // Auto-run next stage if its approval_mode is "auto"
+      if (nextStage.approval_mode === "auto") {
+        setTimeout(() => runStage(nextStage.id), 500);
+      }
+    } else {
+      // Last stage approved — mark item as completed
+      await save({ status: "completed" });
     }
     refetchRuns();
     toast({ title: "✓ אושר" });
@@ -295,6 +305,35 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
                   </div>
                 </div>
               ))}
+
+            {/* Campaign Launcher — shown for target_paid stage */}
+            {(() => {
+              const currentStage = stages.find((s) => s.id === item?.current_stage_id);
+              if (currentStage?.stage_type === "target_paid") {
+                return (
+                  <CampaignLauncher
+                    workItemId={item.id}
+                    tenantId={item.tenant_id}
+                    clientId={item.client_id}
+                    copyText={item.payload?.copy_text}
+                    imageUrl={item.payload?.image_url}
+                    campaignName={item.title}
+                  />
+                );
+              }
+              if (currentStage?.stage_type === "target_seo") {
+                return (
+                  <SEOPublishPanel
+                    workItemId={item.id}
+                    tenantId={item.tenant_id}
+                    clientId={item.client_id}
+                    copyText={item.payload?.copy_text}
+                    title={item.title}
+                  />
+                );
+              }
+              return null;
+            })()}
 
             {/* Run pipeline button */}
             <Button onClick={runFullPipeline} disabled={!!running} className="w-full">

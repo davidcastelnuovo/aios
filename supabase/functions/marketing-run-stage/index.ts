@@ -263,6 +263,44 @@ serve(async (req) => {
       })
       .eq("id", runRow.id);
 
+    // ── Server-side auto-advance: if mode is "auto", move to next stage ──
+    let nextStageId: string | null = null;
+    if (approvalMode === "auto") {
+      const { data: allStages } = await admin
+        .from("marketing_pipeline_stages")
+        .select("id, sort_order, approval_mode")
+        .eq("pipeline_id", item.pipeline_id)
+        .order("sort_order");
+      const stages = allStages ?? [];
+      const currentIdx = stages.findIndex((s: any) => s.id === stage_id);
+      if (currentIdx >= 0 && currentIdx < stages.length - 1) {
+        const nextStage = stages[currentIdx + 1];
+        nextStageId = nextStage.id;
+        // Advance work item to next stage
+        await admin
+          .from("marketing_work_items")
+          .update({ current_stage_id: nextStageId, status: "in_progress" })
+          .eq("id", item_id);
+        // If next stage is also auto, fire-and-forget to trigger it
+        if (nextStage.approval_mode === "auto") {
+          fetch(`${supaUrl}/functions/v1/marketing-run-stage`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${supaService}`,
+            },
+            body: JSON.stringify({ item_id, stage_id: nextStageId }),
+          }).catch(() => {/* ignore */});
+        }
+      } else if (currentIdx === stages.length - 1) {
+        // Last stage — mark work item as completed
+        await admin
+          .from("marketing_work_items")
+          .update({ status: "completed" })
+          .eq("id", item_id);
+      }
+    }
+
     return new Response(
       JSON.stringify({
         run_id: runRow.id,
@@ -274,6 +312,7 @@ serve(async (req) => {
         tokens_in: tokensIn,
         tokens_out: tokensOut,
         cost_usd: cost,
+        next_stage_id: nextStageId,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
