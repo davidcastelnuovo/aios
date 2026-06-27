@@ -251,6 +251,8 @@ const ALL_TOOLS = [
   { name: 'gads_pause', description: 'השהיית קמפיין Google Ads. דורש אישור.', parameters: { type: 'object', properties: { customer_id: { type: 'string' }, campaign_id: { type: 'string' } }, required: ['customer_id','campaign_id'] } },
   { name: 'gads_resume', description: 'הדלקת קמפיין Google Ads. דורש אישור.', parameters: { type: 'object', properties: { customer_id: { type: 'string' }, campaign_id: { type: 'string' } }, required: ['customer_id','campaign_id'] } },
   { name: 'gads_update_budget', description: 'שינוי תקציב יומי לקמפיין Google Ads. דורש אישור.', parameters: { type: 'object', properties: { customer_id: { type: 'string' }, campaign_id: { type: 'string' }, daily_budget: { type: 'number' } }, required: ['customer_id','campaign_id','daily_budget'] } },
+  { name: 'list_google_ad_accounts', description: 'שליפת כל חשבונות Google Ads המחוברים לטננט. מחזיר customer_id, name, status, client_id (אם משויך ללקוח).', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'סינון לפי לקוח ספציפי (אופציונלי)' } } } },
+  { name: 'connect_google_ads_account', description: 'שיוך חשבון Google Ads (customer_id) ללקוח ב-CRM. שומר את המזהה ב-clients.google_ads_account_id.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח' }, customer_id: { type: 'string', description: 'מזהה חשבון Google Ads (ספרות בלבד, ללא מקפים)' } }, required: ['client_id', 'customer_id'] } },
   // ===========================
   // SCHEDULED PAUSE/RESUME
   // ===========================
@@ -2686,6 +2688,138 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         summary: titles[name] || name,
         instruction_for_carmen: 'הצג למשתמש בקצרה מה את עומדת לעשות ובקש אישור: "לאשר? (כן/לא)". אל תבצעי כלום עד שיגיע אישור — קוראת ל-execute_pending_approval רק אחרי תשובה חיובית.',
       }
+    }
+
+    // ============ GOOGLE ADS — READ TOOLS ============
+    case 'list_google_ad_accounts': {
+      const { data: gadsInteg } = await supabase
+        .from('tenant_integrations')
+        .select('settings')
+        .in('tenant_id', accessibleTenantIds)
+        .eq('integration_type', 'google_ads')
+        .eq('is_active', true)
+        .limit(1).maybeSingle()
+
+      if (!gadsInteg?.settings?.refresh_token) {
+        return { error: 'אין חיבור Google Ads פעיל לטננט הזה. יש לחבר תחילה דרך הגדרות האינטגרציות.' }
+      }
+
+      const gClientId = Deno.env.get('GOOGLE_CLIENT_ID')
+      const gClientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET')
+      const gDevToken = Deno.env.get('GOOGLE_ADS_DEVELOPER_TOKEN')
+      if (!gClientId || !gClientSecret || !gDevToken) {
+        return { error: 'חסרות הגדרות סביבה של Google Ads (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_ADS_DEVELOPER_TOKEN)' }
+      }
+
+      const tokResp = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        body: new URLSearchParams({
+          refresh_token: gadsInteg.settings.refresh_token,
+          client_id: gClientId,
+          client_secret: gClientSecret,
+          grant_type: 'refresh_token',
+        }),
+      })
+      const tokData = await tokResp.json()
+      if (!tokData.access_token) {
+        return { error: 'כישלון בחידוש טוקן Google Ads', details: tokData?.error_description }
+      }
+      const gAccessToken = tokData.access_token
+
+      const gadsHeaders: Record<string, string> = {
+        'Authorization': `Bearer ${gAccessToken}`,
+        'developer-token': gDevToken,
+      }
+
+      // List all customers this token can access
+      const listResp = await fetch('https://googleads.googleapis.com/v23/customers:listAccessibleCustomers', {
+        headers: gadsHeaders,
+      })
+      const listData = await listResp.json()
+      if (listData.error) {
+        return { error: `Google Ads API: ${listData.error?.message || JSON.stringify(listData.error)}` }
+      }
+
+      const resourceNames: string[] = listData.resourceNames || []
+      const customerIds = resourceNames.map((r: string) => r.replace('customers/', ''))
+
+      // Fetch name+status for each customer in parallel
+      const accounts = await Promise.all(customerIds.map(async (cid: string) => {
+        try {
+          const r = await fetch(`https://googleads.googleapis.com/v23/customers/${cid}/googleAds:search`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...gadsHeaders },
+            body: JSON.stringify({ query: 'SELECT customer.id, customer.descriptive_name, customer.status, customer.manager FROM customer LIMIT 1' }),
+          })
+          const d = await r.json()
+          const row = d.results?.[0]?.customer
+          if (!row) return { customer_id: cid, name: null, status: null, is_manager: false }
+          return { customer_id: cid, name: row.descriptiveName ?? null, status: row.status ?? null, is_manager: row.manager ?? false }
+        } catch {
+          return { customer_id: cid, name: null, status: null, is_manager: false }
+        }
+      }))
+
+      // Look up which clients already have a google_ads_account_id set
+      const { data: linkedClients } = await supabase
+        .from('clients')
+        .select('id, name, google_ads_account_id')
+        .in('tenant_id', accessibleTenantIds)
+        .not('google_ads_account_id', 'is', null)
+
+      const clientByAccountId = new Map<string, { id: string; name: string }>()
+      for (const c of (linkedClients || [])) {
+        if (c.google_ads_account_id) {
+          clientByAccountId.set(String(c.google_ads_account_id).replace(/-/g, ''), { id: c.id, name: c.name })
+        }
+      }
+
+      let result = accounts.map((a: any) => ({
+        customer_id: a.customer_id,
+        name: a.name,
+        status: a.status,
+        is_manager: a.is_manager,
+        client_id: clientByAccountId.get(a.customer_id)?.id ?? null,
+        client_name: clientByAccountId.get(a.customer_id)?.name ?? null,
+      }))
+
+      if (args.client_id) {
+        result = result.filter((a: any) => a.client_id === args.client_id)
+      }
+
+      return { count: result.length, accounts: result }
+    }
+
+    case 'connect_google_ads_account': {
+      const { client_id, customer_id } = args
+      if (!client_id || !customer_id) return { error: 'client_id ו-customer_id נדרשים' }
+
+      const cleanId = String(customer_id).replace(/-/g, '')
+
+      const { data: client } = await supabase
+        .from('clients')
+        .select('id, name, google_ads_account_id')
+        .in('tenant_id', accessibleTenantIds)
+        .eq('id', client_id)
+        .maybeSingle()
+
+      if (!client) return { error: 'לקוח לא נמצא' }
+
+      const { error: updateErr } = await supabase
+        .from('clients')
+        .update({ google_ads_account_id: cleanId })
+        .eq('id', client_id)
+
+      if (updateErr) throw updateErr
+
+      await supabase.from('agent_action_log').insert({
+        tenant_id: tenantId,
+        action_type: 'connect_google_ads_account',
+        status: 'success',
+        action_details: { client_id, client_name: client.name, customer_id: cleanId, previous_id: client.google_ads_account_id ?? null },
+      }).then(() => {}, () => {})
+
+      return { success: true, client_id, client_name: client.name, customer_id: cleanId }
     }
 
     // ============ SCHEDULES ============
