@@ -12,7 +12,6 @@ import { toast } from "sonner";
 import { Plus, Trash2, Megaphone, Share2, Link2, Loader2, LayoutDashboard } from "lucide-react";
 import {
   CLIENT_CHANNELS,
-  isChannelActive,
   ALL_CHANNEL_FIELD_KEYS,
   type ChannelFieldKey,
 } from "@/config/clientChannels";
@@ -38,19 +37,18 @@ export function ClientConnectionsTab({ clientId, tenantId, onProvisioned }: Prop
   if (conns.isLoading || !conns.data) return <div className="p-4 text-sm text-muted-foreground">טוען חיבורים...</div>;
 
   const c = conns.data.client as Record<string, any> | null;
-  const services: string[] = Array.isArray(c?.services) ? c!.services : [];
-  const activeChannels = CLIENT_CHANNELS.filter((ch) => isChannelActive(ch, services));
+
+  // Show ALL channels regardless of the client's services configuration
+  const allChannels = CLIENT_CHANNELS;
 
   const fieldValue = (key: ChannelFieldKey): string => edits[key] ?? (c?.[key] ?? "") ?? "";
   const setFieldValue = (key: ChannelFieldKey, value: string) => setEdits((prev) => ({ ...prev, [key]: value }));
 
   const saveClientFields = async () => {
     setSaving(true);
-    // Only persist fields belonging to channels currently active for this client.
-    const activeKeys = new Set<ChannelFieldKey>(activeChannels.flatMap((ch) => ch.fields.map((f) => f.key)));
+    // Persist all channel fields regardless of active services
     const payload: Record<string, string | null> = {};
     for (const key of ALL_CHANNEL_FIELD_KEYS) {
-      if (!activeKeys.has(key)) continue;
       const val = fieldValue(key).trim();
       payload[key] = val || null;
     }
@@ -106,12 +104,10 @@ export function ClientConnectionsTab({ clientId, tenantId, onProvisioned }: Prop
     conns.invalidate();
   };
 
-  const showFacebookPages = activeChannels.some((ch) => ch.showFacebookPages);
-
   return (
     <div className="space-y-4" dir="rtl">
-      {/* Per-channel connection fields — only channels the client is marked for */}
-      {activeChannels.map((ch) => {
+      {/* All channels — shown unconditionally regardless of client services */}
+      {allChannels.map((ch) => {
         const missing = ch.fields.some((f) => !fieldValue(f.key).trim());
         return (
           <Card key={ch.id} className="p-4 space-y-3">
@@ -149,12 +145,11 @@ export function ClientConnectionsTab({ clientId, tenantId, onProvisioned }: Prop
         </Button>
       </div>
 
-      {/* Social pages — shown only when a channel that uses Facebook pages is active */}
-      {showFacebookPages && (
-        <Card className="p-4 space-y-3">
-          <div className="flex items-center gap-2 font-semibold text-sm">
-            <Share2 className="h-4 w-4" /> עמודי סושיאל מחוברים
-          </div>
+      {/* Social pages — always shown */}
+      <Card className="p-4 space-y-3">
+        <div className="flex items-center gap-2 font-semibold text-sm">
+          <Share2 className="h-4 w-4" /> עמודי סושיאל מחוברים
+        </div>
           {conns.data.socialPages.length === 0 ? (
             <p className="text-xs text-muted-foreground">אין עמודים מחוברים</p>
           ) : (
@@ -198,7 +193,6 @@ export function ClientConnectionsTab({ clientId, tenantId, onProvisioned }: Prop
             <Button size="sm" onClick={addPage}><Plus className="ml-1 h-4 w-4" /> הוסף</Button>
           </div>
         </Card>
-      )}
 
       {/* WordPress sites */}
       <Card className="p-4 space-y-3">
