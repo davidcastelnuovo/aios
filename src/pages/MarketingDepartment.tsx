@@ -5,10 +5,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Plus, Workflow, CalendarRange, ArrowRight, Megaphone, Search, Share2, Coins, Palette } from "lucide-react";
+import { Plus, Workflow, CalendarRange, ArrowRight, Megaphone, Search, Share2, Coins, Palette, Settings2 } from "lucide-react";
 import { ClientSelector } from "@/components/marketing/ClientSelector";
 import { ClientConnectionsBar } from "@/components/marketing/ClientConnectionsBar";
-import { PipelineCanvas } from "@/components/marketing/PipelineCanvas";
+import { MarketingPipelineBoard } from "@/components/marketing/MarketingPipelineBoard";
+import { GlobalStageSettings } from "@/components/marketing/GlobalStageSettings";
 import { WorkItemSidePanel } from "@/components/marketing/WorkItemSidePanel";
 import { CreativeBoard } from "@/components/marketing/CreativeBoard";
 import { UsagePanel } from "@/components/marketing/UsagePanel";
@@ -37,6 +38,7 @@ export default function MarketingDepartment() {
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [topTab, setTopTab] = useState<MarketingTrack | "calendar" | "creative" | "usage">("campaigns");
   const [calendarTrack, setCalendarTrack] = useState<MarketingTrack>("campaigns");
+  const [globalSettingsOpen, setGlobalSettingsOpen] = useState(false);
   const track: MarketingTrack = topTab === "calendar"
     ? calendarTrack
     : (topTab === "creative" || topTab === "usage" ? "campaigns" : topTab);
@@ -103,9 +105,19 @@ export default function MarketingDepartment() {
         )}
         <div className="ms-auto flex items-center gap-2">
           {pipeline && (
-            <Button onClick={handleNewItem} size="sm">
-              <Plus className="ml-1 h-4 w-4" />
-              פריט תוכן חדש
+            <Button onClick={handleNewItem} size="sm" variant="outline" className="gap-1">
+              <Plus className="h-4 w-4" />
+              פריט חדש
+            </Button>
+          )}
+          {tenantId && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setGlobalSettingsOpen(true)}
+              title="הגדרות גלובליות לפס הייצור"
+            >
+              <Settings2 className="h-4 w-4" />
             </Button>
           )}
         </div>
@@ -152,13 +164,16 @@ export default function MarketingDepartment() {
 
             {!pipeline ? (
               <div className="flex flex-1 items-center justify-center">
-                <div className="text-sm text-muted-foreground">טוען פס יצור...</div>
+                <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted border-t-primary" />
+                  <span className="text-sm">טוען פס ייצור...</span>
+                </div>
               </div>
             ) : (
               <>
                 {TRACKS.map(({ value }) => (
                   <TabsContent key={value} value={value} className="flex-1 min-h-0 m-0">
-                    <PipelineCanvas
+                    <MarketingPipelineBoard
                       pipelineId={pipeline.id}
                       tenantId={tenantId!}
                       clientId={clientId}
@@ -206,6 +221,14 @@ export default function MarketingDepartment() {
 
 
       <WorkItemSidePanel itemId={selectedItemId} onClose={() => setSelectedItemId(null)} />
+
+      {tenantId && (
+        <GlobalStageSettings
+          open={globalSettingsOpen}
+          onClose={() => setGlobalSettingsOpen(false)}
+          tenantId={tenantId}
+        />
+      )}
     </div>
   );
 }
