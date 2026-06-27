@@ -11,9 +11,11 @@ const corsHeaders = {
 const TEXT_MODEL = 'gpt-4o-mini';
 const IMAGE_MODEL = 'dall-e-3';
 
-// Cost per 1M tokens (rough Gemini Flash pricing for usage display)
-const COST_IN_PER_M = 0.075;
-const COST_OUT_PER_M = 0.3;
+// GPT-4o-mini pricing (USD per 1M tokens)
+const COST_IN_PER_M = 0.15;
+const COST_OUT_PER_M = 0.60;
+// DALL-E 3: $0.040 per image (1024x1024 standard)
+const DALLE3_COST_PER_IMAGE = 0.040;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -238,6 +240,9 @@ serve(async (req) => {
       assetUrl = pub.publicUrl;
       assetType = "image";
       outputJson = { image_url: assetUrl };
+      // DALL-E 3 is billed per image, not per token — add fixed cost here
+      tokensIn = 0;
+      tokensOut = 0;
     } else {
       // Text generation
       const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -292,7 +297,9 @@ serve(async (req) => {
     if (assetType === "image") newPayload.image_url = assetUrl;
     await admin.from("marketing_work_items").update({ payload: newPayload }).eq("id", item_id);
 
-    const cost = (tokensIn * COST_IN_PER_M + tokensOut * COST_OUT_PER_M) / 1_000_000;
+    const cost = stageType === "creative"
+      ? DALLE3_COST_PER_IMAGE
+      : (tokensIn * COST_IN_PER_M + tokensOut * COST_OUT_PER_M) / 1_000_000;
 
     // Decide: auto-advance or wait for approval
     const approvalMode = stage.approval_mode ?? "manual";
