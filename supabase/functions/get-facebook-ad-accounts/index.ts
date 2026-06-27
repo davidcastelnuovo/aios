@@ -32,42 +32,154 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Use service role to bypass RLS for reliable token retrieval (we already authenticated the user above)
+    // Optional: caller can specify a specific integration_id to use
+    const url = new URL(req.url);
+    const requestedIntegrationId = url.searchParams.get('integration_id') || null;
+
+    // Use service role to bypass RLS for reliable token retrieval
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Get Facebook access token from tenant_integrations (including shared)
-    let { data: integration, error: intError } = await supabaseAdmin
-      .from('tenant_integrations')
-      .select('id, api_key, settings, shared_from_integration_id')
-      .eq('tenant_id', tenantId)
-      .in('integration_type', ['facebook', 'facebook_lead_ads'])
-      .eq('is_active', true)
-      .order('updated_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    let integration: any = null;
 
-    console.log('Facebook integration lookup:', { tenantId, found: !!integration, hasToken: !!integration?.api_key, sharedFrom: integration?.shared_from_integration_id, error: intError?.message });
+    if (requestedIntegrationId) {
+      // Fetch the specific integration and verify the user has access
+      const { data: specific } = await supabaseAdmin
+        .from('tenant_integrations')
+        .select('id, api_key, settings, shared_from_integration_id, user_id, connection_visibility, tenant_id')
+        .eq('id', requestedIntegrationId)
+        .eq('is_active', true)
+        .maybeSingle();
 
-    // If this is a shared integration, fetch the source integration's token
+      if (specific) {
+        const canAccess =
+          specific.user_id === user.id ||
+          specific.connection_visibility === 'org' ||
+          specific.user_id === null;
+
+        if (!canAccess && specific.connection_visibility === 'shared') {
+          const { data: perm } = await supabaseAdmin
+            .from('integration_user_permissions')
+            .select('id')
+            .eq('integration_id', requestedIntegrationId)
+            .eq('user_id', user.id)
+            .maybeSingle();
+          if (perm) integration = specific;
+        } else if (canAccess) {
+          integration = specific;
+        }
+      }
+
+      if (!integration) {
+        return new Response(JSON.stringify({
+          error: 'Integration not found or access denied',
+          message: 'אין גישה לחיבור המבוקש',
+        }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+    } else {
+      // Auto-select: prefer the user's own connection, then org-visible, then shared
+      // 1. User's own connection
+      const { data: ownIntegration } = await supabaseAdmin
+        .from('tenant_integrations')
+        .select('id, api_key, settings, shared_from_integration_id, user_id, connection_visibility')
+        .eq('tenant_id', tenantId)
+        .in('integration_type', ['facebook', 'facebook_lead_ads'])
+        .eq('is_active', true)
+        .eq('user_id', user.id)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (ownIntegration?.api_key) {
+        integration = ownIntegration;
+      } else {
+        // 2. Org-visible connections
+        const { data: orgIntegration } = await supabaseAdmin
+          .from('tenant_integrations')
+          .select('id, api_key, settings, shared_from_integration_id, user_id, connection_visibility')
+          .eq('tenant_id', tenantId)
+          .in('integration_type', ['facebook', 'facebook_lead_ads'])
+          .eq('is_active', true)
+          .eq('connection_visibility', 'org')
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (orgIntegration?.api_key) {
+          integration = orgIntegration;
+        } else {
+          // 3. Shared with this specific user
+          const { data: permissions } = await supabaseAdmin
+            .from('integration_user_permissions')
+            .select('integration_id')
+            .eq('user_id', user.id);
+
+          const sharedIds = (permissions || []).map((p: any) => p.integration_id);
+
+          if (sharedIds.length > 0) {
+            const { data: sharedIntegration } = await supabaseAdmin
+              .from('tenant_integrations')
+              .select('id, api_key, settings, shared_from_integration_id, user_id, connection_visibility')
+              .eq('tenant_id', tenantId)
+              .in('integration_type', ['facebook', 'facebook_lead_ads'])
+              .eq('is_active', true)
+              .in('id', sharedIds)
+              .order('updated_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            if (sharedIntegration?.api_key) {
+              integration = sharedIntegration;
+            }
+          }
+
+          // 4. Fallback: any active integration for this tenant (legacy behaviour)
+          if (!integration) {
+            const { data: fallback } = await supabaseAdmin
+              .from('tenant_integrations')
+              .select('id, api_key, settings, shared_from_integration_id, user_id, connection_visibility')
+              .eq('tenant_id', tenantId)
+              .in('integration_type', ['facebook', 'facebook_lead_ads'])
+              .eq('is_active', true)
+              .order('updated_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            integration = fallback;
+          }
+        }
+      }
+    }
+
+    console.log('Facebook integration lookup:', {
+      tenantId,
+      userId: user.id,
+      requestedId: requestedIntegrationId,
+      found: !!integration,
+      hasToken: !!integration?.api_key,
+      visibility: integration?.connection_visibility,
+      sharedFrom: integration?.shared_from_integration_id,
+    });
+
+    // If this is a cross-tenant shared integration, fetch the source token
     if (integration?.shared_from_integration_id && !integration?.api_key) {
       const { data: sourceIntegration } = await supabaseAdmin
         .from('tenant_integrations')
         .select('api_key, settings')
         .eq('id', integration.shared_from_integration_id)
         .maybeSingle();
-      
-      console.log('Shared source lookup:', { sourceId: integration.shared_from_integration_id, hasToken: !!sourceIntegration?.api_key });
 
+      console.log('Shared source lookup:', { sourceId: integration.shared_from_integration_id, hasToken: !!sourceIntegration?.api_key });
       if (sourceIntegration?.api_key) {
         integration = { ...integration, api_key: sourceIntegration.api_key };
       }
     }
 
     if (!integration?.api_key) {
-      return new Response(JSON.stringify({ 
+      return new Response(JSON.stringify({
         error: 'Facebook not configured',
         message: 'יש להגדיר תחילה את האינטגרציה עם פייסבוק',
         debug: { tenantId, foundIntegration: !!integration }
@@ -79,8 +191,7 @@ Deno.serve(async (req) => {
     const accessToken = integration.api_key;
     const FIELDS = 'id,name,account_status,currency,amount_spent';
 
-    // Paginate a Graph edge, returning all rows. Never throws — a missing permission on
-    // one edge must not break discovery via the others.
+    // Paginate a Graph edge, returning all rows. Never throws.
     const fetchEdge = async (url: string): Promise<any[]> => {
       const out: any[] = [];
       let next: string | null = url;
@@ -100,9 +211,7 @@ Deno.serve(async (req) => {
     // 1) Ad accounts the token user OWNS directly.
     const owned = await fetchEdge(`https://graph.facebook.com/v21.0/me/adaccounts?fields=${FIELDS}&limit=100&access_token=${accessToken}`);
 
-    // 2) Agency case: accounts shared via Business Manager. me/adaccounts does NOT surface
-    //    accounts a Business merely has access to (client accounts), so walk each business the
-    //    user belongs to and pull both client_ad_accounts and owned_ad_accounts.
+    // 2) Agency case: accounts shared via Business Manager.
     const businesses = await fetchEdge(`https://graph.facebook.com/v21.0/me/businesses?fields=id,name&limit=100&access_token=${accessToken}`);
     const bmAccounts: any[] = [];
     for (const biz of businesses) {
@@ -113,7 +222,7 @@ Deno.serve(async (req) => {
       for (const a of [...clientAcc, ...ownedAcc]) bmAccounts.push({ ...a, business_id: biz.id, business_name: biz.name });
     }
 
-    // Merge + dedupe by account id (owned-direct first, then Business Manager).
+    // Merge + dedupe by account id
     const byId = new Map<string, any>();
     for (const a of [...owned, ...bmAccounts]) {
       if (!a?.id) continue;
@@ -121,7 +230,13 @@ Deno.serve(async (req) => {
     }
     const allAdAccounts = [...byId.values()];
 
-    console.log('FB ad-account discovery:', { owned: owned.length, businesses: businesses.length, viaBusinessManager: bmAccounts.length, total: allAdAccounts.length });
+    console.log('FB ad-account discovery:', {
+      owned: owned.length,
+      businesses: businesses.length,
+      viaBusinessManager: bmAccounts.length,
+      total: allAdAccounts.length,
+      integrationId: integration.id,
+    });
 
     return new Response(JSON.stringify({
       ad_accounts: allAdAccounts.map(acc => ({
@@ -132,7 +247,9 @@ Deno.serve(async (req) => {
         amount_spent: acc.amount_spent,
         business_id: acc.business_id || null,
         business_name: acc.business_name || null,
-      }))
+      })),
+      integration_id: integration.id,
+      integration_visibility: integration.connection_visibility || 'private',
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
