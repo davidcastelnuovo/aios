@@ -432,6 +432,100 @@ export default function Automations() {
     },
   });
 
+  // Create "Manus Direct" automation — manual_command trigger + send_manus_direct action
+  const createManusDirectMutation = useMutation({
+    mutationFn: async () => {
+      if (!tenantId) throw new Error("No tenant");
+      // Find Carmen or any active agent for the agent node
+      const { data: agentsList } = await supabase
+        .from("ai_agents" as any)
+        .select("id,name,active")
+        .eq("tenant_id", tenantId)
+        .eq("active", true);
+      const carmenAgent = (agentsList as any[] || []).find((a) => /כרמן|carmen/i.test(a.name || "")) || (agentsList as any[] || [])[0];
+      // Create the automation header
+      const { data, error } = await supabase
+        .from("automations")
+        .insert({
+          name: "תקשורת ישירה עם Manus",
+          description: "שלח הודעה ישירה ל-Manus AI דרך פקודה ידנית — לשאלות, עדכונים ומשימות מהירות",
+          tenant_id: tenantId,
+          trigger_type: "manual_command",
+          action_type: "notification",
+          configuration: {},
+          is_flow: true,
+          active: true,
+        } as any)
+        .select()
+        .single();
+      if (error) throw error;
+      const mk = (over: any) => ({
+        id: crypto.randomUUID(),
+        automation_id: data.id,
+        tenant_id: tenantId,
+        condition_branch: null,
+        ...over,
+      });
+      // Build flow steps:
+      // 1. Trigger: manual_command — user sends a message/command
+      // 2. Action: agent node — Carmen processes the command and builds the Manus message
+      // 3. Action: send_manus_direct — sends the message directly to Manus
+      const steps = [
+        mk({
+          step_type: "trigger",
+          action_type: "manual_command",
+          label: "פקודה ידנית",
+          configuration: {
+            command_description: "שלח הודעה ישירה ל-Manus AI",
+            input_fields: [
+              { key: "message", label: "הודעה ל-Manus", type: "text", required: true },
+              { key: "task_id", label: "מזהה משימה קיימת (אופציונלי)", type: "text", required: false },
+            ],
+          },
+          position_x: 0,
+          position_y: 0,
+          sort_order: 0,
+        }),
+        ...(carmenAgent ? [mk({
+          step_type: "agent",
+          action_type: "agent",
+          label: "עיבוד ע\"י כרמן (אופציונלי)",
+          configuration: {
+            agent_id: carmenAgent.id,
+            output_format: "single_reply",
+            step_instruction: "קבל את ההודעה הבאה ושלח אותה ל-Manus כפי שהיא, אלא אם המשתמש ביקש לעבד אותה: {{message}}",
+            skip_if_empty: true,
+          },
+          position_x: 0,
+          position_y: 160,
+          sort_order: 1,
+        })] : []),
+        mk({
+          step_type: "action",
+          action_type: "send_manus_direct",
+          label: "שלח ל-Manus",
+          configuration: {
+            message_template: "{{message}}",
+            task_id_template: "{{task_id}}",
+            agent_profile: "manus-1.6",
+          },
+          position_x: 0,
+          position_y: carmenAgent ? 320 : 160,
+          sort_order: carmenAgent ? 2 : 1,
+        }),
+      ];
+      await supabase.from("automation_flow_steps" as any).insert(steps);
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["automations"] });
+      navigate(buildPath(`automations/flow/${data.id}`));
+    },
+    onError: (err: any) => {
+      toast({ title: "שגיאה", description: err.message, variant: "destructive" });
+    },
+  });
+
   // Create new flow automation
   const createFlowMutation = useMutation({
     mutationFn: async () => {
@@ -570,6 +664,27 @@ export default function Automations() {
         >
           <Plus className="h-4 w-4 ml-2" />
           צור תבנית
+        </Button>
+      </div>
+
+      {/* Manus Direct Communication template */}
+      <div className="flex items-center gap-3 p-4 rounded-lg border bg-gradient-to-l from-violet-500/10 to-transparent">
+        <div className="p-2 rounded-full bg-violet-500/20">
+          <Bot className="h-5 w-5 text-violet-500" />
+        </div>
+        <div className="flex-1">
+          <p className="font-semibold text-sm">תבנית: תקשורת ישירה עם Manus</p>
+          <p className="text-xs text-muted-foreground">פקודה ידנית → עיבוד כרמן (אופציונלי) → שליחת הודעה ישירה ל-Manus AI. לשאלות, עדכונים ומשימות מהירות.</p>
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="shrink-0 border-violet-500 text-violet-600 hover:bg-violet-50"
+          onClick={() => createManusDirectMutation.mutate()}
+          disabled={createManusDirectMutation.isPending}
+        >
+          <Plus className="h-4 w-4 ml-2" />
+          {createManusDirectMutation.isPending ? "יוצר..." : "צור תבנית"}
         </Button>
       </div>
 
