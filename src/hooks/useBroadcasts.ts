@@ -7,16 +7,17 @@ export type BroadcastStatus =
   | "draft" | "scheduled" | "sending" | "sent" | "paused" | "failed" | "canceled";
 
 export interface AudienceFilter {
-  source: "clients" | "leads" | "campaigners" | "list";
-  statuses?: string[];     // clients
-  serviceTags?: string[];  // clients
-  statusKeys?: string[];   // leads
+  source: "clients" | "leads" | "campaigners" | "list" | "wa_groups";
+  statuses?: string[];       // clients
+  serviceTags?: string[];    // clients
+  statusKeys?: string[];     // leads
   salesPersonIds?: string[]; // leads
-  tagIds?: string[];       // clients/leads
-  roles?: string[];        // campaigners
-  activeOnly?: boolean;    // campaigners
-  listId?: string;         // source = list
-  includeIds?: string[];   // manual selection within a source
+  tagIds?: string[];         // clients/leads
+  roles?: string[];          // campaigners
+  activeOnly?: boolean;      // campaigners
+  listId?: string;           // source = list
+  groupIds?: string[];       // source = wa_groups (whatsapp_groups UUIDs)
+  includeIds?: string[];     // manual selection within a source
   excludeIds?: string[];
 }
 
@@ -141,7 +142,8 @@ export function useBroadcasts() {
   const launch = useMutation({
     mutationFn: async ({ id, sendNow, scheduledAt }: { id: string; sendNow: boolean; scheduledAt?: string | null }) => {
       const res = await enqueue(id);
-      if (!res?.total) throw new Error("אין נמענים תקינים לדיוור");
+      if (!res?.total && res?.total !== 0) throw new Error("אין נמענים תקינים לדיוור");
+      if (res.total === 0) throw new Error("אין נמענים תקינים לדיוור");
       const patch: any = sendNow
         ? { status: "sending", scheduled_at: new Date().toISOString(), started_at: new Date().toISOString() }
         : { status: "scheduled", scheduled_at: scheduledAt };
