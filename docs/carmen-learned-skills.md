@@ -195,21 +195,26 @@ Claude Code health-check skill written to `ai_skills` (scope=tenant, created_by_
 
 ---
 
-## 2026-06-28 — auto_task_calendar_sync (implemented)
+## 2026-06-28 — get_group_members (WhatsApp group participant identification)
 
-**Capability:** יצירת אירוע Google Calendar אוטומטי כשמשימה נוצרת דרך create_task.
+**Skill slug:** `get_group_members`
+**Trigger phrases:** מי בקבוצה, מי שלח, משתתפי הקבוצה, who is in the group, group members, participant list, זהה שולח
 
-**Root cause of original failure:** הסנכרון היה ידני בלבד — `sync-tasks-to-calendar` דרש auth token של משתמש מחובר. כרמן רצה כ-system (ללא user session), כך שהפונקציה לא יכלה לרוץ אחרי יצירת משימה.
+**What was built:**
+- DB migration: `whatsapp_group_participants` table — caches group participant JIDs, phones, names, is_admin flags, and known lead/client FK links.
+- Tool `get_group_members(group_chat_id, force_refresh?)` in `run-ai-agent/index.ts`:
+  - Looks up the group by `group_chat_id` in `whatsapp_groups`
+  - Auto-syncs from GreenAPI `getGroupData` if no cached participants found (or `force_refresh=true`)
+  - Enriches each participant with `lead_id`/`client_id` by matching last-9-digits of phone
+  - Back-fills `display_name` from recent `chat_messages.sender_name` for that participant
+  - Returns: `phone, name, is_admin, is_super_admin, is_known_contact, contact_type (lead/client/unknown), lead_id, client_id`
+- `green-api-webhook/index.ts`: on new group creation, seeds participants in the background (fire-and-forget `getGroupData` call)
+- `green-api-webhook/index.ts`: on each incoming group message, updates participant `display_name` if it was previously null
 
-**Fix (PR #86, merged to main, deployed):** הוספת לוגיקת auto-sync ישירות ב-`create_task` handler בתוך `executeTool()` ב-`run-ai-agent/index.ts`. לאחר insert מוצלח של משימה עם `due_date` + `due_time`, הקוד:
-1. מחפש את ה-user_id הקשור ל-campaigner_id (via `profiles`)
-2. שולף את `calendar_tokens` של אותו user (service role — לא צריך auth token)
-3. מרענן access_token אם פג תוקף
-4. יוצר אירוע ב-Google Calendar עם start/end בשעון ישראל (`Asia/Jerusalem`)
-5. שומר `google_calendar_event_id` ב-tasks row
+**How to use:**
+- "מי בקבוצה הזאת?" → `get_group_members(group_chat_id="120363...@g.us")`
+- לאחר בדיקה עם `list_wa_groups` לקבלת `group_chat_id`, קרא ל-`get_group_members`
+- האם שולח הודעה הוא לקוח מוכר: `get_group_members` → בדקי `is_known_contact` + `contact_type`
+- ריענון עדכני: `get_group_members(group_chat_id=..., force_refresh=true)`
 
-**Return value of create_task:** כולל `calendar_event_id` ו-`calendar_synced: true` כשהסנכרון הצליח. סנכרון נכשל = לא ממצע את יצירת המשימה (non-fatal).
-
-**How Carmen should use it:** אין שינוי — פשוט קוראת ל-`create_task` עם `due_date` ו-`due_time`. אין צורך בקריאה נפרדת לכלי calendar.
-
-**Skin updated:** `auto_task_calendar_sync` (scope=tenant, created_by_agent=true) — system_prompt עודכן לציין שהפיצ'ר מיושם וש-create_task מחזיר calendar_event_id.
+**Note:** GreenAPI `getGroupData` requires `group_chat_id` (the full JID like `120363...@g.us`), NOT the internal UUID. The webhook passes this in `senderData.chatId` for group messages.
