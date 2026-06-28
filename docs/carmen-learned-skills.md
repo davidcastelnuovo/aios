@@ -195,55 +195,21 @@ Claude Code health-check skill written to `ai_skills` (scope=tenant, created_by_
 
 ---
 
-## 2026-06-28 — auto_task_calendar_sync
+## 2026-06-28 — auto_task_calendar_sync (implemented)
 
-**Skill slug:** `auto_task_calendar_sync`
-**Trigger phrases:** צור משימה ביומן, תזמן פגישה, הוסף ליומן, create calendar event, schedule task, add to calendar
+**Capability:** יצירת אירוע Google Calendar אוטומטי כשמשימה נוצרת דרך create_task.
 
-**Problem solved:** When Carmen created a task via `create_task` with a `due_date` + `due_time`, no Google Calendar event was created — tasks were only stored in the DB.
+**Root cause of original failure:** הסנכרון היה ידני בלבד — `sync-tasks-to-calendar` דרש auth token של משתמש מחובר. כרמן רצה כ-system (ללא user session), כך שהפונקציה לא יכלה לרוץ אחרי יצירת משימה.
 
-**What was built:**
-- New edge function `supabase/functions/create-task-calendar-event/index.ts`:
-  - Accepts `{ task_id }` via service role key (internal call only)
-  - Resolves `campaigner_id → profiles.id → calendar_tokens` to find whose calendar to write to
-  - Falls back to tenant owner if no profile is linked to the campaigner
-  - Refreshes expired OAuth tokens automatically
-  - Creates a Google Calendar event (default 30 min, or `duration_minutes` if set)
-  - Stores the returned `eventId` in `tasks.google_calendar_event_id`
-  - Idempotent: skips if task already has `google_calendar_event_id`
-- Hook in `run-ai-agent/index.ts` `create_task` handler: after successful task insert, fires `create-task-calendar-event` as a **non-blocking background fetch** — task creation never fails due to calendar errors.
+**Fix (PR #86, merged to main, deployed):** הוספת לוגיקת auto-sync ישירות ב-`create_task` handler בתוך `executeTool()` ב-`run-ai-agent/index.ts`. לאחר insert מוצלח של משימה עם `due_date` + `due_time`, הקוד:
+1. מחפש את ה-user_id הקשור ל-campaigner_id (via `profiles`)
+2. שולף את `calendar_tokens` של אותו user (service role — לא צריך auth token)
+3. מרענן access_token אם פג תוקף
+4. יוצר אירוע ב-Google Calendar עם start/end בשעון ישראל (`Asia/Jerusalem`)
+5. שומר `google_calendar_event_id` ב-tasks row
 
-**How to use:**
-- Just use `create_task` with `due_date` and `due_time` as usual — the calendar event is created automatically in the background. No separate tool call needed.
-- If task has no `due_date`/`due_time` → no calendar event (correct behaviour).
+**Return value of create_task:** כולל `calendar_event_id` ו-`calendar_synced: true` כשהסנכרון הצליח. סנכרון נכשל = לא ממצע את יצירת המשימה (non-fatal).
 
-**PR:** #84 — merged to main, CI green, both functions deployed.
+**How Carmen should use it:** אין שינוי — פשוט קוראת ל-`create_task` עם `due_date` ו-`due_time`. אין צורך בקריאה נפרדת לכלי calendar.
 
-
----
-
-## 2026-06-28 — create_calendar_event (Google Calendar)
-
-**Capability:** יצירת אירועי Google Calendar ישירות מכרמן — כולל שליחת הזמנות למשתתפים לפי אימייל.
-
-**What was built:**
-- כלי חדש `create_calendar_event` ב-`run-ai-agent/index.ts`:
-  - קורא ל-Google Calendar API v3 (`/calendars/primary/events?sendUpdates=all`)
-  - Auth: `calendar_tokens` (מטבלת `calendar_tokens` — user_id, access_token, refresh_token)
-  - אם `user_id` לא מצוין — מוצא אוטומטית את המשתמש הראשון בטננט עם יומן מחובר (`needs_reconnect=false`) דרך join עם `tenant_users`
-  - רענון אוטומטי של access_token אם פג תוקף (GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET env vars)
-  - תומך: title, date (YYYY-MM-DD), time (HH:MM), duration_minutes (ברירת מחדל 60), attendees ([]), description, client_id (logging), user_id (optional override)
-  - Timezone: Asia/Jerusalem (ישראל)
-  - מתעד ב-`agent_action_log` (action_type='create_calendar_event')
-  - מחזיר: event_id, html_link, title, start, end, calendar_user, attendees_invited
-
-**Prerequisites:**
-- לפחות משתמש אחד בטננט חיבר Google Calendar דרך הגדרות
-- env vars פעילים: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
-
-**How to use:**
-- "צרי אירוע ביומן לרביעי 1.7 ב-14:00 עם פליקס" → `create_calendar_event(title="פגישה עם פליקס", date="2026-07-01", time="14:00", attendees=["felix@example.com"])`
-- "תזמני פגישת צוות ל-3.7 ב-10:00 שעתיים" → `create_calendar_event(title="פגישת צוות", date="2026-07-03", time="10:00", duration_minutes=120)`
-- "צרי אירוע עם הלקוח X" → `create_calendar_event(title=..., date=..., time=..., client_id=X)`
-
-**PR:** merged to main — commit c5d0280413e4d6b7e81804314a71724e736d91ef
+**Skin updated:** `auto_task_calendar_sync` (scope=tenant, created_by_agent=true) — system_prompt עודכן לציין שהפיצ'ר מיושם וש-create_task מחזיר calendar_event_id.
