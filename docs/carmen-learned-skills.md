@@ -192,3 +192,24 @@ Claude Code health-check skill written to `ai_skills` (scope=tenant, created_by_
 - סינון לפי לקוח: `list_google_ad_accounts(client_id=...)`
 
 **PR:** [יתעדכן עם מספר PR]
+
+---
+
+## 2026-06-28 — auto_task_calendar_sync (implemented)
+
+**Capability:** יצירת אירוע Google Calendar אוטומטי כשמשימה נוצרת דרך create_task.
+
+**Root cause of original failure:** הסנכרון היה ידני בלבד — `sync-tasks-to-calendar` דרש auth token של משתמש מחובר. כרמן רצה כ-system (ללא user session), כך שהפונקציה לא יכלה לרוץ אחרי יצירת משימה.
+
+**Fix (PR #86, merged to main, deployed):** הוספת לוגיקת auto-sync ישירות ב-`create_task` handler בתוך `executeTool()` ב-`run-ai-agent/index.ts`. לאחר insert מוצלח של משימה עם `due_date` + `due_time`, הקוד:
+1. מחפש את ה-user_id הקשור ל-campaigner_id (via `profiles`)
+2. שולף את `calendar_tokens` של אותו user (service role — לא צריך auth token)
+3. מרענן access_token אם פג תוקף
+4. יוצר אירוע ב-Google Calendar עם start/end בשעון ישראל (`Asia/Jerusalem`)
+5. שומר `google_calendar_event_id` ב-tasks row
+
+**Return value of create_task:** כולל `calendar_event_id` ו-`calendar_synced: true` כשהסנכרון הצליח. סנכרון נכשל = לא ממצע את יצירת המשימה (non-fatal).
+
+**How Carmen should use it:** אין שינוי — פשוט קוראת ל-`create_task` עם `due_date` ו-`due_time`. אין צורך בקריאה נפרדת לכלי calendar.
+
+**Skin updated:** `auto_task_calendar_sync` (scope=tenant, created_by_agent=true) — system_prompt עודכן לציין שהפיצ'ר מיושם וש-create_task מחזיר calendar_event_id.
