@@ -55,7 +55,44 @@ export async function ensurePipelineForClient({
     .eq("track", track)
     .maybeSingle();
 
-  if (existing) return existing;
+  if (existing) {
+    // Check if stages exist — if not, seed them (handles legacy pipelines created before stage seeding)
+    const { count } = await supabase
+      .from("marketing_pipeline_stages")
+      .select("id", { count: "exact", head: true })
+      .eq("pipeline_id", existing.id);
+
+    if ((count ?? 0) === 0) {
+      const { data: templates } = await supabase
+        .from("marketing_stage_templates")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .eq("track", track);
+
+      const tplByStageType: Record<string, any> = {};
+      (templates ?? []).forEach((t: any) => { tplByStageType[t.stage_type] = t; });
+
+      await supabase.from("marketing_pipeline_stages").insert(
+        buildDefaultStages(track).map((s) => {
+          const tpl = tplByStageType[s.stage_type];
+          return {
+            pipeline_id: existing.id,
+            tenant_id: tenantId,
+            ...s,
+            name: tpl?.name ?? s.name,
+            agent_id: tpl?.default_agent_id ?? null,
+            approval_mode: tpl?.default_approval_mode ?? "manual",
+            configuration: {
+              instructions: tpl?.default_instructions ?? "",
+              tools: tpl?.default_tools ?? [],
+              target: tpl?.default_target ?? {},
+            },
+          };
+        }),
+      );
+    }
+    return existing;
+  }
 
   // If select failed (e.g. RLS timing), try upsert approach
   const { data: created, error } = await supabase

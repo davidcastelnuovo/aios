@@ -472,11 +472,25 @@ export function MarketingPipelineBoard({
   };
 
   const stageList = stages ?? [];
+  const isLoading = !stages;
 
   return (
     <div className="flex h-full flex-col" dir="rtl">
       {/* Department cards with flow connectors */}
       <div className="flex flex-1 min-h-0 items-stretch gap-0 overflow-x-auto p-4">
+        {isLoading && (
+          <div className="flex flex-1 items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary/40" />
+          </div>
+        )}
+        {!isLoading && stageList.length === 0 && (
+          <div className="flex flex-1 items-center justify-center">
+            <div className="text-center text-muted-foreground">
+              <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-primary/30" />
+              <p className="text-sm">בונה את פס הייצור... רענן עוד רגע</p>
+            </div>
+          </div>
+        )}
         {stageList.map((stage: any, i: number) => {
           const stageItems = itemsByStage[stage.id] ?? [];
           const hasRunning = stageItems.some((item) => item.status === "in_progress");
