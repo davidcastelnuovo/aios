@@ -213,3 +213,32 @@ Claude Code health-check skill written to `ai_skills` (scope=tenant, created_by_
 **How Carmen should use it:** אין שינוי — פשוט קוראת ל-`create_task` עם `due_date` ו-`due_time`. אין צורך בקריאה נפרדת לכלי calendar.
 
 **Skin updated:** `auto_task_calendar_sync` (scope=tenant, created_by_agent=true) — system_prompt עודכן לציין שהפיצ'ר מיושם וש-create_task מחזיר calendar_event_id.
+
+
+---
+
+## 2026-06-28 — get_group_members + WhatsApp group sender identification
+
+**Capability:** זיהוי משתתפי קבוצות WhatsApp ובפרט זיהוי מי שלח הודעה — האם הוא קמפיינר, לקוח, או לא מוכר.
+
+**What was built:**
+
+1. **כלי `get_group_members`** ב-`run-ai-agent/index.ts`:
+   - קורא ל-`getGroupData` של GreenAPI
+   - מעשיר כל משתתף בנתוני CRM: phone, name, role (campaigner/client/unknown), id, is_known_contact
+   - Parameters: `group_chat_id` (חובה), `integration_id` (אופציונלי)
+
+2. **זיהוי שולח אוטומטי בהודעות קבוצה:**
+   - כשמגיעה הודעה מקבוצת WhatsApp, מספר הטלפון של השולח נבדק מול:
+     - טבלת `campaigners` (כבר היה קיים)
+     - טבלת `clients` (חדש — אם לא נמצא קמפיינר)
+   - אם השולח הוא לקוח: מוזרק לסיסטם פרומפט: "הלקוח [שם] שלח הודעה זו — הגב רק על מידע הנוגע ללקוח זה"
+   - משתני `callerClientId` ו-`callerClientName` זמינים בתוך run-ai-agent
+
+**How to use:**
+- "מי בקבוצה הזו?" → `get_group_members(group_chat_id="120363...@g.us")`
+- מתבצע אוטומטית כשלקוח כותב בקבוצה — כרמן תדע שהשולח הוא הלקוח ותגיב בהתאמה אישית
+
+**DB:** `ai_skills` slug=`get_group_members` (scope=tenant, created_by_agent=true)
+
+**Commits:** c5d0280, 58b4a62 → main
