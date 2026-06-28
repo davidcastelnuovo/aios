@@ -10,7 +10,6 @@ import { ClientSelector } from "@/components/marketing/ClientSelector";
 import { ClientConnectionsBar } from "@/components/marketing/ClientConnectionsBar";
 import { MarketingPipelineBoard } from "@/components/marketing/MarketingPipelineBoard";
 import { GlobalStageSettings } from "@/components/marketing/GlobalStageSettings";
-import { WorkItemSidePanel } from "@/components/marketing/WorkItemSidePanel";
 import { CreativeBoard } from "@/components/marketing/CreativeBoard";
 import { UsagePanel } from "@/components/marketing/UsagePanel";
 import {
@@ -36,7 +35,6 @@ export default function MarketingDepartment() {
   const navigate = useNavigate();
   const { tenant } = useCurrentTenant();
   const tenantId = tenant?.id;
-  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [topTab, setTopTab] = useState<MarketingTrack | "calendar" | "creative" | "usage" | "dashboard">("campaigns");
   const [calendarTrack, setCalendarTrack] = useState<MarketingTrack>("campaigns");
   const [globalSettingsOpen, setGlobalSettingsOpen] = useState(false);
@@ -133,7 +131,6 @@ export default function MarketingDepartment() {
       toast({ title: "שגיאה ביצירת פריט", description: error.message, variant: "destructive" });
       return;
     }
-    setSelectedItemId(data.id);
     refetchCampaigns();
     refetchSeo();
     refetchSocial();
@@ -227,7 +224,6 @@ export default function MarketingDepartment() {
                   tenantId={tenantId!}
                   clientId={clientId}
                   track="campaigns"
-                  onSelectItem={setSelectedItemId}
                 />
               )}
             </TabsContent>
@@ -242,7 +238,6 @@ export default function MarketingDepartment() {
                   tenantId={tenantId!}
                   clientId={clientId}
                   track="seo_geo"
-                  onSelectItem={setSelectedItemId}
                 />
               )}
             </TabsContent>
@@ -257,7 +252,6 @@ export default function MarketingDepartment() {
                   tenantId={tenantId!}
                   clientId={clientId}
                   track="social_organic"
-                  onSelectItem={setSelectedItemId}
                 />
               )}
             </TabsContent>
@@ -292,10 +286,9 @@ export default function MarketingDepartment() {
                           pipelineId={pip.id}
                           tenantId={tenantId!}
                           clientId={clientId!}
-                          onSelectItem={setSelectedItemId}
                         />
                       ) : (
-                        <MarketingCalendarView pipelineId={pip.id} clientId={clientId} onSelectItem={setSelectedItemId} />
+                        <MarketingCalendarView pipelineId={pip.id} clientId={clientId} />
                       )}
                     </TabsContent>
                   );
@@ -310,7 +303,7 @@ export default function MarketingDepartment() {
 
             {/* ── Creative ─────────────────────────────────────────────── */}
             <TabsContent value="creative" className="flex-1 min-h-0 m-0 overflow-auto">
-              <CreativeBoard clientId={clientId} onSelectItem={setSelectedItemId} />
+              <CreativeBoard clientId={clientId} />
             </TabsContent>
 
             {/* ── Dashboard iframe ─────────────────────────────────────── */}
@@ -356,8 +349,6 @@ export default function MarketingDepartment() {
           </Tabs>
         </div>
       )}
-
-      <WorkItemSidePanel itemId={selectedItemId} onClose={() => setSelectedItemId(null)} />
 
       {tenantId && (
         <GlobalStageSettings
