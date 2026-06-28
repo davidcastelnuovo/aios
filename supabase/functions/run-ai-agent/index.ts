@@ -1,6 +1,6 @@
 // redeploy trigger: restore the ai_agents-based run-ai-agent (a direct prod deploy had shipped a
 // broken rewrite querying a non-existent `agents` table → every agent call 404'd). This is the
-// known-good monolithic version from main; CI redeploys it via the Supabase CLI. (re-deploy: a stray placeholder bundle had overwritten v40).
+// known-good monolithic version from main; CI redeploys it via the Supabase CLI. (re-deploy: a stray placeholder bundle had overwritten v40; re-deploy 2026-06-28: fix verify_jwt=false via CI).
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
 import { resolveModelId } from '../_shared/models.ts'
 import { assertCallerCanAccessClient, assertCallerCanAccessEntityClient } from '../_shared/auth-helpers.ts'
