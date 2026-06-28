@@ -1,6 +1,6 @@
 // redeploy trigger: rebundle _shared/carmen.ts keyword-aware routing (retry — esm.sh 522 aborted prior deploy)
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-import { findCarmenSessionAutomation, handleCarmenMessage } from '../_shared/carmen.ts';
+import { findCarmenSessionAutomation, handleCarmenMessage, resolveGroupSenderIdentity } from '../_shared/carmen.ts';
 import { aiTranscribe, aiCleanTranscript } from '../_shared/ai.ts';
 
 const corsHeaders = {
@@ -575,6 +575,35 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Resolve sender identity against CRM and inject a context prefix so Carmen
+      // knows who is writing in the group (campaigner / client / lead / unknown).
+      let enrichedMessageText = messageText;
+      if (authorPhone && messageText.trim()) {
+        try {
+          const identity = await resolveGroupSenderIdentity(supabase, groupTenantId, authorPhone);
+          if (identity) {
+            enrichedMessageText = `${identity.contextLine}\n${messageText}`;
+            // Also upsert into wa_group_members cache (best-effort)
+            const normPhone = authorPhone.replace(/\D/g, '').slice(-9);
+            supabase.from('wa_group_members').upsert({
+              tenant_id: groupTenantId,
+              group_chat_id: groupChatId,
+              phone: normPhone,
+              wa_id: authorPhone.includes('@') ? authorPhone : `${authorPhone}@c.us`,
+              name: senderName || null,
+              contact_type: identity.contactType,
+              contact_id: identity.contactId || null,
+              contact_name: identity.contactName || null,
+              last_synced_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            }, { onConflict: 'tenant_id,group_chat_id,phone' }).then(() => {});
+            console.log('[manus-wa group] sender identity resolved', { authorPhone, contactType: identity.contactType, contactName: identity.contactName });
+          }
+        } catch (identityErr) {
+          console.error('[manus-wa group] identity resolution failed (continuing):', identityErr);
+        }
+      }
+
       let carmenOutcome: string | null = null;
       try {
         const result = await handleCarmenMessage({
@@ -585,7 +614,7 @@ Deno.serve(async (req) => {
           chatId: groupChatId,
           phoneNumber: authorPhone || '',
           senderName,
-          messageText,
+          messageText: enrichedMessageText,
           isIncoming: !isOutgoingFromPhone,
           isManualOutgoing: isOutgoingFromPhone,
           isGroup: true,

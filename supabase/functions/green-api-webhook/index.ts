@@ -1,6 +1,6 @@
 // redeploy trigger: rebundle _shared/carmen.ts keyword-aware routing (retry — esm.sh 522 aborted prior deploy)
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-import { handleCarmenMessage, fetchKnownEntityNames } from '../_shared/carmen.ts';
+import { handleCarmenMessage, fetchKnownEntityNames, resolveGroupSenderIdentity } from '../_shared/carmen.ts';
 import { aiTranscribe, aiCleanTranscript } from '../_shared/ai.ts';
 
 
@@ -1454,6 +1454,37 @@ Deno.serve(async (req) => {
     // Groups are supported — the internal `group_requires_explicit_scope` guard
     // ensures Carmen only replies in groups that the automation explicitly targets.
     if (isIncoming || isManualOutgoing) {
+      // For group messages, resolve the sender's CRM identity and prepend context
+      // so Carmen knows who is writing (campaigner / client / lead).
+      let carmenMessageText = messageText;
+      if (isGroup && phoneNumber && messageText.trim()) {
+        try {
+          const identity = await resolveGroupSenderIdentity(supabaseClient, tenantId, phoneNumber);
+          if (identity) {
+            carmenMessageText = `${identity.contextLine}\n${messageText}`;
+            const groupChatIdForCache = senderData.chatId || '';
+            if (groupChatIdForCache) {
+              const normPhone = phoneNumber.replace(/\D/g, '').slice(-9);
+              supabaseClient.from('wa_group_members').upsert({
+                tenant_id: tenantId,
+                group_chat_id: groupChatIdForCache,
+                phone: normPhone,
+                wa_id: phoneNumber.includes('@') ? phoneNumber : `${phoneNumber}@c.us`,
+                name: senderData.senderName || null,
+                contact_type: identity.contactType,
+                contact_id: identity.contactId || null,
+                contact_name: identity.contactName || null,
+                last_synced_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              }, { onConflict: 'tenant_id,group_chat_id,phone' }).then(() => {});
+            }
+            console.log('[green-api group] sender identity resolved', { phoneNumber, contactType: identity.contactType, contactName: identity.contactName });
+          }
+        } catch (identityErr) {
+          console.error('[green-api group] identity resolution failed (continuing):', identityErr);
+        }
+      }
+
       try {
         const carmenPhoneNumber = isManualOutgoing && sourcePhoneNumber ? sourcePhoneNumber : phoneNumber;
         const carmenChatId = isManualOutgoing && sourcePhoneNumber ? `${sourcePhoneNumber}@c.us` : senderData.chatId;
@@ -1466,7 +1497,7 @@ Deno.serve(async (req) => {
           phoneNumber: carmenPhoneNumber,
           sourcePhoneNumber,
           senderName: senderData.senderName || null,
-          messageText,
+          messageText: carmenMessageText,
           isIncoming,
           isManualOutgoing,
           isGroup,

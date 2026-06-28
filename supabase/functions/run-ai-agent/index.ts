@@ -254,10 +254,6 @@ const ALL_TOOLS = [
   { name: 'list_google_ad_accounts', description: 'שליפת כל חשבונות Google Ads המחוברים לטננט. מחזיר customer_id, name, status, client_id (אם משויך ללקוח).', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'סינון לפי לקוח ספציפי (אופציונלי)' } } } },
   { name: 'connect_google_ads_account', description: 'שיוך חשבון Google Ads (customer_id) ללקוח ב-CRM. שומר את המזהה ב-clients.google_ads_account_id.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח' }, customer_id: { type: 'string', description: 'מזהה חשבון Google Ads (ספרות בלבד, ללא מקפים)' } }, required: ['client_id', 'customer_id'] } },
   // ===========================
-  // GOOGLE CALENDAR
-  // ===========================
-  { name: 'create_calendar_event', description: 'יצירת אירוע ביומן Google Calendar. יוצר אירוע עם כותרת, תאריך, שעה, משתתפים (ישלח להם הזמנה) ותיאור. ברירת מחדל: שעה אחת. אם user_id לא מצוין — ישתמש ביומן של המשתמש הראשון שחיבר יומן בארגון.', parameters: { type: 'object', properties: { title: { type: 'string', description: 'כותרת האירוע' }, date: { type: 'string', description: 'תאריך ב-YYYY-MM-DD (לדוגמה 2026-07-01)' }, time: { type: 'string', description: 'שעת התחלה ב-HH:MM (לדוגמה 14:00), שעון ישראל' }, duration_minutes: { type: 'integer', description: 'משך האירוע בדקות. ברירת מחדל: 60' }, attendees: { type: 'array', items: { type: 'string' }, description: 'רשימת כתובות אימייל לזמן לאירוע. ישלחו להם הזמנות.' }, description: { type: 'string', description: 'תיאור/הערות לאירוע (אופציונלי)' }, client_id: { type: 'string', description: 'מזהה לקוח לשיוך האירוע בלוג (אופציונלי)' }, user_id: { type: 'string', description: 'מזהה משתמש שיומנו ישמש. אופציונלי — ברירת מחדל: המשתמש הראשון עם יומן מחובר בארגון.' } }, required: ['title', 'date', 'time'] } },
-  // ===========================
   // SCHEDULED PAUSE/RESUME
   // ===========================
   { name: 'schedule_campaign_toggle', description: 'תזמון אוטומטי של כיבוי/הדלקה בלוח זמנים (cron) או חד-פעמי (run_at). דורש אישור. דוגמה: לכבות כל יום ב-22:00 → cron_expression "0 22 * * *". להדליק ראשון-חמישי 07:00 → "0 7 * * 1-5".', parameters: { type: 'object', properties: { entity_id: { type: 'string' }, entity_type: { type: 'string', enum: ['fb_campaign','fb_adset','fb_ad','google_campaign'] }, action: { type: 'string', enum: ['pause','resume'] }, cron_expression: { type: 'string' }, run_at: { type: 'string', description: 'ISO datetime לחד-פעמי' }, timezone: { type: 'string', description: 'ברירת מחדל Asia/Jerusalem' }, client_id: { type: 'string' }, notes: { type: 'string' } }, required: ['entity_id','entity_type','action'] } },
@@ -272,6 +268,7 @@ const ALL_TOOLS = [
   { name: 'schedule_broadcast', description: 'תזמון דיוור קיים לשליחה בזמן עתידי. דורש אישור. מעביר לסטטוס scheduled.', parameters: { type: 'object', properties: { broadcast_id: { type: 'string', description: 'מזהה הדיוור' }, scheduled_at: { type: 'string', description: 'תאריך ושעה ב-ISO UTC (לדוגמה 2026-07-01T18:00:00Z עבור 21:00 שעון ישראל)' } }, required: ['broadcast_id', 'scheduled_at'] } },
   { name: 'cancel_broadcast', description: 'ביטול דיוור מתוזמן או עצירת דיוור פעיל. דורש אישור.', parameters: { type: 'object', properties: { broadcast_id: { type: 'string' } }, required: ['broadcast_id'] } },
   { name: 'list_wa_groups', description: 'רשימת קבוצות וואטסאפ הזמינות לדיוור (לא חסומות). מחזיר id, group_name, group_chat_id. השתמש כדי לקבל groupIds לפני יצירת דיוור לקבוצות.', parameters: { type: 'object', properties: { name_search: { type: 'string', description: 'חיפוש חלקי בשם הקבוצה (אופציונלי)' }, limit: { type: 'integer', description: 'ברירת מחדל 50' } } } },
+  { name: 'get_group_members', description: 'שליפת רשימת משתתפים בקבוצת WhatsApp עם זיהוי CRM — לכל משתתף מחזיר phone, name, contact_type (campaigner/client/lead/unknown), contact_name ו-is_admin. שולף מ-GreenAPI (ומעדכן את הקאש), ומחצלב מול campaigners, clients, leads. השתמש כשרוצים לדעת מי בקבוצה, לפני קמפיין ממוקד, או לאיתור לקוחות שלא מזוהים.', parameters: { type: 'object', properties: { group_chat_id: { type: 'string', description: 'מזהה הקבוצה (group_chat_id) — לדוגמה 120363032476886101@g.us. ניתן לקבל מ-list_wa_groups.' }, integration_id: { type: 'string', description: 'מזהה אינטגרציית GreenAPI לשימוש (אופציונלי — ישתמש בברירת מחדל)' }, force_refresh: { type: 'boolean', description: 'כפה שליפה מחדש מ-GreenAPI גם אם הקאש עדכני (ברירת מחדל false)' } }, required: ['group_chat_id'] } },
   // ===========================
   // APPROVAL FLOW
   // ===========================
@@ -589,63 +586,15 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         duration_minutes: args.duration_minutes || null,
       }).select('id, title, status').single()
       if (error) throw error
-      // Auto-sync to Google Calendar if due_date + due_time are set
-      let calendarEventId: string | null = null
-      if (data.id && args.due_date && args.due_time && campaignerId) {
-        try {
-          const { data: ownerProfile } = await supabase
-            .from('profiles').select('id').eq('campaigner_id', campaignerId).limit(1).maybeSingle()
-          if (ownerProfile?.id) {
-            const { data: tokenData } = await supabase
-              .from('calendar_tokens').select('*').eq('user_id', ownerProfile.id).maybeSingle()
-            if (tokenData) {
-              let accessToken = tokenData.access_token
-              if (new Date(tokenData.expires_at) <= new Date()) {
-                const clientId = Deno.env.get('GOOGLE_CLIENT_ID')
-                const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET')
-                if (clientId && clientSecret) {
-                  const rr = await fetch('https://oauth2.googleapis.com/token', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, refresh_token: tokenData.refresh_token, grant_type: 'refresh_token' }),
-                  })
-                  const rd = await rr.json()
-                  if (rd.access_token) {
-                    accessToken = rd.access_token
-                    await supabase.from('calendar_tokens').update({ access_token: accessToken, expires_at: new Date(Date.now() + rd.expires_in * 1000).toISOString() }).eq('user_id', ownerProfile.id)
-                  }
-                }
-              }
-              if (accessToken) {
-                const startDT = `${args.due_date}T${args.due_time}`
-                const timeParts = (args.due_time || '00:00:00').split(':').map(Number)
-                const totalMin = (timeParts[0] || 0) * 60 + (timeParts[1] || 0) + (args.duration_minutes || 30)
-                const endDT = `${args.due_date}T${String(Math.floor(totalMin / 60) % 24).padStart(2, '0')}:${String(totalMin % 60).padStart(2, '0')}:00`
-                const calResp = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
-                  method: 'POST',
-                  headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    summary: args.title,
-                    description: args.notes || 'משימה ממערכת AIOS',
-                    start: { dateTime: startDT, timeZone: 'Asia/Jerusalem' },
-                    end: { dateTime: endDT, timeZone: 'Asia/Jerusalem' },
-                  }),
-                })
-                if (calResp.ok) {
-                  const calData = await calResp.json()
-                  if (calData.id) {
-                    calendarEventId = calData.id
-                    await supabase.from('tasks').update({ google_calendar_event_id: calData.id }).eq('id', data.id)
-                  }
-                }
-              }
-            }
-          }
-        } catch (_calErr) {
-          // Calendar sync failure is non-fatal — task was created successfully
-        }
+      // Auto-sync to Google Calendar if task has a scheduled time (fire-and-forget)
+      if (args.due_date && args.due_time) {
+        fetch(`${SUPABASE_URL}/functions/v1/create-task-calendar-event`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ task_id: data.id }),
+        }).catch((calErr) => console.error('[create_task] calendar sync failed:', calErr))
       }
-      return { task_id: data.id, title: data.title, status: data.status, ...(calendarEventId ? { calendar_event_id: calendarEventId, calendar_synced: true } : {}) }
+      return { task_id: data.id, title: data.title, status: data.status }
     }
     case 'create_agent_task': {
       // Create task in agent_tasks table (for Carmen herself)
@@ -2882,120 +2831,6 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return { success: true, client_id, client_name: client.name, customer_id: cleanId }
     }
 
-    // ============ GOOGLE CALENDAR ============
-    case 'create_calendar_event': {
-      const { title, date, time, duration_minutes, attendees, description: eventDesc, client_id: calClientId, user_id: calUserId } = args
-      if (!title || !date || !time) return { error: 'title, date ו-time נדרשים' }
-
-      // Resolve which user's calendar to use
-      let calendarUserId: string | null = calUserId || null
-      let calGoogleEmail: string | null = null
-      if (!calendarUserId) {
-        const { data: tuData } = await supabase
-          .from('tenant_users')
-          .select('user_id')
-          .eq('tenant_id', tenantId)
-        const tenantUserIds: string[] = (tuData || []).map((r: any) => r.user_id)
-        if (tenantUserIds.length > 0) {
-          const { data: ctRow } = await supabase
-            .from('calendar_tokens')
-            .select('user_id, google_email')
-            .in('user_id', tenantUserIds)
-            .eq('needs_reconnect', false)
-            .limit(1)
-            .maybeSingle()
-          if (ctRow) { calendarUserId = ctRow.user_id; calGoogleEmail = ctRow.google_email }
-        }
-      }
-      if (!calendarUserId) {
-        return { error: 'אין יומן Google Calendar מחובר בארגון. יש לחבר תחילה דרך הגדרות → אינטגרציות → Google Calendar.' }
-      }
-
-      const { data: tokenData } = await supabase
-        .from('calendar_tokens')
-        .select('access_token, refresh_token, expires_at, google_email')
-        .eq('user_id', calendarUserId)
-        .maybeSingle()
-
-      if (!tokenData) {
-        return { error: `לא נמצא יומן מחובר למשתמש המבוקש. יש לחבר ב-הגדרות → Google Calendar.` }
-      }
-      if (!calGoogleEmail) calGoogleEmail = tokenData.google_email
-
-      let accessToken = tokenData.access_token
-      if (new Date(tokenData.expires_at) <= new Date()) {
-        const gClientId = Deno.env.get('GOOGLE_CLIENT_ID')
-        const gClientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET')
-        if (!gClientId || !gClientSecret) return { error: 'חסרות הגדרות סביבה של Google (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET)' }
-        const tokResp = await fetch('https://oauth2.googleapis.com/token', {
-          method: 'POST',
-          body: new URLSearchParams({
-            refresh_token: tokenData.refresh_token,
-            client_id: gClientId,
-            client_secret: gClientSecret,
-            grant_type: 'refresh_token',
-          }),
-        })
-        const tokJson = await tokResp.json()
-        if (!tokJson.access_token) return { error: 'כישלון בחידוש טוקן Google Calendar', details: tokJson?.error_description }
-        accessToken = tokJson.access_token
-        const newExpiry = new Date(Date.now() + (tokJson.expires_in || 3600) * 1000).toISOString()
-        await supabase.from('calendar_tokens').update({ access_token: accessToken, expires_at: newExpiry }).eq('user_id', calendarUserId)
-      }
-
-      // Build start/end local datetime strings (Asia/Jerusalem — passed with timeZone field)
-      const [startH, startM] = time.split(':').map(Number)
-      const durationMins = duration_minutes ?? 60
-      const totalEndMins = startH * 60 + startM + durationMins
-      const endH = Math.floor(totalEndMins / 60) % 24
-      const endM = totalEndMins % 60
-      const daysOverflow = Math.floor(totalEndMins / (24 * 60))
-      let endDate = date
-      if (daysOverflow > 0) {
-        const d = new Date(`${date}T12:00:00Z`)
-        d.setUTCDate(d.getUTCDate() + daysOverflow)
-        endDate = d.toISOString().split('T')[0]
-      }
-      const startDateTime = `${date}T${String(startH).padStart(2,'0')}:${String(startM).padStart(2,'0')}:00`
-      const endDateTime = `${endDate}T${String(endH).padStart(2,'0')}:${String(endM).padStart(2,'0')}:00`
-
-      const calEvent: Record<string, unknown> = {
-        summary: title,
-        description: eventDesc || '',
-        start: { dateTime: startDateTime, timeZone: 'Asia/Jerusalem' },
-        end: { dateTime: endDateTime, timeZone: 'Asia/Jerusalem' },
-      }
-      if (attendees && Array.isArray(attendees) && attendees.length > 0) {
-        calEvent.attendees = attendees.map((email: string) => ({ email }))
-      }
-
-      const calResp = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=all', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(calEvent),
-      })
-      const calData = await calResp.json()
-      if (!calResp.ok) return { error: calData.error?.message || 'Google Calendar API error', details: calData }
-
-      await supabase.from('agent_action_log').insert({
-        tenant_id: tenantId,
-        action_type: 'create_calendar_event',
-        status: 'success',
-        action_details: { title, date, time, duration_minutes: durationMins, attendees, client_id: calClientId, event_id: calData.id, calendar_user: calGoogleEmail },
-      }).then(() => {}, () => {})
-
-      return {
-        success: true,
-        event_id: calData.id,
-        html_link: calData.htmlLink,
-        title,
-        start: `${date} ${time}`,
-        end: `${endDate} ${String(endH).padStart(2,'0')}:${String(endM).padStart(2,'0')}`,
-        calendar_user: calGoogleEmail,
-        attendees_invited: attendees || [],
-      }
-    }
-
     // ============ SCHEDULES ============
     case 'schedule_campaign_toggle': {
       const nextRun = args.run_at || (args.cron_expression ? new Date(Date.now() + 60_000).toISOString() : null)
@@ -3202,6 +3037,161 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const { data, error } = await q
       if (error) throw error
       return { count: data.length, groups: data }
+    }
+
+    case 'get_group_members': {
+      const groupChatId = args.group_chat_id as string
+      const forceRefresh = !!args.force_refresh
+      const normalizePhone = (p: string) => (p || '').replace(/\D/g, '').slice(-9)
+
+      // ── 1. Check cache freshness (skip if force_refresh or stale > 6h) ────────
+      const CACHE_TTL_MS = 6 * 60 * 60 * 1000
+      if (!forceRefresh) {
+        const { data: cached } = await supabase
+          .from('wa_group_members')
+          .select('id, phone, wa_id, name, contact_type, contact_id, contact_name, is_admin, last_synced_at')
+          .eq('tenant_id', tenantId)
+          .eq('group_chat_id', groupChatId)
+          .order('last_synced_at', { ascending: false })
+          .limit(1)
+        if (cached && cached.length > 0) {
+          const age = Date.now() - new Date(cached[0].last_synced_at).getTime()
+          if (age < CACHE_TTL_MS) {
+            // Return full cached list
+            const { data: allCached } = await supabase
+              .from('wa_group_members')
+              .select('phone, wa_id, name, contact_type, contact_id, contact_name, is_admin')
+              .eq('tenant_id', tenantId)
+              .eq('group_chat_id', groupChatId)
+              .order('contact_type', { ascending: true })
+            return { source: 'cache', group_chat_id: groupChatId, count: (allCached || []).length, members: allCached || [] }
+          }
+        }
+      }
+
+      // ── 2. Fetch from GreenAPI ─────────────────────────────────────────────
+      let integrationId = args.integration_id as string | null
+      const { data: greenInteg } = await supabase
+        .from('tenant_integrations')
+        .select('id, settings, api_key')
+        .eq('tenant_id', tenantId)
+        .eq('integration_type', 'green_api')
+        .eq('is_active', true)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (!greenInteg) {
+        // No GreenAPI — return cached or empty
+        const { data: cached } = await supabase
+          .from('wa_group_members')
+          .select('phone, wa_id, name, contact_type, contact_id, contact_name, is_admin')
+          .eq('tenant_id', tenantId)
+          .eq('group_chat_id', groupChatId)
+        return { source: 'cache_only', group_chat_id: groupChatId, count: (cached || []).length, members: cached || [], warning: 'No active GreenAPI integration found — showing cached data only' }
+      }
+
+      const greenSettings = (greenInteg.settings as any) || {}
+      const instanceId = greenSettings.instance_id || greenSettings.instanceId
+      const apiToken = greenInteg.api_key || greenSettings.api_token
+
+      let rawParticipants: Array<{ id: string; isAdmin: boolean; isSuperAdmin: boolean }> = []
+      if (instanceId && apiToken) {
+        try {
+          const res = await fetch(
+            `https://api.green-api.com/waInstance${instanceId}/getGroupData/${apiToken}`,
+            { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ groupId: groupChatId }) }
+          )
+          if (res.ok) {
+            const gData = await res.json()
+            rawParticipants = Array.isArray(gData.participants) ? gData.participants : []
+          } else {
+            console.error('[get_group_members] GreenAPI getGroupData failed:', res.status)
+          }
+        } catch (err) {
+          console.error('[get_group_members] GreenAPI fetch error:', err)
+        }
+      }
+
+      // ── 3. Enrich each participant with CRM identity ───────────────────────
+      const enriched: Array<Record<string, any>> = []
+      const now = new Date().toISOString()
+
+      for (const p of rawParticipants) {
+        const waId = p.id // e.g. 972501234567@c.us
+        const rawPhone = waId.split('@')[0]
+        const norm = normalizePhone(rawPhone)
+        if (!norm) continue
+
+        let contactType = 'unknown'
+        let contactId: string | null = null
+        let contactName: string | null = null
+
+        // Campaigner?
+        const { data: camp } = await supabase
+          .from('campaigners')
+          .select('id, full_name')
+          .eq('tenant_id', tenantId)
+          .ilike('phone', `%${norm}%`)
+          .maybeSingle()
+        if (camp) { contactType = 'campaigner'; contactId = camp.id; contactName = camp.full_name }
+
+        if (contactType === 'unknown') {
+          // Client?
+          const { data: cl } = await supabase
+            .from('clients')
+            .select('id, name, contact_name')
+            .eq('tenant_id', tenantId)
+            .ilike('phone', `%${norm}%`)
+            .maybeSingle()
+          if (cl) { contactType = 'client'; contactId = cl.id; contactName = cl.name || cl.contact_name }
+        }
+
+        if (contactType === 'unknown') {
+          // Lead?
+          const { data: ld } = await supabase
+            .from('leads')
+            .select('id, contact_name, company_name')
+            .eq('tenant_id', tenantId)
+            .ilike('phone', `%${norm}%`)
+            .maybeSingle()
+          if (ld) { contactType = 'lead'; contactId = ld.id; contactName = ld.contact_name || ld.company_name }
+        }
+
+        const member = {
+          phone: norm,
+          wa_id: waId,
+          name: contactName || rawPhone,
+          contact_type: contactType,
+          contact_id: contactId,
+          contact_name: contactName,
+          is_admin: p.isAdmin || p.isSuperAdmin || false,
+        }
+        enriched.push(member)
+
+        // Upsert into cache
+        await supabase.from('wa_group_members').upsert({
+          tenant_id: tenantId,
+          group_chat_id: groupChatId,
+          ...member,
+          last_synced_at: now,
+          updated_at: now,
+        }, { onConflict: 'tenant_id,group_chat_id,phone' })
+      }
+
+      // ── 4. Summary stats ──────────────────────────────────────────────────
+      const stats = enriched.reduce((acc: Record<string, number>, m) => {
+        acc[m.contact_type] = (acc[m.contact_type] || 0) + 1
+        return acc
+      }, {})
+
+      return {
+        source: 'greenapi',
+        group_chat_id: groupChatId,
+        count: enriched.length,
+        stats,
+        members: enriched,
+      }
     }
 
     default:

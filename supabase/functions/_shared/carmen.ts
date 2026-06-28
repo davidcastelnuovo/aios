@@ -1164,3 +1164,118 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
 
   return { handled: true, outcome: 'started' };
 }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// WhatsApp group sender identity resolution
+// Looks up a sender's phone against campaigners / clients / leads and returns
+// a contextual prefix that Carmen prepends to the user message so she always
+// knows who wrote in the group.
+// ──────────────────────────────────────────────────────────────────────────────
+
+export interface GroupSenderIdentity {
+  contactType: 'campaigner' | 'client' | 'lead' | 'unknown';
+  contactId: string | null;
+  contactName: string | null;
+  /** Campaigner-specific: clients they manage (for context injection) */
+  managedClientNames: string[];
+  /** One-line Hebrew context string for Carmen */
+  contextLine: string;
+}
+
+export async function resolveGroupSenderIdentity(
+  supabase: any,
+  tenantId: string,
+  authorPhone: string | null,
+): Promise<GroupSenderIdentity | null> {
+  if (!authorPhone) return null;
+  const norm = authorPhone.replace(/\D/g, '').slice(-9);
+  if (!norm) return null;
+
+  // 1. Check wa_group_members cache first (fast path)
+  const { data: cached } = await supabase
+    .from('wa_group_members')
+    .select('contact_type, contact_id, contact_name, name')
+    .eq('tenant_id', tenantId)
+    .eq('phone', norm)
+    .neq('contact_type', 'unknown')
+    .order('last_synced_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (cached?.contact_type && cached.contact_type !== 'unknown') {
+    return buildIdentity(supabase, tenantId, cached.contact_type, cached.contact_id, cached.contact_name || cached.name);
+  }
+
+  // 2. Campaigners
+  const { data: campaigner } = await supabase
+    .from('campaigners')
+    .select('id, full_name')
+    .eq('tenant_id', tenantId)
+    .or(`phone.ilike.%${norm}%,phone.ilike.%${authorPhone}%`)
+    .eq('active', true)
+    .maybeSingle();
+
+  if (campaigner) {
+    return buildIdentity(supabase, tenantId, 'campaigner', campaigner.id, campaigner.full_name);
+  }
+
+  // 3. Clients
+  const { data: client } = await supabase
+    .from('clients')
+    .select('id, name, contact_name')
+    .eq('tenant_id', tenantId)
+    .or(`phone.ilike.%${norm}%,phone.ilike.%${authorPhone}%`)
+    .maybeSingle();
+
+  if (client) {
+    return buildIdentity(supabase, tenantId, 'client', client.id, client.name || client.contact_name);
+  }
+
+  // 4. Leads
+  const { data: lead } = await supabase
+    .from('leads')
+    .select('id, contact_name, company_name')
+    .eq('tenant_id', tenantId)
+    .or(`phone.ilike.%${norm}%,phone.ilike.%${authorPhone}%`)
+    .maybeSingle();
+
+  if (lead) {
+    return buildIdentity(supabase, tenantId, 'lead', lead.id, lead.contact_name || lead.company_name);
+  }
+
+  return null; // unknown sender — no prefix added
+}
+
+async function buildIdentity(
+  supabase: any,
+  tenantId: string,
+  contactType: 'campaigner' | 'client' | 'lead',
+  contactId: string | null,
+  contactName: string | null,
+): Promise<GroupSenderIdentity> {
+  let managedClientNames: string[] = [];
+
+  if (contactType === 'campaigner' && contactId) {
+    const { data: links } = await supabase
+      .from('client_team')
+      .select('clients(name)')
+      .eq('campaigner_id', contactId)
+      .limit(10);
+    managedClientNames = (links || [])
+      .map((r: any) => r.clients?.name)
+      .filter(Boolean) as string[];
+  }
+
+  const typeLabel = contactType === 'campaigner' ? 'קמפיינר'
+    : contactType === 'client' ? 'לקוח'
+    : 'ליד';
+
+  const parts = [`${typeLabel}: ${contactName || 'לא ידוע'}`];
+  if (managedClientNames.length > 0) {
+    parts.push(`לקוחות: ${managedClientNames.join(', ')}`);
+  }
+
+  const contextLine = `[🔍 זיהוי שולח | ${parts.join(' | ')}]`;
+
+  return { contactType, contactId, contactName: contactName || null, managedClientNames, contextLine };
+}
