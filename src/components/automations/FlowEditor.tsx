@@ -742,6 +742,8 @@ export default function FlowEditor() {
         onClose={() => setSelectedNodeId(null)}
         onUpdate={updateNode}
         allNodes={allNodes}
+        automationId={automationId}
+        automationName={automationName}
       />
 
       {/* ── Dialogs ── */}

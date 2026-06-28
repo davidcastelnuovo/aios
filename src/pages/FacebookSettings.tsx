@@ -20,6 +20,7 @@ import { FacebookFormMappingSection } from "@/components/forms/FacebookFormMappi
 import { ShareFacebookConnectionSection } from "@/components/forms/ShareFacebookConnectionSection";
 import { SharedFacebookConnectionBanner } from "@/components/forms/SharedFacebookConnectionBanner";
 import { ManageIntegrationPermissionsDialog } from "@/components/forms/ManageIntegrationPermissionsDialog";
+import { IntegrationVisibilitySelector } from "@/components/forms/IntegrationVisibilitySelector";
 
 interface FacebookPage {
   id: string;
@@ -778,12 +779,35 @@ export default function FacebookSettings() {
             </CardContent>
           </Card>
 
-          {/* Share Connection Section - only for own connections */}
+          {/* Visibility / Sharing Section - only for own connections */}
           {isOwnConnection && leadAdsIntegration?.id && currentTenant?.id && (
-            <ShareFacebookConnectionSection 
-              integrationId={leadAdsIntegration.id}
-              currentTenantId={currentTenant.id}
-            />
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 flex-row-reverse justify-end text-right text-base">
+                  <Share2 className="h-5 w-5" />
+                  הגדרות שיתוף החיבור
+                </CardTitle>
+                <CardDescription className="text-right">
+                  קבע מי יכול להשתמש בחיבור Facebook שלך בתוך הארגון
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <IntegrationVisibilitySelector
+                  integrationId={leadAdsIntegration.id}
+                  integrationName={(leadAdsIntegration.settings as any)?.page_name || 'Facebook Lead Ads'}
+                  ownerId={leadAdsIntegration.user_id || null}
+                  tenantId={currentTenant.id}
+                />
+                {/* Cross-org sharing (between tenants / agencies) */}
+                <div className="pt-4 border-t">
+                  <p className="text-sm font-medium text-right mb-3">שיתוף עם ארגונים אחרים</p>
+                  <ShareFacebookConnectionSection
+                    integrationId={leadAdsIntegration.id}
+                    currentTenantId={currentTenant.id}
+                  />
+                </div>
+              </CardContent>
+            </Card>
           )}
 
           {/* Form Mapping Section */}

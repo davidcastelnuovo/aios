@@ -9,7 +9,10 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { Play, Loader2, Check, X, RotateCw, Image as ImageIcon } from "lucide-react";
+import { Play, Loader2, Check, X, RotateCw, Image as ImageIcon, Megaphone, Search, AlertCircle, ChevronRight, Sparkles } from "lucide-react";
+import { CampaignLauncher } from "./CampaignLauncher";
+import { SEOPublishPanel } from "./SEOPublishPanel";
+import { ABTestPanel } from "./ABTestPanel";
 
 interface Props {
   itemId: string | null;
@@ -155,14 +158,30 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
       const { data, error } = await supabase.functions.invoke("marketing-run-pipeline", {
         body: { item_id: itemId },
       });
-      if (error) throw error;
-      if ((data as any)?.error) throw new Error((data as any).error);
-      toast({ title: "✓ ה-Pipeline הופעל" });
+      // Always refresh UI regardless of outcome
       refetchRuns();
       refetchAssets();
       loadItem();
       queryClient.invalidateQueries({ queryKey: ["marketing-items-calendar"] });
+      if (error) throw error;
+      if ((data as any)?.error) {
+        toast({ title: "שגיאה בהרצת הפייפליין", description: (data as any).error, variant: "destructive" });
+        return;
+      }
+      if ((data as any)?.awaiting_approval) {
+        toast({ title: "⏸ ממתין לאישורך", description: "שלב הסתיים ומחכה לאישור להמשיך" });
+        return;
+      }
+      if ((data as any)?.completed) {
+        toast({ title: "✓ הפייפליין הושלם!", description: "כל השלבים הורצו בהצלחה" });
+        return;
+      }
+      toast({ title: "✓ ה-Pipeline הופעל" });
     } catch (e: any) {
+      // Still refresh even on error
+      refetchRuns();
+      refetchAssets();
+      loadItem();
       toast({ title: "שגיאה", description: e.message, variant: "destructive" });
     } finally {
       setRunning(null);
@@ -174,7 +193,15 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
     // advance to next stage
     const idx = stages.findIndex((s) => s.id === stageId);
     if (idx >= 0 && idx < stages.length - 1) {
-      await save({ current_stage_id: stages[idx + 1].id });
+      const nextStage = stages[idx + 1];
+      await save({ current_stage_id: nextStage.id, status: "in_progress" });
+      // Auto-run next stage if its approval_mode is "auto"
+      if (nextStage.approval_mode === "auto") {
+        setTimeout(() => runStage(nextStage.id), 500);
+      }
+    } else {
+      // Last stage approved — mark item as completed
+      await save({ status: "completed" });
     }
     refetchRuns();
     toast({ title: "✓ אושר" });
@@ -271,30 +298,132 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
               </div>
             )}
 
-            {/* Awaiting approval */}
-            {(runs ?? [])
-              .filter((r: any) => r.status === "awaiting_approval")
-              .map((r: any) => (
-                <div
-                  key={r.id}
-                  className="rounded-md border-2 border-amber-500/60 bg-amber-500/10 p-3"
-                >
-                  <div className="mb-2 text-sm font-medium">
-                    ממתין לאישור — {r.marketing_pipeline_stages?.name}
+            {/* Awaiting approval — prominent banner */}
+            {(() => {
+              const pendingRuns = (runs ?? []).filter((r: any) => r.status === "awaiting_approval");
+              if (pendingRuns.length === 0) return null;
+              return (
+                <div className="rounded-xl border-2 border-amber-400 bg-gradient-to-b from-amber-50 to-amber-50/40 shadow-md overflow-hidden">
+                  {/* Banner header */}
+                  <div className="flex items-center gap-2 bg-amber-400/20 px-4 py-2.5 border-b border-amber-300">
+                    <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
+                    <span className="text-sm font-bold text-amber-800">נדרש אישורך להמשך</span>
+                    <span className="ms-auto rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                      {pendingRuns.length} ממתינים
+                    </span>
                   </div>
-                  <div className="flex gap-2">
-                    <Button size="sm" onClick={() => approveRun(r.id, r.stage_id)}>
-                      <Check className="ml-1 h-3 w-3" /> אשר והמשך
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => runStage(r.stage_id)}>
-                      <RotateCw className="ml-1 h-3 w-3" /> הרץ מחדש
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => rejectRun(r.id)}>
-                      <X className="ml-1 h-3 w-3" /> דחה
-                    </Button>
+                  {/* Each pending run */}
+                  <div className="divide-y divide-amber-200/60">
+                    {pendingRuns.map((r: any) => {
+                      const stageName = r.marketing_pipeline_stages?.name ?? "שלב";
+                      const nextStageIdx = stages.findIndex((s: any) => s.id === r.stage_id);
+                      const nextStageName = nextStageIdx >= 0 && nextStageIdx < stages.length - 1
+                        ? stages[nextStageIdx + 1]?.name
+                        : null;
+                      return (
+                        <div key={r.id} className="px-4 py-3">
+                          <div className="mb-2 flex items-center gap-1.5 text-sm">
+                            <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                            <span className="font-medium text-amber-900">{stageName}</span>
+                            {nextStageName && (
+                              <>
+                                <ChevronRight className="h-3 w-3 text-amber-400" />
+                                <span className="text-amber-600 text-xs">{nextStageName}</span>
+                              </>
+                            )}
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              className="flex-1 bg-amber-500 hover:bg-amber-600 text-white shadow-sm"
+                              onClick={() => approveRun(r.id, r.stage_id)}
+                            >
+                              <Check className="ml-1 h-3.5 w-3.5" />
+                              {nextStageName ? `אשר ועבור ל${nextStageName}` : "אשר וסיים"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-amber-300 hover:bg-amber-100"
+                              onClick={() => runStage(r.stage_id)}
+                              title="הרץ מחדש"
+                            >
+                              <RotateCw className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-red-500 hover:bg-red-50"
+                              onClick={() => rejectRun(r.id)}
+                              title="דחה"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-              ))}
+              );
+            })()}
+
+            {/* AB Test Panel — shown for copy stage */}
+            {(() => {
+              const currentStage = stages.find((s) => s.id === item?.current_stage_id);
+              if (currentStage?.stage_type === "copy") {
+                const brief = item.payload?.brief_text ?? item.payload?.notes ?? item.title ?? "";
+                // Infer channel from pipeline track (stored in item payload or default to meta)
+                const channel = item.payload?.channel ?? "meta";
+                return (
+                  <ABTestPanel
+                    workItemId={item.id}
+                    tenantId={item.tenant_id}
+                    brief={brief}
+                    channel={channel}
+                    onVariantSelected={(variant) => {
+                      // Advance to next stage after selecting winner
+                      const idx = stages.findIndex((s) => s.id === item.current_stage_id);
+                      if (idx >= 0 && idx < stages.length - 1) {
+                        const nextStage = stages[idx + 1];
+                        save({ current_stage_id: nextStage.id, status: "in_progress" });
+                      }
+                      loadItem();
+                    }}
+                  />
+                );
+              }
+              return null;
+            })()}
+
+            {/* Campaign Launcher — shown for target_paid stage */}
+            {(() => {
+              const currentStage = stages.find((s) => s.id === item?.current_stage_id);
+              if (currentStage?.stage_type === "target_paid") {
+                return (
+                  <CampaignLauncher
+                    workItemId={item.id}
+                    tenantId={item.tenant_id}
+                    clientId={item.client_id}
+                    copyText={item.payload?.copy_text}
+                    imageUrl={item.payload?.image_url}
+                    campaignName={item.title}
+                  />
+                );
+              }
+              if (currentStage?.stage_type === "target_seo") {
+                return (
+                  <SEOPublishPanel
+                    workItemId={item.id}
+                    tenantId={item.tenant_id}
+                    clientId={item.client_id}
+                    copyText={item.payload?.copy_text}
+                    title={item.title}
+                  />
+                );
+              }
+              return null;
+            })()}
 
             {/* Run pipeline button */}
             <Button onClick={runFullPipeline} disabled={!!running} className="w-full">

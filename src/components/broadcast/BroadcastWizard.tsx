@@ -20,7 +20,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Users, Image as ImageIcon, Send, CalendarClock, Loader2, MessageSquare, Mail } from "lucide-react";
+import { Users, Image as ImageIcon, Send, CalendarClock, Loader2, MessageSquare, Mail, UsersRound } from "lucide-react";
 
 const CLIENT_STATUSES = [
   { key: "active", label: "פעיל" },
@@ -65,6 +65,9 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
   const [pickMode, setPickMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [candidateSearch, setCandidateSearch] = useState("");
+  // WA Groups state
+  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
+  const [groupSearch, setGroupSearch] = useState("");
   const [bodyText, setBodyText] = useState("");
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [audienceCount, setAudienceCount] = useState<number | null>(null);
@@ -81,6 +84,7 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
       setIntegrationId(undefined); setSource("leads");
       setClientStatuses([]); setLeadStatusKeys([]); setTagIds([]); setActiveOnly(true);
       setListId(undefined); setPickMode(false); setSelectedIds([]); setCandidateSearch("");
+      setSelectedGroupIds([]); setGroupSearch("");
       setBodyText(""); setMediaFile(null); setAudienceCount(null);
       setSendMode("now"); setScheduledAt("");
     }
@@ -118,6 +122,22 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
     },
   });
 
+  // WhatsApp groups for the tenant
+  const { data: waGroups, isLoading: groupsLoading } = useQuery({
+    queryKey: ["wa-groups", tenantId],
+    enabled: !!tenantId && open && channel === "whatsapp",
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("whatsapp_groups")
+        .select("id, group_name, group_chat_id, description")
+        .eq("tenant_id", tenantId)
+        .eq("is_blocked", false)
+        .order("group_name", { ascending: true });
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
   const selectedProvider = useMemo<"green_api" | "manus_wa" | "resend">(() => {
     if (channel === "email") return "resend";
     const i = (integrations || []).find((x: any) => x.id === integrationId);
@@ -125,6 +145,7 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
   }, [integrations, integrationId, channel]);
 
   const buildFilter = (): AudienceFilter => {
+    if (source === "wa_groups") return { source: "wa_groups", groupIds: selectedGroupIds };
     if (source === "list") return { source: "list", listId };
     const include = pickMode ? { includeIds: selectedIds } : {};
     if (source === "clients") return { source, statuses: clientStatuses, tagIds, ...include };
@@ -135,7 +156,7 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
   // Candidate contacts for manual selection (base-table filters; tags applied server-side otherwise)
   const candidates = useQuery({
     queryKey: ["broadcast-candidates", tenantId, source, clientStatuses, leadStatusKeys, activeOnly],
-    enabled: !!tenantId && open && pickMode && source !== "list",
+    enabled: !!tenantId && open && pickMode && source !== "list" && source !== "wa_groups",
     queryFn: async () => {
       if (source === "clients") {
         let q = supabase.from("clients").select("id, contact_name, name, phone, email").eq("tenant_id", tenantId);
@@ -157,6 +178,11 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
   });
 
   const runPreview = async () => {
+    if (source === "wa_groups") {
+      // For groups, count = number of selected groups
+      setAudienceCount(selectedGroupIds.length);
+      return;
+    }
     setPreviewing(true);
     try {
       const res = await previewAudience(buildFilter(), channel);
@@ -171,16 +197,25 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
 
   // Recompute count when audience criteria change (on the audience step)
   useEffect(() => {
-    if (step === 2 && open && (source !== "list" || listId)) runPreview();
+    if (step === 2 && open) {
+      if (source === "wa_groups") {
+        setAudienceCount(selectedGroupIds.length);
+      } else if (source !== "list" || listId) {
+        runPreview();
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, source, clientStatuses, leadStatusKeys, tagIds, activeOnly, listId, pickMode, selectedIds]);
+  }, [step, source, clientStatuses, leadStatusKeys, tagIds, activeOnly, listId, pickMode, selectedIds, selectedGroupIds]);
 
   const toggle = (arr: string[], v: string, set: (x: string[]) => void) =>
     set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
 
   const canNext = () => {
     if (step === 1) return channel === "email" ? domains.length > 0 : !!integrationId;
-    if (step === 2) return (audienceCount ?? 0) > 0;
+    if (step === 2) {
+      if (source === "wa_groups") return selectedGroupIds.length > 0;
+      return (audienceCount ?? 0) > 0;
+    }
     if (step === 3) {
       if (bodyText.trim().length === 0) return false;
       if (channel === "email") {
@@ -232,10 +267,11 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
         scheduledAt: sendMode === "schedule" ? new Date(scheduledAt).toISOString() : null,
       });
 
+      const isGroups = source === "wa_groups";
       toast.success(
         sendMode === "now"
-          ? `הדיוור נשלח ל-${total} נמענים (בקצב מבוקר)`
-          : `הדיוור תוזמן ל-${total} נמענים`,
+          ? `הדיוור נשלח ל-${total} ${isGroups ? "קבוצות" : "נמענים"} (בקצב מבוקר)`
+          : `הדיוור תוזמן ל-${total} ${isGroups ? "קבוצות" : "נמענים"}`,
       );
       onOpenChange(false);
       onDone?.();
@@ -245,6 +281,10 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
       setSubmitting(false);
     }
   };
+
+  const filteredGroups = (waGroups || []).filter((g: any) =>
+    !groupSearch || g.group_name.toLowerCase().includes(groupSearch.toLowerCase())
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -313,17 +353,98 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
           <div className="space-y-4">
             <div>
               <Label>מקור</Label>
-              <Select value={source} onValueChange={(v) => setSource(v as any)}>
+              <Select value={source} onValueChange={(v) => {
+                setSource(v as AudienceFilter["source"]);
+                setSelectedGroupIds([]);
+                setGroupSearch("");
+              }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent className="bg-background z-[100]">
                   <SelectItem value="leads">לידים</SelectItem>
                   <SelectItem value="clients">לקוחות</SelectItem>
                   <SelectItem value="campaigners">צוות</SelectItem>
                   <SelectItem value="list">רשימת תפוצה</SelectItem>
+                  {channel === "whatsapp" && (
+                    <SelectItem value="wa_groups">
+                      <span className="flex items-center gap-1">
+                        <UsersRound className="h-3.5 w-3.5" /> קבוצות וואטסאפ
+                      </span>
+                    </SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
 
+            {/* ── WA Groups picker ── */}
+            {source === "wa_groups" && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm">בחר קבוצות לשליחה</Label>
+                  {selectedGroupIds.length > 0 && (
+                    <span className="text-xs text-muted-foreground">נבחרו {selectedGroupIds.length} קבוצות</span>
+                  )}
+                </div>
+                <Input
+                  value={groupSearch}
+                  onChange={(e) => setGroupSearch(e.target.value)}
+                  placeholder="חיפוש קבוצה..."
+                  className="h-8"
+                />
+                {groupsLoading ? (
+                  <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin" /></div>
+                ) : filteredGroups.length === 0 ? (
+                  <div className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
+                    <UsersRound className="mx-auto mb-2 h-6 w-6 opacity-40" />
+                    {(waGroups || []).length === 0
+                      ? "לא נמצאו קבוצות וואטסאפ. ודא שהחיבור פעיל ושהקבוצות סונכרנו."
+                      : "לא נמצאו קבוצות התואמות לחיפוש."}
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                      <span>{filteredGroups.length} קבוצות</span>
+                      <button
+                        type="button"
+                        className="underline"
+                        onClick={() => {
+                          const allIds = filteredGroups.map((g: any) => g.id);
+                          setSelectedGroupIds(
+                            selectedGroupIds.length === allIds.length ? [] : allIds
+                          );
+                        }}
+                      >
+                        {selectedGroupIds.length === filteredGroups.length ? "נקה הכל" : "בחר הכל"}
+                      </button>
+                    </div>
+                    <div className="max-h-56 overflow-y-auto space-y-1 rounded-lg border p-2">
+                      {filteredGroups.map((g: any) => (
+                        <label key={g.id} className="flex items-center gap-2 rounded p-1.5 text-sm hover:bg-muted cursor-pointer">
+                          <Checkbox
+                            checked={selectedGroupIds.includes(g.id)}
+                            onCheckedChange={() => toggle(selectedGroupIds, g.id, setSelectedGroupIds)}
+                          />
+                          <UsersRound className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <div className="min-w-0">
+                            <div className="truncate font-medium">{g.group_name}</div>
+                            {g.description && (
+                              <div className="truncate text-xs text-muted-foreground">{g.description}</div>
+                            )}
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {selectedGroupIds.length > 0 && (
+                  <div className="rounded-lg bg-muted p-3 text-sm flex items-center gap-2">
+                    <UsersRound className="h-4 w-4" />
+                    <span>ישלח ל-<strong>{selectedGroupIds.length}</strong> קבוצות</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Existing sources ── */}
             {source === "list" && (
               <div>
                 <Label>בחר רשימה</Label>
@@ -389,7 +510,7 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
               </div>
             )}
 
-            {source !== "list" && (
+            {source !== "list" && source !== "wa_groups" && (
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-sm">
                   <Checkbox checked={pickMode} onCheckedChange={(v) => { setPickMode(!!v); setSelectedIds([]); }} />
@@ -424,10 +545,12 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
               </div>
             )}
 
-            <div className="rounded-lg bg-muted p-3 text-sm flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              {previewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <strong>{audienceCount ?? 0}</strong>} נמענים תקינים
-            </div>
+            {source !== "wa_groups" && (
+              <div className="rounded-lg bg-muted p-3 text-sm flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                {previewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <strong>{audienceCount ?? 0}</strong>} נמענים תקינים
+              </div>
+            )}
           </div>
         )}
 
@@ -484,25 +607,29 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
               </>
             )}
             <Label>תוכן ההודעה</Label>
-            <div className="flex flex-wrap gap-2 text-xs">
-              {["{{contact_name}}", "{{phone}}"].map((v) => (
-                <button key={v} type="button" className="rounded border px-2 py-0.5"
-                  onClick={() => setBodyText((b) => b + " " + v)}>{v}</button>
-              ))}
-            </div>
+            {source !== "wa_groups" && (
+              <div className="flex flex-wrap gap-2 text-xs">
+                {["{{contact_name}}", "{{phone}}"].map((v) => (
+                  <button key={v} type="button" className="rounded border px-2 py-0.5"
+                    onClick={() => setBodyText((b) => b + " " + v)}>{v}</button>
+                ))}
+              </div>
+            )}
             <Textarea rows={6} value={bodyText} onChange={(e) => setBodyText(e.target.value)}
-              placeholder="שלום {{contact_name}}, ..." />
+              placeholder={source === "wa_groups" ? "שלום לכולם, ..." : "שלום {{contact_name}}, ..."} />
             {channel !== "email" && (
               <div>
                 <Label className="mb-1 flex items-center gap-1"><ImageIcon className="h-4 w-4" /> תמונה (אופציונלי)</Label>
                 <Input type="file" accept="image/*" onChange={(e) => setMediaFile(e.target.files?.[0] || null)} />
               </div>
             )}
-            <p className="text-xs text-muted-foreground">
-              {channel === "email"
-                ? "קישור הסרה מהרשימה (unsubscribe) יתווסף אוטומטית לתחתית כל אימייל — נדרש על פי חוק."
-                : 'מומלץ להוסיף בסוף ההודעה אפשרות הסרה (למשל: "להסרה השב הסר") — נדרש על פי חוק.'}
-            </p>
+            {source !== "wa_groups" && (
+              <p className="text-xs text-muted-foreground">
+                {channel === "email"
+                  ? "קישור הסרה מהרשימה (unsubscribe) יתווסף אוטומטית לתחתית כל אימייל — נדרש על פי חוק."
+                  : 'מומלץ להוסיף בסוף ההודעה אפשרות הסרה (למשל: "להסרה השב הסר") — נדרש על פי חוק.'}
+              </p>
+            )}
           </div>
         )}
 
@@ -529,9 +656,20 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
                   ? "אימייל (Resend)"
                   : `WhatsApp (${selectedProvider === "manus_wa" ? "Manus" : "Green API"})`}
               </div>
-              <div>נמענים: <Badge variant="secondary">{audienceCount ?? 0}</Badge></div>
-              {channel !== "email" && (
-                <div className="text-xs text-muted-foreground">שליחה בקצב מבוקר (12–20 שניות בין הודעות) כדי להימנע מחסימה.</div>
+              {source === "wa_groups" ? (
+                <div className="space-y-1">
+                  <div>קבוצות: <Badge variant="secondary">{selectedGroupIds.length}</Badge></div>
+                  <div className="text-xs text-muted-foreground">
+                    ההודעה תישלח לכל הקבוצות הנבחרות{sendMode === "schedule" ? " במועד המתוזמן" : " מיד"}.
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div>נמענים: <Badge variant="secondary">{audienceCount ?? 0}</Badge></div>
+                  {channel !== "email" && (
+                    <div className="text-xs text-muted-foreground">שליחה בקצב מבוקר (12–20 שניות בין הודעות) כדי להימנע מחסימה.</div>
+                  )}
+                </>
               )}
             </div>
           </div>

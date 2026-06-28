@@ -1,7 +1,7 @@
 // Shared AI model catalog for run-ai-agent + list-ai-models edge fn.
 // Single source of truth for available "brains".
 
-export type ModelFamily = 'google' | 'openai' | 'anthropic';
+export type ModelFamily = 'google' | 'openai' | 'anthropic' | 'manus';
 
 export interface ModelDef {
   id: string;          // gateway model id (e.g. 'google/gemini-3-flash-preview')
@@ -39,6 +39,8 @@ export const MODEL_CATALOG: ModelDef[] = [
   { id: 'anthropic/claude-sonnet-4-6', alias: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', family: 'anthropic', context_window: 200_000, capabilities: ['text','vision','tools'], isLatest: true, recommended: true },
   { id: 'anthropic/claude-opus-4-8', alias: 'claude-opus-4-8', label: 'Claude Opus 4.8', family: 'anthropic', context_window: 200_000, capabilities: ['text','vision','tools'], isLatest: true },
   { id: 'anthropic/claude-haiku-4-5-20251001', alias: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', family: 'anthropic', context_window: 200_000, capabilities: ['text','tools'], cheap: true },
+  // ===== Manus AI (async task delegation — requires manus integration api_key) =====
+  { id: 'manus/manus-1', alias: 'manus-1', label: 'Manus AI', family: 'manus', capabilities: ['text','tools'], isLatest: true },
 ];
 
 /**
@@ -53,6 +55,8 @@ export function resolveModelId(engine: string | null | undefined): string {
   // Alias match
   const byAlias = MODEL_CATALOG.find(m => m.alias === engine);
   if (byAlias) return byAlias.id;
+  // Manus is routed separately (not via resolveLLMTarget / OpenAI-compatible)
+  if (lower === 'manus/manus-1' || lower === 'manus-1') return 'manus/manus-1';
   // Legacy mappings
   const legacy: Record<string, string> = {
     'gemini-1.5-flash': 'google/gemini-2.5-flash',

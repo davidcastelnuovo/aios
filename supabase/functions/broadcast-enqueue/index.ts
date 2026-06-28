@@ -3,14 +3,15 @@
 // and commit mode (insert broadcast_recipients + mark broadcast ready to send).
 //
 // Audience filter shape (audience_filter JSONB on broadcasts):
-//   { source: 'clients'|'leads'|'campaigners',
+//   { source: 'clients'|'leads'|'campaigners'|'list'|'wa_groups',
 //     statuses?: string[],        // clients: client_status enum
 //     serviceTags?: string[],     // clients: services[] overlap
 //     statusKeys?: string[],      // leads: leads.status
 //     salesPersonIds?: string[],  // leads: sales_person_id
 //     tagIds?: string[],          // clients/leads: chat_contact_tags
 //     roles?: string[],           // campaigners: role[] overlap
-//     activeOnly?: boolean }      // campaigners (default true)
+//     activeOnly?: boolean,       // campaigners (default true)
+//     groupIds?: string[] }       // wa_groups: whatsapp_groups UUIDs
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 
 const corsHeaders = {
@@ -34,11 +35,12 @@ function normalizePhone(input: string | null | undefined, cc = '972'): string | 
 }
 
 type Recipient = {
-  entity_type: 'client' | 'lead' | 'campaigner' | 'manual';
+  entity_type: 'client' | 'lead' | 'campaigner' | 'manual' | 'wa_group';
   entity_id: string | null;
-  phone: string | null;
+  phone: string | null;        // null for wa_group recipients
   email: string | null;
   contact_name: string | null;
+  group_chat_id?: string | null; // only for wa_group
 };
 
 Deno.serve(async (req) => {
@@ -88,6 +90,29 @@ Deno.serve(async (req) => {
 
     const source: string = filter.source;
     let recipients: Recipient[] = [];
+
+    // ── Source: WhatsApp groups ──
+    if (source === 'wa_groups') {
+      const groupIds: string[] = Array.isArray(filter.groupIds) ? filter.groupIds : [];
+      if (groupIds.length === 0) {
+        return new Response(JSON.stringify({ error: 'missing_groupIds' }), { status: 400, headers: corsHeaders });
+      }
+      const { data: groups, error } = await db
+        .from('whatsapp_groups')
+        .select('id, group_name, group_chat_id')
+        .eq('tenant_id', tenantId)
+        .in('id', groupIds);
+      if (error) throw error;
+      const groupRecipients: Recipient[] = (groups || []).map((g: any) => ({
+        entity_type: 'wa_group' as const,
+        entity_id: g.id,
+        phone: null,
+        email: null,
+        contact_name: g.group_name || null,
+        group_chat_id: g.group_chat_id || null,
+      }));
+      return finalizeGroups(groupRecipients, db, tenantId, dryRun, broadcastId);
+    }
 
     // ── Source: saved mailing list (short-circuits CRM resolution) ──
     if (source === 'list') {
@@ -181,6 +206,8 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'unknown_source' }), { status: 400, headers: corsHeaders });
     }
 
+    // (wa_groups handled above; never reaches here for that source)
+
     // ── Manual include / exclude specific contacts by entity id ──
     if (Array.isArray(filter.includeIds) && filter.includeIds.length > 0) {
       const inc = new Set(filter.includeIds);
@@ -269,6 +296,50 @@ async function finalize(
     .from('broadcasts')
     .update({ stats: { total, sent: 0, delivered: 0, failed: 0, opted_out: 0 } })
     .eq('id', ctx.broadcastId);
+
+  return new Response(JSON.stringify({ success: true, total, sample }), { status: 200, headers: corsHeaders });
+}
+
+/**
+ * Finalize WA group recipients — stored with entity_type='wa_group' and
+ * group_chat_id in the entity_id column (no phone/email normalization needed).
+ */
+async function finalizeGroups(
+  groups: Recipient[],
+  db: any,
+  tenantId: string,
+  dryRun: boolean | undefined,
+  broadcastId: string | undefined,
+) {
+  const total = groups.length;
+  const sample = groups.slice(0, 10).map((g) => ({ name: g.contact_name, group_chat_id: g.group_chat_id }));
+
+  if (dryRun || !broadcastId) {
+    return new Response(JSON.stringify({ success: true, total, sample }), { status: 200, headers: corsHeaders });
+  }
+
+  // Commit: clear previous snapshot, insert group rows
+  await db.from('broadcast_recipients').delete().eq('broadcast_id', broadcastId);
+
+  if (total > 0) {
+    const rows = groups.map((g) => ({
+      broadcast_id: broadcastId,
+      tenant_id: tenantId,
+      entity_type: 'wa_group',
+      entity_id: g.entity_id,           // whatsapp_groups.id (UUID)
+      phone: g.group_chat_id,           // reuse phone col to store chat_id for dispatch
+      email: null,
+      contact_name: g.contact_name,
+      status: 'pending',
+    }));
+    const { error } = await db.from('broadcast_recipients').insert(rows);
+    if (error && !String(error.message).includes('duplicate')) throw error;
+  }
+
+  await db
+    .from('broadcasts')
+    .update({ stats: { total, sent: 0, delivered: 0, failed: 0, opted_out: 0 } })
+    .eq('id', broadcastId);
 
   return new Response(JSON.stringify({ success: true, total, sample }), { status: 200, headers: corsHeaders });
 }

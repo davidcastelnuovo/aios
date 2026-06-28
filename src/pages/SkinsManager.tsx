@@ -173,9 +173,9 @@ export default function SkinsManager() {
         <Button onClick={newSkin} className="gap-1.5"><Plus className="h-4 w-4" />סקין חדש</Button>
         <div className="text-right">
           <h1 className="text-2xl font-bold flex items-center gap-2 justify-end">
-            <Sparkles className="h-6 w-6 text-orange-500" />הסקינז של כרמן
+            <Sparkles className="h-6 w-6 text-orange-500" />סקינז
           </h1>
-          <p className="text-sm text-muted-foreground">תפקידים שכרמן לובשת לפי המשימה — קופי, SEO, קמפיינרית, כספים ועוד.</p>
+          <p className="text-sm text-muted-foreground">תפקידים שהסוכן לובש לפי המשימה — קופי, SEO, קמפיינר, כספים ועוד.</p>
         </div>
       </div>
 

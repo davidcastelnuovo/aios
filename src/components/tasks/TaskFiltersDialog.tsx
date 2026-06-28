@@ -105,6 +105,7 @@ export function TaskFiltersDialog({
     { value: "clients", label: "לקוחות בלבד" },
     { value: "leads", label: "לידים בלבד" },
     { value: "general", label: "משימות כלליות (ללא שיוך)" },
+    { value: "unassigned", label: "לא משוייכות ללקוח" },
   ];
 
   return (

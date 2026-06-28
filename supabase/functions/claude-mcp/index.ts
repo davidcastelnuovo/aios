@@ -28,6 +28,8 @@
 //   CLAUDE_DEV_ROUTINE_ID / CLAUDE_DEV_ROUTINE_TOKEN  separate routine for dev tasks
 //   CLAUDE_ROUTINE_BETA   override the experimental beta header (defaults below)
 //   CLAUDE_DEFAULT_TENANT_ID  fallback tenant when one can't be resolved from the bearer
+// redeploy: revert to the original claude-mcp (no dispatch WhatsApp ping) so Carmen's own
+// session-URL relay is the single message — the extra ping had caused duplicate messages.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
@@ -41,7 +43,7 @@ const corsHeaders = {
 
 const ANTHROPIC_BETA = Deno.env.get("CLAUDE_ROUTINE_BETA") || "experimental-cc-routine-2026-04-01";
 const ANTHROPIC_VERSION = "2023-06-01";
-const SERVER_INFO = { name: "claude-mcp", version: "1.4.0" };
+const SERVER_INFO = { name: "claude-mcp", version: "1.6.0" };
 const PROTOCOL_VERSION = "2024-11-05";
 const MAX_TEXT = 65_536; // Routines /fire hard limit on the `text` field.
 
@@ -181,6 +183,70 @@ async function resolveContext(bearer: string | undefined): Promise<{ tenantId: s
   }
 }
 
+function sbClient() {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+}
+
+// MEMORY: pull the last few Carmen → Claude dispatches for this tenant so a fresh
+// routine session knows what was already asked (and where it landed) instead of
+// starting cold. Returns a prompt block, or '' when there's nothing / no tenant.
+async function recentDispatchContext(tenantId: string | null): Promise<string> {
+  if (!tenantId) return "";
+  const sb = sbClient();
+  if (!sb) return "";
+  try {
+    const { data } = await sb
+      .from("claude_dispatches")
+      .select("created_at, tool, request_text, session_url, status")
+      .eq("tenant_id", tenantId)
+      .order("created_at", { ascending: false })
+      .limit(5);
+    const rows = (data || []) as Array<any>;
+    if (!rows.length) return "";
+    const lines = rows.map((r) => {
+      const when = String(r.created_at || "").slice(0, 16).replace("T", " ");
+      const what = String(r.request_text || "").replace(/\s+/g, " ").slice(0, 200);
+      const tag = r.tool === "request_dev_task" ? "DEV" : "ASK";
+      const sess = r.session_url ? ` — ${r.session_url}` : "";
+      return `• [${when} · ${tag} · ${r.status || "dispatched"}] ${what}${sess}`;
+    });
+    return (
+      `\n\n--- RECENT CONTEXT — what Carmen already asked Claude (most recent first) ---\n` +
+      `Before starting, read docs/carmen-learned-skills.md and the list below. If this request ` +
+      `duplicates or continues earlier work, build on it (check the prior session / its PR) instead ` +
+      `of starting over.\n` +
+      lines.join("\n")
+    );
+  } catch (e) {
+    console.error("[claude-mcp] recentDispatchContext failed:", (e as any)?.message ?? e);
+    return "";
+  }
+}
+
+// VISIBILITY (durable): persist the dispatch so David has a record of what Carmen
+// asked + the live session URL, and future sessions can recall it. Never throws.
+async function logDispatch(args: {
+  tenantId: string | null; agentId: string | null; tool: string;
+  requestText: string; context: string; branch: string; sessionUrl: string;
+}): Promise<void> {
+  const sb = sbClient();
+  if (!sb) return;
+  try {
+    await sb.from("claude_dispatches").insert({
+      tenant_id: args.tenantId,
+      agent_id: args.agentId,
+      tool: args.tool,
+      request_text: args.requestText,
+      context: args.context || null,
+      branch: args.branch || null,
+      session_url: args.sessionUrl || null,
+    });
+  } catch (e) {
+    console.error("[claude-mcp] logDispatch failed:", (e as any)?.message ?? e);
+  }
+}
+
 // Appended to every help request so Claude (a) solves the task, (b) makes Carmen
 // independent next time, (c) keeps David in the loop with the result, and (d)
 // treats a failed previously-taught skin as a fix-and-retry job. Carmen's side
@@ -229,8 +295,10 @@ async function handleToolCall(name: string, args: Record<string, any>, ctx: { te
       (branch ? `\nBase/target branch: ${branch}\n` : ``) +
       (context ? `\nContext:\n${context}\n` : ``) +
       `\nPlease implement this in the AIOS codebase and open a pull request when done.` +
+      (await recentDispatchContext(ctx.tenantId)) +
       teachingBlock(ctx.tenantId, ctx.agentId);
     const url = await fireRoutine(id, token, text);
+    await logDispatch({ tenantId: ctx.tenantId, agentId: ctx.agentId, tool: "request_dev_task", requestText: task, context, branch, sessionUrl: url });
     return `✅ Dispatched the dev task to Claude Code. Claude is now working on it and will open a pull request when finished.\nSession: ${url}`;
   }
 
@@ -245,8 +313,10 @@ async function handleToolCall(name: string, args: Record<string, any>, ctx: { te
       `Requested by Carmen (AIOS agent), on behalf of David.\n\n` +
       `${request}\n` +
       (context ? `\nContext:\n${context}\n` : ``) +
+      (await recentDispatchContext(ctx.tenantId)) +
       teachingBlock(ctx.tenantId, ctx.agentId);
     const url = await fireRoutine(id, token, text);
+    await logDispatch({ tenantId: ctx.tenantId, agentId: ctx.agentId, tool: "ask_claude", requestText: request, context, branch: "", sessionUrl: url });
     return `✅ Sent your request to Claude. A Claude Code session is now running on it.\nSession: ${url}`;
   }
 

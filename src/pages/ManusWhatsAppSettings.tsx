@@ -21,6 +21,7 @@ import {
   RefreshCw, Plus, Pencil, Trash2, Share2,
 } from "lucide-react";
 import { ShareIntegrationTenantsDialog } from "@/components/forms/ShareIntegrationTenantsDialog";
+import { IntegrationVisibilitySelector } from "@/components/forms/IntegrationVisibilitySelector";
 
 const PROJECT_REF = (import.meta.env.VITE_SUPABASE_PROJECT_ID as string) || "";
 
@@ -326,6 +327,13 @@ export default function ManusWhatsAppSettings() {
                       </div>
                     </div>
                   </div>
+                  <Separator />
+                  <IntegrationVisibilitySelector
+                    integrationId={i.id}
+                    integrationName={i.display_name || "Manus WA"}
+                    ownerId={userId}
+                    tenantId={tenantId!}
+                  />
                 </CardContent>
               </Card>
             );

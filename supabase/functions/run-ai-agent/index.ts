@@ -1,4 +1,6 @@
-// redeploy trigger: rebundle _shared/models.ts — Claude (Anthropic) brains added to the catalog
+// redeploy trigger: restore the ai_agents-based run-ai-agent (a direct prod deploy had shipped a
+// broken rewrite querying a non-existent `agents` table → every agent call 404'd). This is the
+// known-good monolithic version from main; CI redeploys it via the Supabase CLI. (re-deploy: a stray placeholder bundle had overwritten v40).
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
 import { resolveModelId } from '../_shared/models.ts'
 import { assertCallerCanAccessClient, assertCallerCanAccessEntityClient } from '../_shared/auth-helpers.ts'
@@ -17,6 +19,10 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+
+// ai_memory.user_id is nullable — NULL means system/agent write (no real user).
+// The unique index uses COALESCE(user_id, '00000000-0000-0000-0000-000000000000') for dedup.
+const SYSTEM_USER_UUID = '00000000-0000-0000-0000-000000000000' // kept for reference only
 
 function resolveModel(engine: string): string {
   return resolveModelId(engine)
@@ -92,12 +98,13 @@ const ALL_TOOLS = [
   { name: 'search_entities', description: 'חיפוש סוכנויות, לקוחות, קמפיינרים או לידים לפי שם. עבור client: אם הקורא הוא קמפיינר WhatsApp, התוצאות מוגבלות אוטומטית ללקוחות שלו אלא אם הועבר all_scopes=true. ניתן לסנן clients/leads לפי agency_id.', parameters: { type: 'object', properties: { entity_type: { type: 'string', enum: ['agency', 'client', 'campaigner', 'lead'] }, search_term: { type: 'string' }, agency_id: { type: 'string', description: 'הגבלה לסוכנות מסוימת (רלוונטי ל-client/lead)' }, all_scopes: { type: 'boolean', description: 'דרוס את סקופ הקמפיינר והחזר תוצאות מכל הארגון.' } }, required: ['entity_type', 'search_term'] } },
   // MANUS AI - Complex task delegation
   { name: 'delegate_to_manus', description: 'שליחת משימה מורכבת ל-Manus AI לביצוע ברקע (מחקר שוק, ניתוח קמפיינים, יצירת תוכן, ניתוח נתונים). המשימה רצה ברקע ועשויה לקחת דקות עד שעות.', parameters: { type: 'object', properties: { prompt: { type: 'string', description: 'תיאור מפורט של המשימה לביצוע' }, context_data: { type: 'string', description: 'נתוני הקשר רלוונטיים (למשל נתוני קמפיינים)' } }, required: ['prompt'] } },
+  { name: 'send_message_to_manus', description: 'שליחת הודעה ישירה ל-Manus agent פעיל (תקשורת ישירה). משמש לשאלות, עדכונים, או המשך שיחה עם Manus על משימה קיימת. מחזיר מיידית ללא המתנה לתשובה.', parameters: { type: 'object', properties: { message: { type: 'string', description: 'ההודעה לשליחה ל-Manus' }, task_id: { type: 'string', description: 'מזהה המשימה הקיימת (אופציונלי — אם לא מוגדר ישתמש ב-agent-default)' } }, required: ['message'] } },
   { name: 'get_facebook_campaign_data', description: 'שליפת נתוני קמפיינים מפייסבוק לצורך ניתוח', parameters: { type: 'object', properties: { client_id: { type: 'string' }, days: { type: 'integer', description: 'מספר ימים אחורה (ברירת מחדל 30)' } } } },
   { name: 'list_facebook_campaigns', description: 'רשימת קמפיינים פעילים/מושבתים של לקוח עם campaign_id, שם וסטטוס. השתמש כדי למצוא את ה-campaign_id לפני toggle.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, name_search: { type: 'string', description: 'חיפוש חלקי בשם הקמפיין' } }, required: ['client_id'] } },
-  { name: 'toggle_facebook_campaign', description: 'הפעלה (ACTIVE) או השהיה (PAUSED) של קמפיין פייסבוק לפי campaign_id. דורש אישור מפורש של המשתמש לפני הפעלה — אל תקרא לכלי לפני שהמשתמש אישר את הפעולה הספציפית.', parameters: { type: 'object', properties: { campaign_id: { type: 'string', description: 'Facebook campaign ID (מספרי, לא שם)' }, status: { type: 'string', enum: ['ACTIVE', 'PAUSED'] }, confirmed: { type: 'boolean', description: 'חובה true — מאשר שהמשתמש אישר במפורש את הפעולה' } }, required: ['campaign_id', 'status', 'confirmed'] } },
-  { name: 'analyze_facebook_campaign', description: 'ניתוח עומק של קמפיין פייסבוק יחיד: השוואת היום מול 7 ימים מול 30 ימים, מטריקות (CPL, CTR, frequency, spend), זיהוי חריגות והמלצות לפעולה. השתמש לפני שמציעים פעולה כדי לבסס המלצה.', parameters: { type: 'object', properties: { campaign_id: { type: 'string' } }, required: ['campaign_id'] } },
-  { name: 'update_facebook_budget', description: 'עדכון תקציב יומי או כולל לקמפיין פייסבוק. דורש אישור מפורש של המשתמש (confirmed=true). חריגה של מעל 20% או מעל 500 ש"ח דורשת התרעה מפורשת.', parameters: { type: 'object', properties: { campaign_id: { type: 'string' }, daily_budget: { type: 'number', description: 'תקציב יומי בשקלים (לא במיקרו-יחידות)' }, lifetime_budget: { type: 'number' }, confirmed: { type: 'boolean' } }, required: ['campaign_id', 'confirmed'] } },
-  { name: 'duplicate_facebook_campaign', description: 'שכפול קמפיין פייסבוק (במצב PAUSED) לצורך ניסיון בקהל/יצירה אחרים. דורש אישור.', parameters: { type: 'object', properties: { campaign_id: { type: 'string' }, name_suffix: { type: 'string' }, confirmed: { type: 'boolean' } }, required: ['campaign_id', 'confirmed'] } },
+  { name: 'toggle_facebook_campaign', description: 'הפעלה (ACTIVE) או השהיה (PAUSED) של קמפיין פייסבוק לפי campaign_id. דורש אישור מפורש של המשתמש לפני הפעלה — אל תקרא לכלי לפני שהמשתמש אישר את הפעולה הספציפית.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string', description: 'Facebook campaign ID (מספרי, לא שם)' }, status: { type: 'string', enum: ['ACTIVE', 'PAUSED'] }, confirmed: { type: 'boolean', description: 'חובה true — מאשר שהמשתמש אישר במפורש את הפעולה' } }, required: ['client_id', 'campaign_id', 'status', 'confirmed'] } },
+  { name: 'analyze_facebook_campaign', description: 'ניתוח עומק של קמפיין פייסבוק יחיד: השוואת היום מול 7 ימים מול 30 ימים, מטריקות (CPL, CTR, frequency, spend), זיהוי חריגות והמלצות לפעולה. השתמש לפני שמציעים פעולה כדי לבסס המלצה.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string' } }, required: ['client_id', 'campaign_id'] } },
+  { name: 'update_facebook_budget', description: 'עדכון תקציב יומי או כולל לקמפיין פייסבוק. דורש אישור מפורש של המשתמש (confirmed=true). חריגה של מעל 20% או מעל 500 ש"ח דורשת התרעה מפורשת.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string' }, daily_budget: { type: 'number', description: 'תקציב יומי בשקלים (לא במיקרו-יחידות)' }, lifetime_budget: { type: 'number' }, confirmed: { type: 'boolean' } }, required: ['client_id', 'campaign_id', 'confirmed'] } },
+  { name: 'duplicate_facebook_campaign', description: 'שכפול קמפיין פייסבוק (במצב PAUSED) לצורך ניסיון בקהל/יצירה אחרים. דורש אישור.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string' }, name_suffix: { type: 'string' }, confirmed: { type: 'boolean' } }, required: ['client_id', 'campaign_id', 'confirmed'] } },
   { name: 'get_campaign_alerts', description: 'שליפת התראות פתוחות על קמפיינים (קמפיין נעצר, מודעה לא מאושרת, CPL חורג, frequency גבוה). השתמש בתחילת בדיקת דופק או כשהמשתמש שואל על מצב הקמפיינים.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, severity: { type: 'string', enum: ['info', 'warning', 'critical'] }, only_open: { type: 'boolean', description: 'ברירת מחדל true' } } } },
   { name: 'acknowledge_campaign_alert', description: 'סימון התראת קמפיין כטופלה.', parameters: { type: 'object', properties: { alert_id: { type: 'string' } }, required: ['alert_id'] } },
   { name: 'list_social_pages', description: 'רשימת עמודים מחוברים (פייסבוק/אינסטגרם) של הטננט. שימושי לפני פרסום או טיפול בתגובות.', parameters: { type: 'object', properties: { platform: { type: 'string', enum: ['facebook', 'instagram'] }, client_id: { type: 'string' } } } },
@@ -244,12 +251,28 @@ const ALL_TOOLS = [
   { name: 'gads_pause', description: 'השהיית קמפיין Google Ads. דורש אישור.', parameters: { type: 'object', properties: { customer_id: { type: 'string' }, campaign_id: { type: 'string' } }, required: ['customer_id','campaign_id'] } },
   { name: 'gads_resume', description: 'הדלקת קמפיין Google Ads. דורש אישור.', parameters: { type: 'object', properties: { customer_id: { type: 'string' }, campaign_id: { type: 'string' } }, required: ['customer_id','campaign_id'] } },
   { name: 'gads_update_budget', description: 'שינוי תקציב יומי לקמפיין Google Ads. דורש אישור.', parameters: { type: 'object', properties: { customer_id: { type: 'string' }, campaign_id: { type: 'string' }, daily_budget: { type: 'number' } }, required: ['customer_id','campaign_id','daily_budget'] } },
+  { name: 'list_google_ad_accounts', description: 'שליפת כל חשבונות Google Ads המחוברים לטננט. מחזיר customer_id, name, status, client_id (אם משויך ללקוח).', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'סינון לפי לקוח ספציפי (אופציונלי)' } } } },
+  { name: 'connect_google_ads_account', description: 'שיוך חשבון Google Ads (customer_id) ללקוח ב-CRM. שומר את המזהה ב-clients.google_ads_account_id.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח' }, customer_id: { type: 'string', description: 'מזהה חשבון Google Ads (ספרות בלבד, ללא מקפים)' } }, required: ['client_id', 'customer_id'] } },
+  // ===========================
+  // GOOGLE CALENDAR
+  // ===========================
+  { name: 'create_calendar_event', description: 'יצירת אירוע ביומן Google Calendar. יוצר אירוע עם כותרת, תאריך, שעה, משתתפים (ישלח להם הזמנה) ותיאור. ברירת מחדל: שעה אחת. אם user_id לא מצוין — ישתמש ביומן של המשתמש הראשון שחיבר יומן בארגון.', parameters: { type: 'object', properties: { title: { type: 'string', description: 'כותרת האירוע' }, date: { type: 'string', description: 'תאריך ב-YYYY-MM-DD (לדוגמה 2026-07-01)' }, time: { type: 'string', description: 'שעת התחלה ב-HH:MM (לדוגמה 14:00), שעון ישראל' }, duration_minutes: { type: 'integer', description: 'משך האירוע בדקות. ברירת מחדל: 60' }, attendees: { type: 'array', items: { type: 'string' }, description: 'רשימת כתובות אימייל לזמן לאירוע. ישלחו להם הזמנות.' }, description: { type: 'string', description: 'תיאור/הערות לאירוע (אופציונלי)' }, client_id: { type: 'string', description: 'מזהה לקוח לשיוך האירוע בלוג (אופציונלי)' }, user_id: { type: 'string', description: 'מזהה משתמש שיומנו ישמש. אופציונלי — ברירת מחדל: המשתמש הראשון עם יומן מחובר בארגון.' } }, required: ['title', 'date', 'time'] } },
   // ===========================
   // SCHEDULED PAUSE/RESUME
   // ===========================
   { name: 'schedule_campaign_toggle', description: 'תזמון אוטומטי של כיבוי/הדלקה בלוח זמנים (cron) או חד-פעמי (run_at). דורש אישור. דוגמה: לכבות כל יום ב-22:00 → cron_expression "0 22 * * *". להדליק ראשון-חמישי 07:00 → "0 7 * * 1-5".', parameters: { type: 'object', properties: { entity_id: { type: 'string' }, entity_type: { type: 'string', enum: ['fb_campaign','fb_adset','fb_ad','google_campaign'] }, action: { type: 'string', enum: ['pause','resume'] }, cron_expression: { type: 'string' }, run_at: { type: 'string', description: 'ISO datetime לחד-פעמי' }, timezone: { type: 'string', description: 'ברירת מחדל Asia/Jerusalem' }, client_id: { type: 'string' }, notes: { type: 'string' } }, required: ['entity_id','entity_type','action'] } },
   { name: 'list_campaign_schedules', description: 'רשימת תזמונים פעילים של פעולות על קמפיינים (כיבוי/הדלקה).', parameters: { type: 'object', properties: { client_id: { type: 'string' }, only_enabled: { type: 'boolean' }, limit: { type: 'integer' } } } },
   { name: 'cancel_campaign_schedule', description: 'ביטול תזמון קיים.', parameters: { type: 'object', properties: { schedule_id: { type: 'string' } }, required: ['schedule_id'] } },
+  // ===========================
+  // BROADCAST (דיוור)
+  // ===========================
+  { name: 'list_broadcasts', description: 'רשימת דיוורים קיימים (broadcasts). מחזיר שם, ערוץ, סטטוס, תאריך תזמון וסטטיסטיקות שליחה. השתמש כדי לראות מה קיים לפני יצירה חדשה.', parameters: { type: 'object', properties: { status: { type: 'string', enum: ['draft','scheduled','sending','sent','paused','failed','canceled'], description: 'סינון לפי סטטוס (אופציונלי)' }, limit: { type: 'integer', description: 'ברירת מחדל 20' } } } },
+  { name: 'create_broadcast', description: 'יצירת דיוור WhatsApp חדש לקהל יעד (לקוחות / לידים / קמפיינרים / רשימה / קבוצות וואטסאפ). דורש אישור לפני שליחה. אחרי יצירה — שאל "לשלוח עכשיו או לתזמן?".', parameters: { type: 'object', properties: { name: { type: 'string', description: 'שם הדיוור' }, body_text: { type: 'string', description: 'תוכן ההודעה. אפשר להשתמש ב-{{contact_name}} כמשתנה.' }, audience_source: { type: 'string', enum: ['clients','leads','campaigners','wa_groups'], description: 'מקור הקהל' }, audience_filter: { type: 'object', description: 'פרמטרים נוספים לפי source: clients→{statuses,tagIds}, leads→{statusKeys,salesPersonIds}, campaigners→{roles}, wa_groups→{groupIds:["uuid1",...]}' }, scheduled_at: { type: 'string', description: 'תאריך ושעה לתזמון ב-ISO UTC (אופציונלי — ריק = שלח מיד אחרי אישור)' }, integration_id: { type: 'string', description: 'UUID של חיבור WhatsApp לשימוש (אופציונלי — ישתמש בברירת מחדל)' } }, required: ['name', 'body_text', 'audience_source'] } },
+  { name: 'send_broadcast_now', description: 'שליחה מיידית של דיוור קיים (status=draft/scheduled). דורש אישור. מעביר לסטטוס sending ומתחיל לשלוח.', parameters: { type: 'object', properties: { broadcast_id: { type: 'string', description: 'מזהה הדיוור' } }, required: ['broadcast_id'] } },
+  { name: 'schedule_broadcast', description: 'תזמון דיוור קיים לשליחה בזמן עתידי. דורש אישור. מעביר לסטטוס scheduled.', parameters: { type: 'object', properties: { broadcast_id: { type: 'string', description: 'מזהה הדיוור' }, scheduled_at: { type: 'string', description: 'תאריך ושעה ב-ISO UTC (לדוגמה 2026-07-01T18:00:00Z עבור 21:00 שעון ישראל)' } }, required: ['broadcast_id', 'scheduled_at'] } },
+  { name: 'cancel_broadcast', description: 'ביטול דיוור מתוזמן או עצירת דיוור פעיל. דורש אישור.', parameters: { type: 'object', properties: { broadcast_id: { type: 'string' } }, required: ['broadcast_id'] } },
+  { name: 'list_wa_groups', description: 'רשימת קבוצות וואטסאפ הזמינות לדיוור (לא חסומות). מחזיר id, group_name, group_chat_id. השתמש כדי לקבל groupIds לפני יצירת דיוור לקבוצות.', parameters: { type: 'object', properties: { name_search: { type: 'string', description: 'חיפוש חלקי בשם הקבוצה (אופציונלי)' }, limit: { type: 'integer', description: 'ברירת מחדל 50' } } } },
+  { name: 'get_group_members', description: 'שליפת רשימת המשתתפים בקבוצת WhatsApp, מועשרת בזיהוי CRM (קמפיינר / לקוח / לא מוכר). שימושי לדעת מול מי את מתכתבת בקבוצה. מחזיר לכל משתתף: phone, name, role (campaigner/client/unknown), id.', parameters: { type: 'object', properties: { group_chat_id: { type: 'string', description: 'מזהה הקבוצה — לדוגמה 120363015444800400@g.us' }, integration_id: { type: 'string', description: 'UUID של חיבור WhatsApp (אופציונלי — ישתמש בחיבור GreenAPI הפעיל)' } }, required: ['group_chat_id'] } },
   // ===========================
   // APPROVAL FLOW
   // ===========================
@@ -271,8 +294,7 @@ const ALL_TOOLS = [
 const FB_GRAPH_VERSION = 'v21.0'
 
 async function fbResolveClientAdAccount(supabase: any, tenantId: string, clientId: string): Promise<string | null> {
-  // clients.* ad-account fields are empty in practice — the act_ id lives in the
-  // client's Meta sync table config (crm_tables.integration_settings).
+  // 1. crm_tables (clients connected via the facebook sync/report-table flow).
   const { data } = await supabase
     .from('crm_tables')
     .select('integration_settings, last_sync_at')
@@ -285,6 +307,14 @@ async function fbResolveClientAdAccount(supabase: any, tenantId: string, clientI
     const acc = s.ad_account_id || s.account_id || s.meta_account_id
     if (acc) return String(acc).replace(/^act_/, '')
   }
+  // 2. Fallback: clients.meta_ads_account_id (the ad account set directly on the client record).
+  const { data: cl } = await supabase
+    .from('clients')
+    .select('meta_ads_account_id')
+    .eq('id', clientId)
+    .eq('tenant_id', tenantId)
+    .maybeSingle()
+  if (cl?.meta_ads_account_id) return String(cl.meta_ads_account_id).replace(/^act_/, '')
   return null
 }
 
@@ -560,6 +590,14 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         duration_minutes: args.duration_minutes || null,
       }).select('id, title, status').single()
       if (error) throw error
+      // Auto-sync to Google Calendar if task has a scheduled time (fire-and-forget)
+      if (args.due_date && args.due_time) {
+        fetch(`${SUPABASE_URL}/functions/v1/create-task-calendar-event`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ task_id: data.id }),
+        }).catch((calErr) => console.error('[create_task] calendar sync failed:', calErr))
+      }
       return { task_id: data.id, title: data.title, status: data.status }
     }
     case 'create_agent_task': {
@@ -697,7 +735,16 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     case 'list_tasks': {
       let query = supabase.from('tasks').select('id, title, status, priority, due_date, due_time, duration_minutes, clients(name), leads(company_name), campaigners(full_name)').in('tenant_id', accessibleTenantIds).order('priority', { ascending: false }).limit(args.limit || 20)
       if (args.status) query = query.eq('status', args.status)
-      if (args.client_id) query = query.eq('client_id', args.client_id)
+      if (args.client_id) {
+        if (callerCampaignerId && !bypassCampaignerScope) await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
+        query = query.eq('client_id', args.client_id)
+      } else if (callerCampaignerId && !bypassCampaignerScope) {
+        const { data: links } = await supabase.from('client_team').select('client_id').eq('campaigner_id', callerCampaignerId)
+        const ids = (links || []).map((l: any) => l.client_id)
+        query = ids.length > 0
+          ? query.or(`client_id.is.null,client_id.in.(${ids.join(',')})`)
+          : query.is('client_id', null)
+      }
       const { data, error } = await query
       if (error) throw error
       return { count: data.length, tasks: data.map((t: any) => ({ ...t, client_name: t.clients?.name, lead_name: t.leads?.company_name, campaigner_name: t.campaigners?.full_name })) }
@@ -901,6 +948,34 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       }
     }
 
+    case 'send_message_to_manus': {
+      const manusApiUrl = `${SUPABASE_URL}/functions/v1/manus-api`
+      const msgBody: any = {
+        action: 'send_message',
+        tenantId,
+        message: args.message,
+      }
+      if (args.task_id) msgBody.task_id = args.task_id
+      const msgRes = await fetch(manusApiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+        body: JSON.stringify(msgBody),
+      })
+      if (!msgRes.ok) {
+        const errText = await msgRes.text()
+        throw new Error(`Manus send_message error [${msgRes.status}]: ${errText}`)
+      }
+      const msgData = await msgRes.json()
+      return {
+        success: true,
+        task_id: msgData.task_id,
+        message: 'ההודעה נשלחה ל-Manus בהצלחה.',
+      }
+    }
+
     case 'get_facebook_campaign_data': {
       if (args.client_id) await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
       const daysBack = args.days || 30
@@ -1012,6 +1087,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (args.confirmed !== true) {
         return { error: 'not_confirmed', message: 'אישור משתמש מפורש נדרש. שאל את המשתמש לפני קריאה לכלי הזה ושלח confirmed=true רק אחרי שהוא אישר.' }
       }
+      await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
       const targetTenantId = accessibleTenantIds[0]
       const fnUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/toggle-facebook-campaign`
       const res = await fetch(fnUrl, {
@@ -1031,6 +1107,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return { success: true, campaign_id: args.campaign_id, new_status: args.status, fb: json }
     }
     case 'analyze_facebook_campaign': {
+      await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
       const targetTenantId = accessibleTenantIds[0]
       const fnUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/fb-campaign-analyze`
       const res = await fetch(fnUrl, {
@@ -1047,6 +1124,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (args.confirmed !== true) {
         return { error: 'not_confirmed', message: 'אישור משתמש מפורש נדרש (confirmed=true).' }
       }
+      await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
       const targetTenantId = accessibleTenantIds[0]
       const action = name === 'update_facebook_budget' ? 'update_budget' : 'duplicate'
       const fnUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/fb-campaign-control`
@@ -1742,8 +1820,8 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     case 'save_memory': {
       const cat = args.category || 'general'
       const { data, error } = await supabase.from('ai_memory').upsert({
-        tenant_id: tenantId, user_id: userId || 'system', key: args.key, content: args.content, category: cat,
-      }, { onConflict: 'user_id,tenant_id,category,key' }).select('key, category').single()
+        tenant_id: tenantId, user_id: (userId && userId !== 'system') ? userId : null, key: args.key, content: args.content, category: cat,
+      }, { onConflict: 'user_id,tenant_id,category,key', ignoreDuplicates: false }).select('key, category').single()
       if (error) throw error
       // Mirror to agent_memory (Hermes FTS layer) for cross-conversation recall
       const importanceMap: Record<string, number> = {
@@ -2094,7 +2172,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       // 1. Resolve client scope
       let clientsQuery = supabase
         .from('clients')
-        .select('id, name, agency_id, agencies(name)')
+        .select('id, name, agency_id, meta_ads_account_id, agencies(name)')
         .in('tenant_id', accessibleTenantIds)
         .in('status', ['active', 'onboarding'])
         .order('name')
@@ -2187,7 +2265,8 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       let healthy = 0
       for (const c of (scopeClients || [])) {
         const settings = settingsByClient.get(c.id)
-        const adAccountId = settings?.ad_account_id || null
+        const adAccountId = settings?.ad_account_id
+          || (c.meta_ads_account_id ? String(c.meta_ads_account_id).replace(/^act_/, '') : null)
         const flags: string[] = []
         let status: string = 'unknown'
         let hasSpend7 = false
@@ -2624,6 +2703,252 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       }
     }
 
+    // ============ GOOGLE ADS — READ TOOLS ============
+    case 'list_google_ad_accounts': {
+      const { data: gadsInteg } = await supabase
+        .from('tenant_integrations')
+        .select('settings')
+        .in('tenant_id', accessibleTenantIds)
+        .eq('integration_type', 'google_ads')
+        .eq('is_active', true)
+        .limit(1).maybeSingle()
+
+      if (!gadsInteg?.settings?.refresh_token) {
+        return { error: 'אין חיבור Google Ads פעיל לטננט הזה. יש לחבר תחילה דרך הגדרות האינטגרציות.' }
+      }
+
+      const gClientId = Deno.env.get('GOOGLE_CLIENT_ID')
+      const gClientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET')
+      const gDevToken = Deno.env.get('GOOGLE_ADS_DEVELOPER_TOKEN')
+      if (!gClientId || !gClientSecret || !gDevToken) {
+        return { error: 'חסרות הגדרות סביבה של Google Ads (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_ADS_DEVELOPER_TOKEN)' }
+      }
+
+      const tokResp = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        body: new URLSearchParams({
+          refresh_token: gadsInteg.settings.refresh_token,
+          client_id: gClientId,
+          client_secret: gClientSecret,
+          grant_type: 'refresh_token',
+        }),
+      })
+      const tokData = await tokResp.json()
+      if (!tokData.access_token) {
+        return { error: 'כישלון בחידוש טוקן Google Ads', details: tokData?.error_description }
+      }
+      const gAccessToken = tokData.access_token
+
+      const gadsHeaders: Record<string, string> = {
+        'Authorization': `Bearer ${gAccessToken}`,
+        'developer-token': gDevToken,
+      }
+
+      // List all customers this token can access
+      const listResp = await fetch('https://googleads.googleapis.com/v23/customers:listAccessibleCustomers', {
+        headers: gadsHeaders,
+      })
+      const listData = await listResp.json()
+      if (listData.error) {
+        return { error: `Google Ads API: ${listData.error?.message || JSON.stringify(listData.error)}` }
+      }
+
+      const resourceNames: string[] = listData.resourceNames || []
+      const customerIds = resourceNames.map((r: string) => r.replace('customers/', ''))
+
+      // Fetch name+status for each customer in parallel
+      const accounts = await Promise.all(customerIds.map(async (cid: string) => {
+        try {
+          const r = await fetch(`https://googleads.googleapis.com/v23/customers/${cid}/googleAds:search`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...gadsHeaders },
+            body: JSON.stringify({ query: 'SELECT customer.id, customer.descriptive_name, customer.status, customer.manager FROM customer LIMIT 1' }),
+          })
+          const d = await r.json()
+          const row = d.results?.[0]?.customer
+          if (!row) return { customer_id: cid, name: null, status: null, is_manager: false }
+          return { customer_id: cid, name: row.descriptiveName ?? null, status: row.status ?? null, is_manager: row.manager ?? false }
+        } catch {
+          return { customer_id: cid, name: null, status: null, is_manager: false }
+        }
+      }))
+
+      // Look up which clients already have a google_ads_account_id set
+      const { data: linkedClients } = await supabase
+        .from('clients')
+        .select('id, name, google_ads_account_id')
+        .in('tenant_id', accessibleTenantIds)
+        .not('google_ads_account_id', 'is', null)
+
+      const clientByAccountId = new Map<string, { id: string; name: string }>()
+      for (const c of (linkedClients || [])) {
+        if (c.google_ads_account_id) {
+          clientByAccountId.set(String(c.google_ads_account_id).replace(/-/g, ''), { id: c.id, name: c.name })
+        }
+      }
+
+      let result = accounts.map((a: any) => ({
+        customer_id: a.customer_id,
+        name: a.name,
+        status: a.status,
+        is_manager: a.is_manager,
+        client_id: clientByAccountId.get(a.customer_id)?.id ?? null,
+        client_name: clientByAccountId.get(a.customer_id)?.name ?? null,
+      }))
+
+      if (args.client_id) {
+        result = result.filter((a: any) => a.client_id === args.client_id)
+      }
+
+      return { count: result.length, accounts: result }
+    }
+
+    case 'connect_google_ads_account': {
+      const { client_id, customer_id } = args
+      if (!client_id || !customer_id) return { error: 'client_id ו-customer_id נדרשים' }
+
+      const cleanId = String(customer_id).replace(/-/g, '')
+
+      const { data: client } = await supabase
+        .from('clients')
+        .select('id, name, google_ads_account_id')
+        .in('tenant_id', accessibleTenantIds)
+        .eq('id', client_id)
+        .maybeSingle()
+
+      if (!client) return { error: 'לקוח לא נמצא' }
+
+      const { error: updateErr } = await supabase
+        .from('clients')
+        .update({ google_ads_account_id: cleanId })
+        .eq('id', client_id)
+
+      if (updateErr) throw updateErr
+
+      await supabase.from('agent_action_log').insert({
+        tenant_id: tenantId,
+        action_type: 'connect_google_ads_account',
+        status: 'success',
+        action_details: { client_id, client_name: client.name, customer_id: cleanId, previous_id: client.google_ads_account_id ?? null },
+      }).then(() => {}, () => {})
+
+      return { success: true, client_id, client_name: client.name, customer_id: cleanId }
+    }
+
+    // ============ GOOGLE CALENDAR ============
+    case 'create_calendar_event': {
+      const { title, date, time, duration_minutes, attendees, description: eventDesc, client_id: calClientId, user_id: calUserId } = args
+      if (!title || !date || !time) return { error: 'title, date ו-time נדרשים' }
+
+      // Resolve which user's calendar to use
+      let calendarUserId: string | null = calUserId || null
+      let calGoogleEmail: string | null = null
+      if (!calendarUserId) {
+        const { data: tuData } = await supabase
+          .from('tenant_users')
+          .select('user_id')
+          .eq('tenant_id', tenantId)
+        const tenantUserIds: string[] = (tuData || []).map((r: any) => r.user_id)
+        if (tenantUserIds.length > 0) {
+          const { data: ctRow } = await supabase
+            .from('calendar_tokens')
+            .select('user_id, google_email')
+            .in('user_id', tenantUserIds)
+            .eq('needs_reconnect', false)
+            .limit(1)
+            .maybeSingle()
+          if (ctRow) { calendarUserId = ctRow.user_id; calGoogleEmail = ctRow.google_email }
+        }
+      }
+      if (!calendarUserId) {
+        return { error: 'אין יומן Google Calendar מחובר בארגון. יש לחבר תחילה דרך הגדרות → אינטגרציות → Google Calendar.' }
+      }
+
+      const { data: tokenData } = await supabase
+        .from('calendar_tokens')
+        .select('access_token, refresh_token, expires_at, google_email')
+        .eq('user_id', calendarUserId)
+        .maybeSingle()
+
+      if (!tokenData) {
+        return { error: `לא נמצא יומן מחובר למשתמש המבוקש. יש לחבר ב-הגדרות → Google Calendar.` }
+      }
+      if (!calGoogleEmail) calGoogleEmail = tokenData.google_email
+
+      let accessToken = tokenData.access_token
+      if (new Date(tokenData.expires_at) <= new Date()) {
+        const gClientId = Deno.env.get('GOOGLE_CLIENT_ID')
+        const gClientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET')
+        if (!gClientId || !gClientSecret) return { error: 'חסרות הגדרות סביבה של Google (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET)' }
+        const tokResp = await fetch('https://oauth2.googleapis.com/token', {
+          method: 'POST',
+          body: new URLSearchParams({
+            refresh_token: tokenData.refresh_token,
+            client_id: gClientId,
+            client_secret: gClientSecret,
+            grant_type: 'refresh_token',
+          }),
+        })
+        const tokJson = await tokResp.json()
+        if (!tokJson.access_token) return { error: 'כישלון בחידוש טוקן Google Calendar', details: tokJson?.error_description }
+        accessToken = tokJson.access_token
+        const newExpiry = new Date(Date.now() + (tokJson.expires_in || 3600) * 1000).toISOString()
+        await supabase.from('calendar_tokens').update({ access_token: accessToken, expires_at: newExpiry }).eq('user_id', calendarUserId)
+      }
+
+      // Build start/end local datetime strings (Asia/Jerusalem — passed with timeZone field)
+      const [startH, startM] = time.split(':').map(Number)
+      const durationMins = duration_minutes ?? 60
+      const totalEndMins = startH * 60 + startM + durationMins
+      const endH = Math.floor(totalEndMins / 60) % 24
+      const endM = totalEndMins % 60
+      const daysOverflow = Math.floor(totalEndMins / (24 * 60))
+      let endDate = date
+      if (daysOverflow > 0) {
+        const d = new Date(`${date}T12:00:00Z`)
+        d.setUTCDate(d.getUTCDate() + daysOverflow)
+        endDate = d.toISOString().split('T')[0]
+      }
+      const startDateTime = `${date}T${String(startH).padStart(2,'0')}:${String(startM).padStart(2,'0')}:00`
+      const endDateTime = `${endDate}T${String(endH).padStart(2,'0')}:${String(endM).padStart(2,'0')}:00`
+
+      const calEvent: Record<string, unknown> = {
+        summary: title,
+        description: eventDesc || '',
+        start: { dateTime: startDateTime, timeZone: 'Asia/Jerusalem' },
+        end: { dateTime: endDateTime, timeZone: 'Asia/Jerusalem' },
+      }
+      if (attendees && Array.isArray(attendees) && attendees.length > 0) {
+        calEvent.attendees = attendees.map((email: string) => ({ email }))
+      }
+
+      const calResp = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=all', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(calEvent),
+      })
+      const calData = await calResp.json()
+      if (!calResp.ok) return { error: calData.error?.message || 'Google Calendar API error', details: calData }
+
+      await supabase.from('agent_action_log').insert({
+        tenant_id: tenantId,
+        action_type: 'create_calendar_event',
+        status: 'success',
+        action_details: { title, date, time, duration_minutes: durationMins, attendees, client_id: calClientId, event_id: calData.id, calendar_user: calGoogleEmail },
+      }).then(() => {}, () => {})
+
+      return {
+        success: true,
+        event_id: calData.id,
+        html_link: calData.htmlLink,
+        title,
+        start: `${date} ${time}`,
+        end: `${endDate} ${String(endH).padStart(2,'0')}:${String(endM).padStart(2,'0')}`,
+        calendar_user: calGoogleEmail,
+        attendees_invited: attendees || [],
+      }
+    }
+
     // ============ SCHEDULES ============
     case 'schedule_campaign_toggle': {
       const nextRun = args.run_at || (args.cron_expression ? new Date(Date.now() + 60_000).toISOString() : null)
@@ -2662,6 +2987,265 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return { success: true, schedule_id: args.schedule_id, enabled: false }
     }
 
+    // ===========================
+    // BROADCAST (דיוור)
+    // ===========================
+    case 'list_broadcasts': {
+      let q = supabase
+        .from('broadcasts')
+        .select('id, name, channel, status, scheduled_at, stats, created_at, body_text')
+        .eq('tenant_id', tenantId)
+        .order('created_at', { ascending: false })
+        .limit(args.limit || 20)
+      if (args.status) q = q.eq('status', args.status)
+      const { data, error } = await q
+      if (error) throw error
+      return { count: data.length, broadcasts: data }
+    }
+    case 'create_broadcast': {
+      // Build audience_filter from source + extra filter
+      const audience_filter: Record<string, any> = {
+        source: args.audience_source,
+        ...(args.audience_filter || {}),
+      }
+      // Determine provider from tenant's default WA integration
+      let provider = 'green_api'
+      let integration_id = args.integration_id || null
+      if (!integration_id) {
+        const { data: integ } = await supabase
+          .from('tenant_integrations')
+          .select('id, integration_type')
+          .eq('tenant_id', tenantId)
+          .in('integration_type', ['green_api', 'manus_wa'])
+          .eq('is_active', true)
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (integ) {
+          integration_id = integ.id
+          provider = integ.integration_type
+        }
+      } else {
+        const { data: integ } = await supabase
+          .from('tenant_integrations')
+          .select('integration_type')
+          .eq('id', integration_id)
+          .maybeSingle()
+        if (integ) provider = integ.integration_type
+      }
+      const insertData: Record<string, any> = {
+        tenant_id: tenantId,
+        created_by: callerId || null,
+        name: args.name,
+        channel: 'whatsapp',
+        provider,
+        integration_id,
+        body_text: args.body_text,
+        audience_filter,
+        status: 'draft',
+      }
+      if (args.scheduled_at) {
+        insertData.scheduled_at = args.scheduled_at
+        insertData.status = 'scheduled'
+      }
+      const { data: bc, error } = await supabase.from('broadcasts').insert(insertData).select('id, name, status, scheduled_at').single()
+      if (error) throw error
+      return {
+        pending_approval: true,
+        approval_id: null,
+        broadcast_id: bc.id,
+        summary: `דיוור חדש "${bc.name}" נוצר (${bc.status}). קהל: ${args.audience_source}. ${args.scheduled_at ? 'מתוזמן ל-' + args.scheduled_at : 'טרם נשלח — שאל את המשתמש לאישור ושליחה.'}`,
+        instruction_for_carmen: 'הצג סיכום של הדיוור (שם, קהל, תוכן) ושאל "לשלוח עכשיו או לתזמן למועד מסוים?". אסור לשלוח בלי אישור מפורש.',
+      }
+    }
+    case 'send_broadcast_now': {
+      const { data: bc, error: bcErr } = await supabase
+        .from('broadcasts')
+        .select('id, name, status, tenant_id')
+        .eq('id', args.broadcast_id)
+        .eq('tenant_id', tenantId)
+        .single()
+      if (bcErr || !bc) throw new Error('דיוור לא נמצא')
+      if (!['draft','scheduled'].includes(bc.status)) throw new Error(`אי אפשר לשלוח דיוור בסטטוס ${bc.status}`)
+      const { data: aq, error: aqErr } = await supabase.from('agent_approval_queue').insert({
+        tenant_id: tenantId,
+        agent_id: agentId || null,
+        requested_by: userId,
+        action_type: 'send_broadcast_now',
+        title: `שליחת דיוור: ${bc.name}`,
+        description: 'שליחת דיוור WhatsApp מיידית',
+        tool_name: 'send_broadcast_now',
+        tool_input: { broadcast_id: bc.id },
+        status: 'pending',
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      }).select('id').single()
+      if (aqErr) throw aqErr
+      return {
+        pending_approval: true,
+        approval_id: aq.id,
+        summary: `שליחת דיוור "${bc.name}" מיידית לכל הנמענים.`,
+        instruction_for_carmen: 'הצג סיכום ובקש אישור. אחרי אישור — קרא ל-execute_pending_approval.',
+      }
+    }
+    case 'schedule_broadcast': {
+      const { data: bc, error: bcErr } = await supabase
+        .from('broadcasts')
+        .select('id, name, status')
+        .eq('id', args.broadcast_id)
+        .eq('tenant_id', tenantId)
+        .single()
+      if (bcErr || !bc) throw new Error('דיוור לא נמצא')
+      const { data: aq, error: aqErr } = await supabase.from('agent_approval_queue').insert({
+        tenant_id: tenantId,
+        agent_id: agentId || null,
+        requested_by: userId,
+        action_type: 'schedule_broadcast',
+        title: `תזמון דיוור: ${bc.name}`,
+        description: `תזמון ל-${args.scheduled_at}`,
+        tool_name: 'schedule_broadcast',
+        tool_input: { broadcast_id: bc.id, scheduled_at: args.scheduled_at },
+        status: 'pending',
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      }).select('id').single()
+      if (aqErr) throw aqErr
+      return {
+        pending_approval: true,
+        approval_id: aq.id,
+        summary: `תזמון דיוור "${bc.name}" ל-${args.scheduled_at}.`,
+        instruction_for_carmen: 'הצג סיכום ובקש אישור. אחרי אישור — קרא ל-execute_pending_approval.',
+      }
+    }
+    case 'cancel_broadcast': {
+      const { data: bc, error: bcErr } = await supabase
+        .from('broadcasts')
+        .select('id, name, status')
+        .eq('id', args.broadcast_id)
+        .eq('tenant_id', tenantId)
+        .single()
+      if (bcErr || !bc) throw new Error('דיוור לא נמצא')
+      const { data: aq, error: aqErr } = await supabase.from('agent_approval_queue').insert({
+        tenant_id: tenantId,
+        agent_id: agentId || null,
+        requested_by: userId,
+        action_type: 'cancel_broadcast',
+        title: `ביטול דיוור: ${bc.name}`,
+        description: `ביטול דיוור בסטטוס ${bc.status}`,
+        tool_name: 'cancel_broadcast',
+        tool_input: { broadcast_id: bc.id },
+        status: 'pending',
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      }).select('id').single()
+      if (aqErr) throw aqErr
+      return {
+        pending_approval: true,
+        approval_id: aq.id,
+        summary: `ביטול דיוור "${bc.name}" (${bc.status}).`,
+        instruction_for_carmen: 'הצג סיכום ובקש אישור. אחרי אישור — קרא ל-execute_pending_approval.',
+      }
+    }
+    case 'list_wa_groups': {
+      let q = supabase
+        .from('whatsapp_groups')
+        .select('id, group_name, group_chat_id, created_at')
+        .eq('tenant_id', tenantId)
+        .eq('is_blocked', false)
+        .order('group_name', { ascending: true })
+        .limit(args.limit || 50)
+      if (args.name_search) q = q.ilike('group_name', `%${args.name_search}%`)
+      const { data, error } = await q
+      if (error) throw error
+      return { count: data.length, groups: data }
+    }
+
+    // ============ WHATSAPP GROUP MEMBERS ============
+    case 'get_group_members': {
+      const { group_chat_id, integration_id: argIntegrationId } = args
+      if (!group_chat_id) return { error: 'group_chat_id נדרש' }
+
+      // 1. Resolve GreenAPI integration
+      let resolvedIntegId = argIntegrationId || null
+      let instanceId: string | null = null
+      let apiToken: string | null = null
+
+      if (!resolvedIntegId) {
+        const { data: integ } = await supabase
+          .from('tenant_integrations')
+          .select('id, instance_id, api_key')
+          .eq('tenant_id', tenantId)
+          .eq('integration_type', 'green_api')
+          .eq('is_active', true)
+          .limit(1)
+          .maybeSingle()
+        if (integ) {
+          resolvedIntegId = integ.id
+          instanceId = integ.instance_id
+          apiToken = integ.api_key
+        }
+      } else {
+        const { data: integ } = await supabase
+          .from('tenant_integrations')
+          .select('instance_id, api_key')
+          .eq('id', resolvedIntegId)
+          .maybeSingle()
+        if (integ) { instanceId = integ.instance_id; apiToken = integ.api_key }
+      }
+
+      if (!instanceId || !apiToken) {
+        return { error: 'לא נמצא חיבור GreenAPI פעיל. יש לחבר WhatsApp דרך הגדרות → אינטגרציות.' }
+      }
+
+      // 2. Fetch group participants from GreenAPI
+      let rawParticipants: Array<{ id: string; isAdmin?: boolean; isSuperAdmin?: boolean }> = []
+      try {
+        const gwRes = await fetch(
+          `https://api.green-api.com/waInstance${instanceId}/getGroupData/${apiToken}`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ groupId: group_chat_id }) }
+        )
+        if (gwRes.ok) {
+          const gwData = await gwRes.json()
+          rawParticipants = Array.isArray(gwData?.participants) ? gwData.participants : []
+        } else {
+          console.error('[get_group_members] GreenAPI error:', await gwRes.text())
+        }
+      } catch (e: any) {
+        console.error('[get_group_members] GreenAPI fetch failed:', e?.message)
+      }
+
+      // 3. Bulk-load campaigners and clients for phone matching
+      const [campRes, clientRes] = await Promise.all([
+        supabase.from('campaigners').select('id, full_name, phone').eq('tenant_id', tenantId).eq('active', true),
+        supabase.from('clients').select('id, name, phone').eq('tenant_id', tenantId).not('phone', 'is', null),
+      ])
+      const campaigners: Array<{ id: string; full_name: string; phone: string }> = campRes.data || []
+      const clients: Array<{ id: string; name: string; phone: string }> = clientRes.data || []
+
+      const normalize9 = (p: string) => p.replace(/[^0-9]/g, '').slice(-9)
+
+      // 4. Enrich each participant
+      const members = rawParticipants.map((p) => {
+        const phone = String(p.id || '').split('@')[0].replace(/[^0-9]/g, '')
+        const norm9 = phone.slice(-9)
+        const campaigner = campaigners.find(c => c.phone && normalize9(c.phone) === norm9)
+        const client = !campaigner && clients.find(c => c.phone && normalize9(c.phone) === norm9)
+        return {
+          phone,
+          name: campaigner?.full_name || client?.name || null,
+          role: campaigner ? 'campaigner' : client ? 'client' : 'unknown',
+          id: campaigner?.id || client?.id || null,
+          is_admin: !!p.isAdmin || !!p.isSuperAdmin,
+          is_known_contact: !!(campaigner || client),
+        }
+      })
+
+      return {
+        group_chat_id,
+        total: members.length,
+        known: members.filter(m => m.is_known_contact).length,
+        members,
+      }
+    }
+
     default:
       throw new Error(`Unknown tool: ${name}`)
   }
@@ -2685,7 +3269,7 @@ type Emit = ((obj: any) => void) | undefined
 
 async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Promise<Response> {
   try {
-    const { agent_id: bodyAgentId, command_text, temperature, automation_id, user_name, lead_data, tenant_id, user_id, task_skills, task_mode, conversation_history, wa_notify } = bodyJson
+    const { agent_id: bodyAgentId, command_text, temperature, automation_id, user_name, lead_data, tenant_id, user_id, task_skills, task_mode, system_prompt_addon, conversation_history, wa_notify } = bodyJson
     console.log(`[AGENT] Starting run: agent=${bodyAgentId}, command="${command_text?.substring(0, 80)}", surface=${surface}, stream=${!!emit}`)
 
     if (!command_text) throw new Error('Missing command_text')
@@ -2726,6 +3310,8 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
 
     // 2.5. Resolve caller identity from phone number (WhatsApp sessions)
     let callerCampaignerId: string | null = null
+    let callerClientId: string | null = null
+    let callerClientName: string | null = null
     let callerName: string | null = user_name || null
     const callerPhone = lead_data?.phone || null
     if (callerPhone && resolvedTenantId) {
@@ -2748,6 +3334,27 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
             callerCampaignerId = match.id
             callerName = match.full_name
             console.log(`[AGENT] Resolved caller phone ${callerPhone} → campaigner: ${match.full_name} (${match.id})`)
+          }
+        }
+        // Also look up clients by phone if no campaigner matched
+        if (!callerCampaignerId) {
+          const { data: matchedClients } = await supabase
+            .from('clients')
+            .select('id, name, phone')
+            .eq('tenant_id', resolvedTenantId)
+            .not('phone', 'is', null)
+          if (matchedClients) {
+            const clientMatch = matchedClients.find((c: any) => {
+              if (!c.phone) return false
+              const cNorm = c.phone.replace(/[^0-9]/g, '').slice(-9)
+              return cNorm === normalizedPhone
+            })
+            if (clientMatch) {
+              callerClientId = clientMatch.id
+              callerClientName = clientMatch.name
+              if (!callerName) callerName = clientMatch.name
+              console.log(`[AGENT] Resolved caller phone ${callerPhone} → client: ${clientMatch.name} (${clientMatch.id})`)
+            }
           }
         }
       }
@@ -2807,11 +3414,11 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
         const keyBase = `instr_${Math.abs(h).toString(36)}`
         await supabase.from('ai_memory').upsert({
           tenant_id: resolvedTenantId,
-          user_id: callerUserId || resolvedUserId || 'system',
+          user_id: callerUserId || (resolvedUserId !== 'system' ? resolvedUserId : null) || null,
           key: keyBase,
           content: sentence,
           category: 'instructions',
-        }, { onConflict: 'user_id,tenant_id,category,key' })
+        }, { onConflict: 'user_id,tenant_id,category,key', ignoreDuplicates: false })
         // Mirror to Hermes FTS layer (agent_memory) so cross-conversation recall sees it.
         try {
           await saveAgentMemory({
@@ -2885,6 +3492,8 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
       const callerContext = {
         callerName: callerName ?? undefined,
         callerCampaignerId: callerCampaignerId ?? undefined,
+        callerClientId: callerClientId ?? undefined,
+        callerClientName: callerClientName ?? undefined,
         callerRole: callerRole ?? undefined,
         isManagerRole: isManagerRoleCaller,
         isTeamManager: isTeamManagerCaller,
@@ -2971,10 +3580,21 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
         analyst: 'את מנתחת נתונים. שולפת נתונים מהמערכת, מזהה דפוסים ומסיקה תובנות עסקיות ברורות.',
         scheduler: 'את מומחית ניהול לוח זמנים. מתאמת פגישות, יוצרת תזכורות ומנהלת משימות זמניות בצורה יעילה.',
         onboarding: 'את מומחית קליטת לקוחות. מדריכה לקוחות חדשים בצורה חמה ומקצועית.',
+        marketing_strategy: 'את אסטרטגיסטית שיווקית מנוסה. תפקידך לבנות בריף שיווקי מפורט המבוסס על מידע הלקוח, לנתח מתחרים, להגדיר קהלי יעד ולתכנן מסעות לקוח. כשנשאלת — בני בריף מובנה, ממוקד, עם יעדים מדידים.',
+        marketing_copy: 'את קופירייטרית שיווקית מוכשרת. תפקידך לכתוב תוכן מרתק, משכנע ומותאם לפלטפורמה ולקהל היעד. הציעי תמיד מספר גרסאות עם זוויות שונות.',
+        marketing_creative: 'את מנהלת קריאייטיב ומעצבת גרפית. תפקידך לכתוב פרומפטים מדויקים לתמונות, לתאר ויז\'ואלים מרשימים ולהגדיר פלטות צבעים ועיצוב מותגי.',
+        marketing_paid: 'את מנהלת קמפיינים ממומנים מנוסה ב-Meta Ads ו-Google Ads. תפקידך לבנות מבנה קמפיין, להגדיר קהלים, תקציב ולמקסם ROAS.',
+        marketing_seo: 'את מומחית SEO ו-GEO. תפקידך לבנות אסטרטגיית מילות מפתח, לכתוב תוכן מקודם ולהגדיר מבנה כתבות לדירוג גבוה בגוגל ובמנועי AI.',
+        marketing_social: 'את מנהלת מדיה חברתית מנוסה. תפקידך לתכנן תוכן אורגני, לכתוב קפשנים, לבחור האשטגים ולמקסם אנגייג\'מנט בכל פלטפורמה.',
+        marketing_analytics: 'את אנליסטית שיווקית. תפקידך לנתח ביצועי קמפיינים, לזהות דפוסים, להסיק תובנות ולהמליץ על שיפורים מבוססי נתונים.',
       }
       if (TASK_MODE_PROMPTS[task_mode]) {
         systemPrompt += `\n\n=== מוד משימה ===\n${TASK_MODE_PROMPTS[task_mode]}`
       }
+    }
+    // Caller-supplied system prompt addon (e.g. from StageWorkspace)
+    if (system_prompt_addon) {
+      systemPrompt += `\n\n=== הקשר נוסף ===\n${system_prompt_addon}`
     }
     // Inject task-level skills override (from AgentTasksPage)
     if (task_skills && Array.isArray(task_skills) && task_skills.length > 0) {
@@ -3267,6 +3887,11 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
       if (leadParts.length) systemPrompt += `\n\nפרטי ליד:\n${leadParts.join('\n')}`
     }
 
+    // Inject group sender identity context
+    if (callerClientId) {
+      systemPrompt += `\n\n👤 **זיהוי שולח ההודעה (קבוצת WhatsApp):** הלקוח "${callerClientName || callerClientId}" (client_id=${callerClientId}) שלח הודעה זו. הגב רק על מידע הנוגע ללקוח זה — אסור לחשוף נתונים של לקוחות אחרים.`
+    }
+
     // WhatsApp context
     if (isCarmen) {
       systemPrompt += `\n\n⚡ **כלל תמציתיות (חובה ב-WhatsApp):** עני ישירות לשאלה שנשאלה, ב-1–3 משפטים מקסימום. אסור פתיחים, אסור לחזור על השאלה, אסור להציע פעולות נוספות אלא אם נתבקשת במפורש.`
@@ -3384,11 +4009,21 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
       const disabledIntegrations = ((agent as any).disabled_integrations || []) as string[]
       const mcp = await loadMcpTools(supabase, resolvedTenantId, agent_id, disabledIntegrations)
       if (mcp.toolDefs.length > 0) {
+        // 4b-i. Escalation agent filter
+        // If metadata.escalation_agent is set, only expose MCP tools for the chosen escalation agent.
+        // 'claude'  → block mcp_Manus__ tools (keep Claude MCP tools only)
+        // 'manus'   → block mcp_Claude__ tools (keep Manus MCP tools only)
+        // 'none'    → block both (no escalation to external AI)
+        // 'all'/unset → keep everything (default, backward-compatible)
+        const escalationAgent: string = (agent as any).metadata?.escalation_agent || 'all'
         for (const t of mcp.toolDefs) {
+          if (escalationAgent === 'claude' && t.name.startsWith('mcp_Manus__')) continue
+          if (escalationAgent === 'manus'  && t.name.startsWith('mcp_Claude__')) continue
+          if (escalationAgent === 'none'   && (t.name.startsWith('mcp_Claude__') || t.name.startsWith('mcp_Manus__'))) continue
           toolsForAPI.push({ type: 'function', function: t as any })
         }
         mcpExecutors = mcp.executors
-        console.log(`[AGENT] Loaded ${mcp.toolDefs.length} MCP tools from ${mcp.connectionsCount} connections`)
+        console.log(`[AGENT] Loaded ${mcp.toolDefs.length} MCP tools from ${mcp.connectionsCount} connections (escalation=${escalationAgent})`)
       }
     } catch (e: any) {
       console.error('[AGENT] MCP load failed:', e?.message)
@@ -3437,6 +4072,34 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     let finalOutput = ''
     const toolLog: any[] = []
     const startTime = Date.now()
+
+    // If the agent's engine is Manus — delegate the entire conversation to Manus AI
+    // and return the result directly (no tool loop needed here).
+    if (model === 'manus/manus-1' || model === 'manus-1') {
+      const manusBody: any = {
+        action: 'create_task',
+        tenantId: agent.tenant_id,
+        prompt: command_text,
+      }
+      const manusRes = await fetch(`${SUPABASE_URL}/functions/v1/manus-api`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+        body: JSON.stringify(manusBody),
+      })
+      if (!manusRes.ok) {
+        const errText = await manusRes.text()
+        const detail = (() => { try { return JSON.parse(errText)?.error } catch { return errText } })()
+        if (/not configured|key not found|api_key/i.test(String(detail))) {
+          throw new Error('Manus API key חסר — הגדר אותו בהגדרות אינטגרציות')
+        }
+        throw new Error(`Manus API error [${manusRes.status}]: ${detail}`)
+      }
+      const manusData = await manusRes.json()
+      const taskUrl = manusData.task_url || manusData.share_url || ''
+      finalOutput = `✅ משימה נשלחה ל-Manus AI${taskUrl ? `\n🔗 ${taskUrl}` : ''}\nמזהה: ${manusData.task_id || '—'}`
+      if (emit) emit({ type: 'token', content: finalOutput })
+      return finalOutput
+    }
 
     // Route to the org's own LLM provider (OpenAI/Google/Anthropic) using the
     // keys stored in the "llm" integration.

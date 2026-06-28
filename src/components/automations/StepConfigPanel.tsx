@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { FacebookDeliveryModeSection } from "@/components/automations/FacebookDeliveryModeSection";
+import { TriggerTestPanel } from "./TriggerTestPanel";
+import { TestTube } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -13,6 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Loader2, Facebook, CheckCircle2, Search, Bot, Plus, Sparkles, Copy, FileText, Phone, Scissors, Languages, RotateCcw, ChevronDown, ClipboardCopy } from "lucide-react";
+import { NodeIconDisplay } from "./nodeIcons";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Dialog,
@@ -127,6 +130,8 @@ const ACTION_OPTIONS = [
   { value: "webhook", label: "Webhook" },
   { value: "email", label: "אימייל" },
   { value: "notification", label: "התראה" },
+  { value: "run_manus_task", label: "🤖 הרץ משימת Manus (ברקע)" },
+  { value: "send_manus_direct", label: "💬 שלח הודעה ישירה ל-Manus" },
 ];
 
 
@@ -260,6 +265,8 @@ interface StepConfigPanelProps {
   onClose: () => void;
   onUpdate: (nodeId: string, updates: Partial<FlowNodeData>) => void;
   allNodes?: FlowNodeData[];
+  automationId?: string;
+  automationName?: string;
 }
 
 interface FacebookPage {
@@ -281,7 +288,7 @@ interface FacebookForm {
   fields?: FacebookFormField[];
 }
 
-export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [] }: StepConfigPanelProps) {
+export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [], automationId, automationName }: StepConfigPanelProps) {
   const { tenant } = useCurrentTenant();
   const tenantId = tenant?.id;
 
@@ -295,6 +302,7 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [] }
 
   const isLeadCreatedTrigger = node.step_type === "trigger" && node.action_type === "lead_created";
   const leadSource = node.configuration?.lead_source || "any";
+  const [showTriggerTest, setShowTriggerTest] = useState(false);
 
   const handleActionTypeChange = (value: string) => {
     onUpdate(node.id, { action_type: value });
@@ -319,21 +327,31 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [] }
   const options = node.step_type === "trigger" ? TRIGGER_OPTIONS : ACTION_OPTIONS;
 
   return (
+    <>
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
       <SheetContent side="left" className="w-[360px] sm:w-[400px] overflow-y-auto">
         <SheetHeader>
-          <SheetTitle className="text-right">
-            {node.step_type === "trigger" ? "הגדרת טריגר" :
-             node.step_type === "action" ? "הגדרת פעולה" :
-             node.step_type === "condition" ? "הגדרת תנאי (IF)" :
-             node.step_type === "switch" ? "הגדרת מיתוג (Switch)" :
-             node.step_type === "merge" ? "הגדרת מיזוג (Merge)" :
-             node.step_type === "loop" ? "הגדרת לולאה (Loop)" :
-             node.step_type === "code" ? "הגדרת קוד (Code)" :
-             node.step_type === "error_branch" ? "הגדרת טיפול בשגיאה" :
-             node.step_type === "agent" ? "הגדרת סוכן AI" :
-             "הגדרת השהייה"}
-          </SheetTitle>
+          <div className="flex items-center gap-3" dir="rtl">
+            <div className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center shrink-0 border">
+              <NodeIconDisplay
+                stepType={node.step_type}
+                actionType={node.action_type}
+                size={20}
+              />
+            </div>
+            <SheetTitle className="text-right text-base">
+              {node.step_type === "trigger" ? "הגדרת טריגר" :
+               node.step_type === "action" ? "הגדרת פעולה" :
+               node.step_type === "condition" ? "הגדרת תנאי (IF)" :
+               node.step_type === "switch" ? "הגדרת מיתוג (Switch)" :
+               node.step_type === "merge" ? "הגדרת מיזוג (Merge)" :
+               node.step_type === "loop" ? "הגדרת לולאה (Loop)" :
+               node.step_type === "code" ? "הגדרת קוד (Code)" :
+               node.step_type === "error_branch" ? "הגדרת טיפול בשגיאה" :
+               node.step_type === "agent" ? "הגדרת סוכן AI" :
+               "הגדרת השהייה"}
+            </SheetTitle>
+          </div>
         </SheetHeader>
 
         <div className="space-y-4 mt-6">
@@ -975,6 +993,80 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [] }
             />
           )}
 
+          {/* Manus Task config */}
+          {node.action_type === "run_manus_task" && (
+            <div className="space-y-4" dir="rtl">
+              <div className="rounded-lg border border-blue-200 bg-blue-50/50 p-3 text-right">
+                <p className="text-xs text-blue-700 font-medium">🤖 Manus יצור משימה חדשה ברקע ויחזיר task_id. התוצאה תישמר ב-manus_tasks.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-right block">פרומפט למשימה *</Label>
+                <Textarea
+                  value={node.configuration?.prompt_template || ""}
+                  onChange={(e) => handleConfigChange("prompt_template", e.target.value)}
+                  placeholder="תאר את המשימה... ניתן להשתמש ב-{{contact_name}}, {{company_name}} וכו'"
+                  className="text-right min-h-[100px]"
+                  rows={4}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-right block">פרופיל סוכן</Label>
+                <Select
+                  value={node.configuration?.agent_profile || "manus-1.6"}
+                  onValueChange={(v) => handleConfigChange("agent_profile", v)}
+                >
+                  <SelectTrigger className="text-right">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="manus-1.6">Manus 1.6 (סטנדרט)</SelectItem>
+                    <SelectItem value="manus-lite">Manus Lite (מהיר)</SelectItem>
+                    <SelectItem value="manus-max">Manus Max (עוצמתי)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2 justify-end">
+                <Checkbox
+                  id="include_context"
+                  checked={node.configuration?.include_context ?? false}
+                  onCheckedChange={(v) => handleConfigChange("include_context", !!v)}
+                />
+                <Label htmlFor="include_context" className="text-sm cursor-pointer">צרף נתוני הטריגר לפרומפט</Label>
+              </div>
+            </div>
+          )}
+
+          {/* Manus Direct Message config */}
+          {node.action_type === "send_manus_direct" && (
+            <div className="space-y-4" dir="rtl">
+              <div className="rounded-lg border border-purple-200 bg-purple-50/50 p-3 text-right">
+                <p className="text-xs text-purple-700 font-medium">💬 שליחת הודעה ישירה ל-Manus agent-default. אם לא מוגדר task_id ישתמש ב-agent-default-main_task.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-right block">הודעה *</Label>
+                <Textarea
+                  value={node.configuration?.message_template || ""}
+                  onChange={(e) => handleConfigChange("message_template", e.target.value)}
+                  placeholder="תוכן ההודעה... ניתן להשתמש ב-{{contact_name}}, {{company_name}} וכו'"
+                  className="text-right min-h-[80px]"
+                  rows={3}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-right block">Task ID (אופציונלי)</Label>
+                <Input
+                  value={node.configuration?.task_id || ""}
+                  onChange={(e) => handleConfigChange("task_id", e.target.value)}
+                  placeholder="agent-default-main_task (ברירת מחדל)"
+                  className="text-right font-mono text-sm"
+                  dir="ltr"
+                />
+              </div>
+            </div>
+          )}
+
           {/* Status update config */}
           {node.action_type === "update_status" && (
             <>
@@ -1006,8 +1098,36 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [] }
             </>
           )}
         </div>
+
+        {/* ── Per-trigger test button ── */}
+        {node.step_type === "trigger" && automationId && (
+          <div className="border-t pt-4">
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full gap-2 border-dashed hover:border-primary hover:text-primary"
+              onClick={() => setShowTriggerTest(true)}
+            >
+              <TestTube className="h-4 w-4" />
+              בדוק טריגר זה
+            </Button>
+          </div>
+        )}
       </SheetContent>
     </Sheet>
+
+    {/* Trigger test panel */}
+    {node.step_type === "trigger" && automationId && (
+      <TriggerTestPanel
+        open={showTriggerTest}
+        onOpenChange={setShowTriggerTest}
+        automationId={automationId}
+        automationName={automationName || "אוטומציה"}
+        triggerType={node.action_type || ""}
+        triggerConfig={node.configuration}
+      />
+    )}
+    </>
   );
 }
 

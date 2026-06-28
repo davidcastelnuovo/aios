@@ -80,15 +80,39 @@ Deno.serve(async (req) => {
         }
 
         // Get Facebook access token for this table's tenant
-        let { data: integration } = await supabase
-          .from('tenant_integrations')
-          .select('api_key, shared_from_integration_id')
-          .eq('tenant_id', table.tenant_id)
-          .in('integration_type', ['facebook', 'facebook_lead_ads'])
-          .eq('is_active', true)
-          .limit(1)
-          .maybeSingle();
-
+        // Respect connection_visibility: prefer the integration stored in integration_settings,
+        // then org-visible, then any active integration (legacy fallback).
+        const storedIntegrationId = settings.integration_id || null;
+        let { data: integration } = storedIntegrationId
+          ? await supabase
+              .from('tenant_integrations')
+              .select('api_key, shared_from_integration_id, connection_visibility')
+              .eq('id', storedIntegrationId)
+              .eq('is_active', true)
+              .maybeSingle()
+          : await supabase
+              .from('tenant_integrations')
+              .select('api_key, shared_from_integration_id, connection_visibility')
+              .eq('tenant_id', table.tenant_id)
+              .in('integration_type', ['facebook', 'facebook_lead_ads'])
+              .eq('is_active', true)
+              .in('connection_visibility', ['org', 'private'])
+              .order('updated_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+        // Fallback: any active integration for this tenant
+        if (!integration) {
+          const { data: fallback } = await supabase
+            .from('tenant_integrations')
+            .select('api_key, shared_from_integration_id, connection_visibility')
+            .eq('tenant_id', table.tenant_id)
+            .in('integration_type', ['facebook', 'facebook_lead_ads'])
+            .eq('is_active', true)
+            .order('updated_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          integration = fallback;
+        }
         // If shared integration, get source token
         if (integration?.shared_from_integration_id && !integration?.api_key) {
           const { data: sourceIntegration } = await supabase
@@ -97,13 +121,11 @@ Deno.serve(async (req) => {
             .eq('id', integration.shared_from_integration_id)
             .eq('is_active', true)
             .maybeSingle();
-          
           if (sourceIntegration?.api_key) {
             integration = { ...integration, api_key: sourceIntegration.api_key };
           }
         }
-
-        if (!integration?.api_key) {
+                if (!integration?.api_key) {
           continue;
         }
 

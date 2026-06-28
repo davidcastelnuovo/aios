@@ -140,20 +140,33 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
   const { data: chatIntegrations } = useQuery({
     queryKey: ["chat-integrations", tenantIdForProvider, userId],
     queryFn: async () => {
-      if (!tenantIdForProvider) return [];
+      if (!tenantIdForProvider || !userId) return [];
+      // Fetch all WA/manychat integrations for the tenant
       const { data, error } = await supabase
         .from("tenant_integrations")
-        .select("id, integration_type, user_id")
+        .select("id, integration_type, user_id, connection_visibility, display_name")
         .eq("tenant_id", tenantIdForProvider)
         .eq("is_active", true)
         .in("integration_type", ["manychat", "green_api", "manus_wa"]);
       if (error) return [];
-      // Scope per-user providers (green_api / manus_wa) to current user; keep manychat at tenant level
-      return (data || []).filter((i: any) =>
-        i.integration_type === "manychat" ? true : i.user_id === userId
-      );
+
+      // Fetch integrations the user has explicit permission for
+      const { data: permData } = await supabase
+        .from("integration_user_permissions")
+        .select("integration_id")
+        .eq("user_id", userId);
+      const permittedIds = new Set((permData || []).map((p: any) => p.integration_id));
+
+      // Filter: manychat = tenant level; WA = own OR org-visible OR explicitly permitted
+      return (data || []).filter((i: any) => {
+        if (i.integration_type === "manychat") return true;
+        if (i.user_id === userId) return true;               // own connection
+        if (i.connection_visibility === "org") return true;  // org-wide shared
+        if (permittedIds.has(i.id)) return true;             // explicitly shared
+        return false;
+      });
     },
-    enabled: !!tenantIdForProvider,
+    enabled: !!tenantIdForProvider && !!userId,
   });
 
 

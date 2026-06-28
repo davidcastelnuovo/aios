@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useSidebar } from "@/components/ui/sidebar";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -181,7 +181,7 @@ export function WeeklyTaskBoard() {
   }, [currentDate, viewMode]);
 
   // Fetch user profile to get campaigner_id / sales_person_id for "mine" filter
-  const { data: userProfile, isFetched: isUserProfileFetched } = useQuery({
+  const { data: userProfile } = useQuery({
     queryKey: ["user-profile-for-tasks", user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -195,19 +195,9 @@ export function WeeklyTaskBoard() {
     enabled: !!user?.id,
   });
 
-  // If user has no campaigner/sales profile, default to "all" so tasks are visible
-  const didInitFiltersRef = useRef(false);
-  useEffect(() => {
-    if (didInitFiltersRef.current) return;
-    if (!tenantId || !user?.id || !isUserProfileFetched) return;
-
-    const hasMineIdentity = !!userProfile?.campaigner_id || !!userProfile?.sales_person_id;
-    if (!hasMineIdentity) {
-      setFilters((prev) => (prev.campaignerId === "mine" ? { ...prev, campaignerId: "all" } : prev));
-    }
-
-    didInitFiltersRef.current = true;
-  }, [tenantId, user?.id, isUserProfileFetched, userProfile?.campaigner_id, userProfile?.sales_person_id]);
+  // Default view = "my tasks only" (campaignerId: "mine"). For users without a
+  // campaigner/sales identity (e.g. owners), "mine" resolves to tasks they created
+  // (see the "mine" branch in the tasks query below), so it stays meaningful.
 
   // Fetch Google Calendar events
   const { data: calendarEvents = [] } = useQuery({
@@ -245,7 +235,7 @@ export function WeeklyTaskBoard() {
   });
 
   // Fetch tasks for the current view + overdue tasks
-  const { data: fetchedTasks = [], isLoading } = useQuery({
+  const { data: fetchedTasks = [], isLoading, isFetching } = useQuery({
     queryKey: ["tasks", tenantId, crossTenantAgencyIds, format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd"), filters, viewMode, userProfile?.campaigner_id, selectedAgency],
     enabled: !!tenantId && !!user?.id,
     queryFn: async () => {
@@ -290,21 +280,27 @@ export function WeeklyTaskBoard() {
         );
       }
 
-      // Apply "mine" filter - tasks assigned to me (campaigner or sales) OR created by me
+      // Apply "mine" filter - tasks ASSIGNED to me (campaigner or sales person).
+      // We intentionally do NOT include `created_by` here: an admin/owner creates
+      // most of the team's tasks, so OR-ing on created_by made "mine" show nearly
+      // everything. "Mine" = what I'm responsible for, not what I authored.
       if (filters.campaignerId === "mine") {
         const myCampaignerId = userProfile?.campaigner_id;
         const mySalesPersonId = userProfile?.sales_person_id;
         const myUserId = user?.id;
 
-        // Build OR conditions: campaigner_id, sales_person_id, or created_by
-        const conditions: string[] = [];
-        if (myCampaignerId) conditions.push(`campaigner_id.eq.${myCampaignerId}`);
-        if (mySalesPersonId) conditions.push(`sales_person_id.eq.${mySalesPersonId}`);
-        if (myUserId) conditions.push(`created_by.eq.${myUserId}`);
+        const assignmentConditions: string[] = [];
+        if (myCampaignerId) assignmentConditions.push(`campaigner_id.eq.${myCampaignerId}`);
+        if (mySalesPersonId) assignmentConditions.push(`sales_person_id.eq.${mySalesPersonId}`);
 
-        if (conditions.length > 0) {
+        if (assignmentConditions.length > 0) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          query = (query as any).or(conditions.join(','));
+          query = (query as any).or(assignmentConditions.join(','));
+        } else if (myUserId) {
+          // User has no campaigner/sales identity → fall back to tasks they created,
+          // scoped to created_by (never an unfiltered "show everything").
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          query = (query as any).eq("created_by", myUserId);
         }
       } else if (filters.campaignerId === "none") {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -326,6 +322,9 @@ export function WeeklyTaskBoard() {
         query = query.not("lead_id", "is", null);
       } else if (filters.association === "general") {
         query = query.is("client_id", null).is("lead_id", null);
+      } else if (filters.association === "unassigned") {
+        // Tasks not linked to any client (may still have a lead).
+        query = query.is("client_id", null);
       }
 
       // Apply agency filter from header
@@ -335,18 +334,17 @@ export function WeeklyTaskBoard() {
           .from("clients")
           .select("id")
           .eq("agency_id", selectedAgency);
-        
+
         const clientIds = agencyClients?.map(c => c.id) || [];
-        
+
+        // Show tasks linked to a client in this agency, OR tasks assigned directly
+        // to the agency with no client. Tasks of other agencies and client-less
+        // tasks of other agencies are excluded — those only show under "all agencies".
+        const orParts = [`and(client_id.is.null,agency_id.eq.${selectedAgency})`];
         if (clientIds.length > 0) {
-          // Show tasks where client belongs to agency OR task itself belongs to agency (for non-client tasks)
-          query = query.or(
-            `client_id.in.(${clientIds.join(",")}),and(client_id.is.null,agency_id.eq.${selectedAgency})`
-          );
-        } else {
-          // No clients in this agency, only show tasks directly assigned to agency
-          query = query.is("client_id", null).eq("agency_id", selectedAgency);
+          orParts.unshift(`client_id.in.(${clientIds.join(",")})`);
         }
+        query = query.or(orParts.join(","));
       }
 
 
@@ -365,13 +363,17 @@ export function WeeklyTaskBoard() {
   const [localTasks, setLocalTasks] = useState<FullTask[]>([]);
   
   useEffect(() => {
-    if (fetchedTasks && fetchedTasks.length > 0) {
-      setLocalTasks(fetchedTasks);
-    }
-  }, [JSON.stringify(fetchedTasks?.map(t => `${t.id}_${t.duration_minutes}_${t.status}_${t.campaigner_id}_${t.client_id}`))]);
-  
-  // Use localTasks for rendering, fallback to fetchedTasks if empty
-  const tasks = localTasks.length > 0 ? localTasks : (fetchedTasks || []);
+    // Don't clobber the current list while a refetch is in flight (avoids an empty flash).
+    if (isFetching) return;
+    // Sync with the settled server result, INCLUDING an empty list. This is critical:
+    // when a filter (campaigner / agency / type / association / date) matches no tasks,
+    // we must clear the board. The old `length > 0` guard kept the previous (broader) set,
+    // which made filters look like they were ignored and showed all tasks.
+    setLocalTasks(fetchedTasks ?? []);
+  }, [isFetching, JSON.stringify(fetchedTasks?.map(t => `${t.id}_${t.duration_minutes}_${t.status}_${t.campaigner_id}_${t.client_id}`))]);
+
+  // localTasks is the source of truth for rendering (kept in sync with the filtered query above).
+  const tasks = localTasks;
 
   // Filter out calendar events that are actually synced tasks (to avoid duplicates)
   // Also hide calendar events when filtering by a specific campaigner (not "mine" or "all")
@@ -1524,10 +1526,7 @@ export function WeeklyTaskBoard() {
         open={filtersDialogOpen}
         onOpenChange={setFiltersDialogOpen}
         currentFilters={filters}
-        onApply={(next) => {
-          const hasMineIdentity = !!userProfile?.campaigner_id || !!userProfile?.sales_person_id;
-          setFilters(!hasMineIdentity && next.campaignerId === "mine" ? { ...next, campaignerId: "all" } : next);
-        }}
+        onApply={(next) => setFilters(next)}
       />
 
       {/* Quick Add Task Dialog (double-click on slot) */}

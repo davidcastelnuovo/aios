@@ -7,7 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Zap, Activity, Trash2, Edit, TestTube, Workflow, MessageCircle, Bot, Share2, Copy, Building2 } from "lucide-react";
+import { Plus, Zap, Activity, Trash2, Edit, TestTube, Workflow, MessageCircle, Bot, Share2, Copy, Building2, ArrowRight, Cpu } from "lucide-react";
+import { NodeIconDisplay } from "@/components/automations/nodeIcons";
 import { useToast } from "@/hooks/use-toast";
 import { AddAutomationForm } from "@/components/forms/AddAutomationForm";
 import { EditAutomationDialog } from "@/components/forms/EditAutomationDialog";
@@ -249,6 +250,77 @@ export default function Automations() {
     },
   });
 
+  // Create Manus direct WhatsApp channel
+  const createManusFlowMutation = useMutation({
+    mutationFn: async () => {
+      if (!tenantId) throw new Error("No tenant");
+      const { data: agentsList } = await supabase
+        .from("ai_agents" as any)
+        .select("id,name,active")
+        .eq("tenant_id", tenantId)
+        .eq("active", true);
+      // Use Carmen as the routing agent — she has manus-mcp connected and will
+      // forward the request to Manus via ask_manus / request_dev_task tools.
+      const carmenAgent = (agentsList as any[] || []).find((a) => /כרמן|carmen/i.test(a.name || "")) || (agentsList as any[] || [])[0];
+      if (!carmenAgent) throw new Error("לא נמצאה כרמן פעילה. ודא שסוכן כרמן קיים.");
+      const { data, error } = await supabase
+        .from("automations")
+        .insert({
+          name: "מנוס / ישיר",
+          description: "ערוץ ישיר לדוד עם Manus דרך WhatsApp — מילת הפעלה: מנוס",
+          tenant_id: tenantId,
+          trigger_type: "carmen_whatsapp_session",
+          action_type: "notification",
+          configuration: {},
+          is_flow: true,
+          active: true,
+        } as any)
+        .select()
+        .single();
+      if (error) throw error;
+      const { data: waInt } = await supabase
+        .from("tenant_integrations" as any)
+        .select("id")
+        .eq("tenant_id", tenantId)
+        .eq("integration_type", "manus_wa")
+        .eq("is_active", true)
+        .limit(1)
+        .maybeSingle();
+      const { data: gaInt } = await supabase
+        .from("tenant_integrations" as any)
+        .select("id")
+        .eq("tenant_id", tenantId)
+        .eq("integration_type", "green_api")
+        .eq("is_active", true)
+        .limit(1)
+        .maybeSingle();
+      const mk = (over: any) => ({
+        id: crypto.randomUUID(),
+        automation_id: data.id,
+        tenant_id: tenantId,
+        condition_branch: null,
+        ...over,
+      });
+      const steps = [
+        // Step 1: WhatsApp session — keyword "מנוס" triggers the channel
+        mk({ step_type: "action", action_type: "carmen_whatsapp_session", label: "סשן WhatsApp - מנוס ישיר", configuration: { agent_id: carmenAgent.id, trigger_keyword: "מנוס", trigger_keywords: ["מנוס", "manus", "Manus"], carmen_scope_mode: "specific_phone", carmen_allowed_phones: ["972507677613"], carmen_integration_id: waInt?.id || null, session_timeout_minutes: 60 }, position_x: 0, position_y: 0, sort_order: 0 }),
+        // Step 2: Carmen routes to Manus via manus-mcp (ask_manus or request_dev_task)
+        mk({ step_type: "action", action_type: null, label: "כרמן מנתבת ל-Manus", configuration: { agent_id: carmenAgent.id, output_format: "single_reply", step_instruction: "המשתמש שלח בקשה לערוץ מנוס ישיר. השתמשי בכלי ask_manus או request_dev_task כדי להעביר את הבקשה הבאה ל-Manus AI. העברי את הבקשה כמו שהיא, ללא עיבוד. אם הבקשה עוסקת בקוד/פיתוח/גיטהאב — השתמשי ב-request_dev_task. אחרת — השתמשי ב-ask_manus. החזירי לדוד את ה-task URL שקיבלת מ-Manus (בדרך כלל: Manus עובד וישלח אישור בסיום בנפרד). הבקשה: {{message_text}}" }, position_x: 0, position_y: 150, sort_order: 1 }),
+        // Step 3: Send the task URL confirmation back to WhatsApp
+        mk({ step_type: "action", action_type: "send_manus_message", label: "שלח אישור ל-WhatsApp", configuration: { recipients: [{ type: "phone_manual", phone: "972507677613" }], green_api_mode: "tenant", message_template: "{{agent_output}}", green_api_integration_id: gaInt?.id || null }, position_x: 0, position_y: 300, sort_order: 2 }),
+      ];
+      await supabase.from("automation_flow_steps" as any).insert(steps);
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["automations"] });
+      navigate(buildPath(`automations/flow/${data.id}`));
+    },
+    onError: (err: any) => {
+      toast({ title: "שגיאה", description: err.message, variant: "destructive" });
+    },
+  });
+
   // Create new Carmen WhatsApp session automation
   const createCarmenFlowMutation = useMutation({
     mutationFn: async () => {
@@ -365,6 +437,100 @@ export default function Automations() {
     },
   });
 
+  // Create "Manus Direct" automation — manual_command trigger + send_manus_direct action
+  const createManusDirectMutation = useMutation({
+    mutationFn: async () => {
+      if (!tenantId) throw new Error("No tenant");
+      // Find Carmen or any active agent for the agent node
+      const { data: agentsList } = await supabase
+        .from("ai_agents" as any)
+        .select("id,name,active")
+        .eq("tenant_id", tenantId)
+        .eq("active", true);
+      const carmenAgent = (agentsList as any[] || []).find((a) => /כרמן|carmen/i.test(a.name || "")) || (agentsList as any[] || [])[0];
+      // Create the automation header
+      const { data, error } = await supabase
+        .from("automations")
+        .insert({
+          name: "תקשורת ישירה עם Manus",
+          description: "שלח הודעה ישירה ל-Manus AI דרך פקודה ידנית — לשאלות, עדכונים ומשימות מהירות",
+          tenant_id: tenantId,
+          trigger_type: "manual_command",
+          action_type: "notification",
+          configuration: {},
+          is_flow: true,
+          active: true,
+        } as any)
+        .select()
+        .single();
+      if (error) throw error;
+      const mk = (over: any) => ({
+        id: crypto.randomUUID(),
+        automation_id: data.id,
+        tenant_id: tenantId,
+        condition_branch: null,
+        ...over,
+      });
+      // Build flow steps:
+      // 1. Trigger: manual_command — user sends a message/command
+      // 2. Action: agent node — Carmen processes the command and builds the Manus message
+      // 3. Action: send_manus_direct — sends the message directly to Manus
+      const steps = [
+        mk({
+          step_type: "trigger",
+          action_type: "manual_command",
+          label: "פקודה ידנית",
+          configuration: {
+            command_description: "שלח הודעה ישירה ל-Manus AI",
+            input_fields: [
+              { key: "message", label: "הודעה ל-Manus", type: "text", required: true },
+              { key: "task_id", label: "מזהה משימה קיימת (אופציונלי)", type: "text", required: false },
+            ],
+          },
+          position_x: 0,
+          position_y: 0,
+          sort_order: 0,
+        }),
+        ...(carmenAgent ? [mk({
+          step_type: "agent",
+          action_type: "agent",
+          label: "עיבוד ע\"י כרמן (אופציונלי)",
+          configuration: {
+            agent_id: carmenAgent.id,
+            output_format: "single_reply",
+            step_instruction: "קבל את ההודעה הבאה ושלח אותה ל-Manus כפי שהיא, אלא אם המשתמש ביקש לעבד אותה: {{message}}",
+            skip_if_empty: true,
+          },
+          position_x: 0,
+          position_y: 160,
+          sort_order: 1,
+        })] : []),
+        mk({
+          step_type: "action",
+          action_type: "send_manus_direct",
+          label: "שלח ל-Manus",
+          configuration: {
+            message_template: "{{message}}",
+            task_id_template: "{{task_id}}",
+            agent_profile: "manus-1.6",
+          },
+          position_x: 0,
+          position_y: carmenAgent ? 320 : 160,
+          sort_order: carmenAgent ? 2 : 1,
+        }),
+      ];
+      await supabase.from("automation_flow_steps" as any).insert(steps);
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["automations"] });
+      navigate(buildPath(`automations/flow/${data.id}`));
+    },
+    onError: (err: any) => {
+      toast({ title: "שגיאה", description: err.message, variant: "destructive" });
+    },
+  });
+
   // Create new flow automation
   const createFlowMutation = useMutation({
     mutationFn: async () => {
@@ -461,6 +627,30 @@ export default function Automations() {
         </div>
       )}
 
+      {/* Manus Direct Channel Banner */}
+      {!automations?.some((a: any) => (a.name || "").includes("מנוס / ישיר")) && (
+        <div className="rounded-xl border border-blue-500/30 bg-gradient-to-l from-blue-500/5 to-transparent p-4 flex flex-col md:flex-row items-start md:items-center gap-4">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-blue-500/15 flex items-center justify-center shrink-0">
+              <Cpu className="h-5 w-5 text-blue-400" />
+            </div>
+            <div>
+              <p className="font-semibold text-sm">ערוץ ישיר ל-Manus ב-WhatsApp</p>
+              <p className="text-xs text-muted-foreground">שלח "מנוס" ב-WhatsApp לשיחה ישירה עם Manus AI — מחקר, קוד, ניתוח ועוד</p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            className="md:mr-auto bg-blue-600 hover:bg-blue-700 text-white shrink-0"
+            onClick={() => createManusFlowMutation.mutate()}
+            disabled={createManusFlowMutation.isPending}
+          >
+            <Cpu className="h-4 w-4 ml-2" />
+            צור ערוץ Manus
+          </Button>
+        </div>
+      )}
+
       {/* Campaign Pulse template */}
       <div className="flex items-center gap-3 p-4 rounded-lg border bg-gradient-to-l from-orange-500/10 to-transparent">
         <div className="p-2 rounded-full bg-orange-500/20">
@@ -482,61 +672,109 @@ export default function Automations() {
         </Button>
       </div>
 
+      {/* Manus Direct Communication template */}
+      <div className="flex items-center gap-3 p-4 rounded-lg border bg-gradient-to-l from-violet-500/10 to-transparent">
+        <div className="p-2 rounded-full bg-violet-500/20">
+          <Bot className="h-5 w-5 text-violet-500" />
+        </div>
+        <div className="flex-1">
+          <p className="font-semibold text-sm">תבנית: תקשורת ישירה עם Manus</p>
+          <p className="text-xs text-muted-foreground">פקודה ידנית → עיבוד כרמן (אופציונלי) → שליחת הודעה ישירה ל-Manus AI. לשאלות, עדכונים ומשימות מהירות.</p>
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="shrink-0 border-violet-500 text-violet-600 hover:bg-violet-50"
+          onClick={() => createManusDirectMutation.mutate()}
+          disabled={createManusDirectMutation.isPending}
+        >
+          <Plus className="h-4 w-4 ml-2" />
+          {createManusDirectMutation.isPending ? "יוצר..." : "צור תבנית"}
+        </Button>
+      </div>
+
       {/* Automations Grid */}
       <div className="grid gap-3 md:gap-4 grid-cols-1 lg:grid-cols-2">
         {automations?.map((automation) => {
           const isMirror = (automation as any)._isSharedMirror === true;
+          const isCarmenMode = (automation as any).configuration?.carmen_session_mode === true;
+          const isFlow = (automation as any).is_flow;
+          const triggerType = automation.trigger_type;
+          const actionType = automation.action_type;
           return (
           <Card
             key={automation.id}
             className={cn(
+              "group transition-all duration-200",
               automation.active ? "" : "opacity-60",
-              (automation as any).is_flow && "cursor-pointer hover:border-primary/50 transition-colors",
-              (automation as any).configuration?.carmen_session_mode === true && "border-purple-500/40 bg-purple-500/5",
+              isFlow && "cursor-pointer hover:border-primary/50 hover:shadow-md",
+              isCarmenMode && "border-purple-500/40 bg-purple-500/5",
               isMirror && "border-dashed border-amber-500/40 bg-amber-500/5"
             )}
-            onClick={() => (automation as any).is_flow && navigate(buildPath(`automations/flow/${automation.id}`))}
+            onClick={() => isFlow && navigate(buildPath(`automations/flow/${automation.id}`))}
           >
-            <CardHeader className="pb-3">
-              <div className="flex items-start justify-between gap-2">
+            <CardHeader className="pb-2">
+              <div className="flex items-start justify-between gap-3">
+                {/* Trigger icon badge */}
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border"
+                  style={{ backgroundColor: "rgba(var(--muted), 0.5)" }}
+                >
+                  <NodeIconDisplay
+                    stepType="trigger"
+                    actionType={triggerType}
+                    size={20}
+                  />
+                </div>
+
                 <div className="flex-1 min-w-0">
-                  <CardTitle className="text-base md:text-lg truncate flex items-center gap-2">
-                     {(automation as any).configuration?.carmen_session_mode === true ? (
-                      <Bot className="h-4 w-4 shrink-0 text-purple-400" />
-                    ) : (automation as any).is_flow ? (
-                      <Workflow className="h-4 w-4 shrink-0 text-primary" />
-                    ) : null}
-                    {automation.name}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <CardTitle className="text-sm font-semibold truncate">
+                      {automation.name}
+                    </CardTitle>
                     {isMirror && (
-                      <Badge variant="outline" className="text-[10px] border-amber-500/50 text-amber-600 dark:text-amber-400">
-                        מראה משותפת (צפייה בלבד)
+                      <Badge variant="outline" className="text-[10px] border-amber-500/50 text-amber-600 dark:text-amber-400 shrink-0">
+                        מראה
                       </Badge>
                     )}
-                  </CardTitle>
+                    {isCarmenMode && (
+                      <Badge variant="outline" className="text-[10px] border-purple-500/50 text-purple-600 dark:text-purple-400 shrink-0">
+                        כרמן
+                      </Badge>
+                    )}
+                  </div>
+                  {/* Trigger → Action summary */}
+                  <div className="flex items-center gap-1 mt-1">
+                    <span className="text-[11px] text-muted-foreground">
+                      {TRIGGER_LABELS[triggerType] || triggerType}
+                    </span>
+                    {actionType && (
+                      <>
+                        <ArrowRight className="h-2.5 w-2.5 text-muted-foreground/50 shrink-0" />
+                        <span className="text-[11px] text-muted-foreground">
+                          {ACTION_LABELS[actionType] || actionType}
+                        </span>
+                      </>
+                    )}
+                  </div>
                   {automation.description && (
-                    <CardDescription className="text-xs mt-1 line-clamp-2">
+                    <CardDescription className="text-xs mt-0.5 line-clamp-1">
                       {automation.description}
                     </CardDescription>
                   )}
                 </div>
+
                 <Switch
                   checked={automation.active}
                   disabled={isMirror}
                   onCheckedChange={(checked) =>
                     !isMirror && toggleActiveMutation.mutate({ id: automation.id, active: checked })
                   }
+                  onClick={(e) => e.stopPropagation()}
                 />
               </div>
             </CardHeader>
-            <CardContent className="pt-0 space-y-3">
-              <div className="flex flex-wrap gap-2 text-xs">
-                <Badge variant="outline">
-                  {TRIGGER_LABELS[automation.trigger_type] || automation.trigger_type}
-                </Badge>
-                <Badge variant="secondary">
-                  {ACTION_LABELS[automation.action_type] || automation.action_type}
-                </Badge>
-              </div>
+            <CardContent className="pt-0 space-y-2">
 
               {(automation.configuration as any)?.url && (
                 <p className="text-xs text-muted-foreground truncate">
@@ -556,79 +794,87 @@ export default function Automations() {
                 </p>
               )}
 
-              <div className="flex flex-wrap gap-2 pt-2">
+              <div className="flex flex-wrap gap-1.5 pt-1">
                 <Button
                   size="sm"
-                  variant="outline"
+                  variant="ghost"
                   onClick={(e) => { e.stopPropagation(); handleViewLogs(automation.id); }}
-                  className="flex-1 min-w-0"
+                  className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
                 >
                   <Activity className="h-3 w-3 ml-1" />
                   לוגים
                 </Button>
                 {!isMirror && (
                   <>
+                    {!isFlow && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={(e) => { e.stopPropagation(); handleTest(automation); }}
+                        className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        <TestTube className="h-3 w-3 ml-1" />
+                        בדיקה
+                      </Button>
+                    )}
                     <Button
                       size="sm"
-                      variant="outline"
-                      onClick={(e) => { e.stopPropagation(); handleTest(automation); }}
-                    >
-                      <TestTube className="h-3 w-3 ml-1" />
-                      בדיקה
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
+                      variant="ghost"
                       onClick={(e) => { e.stopPropagation(); handleEdit(automation); }}
+                      className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
                     >
                       <Edit className="h-3 w-3 ml-1" />
                       עריכה
                     </Button>
                     <Button
                       size="sm"
-                      variant="outline"
+                      variant="ghost"
                       onClick={(e) => {
                         e.stopPropagation();
                         setSelectedAutomation(automation);
                         setShareDialogOpen(true);
                       }}
                       title="שתף כמראה (read-only) עם ארגון אחר"
+                      className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
                     >
                       <Share2 className="h-3 w-3 ml-1" />
                       שתף
                     </Button>
                     <Button
                       size="sm"
-                      variant="outline"
+                      variant="ghost"
                       onClick={(e) => { e.stopPropagation(); duplicateMutation.mutate(automation.id); }}
                       disabled={duplicateMutation.isPending}
                       title="שכפל אוטומציה בארגון הנוכחי"
+                      className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
                     >
                       <Copy className="h-3 w-3 ml-1" />
                       שכפל
                     </Button>
                     <Button
                       size="sm"
-                      variant="outline"
+                      variant="ghost"
                       onClick={(e) => {
                         e.stopPropagation();
                         setSelectedAutomation(automation);
                         setCloneOrgOpen(true);
                       }}
                       title="שכפל עותק עצמאי לארגון אחר"
+                      className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
                     >
                       <Building2 className="h-3 w-3 ml-1" />
                       שכפל לארגון
                     </Button>
                     <Button
                       size="sm"
-                      variant="destructive"
+                      variant="ghost"
                       onClick={(e) => {
                         e.stopPropagation();
                         if (confirm("האם למחוק אוטומציה זו?")) {
                           deleteMutation.mutate(automation.id);
                         }
                       }}
+                      className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 mr-auto"
                     >
                       <Trash2 className="h-3 w-3" />
                     </Button>

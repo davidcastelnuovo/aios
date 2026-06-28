@@ -20,7 +20,8 @@ serve(async (req) => {
     }
 
     const supaUrl = Deno.env.get("SUPABASE_URL")!;
-    const admin = createClient(supaUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const supaService = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const admin = createClient(supaUrl, supaService);
 
     const { data: item } = await admin
       .from("marketing_work_items")
@@ -43,26 +44,60 @@ serve(async (req) => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(auth ? { Authorization: auth } : {}),
+          ...(auth ? { Authorization: auth } : { Authorization: `Bearer ${supaService}` }),
           apikey: Deno.env.get("SUPABASE_ANON_KEY")!,
         },
         body: JSON.stringify({ item_id, stage_id: s.id }),
       });
       const json = await r.json();
       results.push({ stage_id: s.id, ...json });
-      // advance current_stage_id
+
+      if (!r.ok || json.error || json.status === "failed") {
+        // Stage failed — do NOT advance current_stage_id, stop pipeline
+        console.error(`[run-pipeline] Stage ${s.id} failed:`, json.error ?? json.status);
+        return new Response(
+          JSON.stringify({
+            results,
+            stopped_at: s.id,
+            error: json.error ?? "Stage failed",
+          }),
+          {
+            status: 422,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      // Advance current_stage_id only after successful run
       await admin
         .from("marketing_work_items")
-        .update({ current_stage_id: s.id })
+        .update({ current_stage_id: s.id, status: "in_progress" })
         .eq("id", item_id);
-      // stop on failure or awaiting approval
-      if (!r.ok || json.status === "awaiting_approval" || json.status === "failed") break;
+
+      // Stop if stage needs approval — user must approve manually
+      if (json.status === "awaiting_approval") {
+        return new Response(
+          JSON.stringify({
+            results,
+            stopped_at: s.id,
+            awaiting_approval: true,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
-    return new Response(JSON.stringify({ results }), {
+    // All stages completed
+    await admin
+      .from("marketing_work_items")
+      .update({ status: "completed" })
+      .eq("id", item_id);
+
+    return new Response(JSON.stringify({ results, completed: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e: any) {
+    console.error("[run-pipeline] error:", e);
     return new Response(JSON.stringify({ error: String(e.message ?? e) }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

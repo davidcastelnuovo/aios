@@ -32,6 +32,26 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-06-26 — save_memory engine fix (UUID sentinel)
+- **Skin slug:** n/a (engine bug fix — no new Carmen skill needed)
+- **What changed:** `run-ai-agent` was crashing with `invalid input syntax for type uuid: "system"` whenever `save_memory` was called without a logged-in user (e.g. WhatsApp automations). `ai_memory.user_id` is `NOT NULL uuid` but the fallback was the literal string `'system'`. Fixed in PR #65: introduced `SYSTEM_USER_UUID = '00000000-0000-0000-0000-000000000000'` and replaced both broken sites (save_memory tool + auto-instruction-capture path). Carmen no longer needs any workaround — the engine handles it.
+- **Key context:** The 2026-06-25 `save_agent_memory` skin was a symptom workaround (using David's hardcoded UUID). The root fix is now in the engine.
+- **Origin:** Carmen escalated — `save_memory` failing for WhatsApp automation sessions.
+
+### 2026-06-26 — grant_module_permission (הענקת גישה למודול)
+- **Skin slug:** `grant_module_permission` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Grant a user (campaigner, team_manager, etc.) explicit access to a restricted AIOS UI module (e.g. `integrations`, `accounting_integrations`) by upserting a row in `user_permissions`. Verifies the user is within their existing role scope before granting — refuses out-of-scope elevations. Logs to `claude_carmen_audit`.
+- **How:** (1) `search_entities(entity_type=user)` to resolve user_id; (2) verify role in `user_roles`; (3) `INSERT INTO user_permissions (user_id, module, can_access) VALUES (?, ?, true) ON CONFLICT (user_id, module) DO UPDATE SET can_access=true`; (4) log to `claude_carmen_audit`; (5) confirm in Hebrew.
+- **Key context:** `restrictedModules` in `src/hooks/useUserPermissions.ts` lists modules that require explicit `can_access=true` even for owners. The `integrations` module is the parent screen — a user can have `lead_integrations=true` but still see a blank integrations screen if the parent `integrations` row is missing.
+- **Origin:** Carmen escalated — Ana (Anna Relin, `adamchik2301@gmail.com`) had `lead_integrations=true` but no `integrations` row, so she saw no integrations screen. Fix applied live (safe-fix: missing row, no role elevation).
+
+### 2026-06-26 — ניתוח קמפיינים פייסבוק (facebook campaign analysis)
+- **Skin slug:** `facebook-campaign-analysis` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Fetch live Facebook/Meta campaign data for any client, list campaigns with their IDs, analyze a specific campaign in depth (CPL/CTR/frequency vs 30d/7d/today), and check ad account health — all via live Meta API, no CRM sync table required.
+- **How:** (1) `list_clients` or `search_entities` to get `client_id`; (2) `get_facebook_campaign_data(client_id)` for insights; (3) `list_facebook_campaigns(client_id)` for campaign IDs; (4) `analyze_facebook_campaign(campaign_id)` for deep analysis; (5) `check_ad_accounts_health()` for status. If tools return `fb_not_connected` the Facebook token has expired — report to David.
+- **Bug fixed (PR #37):** `fbResolveClientAdAccount` in `run-ai-agent` was ignoring `clients.meta_ads_account_id` and only checking `crm_tables.integration_settings`. 50 clients had their Meta account ID set directly on the client record but no linked facebook_insights crm_table — all live FB calls silently returned empty. Fixed by adding a fallback to `clients.meta_ads_account_id` in both `fbResolveClientAdAccount` and `check_ad_accounts_health`.
+- **Origin:** Carmen escalated — `analyze_campaign` failing for "רווה קולינריה נוזלית" (`meta_ads_account_id=685779550291000`).
+
 ### 2026-06-26 — תיקון גישת קמפיינר (fix campaigner access)
 - **Skin slug:** `fix-campaigner-access` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** When a campaigner reports they cannot see a client that should be accessible, Carmen calls `fix_campaigner_access` via the `carmen-admin-mcp` MCP connection. The tool checks that the campaigner already belongs to the client's agency before granting access — refuses out-of-scope requests. Returns a Hebrew outcome: *granted / already_assigned / refused_out_of_scope*. Every call is logged to `claude_carmen_audit`.
@@ -101,3 +121,124 @@ mentioned "קלוד" incidentally at the end (e.g. "…קלוד אומר שזה 
 **Remaining manual step:** For Ana ("אנה") routing, create an  row for Ana and
 a flow-builder automation with . The switch guard will then route
 her messages correctly without any further code changes.
+
+## 2026-06-26 — Outbound-to-Third-Party Guard
+
+**Tenant:** AfterLead (`2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+**PR:** [#54](https://github.com/davidcastelnuovo/aios/pull/54) — `fix/carmen-outbound-third-party`
+**ai_skills slug:** `outbound-third-party-guard`
+
+**Problem:** When David sends a message from his connected phone to a third party (e.g. Ana),
+the Manus gateway delivers the webhook with `fromMe=true`. Two bugs caused Carmen to
+respond incorrectly:
+
+1. **LID resolver ran for outbound events** — the resolver searched for an active Carmen
+   session and overwrote `counterpartPhone` with Carmen's session phone, mis-attributing
+   "Hi Ana" to Carmen's own chat thread.
+
+2. **No explicit outbound-to-third-party guard** — `handleCarmenMessage` found the active
+   session and processed the message (the active-session path has no keyword requirement).
+
+**Fixes (`manus-wa-webhook/index.ts`):**
+
+1. **Fix 1** (~line 336): Added `&& !fromMeFlag` to the LID resolution block guard.
+   When `fromMeFlag=true`, `to` already contains the real recipient phone — the LID
+   resolver must not overwrite it with a Carmen session phone.
+
+2. **Fix 2** (before `handleCarmenMessage` call): Explicit guard:
+   - Fires when `isOutgoingFromPhone && !pairedFromGreenApi && !isGroup`
+   - Checks for trigger keyword (`כרמן/קלוד/carmen/claude`) in first 80 chars (PR #47)
+   - If no keyword: queries `carmen_whatsapp_sessions` for active session on this `chatId`
+   - If no session: returns `{ received: true, ignored: "outbound_third_party" }` — Carmen skipped
+
+**What is preserved:**
+- PR #47: trigger keyword detection in first 80 chars unchanged
+- Active Carmen session continuation: outbound in Carmen's own thread → Carmen continues
+- Group / Green API pairing / inbound messages: guards are no-ops
+
+**Regression tests:** `supabase/functions/manus-wa-webhook/index.test.ts`
+— 16 Deno tests covering scenarios A (skip), B (continue-with-session), C (keyword routing),
+  PR #47 80-char window, inbound/group/green-api passthroughs, and Fix 1 LID gate.
+
+---
+
+## 2026-06-26 — claude_health_check
+
+**Skill slug:** `claude_health_check`
+**Trigger phrases:** health check, בדיקת תקינות, status check, are you operational, confirm operational, האם קלוד פועל
+
+Claude Code health-check skill written to `ai_skills` (scope=tenant, created_by_agent=true).
+
+**What it does:** Confirms Claude Code is operational by checking Supabase DB and GitHub API accessibility, listing open/pending PRs in the AIOS repo, marking any pending `claude_dispatches` row as completed, logging to `claude_carmen_audit`, and notifying David via `claude_notify_david`.
+
+**Note on git clone:** This container's egress policy blocks `github.com` git traffic (403 from local proxy at port 41729). Code reads use the GitHub API instead; code writes require a session with git clone access enabled.
+
+---
+
+## 2026-06-27 — list_google_ad_accounts + connect_google_ads_account
+
+**Capability:** שליפת חשבונות Google Ads המחוברים לטננט ושיוכם ללקוחות ב-CRM.
+
+**What was built:**
+- שני כלים חדשים ב-`run-ai-agent/index.ts`:
+  1. `list_google_ad_accounts(client_id?)` — קורא ל-Google Ads API (`listAccessibleCustomers` + GAQL לפרטי לקוח), ומחזיר עבור כל חשבון: `customer_id, name, status, is_manager, client_id, client_name`. תומך בפרמטר `client_id` לסינון. קורא ל-`clients.google_ads_account_id` לשיוך.
+  2. `connect_google_ads_account(client_id, customer_id)` — מעדכן `clients.google_ads_account_id` ומתעד ב-`agent_action_log`.
+- Auth: `settings.refresh_token` מ-`tenant_integrations` (integration_type=`google_ads`, is_active=true) + exchange ל-access_token via `oauth2.googleapis.com/token` + env vars `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_ADS_DEVELOPER_TOKEN`.
+- **Skin עודכן:** `campaigner` (slug=`campaigner`) — נוסף ל-`system_prompt` ול-`steps` הסבר על שימוש ב-`list_google_ad_accounts` ו-`connect_google_ads_account`.
+
+**How to use:**
+- "תראי לי את חשבונות Google Ads" → `list_google_ad_accounts()`
+- "תחברי את לקוח X לחשבון Google Ads 1234567890" → `connect_google_ads_account(client_id=..., customer_id=...)`
+- סינון לפי לקוח: `list_google_ad_accounts(client_id=...)`
+
+**PR:** [יתעדכן עם מספר PR]
+
+---
+
+## 2026-06-28 — auto_task_calendar_sync (implemented)
+
+**Capability:** יצירת אירוע Google Calendar אוטומטי כשמשימה נוצרת דרך create_task.
+
+**Root cause of original failure:** הסנכרון היה ידני בלבד — `sync-tasks-to-calendar` דרש auth token של משתמש מחובר. כרמן רצה כ-system (ללא user session), כך שהפונקציה לא יכלה לרוץ אחרי יצירת משימה.
+
+**Fix (PR #86, merged to main, deployed):** הוספת לוגיקת auto-sync ישירות ב-`create_task` handler בתוך `executeTool()` ב-`run-ai-agent/index.ts`. לאחר insert מוצלח של משימה עם `due_date` + `due_time`, הקוד:
+1. מחפש את ה-user_id הקשור ל-campaigner_id (via `profiles`)
+2. שולף את `calendar_tokens` של אותו user (service role — לא צריך auth token)
+3. מרענן access_token אם פג תוקף
+4. יוצר אירוע ב-Google Calendar עם start/end בשעון ישראל (`Asia/Jerusalem`)
+5. שומר `google_calendar_event_id` ב-tasks row
+
+**Return value of create_task:** כולל `calendar_event_id` ו-`calendar_synced: true` כשהסנכרון הצליח. סנכרון נכשל = לא ממצע את יצירת המשימה (non-fatal).
+
+**How Carmen should use it:** אין שינוי — פשוט קוראת ל-`create_task` עם `due_date` ו-`due_time`. אין צורך בקריאה נפרדת לכלי calendar.
+
+**Skin updated:** `auto_task_calendar_sync` (scope=tenant, created_by_agent=true) — system_prompt עודכן לציין שהפיצ'ר מיושם וש-create_task מחזיר calendar_event_id.
+
+
+---
+
+## 2026-06-28 — get_group_members + WhatsApp group sender identification
+
+**Capability:** זיהוי משתתפי קבוצות WhatsApp ובפרט זיהוי מי שלח הודעה — האם הוא קמפיינר, לקוח, או לא מוכר.
+
+**What was built:**
+
+1. **כלי `get_group_members`** ב-`run-ai-agent/index.ts`:
+   - קורא ל-`getGroupData` של GreenAPI
+   - מעשיר כל משתתף בנתוני CRM: phone, name, role (campaigner/client/unknown), id, is_known_contact
+   - Parameters: `group_chat_id` (חובה), `integration_id` (אופציונלי)
+
+2. **זיהוי שולח אוטומטי בהודעות קבוצה:**
+   - כשמגיעה הודעה מקבוצת WhatsApp, מספר הטלפון של השולח נבדק מול:
+     - טבלת `campaigners` (כבר היה קיים)
+     - טבלת `clients` (חדש — אם לא נמצא קמפיינר)
+   - אם השולח הוא לקוח: מוזרק לסיסטם פרומפט: "הלקוח [שם] שלח הודעה זו — הגב רק על מידע הנוגע ללקוח זה"
+   - משתני `callerClientId` ו-`callerClientName` זמינים בתוך run-ai-agent
+
+**How to use:**
+- "מי בקבוצה הזו?" → `get_group_members(group_chat_id="120363...@g.us")`
+- מתבצע אוטומטית כשלקוח כותב בקבוצה — כרמן תדע שהשולח הוא הלקוח ותגיב בהתאמה אישית
+
+**DB:** `ai_skills` slug=`get_group_members` (scope=tenant, created_by_agent=true)
+
+**Commits:** c5d0280, 58b4a62 → main

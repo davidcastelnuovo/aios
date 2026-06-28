@@ -23,7 +23,9 @@ const CATEGORY_META: Record<string, { label: string; icon: any; color: string }>
   learned_facts: { label: "עובדות שנלמדו", icon: Brain, color: "text-purple-600" },
 };
 
-export default function CarmenInsights() {
+export { CarmenInsights };
+export default CarmenInsights;
+function CarmenInsights() {
   const { tenantId } = useCurrentTenant();
   const [tab, setTab] = useState("sessions");
   const [openSession, setOpenSession] = useState<any | null>(null);

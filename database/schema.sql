@@ -887,7 +887,7 @@ CREATE TABLE public.clients (
   whatsapp_group_id uuid,
   end_date date,
   tier client_tier,
-  services text[] DEFAULT '{}'::text[],
+  services jsonb DEFAULT '[]'::jsonb,
   health_score integer DEFAULT 100,
   overall_status text DEFAULT 'green'::text,
   active_flags jsonb DEFAULT '[]'::jsonb,
@@ -4215,7 +4215,7 @@ BEGIN
     meta_ads_account_id, google_ads_account_id
   ) VALUES (
     p_name, p_contact_name, p_agency_id, p_tenant_id, p_phone, p_email, p_folder_link,
-    p_retainer, p_monthly_budget, p_website, p_notes, p_is_seo_client, p_services,
+    p_retainer, p_monthly_budget, p_website, p_notes, p_is_seo_client, to_jsonb(p_services),
     p_meta_ads_account_id, p_google_ads_account_id
   ) RETURNING id INTO v_client_id;
 

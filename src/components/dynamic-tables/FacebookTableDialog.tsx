@@ -19,11 +19,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
-import { Loader2, Facebook, AlertCircle } from "lucide-react";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useUserIntegrations } from "@/hooks/useUserIntegrations";
+import { Loader2, Facebook, AlertCircle, Lock, Globe, Users } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface FacebookTableDialogProps {
@@ -49,11 +52,24 @@ const dateRangeOptions = [
   { value: "this_month", label: "החודש הנוכחי" },
 ];
 
+const visibilityIcon = (v: string | null) => {
+  if (v === "org") return <Globe className="h-3 w-3 text-blue-500" />;
+  if (v === "shared") return <Users className="h-3 w-3 text-violet-500" />;
+  return <Lock className="h-3 w-3 text-muted-foreground" />;
+};
+
+const visibilityLabel = (v: string | null) => {
+  if (v === "org") return "ארגוני";
+  if (v === "shared") return "משותף";
+  return "פרטי";
+};
+
 export function FacebookTableDialog({ open, onOpenChange, assignedClientIds }: FacebookTableDialogProps) {
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
+  const { userId } = useCurrentUser();
 
   const [tableName, setTableName] = useState("");
   const [selectedAdAccount, setSelectedAdAccount] = useState("");
@@ -63,6 +79,27 @@ export function FacebookTableDialog({ open, onOpenChange, assignedClientIds }: F
   const [agencyId, setAgencyId] = useState<string>("");
   const [clientId, setClientId] = useState<string>("");
   const [clientSearch, setClientSearch] = useState("");
+  const [selectedIntegrationId, setSelectedIntegrationId] = useState<string>("");
+
+  // Fetch all Facebook integrations accessible to this user (own + shared)
+  const { data: fbIntegrations = [], isLoading: loadingIntegrations } = useUserIntegrations(
+    tenantId,
+    'facebook_lead_ads',
+    { enabled: open }
+  );
+
+  // Auto-select first integration (prefer own)
+  useEffect(() => {
+    if (!open) return;
+    if (fbIntegrations.length === 0) {
+      setSelectedIntegrationId("");
+      return;
+    }
+    if (!selectedIntegrationId || !fbIntegrations.some((i: any) => i.id === selectedIntegrationId)) {
+      const ownFirst = (fbIntegrations as any[]).find((i) => i._isOwn) || fbIntegrations[0];
+      setSelectedIntegrationId((ownFirst as any).id);
+    }
+  }, [fbIntegrations, open]);
 
   // Fetch agencies
   const { data: agencies = [] } = useQuery({
@@ -106,41 +143,24 @@ export function FacebookTableDialog({ open, onOpenChange, assignedClientIds }: F
     setClientSearch("");
   }, [agencyId]);
 
-  // Check if Facebook is connected
-  const { data: facebookIntegration, isLoading: checkingFacebook } = useQuery({
-    queryKey: ['facebook-integration-status'],
-    queryFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return null;
-      
-      const { data: tenantId } = await supabase.rpc('get_user_tenant_id', { _user_id: session.user.id });
-      if (!tenantId) return null;
+  // Reset ad account when integration changes
+  useEffect(() => {
+    setSelectedAdAccount("");
+    setAdAccountSearch("");
+  }, [selectedIntegrationId]);
 
-      const { data } = await supabase
-        .from('tenant_integrations')
-        .select('id, is_active')
-        .eq('tenant_id', tenantId)
-        .in('integration_type', ['facebook', 'facebook_lead_ads'])
-        .eq('is_active', true)
-        .limit(1)
-        .maybeSingle();
-      
-      return data;
-    },
-    enabled: open,
-  });
-
-  // Fetch ad accounts - the edge function handles token retrieval server-side
+  // Fetch ad accounts for the selected integration
   const { data: adAccountsData, isLoading: loadingAdAccounts, error: adAccountsError } = useQuery({
-    queryKey: ['facebook-ad-accounts'],
+    queryKey: ['facebook-ad-accounts', selectedIntegrationId],
     queryFn: async () => {
-      const response = await supabase.functions.invoke('get-facebook-ad-accounts', {
+      const params = selectedIntegrationId ? `?integration_id=${selectedIntegrationId}` : '';
+      const response = await supabase.functions.invoke(`get-facebook-ad-accounts${params}`, {
         method: 'GET',
       });
       if (response.error) throw response.error;
       return response.data;
     },
-    enabled: open && !!facebookIntegration?.is_active,
+    enabled: open && !!selectedIntegrationId,
   });
 
   const adAccounts: AdAccount[] = adAccountsData?.ad_accounts || [];
@@ -170,6 +190,8 @@ export function FacebookTableDialog({ open, onOpenChange, assignedClientIds }: F
             currency: selectedAccount?.currency || 'ILS',
             date_range: dateRange,
             sync_frequency: 'daily',
+            // Store the integration_id so cron-sync uses the correct token
+            integration_id: selectedIntegrationId || null,
           },
           agency_id: agencyId || null,
           client_id: clientId || null,
@@ -182,7 +204,7 @@ export function FacebookTableDialog({ open, onOpenChange, assignedClientIds }: F
     onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
       toast.success('טבלת Facebook Insights נוצרה בהצלחה');
-      
+
       // Trigger initial sync
       try {
         toast.info('מסנכרן נתונים מפייסבוק...');
@@ -229,10 +251,11 @@ export function FacebookTableDialog({ open, onOpenChange, assignedClientIds }: F
     setAdAccountSearch("");
     setAgencyId("");
     setClientId("");
+    setSelectedIntegrationId("");
     onOpenChange(false);
   };
 
-  const isFacebookConfigured = !!facebookIntegration?.is_active;
+  const isFacebookConfigured = fbIntegrations.length > 0;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -247,7 +270,7 @@ export function FacebookTableDialog({ open, onOpenChange, assignedClientIds }: F
           </DialogDescription>
         </DialogHeader>
 
-        {checkingFacebook ? (
+        {loadingIntegrations ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-6 w-6 animate-spin" />
           </div>
@@ -256,9 +279,9 @@ export function FacebookTableDialog({ open, onOpenChange, assignedClientIds }: F
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
               האינטגרציה עם פייסבוק לא מוגדרת. יש להגדיר תחילה את החיבור בדף{" "}
-              <Button 
-                variant="link" 
-                className="p-0 h-auto" 
+              <Button
+                variant="link"
+                className="p-0 h-auto"
                 onClick={() => {
                   handleClose();
                   navigate(buildPath('/integrations/facebook'));
@@ -270,6 +293,48 @@ export function FacebookTableDialog({ open, onOpenChange, assignedClientIds }: F
           </Alert>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
+
+            {/* Connection selector — only shown when more than one connection is available */}
+            {fbIntegrations.length > 1 && (
+              <div className="space-y-2">
+                <Label>חיבור Facebook לשימוש</Label>
+                <Select value={selectedIntegrationId} onValueChange={setSelectedIntegrationId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="בחר חיבור" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(fbIntegrations as any[]).map((intg) => {
+                      const settings = intg.settings as any;
+                      const pageName = settings?.page_name || 'Facebook';
+                      const visibility = intg.connection_visibility || (intg._isOwn ? 'private' : null);
+                      return (
+                        <SelectItem key={intg.id} value={intg.id}>
+                          <div className="flex items-center gap-2">
+                            {visibilityIcon(visibility)}
+                            <span>{pageName}</span>
+                            {intg._isOwn && (
+                              <Badge variant="secondary" className="text-xs py-0">שלי</Badge>
+                            )}
+                            {intg._sharedByName && (
+                              <Badge variant="outline" className="text-xs py-0">
+                                של {intg._sharedByName}
+                              </Badge>
+                            )}
+                            <span className="text-xs text-muted-foreground">
+                              ({visibilityLabel(visibility)})
+                            </span>
+                          </div>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  חשבונות המודעות שיוצגו תלויים בחיבור שנבחר
+                </p>
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label htmlFor="table-name">שם הטבלה</Label>
               <Input
@@ -314,7 +379,7 @@ export function FacebookTableDialog({ open, onOpenChange, assignedClientIds }: F
                     </SelectTrigger>
                     <SelectContent>
                       {adAccounts
-                        .filter((account) => 
+                        .filter((account) =>
                           account.name?.toLowerCase().includes(adAccountSearch.toLowerCase()) ||
                           account.id?.includes(adAccountSearch)
                         )
@@ -405,8 +470,8 @@ export function FacebookTableDialog({ open, onOpenChange, assignedClientIds }: F
               <Button type="button" variant="outline" onClick={handleClose}>
                 ביטול
               </Button>
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 disabled={createMutation.isPending || !selectedAdAccount}
               >
                 {createMutation.isPending ? (

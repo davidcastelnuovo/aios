@@ -142,7 +142,57 @@ async function sendOne(db: any, b: any, r: any): Promise<{ ok: boolean; messageI
     return res.ok ? { ok: true, messageId: res.json?.id } : { ok: false, error: JSON.stringify(res.json).slice(0, 300) };
   }
 
-  // ── WhatsApp (Green API / Manus) ──
+  // ── WhatsApp — Group broadcast (entity_type = 'wa_group') ──
+  // r.phone stores the group_chat_id (e.g. "120363416882903532@g.us")
+  // r.entity_id is the whatsapp_groups UUID
+  if (r.entity_type === 'wa_group') {
+    const groupId = r.entity_id;   // whatsapp_groups.id UUID
+    const senderUserId = b.created_by;
+    if (!senderUserId) return { ok: false, error: 'missing_created_by' };
+    if (!groupId) return { ok: false, error: 'missing_group_entity_id' };
+
+    try {
+      const hasMedia = !!b.media_url;
+      if (b.provider === 'manus_wa') {
+        if (hasMedia) {
+          const res = await invokeEdgeFn('send-manus-wa-file', {
+            groupId, imageUrl: b.media_url, caption: body,
+            tenantId: b.tenant_id, integrationId: b.integration_id, senderUserId,
+          });
+          return res.ok ? { ok: true, messageId: res.json?.messageId } : { ok: false, error: JSON.stringify(res.json).slice(0, 300) };
+        }
+        const res = await invokeEdgeFn('send-manus-wa-message', {
+          groupId, message: body, tenantId: b.tenant_id,
+          integrationId: b.integration_id, senderUserId,
+        });
+        return res.ok ? { ok: true, messageId: res.json?.messageId } : { ok: false, error: JSON.stringify(res.json).slice(0, 300) };
+      }
+      // green_api
+      if (hasMedia) {
+        // For groups with green_api, use the group_chat_id stored in r.phone
+        const groupChatId = r.phone; // stored as phone in enqueue
+        if (!groupChatId) return { ok: false, error: 'missing_group_chat_id' };
+        const { data: integ } = await db
+          .from('tenant_integrations').select('api_key, settings').eq('id', b.integration_id).maybeSingle();
+        if (!integ?.api_key || !integ?.settings?.instance_id) return { ok: false, error: 'green_api_not_configured' };
+        const url = `https://api.green-api.com/waInstance${integ.settings.instance_id}/sendFileByUrl/${integ.api_key}`;
+        const res2 = await fetch(url, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chatId: groupChatId, urlFile: b.media_url, fileName: 'image.jpg', caption: body }),
+        });
+        const json2 = await res2.json().catch(() => ({}));
+        return res2.ok ? { ok: true, messageId: json2?.idMessage } : { ok: false, error: JSON.stringify(json2).slice(0, 300) };
+      }
+      const res = await invokeEdgeFn('send-green-api-message', {
+        groupId, message: body, tenantId: b.tenant_id, senderUserId,
+      });
+      return res.ok ? { ok: true, messageId: res.json?.messageId } : { ok: false, error: JSON.stringify(res.json).slice(0, 300) };
+    } catch (e: any) {
+      return { ok: false, error: String(e?.message || e).slice(0, 300) };
+    }
+  }
+
+  // ── WhatsApp (Green API / Manus) — individual contacts ──
   const hasMedia = !!b.media_url;
   const senderUserId = b.created_by;
 

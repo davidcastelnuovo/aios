@@ -14,6 +14,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ArrowRight, Webhook, Key, CheckCircle2, AlertCircle, Copy, ExternalLink, UserPlus, Share2 } from "lucide-react";
 import { ShareIntegrationTenantsDialog } from "@/components/forms/ShareIntegrationTenantsDialog";
+import { IntegrationVisibilitySelector } from "@/components/forms/IntegrationVisibilitySelector";
 import {
   Dialog,
   DialogContent,
@@ -549,6 +550,29 @@ export default function GreenAPISettings() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Sharing / Visibility Card - only shown when integration exists */}
+      {integration?.is_active && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Share2 className="h-5 w-5" />
+              שיתוף החיבור עם הארגון
+            </CardTitle>
+            <CardDescription>
+              בחר מי יוכל לראות שיחות ולשלוח הודעות דרך חיבור זה
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <IntegrationVisibilitySelector
+              integrationId={integration.id}
+              integrationName="Green API"
+              ownerId={userId}
+              tenantId={tenantId!}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Assign to User Dialog */}
       <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>

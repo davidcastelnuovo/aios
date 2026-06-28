@@ -152,3 +152,21 @@ BEGIN
   DELETE FROM job_queue WHERE status IN ('done', 'dead_letter') AND finished_at < now() - interval '30 days';
   GET DIAGNOSTICS v_deleted = ROW_COUNT; RETURN v_deleted;
 END; $$;
+
+-- run_ddl_once: helper for edge functions to run DDL (used by run-db-migration)
+CREATE OR REPLACE FUNCTION public.run_ddl_once(sql text)
+RETURNS text
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  EXECUTE sql;
+  RETURN 'ok';
+EXCEPTION WHEN OTHERS THEN
+  RETURN SQLERRM;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.run_ddl_once(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.run_ddl_once(text) FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.run_ddl_once(text) TO service_role;

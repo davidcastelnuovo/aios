@@ -231,6 +231,45 @@ serve(async (req) => {
         break;
       }
 
+      case 'send_message': {
+        // Send a message to an existing task or to the default Manus agent.
+        // task_id defaults to 'agent-default-main_task' for direct communication.
+        const { taskId, message, agentProfile, connectors } = params;
+        const targetTaskId = taskId || 'agent-default-main_task';
+        const msgBody: any = { message };
+        if (agentProfile) msgBody.agentProfile = agentProfile;
+        if (connectors) msgBody.connectors = connectors;
+        const res = await fetch(`${MANUS_API_URL}/tasks/${encodeURIComponent(targetTaskId)}/messages`, {
+          method: 'POST',
+          headers: manusHeaders,
+          body: JSON.stringify(msgBody),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(`Manus API error [${res.status}]: ${JSON.stringify(data)}`);
+        }
+        result = data;
+        break;
+      }
+
+      case 'list_messages': {
+        // Poll messages for a task (for checking Manus response).
+        const { taskId: listTaskId, after: afterCursor } = params;
+        const targetId = listTaskId || 'agent-default-main_task';
+        const qp = new URLSearchParams();
+        if (afterCursor) qp.set('after', afterCursor);
+        const res = await fetch(`${MANUS_API_URL}/tasks/${encodeURIComponent(targetId)}/messages?${qp}`, {
+          method: 'GET',
+          headers: manusHeaders,
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(`Manus API error [${res.status}]: ${JSON.stringify(data)}`);
+        }
+        result = data;
+        break;
+      }
+
       default:
         return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },

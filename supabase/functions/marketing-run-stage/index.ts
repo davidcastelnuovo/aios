@@ -9,11 +9,13 @@ const corsHeaders = {
 };
 
 const TEXT_MODEL = 'gpt-4o-mini';
-const IMAGE_MODEL = 'gpt-4o-mini';
+const IMAGE_MODEL = 'dall-e-3';
 
-// Cost per 1M tokens (rough Gemini Flash pricing for usage display)
-const COST_IN_PER_M = 0.075;
-const COST_OUT_PER_M = 0.3;
+// GPT-4o-mini pricing (USD per 1M tokens)
+const COST_IN_PER_M = 0.15;
+const COST_OUT_PER_M = 0.60;
+// DALL-E 3: $0.040 per image (1024x1024 standard)
+const DALLE3_COST_PER_IMAGE = 0.040;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -24,8 +26,31 @@ serve(async (req) => {
   const admin = createClient(supaUrl, supaService);
 
   try {
-    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-    if (!OPENAI_API_KEY) throw new Error("Missing OPENAI_API_KEY");
+    // Get OpenAI API key from tenant_integrations (same as run-ai-agent)
+    const getOpenAIKey = async (tenantId: string): Promise<string> => {
+      const { data } = await admin
+        .from('tenant_integrations')
+        .select('settings, shared_from_integration_id')
+        .eq('tenant_id', tenantId)
+        .eq('integration_type', 'llm')
+        .eq('is_active', true)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      let settings = (data?.settings || {}) as Record<string, string>;
+      // If shared, load from source
+      if (data?.shared_from_integration_id && !settings.openai_api_key) {
+        const { data: src } = await admin
+          .from('tenant_integrations')
+          .select('settings')
+          .eq('id', data.shared_from_integration_id)
+          .maybeSingle();
+        if (src?.settings) settings = src.settings as Record<string, string>;
+      }
+      const key = settings.openai_api_key;
+      if (!key) throw new Error('OpenAI API key חסר — הגדר אותו בהגדרות האינטגרציות');
+      return key;
+    };
 
     const { item_id, stage_id } = await req.json();
     if (!item_id || !stage_id) {
@@ -103,6 +128,9 @@ serve(async (req) => {
     if (runErr || !runRow) throw new Error("Failed to create run: " + runErr?.message);
     runId = runRow.id;
 
+    // Get OpenAI API key from tenant_integrations
+    const OPENAI_API_KEY = await getOpenAIKey(item.tenant_id);
+
     const cfg = (stage.configuration as any) ?? {};
     const instructions: string = cfg.instructions ?? "";
     const stageType: string = stage.stage_type;
@@ -154,8 +182,33 @@ serve(async (req) => {
     let outputJson: any = {};
 
     if (stageType === "creative") {
-      // Image generation
-      const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
+      // Image generation via DALL-E 3
+      // First, generate a detailed image prompt using text model
+      const promptRes = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: TEXT_MODEL,
+          messages: [
+            { role: "system", content: systemPrompt || "You are a creative director. Generate concise DALL-E image prompts in English." },
+            { role: "user", content: userPrompt + "\n\nGenerate a concise DALL-E 3 image prompt (max 200 words) in English for this marketing creative. Focus on visual elements, style, and composition." },
+          ],
+          max_tokens: 300,
+        }),
+      });
+      let imagePrompt = item.title ?? "Professional marketing creative";
+      if (promptRes.ok) {
+        const promptData = await promptRes.json();
+        imagePrompt = promptData.choices?.[0]?.message?.content ?? imagePrompt;
+        tokensIn += promptData.usage?.prompt_tokens ?? 0;
+        tokensOut += promptData.usage?.completion_tokens ?? 0;
+      }
+
+      // Generate image with DALL-E 3
+      const aiRes = await fetch("https://api.openai.com/v1/images/generations", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${OPENAI_API_KEY}`,
@@ -163,21 +216,19 @@ serve(async (req) => {
         },
         body: JSON.stringify({
           model: IMAGE_MODEL,
-          messages: [
-            { role: "system", content: systemPrompt || "You are a creative director." },
-            { role: "user", content: userPrompt },
-          ],
-          modalities: ["image", "text"],
+          prompt: imagePrompt,
+          n: 1,
+          size: "1024x1024",
+          response_format: "b64_json",
         }),
       });
       if (!aiRes.ok) {
         const t = await aiRes.text();
-        throw new Error(`AI gateway ${aiRes.status}: ${t}`);
+        throw new Error(`Image generation ${aiRes.status}: ${t}`);
       }
       const data = await aiRes.json();
-      const base64 = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-      if (!base64) throw new Error("No image returned");
-      const b64Data = base64.replace(/^data:image\/\w+;base64,/, "");
+      const b64Data = data.data?.[0]?.b64_json;
+      if (!b64Data) throw new Error("No image returned from DALL-E");
       const bytes = Uint8Array.from(atob(b64Data), (c) => c.charCodeAt(0));
       const fileName = `${Date.now()}-${runRow.id}.png`;
       const filePath = `${item.tenant_id}/marketing/${item_id}/${fileName}`;
@@ -188,9 +239,10 @@ serve(async (req) => {
       const { data: pub } = admin.storage.from("entity-attachments").getPublicUrl(filePath);
       assetUrl = pub.publicUrl;
       assetType = "image";
-      tokensIn = data.usage?.prompt_tokens ?? 0;
-      tokensOut = data.usage?.completion_tokens ?? 0;
       outputJson = { image_url: assetUrl };
+      // DALL-E 3 is billed per image, not per token — add fixed cost here
+      tokensIn = 0;
+      tokensOut = 0;
     } else {
       // Text generation
       const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -245,7 +297,9 @@ serve(async (req) => {
     if (assetType === "image") newPayload.image_url = assetUrl;
     await admin.from("marketing_work_items").update({ payload: newPayload }).eq("id", item_id);
 
-    const cost = (tokensIn * COST_IN_PER_M + tokensOut * COST_OUT_PER_M) / 1_000_000;
+    const cost = stageType === "creative"
+      ? DALLE3_COST_PER_IMAGE
+      : (tokensIn * COST_IN_PER_M + tokensOut * COST_OUT_PER_M) / 1_000_000;
 
     // Decide: auto-advance or wait for approval
     const approvalMode = stage.approval_mode ?? "manual";
@@ -263,6 +317,114 @@ serve(async (req) => {
       })
       .eq("id", runRow.id);
 
+    // ── Send approval notification when stage needs approval (semi mode) ──
+    if (finalStatus === "awaiting_approval") {
+      try {
+        // Find tenant owner/admin email + phone
+        const { data: tenantOwners } = await admin
+          .from("tenant_users")
+          .select("user_id, role")
+          .eq("tenant_id", item.tenant_id)
+          .in("role", ["owner", "admin"])
+          .limit(3);
+
+        for (const owner of tenantOwners ?? []) {
+          const { data: profile } = await admin
+            .from("profiles")
+            .select("email, phone, full_name")
+            .eq("id", owner.user_id)
+            .maybeSingle();
+
+          if (!profile) continue;
+
+          const stageName = stage.name ?? stageType;
+          const itemTitle = item.title ?? "פריט תוכן";
+          const approvalUrl = `https://aios.co.il/marketing`;
+          const msgText = `✅ *שלב "${stageName}" הושלם*\n\nפריט: ${itemTitle}\n\nהתוכן מחכה לאישורך כדי להמשיך לשלב הבא.\n\n🔗 ${approvalUrl}`;
+
+          // Send email
+          if (profile.email) {
+            await fetch(`${supaUrl}/functions/v1/send-resend-email`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${supaService}`,
+              },
+              body: JSON.stringify({
+                to: profile.email,
+                subject: `[AIOS Marketing] שלב "${stageName}" מחכה לאישורך`,
+                html: `<div dir="rtl" style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+  <h2 style="color:#f59e0b">✅ שלב הושלם — נדרש אישורך</h2>
+  <p><strong>פריט:</strong> ${itemTitle}</p>
+  <p><strong>שלב שהושלם:</strong> ${stageName}</p>
+  <p>התוכן שנוצר על ידי קרמן מחכה לאישורך כדי להמשיך לשלב הבא בפייפליין.</p>
+  <a href="${approvalUrl}" style="display:inline-block;background:#f59e0b;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;margin-top:16px">עבור לאישור</a>
+</div>`,
+              }),
+            }).catch((e) => console.error("Email notification failed:", e));
+          }
+
+          // Send WhatsApp if phone available
+          if (profile.phone) {
+            await fetch(`${supaUrl}/functions/v1/send-manus-wa-message`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${supaService}`,
+              },
+              body: JSON.stringify({
+                tenantId: item.tenant_id,
+                phoneNumber: profile.phone,
+                message: msgText,
+                senderUserId: owner.user_id,
+              }),
+            }).catch((e) => console.error("WhatsApp notification failed:", e));
+          }
+        }
+      } catch (notifErr) {
+        // Notifications are best-effort — don't fail the run
+        console.error("Approval notification error:", notifErr);
+      }
+    }
+
+    // ── Server-side auto-advance: if mode is "auto", move to next stage ──
+    let nextStageId: string | null = null;
+    if (approvalMode === "auto") {
+      const { data: allStages } = await admin
+        .from("marketing_pipeline_stages")
+        .select("id, sort_order, approval_mode")
+        .eq("pipeline_id", item.pipeline_id)
+        .order("sort_order");
+      const stages = allStages ?? [];
+      const currentIdx = stages.findIndex((s: any) => s.id === stage_id);
+      if (currentIdx >= 0 && currentIdx < stages.length - 1) {
+        const nextStage = stages[currentIdx + 1];
+        nextStageId = nextStage.id;
+        // Advance work item to next stage
+        await admin
+          .from("marketing_work_items")
+          .update({ current_stage_id: nextStageId, status: "in_progress" })
+          .eq("id", item_id);
+        // If next stage is also auto, fire-and-forget to trigger it
+        if (nextStage.approval_mode === "auto") {
+          fetch(`${supaUrl}/functions/v1/marketing-run-stage`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${supaService}`,
+            },
+            body: JSON.stringify({ item_id, stage_id: nextStageId }),
+          }).catch(() => {/* ignore */});
+        }
+      } else if (currentIdx === stages.length - 1) {
+        // Last stage — mark work item as completed
+        await admin
+          .from("marketing_work_items")
+          .update({ status: "completed" })
+          .eq("id", item_id);
+      }
+    }
+
     return new Response(
       JSON.stringify({
         run_id: runRow.id,
@@ -274,6 +436,7 @@ serve(async (req) => {
         tokens_in: tokensIn,
         tokens_out: tokensOut,
         cost_usd: cost,
+        next_stage_id: nextStageId,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );

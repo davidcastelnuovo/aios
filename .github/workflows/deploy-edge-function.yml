@@ -52,7 +52,7 @@ jobs:
             # Functions whose files changed in this push.
             CHANGED=$(git diff --name-only HEAD^ HEAD -- 'supabase/functions/**' \
               | sed -E 's#supabase/functions/([^/]+)/.*#\1#' \
-              | grep -v '^_shared$' | sort -u | tr '\n' ' ')
+              | { grep -v '^_shared$' || true; } | sort -u | tr '\n' ' ')
             echo "Changed functions: $CHANGED"
             echo "list=$CHANGED" >> "$GITHUB_OUTPUT"
           fi
