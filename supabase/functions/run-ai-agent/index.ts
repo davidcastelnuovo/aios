@@ -585,6 +585,14 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         duration_minutes: args.duration_minutes || null,
       }).select('id, title, status').single()
       if (error) throw error
+      // Auto-sync to Google Calendar if task has a scheduled time (fire-and-forget)
+      if (args.due_date && args.due_time) {
+        fetch(`${SUPABASE_URL}/functions/v1/create-task-calendar-event`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ task_id: data.id }),
+        }).catch((calErr) => console.error('[create_task] calendar sync failed:', calErr))
+      }
       return { task_id: data.id, title: data.title, status: data.status }
     }
     case 'create_agent_task': {
