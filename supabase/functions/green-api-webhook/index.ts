@@ -956,6 +956,35 @@ Deno.serve(async (req) => {
         }
 
         groupId = newGroup.id;
+
+        // Background: seed participants for the newly discovered group
+        if (instanceId && apiToken) {
+          ;(async () => {
+            try {
+              const gaRes = await fetch(
+                `https://api.green-api.com/waInstance${instanceId}/getGroupData/${apiToken}`,
+                { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ groupId: groupChatId }) }
+              )
+              if (!gaRes.ok) return
+              const gaData = await gaRes.json()
+              const rawParticipants: Array<{ id: string; isAdmin: boolean; isSuperAdmin: boolean }> = gaData.participants || []
+              if (rawParticipants.length === 0) return
+              const upserts = rawParticipants.map((p) => ({
+                group_id: groupId,
+                tenant_id: tenantId,
+                phone_jid: p.id,
+                phone: p.id.split('@')[0],
+                is_admin: p.isAdmin || false,
+                is_super_admin: p.isSuperAdmin || false,
+                last_synced_at: new Date().toISOString(),
+              }))
+              await supabaseClient.from('whatsapp_group_participants').upsert(upserts, { onConflict: 'group_id,phone_jid', ignoreDuplicates: false })
+            } catch (e) {
+              console.error('[green-api-webhook] participants seed error:', e)
+            }
+          })()
+        }
+
       } else if (existingGroup) {
         const currentName = existingGroup.group_name || '';
         const looksLikePlaceholder = currentName.startsWith('קבוצה ');
@@ -1048,6 +1077,17 @@ Deno.serve(async (req) => {
         throw insertError;
       }
 
+      // Update participant display_name if we just learned it from this message
+      if (isIncoming && senderData.senderName && senderWid) {
+        const senderJid = senderWid.includes('@') ? senderWid : `${senderWid}@c.us`
+        supabaseClient
+          .from('whatsapp_group_participants')
+          .update({ display_name: senderData.senderName, updated_at: new Date().toISOString() })
+          .eq('group_id', groupId)
+          .eq('phone_jid', senderJid)
+          .is('display_name', null)
+          .then(() => {}, () => {})
+      }
 
       // Forward to linked team channels
       const forwardedSenderName = isOutgoing ? connectionDisplayName : senderData.senderName;
