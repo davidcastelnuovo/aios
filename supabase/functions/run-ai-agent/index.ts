@@ -585,15 +585,63 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         duration_minutes: args.duration_minutes || null,
       }).select('id, title, status').single()
       if (error) throw error
-      // Auto-sync to Google Calendar if task has a scheduled time (fire-and-forget)
-      if (args.due_date && args.due_time) {
-        fetch(`${SUPABASE_URL}/functions/v1/create-task-calendar-event`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ task_id: data.id }),
-        }).catch((calErr) => console.error('[create_task] calendar sync failed:', calErr))
+      // Auto-sync to Google Calendar if due_date + due_time are set
+      let calendarEventId: string | null = null
+      if (data.id && args.due_date && args.due_time && campaignerId) {
+        try {
+          const { data: ownerProfile } = await supabase
+            .from('profiles').select('id').eq('campaigner_id', campaignerId).limit(1).maybeSingle()
+          if (ownerProfile?.id) {
+            const { data: tokenData } = await supabase
+              .from('calendar_tokens').select('*').eq('user_id', ownerProfile.id).maybeSingle()
+            if (tokenData) {
+              let accessToken = tokenData.access_token
+              if (new Date(tokenData.expires_at) <= new Date()) {
+                const clientId = Deno.env.get('GOOGLE_CLIENT_ID')
+                const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET')
+                if (clientId && clientSecret) {
+                  const rr = await fetch('https://oauth2.googleapis.com/token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, refresh_token: tokenData.refresh_token, grant_type: 'refresh_token' }),
+                  })
+                  const rd = await rr.json()
+                  if (rd.access_token) {
+                    accessToken = rd.access_token
+                    await supabase.from('calendar_tokens').update({ access_token: accessToken, expires_at: new Date(Date.now() + rd.expires_in * 1000).toISOString() }).eq('user_id', ownerProfile.id)
+                  }
+                }
+              }
+              if (accessToken) {
+                const startDT = `${args.due_date}T${args.due_time}`
+                const timeParts = (args.due_time || '00:00:00').split(':').map(Number)
+                const totalMin = (timeParts[0] || 0) * 60 + (timeParts[1] || 0) + (args.duration_minutes || 30)
+                const endDT = `${args.due_date}T${String(Math.floor(totalMin / 60) % 24).padStart(2, '0')}:${String(totalMin % 60).padStart(2, '0')}:00`
+                const calResp = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+                  method: 'POST',
+                  headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    summary: args.title,
+                    description: args.notes || 'משימה ממערכת AIOS',
+                    start: { dateTime: startDT, timeZone: 'Asia/Jerusalem' },
+                    end: { dateTime: endDT, timeZone: 'Asia/Jerusalem' },
+                  }),
+                })
+                if (calResp.ok) {
+                  const calData = await calResp.json()
+                  if (calData.id) {
+                    calendarEventId = calData.id
+                    await supabase.from('tasks').update({ google_calendar_event_id: calData.id }).eq('id', data.id)
+                  }
+                }
+              }
+            }
+          }
+        } catch (_calErr) {
+          // Calendar sync failure is non-fatal — task was created successfully
+        }
       }
-      return { task_id: data.id, title: data.title, status: data.status }
+      return { task_id: data.id, title: data.title, status: data.status, ...(calendarEventId ? { calendar_event_id: calendarEventId, calendar_synced: true } : {}) }
     }
     case 'create_agent_task': {
       // Create task in agent_tasks table (for Carmen herself)
