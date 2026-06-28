@@ -272,6 +272,7 @@ const ALL_TOOLS = [
   { name: 'schedule_broadcast', description: 'תזמון דיוור קיים לשליחה בזמן עתידי. דורש אישור. מעביר לסטטוס scheduled.', parameters: { type: 'object', properties: { broadcast_id: { type: 'string', description: 'מזהה הדיוור' }, scheduled_at: { type: 'string', description: 'תאריך ושעה ב-ISO UTC (לדוגמה 2026-07-01T18:00:00Z עבור 21:00 שעון ישראל)' } }, required: ['broadcast_id', 'scheduled_at'] } },
   { name: 'cancel_broadcast', description: 'ביטול דיוור מתוזמן או עצירת דיוור פעיל. דורש אישור.', parameters: { type: 'object', properties: { broadcast_id: { type: 'string' } }, required: ['broadcast_id'] } },
   { name: 'list_wa_groups', description: 'רשימת קבוצות וואטסאפ הזמינות לדיוור (לא חסומות). מחזיר id, group_name, group_chat_id. השתמש כדי לקבל groupIds לפני יצירת דיוור לקבוצות.', parameters: { type: 'object', properties: { name_search: { type: 'string', description: 'חיפוש חלקי בשם הקבוצה (אופציונלי)' }, limit: { type: 'integer', description: 'ברירת מחדל 50' } } } },
+  { name: 'get_group_members', description: 'שליפת רשימת המשתתפים בקבוצת WhatsApp, מועשרת בזיהוי CRM (קמפיינר / לקוח / לא מוכר). שימושי לדעת מול מי את מתכתבת בקבוצה. מחזיר לכל משתתף: phone, name, role (campaigner/client/unknown), id.', parameters: { type: 'object', properties: { group_chat_id: { type: 'string', description: 'מזהה הקבוצה — לדוגמה 120363015444800400@g.us' }, integration_id: { type: 'string', description: 'UUID של חיבור WhatsApp (אופציונלי — ישתמש בחיבור GreenAPI הפעיל)' } }, required: ['group_chat_id'] } },
   // ===========================
   // APPROVAL FLOW
   // ===========================
@@ -589,63 +590,15 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         duration_minutes: args.duration_minutes || null,
       }).select('id, title, status').single()
       if (error) throw error
-      // Auto-sync to Google Calendar if due_date + due_time are set
-      let calendarEventId: string | null = null
-      if (data.id && args.due_date && args.due_time && campaignerId) {
-        try {
-          const { data: ownerProfile } = await supabase
-            .from('profiles').select('id').eq('campaigner_id', campaignerId).limit(1).maybeSingle()
-          if (ownerProfile?.id) {
-            const { data: tokenData } = await supabase
-              .from('calendar_tokens').select('*').eq('user_id', ownerProfile.id).maybeSingle()
-            if (tokenData) {
-              let accessToken = tokenData.access_token
-              if (new Date(tokenData.expires_at) <= new Date()) {
-                const clientId = Deno.env.get('GOOGLE_CLIENT_ID')
-                const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET')
-                if (clientId && clientSecret) {
-                  const rr = await fetch('https://oauth2.googleapis.com/token', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, refresh_token: tokenData.refresh_token, grant_type: 'refresh_token' }),
-                  })
-                  const rd = await rr.json()
-                  if (rd.access_token) {
-                    accessToken = rd.access_token
-                    await supabase.from('calendar_tokens').update({ access_token: accessToken, expires_at: new Date(Date.now() + rd.expires_in * 1000).toISOString() }).eq('user_id', ownerProfile.id)
-                  }
-                }
-              }
-              if (accessToken) {
-                const startDT = `${args.due_date}T${args.due_time}`
-                const timeParts = (args.due_time || '00:00:00').split(':').map(Number)
-                const totalMin = (timeParts[0] || 0) * 60 + (timeParts[1] || 0) + (args.duration_minutes || 30)
-                const endDT = `${args.due_date}T${String(Math.floor(totalMin / 60) % 24).padStart(2, '0')}:${String(totalMin % 60).padStart(2, '0')}:00`
-                const calResp = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
-                  method: 'POST',
-                  headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    summary: args.title,
-                    description: args.notes || 'משימה ממערכת AIOS',
-                    start: { dateTime: startDT, timeZone: 'Asia/Jerusalem' },
-                    end: { dateTime: endDT, timeZone: 'Asia/Jerusalem' },
-                  }),
-                })
-                if (calResp.ok) {
-                  const calData = await calResp.json()
-                  if (calData.id) {
-                    calendarEventId = calData.id
-                    await supabase.from('tasks').update({ google_calendar_event_id: calData.id }).eq('id', data.id)
-                  }
-                }
-              }
-            }
-          }
-        } catch (_calErr) {
-          // Calendar sync failure is non-fatal — task was created successfully
-        }
+      // Auto-sync to Google Calendar if task has a scheduled time (fire-and-forget)
+      if (args.due_date && args.due_time) {
+        fetch(`${SUPABASE_URL}/functions/v1/create-task-calendar-event`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ task_id: data.id }),
+        }).catch((calErr) => console.error('[create_task] calendar sync failed:', calErr))
       }
-      return { task_id: data.id, title: data.title, status: data.status, ...(calendarEventId ? { calendar_event_id: calendarEventId, calendar_synced: true } : {}) }
+      return { task_id: data.id, title: data.title, status: data.status }
     }
     case 'create_agent_task': {
       // Create task in agent_tasks table (for Carmen herself)
@@ -3204,6 +3157,95 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return { count: data.length, groups: data }
     }
 
+    // ============ WHATSAPP GROUP MEMBERS ============
+    case 'get_group_members': {
+      const { group_chat_id, integration_id: argIntegrationId } = args
+      if (!group_chat_id) return { error: 'group_chat_id נדרש' }
+
+      // 1. Resolve GreenAPI integration
+      let resolvedIntegId = argIntegrationId || null
+      let instanceId: string | null = null
+      let apiToken: string | null = null
+
+      if (!resolvedIntegId) {
+        const { data: integ } = await supabase
+          .from('tenant_integrations')
+          .select('id, instance_id, api_key')
+          .eq('tenant_id', tenantId)
+          .eq('integration_type', 'green_api')
+          .eq('is_active', true)
+          .limit(1)
+          .maybeSingle()
+        if (integ) {
+          resolvedIntegId = integ.id
+          instanceId = integ.instance_id
+          apiToken = integ.api_key
+        }
+      } else {
+        const { data: integ } = await supabase
+          .from('tenant_integrations')
+          .select('instance_id, api_key')
+          .eq('id', resolvedIntegId)
+          .maybeSingle()
+        if (integ) { instanceId = integ.instance_id; apiToken = integ.api_key }
+      }
+
+      if (!instanceId || !apiToken) {
+        return { error: 'לא נמצא חיבור GreenAPI פעיל. יש לחבר WhatsApp דרך הגדרות → אינטגרציות.' }
+      }
+
+      // 2. Fetch group participants from GreenAPI
+      let rawParticipants: Array<{ id: string; isAdmin?: boolean; isSuperAdmin?: boolean }> = []
+      try {
+        const gwRes = await fetch(
+          `https://api.green-api.com/waInstance${instanceId}/getGroupData/${apiToken}`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ groupId: group_chat_id }) }
+        )
+        if (gwRes.ok) {
+          const gwData = await gwRes.json()
+          rawParticipants = Array.isArray(gwData?.participants) ? gwData.participants : []
+        } else {
+          console.error('[get_group_members] GreenAPI error:', await gwRes.text())
+        }
+      } catch (e: any) {
+        console.error('[get_group_members] GreenAPI fetch failed:', e?.message)
+      }
+
+      // 3. Bulk-load campaigners and clients for phone matching
+      const [campRes, clientRes] = await Promise.all([
+        supabase.from('campaigners').select('id, full_name, phone').eq('tenant_id', tenantId).eq('active', true),
+        supabase.from('clients').select('id, name, phone').eq('tenant_id', tenantId).not('phone', 'is', null),
+      ])
+      const campaigners: Array<{ id: string; full_name: string; phone: string }> = campRes.data || []
+      const clients: Array<{ id: string; name: string; phone: string }> = clientRes.data || []
+
+      const normalize9 = (p: string) => p.replace(/[^0-9]/g, '').slice(-9)
+
+      // 4. Enrich each participant
+      const members = rawParticipants.map((p) => {
+        const phone = String(p.id || '').split('@')[0].replace(/[^0-9]/g, '')
+        const norm9 = phone.slice(-9)
+        const campaigner = campaigners.find(c => c.phone && normalize9(c.phone) === norm9)
+        const client = !campaigner && clients.find(c => c.phone && normalize9(c.phone) === norm9)
+        return {
+          phone,
+          name: campaigner?.full_name || client?.name || null,
+          role: campaigner ? 'campaigner' : client ? 'client' : 'unknown',
+          id: campaigner?.id || client?.id || null,
+          is_admin: !!p.isAdmin || !!p.isSuperAdmin,
+          is_known_contact: !!(campaigner || client),
+        }
+      })
+
+      return {
+        group_chat_id,
+        total: members.length,
+        known: members.filter(m => m.is_known_contact).length,
+        members,
+      }
+    }
+
     default:
       throw new Error(`Unknown tool: ${name}`)
   }
@@ -3268,6 +3310,8 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
 
     // 2.5. Resolve caller identity from phone number (WhatsApp sessions)
     let callerCampaignerId: string | null = null
+    let callerClientId: string | null = null
+    let callerClientName: string | null = null
     let callerName: string | null = user_name || null
     const callerPhone = lead_data?.phone || null
     if (callerPhone && resolvedTenantId) {
@@ -3290,6 +3334,27 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
             callerCampaignerId = match.id
             callerName = match.full_name
             console.log(`[AGENT] Resolved caller phone ${callerPhone} → campaigner: ${match.full_name} (${match.id})`)
+          }
+        }
+        // Also look up clients by phone if no campaigner matched
+        if (!callerCampaignerId) {
+          const { data: matchedClients } = await supabase
+            .from('clients')
+            .select('id, name, phone')
+            .eq('tenant_id', resolvedTenantId)
+            .not('phone', 'is', null)
+          if (matchedClients) {
+            const clientMatch = matchedClients.find((c: any) => {
+              if (!c.phone) return false
+              const cNorm = c.phone.replace(/[^0-9]/g, '').slice(-9)
+              return cNorm === normalizedPhone
+            })
+            if (clientMatch) {
+              callerClientId = clientMatch.id
+              callerClientName = clientMatch.name
+              if (!callerName) callerName = clientMatch.name
+              console.log(`[AGENT] Resolved caller phone ${callerPhone} → client: ${clientMatch.name} (${clientMatch.id})`)
+            }
           }
         }
       }
@@ -3427,6 +3492,8 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
       const callerContext = {
         callerName: callerName ?? undefined,
         callerCampaignerId: callerCampaignerId ?? undefined,
+        callerClientId: callerClientId ?? undefined,
+        callerClientName: callerClientName ?? undefined,
         callerRole: callerRole ?? undefined,
         isManagerRole: isManagerRoleCaller,
         isTeamManager: isTeamManagerCaller,
@@ -3807,6 +3874,11 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
         .filter(([, v]) => v)
         .map(([k, v]) => `${k}: ${v}`)
       if (leadParts.length) systemPrompt += `\n\nפרטי ליד:\n${leadParts.join('\n')}`
+    }
+
+    // Inject group sender identity context
+    if (callerClientId) {
+      systemPrompt += `\n\n👤 **זיהוי שולח ההודעה (קבוצת WhatsApp):** הלקוח "${callerClientName || callerClientId}" (client_id=${callerClientId}) שלח הודעה זו. הגב רק על מידע הנוגע ללקוח זה — אסור לחשוף נתונים של לקוחות אחרים.`
     }
 
     // WhatsApp context
