@@ -137,7 +137,7 @@ function WorkItemCard({
 }: {
   item: any;
   stageId: string;
-  onSelect: () => void;
+  onSelect?: () => void;
   onRun: (stageId: string) => void;
   running: string | null;
 }) {
@@ -261,7 +261,6 @@ function FlowConnector({ hasRunning }: { hasRunning: boolean }) {
 function DepartmentCard({
   stage,
   items,
-  onSelectItem,
   onOpenConfig,
   onOpenWorkspace,
   onNewItem,
@@ -270,7 +269,6 @@ function DepartmentCard({
 }: {
   stage: any;
   items: any[];
-  onSelectItem: (id: string) => void;
   onOpenConfig: (stage: any) => void;
   onOpenWorkspace: (stage: any) => void;
   onNewItem: (stageId: string) => void;
@@ -330,7 +328,7 @@ function DepartmentCard({
             key={item.id}
             item={item}
             stageId={stage.id}
-            onSelect={() => onSelectItem(item.id)}
+            onSelect={() => onOpenWorkspace(stage)}
             onRun={onRun}
             running={running}
           />
@@ -374,7 +372,6 @@ interface Props {
   tenantId: string;
   clientId: string;
   track: string;
-  onSelectItem: (id: string) => void;
 }
 
 export function MarketingPipelineBoard({
@@ -382,7 +379,6 @@ export function MarketingPipelineBoard({
   tenantId,
   clientId,
   track,
-  onSelectItem,
 }: Props) {
   const queryClient = useQueryClient();
   const [openStageId, setOpenStageId] = useState<string | null>(null);
@@ -450,7 +446,6 @@ export function MarketingPipelineBoard({
       return;
     }
     refetchItems();
-    onSelectItem(data.id);
   };
 
   const handleRun = async (stageId: string) => {
@@ -491,7 +486,6 @@ export function MarketingPipelineBoard({
               <DepartmentCard
                 stage={stage}
                 items={stageItems}
-                onSelectItem={onSelectItem}
                 onOpenConfig={(s) => setOpenStageId(s.id)}
                 onOpenWorkspace={(s) => setWorkspaceStage(s)}
                 onNewItem={handleNewItem}
@@ -525,7 +519,7 @@ export function MarketingPipelineBoard({
           clientId={clientId}
           items={itemsByStage[workspaceStage.id] ?? []}
           onClose={() => setWorkspaceStage(null)}
-          onSelectItem={onSelectItem}
+          onSelectItem={() => {}}
           onNewItem={() => handleNewItem(workspaceStage.id)}
         />
       )}
