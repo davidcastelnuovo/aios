@@ -239,9 +239,21 @@ Deno.serve(async (req) => {
     // windows (e.g. 7d_click + 1d_view), which double/triple counts the same user
     // and inflates purchases/leads by 2x-3x vs. what Ads Manager displays.
     const insightsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/insights?level=campaign&fields=campaign_id,campaign_name,impressions,clicks,cpm,ctr,actions,action_values,conversions,cost_per_action_type,cost_per_conversion,spend&time_range={"since":"${sinceStr}","until":"${untilStr}"}&time_increment=1&use_unified_attribution_setting=true&limit=500&access_token=${accessToken}`;
-    
-    const response = await fetch(insightsUrl);
-    const data = await response.json();
+
+    // Paginate through ALL pages. A single page caps at 500 rows; busy accounts
+    // (many campaign×day rows) would otherwise be truncated, dropping the most
+    // recent dates (Facebook returns rows oldest-first).
+    const data: any = { data: [] };
+    {
+      let next: string | null = insightsUrl;
+      while (next) {
+        const r = await fetch(next);
+        const d: any = await r.json();
+        if (d.error) { data.error = d.error; break; }
+        if (Array.isArray(d.data)) data.data.push(...d.data);
+        next = d.paging?.next || null;
+      }
+    }
 
     if (data.error) {
       console.error('Facebook API error:', data.error);
