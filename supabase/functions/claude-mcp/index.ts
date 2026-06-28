@@ -280,10 +280,45 @@ function teachingBlock(tenantId: string | null, agentId: string | null): string 
   );
 }
 
+// Deduplicate: check if a very similar dispatch was fired within the last 15 minutes.
+async function recentDuplicateDispatch(tenantId: string | null, tool: string, requestText: string): Promise<string | null> {
+  if (!tenantId) return null;
+  const sb = sbClient();
+  if (!sb) return null;
+  try {
+    const cutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+    const { data } = await sb
+      .from("claude_dispatches")
+      .select("session_url, request_text")
+      .eq("tenant_id", tenantId)
+      .eq("tool", tool)
+      .gte("created_at", cutoff)
+      .order("created_at", { ascending: false })
+      .limit(5);
+    if (!data?.length) return null;
+    // Simple substring overlap check — flag if 60%+ of the new text appears in a recent dispatch
+    const needle = requestText.slice(0, 120).toLowerCase();
+    for (const row of data) {
+      const hay = String(row.request_text || "").toLowerCase();
+      if (hay.includes(needle.slice(0, 80))) return row.session_url || "already-dispatched";
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 async function handleToolCall(name: string, args: Record<string, any>, ctx: { tenantId: string | null; agentId: string | null }): Promise<string> {
   if (name === "request_dev_task") {
     const task = String(args?.task ?? "").trim();
     if (!task) throw new Error("request_dev_task requires a non-empty 'task'.");
+
+    // Guard: don't fire a duplicate session for the same task within 15 minutes
+    const dupSession = await recentDuplicateDispatch(ctx.tenantId, "request_dev_task", task);
+    if (dupSession) {
+      return `⚠️ This task was already dispatched to Claude within the last 15 minutes. Skipping duplicate dispatch.\nExisting session: ${dupSession}`;
+    }
+
     const { id, token } = resolveRoutine("dev");
     if (!id || !token) throw new Error("Claude dev routine is not configured (set CLAUDE_ROUTINE_ID / CLAUDE_ROUTINE_TOKEN secrets).");
     const branch = String(args?.branch ?? "").trim();
