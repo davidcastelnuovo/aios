@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
 import { fireIntegrationAlert } from '../_shared/fireIntegrationAlert.ts';
 import {
   buildInsightRecord,
+  buildResultLeadTypeMap,
   type CampaignStatus,
   type InsightRecord,
   FB_INSIGHTS_FIELD_KEYS,
@@ -181,6 +182,25 @@ Deno.serve(async (req) => {
           }
         }
 
+        // Fetch ad sets' promoted_object so we know the EXACT event each campaign
+        // is optimized for (its "Result" in Ads Manager) — e.g. the custom pixel
+        // event "NewLead" rather than the broad fb_pixel_lead. This is what keeps
+        // the lead counts matching Facebook instead of inflating them.
+        const adsets: any[] = [];
+        {
+          let next: string | null = `https://graph.facebook.com/v21.0/${adAccountId}/adsets?fields=campaign_id,optimization_goal,promoted_object&limit=500&access_token=${accessToken}`;
+          while (next) {
+            const r = await fetch(next);
+            const d: any = await r.json();
+            if (d.error) break;
+            if (Array.isArray(d.data)) adsets.push(...d.data);
+            next = d.paging?.next || null;
+          }
+        }
+        const campaignObjectives: Record<string, string | null | undefined> = {};
+        for (const c of Object.values(campaignStatuses)) campaignObjectives[c.id] = c.objective;
+        const resultLeadTypes = buildResultLeadTypeMap(adsets, campaignObjectives);
+
         // Also fetch ad account status
         const accountUrl = `https://graph.facebook.com/v21.0/${adAccountId}?fields=account_status,disable_reason,name&access_token=${accessToken}`;
         const accountResponse = await fetch(accountUrl);
@@ -233,7 +253,7 @@ Deno.serve(async (req) => {
         // `sync-facebook-insights` function count leads identically (incl.
         // `offsite_conversion.fb_pixel_custom.*` custom conversions like NewLead).
         const insights: InsightRecord[] = (data.data || []).map((insight: any) =>
-          buildInsightRecord(insight, campaignStatuses)
+          buildInsightRecord(insight, campaignStatuses, resultLeadTypes)
         );
 
 

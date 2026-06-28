@@ -95,12 +95,104 @@ const ADD_TO_CART_ACTION_TYPE_PRIORITY = [
 ];
 
 /**
+ * Resolve the EXACT action_type(s) Facebook counts as a campaign's "Result",
+ * from an ad set's `promoted_object` + `optimization_goal`. This is what makes
+ * the report match Ads Manager: instead of guessing across all lead-ish events
+ * (and picking the broad `fb_pixel_lead` over the campaign's real optimized
+ * event), we count only the event the campaign is actually optimized for.
+ *
+ * Returns an array of equivalent action_types (count = MAX across them), or
+ * null when it can't be determined (caller falls back to the heuristic).
+ */
+/** Extract a custom pixel event name from a promoted_object `pixel_rule` JSON
+ *  string, e.g. {"event":{"eq":"NewLead"}} → "NewLead". Returns null if none. */
+function extractPixelRuleEvent(pixelRule: any): string | null {
+  if (!pixelRule) return null;
+  try {
+    const s = typeof pixelRule === 'string' ? pixelRule : JSON.stringify(pixelRule);
+    const m = s.match(/"event"\s*:\s*\{\s*"eq"\s*:\s*"([^"]+)"/) || s.match(/"event"\s*:\s*"([^"]+)"/);
+    return m ? m[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+export function resolveResultLeadTypes(
+  promotedObject: any,
+  optimizationGoal?: string | null,
+  objective?: string | null,
+): string[] | null {
+  const po = promotedObject || {};
+  const goal = String(optimizationGoal || '').toUpperCase();
+  const obj = String(objective || '').toUpperCase();
+  const cet = String(po.custom_event_type || '').toUpperCase();
+
+  // 1) Pixel Custom Conversion rule (optimized for a specific custom conversion).
+  if (po.custom_conversion_id) {
+    return ['offsite_conversion.fb_pixel_custom.' + po.custom_conversion_id];
+  }
+  // 2) Custom pixel event (e.g. trackCustom('NewLead')) — the common case here.
+  //    Meta exposes the event name either as `custom_event_str` or embedded in
+  //    the `pixel_rule` JSON ({"event":{"eq":"NewLead"}}). Handle both.
+  if (cet === 'OTHER' || cet === '' || cet === 'CONTENT_VIEW') {
+    const name = po.custom_event_str || extractPixelRuleEvent(po.pixel_rule);
+    if (name) return ['offsite_conversion.fb_pixel_custom.' + name];
+  }
+  // 3) Standard pixel events, mapped to their insights action_type.
+  const STD: Record<string, string[]> = {
+    LEAD: ['offsite_conversion.fb_pixel_lead'],
+    COMPLETE_REGISTRATION: ['offsite_conversion.fb_pixel_complete_registration', 'complete_registration'],
+    CONTACT: ['offsite_conversion.fb_pixel_contact', 'contact'],
+    SCHEDULE: ['offsite_conversion.fb_pixel_schedule', 'schedule'],
+    SUBMIT_APPLICATION: ['offsite_conversion.fb_pixel_submit_application', 'submit_application'],
+    SUBSCRIBE: ['offsite_conversion.fb_pixel_subscribe', 'subscribe'],
+  };
+  if (STD[cet]) return STD[cet];
+  // PURCHASE / sales optimization is not a lead — let the caller handle it.
+  if (cet === 'PURCHASE') return null;
+
+  // 4) No pixel event: on-Facebook instant Lead Form.
+  if (goal === 'LEAD_GENERATION' || goal === 'QUALITY_LEAD') {
+    return ['leadgen_grouped', 'leadgen.other', 'onsite_conversion.lead_grouped'];
+  }
+  // 5) Messaging / conversations.
+  if (goal === 'CONVERSATIONS' || obj === 'OUTCOME_ENGAGEMENT' || obj === 'MESSAGES') {
+    return ['onsite_conversion.messaging_conversation_started_7d', 'messaging_conversation_started_7d'];
+  }
+  return null;
+}
+
+/**
+ * Build campaign_id → result action_type(s) map from a list of ad sets
+ * (each `{ campaign_id, optimization_goal, promoted_object }`). Keeps the first
+ * resolvable result per campaign. `campaignObjectives` supplies the campaign
+ * objective as a fallback signal for the resolver.
+ */
+export function buildResultLeadTypeMap(
+  adsets: any[],
+  campaignObjectives: Record<string, string | null | undefined> = {},
+): Record<string, string[]> {
+  const map: Record<string, string[]> = {};
+  for (const as of adsets || []) {
+    const cid = String(as?.campaign_id || '');
+    if (!cid || map[cid]) continue;
+    const types = resolveResultLeadTypes(as?.promoted_object, as?.optimization_goal, campaignObjectives[cid]);
+    if (types && types.length > 0) map[cid] = types;
+  }
+  return map;
+}
+
+/**
  * Build a single CRM InsightRecord from one Facebook insights row (one
  * campaign × day). `campaignStatuses` maps campaign_id → status/objective.
+ * `resultLeadTypesByCampaign` (optional) maps campaign_id → the exact result
+ * action_type(s) from `buildResultLeadTypeMap`; when present for a campaign it
+ * is authoritative and makes leads match Ads Manager's "Results" exactly.
  */
 export function buildInsightRecord(
   insight: any,
   campaignStatuses: Record<string, CampaignStatus>,
+  resultLeadTypesByCampaign: Record<string, string[]> = {},
 ): InsightRecord {
   const allActions = [...(insight.actions ?? []), ...(insight.conversions ?? [])];
   const actionValues = insight.action_values ?? [];
@@ -178,8 +270,18 @@ export function buildInsightRecord(
     _customConversionLeadsValue,
     _standardIntentValue,
   );
+
+  // AUTHORITATIVE PATH: when we know the exact event this campaign is optimized
+  // for (from the ad set's promoted_object), count only that event — this is
+  // what Facebook shows in the "Results" column. Avoids inflating by counting
+  // the broad fb_pixel_lead, or by summing several custom events.
+  const _resultTypes = resultLeadTypesByCampaign[String(insight.campaign_id || '')];
   let leads: number;
-  if (_isMessagingObjective) {
+  let _leadsAuthoritative = false;
+  if (_resultTypes && _resultTypes.length > 0) {
+    leads = Math.max(0, ..._resultTypes.map((t) => sumByTypes([t])));
+    _leadsAuthoritative = true;
+  } else if (_isMessagingObjective) {
     leads = _messagingLeadsValue > 0 ? _messagingLeadsValue : _websiteLeads;
   } else if (_isLeadFormObjective) {
     // Prefer real form submissions; if the "Leads" campaign actually drives to a
@@ -189,8 +291,9 @@ export function buildInsightRecord(
     // Conversions / Sales / Traffic with pixel — website leads.
     leads = _websiteLeads > 0 ? _websiteLeads : _formLeadsValue;
   }
-  // Final fallback: FB's deduplicated aggregate `lead` total.
-  if (leads === 0) leads = _aggregateLeadValue;
+  // Final fallback: FB's deduplicated aggregate `lead` total. Never override an
+  // authoritative 0 (FB genuinely reported no results for the optimized event).
+  if (!_leadsAuthoritative && leads === 0) leads = _aggregateLeadValue;
 
   const _spendForLog = parseFloat(insight.spend) || 0;
   if (leads === 0 && _spendForLog > 0) {
