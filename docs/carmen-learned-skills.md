@@ -191,4 +191,33 @@ Claude Code health-check skill written to `ai_skills` (scope=tenant, created_by_
 - "תחברי את לקוח X לחשבון Google Ads 1234567890" → `connect_google_ads_account(client_id=..., customer_id=...)`
 - סינון לפי לקוח: `list_google_ad_accounts(client_id=...)`
 
-**PR:** [יתעדכן עם מספר PR]
+**PR:** #84 (list_google_ad_accounts + connect_google_ads_account)
+
+---
+
+## 2026-06-28 — auto_sync_task_to_calendar + dispatch_dedup
+
+**Capability 1:** יצירת אירוע Google Calendar אוטומטית בעת יצירת משימה.
+
+**הבעיה:** `create_task` ב-`run-ai-agent` יצרה משימות בטבלת `tasks` אבל לא יצרה אירוע ב-Google Calendar. המשתמש ציפה שמשימה עם `due_date` + `due_time` תופיע אוטומטית בלוח שנה.
+
+**הפתרון:** נוספה פונקציית עזר `tryCreateCalendarEventForTask` ב-`run-ai-agent/index.ts`:
+1. מחפשת את המשתמש המקושר לקמפיינר (`profiles.campaigner_id`)
+2. שולפת את `calendar_tokens` שלו
+3. מרעננת token אם פג תוקפו
+4. יוצרת אירוע ב-Google Calendar Primary (עם timezone `Asia/Jerusalem`)
+5. שומרת `google_calendar_event_id` בחזרה על המשימה
+
+Fire-and-forget: אם אין חיבור לוח שנה — המשימה נוצרת בכל זאת ללא שגיאה.
+
+**תנאי הפעלה:** נדרש `due_date` + `due_time` + `campaigner_id` (כולם קיימים בקריאה רגילה של create_task).
+
+---
+
+**Capability 2:** מניעת שליחת בקשות כפולות ל-Claude.
+
+**הבעיה:** Carmen שלחה 4 בקשות זהות בתוך דקות (לאותה בעיה), כי `request_dev_task` לא בדק כפילויות.
+
+**הפתרון:** נוספה `recentDuplicateDispatch` ב-`claude-mcp/index.ts`: לפני שמפעילים session חדש של Claude, בודקים אם קיים dispatch דומה מאותו tenant בـ15 הדקות האחרונות. אם כן — מחזירים אזהרה עם קישור ל-session הקיים במקום לפתוח כפיל.
+
+**PR:** #85
