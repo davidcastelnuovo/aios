@@ -192,3 +192,29 @@ Claude Code health-check skill written to `ai_skills` (scope=tenant, created_by_
 - סינון לפי לקוח: `list_google_ad_accounts(client_id=...)`
 
 **PR:** [יתעדכן עם מספר PR]
+
+---
+
+## 2026-06-28 — auto_task_calendar_sync
+
+**Skill slug:** `auto_task_calendar_sync`
+**Trigger phrases:** צור משימה ביומן, תזמן פגישה, הוסף ליומן, create calendar event, schedule task, add to calendar
+
+**Problem solved:** When Carmen created a task via `create_task` with a `due_date` + `due_time`, no Google Calendar event was created — tasks were only stored in the DB.
+
+**What was built:**
+- New edge function `supabase/functions/create-task-calendar-event/index.ts`:
+  - Accepts `{ task_id }` via service role key (internal call only)
+  - Resolves `campaigner_id → profiles.id → calendar_tokens` to find whose calendar to write to
+  - Falls back to tenant owner if no profile is linked to the campaigner
+  - Refreshes expired OAuth tokens automatically
+  - Creates a Google Calendar event (default 30 min, or `duration_minutes` if set)
+  - Stores the returned `eventId` in `tasks.google_calendar_event_id`
+  - Idempotent: skips if task already has `google_calendar_event_id`
+- Hook in `run-ai-agent/index.ts` `create_task` handler: after successful task insert, fires `create-task-calendar-event` as a **non-blocking background fetch** — task creation never fails due to calendar errors.
+
+**How to use:**
+- Just use `create_task` with `due_date` and `due_time` as usual — the calendar event is created automatically in the background. No separate tool call needed.
+- If task has no `due_date`/`due_time` → no calendar event (correct behaviour).
+
+**PR:** #84 — merged to main, CI green, both functions deployed.
