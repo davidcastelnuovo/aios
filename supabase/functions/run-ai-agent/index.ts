@@ -254,6 +254,10 @@ const ALL_TOOLS = [
   { name: 'list_google_ad_accounts', description: 'שליפת כל חשבונות Google Ads המחוברים לטננט. מחזיר customer_id, name, status, client_id (אם משויך ללקוח).', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'סינון לפי לקוח ספציפי (אופציונלי)' } } } },
   { name: 'connect_google_ads_account', description: 'שיוך חשבון Google Ads (customer_id) ללקוח ב-CRM. שומר את המזהה ב-clients.google_ads_account_id.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח' }, customer_id: { type: 'string', description: 'מזהה חשבון Google Ads (ספרות בלבד, ללא מקפים)' } }, required: ['client_id', 'customer_id'] } },
   // ===========================
+  // GOOGLE CALENDAR
+  // ===========================
+  { name: 'create_calendar_event', description: 'יצירת אירוע ביומן Google Calendar. יוצר אירוע עם כותרת, תאריך, שעה, משתתפים (ישלח להם הזמנה) ותיאור. ברירת מחדל: שעה אחת. אם user_id לא מצוין — ישתמש ביומן של המשתמש הראשון שחיבר יומן בארגון.', parameters: { type: 'object', properties: { title: { type: 'string', description: 'כותרת האירוע' }, date: { type: 'string', description: 'תאריך ב-YYYY-MM-DD (לדוגמה 2026-07-01)' }, time: { type: 'string', description: 'שעת התחלה ב-HH:MM (לדוגמה 14:00), שעון ישראל' }, duration_minutes: { type: 'integer', description: 'משך האירוע בדקות. ברירת מחדל: 60' }, attendees: { type: 'array', items: { type: 'string' }, description: 'רשימת כתובות אימייל לזמן לאירוע. ישלחו להם הזמנות.' }, description: { type: 'string', description: 'תיאור/הערות לאירוע (אופציונלי)' }, client_id: { type: 'string', description: 'מזהה לקוח לשיוך האירוע בלוג (אופציונלי)' }, user_id: { type: 'string', description: 'מזהה משתמש שיומנו ישמש. אופציונלי — ברירת מחדל: המשתמש הראשון עם יומן מחובר בארגון.' } }, required: ['title', 'date', 'time'] } },
+  // ===========================
   // SCHEDULED PAUSE/RESUME
   // ===========================
   { name: 'schedule_campaign_toggle', description: 'תזמון אוטומטי של כיבוי/הדלקה בלוח זמנים (cron) או חד-פעמי (run_at). דורש אישור. דוגמה: לכבות כל יום ב-22:00 → cron_expression "0 22 * * *". להדליק ראשון-חמישי 07:00 → "0 7 * * 1-5".', parameters: { type: 'object', properties: { entity_id: { type: 'string' }, entity_type: { type: 'string', enum: ['fb_campaign','fb_adset','fb_ad','google_campaign'] }, action: { type: 'string', enum: ['pause','resume'] }, cron_expression: { type: 'string' }, run_at: { type: 'string', description: 'ISO datetime לחד-פעמי' }, timezone: { type: 'string', description: 'ברירת מחדל Asia/Jerusalem' }, client_id: { type: 'string' }, notes: { type: 'string' } }, required: ['entity_id','entity_type','action'] } },
@@ -2820,6 +2824,120 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       }).then(() => {}, () => {})
 
       return { success: true, client_id, client_name: client.name, customer_id: cleanId }
+    }
+
+    // ============ GOOGLE CALENDAR ============
+    case 'create_calendar_event': {
+      const { title, date, time, duration_minutes, attendees, description: eventDesc, client_id: calClientId, user_id: calUserId } = args
+      if (!title || !date || !time) return { error: 'title, date ו-time נדרשים' }
+
+      // Resolve which user's calendar to use
+      let calendarUserId: string | null = calUserId || null
+      let calGoogleEmail: string | null = null
+      if (!calendarUserId) {
+        const { data: tuData } = await supabase
+          .from('tenant_users')
+          .select('user_id')
+          .eq('tenant_id', tenantId)
+        const tenantUserIds: string[] = (tuData || []).map((r: any) => r.user_id)
+        if (tenantUserIds.length > 0) {
+          const { data: ctRow } = await supabase
+            .from('calendar_tokens')
+            .select('user_id, google_email')
+            .in('user_id', tenantUserIds)
+            .eq('needs_reconnect', false)
+            .limit(1)
+            .maybeSingle()
+          if (ctRow) { calendarUserId = ctRow.user_id; calGoogleEmail = ctRow.google_email }
+        }
+      }
+      if (!calendarUserId) {
+        return { error: 'אין יומן Google Calendar מחובר בארגון. יש לחבר תחילה דרך הגדרות → אינטגרציות → Google Calendar.' }
+      }
+
+      const { data: tokenData } = await supabase
+        .from('calendar_tokens')
+        .select('access_token, refresh_token, expires_at, google_email')
+        .eq('user_id', calendarUserId)
+        .maybeSingle()
+
+      if (!tokenData) {
+        return { error: `לא נמצא יומן מחובר למשתמש המבוקש. יש לחבר ב-הגדרות → Google Calendar.` }
+      }
+      if (!calGoogleEmail) calGoogleEmail = tokenData.google_email
+
+      let accessToken = tokenData.access_token
+      if (new Date(tokenData.expires_at) <= new Date()) {
+        const gClientId = Deno.env.get('GOOGLE_CLIENT_ID')
+        const gClientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET')
+        if (!gClientId || !gClientSecret) return { error: 'חסרות הגדרות סביבה של Google (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET)' }
+        const tokResp = await fetch('https://oauth2.googleapis.com/token', {
+          method: 'POST',
+          body: new URLSearchParams({
+            refresh_token: tokenData.refresh_token,
+            client_id: gClientId,
+            client_secret: gClientSecret,
+            grant_type: 'refresh_token',
+          }),
+        })
+        const tokJson = await tokResp.json()
+        if (!tokJson.access_token) return { error: 'כישלון בחידוש טוקן Google Calendar', details: tokJson?.error_description }
+        accessToken = tokJson.access_token
+        const newExpiry = new Date(Date.now() + (tokJson.expires_in || 3600) * 1000).toISOString()
+        await supabase.from('calendar_tokens').update({ access_token: accessToken, expires_at: newExpiry }).eq('user_id', calendarUserId)
+      }
+
+      // Build start/end local datetime strings (Asia/Jerusalem — passed with timeZone field)
+      const [startH, startM] = time.split(':').map(Number)
+      const durationMins = duration_minutes ?? 60
+      const totalEndMins = startH * 60 + startM + durationMins
+      const endH = Math.floor(totalEndMins / 60) % 24
+      const endM = totalEndMins % 60
+      const daysOverflow = Math.floor(totalEndMins / (24 * 60))
+      let endDate = date
+      if (daysOverflow > 0) {
+        const d = new Date(`${date}T12:00:00Z`)
+        d.setUTCDate(d.getUTCDate() + daysOverflow)
+        endDate = d.toISOString().split('T')[0]
+      }
+      const startDateTime = `${date}T${String(startH).padStart(2,'0')}:${String(startM).padStart(2,'0')}:00`
+      const endDateTime = `${endDate}T${String(endH).padStart(2,'0')}:${String(endM).padStart(2,'0')}:00`
+
+      const calEvent: Record<string, unknown> = {
+        summary: title,
+        description: eventDesc || '',
+        start: { dateTime: startDateTime, timeZone: 'Asia/Jerusalem' },
+        end: { dateTime: endDateTime, timeZone: 'Asia/Jerusalem' },
+      }
+      if (attendees && Array.isArray(attendees) && attendees.length > 0) {
+        calEvent.attendees = attendees.map((email: string) => ({ email }))
+      }
+
+      const calResp = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=all', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(calEvent),
+      })
+      const calData = await calResp.json()
+      if (!calResp.ok) return { error: calData.error?.message || 'Google Calendar API error', details: calData }
+
+      await supabase.from('agent_action_log').insert({
+        tenant_id: tenantId,
+        action_type: 'create_calendar_event',
+        status: 'success',
+        action_details: { title, date, time, duration_minutes: durationMins, attendees, client_id: calClientId, event_id: calData.id, calendar_user: calGoogleEmail },
+      }).then(() => {}, () => {})
+
+      return {
+        success: true,
+        event_id: calData.id,
+        html_link: calData.htmlLink,
+        title,
+        start: `${date} ${time}`,
+        end: `${endDate} ${String(endH).padStart(2,'0')}:${String(endM).padStart(2,'0')}`,
+        calendar_user: calGoogleEmail,
+        attendees_invited: attendees || [],
+      }
     }
 
     // ============ SCHEDULES ============
