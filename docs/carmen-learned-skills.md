@@ -192,3 +192,31 @@ Claude Code health-check skill written to `ai_skills` (scope=tenant, created_by_
 - סינון לפי לקוח: `list_google_ad_accounts(client_id=...)`
 
 **PR:** [יתעדכן עם מספר PR]
+
+---
+
+## 2026-06-28 — create_calendar_event (Google Calendar)
+
+**Capability:** יצירת אירועי Google Calendar ישירות מכרמן — כולל שליחת הזמנות למשתתפים לפי אימייל.
+
+**What was built:**
+- כלי חדש `create_calendar_event` ב-`run-ai-agent/index.ts`:
+  - קורא ל-Google Calendar API v3 (`/calendars/primary/events?sendUpdates=all`)
+  - Auth: `calendar_tokens` (מטבלת `calendar_tokens` — user_id, access_token, refresh_token)
+  - אם `user_id` לא מצוין — מוצא אוטומטית את המשתמש הראשון בטננט עם יומן מחובר (`needs_reconnect=false`) דרך join עם `tenant_users`
+  - רענון אוטומטי של access_token אם פג תוקף (GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET env vars)
+  - תומך: title, date (YYYY-MM-DD), time (HH:MM), duration_minutes (ברירת מחדל 60), attendees ([]), description, client_id (logging), user_id (optional override)
+  - Timezone: Asia/Jerusalem (ישראל)
+  - מתעד ב-`agent_action_log` (action_type='create_calendar_event')
+  - מחזיר: event_id, html_link, title, start, end, calendar_user, attendees_invited
+
+**Prerequisites:**
+- לפחות משתמש אחד בטננט חיבר Google Calendar דרך הגדרות
+- env vars פעילים: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
+
+**How to use:**
+- "צרי אירוע ביומן לרביעי 1.7 ב-14:00 עם פליקס" → `create_calendar_event(title="פגישה עם פליקס", date="2026-07-01", time="14:00", attendees=["felix@example.com"])`
+- "תזמני פגישת צוות ל-3.7 ב-10:00 שעתיים" → `create_calendar_event(title="פגישת צוות", date="2026-07-03", time="10:00", duration_minutes=120)`
+- "צרי אירוע עם הלקוח X" → `create_calendar_event(title=..., date=..., time=..., client_id=X)`
+
+**PR:** feat/carmen-calendar-tool
