@@ -3053,7 +3053,7 @@ type Emit = ((obj: any) => void) | undefined
 
 async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Promise<Response> {
   try {
-    const { agent_id: bodyAgentId, command_text, temperature, automation_id, user_name, lead_data, tenant_id, user_id, task_skills, task_mode, conversation_history, wa_notify } = bodyJson
+    const { agent_id: bodyAgentId, command_text, temperature, automation_id, user_name, lead_data, tenant_id, user_id, task_skills, task_mode, system_prompt_addon, conversation_history, wa_notify } = bodyJson
     console.log(`[AGENT] Starting run: agent=${bodyAgentId}, command="${command_text?.substring(0, 80)}", surface=${surface}, stream=${!!emit}`)
 
     if (!command_text) throw new Error('Missing command_text')
@@ -3339,10 +3339,21 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
         analyst: 'את מנתחת נתונים. שולפת נתונים מהמערכת, מזהה דפוסים ומסיקה תובנות עסקיות ברורות.',
         scheduler: 'את מומחית ניהול לוח זמנים. מתאמת פגישות, יוצרת תזכורות ומנהלת משימות זמניות בצורה יעילה.',
         onboarding: 'את מומחית קליטת לקוחות. מדריכה לקוחות חדשים בצורה חמה ומקצועית.',
+        marketing_strategy: 'את אסטרטגיסטית שיווקית מנוסה. תפקידך לבנות בריף שיווקי מפורט המבוסס על מידע הלקוח, לנתח מתחרים, להגדיר קהלי יעד ולתכנן מסעות לקוח. כשנשאלת — בני בריף מובנה, ממוקד, עם יעדים מדידים.',
+        marketing_copy: 'את קופירייטרית שיווקית מוכשרת. תפקידך לכתוב תוכן מרתק, משכנע ומותאם לפלטפורמה ולקהל היעד. הציעי תמיד מספר גרסאות עם זוויות שונות.',
+        marketing_creative: 'את מנהלת קריאייטיב ומעצבת גרפית. תפקידך לכתוב פרומפטים מדויקים לתמונות, לתאר ויז\'ואלים מרשימים ולהגדיר פלטות צבעים ועיצוב מותגי.',
+        marketing_paid: 'את מנהלת קמפיינים ממומנים מנוסה ב-Meta Ads ו-Google Ads. תפקידך לבנות מבנה קמפיין, להגדיר קהלים, תקציב ולמקסם ROAS.',
+        marketing_seo: 'את מומחית SEO ו-GEO. תפקידך לבנות אסטרטגיית מילות מפתח, לכתוב תוכן מקודם ולהגדיר מבנה כתבות לדירוג גבוה בגוגל ובמנועי AI.',
+        marketing_social: 'את מנהלת מדיה חברתית מנוסה. תפקידך לתכנן תוכן אורגני, לכתוב קפשנים, לבחור האשטגים ולמקסם אנגייג\'מנט בכל פלטפורמה.',
+        marketing_analytics: 'את אנליסטית שיווקית. תפקידך לנתח ביצועי קמפיינים, לזהות דפוסים, להסיק תובנות ולהמליץ על שיפורים מבוססי נתונים.',
       }
       if (TASK_MODE_PROMPTS[task_mode]) {
         systemPrompt += `\n\n=== מוד משימה ===\n${TASK_MODE_PROMPTS[task_mode]}`
       }
+    }
+    // Caller-supplied system prompt addon (e.g. from StageWorkspace)
+    if (system_prompt_addon) {
+      systemPrompt += `\n\n=== הקשר נוסף ===\n${system_prompt_addon}`
     }
     // Inject task-level skills override (from AgentTasksPage)
     if (task_skills && Array.isArray(task_skills) && task_skills.length > 0) {

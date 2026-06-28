@@ -439,13 +439,24 @@ ${itemsSummary ? `פריטי תוכן נוכחיים:\n${itemsSummary}` : ""}
         ? `${historyText}\nמשתמש: ${userMsg.content}`
         : userMsg.content;
 
+      const STAGE_TYPE_TO_TASK_MODE: Record<string, string> = {
+        strategy: "marketing_strategy",
+        copy: "marketing_copy",
+        creative: "marketing_creative",
+        target_paid: "marketing_paid",
+        target_seo: "marketing_seo",
+        target_organic: "marketing_social",
+        measurement: "marketing_analytics",
+      };
+
       const { data, error } = await supabase.functions.invoke("run-ai-agent", {
         body: {
           command_text: fullCommand,
           agent_id: stage.agent_id ?? null,
           tenant_id: tenantId,
           client_id: clientId,
-          task_mode: "copywriting",
+          task_mode: STAGE_TYPE_TO_TASK_MODE[stage.stage_type] ?? "copywriting",
+          system_prompt_addon: systemPrompt,
           user_name: "מחלקת שיווק",
         },
       });
