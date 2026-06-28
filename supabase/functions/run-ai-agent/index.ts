@@ -508,6 +508,81 @@ async function getAccessibleTenantIds(supabase: any, tenantId: string): Promise<
   }
 }
 
+// Auto-create a Google Calendar event for a newly created task.
+// Silently no-ops when the campaigner's user has no connected calendar.
+async function tryCreateCalendarEventForTask(
+  supabase: any,
+  taskId: string,
+  title: string,
+  dueDate: string,
+  dueTime: string,
+  durationMinutes: number | null,
+  campaignerId: string,
+): Promise<void> {
+  try {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('campaigner_id', campaignerId)
+      .maybeSingle()
+    if (!profile?.id) return
+
+    const { data: tokenData } = await supabase
+      .from('calendar_tokens')
+      .select('access_token, refresh_token, expires_at')
+      .eq('user_id', profile.id)
+      .maybeSingle()
+    if (!tokenData) return
+
+    let accessToken = tokenData.access_token
+    if (new Date(tokenData.expires_at) <= new Date()) {
+      const clientId = Deno.env.get('GOOGLE_CLIENT_ID')
+      const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET')
+      if (!clientId || !clientSecret) return
+      const r = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: clientId, client_secret: clientSecret,
+          refresh_token: tokenData.refresh_token, grant_type: 'refresh_token',
+        }),
+      })
+      const rd = await r.json()
+      if (!rd.access_token) return
+      accessToken = rd.access_token
+      await supabase.from('calendar_tokens').update({
+        access_token: accessToken,
+        expires_at: new Date(Date.now() + rd.expires_in * 1000).toISOString(),
+      }).eq('user_id', profile.id)
+    }
+
+    const start = new Date(`${dueDate}T${dueTime}`)
+    const end = new Date(start.getTime() + (durationMinutes || 30) * 60_000)
+    const calResp = await fetch(
+      'https://www.googleapis.com/calendar/v3/calendars/primary/events',
+      {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          summary: title,
+          description: 'משימה ממערכת AIOS',
+          start: { dateTime: start.toISOString(), timeZone: 'Asia/Jerusalem' },
+          end: { dateTime: end.toISOString(), timeZone: 'Asia/Jerusalem' },
+        }),
+      }
+    )
+    if (calResp.ok) {
+      const ev = await calResp.json()
+      if (ev.id) await supabase.from('tasks').update({ google_calendar_event_id: ev.id }).eq('id', taskId)
+    } else {
+      const e = await calResp.json().catch(() => ({}))
+      console.warn('[create_task] calendar event failed:', calResp.status, e?.error?.message)
+    }
+  } catch (e: any) {
+    console.warn('[create_task] calendar sync error:', e?.message)
+  }
+}
+
 async function executeTool(name: string, args: Record<string, any>, supabase: any, tenantId: string, userId: string, callerCampaignerId?: string | null, agentId?: string | null, callerRole?: string | null, callerManagedAgencyIds?: string[] | null, callerPhone?: string | null, waNotify?: any): Promise<any> {
   const accessibleTenantIds = await getAccessibleTenantIds(supabase, tenantId)
   // Role-based scope: managers (owner/agency_owner/agency_manager/super_admin) bypass the campaigner narrow-scope.
@@ -585,13 +660,11 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         duration_minutes: args.duration_minutes || null,
       }).select('id, title, status').single()
       if (error) throw error
-      // Auto-sync to Google Calendar if task has a scheduled time (fire-and-forget)
-      if (args.due_date && args.due_time) {
-        fetch(`${SUPABASE_URL}/functions/v1/create-task-calendar-event`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ task_id: data.id }),
-        }).catch((calErr) => console.error('[create_task] calendar sync failed:', calErr))
+      // Auto-sync to Google Calendar — fire-and-forget; never fails the create_task call
+      if (data?.id && args.due_date && args.due_time && campaignerId) {
+        tryCreateCalendarEventForTask(
+          supabase, data.id, args.title, args.due_date, args.due_time, args.duration_minutes ?? null, campaignerId
+        ).catch(e => console.warn('[create_task] calendar sync uncaught:', e?.message))
       }
       return { task_id: data.id, title: data.title, status: data.status }
     }
