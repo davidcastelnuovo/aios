@@ -195,21 +195,37 @@ Claude Code health-check skill written to `ai_skills` (scope=tenant, created_by_
 
 ---
 
-## 2026-06-28 — auto_task_calendar_sync (implemented)
+## 2026-06-28 — auto_task_calendar_sync
 
-**Capability:** יצירת אירוע Google Calendar אוטומטי כשמשימה נוצרת דרך create_task.
+**Skill slug:** `auto_task_calendar_sync`
+**Trigger phrases:** צור משימה ביומן, תזמן פגישה, הוסף ליומן, create calendar event, schedule task, add to calendar
 
-**Root cause of original failure:** הסנכרון היה ידני בלבד — `sync-tasks-to-calendar` דרש auth token של משתמש מחובר. כרמן רצה כ-system (ללא user session), כך שהפונקציה לא יכלה לרוץ אחרי יצירת משימה.
+**Problem solved:** When Carmen created a task via `create_task` with a `due_date` + `due_time`, no Google Calendar event was created — tasks were only stored in the DB.
 
-**Fix (PR #86, merged to main, deployed):** הוספת לוגיקת auto-sync ישירות ב-`create_task` handler בתוך `executeTool()` ב-`run-ai-agent/index.ts`. לאחר insert מוצלח של משימה עם `due_date` + `due_time`, הקוד:
-1. מחפש את ה-user_id הקשור ל-campaigner_id (via `profiles`)
-2. שולף את `calendar_tokens` של אותו user (service role — לא צריך auth token)
-3. מרענן access_token אם פג תוקף
-4. יוצר אירוע ב-Google Calendar עם start/end בשעון ישראל (`Asia/Jerusalem`)
-5. שומר `google_calendar_event_id` ב-tasks row
+**What was built:**
+- New edge function `supabase/functions/create-task-calendar-event/index.ts`:
+  - Accepts `{ task_id }` via service role key (internal call only)
+  - Resolves `campaigner_id → profiles.id → calendar_tokens` to find whose calendar to write to
+  - Falls back to tenant owner if no profile is linked to the campaigner
+  - Refreshes expired OAuth tokens automatically
+  - Creates a Google Calendar event (default 30 min, or `duration_minutes` if set)
+  - Stores the returned `eventId` in `tasks.google_calendar_event_id`
+  - Idempotent: skips if task already has `google_calendar_event_id`
+- Hook in `run-ai-agent/index.ts` `create_task` handler: after successful task insert, fires `create-task-calendar-event` as a **non-blocking background fetch** — task creation never fails due to calendar errors.
 
-**Return value of create_task:** כולל `calendar_event_id` ו-`calendar_synced: true` כשהסנכרון הצליח. סנכרון נכשל = לא ממצע את יצירת המשימה (non-fatal).
+**How to use:**
+- Just use `create_task` with `due_date` and `due_time` as usual — the calendar event is created automatically in the background. No separate tool call needed.
+- If task has no `due_date`/`due_time` → no calendar event (correct behaviour).
 
-**How Carmen should use it:** אין שינוי — פשוט קוראת ל-`create_task` עם `due_date` ו-`due_time`. אין צורך בקריאה נפרדת לכלי calendar.
+**PR:** #84 — merged to main, CI green, both functions deployed.
 
-**Skin updated:** `auto_task_calendar_sync` (scope=tenant, created_by_agent=true) — system_prompt עודכן לציין שהפיצ'ר מיושם וש-create_task מחזיר calendar_event_id.
+---
+
+### 2026-06-28 — זיהוי משתתפי קבוצת WhatsApp (wa group participant identity)
+- **Skin slug:** `get_group_members` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** In any WhatsApp group conversation, Carmen automatically receives a Hebrew context line prepended to each message identifying the sender — whether they're a campaigner (with their client list) or a known client. Carmen can also call `get_group_members(group_chat_id)` to explicitly fetch and refresh the full participant list for a group from GreenAPI.
+- **How:** `resolveGroupSenderIdentity(supabase, tenantId, authorPhone)` in `_shared/carmen.ts` — checks `wa_group_members` cache first, then looks up campaigners → clients → leads. Builds a Hebrew context line `[🔍 זיהוי שולח | קמפיינר: X | לקוחות: A, B]` or `[🔍 זיהוי שולח | לקוח: Y]` prepended to `messageText` before `handleCarmenMessage`. Both `manus-wa-webhook` and `green-api-webhook` call this on every group message. The `get_group_members` tool calls GreenAPI's `getGroupData` endpoint, upserts all members into `wa_group_members` with CRM enrichment, and returns a typed list.
+- **New table:** `wa_group_members` — caches participants with CRM identity (phone, wa_id, name, contact_type, contact_id, contact_name, is_admin, last_synced_at). RLS tenant-scoped, 6h staleness for cache.
+- **Key constraint:** Unknown senders produce no prefix and no new record — never creates leads automatically.
+- **Origin:** Carmen escalated 3× (dispatches `f0a891f2`, `875ddc83`, `d02f359b`) — "Carmen receives WhatsApp group messages but doesn't know who the participants are."
+- **PR:** #88 (feat/wa-group-participant-identity)
