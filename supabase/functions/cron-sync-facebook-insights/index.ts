@@ -1,42 +1,20 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
 import { fireIntegrationAlert } from '../_shared/fireIntegrationAlert.ts';
+import {
+  buildInsightRecord,
+  buildResultLeadTypeMap,
+  type CampaignStatus,
+  type InsightRecord,
+  FB_INSIGHTS_FIELD_KEYS,
+  FB_INSIGHTS_FIELD_NAMES,
+  FB_INSIGHTS_FIELD_TYPES,
+} from '../_shared/fbInsights.ts';
 
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
-
-interface InsightRecord {
-  date: string;
-  campaign_id: string;
-  campaign_name: string;
-  impressions: number;
-  clicks: number;
-  lp_or_form_views: number;
-  cpm: number;
-  ctr: number;
-  leads: number;
-  form_leads: number;
-  cost_per_lead: number;
-  spend: number;
-  purchases: number;
-  purchase_value: number;
-  add_to_cart: number;
-  roas: number;
-  campaign_objective: string | null;
-  campaign_type: 'lead' | 'ecommerce' | 'other';
-  effective_status?: string;
-  configured_status?: string;
-}
-
-interface CampaignStatus {
-  id: string;
-  name: string;
-  effective_status: string;
-  configured_status: string;
-  objective?: string | null;
-}
 
 const BATCH_SIZE = 8;
 
@@ -208,7 +186,7 @@ Deno.serve(async (req) => {
 
 
         // First, fetch campaign statuses to detect real blocks
-        const campaignsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/campaigns?fields=id,name,effective_status,configured_status,objective&limit=500&access_token=${accessToken}`;
+        const campaignsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/campaigns?fields=id,name,effective_status,configured_status,objective,updated_time&limit=500&access_token=${accessToken}`;
         const campaignsResponse = await fetch(campaignsUrl);
         const campaignsData = await campaignsResponse.json();
         
@@ -221,9 +199,29 @@ Deno.serve(async (req) => {
               effective_status: campaign.effective_status,
               configured_status: campaign.configured_status,
               objective: campaign.objective || null,
+              updated_time: campaign.updated_time || null,
             };
           }
         }
+
+        // Fetch ad sets' promoted_object so we know the EXACT event each campaign
+        // is optimized for (its "Result" in Ads Manager) — e.g. the custom pixel
+        // event "NewLead" rather than the broad fb_pixel_lead. This is what keeps
+        // the lead counts matching Facebook instead of inflating them.
+        const adsets: any[] = [];
+        {
+          let next: string | null = `https://graph.facebook.com/v21.0/${adAccountId}/adsets?fields=campaign_id,optimization_goal,promoted_object&limit=500&access_token=${accessToken}`;
+          while (next) {
+            const r = await fetch(next);
+            const d: any = await r.json();
+            if (d.error) break;
+            if (Array.isArray(d.data)) adsets.push(...d.data);
+            next = d.paging?.next || null;
+          }
+        }
+        const campaignObjectives: Record<string, string | null | undefined> = {};
+        for (const c of Object.values(campaignStatuses)) campaignObjectives[c.id] = c.objective;
+        const resultLeadTypes = buildResultLeadTypeMap(adsets, campaignObjectives);
 
         // Also fetch ad account status
         const accountUrl = `https://graph.facebook.com/v21.0/${adAccountId}?fields=account_status,disable_reason,name&access_token=${accessToken}`;
@@ -245,8 +243,11 @@ Deno.serve(async (req) => {
           accountDisableReason = accountData.disable_reason || null;
         }
 
-        // Fetch insights from Facebook
-        const insightsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/insights?level=campaign&fields=campaign_id,campaign_name,impressions,clicks,cpm,ctr,actions,action_values,conversions,cost_per_action_type,cost_per_conversion,spend&time_range={"since":"${sinceStr}","until":"${untilStr}"}&time_increment=1&limit=500&access_token=${accessToken}`;
+        // Fetch insights from Facebook.
+        // use_unified_attribution_setting=true makes FB return numbers that match
+        // the Ads Manager UI; we must NOT pass action_attribution_windows (that
+        // makes `value` the SUM across windows and double/triple counts results).
+        const insightsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/insights?level=campaign&fields=campaign_id,campaign_name,impressions,clicks,cpm,ctr,actions,action_values,conversions,cost_per_action_type,cost_per_conversion,spend&time_range={"since":"${sinceStr}","until":"${untilStr}"}&time_increment=1&use_unified_attribution_setting=true&limit=500&access_token=${accessToken}`;
 
         // Paginate through ALL pages. A single page caps at 500 rows; busy accounts
         // (many campaign×day rows) would otherwise be truncated, dropping the most
@@ -270,159 +271,18 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // All lead action types to count.
-        // Note: when the account uses a Custom Conversion as the "Result",
-        // Facebook returns it as action_type like: offsite_conversion.custom.*
-        const leadActionTypes = [
-          'lead', // Aggregate lead count
-          'leadgen_grouped', // Facebook Lead Forms
-          'offsite_conversion.fb_pixel_lead', // Landing page leads (standard pixel event)
-          'onsite_conversion.lead_grouped', // On-site leads
-          'app_custom_event.fb_mobile_lead', // App leads
-          'onsite_conversion.messaging_conversation_started_7d',
-          'messaging_conversation_started_7d',
-          'onsite_conversion.messaging_first_reply',
-          'messaging_first_reply',
-        ];
-        const purchaseActionTypes = ['purchase', 'omni_purchase', 'offsite_conversion.fb_pixel_purchase'];
-        const addToCartActionTypes = ['add_to_cart', 'offsite_conversion.fb_pixel_add_to_cart'];
-
-        const insights: InsightRecord[] = (data.data || []).map((insight: any) => {
-          const allActions = [...(insight.actions ?? []), ...(insight.conversions ?? [])];
-          const actionValues = insight.action_values ?? [];
-          const actionTypeSet = new Set(allActions.map((a: any) => String(a.action_type || '')));
-
-          const getActionCount = (actionTypes: string[]) =>
-            allActions
-              .filter((a: any) => actionTypes.includes(String(a.action_type || '')))
-              .reduce((sum: number, a: any) => sum + (parseInt(a.value) || 0), 0);
-
-          const getActionValue = (actionTypes: string[]) =>
-            actionValues
-              .filter((a: any) => actionTypes.includes(String(a.action_type || '')))
-              .reduce((sum: number, a: any) => sum + (parseFloat(a.value) || 0), 0);
-
-          // Extract lead count — MAX between aggregate 'lead' and sum of all specific lead types.
-          const aggregateLeadAction = allActions.find((a: any) => a.action_type === 'lead');
-          const aggregateLeadValue = aggregateLeadAction ? (parseInt(aggregateLeadAction.value) || 0) : 0;
-          const specificLeadsSum = allActions
-            .filter((a: any) => {
-              const type = String(a.action_type || '');
-              return (
-                leadActionTypes.slice(1).includes(type) ||
-                type.startsWith('offsite_conversion.custom')
-              );
-            })
-            .reduce((sum: number, a: any) => sum + (parseInt(a.value) || 0), 0);
-
-          // For Lead Form campaigns, prefer leadgen_grouped to match FB UI "Results" column.
-          const _campaignStatusForLeads = campaignStatuses[insight.campaign_id];
-          const _objectiveForLeads = String(_campaignStatusForLeads?.objective || '').toUpperCase();
-          const _isLeadFormObjective = ['OUTCOME_LEADS', 'LEAD_GENERATION'].includes(_objectiveForLeads);
-          const _leadgenGroupedValue = allActions
-            .filter((a: any) => ['leadgen.other', 'leadgen_grouped', 'onsite_conversion.lead_grouped'].includes(String(a.action_type || '')))
-            .reduce((sum: number, a: any) => sum + (parseInt(a.value) || 0), 0);
-
-          const leads = _isLeadFormObjective && _leadgenGroupedValue > 0
-            ? _leadgenGroupedValue
-            : Math.max(aggregateLeadValue, specificLeadsSum);
-
-          // Extract landing page views (Facebook action)
-          const landingPageViews = allActions
-            .filter((a: any) => String(a.action_type || '') === 'landing_page_view')
-            .reduce((sum: number, a: any) => sum + (parseInt(a.value) || 0), 0);
-
-          // Extract form opens for Lead Form campaigns
-          const formOpens = allActions
-            .filter((a: any) => {
-              const type = String(a.action_type || '');
-              return type === 'leadgen_form_opened' || type === 'lead_form_open';
-            })
-            .reduce((sum: number, a: any) => sum + (parseInt(a.value) || 0), 0);
-
-          // Detect Lead Form campaigns (so we don't accidentally use landing page views)
-          const leadFormLeads = allActions
-            .filter((a: any) => String(a.action_type || '') === 'leadgen_grouped')
-            .reduce((sum: number, a: any) => sum + (parseInt(a.value) || 0), 0);
-
-          const isLeadFormCampaign = leadFormLeads > 0 || formOpens > 0;
-
-          // For Lead Form campaigns: use *form opens*.
-          // For Website/LP campaigns: use *landing page views*.
-          const lpOrFormViews = isLeadFormCampaign ? formOpens : landingPageViews;
-
-          // Extract cost per lead - always calculate as spend / leads for accuracy
-          // This ensures CPL matches what Facebook shows when aggregating
-          let costPerLead = 0;
-          const spend = parseFloat(insight.spend) || 0;
-          if (leads > 0) {
-            costPerLead = spend / leads;
-          }
-
-          const purchases = getActionCount(purchaseActionTypes);
-          const purchaseValue = getActionValue(purchaseActionTypes);
-          const addToCart = getActionCount(addToCartActionTypes);
-          const roas = spend > 0 ? purchaseValue / spend : 0;
-
-          // Get campaign status
-          const campaignStatus = campaignStatuses[insight.campaign_id];
-          const objective = String(campaignStatus?.objective || '').toUpperCase();
-          const isEcommerceObjective = ['OUTCOME_SALES', 'PRODUCT_CATALOG_SALES', 'SALES'].includes(objective);
-          const isLeadObjective = ['OUTCOME_LEADS', 'LEAD_GENERATION'].includes(objective);
-          const hasEcommerceSignal =
-            purchases > 0 ||
-            purchaseValue > 0 ||
-            addToCart > 0 ||
-            purchaseActionTypes.some((type) => actionTypeSet.has(type)) ||
-            addToCartActionTypes.some((type) => actionTypeSet.has(type));
-          const hasLeadSignal =
-            leads > 0 ||
-            leadActionTypes.some((type) => actionTypeSet.has(type)) ||
-            Array.from(actionTypeSet).some((type) => type.startsWith('offsite_conversion.custom'));
-
-          // PRIORITY: Campaign objective is the source of truth.
-          const campaignType: 'lead' | 'ecommerce' | 'other' =
-            isLeadObjective
-              ? 'lead'
-              : isEcommerceObjective
-                ? 'ecommerce'
-                : hasEcommerceSignal && !(hasLeadSignal && purchases === 0 && purchaseValue === 0)
-                  ? 'ecommerce'
-                  : hasLeadSignal
-                    ? 'lead'
-                    : hasEcommerceSignal
-                      ? 'ecommerce'
-                      : 'other';
-
-          return {
-            date: insight.date_start,
-            campaign_id: insight.campaign_id,
-            campaign_name: insight.campaign_name,
-            impressions: parseInt(insight.impressions) || 0,
-            clicks: parseInt(insight.clicks) || 0,
-            lp_or_form_views: lpOrFormViews,
-            cpm: parseFloat(insight.cpm) || 0,
-            ctr: parseFloat(insight.ctr) || 0,
-            leads,
-            form_leads: _leadgenGroupedValue,
-            cost_per_lead: costPerLead,
-            spend: parseFloat(insight.spend) || 0,
-            purchases,
-            purchase_value: purchaseValue,
-            add_to_cart: addToCart,
-            roas,
-            campaign_objective: campaignStatus?.objective || null,
-            campaign_type: campaignType,
-            effective_status: campaignStatus?.effective_status || null,
-            configured_status: campaignStatus?.configured_status || null,
-          };
-        });
+        // Build CRM records via the shared helper so the cron and the manual
+        // `sync-facebook-insights` function count leads identically (incl.
+        // `offsite_conversion.fb_pixel_custom.*` custom conversions like NewLead).
+        const insights: InsightRecord[] = (data.data || []).map((insight: any) =>
+          buildInsightRecord(insight, campaignStatuses, resultLeadTypes)
+        );
 
 
-        // Ensure fields exist
-        const fieldKeys = ['date', 'campaign_name', 'campaign_id', 'impressions', 'clicks', 'lp_or_form_views', 'cpm', 'ctr', 'leads', 'form_leads', 'cost_per_lead', 'spend', 'purchases', 'purchase_value', 'add_to_cart', 'roas', 'campaign_objective', 'campaign_type', 'effective_status', 'configured_status'];
-        const fieldNames = ['תאריך', 'שם הקמפיין', 'מזהה קמפיין', 'חשיפות', 'קליקים', 'צפיות LP / פתיחות טופס', 'עלות ל-1000 חשיפות', 'אחוז קליקים', 'לידים', 'לידים מטופס', 'עלות לליד', 'הוצאה', 'רכישות', 'ערך רכישות', 'הוספות לעגלה', 'ROAS', 'מטרת קמפיין', 'סוג קמפיין', 'סטטוס בפועל', 'סטטוס מוגדר'];
-        const fieldTypes = ['date', 'text', 'text', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'text', 'text', 'text', 'text'];
+        // Ensure fields exist (shared schema, identical to the manual sync)
+        const fieldKeys = FB_INSIGHTS_FIELD_KEYS;
+        const fieldNames = FB_INSIGHTS_FIELD_NAMES;
+        const fieldTypes = FB_INSIGHTS_FIELD_TYPES;
         
         // Bulk-ensure fields exist: one read for all keys, one insert for the missing ones.
         const { data: existingFields } = await supabase
