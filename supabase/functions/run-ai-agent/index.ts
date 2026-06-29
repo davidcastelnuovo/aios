@@ -274,6 +274,14 @@ const ALL_TOOLS = [
   { name: 'list_pending_approvals', description: 'רשימת בקשות אישור פתוחות (פעולות שכרמן ביקשה לבצע ומחכות לאישור משתמש). השתמש כשהמשתמש שולח "אשרי"/"כן" כדי למצוא איזו בקשה לבצע.', parameters: { type: 'object', properties: { limit: { type: 'integer' } } } },
   { name: 'execute_pending_approval', description: 'ביצוע בקשת אישור פתוחה — אחרי שהמשתמש אישר בוואטסאפ ("אשרי"/"כן"). הכלי מבצע את הפעולה בפועל ומעדכן את הסטטוס. אם אין approval_id — קח את הפתוח האחרון מ-list_pending_approvals.', parameters: { type: 'object', properties: { approval_id: { type: 'string' } } } },
   { name: 'reject_pending_approval', description: 'דחיית בקשת אישור פתוחה — אחרי שהמשתמש סירב.', parameters: { type: 'object', properties: { approval_id: { type: 'string' }, reason: { type: 'string' } }, required: ['approval_id'] } },
+  // ===========================
+  // CALENDAR INVITES
+  // ===========================
+  { name: 'send_calendar_invite', description: 'שליחת זימון Google Calendar (ICS) דרך מייל לנמען חיצוני — האירוע נוצר ביומן הארגון עם הנמען כמשתתף, וגוגל שולחת לו מייל אוטומטי עם כפתורי אישור/דחייה. השתמש כשהמשתמש רוצה לזמן פגישה עם אדם חיצוני.', parameters: { type: 'object', properties: { attendee_email: { type: 'string', description: 'כתובת המייל של המוזמן' }, attendee_name: { type: 'string', description: 'שם המוזמן (אופציונלי)' }, title: { type: 'string', description: 'שם הפגישה/האירוע' }, date: { type: 'string', description: 'תאריך בפורמט YYYY-MM-DD' }, time: { type: 'string', description: 'שעת התחלה בפורמט HH:MM' }, duration_minutes: { type: 'integer', description: 'משך בדקות (ברירת מחדל 60)' }, notes: { type: 'string', description: 'הערות / תיאור הפגישה (אופציונלי)' } }, required: ['attendee_email', 'title', 'date', 'time'] } },
+  // ===========================
+  // CAMPAIGNER MESSAGING
+  // ===========================
+  { name: 'send_message_to_campaigner', description: 'שליחת הודעת WhatsApp לחבר צוות/קמפיינר לפי campaigner_id. עדיף על send_whatsapp_via_gateway כשרוצים לשלוח לחבר צוות ולא יודעים את מספר הטלפון.', parameters: { type: 'object', properties: { campaigner_id: { type: 'string', description: 'מזהה הקמפיינר (UUID)' }, message_text: { type: 'string', description: 'תוכן ההודעה' } }, required: ['campaigner_id', 'message_text'] } },
 ]
 
 
@@ -3111,6 +3119,109 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return { count: data.length, groups: data }
     }
 
+    // ============ CALENDAR INVITES ============
+    case 'send_calendar_invite': {
+      const { attendee_email, attendee_name, title, date, time, duration_minutes, notes } = args
+      if (!attendee_email || !title || !date || !time) return { error: 'attendee_email, title, date, time נדרשים' }
+
+      // Resolve calendar tokens: prefer caller's user, fall back to tenant owner
+      let calTokenUserId: string | null = null
+      if (callerCampaignerId) {
+        const { data: prof } = await supabase.from('profiles').select('id').eq('campaigner_id', callerCampaignerId).maybeSingle()
+        if (prof?.id) calTokenUserId = prof.id
+      }
+      if (!calTokenUserId && userId && userId !== 'system') {
+        calTokenUserId = userId
+      }
+      if (!calTokenUserId) {
+        // fall back to any tenant campaigner that has calendar tokens
+        const { data: tenantCampaigners } = await supabase.from('campaigners').select('id').eq('tenant_id', tenantId).limit(20)
+        for (const c of (tenantCampaigners || [])) {
+          const { data: prof } = await supabase.from('profiles').select('id').eq('campaigner_id', c.id).maybeSingle()
+          if (!prof?.id) continue
+          const { data: tok } = await supabase.from('calendar_tokens').select('user_id').eq('user_id', prof.id).maybeSingle()
+          if (tok?.user_id) { calTokenUserId = tok.user_id; break }
+        }
+      }
+      if (!calTokenUserId) return { error: 'לא נמצא חיבור Google Calendar פעיל בטננט. חבר יומן תחת הגדרות אינטגרציות.' }
+
+      const { data: tokenData } = await supabase.from('calendar_tokens').select('access_token, refresh_token, expires_at').eq('user_id', calTokenUserId).maybeSingle()
+      if (!tokenData) return { error: 'לא נמצא חיבור Google Calendar. חבר יומן תחת הגדרות אינטגרציות.' }
+
+      let accessToken = tokenData.access_token
+      if (new Date(tokenData.expires_at) <= new Date()) {
+        const clientId = Deno.env.get('GOOGLE_CLIENT_ID')
+        const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET')
+        if (!clientId || !clientSecret) return { error: 'חסרות הגדרות GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET' }
+        const r = await fetch('https://oauth2.googleapis.com/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, refresh_token: tokenData.refresh_token, grant_type: 'refresh_token' }),
+        })
+        const rd = await r.json()
+        if (!rd.access_token) return { error: `רענון טוקן נכשל: ${rd.error || 'unknown'}` }
+        accessToken = rd.access_token
+        await supabase.from('calendar_tokens').update({ access_token: accessToken, expires_at: new Date(Date.now() + rd.expires_in * 1000).toISOString() }).eq('user_id', calTokenUserId)
+      }
+
+      const start = new Date(`${date}T${time}:00`)
+      const end = new Date(start.getTime() + (duration_minutes || 60) * 60_000)
+      const attendees = [{ email: attendee_email, ...(attendee_name ? { displayName: attendee_name } : {}) }]
+
+      const calResp = await fetch(
+        'https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=all&sendNotifications=true',
+        {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            summary: title,
+            description: notes || '',
+            start: { dateTime: start.toISOString(), timeZone: 'Asia/Jerusalem' },
+            end: { dateTime: end.toISOString(), timeZone: 'Asia/Jerusalem' },
+            attendees,
+            guestsCanModify: false,
+          }),
+        }
+      )
+      const evData = await calResp.json()
+      if (!calResp.ok) return { error: `שגיאת Google Calendar: ${evData?.error?.message || calResp.status}` }
+      return {
+        success: true,
+        event_id: evData.id,
+        event_link: evData.htmlLink,
+        attendee_email,
+        attendee_name: attendee_name || null,
+        title,
+        start: start.toISOString(),
+        duration_minutes: duration_minutes || 60,
+        message: `זימון נשלח למייל ${attendee_email} — ${attendee_name || attendee_email} יקבל הזמנה עם כפתורי אישור/דחייה.`,
+      }
+    }
+
+    // ============ CAMPAIGNER MESSAGING ============
+    case 'send_message_to_campaigner': {
+      const { campaigner_id, message_text } = args
+      if (!campaigner_id || !message_text) return { error: 'campaigner_id ו-message_text נדרשים' }
+
+      const { data: campaigner } = await supabase.from('campaigners').select('id, full_name, phone').in('tenant_id', accessibleTenantIds).eq('id', campaigner_id).maybeSingle()
+      if (!campaigner) return { error: 'קמפיינר לא נמצא' }
+      if (!campaigner.phone) return { error: `לא נמצא מספר טלפון עבור ${campaigner.full_name}` }
+
+      // Find an active WhatsApp integration for this tenant
+      const { data: integrations } = await supabase.from('tenant_integrations').select('id, settings').eq('tenant_id', tenantId).in('integration_type', ['greenapi', 'manus_wa', 'manuswa']).eq('is_active', true).order('created_at', { ascending: false }).limit(1)
+      const integration = integrations?.[0]
+      if (!integration?.id) return { error: 'לא נמצאה אינטגרציית WhatsApp פעילה בטננט. חבר WhatsApp תחת הגדרות אינטגרציות.' }
+
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/manage-manus-wa`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+        body: JSON.stringify({ action: 'send_message', integrationId: integration.id, phone: campaigner.phone, message: message_text }),
+      })
+      const data = await res.json()
+      if (!res.ok) return { error: data.error || `שליחה נכשלה [${res.status}]` }
+      return { success: true, campaigner_id, campaigner_name: campaigner.full_name, phone: campaigner.phone, ...data }
+    }
+
     default:
       throw new Error(`Unknown tool: ${name}`)
   }
@@ -3283,7 +3394,7 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
 
     // 3. Build system prompt with full tenant context
     // Fetch tenant context, memory for Carmen and all agents
-    const [tenantRes, agenciesRes, statsRes, memoryRes] = await Promise.all([
+    const [tenantRes, agenciesRes, statsRes, memoryRes, teamRosterRes] = await Promise.all([
       supabase.from('tenants').select('name, type').eq('id', resolvedTenantId).single(),
       supabase.from('agencies').select('id, name, tenant_id').eq('tenant_id', resolvedTenantId).order('name').limit(50),
       Promise.all([
@@ -3292,6 +3403,7 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
         supabase.from('tasks').select('id', { count: 'exact', head: false }).eq('tenant_id', resolvedTenantId).eq('status', 'open'),
       ]),
       supabase.from('ai_memory').select('key, content, category').eq('tenant_id', resolvedTenantId).order('updated_at', { ascending: false }).limit(30),
+      supabase.from('campaigners').select('id, full_name, phone, email, role').eq('tenant_id', resolvedTenantId).order('full_name').limit(50),
     ])
     const tenantName = tenantRes.data?.name || 'הארגון'
     // Resolve shared agencies from other tenants accessible to us
@@ -3309,6 +3421,13 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     const sharedAgencyList = sharedAgencies.map((a: any) => `${a.name} [משותפת מ-${a.source_tenant_name}] (${a.id})`).join(', ')
     const [leadsData, clientsData, tasksData] = statsRes
     const leadsByStatus = (leadsData.data || []).reduce((acc: any, l: any) => { acc[l.status] = (acc[l.status] || 0) + 1; return acc }, {})
+    const teamRoster = (teamRosterRes.data || []) as Array<{ id: string; full_name: string; phone?: string | null; email?: string | null; role?: string[] | null }>
+    const teamRosterLine = teamRoster.length > 0
+      ? `\nצוות הארגון (${teamRoster.length} חברים):\n` + teamRoster.map(m => {
+          const parts = [m.full_name, m.phone ? `📱 ${m.phone}` : null, m.email ? `✉️ ${m.email}` : null, m.role?.length ? `(${m.role.join(', ')})` : null]
+          return `• [${m.id}] ${parts.filter(Boolean).join(' | ')}`
+        }).join('\n')
+      : ''
     const tenantContext = [
       `ארגון: ${tenantName} (tenant_id: ${resolvedTenantId})`,
       ownAgencyList ? `סוכנויות שלנו: ${ownAgencyList}` : '',
@@ -3319,6 +3438,7 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
       `לידים: ${leadsData.data?.length || 0} (${Object.entries(leadsByStatus).map(([k,v]) => `${k}: ${v}`).join(', ')})`,
       `לקוחות פעילים: ${clientsData.data?.length || 0}`,
       `משימות פתוחות: ${tasksData.data?.length || 0}`,
+      teamRosterLine,
     ].filter(Boolean).join('\n')
     const isCarmen = agent.name?.toLowerCase().includes('carmen') || agent.name?.includes('כרמן')
     // ─── PROMPT VERSION SWITCH ───

@@ -242,3 +242,47 @@ Claude Code health-check skill written to `ai_skills` (scope=tenant, created_by_
 **DB:** `ai_skills` slug=`get_group_members` (scope=tenant, created_by_agent=true)
 
 **Commits:** c5d0280, 58b4a62 → main
+
+---
+
+## 2026-06-29 — send_calendar_invite + send_message_to_campaigner + team roster injection
+
+**Dispatches resolved:** d5f3de3f, ef71fbbe (2026-06-29 13:17–13:18 UTC)
+
+**Capabilities built** (all in `run-ai-agent/index.ts`):
+
+### 1. `send_calendar_invite` — Google Calendar invite via email
+
+**What it does:** Creates a Google Calendar event on the organizer's calendar with an external attendee. Google automatically sends an email to the attendee with Accept / Decline buttons (ICS-based). Uses `sendUpdates=all` in the API call.
+
+**Parameters:** `attendee_email` (required), `attendee_name`, `title`, `date` (YYYY-MM-DD), `time` (HH:MM), `duration_minutes` (default 60), `notes`
+
+**Auth flow:** Uses the caller's calendar tokens (via `profiles.campaigner_id`). Falls back to any tenant campaigner with connected tokens. Returns error if no Google Calendar is connected.
+
+**How to use:**
+- "שלחי זימון לפגישה לפליקס מחר ב-08:00" → `send_calendar_invite(attendee_email="dmm4business@gmail.com", attendee_name="פליקס", title="פגישה עם דוד", date="2026-06-30", time="08:00")`
+- פליקס יקבל מייל עם כפתורי "אשר / דחה" מגוגל
+
+### 2. `send_message_to_campaigner` — WhatsApp to a team member
+
+**What it does:** Sends a WhatsApp message to a campaigner by their `campaigner_id` (UUID). Looks up their phone from the `campaigners` table and sends via the tenant's active WhatsApp integration.
+
+**Parameters:** `campaigner_id` (required), `message_text` (required)
+
+**How to use:**
+- "שלחי לפליקס הודעה..." → `list_campaigners()` לקבלת campaigner_id → `send_message_to_campaigner(campaigner_id="...", message_text="...")`
+- אין צורך לדעת את מספר הטלפון — כרמן מוצאת אותו בעצמה
+
+### 3. Team roster — injected into every session's system prompt
+
+**What it does:** At every session startup, `run-ai-agent` fetches all tenant campaigners and injects them into Carmen's organizational context. Carmen now always knows: id, name, phone, email, role — for every team member.
+
+**Format injected:**
+```
+צוות הארגון (N חברים):
+• [uuid] שם | 📱 phone | ✉️ email | (role)
+```
+
+**Why:** Carmen was unaware of team members by name (e.g. "פליקס"). This fix makes the full team roster available in every session without Carmen needing to call `list_campaigners` first.
+
+**DB (ai_skills):** slugs `send_calendar_invite`, `send_message_to_campaigner`, `team_roster_awareness` (scope=tenant, created_by_agent=true)
