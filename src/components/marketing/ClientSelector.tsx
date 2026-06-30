@@ -10,6 +10,7 @@ interface Props {
   tenantId: string | undefined;
   value: string | null;
   onChange: (id: string) => void;
+  agencyId?: string | null;
 }
 
 interface Client {
@@ -26,23 +27,26 @@ interface Agency {
 const ALL_AGENCY = "__all__";
 const NO_AGENCY = "__none__";
 
-export function ClientSelector({ tenantId, value, onChange }: Props) {
+export function ClientSelector({ tenantId, value, onChange, agencyId }: Props) {
   const [open, setOpen] = useState(false);
   const [clients, setClients] = useState<Client[]>([]);
   const [agencies, setAgencies] = useState<Agency[]>([]);
-  const [selectedAgency, setSelectedAgency] = useState<string | null>(null);
+  // Pre-select the global agency filter if provided
+  const [selectedAgency, setSelectedAgency] = useState<string | null>(agencyId ?? null);
   const [search, setSearch] = useState("");
 
   useEffect(() => {
     if (!tenantId) return;
     let cancel = false;
+    let clientsQuery = supabase
+      .from("clients")
+      .select("id, name, agency_id, status")
+      .eq("tenant_id", tenantId)
+      .eq("status", "active")
+      .order("name");
+    if (agencyId) clientsQuery = clientsQuery.eq("agency_id", agencyId);
     Promise.all([
-      supabase
-        .from("clients")
-        .select("id, name, agency_id, status")
-        .eq("tenant_id", tenantId)
-        .eq("status", "active")
-        .order("name"),
+      clientsQuery,
       supabase.from("agencies").select("id, name").eq("tenant_id", tenantId).order("name"),
     ]).then(([clientsRes, agenciesRes]) => {
       if (cancel) return;
@@ -52,7 +56,7 @@ export function ClientSelector({ tenantId, value, onChange }: Props) {
     return () => {
       cancel = true;
     };
-  }, [tenantId]);
+  }, [tenantId, agencyId]);
 
   const current = clients.find((c) => c.id === value);
 

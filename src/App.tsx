@@ -190,6 +190,7 @@ const App = () => (
                   <Route path="/t/:tenantSlug/visual-workspace" element={<ProtectedRoute><AppLayout><VisualWorkspace /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/marketing" element={<ProtectedRoute><MarketingDepartment /></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/marketing/:clientId" element={<ProtectedRoute><MarketingDepartment /></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/marketing/:clientId/:department" element={<ProtectedRoute><MarketingDepartment /></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/campaign-alerts" element={<ProtectedRoute><AppLayout><CampaignAlerts /></AppLayout></ProtectedRoute>} />
 
                   <Route path="/t/:tenantSlug/automations/flow/:automationId" element={<ProtectedRoute requiredPermission="automations"><AutomationFlow /></ProtectedRoute>} />

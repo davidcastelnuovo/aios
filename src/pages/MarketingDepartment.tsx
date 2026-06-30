@@ -1,383 +1,253 @@
-import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useAgency } from "@/contexts/AgencyContext";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Plus, Workflow, CalendarRange, ArrowRight, Megaphone, Search, Share2, Coins, Palette, Settings2, BarChart2, ExternalLink, Loader2 } from "lucide-react";
-import { ClientSelector } from "@/components/marketing/ClientSelector";
-import { ClientConnectionsBar } from "@/components/marketing/ClientConnectionsBar";
-import { MarketingPipelineBoard } from "@/components/marketing/MarketingPipelineBoard";
-import { GlobalStageSettings } from "@/components/marketing/GlobalStageSettings";
-import { CreativeBoard } from "@/components/marketing/CreativeBoard";
-import { UsagePanel } from "@/components/marketing/UsagePanel";
+import { cn } from "@/lib/utils";
 import {
-  ensurePipelineForClient,
-  TRACK_LABELS,
-  type MarketingTrack,
-} from "@/components/marketing/lib/ensurePipeline";
-import { toast } from "@/hooks/use-toast";
-import { MarketingCalendarView } from "@/components/marketing/MarketingCalendarView";
-import { SocialContentGantt } from "@/components/marketing/SocialContentGantt";
+  ArrowRight,
+  PenLine,
+  Palette,
+  Video,
+  Search,
+  Megaphone,
+  BarChart2,
+} from "lucide-react";
+import { ClientSelector } from "@/components/marketing/ClientSelector";
+import { CopywriterDepartment } from "@/components/marketing/departments/CopywriterDepartment";
+import { DesignerDepartment } from "@/components/marketing/departments/DesignerDepartment";
+import { VideoDepartment } from "@/components/marketing/departments/VideoDepartment";
+import { SeoDepartment } from "@/components/marketing/departments/SeoDepartment";
+import { CampaignsDepartment } from "@/components/marketing/departments/CampaignsDepartment";
+import { AnalyticsDepartment } from "@/components/marketing/departments/AnalyticsDepartment";
 
-const TRACKS: { value: MarketingTrack; icon: typeof Megaphone }[] = [
-  { value: "campaigns", icon: Megaphone },
-  { value: "seo_geo", icon: Search },
-  { value: "social_organic", icon: Share2 },
+// ─── Department registry ──────────────────────────────────────────────────────
+
+interface DeptConfig {
+  id: string;
+  label: string;
+  icon: typeof PenLine;
+  color: string;
+  textColor: string;
+  tileGradient: string;
+  description: string;
+}
+
+const DEPARTMENTS: DeptConfig[] = [
+  {
+    id: "copywriter",
+    label: "קופירייטר",
+    icon: PenLine,
+    color: "bg-violet-500",
+    textColor: "text-white",
+    tileGradient: "from-violet-500 to-purple-600",
+    description: "כתיבת תוכן שיווקי, קופי לפרסומות וטקסטים מותאמים",
+  },
+  {
+    id: "designer",
+    label: "מעצב גרפי",
+    icon: Palette,
+    color: "bg-pink-500",
+    textColor: "text-white",
+    tileGradient: "from-pink-500 to-rose-600",
+    description: "עיצוב ויזואלים, פרומפטים לתמונות וזהות מותגית",
+  },
+  {
+    id: "video",
+    label: "יוצר סרטונים",
+    icon: Video,
+    color: "bg-orange-500",
+    textColor: "text-white",
+    tileGradient: "from-orange-500 to-red-500",
+    description: "תכנון, יצירה ועריכת סרטונים לכל פלטפורמה",
+  },
+  {
+    id: "seo",
+    label: "SEO / GEO",
+    icon: Search,
+    color: "bg-emerald-500",
+    textColor: "text-white",
+    tileGradient: "from-emerald-500 to-teal-600",
+    description: "אסטרטגיית מילות מפתח, תוכן מקודם ודירוג במנועי AI",
+  },
+  {
+    id: "campaigns",
+    label: "קמפיינר",
+    icon: Megaphone,
+    color: "bg-blue-500",
+    textColor: "text-white",
+    tileGradient: "from-blue-500 to-indigo-600",
+    description: "ניהול קמפיינים ממומנים ב-Meta, Google ועוד",
+  },
+  {
+    id: "analytics",
+    label: "אנליסט",
+    icon: BarChart2,
+    color: "bg-amber-500",
+    textColor: "text-white",
+    tileGradient: "from-amber-500 to-yellow-600",
+    description: "ניתוח ביצועים, תובנות נתונים והמלצות לשיפור",
+  },
 ];
 
+// ─── Main component ───────────────────────────────────────────────────────────
+
 export default function MarketingDepartment() {
-  const { tenantSlug, clientId: routeClientId } = useParams<{
+  const { tenantSlug, clientId, department } = useParams<{
     tenantSlug: string;
     clientId?: string;
+    department?: string;
   }>();
   const navigate = useNavigate();
   const { tenant } = useCurrentTenant();
   const tenantId = tenant?.id;
-  const [topTab, setTopTab] = useState<MarketingTrack | "calendar" | "creative" | "usage" | "dashboard">("campaigns");
-  const [calendarTrack, setCalendarTrack] = useState<MarketingTrack>("campaigns");
-  const [globalSettingsOpen, setGlobalSettingsOpen] = useState(false);
+  const { selectedAgency } = useAgency();
 
-  const clientId = routeClientId ?? null;
-
-  // ── Load ALL 3 pipelines in parallel ──────────────────────────────────────
-  const { data: campaignsPipeline, isLoading: loadingCampaigns, refetch: refetchCampaigns } = useQuery({
-    queryKey: ["marketing-pipeline", clientId, "campaigns"],
-    enabled: !!clientId && !!tenantId,
-    queryFn: async () => {
-      if (!clientId || !tenantId) return null;
-      return await ensurePipelineForClient({ clientId, tenantId, track: "campaigns" });
-    },
-  });
-
-  const { data: seoPipeline, isLoading: loadingSeo, refetch: refetchSeo } = useQuery({
-    queryKey: ["marketing-pipeline", clientId, "seo_geo"],
-    enabled: !!clientId && !!tenantId,
-    queryFn: async () => {
-      if (!clientId || !tenantId) return null;
-      return await ensurePipelineForClient({ clientId, tenantId, track: "seo_geo" });
-    },
-  });
-
-  const { data: socialPipeline, isLoading: loadingSocial, refetch: refetchSocial } = useQuery({
-    queryKey: ["marketing-pipeline", clientId, "social_organic"],
-    enabled: !!clientId && !!tenantId,
-    queryFn: async () => {
-      if (!clientId || !tenantId) return null;
-      return await ensurePipelineForClient({ clientId, tenantId, track: "social_organic" });
-    },
-  });
-
-  const pipelineByTrack: Record<MarketingTrack, any> = {
-    campaigns: campaignsPipeline,
-    seo_geo: seoPipeline,
-    social_organic: socialPipeline,
-  };
-
-  const allLoaded = !!campaignsPipeline && !!seoPipeline && !!socialPipeline;
-
-  // Current active track pipeline (for "פריט חדש" button)
-  const activeTrack: MarketingTrack =
-    topTab === "calendar"
-      ? calendarTrack
-      : topTab === "creative" || topTab === "usage" || topTab === "dashboard"
-      ? "campaigns"
-      : (topTab as MarketingTrack);
-  const activePipeline = pipelineByTrack[activeTrack];
-
-  // Load the client's linked crm_dashboard for the iframe embed
-  const { data: clientDashboard } = useQuery({
-    queryKey: ["client-dashboard-for-marketing", clientId],
-    enabled: !!clientId && topTab === "dashboard",
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("crm_dashboards")
-        .select("id, name, dashboard_type")
-        .eq("client_id", clientId!)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      return data;
-    },
-  });
+  const agencyId =
+    selectedAgency && selectedAgency !== "all" ? selectedAgency : null;
 
   const handleSelectClient = (id: string) => {
     navigate(`/t/${tenantSlug}/marketing/${id}`);
   };
 
-  const handleNewItem = async () => {
-    if (!activePipeline || !tenantId || !clientId) return;
-    const { data: stages } = await supabase
-      .from("marketing_pipeline_stages")
-      .select("id, sort_order")
-      .eq("pipeline_id", activePipeline.id)
-      .order("sort_order", { ascending: true })
-      .limit(1);
-    const firstStageId = stages?.[0]?.id ?? null;
-    const { data, error } = await supabase
-      .from("marketing_work_items")
-      .insert({
-        pipeline_id: activePipeline.id,
-        tenant_id: tenantId,
-        client_id: clientId,
-        current_stage_id: firstStageId,
-        title: "פריט תוכן חדש",
-        status: "draft",
-      })
-      .select("id")
-      .single();
-    if (error) {
-      toast({ title: "שגיאה ביצירת פריט", description: error.message, variant: "destructive" });
-      return;
-    }
-    refetchCampaigns();
-    refetchSeo();
-    refetchSocial();
+  const handleSelectDept = (deptId: string) => {
+    navigate(`/t/${tenantSlug}/marketing/${clientId}/${deptId}`);
+  };
+
+  const deptProps = {
+    clientId: clientId ?? "",
+    tenantId: tenantId ?? "",
+    agencyId,
   };
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-background overscroll-contain" dir="rtl">
-      <header className="flex items-center gap-3 border-b bg-card/50 px-4 py-2 backdrop-blur">
+    <div className="fixed inset-0 flex flex-col bg-background" dir="rtl">
+      {/* ── Header ──────────────────────────────────────────────────────────── */}
+      <header className="flex items-center gap-3 border-b bg-card/60 px-4 py-2 backdrop-blur shrink-0">
         <Button variant="ghost" size="sm" onClick={() => navigate(`/t/${tenantSlug}`)}>
           <ArrowRight className="ml-1 h-4 w-4" />
           חזרה
         </Button>
-        <h1 className="text-lg font-semibold">מחלקת שיווק</h1>
-        <div className="mx-2 h-6 w-px bg-border" />
-        <ClientSelector tenantId={tenantId} value={clientId} onChange={handleSelectClient} />
-        {clientId && (
-          <>
-            <div className="mx-2 h-6 w-px bg-border" />
-            <ClientConnectionsBar clientId={clientId} />
-          </>
+        <h1 className="text-base font-semibold">מחלקת שיווק</h1>
+        <div className="mx-2 h-5 w-px bg-border" />
+        {tenantId && (
+          <ClientSelector
+            tenantId={tenantId}
+            value={clientId ?? null}
+            onChange={handleSelectClient}
+            agencyId={agencyId}
+          />
         )}
-        <div className="ms-auto flex items-center gap-2">
-          {activePipeline && (
-            <Button onClick={handleNewItem} size="sm" variant="outline" className="gap-1">
-              <Plus className="h-4 w-4" />
-              פריט חדש
-            </Button>
-          )}
-          {tenantId && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setGlobalSettingsOpen(true)}
-              title="הגדרות גלובליות לפס הייצור"
-            >
-              <Settings2 className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
+        {clientId && department && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs text-muted-foreground"
+            onClick={() => navigate(`/t/${tenantSlug}/marketing/${clientId}`)}
+          >
+            ← כל המחלקות
+          </Button>
+        )}
       </header>
 
-      {!clientId ? (
-        <div className="flex flex-1 items-center justify-center">
-          <div className="max-w-md text-center">
-            <Workflow className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-            <h2 className="mb-2 text-xl font-semibold">בחר לקוח להתחיל</h2>
-            <p className="text-sm text-muted-foreground">
-              בחירת לקוח תפתח את פסי היצור השיווקיים — קמפיינים, SEO/GEO וסושיאל אורגני.
-            </p>
-          </div>
-        </div>
-      ) : (
-        <div className="flex flex-1 min-h-0 flex-col">
-          <Tabs
-            value={topTab}
-            onValueChange={(v) => setTopTab(v as any)}
-            className="flex flex-1 min-h-0 flex-col"
-          >
-            <TabsList className="mx-4 mt-2 w-fit">
-              {TRACKS.map(({ value, icon: Icon }) => (
-                <TabsTrigger key={value} value={value}>
-                  <Icon className="ml-1 h-4 w-4" />
-                  {TRACK_LABELS[value]}
-                </TabsTrigger>
-              ))}
-              <TabsTrigger value="calendar">
-                <CalendarRange className="ml-1 h-4 w-4" />
-                לוח תוכן
-              </TabsTrigger>
-              <TabsTrigger value="creative">
-                <Palette className="ml-1 h-4 w-4" />
-                קריאייטיב
-              </TabsTrigger>
-              <TabsTrigger value="usage">
-                <Coins className="ml-1 h-4 w-4" />
-                שימוש בטוקנים
-              </TabsTrigger>
-              <TabsTrigger value="dashboard">
-                <BarChart2 className="ml-1 h-4 w-4" />
-                דשבורד
-              </TabsTrigger>
-            </TabsList>
-
-            {/* ── Campaigns track ─────────────────────────────────────── */}
-            <TabsContent value="campaigns" className="flex-1 min-h-0 m-0">
-              {loadingCampaigns || !campaignsPipeline ? (
-                <LoadingPipeline loading={loadingCampaigns} onRetry={refetchCampaigns} />
-              ) : (
-                <MarketingPipelineBoard
-                  pipelineId={campaignsPipeline.id}
-                  tenantId={tenantId!}
-                  clientId={clientId}
-                  track="campaigns"
-                />
-              )}
-            </TabsContent>
-
-            {/* ── SEO/GEO track ────────────────────────────────────────── */}
-            <TabsContent value="seo_geo" className="flex-1 min-h-0 m-0">
-              {loadingSeo || !seoPipeline ? (
-                <LoadingPipeline loading={loadingSeo} onRetry={refetchSeo} />
-              ) : (
-                <MarketingPipelineBoard
-                  pipelineId={seoPipeline.id}
-                  tenantId={tenantId!}
-                  clientId={clientId}
-                  track="seo_geo"
-                />
-              )}
-            </TabsContent>
-
-            {/* ── Social organic track ─────────────────────────────────── */}
-            <TabsContent value="social_organic" className="flex-1 min-h-0 m-0">
-              {loadingSocial || !socialPipeline ? (
-                <LoadingPipeline loading={loadingSocial} onRetry={refetchSocial} />
-              ) : (
-                <MarketingPipelineBoard
-                  pipelineId={socialPipeline.id}
-                  tenantId={tenantId!}
-                  clientId={clientId}
-                  track="social_organic"
-                />
-              )}
-            </TabsContent>
-
-            {/* ── Calendar ─────────────────────────────────────────────── */}
-            <TabsContent value="calendar" className="flex-1 min-h-0 m-0 flex flex-col">
-              <Tabs
-                value={calendarTrack}
-                onValueChange={(v) => setCalendarTrack(v as MarketingTrack)}
-                className="flex flex-1 min-h-0 flex-col"
+      {/* ── Department tabs (when inside a dept) ────────────────────────────── */}
+      {clientId && department && (
+        <div className="flex items-end gap-1 px-4 pt-2 shrink-0 border-b border-border/40 overflow-x-auto">
+          {DEPARTMENTS.map((d) => {
+            const Icon = d.icon;
+            const isActive = d.id === department;
+            return (
+              <button
+                key={d.id}
+                onClick={() => handleSelectDept(d.id)}
+                className={cn(
+                  "flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-t-lg transition-all whitespace-nowrap border border-b-0",
+                  isActive
+                    ? `${d.color} ${d.textColor} border-transparent shadow-sm`
+                    : "bg-card text-muted-foreground hover:text-foreground border-border/50"
+                )}
               >
-                <TabsList className="mx-4 my-2 w-fit">
-                  {TRACKS.map(({ value, icon: Icon }) => (
-                    <TabsTrigger key={value} value={value}>
-                      <Icon className="ml-1 h-4 w-4" />
-                      {TRACK_LABELS[value]}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-                {TRACKS.map(({ value }) => {
-                  const pip = pipelineByTrack[value];
-                  return (
-                    <TabsContent
-                      key={value}
-                      value={value}
-                      className="flex-1 min-h-0 m-0 overflow-auto"
-                    >
-                      {!pip ? (
-                        <LoadingPipeline loading={false} onRetry={() => { refetchCampaigns(); refetchSeo(); refetchSocial(); }} />
-                      ) : value === "social_organic" ? (
-                        <SocialContentGantt
-                          pipelineId={pip.id}
-                          tenantId={tenantId!}
-                          clientId={clientId!}
-                        />
-                      ) : (
-                        <MarketingCalendarView pipelineId={pip.id} clientId={clientId} />
-                      )}
-                    </TabsContent>
-                  );
-                })}
-              </Tabs>
-            </TabsContent>
-
-            {/* ── Usage ────────────────────────────────────────────────── */}
-            <TabsContent value="usage" className="flex-1 min-h-0 m-0 overflow-auto">
-              <UsagePanel tenantId={tenantId!} clientId={clientId} />
-            </TabsContent>
-
-            {/* ── Creative ─────────────────────────────────────────────── */}
-            <TabsContent value="creative" className="flex-1 min-h-0 m-0 overflow-auto">
-              <CreativeBoard clientId={clientId} />
-            </TabsContent>
-
-            {/* ── Dashboard iframe ─────────────────────────────────────── */}
-            <TabsContent value="dashboard" className="flex-1 min-h-0 m-0 overflow-hidden">
-              {clientDashboard ? (
-                <div className="flex h-full flex-col">
-                  <div className="flex items-center gap-2 border-b bg-muted/30 px-4 py-2 text-sm">
-                    <BarChart2 className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium">{clientDashboard.name}</span>
-                    <a
-                      href={`/t/${tenantSlug}/dashboard/${clientDashboard.id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="ms-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                      פתח בחלון נפרד
-                    </a>
-                  </div>
-                  <iframe
-                    src={`/t/${tenantSlug}/dashboard/${clientDashboard.id}`}
-                    className="flex-1 w-full border-0"
-                    title={`דשבורד — ${clientDashboard.name}`}
-                    allow="fullscreen"
-                  />
-                </div>
-              ) : (
-                <div className="flex h-full flex-col items-center justify-center gap-4 text-muted-foreground">
-                  <BarChart2 className="h-12 w-12 opacity-30" />
-                  <div className="text-center">
-                    <p className="text-sm font-medium">אין דשבורד מקושר ללקוח זה</p>
-                    <p className="mt-1 text-xs">צור דשבורד חדש מתוך עמוד הלקוח ויופיע כאן אוטומטית</p>
-                  </div>
-                  <a
-                    href={`/t/${tenantSlug}/clients`}
-                    className="text-xs text-primary hover:underline"
-                  >
-                    עבור לניהול לקוחות ←
-                  </a>
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
+                <Icon className="h-3.5 w-3.5" />
+                {d.label}
+              </button>
+            );
+          })}
         </div>
       )}
 
-      {tenantId && (
-        <GlobalStageSettings
-          open={globalSettingsOpen}
-          onClose={() => setGlobalSettingsOpen(false)}
-          tenantId={tenantId}
-        />
-      )}
+      {/* ── Content ─────────────────────────────────────────────────────────── */}
+      <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
+        {!clientId ? (
+          <NoClientState agencyId={agencyId} />
+        ) : !department ? (
+          <LandingTiles onSelect={handleSelectDept} />
+        ) : (
+          <div className="flex flex-1 min-h-0">
+            {department === "copywriter" && <CopywriterDepartment {...deptProps} />}
+            {department === "designer" && <DesignerDepartment {...deptProps} />}
+            {department === "video" && <VideoDepartment {...deptProps} />}
+            {department === "seo" && <SeoDepartment {...deptProps} />}
+            {department === "campaigns" && <CampaignsDepartment {...deptProps} />}
+            {department === "analytics" && <AnalyticsDepartment {...deptProps} />}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-function LoadingPipeline({ loading = true, onRetry }: { loading?: boolean; onRetry?: () => void }) {
+// ─── No client state ──────────────────────────────────────────────────────────
+
+function NoClientState({ agencyId }: { agencyId: string | null }) {
   return (
-    <div className="flex flex-1 h-full items-center justify-center">
-      <div className="flex flex-col items-center gap-3 text-muted-foreground">
-        {loading ? (
-          <>
-            <Loader2 className="h-8 w-8 animate-spin text-primary/40" />
-            <span className="text-sm">טוען פס ייצור...</span>
-          </>
-        ) : (
-          <>
-            <span className="text-sm text-destructive">לא ניתן לטעון את פס הייצור</span>
-            {onRetry && (
-              <Button size="sm" variant="outline" onClick={onRetry}>נסה שוב</Button>
-            )}
-          </>
+    <div className="flex flex-1 items-center justify-center">
+      <div className="max-w-sm text-center">
+        <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-violet-500 to-blue-600 shadow-lg">
+          <Megaphone className="h-10 w-10 text-white" />
+        </div>
+        <h2 className="mb-2 text-3xl font-extrabold">מחלקת שיווק</h2>
+        <p className="mb-4 text-sm text-muted-foreground">
+          בחר לקוח מהרשימה למעלה כדי להיכנס למחלקות השיווק
+        </p>
+        {agencyId && (
+          <p className="text-xs text-muted-foreground/60">
+            מציג לקוחות של הסוכנות הנבחרת בלבד
+          </p>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Landing tiles ────────────────────────────────────────────────────────────
+
+function LandingTiles({ onSelect }: { onSelect: (id: string) => void }) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center p-8 overflow-auto">
+      <div className="mb-10 text-center">
+        <h2 className="text-4xl font-extrabold tracking-tight">מחלקת שיווק</h2>
+        <p className="mt-2 text-muted-foreground text-sm">בחר מחלקה להתחיל לעבוד</p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 max-w-3xl w-full">
+        {DEPARTMENTS.map((dept) => {
+          const Icon = dept.icon;
+          return (
+            <button
+              key={dept.id}
+              onClick={() => onSelect(dept.id)}
+              className={cn(
+                "group flex flex-col items-center justify-center rounded-2xl p-7 text-center text-white shadow-md transition-all hover:scale-[1.03] hover:shadow-xl",
+                `bg-gradient-to-br ${dept.tileGradient}`
+              )}
+            >
+              <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm">
+                <Icon className="h-7 w-7" />
+              </div>
+              <span className="text-lg font-bold">{dept.label}</span>
+              <span className="mt-1.5 text-xs opacity-80 leading-snug">{dept.description}</span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
