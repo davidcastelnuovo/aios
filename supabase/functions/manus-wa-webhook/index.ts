@@ -1,3 +1,5 @@
+// redeploy trigger: rebundle _shared/carmen.ts — specific_phone no longer self-matches the
+// operator on outbound messages (stops Carmen replying in the operator's private chats).
 // redeploy trigger: rebundle _shared/carmen.ts keyword-aware routing (retry — esm.sh 522 aborted prior deploy)
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { findCarmenSessionAutomation, handleCarmenMessage } from '../_shared/carmen.ts';

@@ -995,7 +995,14 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     : (cfgForGroups.carmen_allowed_group_id ? [cfgForGroups.carmen_allowed_group_id]
       : (Array.isArray(cfgForGroups.carmen_allowed_groups) ? cfgForGroups.carmen_allowed_groups : []));
   if (scopeMode === 'specific_phone' && !isGroup) {
-    const phoneCandidates = [phoneNumber, sourcePhoneNumber, chatId?.split('@')?.[0]]
+    // `sourcePhoneNumber` is the CONNECTED account — i.e. always the operator
+    // themselves. On the operator's own OUTBOUND messages (isManualOutgoing) it
+    // must NOT be used to match `carmen_allowed_phones`: otherwise every message
+    // the operator sends to ANY third party (e.g. a private chat with a colleague)
+    // self-matches and Carmen replies where she shouldn't. For inbound messages
+    // behaviour is unchanged. Match the counterpart (phoneNumber/chatId) instead.
+    const phoneCandidates = [phoneNumber, chatId?.split('@')?.[0]]
+      .concat(isManualOutgoing ? [] : [sourcePhoneNumber])
       .map((p: string | null | undefined) => (p || '').replace(/[^0-9]/g, ''))
       .filter(Boolean);
     const isPhoneAllowed = allowedPhones.some((p: string) => {
