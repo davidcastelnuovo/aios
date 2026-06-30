@@ -1,4 +1,4 @@
-// redeploy trigger: restore the ai_agents-based run-ai-agent (a direct prod deploy had shipped a
+// redeploy trigger (restore #3): a parallel direct-deploy shipped the incompatible modular run-ai-agent (v64, HTTP 400) — this re-deploys the known-good ai_agents/command_text version from main.
 // broken rewrite querying a non-existent `agents` table → every agent call 404'd). This is the
 // known-good monolithic version from main; CI redeploys it via the Supabase CLI. (re-deploy: a stray placeholder bundle had overwritten v40).
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
