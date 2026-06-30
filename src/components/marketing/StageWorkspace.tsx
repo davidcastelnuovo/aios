@@ -366,6 +366,28 @@ function WorkItemCard({
   );
 }
 
+// ─── Payload field per stage type ────────────────────────────────────────────
+const STAGE_PAYLOAD_KEY: Record<string, string> = {
+  strategy: "brief",
+  copy: "copy_text",
+  creative: "creative_notes",
+  target_paid: "campaign_notes",
+  target_seo: "seo_notes",
+  target_organic: "social_notes",
+  measurement: "measurement_notes",
+};
+
+// Which payload keys from prior stages to inject as context
+const STAGE_PRIOR_KEYS: Record<string, { key: string; label: string }[]> = {
+  strategy: [],
+  copy: [{ key: "brief", label: "בריף" }],
+  creative: [{ key: "brief", label: "בריף" }, { key: "copy_text", label: "קופי" }],
+  target_paid: [{ key: "brief", label: "בריף" }, { key: "copy_text", label: "קופי" }, { key: "creative_notes", label: "קריאייטיב" }],
+  target_seo: [{ key: "brief", label: "בריף" }, { key: "copy_text", label: "קופי" }],
+  target_organic: [{ key: "brief", label: "בריף" }, { key: "copy_text", label: "קופי" }],
+  measurement: [{ key: "brief", label: "בריף" }, { key: "copy_text", label: "קופי" }],
+};
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 interface Props {
   stage: any;
@@ -405,7 +427,13 @@ export function StageWorkspace({
   const [input, setInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [running, setRunning] = useState<string | null>(null);
+  const [activeItemId, setActiveItemId] = useState<string | null>(
+    items.length === 1 ? items[0].id : null
+  );
+  const [savingPayload, setSavingPayload] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  const activeItem = items.find((i) => i.id === activeItemId) ?? null;
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -419,14 +447,19 @@ export function StageWorkspace({
     setChatLoading(true);
 
     try {
-      const itemsSummary = items
-        .slice(0, 3)
-        .map((i) => `- ${i.title}: ${i.payload?.brief ?? i.payload?.copy_text ?? ""}`)
-        .join("\n");
+      // Build prior-stage context from the active item's payload
+      const priorKeys = STAGE_PRIOR_KEYS[stage.stage_type] ?? [];
+      const priorContext = activeItem
+        ? priorKeys
+            .filter(({ key }) => activeItem.payload?.[key])
+            .map(({ key, label }) => `=== ${label} ===\n${activeItem.payload[key]}`)
+            .join("\n\n")
+        : "";
 
       const systemPrompt = `${cfg.systemHint}
 ${stage.configuration?.instructions ? `הוראות ספציפיות לשלב: ${stage.configuration.instructions}` : ""}
-${itemsSummary ? `פריטי תוכן נוכחיים:\n${itemsSummary}` : ""}
+${activeItem ? `\nאתה עובד על הפריט: "${activeItem.title}"` : ""}
+${priorContext ? `\n=== הקשר משלבים קודמים ===\n${priorContext}` : ""}
 ענה תמיד בעברית, בצורה מקצועית ועניינית.`;
 
       const history = messages.slice(-6).map((m) => ({ role: m.role, content: m.content }));
@@ -465,6 +498,17 @@ ${itemsSummary ? `פריטי תוכן נוכחיים:\n${itemsSummary}` : ""}
       const reply =
         data?.output ?? data?.reply ?? data?.message ?? "לא הצלחתי לעבד את הבקשה.";
       setMessages((prev) => [...prev, { role: "assistant", content: reply, ts: Date.now() }]);
+
+      // Auto-save Carmen's output to the active item's payload
+      const payloadKey = STAGE_PAYLOAD_KEY[stage.stage_type];
+      if (activeItem && payloadKey) {
+        const updatedPayload = { ...(activeItem.payload ?? {}), [payloadKey]: reply };
+        await supabase
+          .from("marketing_work_items")
+          .update({ payload: updatedPayload })
+          .eq("id", activeItem.id);
+        queryClient.invalidateQueries({ queryKey: ["marketing-items", pipelineId] });
+      }
     } catch (e: any) {
       setMessages((prev) => [
         ...prev,
@@ -636,6 +680,20 @@ ${itemsSummary ? `פריטי תוכן נוכחיים:\n${itemsSummary}` : ""}
             </Badge>
           </div>
 
+          {/* Active item indicator */}
+          {activeItem && (
+            <div className="px-4 py-2 shrink-0 border-b border-border/30 bg-primary/5">
+              <p className="text-[11px] text-primary font-semibold">
+                עובד על: {activeItem.title}
+              </p>
+              {(STAGE_PRIOR_KEYS[stage.stage_type] ?? []).some(({ key }) => activeItem.payload?.[key]) && (
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  ✓ הקשר משלבים קודמים הוזרק לכרמן
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Items list */}
           <div className="flex-1 overflow-y-auto p-3 space-y-3">
             {items.length === 0 ? (
@@ -652,16 +710,26 @@ ${itemsSummary ? `פריטי תוכן נוכחיים:\n${itemsSummary}` : ""}
               </div>
             ) : (
               items.map((item) => (
-                <WorkItemCard
+                <div
                   key={item.id}
-                  item={item}
-                  stage={stage}
-                  onSelect={() => onSelectItem(item.id)}
-                  onRun={() => handleRun(item.id)}
-                  onApprove={() => handleApprove(item.id)}
-                  onReject={() => handleReject(item.id)}
-                  running={running === item.id}
-                />
+                  className={cn(
+                    "rounded-2xl ring-2 transition-all cursor-pointer",
+                    activeItemId === item.id
+                      ? "ring-primary"
+                      : "ring-transparent hover:ring-primary/30"
+                  )}
+                  onClick={() => setActiveItemId(item.id === activeItemId ? null : item.id)}
+                >
+                  <WorkItemCard
+                    item={item}
+                    stage={stage}
+                    onSelect={() => setActiveItemId(item.id)}
+                    onRun={() => handleRun(item.id)}
+                    onApprove={() => handleApprove(item.id)}
+                    onReject={() => handleReject(item.id)}
+                    running={running === item.id}
+                  />
+                </div>
               ))
             )}
           </div>
