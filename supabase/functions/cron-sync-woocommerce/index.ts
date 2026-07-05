@@ -7,12 +7,9 @@ const corsHeaders = {
 };
 
 /**
- * Cron job: runs every hour to sync all WooCommerce sites that have
+ * Cron job: runs every hour (at :45) to sync all WooCommerce sites that have
  * woo_sync_enabled = true and is_active = true.
- *
- * Schedule in supabase/config.toml:
- *   [cron]
- *   "cron-sync-woocommerce" = "0 * * * *"  (every hour)
+ * pg_cron job: 'woocommerce-hourly-sync' — schedule '45 * * * *'
  */
 serve(async (req) => {
   if (req.method === "OPTIONS") {

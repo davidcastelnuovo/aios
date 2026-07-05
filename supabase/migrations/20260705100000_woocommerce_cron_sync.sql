@@ -1,0 +1,14 @@
+-- Schedule hourly WooCommerce sync via pg_cron (minute 45).
+-- NOTE: This migration is for documentation only — the cron job was applied
+-- directly to prod via execute_sql using the project anon key.
+-- To re-apply on a fresh project, run cron.schedule() with the project's anon key.
+--
+-- Equivalent command (replace <ANON_KEY> with the project anon key):
+--   SELECT cron.schedule(
+--     'woocommerce-hourly-sync', '45 * * * *',
+--     $$ select net.http_post(
+--          url := 'https://zvoijyneresvkadpprel.supabase.co/functions/v1/cron-sync-woocommerce',
+--          headers := jsonb_build_object('Content-Type','application/json','Authorization','Bearer <ANON_KEY>'),
+--          body := '{}'::jsonb
+--        ); $$
+--   );
