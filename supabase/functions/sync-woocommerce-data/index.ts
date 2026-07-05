@@ -7,6 +7,7 @@ const corsHeaders = {
 };
 
 const PAGE_SIZE = 100;
+const FUNCTION_VERSION = "1.1.0"; // deployed 2026-07-05
 
 // ---- WooCommerce API helper ----
 async function wooFetch(
