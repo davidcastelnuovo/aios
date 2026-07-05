@@ -18,9 +18,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Unlink, RefreshCw, CheckCircle2, AlertCircle, ArrowLeft, Loader2, Copy, ExternalLink, Webhook, Settings, Plug, Search } from "lucide-react";
+import { Unlink, RefreshCw, CheckCircle2, AlertCircle, ArrowLeft, Loader2, Copy, ExternalLink, Webhook, Settings, Plug, Search, Share2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
+import { useUserIntegrations } from "@/hooks/useUserIntegrations";
+import { ManageIntegrationPermissionsDialog } from "@/components/forms/ManageIntegrationPermissionsDialog";
 
 // Google Ads icon component
 const GoogleAdsIcon = ({ className = "h-6 w-6" }: { className?: string }) => (
@@ -62,6 +64,20 @@ export default function GoogleAdsSettings() {
   const { buildPath } = useTenantPath();
   const [activeTab, setActiveTab] = useState("make-api");
   const [selectedConnection, setSelectedConnection] = useState<string>("");
+  // Per-connection sharing dialog state (mirrors Google Analytics settings)
+  const [sharingIntegrationId, setSharingIntegrationId] = useState<string | null>(null);
+  const [sharingIntegrationName, setSharingIntegrationName] = useState<string>("");
+  const [sharingOwnerId, setSharingOwnerId] = useState<string | null>(null);
+
+  // All Google Ads connections in this tenant the user can see (own + shared),
+  // each tagged with _isOwn / _sharedByName — this is what enables per-user
+  // connections + sharing, exactly like the Google Analytics settings page.
+  const { data: adsConnections = [], isLoading: loadingAdsConnections } = useUserIntegrations(
+    currentTenant?.id,
+    'google_ads'
+  );
+  const hasAnyDirectConnection = (adsConnections as any[]).length > 0;
+  const hasOwnDirectConnection = (adsConnections as any[]).some((i: any) => i._isOwn);
 
   // Fetch Google Ads integration (direct API)
   const { data: googleAdsIntegration, isLoading: loadingIntegration } = useQuery({
@@ -348,19 +364,20 @@ export default function GoogleAdsSettings() {
     },
   });
 
-  // Disconnect mutation (direct API)
+  // Disconnect mutation (direct API) — per connection id (multi-connection safe)
   const disconnectMutation = useMutation({
-    mutationFn: async () => {
-      if (!googleAdsIntegration?.id) throw new Error('No integration found');
+    mutationFn: async (integrationId: string) => {
+      if (!integrationId) throw new Error('No integration found');
       const { error } = await supabase
         .from('tenant_integrations')
         .update({ is_active: false, api_key: null })
-        .eq('id', googleAdsIntegration.id);
+        .eq('id', integrationId);
       if (error) throw error;
     },
     onSuccess: () => {
       toast.success('החיבור ל-Google Ads נותק בהצלחה');
       queryClient.invalidateQueries({ queryKey: ['google-ads-integration'] });
+      queryClient.invalidateQueries({ queryKey: ['user-integrations'] });
     },
     onError: (error) => {
       toast.error('שגיאה בניתוק: ' + (error as Error).message);
@@ -819,52 +836,129 @@ export default function GoogleAdsSettings() {
           </Card>
         </TabsContent>
 
-        {/* Direct API Connection Tab */}
+        {/* Direct API Connection Tab — per-user connections + sharing (like Analytics) */}
         <TabsContent value="api" className="space-y-6">
-          {needsReauth && (
-            <Alert variant="destructive" className="text-right">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle className="text-right">החיבור ל-Google Ads בוטל או פג תוקף</AlertTitle>
-              <AlertDescription className="text-right space-y-2">
-                <p>הסנכרון האוטומטי הופסק כי גוגל דחתה את ה-refresh token. צריך לחבר מחדש כדי להמשיך.</p>
-                {lastAuthError && (
-                  <p className="text-xs opacity-70">פרטי שגיאה: {lastAuthError}</p>
-                )}
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => connectMutation.mutate()}
-                  disabled={connectMutation.isPending}
-                  className="gap-2"
-                >
-                  {connectMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
-                  חבר מחדש
-                </Button>
-              </AlertDescription>
-            </Alert>
-          )}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center justify-between flex-row-reverse">
-                {isConnected ? (
-                  <Badge variant="default" className="bg-green-500 flex items-center gap-1">
-                    <CheckCircle2 className="h-3 w-3" />
-                    מחובר
-                  </Badge>
-                ) : (
-                  <Badge variant="secondary" className="flex items-center gap-1">
-                    <AlertCircle className="h-3 w-3" />
-                    לא מחובר
-                  </Badge>
-                )}
+                <Badge variant={hasAnyDirectConnection ? "default" : "secondary"} className={hasAnyDirectConnection ? "bg-green-500" : ""}>
+                  {hasAnyDirectConnection ? `${(adsConnections as any[]).length} חשבונות מחוברים` : "לא מחובר"}
+                </Badge>
                 <span className="text-right">Google Ads API</span>
               </CardTitle>
               <CardDescription className="text-right">
-                חיבור ישיר ל-API של Google Ads (דורש Developer Token מאושר)
+                כל משתמש יכול לחבר את חשבון Google Ads שלו, ולבחור לשתף אותו עם הצוות או להשאירו פרטי. חיבור ישיר דורש Developer Token מאושר.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {!isConnected ? (
+              {loadingAdsConnections ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : hasAnyDirectConnection ? (
+                <div className="space-y-4">
+                  {(adsConnections as any[]).map((integ: any) => {
+                    const s = integ.settings as Record<string, any> | null;
+                    const email = (s?.google_email as string) || (s?.customer_name as string) || 'חשבון Google Ads';
+                    const isOwn = integ._isOwn;
+                    const sharedByName = integ._sharedByName;
+                    const needsReauthRow = Boolean(s?.needs_reauth);
+                    return (
+                      <div key={integ.id} className={`flex items-center justify-between p-3 border rounded-lg ${needsReauthRow ? 'bg-destructive/10 border-destructive/40' : 'bg-muted/30'}`}>
+                        <div className="flex items-center gap-3">
+                          {needsReauthRow ? (
+                            <AlertCircle className="h-5 w-5 text-destructive shrink-0" />
+                          ) : (
+                            <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
+                          )}
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-sm">{email}</p>
+                              {!isOwn && (
+                                <Badge variant="secondary" className="text-xs">
+                                  שותף {sharedByName ? `ע"י ${sharedByName}` : ''}
+                                </Badge>
+                              )}
+                              {needsReauthRow && (
+                                <Badge variant="destructive" className="text-xs">נדרש חיבור מחדש</Badge>
+                              )}
+                            </div>
+                            {s?.connected_at && (
+                              <p className="text-xs text-muted-foreground">
+                                חובר: {new Date(s.connected_at as string).toLocaleDateString('he-IL')}
+                              </p>
+                            )}
+                            {needsReauthRow && (
+                              <p className="text-xs text-destructive mt-1">
+                                החיבור לגוגל בוטל או פג תוקף. לחץ "חבר מחדש" כדי לחדש את הגישה.
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          {needsReauthRow && isOwn && (
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => connectMutation.mutate()}
+                              disabled={connectMutation.isPending}
+                            >
+                              {connectMutation.isPending ? <Loader2 className="h-4 w-4 ml-1 animate-spin" /> : <ExternalLink className="h-4 w-4 ml-1" />}
+                              חבר מחדש
+                            </Button>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSharingIntegrationId(integ.id);
+                              setSharingIntegrationName(email);
+                              setSharingOwnerId(integ.user_id);
+                            }}
+                            title={isOwn ? "שתף עם חברי צוות" : "צפה בשיתופים (חיבור משותף בארגון)"}
+                          >
+                            <Share2 className="h-4 w-4 ml-1" />
+                            {isOwn ? "שתף" : "שיתופים"}
+                          </Button>
+                          {isOwn && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => disconnectMutation.mutate(integ.id)}
+                              disabled={disconnectMutation.isPending}
+                            >
+                              נתק
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  <div className="flex gap-2 flex-wrap">
+                    {!hasOwnDirectConnection && (
+                      <Button
+                        variant="outline"
+                        onClick={() => connectMutation.mutate()}
+                        disabled={connectMutation.isPending}
+                        className="border-dashed gap-2"
+                      >
+                        {connectMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+                        + חבר את חשבון Google Ads שלי
+                      </Button>
+                    )}
+                    <Button
+                      variant="outline"
+                      onClick={() => checkStatusMutation.mutate()}
+                      disabled={checkStatusMutation.isPending}
+                      className="gap-2"
+                    >
+                      {checkStatusMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                      בדוק חיבור
+                    </Button>
+                  </div>
+                </div>
+              ) : (
                 <div className="space-y-4">
                   <Alert className="text-right">
                     <AlertTitle className="flex items-center gap-2 flex-row-reverse justify-end">
@@ -872,10 +966,9 @@ export default function GoogleAdsSettings() {
                       התחבר ל-Google Ads
                     </AlertTitle>
                     <AlertDescription className="text-right">
-                      <p>לחץ על הכפתור למטה כדי לאשר גישה לחשבונות Google Ads שלך.</p>
+                      <p>לחץ למטה כדי לאשר גישה לחשבונות Google Ads שלך. כל משתמש מתחבר עם החשבון שלו; אחרי החיבור אפשר לשתף אותו עם הצוות.</p>
                       <p className="text-amber-600 mt-2">
-                        <strong>שים לב:</strong> חיבור זה דורש Developer Token מאושר על ידי Google.
-                        אם עדיין לא קיבלת אישור, השתמש באפשרות "חיבור דרך Make API".
+                        <strong>שים לב:</strong> חיבור זה דורש Developer Token מאושר. אם עדיין לא קיבלת אישור, השתמש ב"חיבור דרך Make API".
                       </p>
                     </AlertDescription>
                   </Alert>
@@ -895,52 +988,6 @@ export default function GoogleAdsSettings() {
                     )}
                   </Button>
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  <Alert className="border-green-200 bg-green-50 text-right">
-                    <AlertTitle className="text-green-800 flex items-center gap-2 flex-row-reverse justify-end">
-                      <CheckCircle2 className="h-4 w-4 text-green-600" />
-                      מחובר בהצלחה
-                    </AlertTitle>
-                    <AlertDescription className="text-green-700 text-right">
-                      {settings?.customer_name && (
-                        <span>חשבון: {settings.customer_name}</span>
-                      )}
-                      {settings?.customer_id && (
-                        <span className="block text-xs opacity-70">ID: {settings.customer_id}</span>
-                      )}
-                    </AlertDescription>
-                  </Alert>
-                  
-                  <div className="flex gap-2 flex-wrap">
-                    <Button
-                      variant="outline"
-                      onClick={() => checkStatusMutation.mutate()}
-                      disabled={checkStatusMutation.isPending}
-                      className="gap-2"
-                    >
-                      {checkStatusMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <RefreshCw className="h-4 w-4" />
-                      )}
-                      בדוק חיבור
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      onClick={() => disconnectMutation.mutate()}
-                      disabled={disconnectMutation.isPending}
-                      className="gap-2"
-                    >
-                      {disconnectMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Unlink className="h-4 w-4" />
-                      )}
-                      נתק חיבור
-                    </Button>
-                  </div>
-                </div>
               )}
             </CardContent>
           </Card>
@@ -959,6 +1006,15 @@ export default function GoogleAdsSettings() {
           <p>4. הנתונים יסונכרנו אוטומטית לפי ההגדרות</p>
         </CardContent>
       </Card>
+
+      {/* Share Integration Dialog (per-connection permissions) */}
+      <ManageIntegrationPermissionsDialog
+        open={!!sharingIntegrationId}
+        onOpenChange={(open) => { if (!open) setSharingIntegrationId(null); }}
+        integrationId={sharingIntegrationId || ''}
+        integrationName={`Google Ads - ${sharingIntegrationName}`}
+        integrationOwnerId={sharingOwnerId}
+      />
     </div>
   );
 }

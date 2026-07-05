@@ -617,12 +617,29 @@ async function getGoogleAdsAccounts(_supabase: any, tenantId: string, userId: st
     return i;
   }));
 
-  const allAccountsArrays = await Promise.all(refreshed.map(fetchAccountsForIntegration));
+  // Annotate every account with the connection (tenant_integrations row) it came from,
+  // so the table-create dialog can pin that exact connection (integrationId) on the table.
+  // This is what makes per-user + shared connections work at sync time.
+  const allAccountsArrays = await Promise.all(refreshed.map(async (integ) => {
+    const accs = await fetchAccountsForIntegration(integ);
+    return accs.map((a) => ({
+      ...a,
+      integration_id: integ.id,
+      integration_user_id: integ.user_id,
+      integration_email: integ.settings?.google_email || null,
+    }));
+  }));
 
+  // Dedup by account id. When the same account is reachable from more than one connection,
+  // prefer the current user's OWN connection so "my report" uses my login by default.
   const map = new Map<string, any>();
   for (const arr of allAccountsArrays) {
     for (const acc of arr) {
-      if (!map.has(acc.id)) map.set(acc.id, acc);
+      const existing = map.get(acc.id);
+      if (!existing) { map.set(acc.id, acc); continue; }
+      const existingIsOwn = existing.integration_user_id === userId;
+      const accIsOwn = acc.integration_user_id === userId;
+      if (accIsOwn && !existingIsOwn) map.set(acc.id, acc);
     }
   }
 

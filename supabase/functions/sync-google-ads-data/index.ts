@@ -125,35 +125,54 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get access token — try table tenant first, then fall back to source tenants
-    // of cross-tenant agency access (e.g. table in tenant A using Google Ads connected in tenant B
-    // because agency is shared via agency_tenant_access).
-    let { data: integration } = await supabase
-      .from('tenant_integrations')
-      .select('*')
-      .eq('tenant_id', tableTenantId)
-      .eq('integration_type', 'google_ads')
-      .eq('is_active', true)
-      .maybeSingle();
+    // Resolve WHICH Google Ads connection to use.
+    //
+    // Preferred: the exact connection chosen when the table was created, stored as
+    // `integration_settings.integrationId` (mirrors the Google Analytics sync). This is
+    // multi-connection safe — different tables/users can point at their own connection or a
+    // shared one, and two active connections on a tenant no longer collide.
+    //
+    // Fallback (legacy tables created before a connection was pinned): deterministically pick
+    // an accessible active connection for this table's tenant (+ agency source tenants),
+    // newest-updated first, preferring one not flagged needs_reauth. We must NEVER use
+    // `.maybeSingle()` here — it throws when a tenant has 2+ Google Ads connections, which is
+    // exactly what broke every account when a second user connected their own account.
+    const chosenIntegrationId = settings.integrationId || settings.integration_id || null;
 
-    if (!integration?.api_key) {
-      const { data: accessRows } = await supabase
+    let integration: any = null;
+
+    if (chosenIntegrationId) {
+      const { data } = await supabaseAdmin
+        .from('tenant_integrations')
+        .select('*')
+        .eq('id', chosenIntegrationId)
+        .eq('integration_type', 'google_ads')
+        .maybeSingle();
+      // Only use it if it's still active and usable; otherwise fall through to the resolver
+      // so a disabled/removed connection doesn't hard-fail an existing table.
+      if (data?.is_active && data?.api_key) integration = data;
+    }
+
+    if (!integration) {
+      const { data: accessRows } = await supabaseAdmin
         .from('agency_tenant_access')
         .select('source_tenant_id')
         .eq('accessing_tenant_id', tableTenantId);
-      const sourceTenantIds = (accessRows || [])
-        .map((r: any) => r.source_tenant_id)
-        .filter((id: any) => !!id && id !== tableTenantId);
+      const sourceTenantIds = Array.from(new Set([
+        tableTenantId,
+        ...((accessRows || []).map((r: any) => r.source_tenant_id).filter(Boolean)),
+      ]));
 
-      if (sourceTenantIds.length > 0) {
-        const { data: fallbackIntegrations } = await supabase
-          .from('tenant_integrations')
-          .select('*')
-          .in('tenant_id', sourceTenantIds)
-          .eq('integration_type', 'google_ads')
-          .eq('is_active', true);
-        integration = (fallbackIntegrations || []).find((i: any) => i.api_key) || null;
-      }
+      const { data: candidates } = await supabaseAdmin
+        .from('tenant_integrations')
+        .select('*')
+        .in('tenant_id', sourceTenantIds)
+        .eq('integration_type', 'google_ads')
+        .eq('is_active', true)
+        .order('updated_at', { ascending: false });
+
+      const usable = (candidates || []).filter((i: any) => i?.api_key);
+      integration = usable.find((i: any) => !(i.settings?.needs_reauth)) || usable[0] || null;
     }
 
     if (!integration?.api_key) {
