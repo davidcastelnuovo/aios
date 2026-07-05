@@ -41,6 +41,10 @@ interface GoogleAdsAccount {
   currency: string;
   manager: boolean;
   manager_id?: string;
+  // Which connection (tenant_integrations row) this account is reached through.
+  integration_id?: string;
+  integration_user_id?: string;
+  integration_email?: string | null;
 }
 
 const dateRangeOptions = [
@@ -184,6 +188,9 @@ export function GoogleAdsTableDialog({ open, onOpenChange, assignedClientIds }: 
         account_name: selectedAcc?.name || '',
         currency: selectedAcc?.currency || 'ILS',
         manager_id: selectedAcc?.manager_id || undefined,
+        // Pin the exact Google Ads connection this account came from, so sync uses the
+        // right user's login (multi-connection safe — mirrors Google Analytics tables).
+        integrationId: selectedAcc?.integration_id || undefined,
       };
 
       // Resolve agency_id: prefer the client's agency_id if a client is selected
@@ -405,6 +412,7 @@ export function GoogleAdsTableDialog({ open, onOpenChange, assignedClientIds }: 
                           return (
                             <SelectItem key={account.id} value={account.id}>
                               {account.name} ({formattedAccountId}) • {account.currency} {account.manager ? '(MCC)' : ''}
+                              {account.integration_email ? ` • ${account.integration_email}` : ''}
                             </SelectItem>
                           );
                         })}
