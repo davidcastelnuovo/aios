@@ -135,7 +135,7 @@ export function ShareTableDialog({ tableId, tableName, tenantId, clientId }: Sha
   });
 
   const getShareUrl = (token: string) => {
-    return `https://after-lead.com/shared/table/${token}`;
+    return `https://aios.co.il/shared/table/${token}`;
   };
 
   const copyLink = (token: string) => {
