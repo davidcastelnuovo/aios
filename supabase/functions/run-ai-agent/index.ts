@@ -115,6 +115,9 @@ const ALL_TOOLS = [
   { name: 'hide_social_comment', description: 'הסתרת תגובה (FB בלבד). דורש confirmed=true.', parameters: { type: 'object', properties: { comment_row_id: { type: 'string' }, confirmed: { type: 'boolean' } }, required: ['comment_row_id', 'confirmed'] } },
   { name: 'sync_social_pages', description: 'סנכרון מחדש של כל העמודים (כולל Page Access Tokens) מפייסבוק. הרץ אחרי חיבור חדש או כשעמוד חסר.', parameters: { type: 'object', properties: { client_id: { type: 'string' } } } },
   { name: 'analyze_campaign_performance', description: 'ניתוח ביצועי קמפיינים מטבלאות CRM. מזהה טבלאות קמפיין לפי שדות (spend+campaign_name) ולא לפי שם — תופס גם טבלאות בעברית. מחזיר coverage_summary (כמה לקוחות מסונכרנים מתוך הסקופ), synced_clients (עם spend/CPL/שינוי 7 מול 30 יום) ו-not_connected_clients (לקוחות שאין להם טבלת קמפיין). חובה לדווח על שני הסלוטים, ולא רק על מי שיש לו נתונים.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה לקוח ספציפי' }, agency_id: { type: 'string', description: 'סינון לסוכנות מסוימת' }, agency_name: { type: 'string', description: 'סינון לפי שם סוכנות (case-insensitive, חיפוש חלקי)' } } } },
+  // MASKYOO CALLS REPORTING
+  { name: 'get_maskyoo_calls_report', description: 'דוח שיחות מסקיו לדוחות SEO. מחזיר ספירות שיחות נכנסות לפי לקוח וקטגוריה (organic/paid) מ-seo_call_snapshots. אם אין snapshot — שולף ישירות מ-call_logs. מחזיר השוואה בין תקופות אם period_compare=true.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה לקוח (אופציונלי — בלעדיו מחזיר כל הלקוחות)' }, client_name: { type: 'string', description: 'חיפוש לקוח לפי שם אם אין client_id' }, period_start: { type: 'string', description: 'תחילת תקופה YYYY-MM-DD (ברירת מחדל: תחילת החודש הנוכחי)' }, period_end: { type: 'string', description: 'סוף תקופה YYYY-MM-DD (ברירת מחדל: היום)' }, category: { type: 'string', enum: ['organic', 'paid', 'all'], description: 'ברירת מחדל: all' }, period_compare: { type: 'boolean', description: 'אם true — מחזיר גם תקופה קודמת מקבילה להשוואה' } } } },
+  { name: 'sync_maskyoo_cdr', description: 'סנכרון CDRs (Call Detail Records) מ-API של מסקיו אל call_logs. הרץ כשהנתונים לא עדכניים. מחזיר כמה רשומות נוספו.', parameters: { type: 'object', properties: { from_date: { type: 'string', description: 'YYYY-MM-DD — תאריך התחלה לסנכרון (ברירת מחדל 7 ימים אחורה)' } } } },
   { name: 'update_client_health', description: 'עדכון מצב בריאות לקוח: מעדכן mood_status בטבלת clients ויוצר רשומה ב-communication_logs. השתמש בכלי הזה כדי להדליק דגל על לקוח כשמזהים בעיה (התייקרות, ירידה בביצועים).', parameters: { type: 'object', properties: { client_id: { type: 'string' }, mood_status: { type: 'string', enum: ['happy', 'wavering', 'churn_risk'], description: 'מצב הלקוח: happy=תקין, wavering=מתלבט, churn_risk=סיכון נטישה' }, communication_status: { type: 'string', enum: ['normal', 'sensitive', 'complaint'], description: 'סטטוס תקשורת לרשומת communication_logs' }, note: { type: 'string', description: 'הערה/סיכום — מה הבעיה שזוהתה' } }, required: ['client_id', 'mood_status', 'note'] } },
   // CLIENTS - full CRUD
   { name: 'create_client', description: 'יצירת לקוח חדש במערכת', parameters: { type: 'object', properties: { name: { type: 'string', description: 'שם העסק/לקוח' }, contact_name: { type: 'string' }, phone: { type: 'string' }, email: { type: 'string' }, agency_id: { type: 'string', description: 'מזהה סוכנות (אופציונלי)' }, notes: { type: 'string' } }, required: ['name'] } },
@@ -3220,6 +3223,97 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const data = await res.json()
       if (!res.ok) return { error: data.error || `שליחה נכשלה [${res.status}]` }
       return { success: true, campaigner_id, campaigner_name: campaigner.full_name, phone: campaigner.phone, ...data }
+    }
+
+    // ============ MASKYOO CALLS REPORTING ============
+    case 'get_maskyoo_calls_report': {
+      const { client_id: argClientId, client_name, period_start, period_end, category, period_compare } = args
+
+      // Resolve period — default to current month
+      const now = new Date()
+      const defaultStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+      const defaultEnd = now.toISOString().split('T')[0]
+      const pStart = period_start || defaultStart
+      const pEnd = period_end || defaultEnd
+
+      // Resolve client_id by name if not given
+      let resolvedClientId = argClientId
+      if (!resolvedClientId && client_name) {
+        const { data: found } = await supabase.from('clients').select('id, name').in('tenant_id', accessibleTenantIds).ilike('name', `%${client_name}%`).limit(5)
+        if (!found?.length) return { error: `לא נמצא לקוח בשם "${client_name}"` }
+        if (found.length > 1) return { ambiguous: true, matches: found.map((c: any) => ({ id: c.id, name: c.name })), message: 'נמצאו מספר לקוחות — ציין client_id' }
+        resolvedClientId = found[0].id
+      }
+
+      // Query seo_call_snapshots for given period
+      const snapshotQuery = supabase
+        .from('seo_call_snapshots')
+        .select('client_id, category, period_start, period_end, incoming_count, is_manual, note, synced_at')
+        .in('tenant_id', accessibleTenantIds)
+        .gte('period_start', pStart)
+        .lte('period_end', pEnd)
+      if (resolvedClientId) snapshotQuery.eq('client_id', resolvedClientId)
+      if (category && category !== 'all') snapshotQuery.eq('category', category)
+
+      const { data: snapshots, error: snapErr } = await snapshotQuery.order('period_start', { ascending: false })
+      if (snapErr) return { error: snapErr.message }
+
+      // Enrich with client names
+      const clientIds = [...new Set((snapshots || []).map((s: any) => s.client_id))]
+      let clientNames: Record<string, string> = {}
+      if (clientIds.length) {
+        const { data: clients } = await supabase.from('clients').select('id, name').in('id', clientIds)
+        clients?.forEach((c: any) => { clientNames[c.id] = c.name })
+      }
+
+      const rows = (snapshots || []).map((s: any) => ({
+        client_id: s.client_id,
+        client_name: clientNames[s.client_id] || s.client_id,
+        category: s.category,
+        period: `${s.period_start} → ${s.period_end}`,
+        incoming_calls: s.incoming_count,
+        is_manual: s.is_manual,
+        note: s.note,
+        last_sync: s.synced_at,
+      }))
+
+      // Optional: compare with previous period of same length
+      let prevRows: any[] = []
+      if (period_compare) {
+        const startDate = new Date(pStart)
+        const endDate = new Date(pEnd)
+        const diffMs = endDate.getTime() - startDate.getTime()
+        const prevEnd = new Date(startDate.getTime() - 86400000).toISOString().split('T')[0]
+        const prevStart = new Date(startDate.getTime() - diffMs - 86400000).toISOString().split('T')[0]
+
+        const prevQuery = supabase
+          .from('seo_call_snapshots')
+          .select('client_id, category, incoming_count')
+          .in('tenant_id', accessibleTenantIds)
+          .gte('period_start', prevStart)
+          .lte('period_end', prevEnd)
+        if (resolvedClientId) prevQuery.eq('client_id', resolvedClientId)
+        if (category && category !== 'all') prevQuery.eq('category', category)
+        const { data: prev } = await prevQuery
+        prevRows = (prev || []).map((p: any) => ({
+          client_id: p.client_id, category: p.category, incoming_calls: p.incoming_count,
+          period: `${prevStart} → ${prevEnd}`,
+        }))
+      }
+
+      return { period: `${pStart} → ${pEnd}`, total_snapshots: rows.length, results: rows, previous_period: prevRows.length ? prevRows : undefined }
+    }
+
+    case 'sync_maskyoo_cdr': {
+      const { from_date } = args
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/sync-maskyoo-cdr`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+        body: JSON.stringify({ tenant_id: tenantId, from_date }),
+      })
+      const data = await res.json()
+      if (!res.ok) return { error: data.error || `סנכרון נכשל [${res.status}]` }
+      return { success: true, ...data }
     }
 
     default:

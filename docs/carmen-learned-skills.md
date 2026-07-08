@@ -286,3 +286,45 @@ Claude Code health-check skill written to `ai_skills` (scope=tenant, created_by_
 **Why:** Carmen was unaware of team members by name (e.g. "פליקס"). This fix makes the full team roster available in every session without Carmen needing to call `list_campaigners` first.
 
 **DB (ai_skills):** slugs `send_calendar_invite`, `send_message_to_campaigner`, `team_roster_awareness` (scope=tenant, created_by_agent=true)
+
+---
+
+## 2026-07-08 — get_maskyoo_calls_report + sync_maskyoo_cdr (Maskyoo reports)
+
+**Capabilities built** (in `run-ai-agent/index.ts` + RLS fix):
+
+### 1. `get_maskyoo_calls_report` — דוח שיחות מסקיו לפי לקוח/תקופה
+
+**What it does:** שולף ספירות שיחות נכנסות מ-`seo_call_snapshots` לפי לקוח, קטגוריה (organic/paid), ותקופה. תומך בהשוואה לתקופה קודמת (period_compare=true). מסמן אם הנתון הוכנס ידנית (is_manual).
+
+**Parameters:**
+- `client_id` — UUID לקוח (אופציונלי, בלעדיו מחזיר כל הלקוחות)
+- `client_name` — חיפוש חלקי אם אין client_id
+- `period_start` / `period_end` — YYYY-MM-DD (ברירת מחדל: החודש הנוכחי)
+- `category` — `organic` / `paid` / `all` (ברירת מחדל: all)
+- `period_compare` — boolean, אם true מחזיר גם תקופה קודמת מקבילה
+
+**How to use:**
+- "כמה שיחות היו לברלינר החודש?" → `get_maskyoo_calls_report(client_name="ברלינר", period_compare=true)`
+- "דוח שיחות אורגני לחודש יוני" → `get_maskyoo_calls_report(category="organic", period_start="2026-06-01", period_end="2026-06-30")`
+
+### 2. `sync_maskyoo_cdr` — סנכרון CDRs מ-API מסקיו
+
+**What it does:** קורא ל-`sync-maskyoo-cdr` edge function כדי למשוך שיחות חדשות מה-API של מסקיו אל `call_logs`. מחזיר כמה רשומות נוספו.
+
+**Parameters:** `from_date` (YYYY-MM-DD, ברירת מחדל 7 ימים אחורה)
+
+**How to use:** "תסנכרני שיחות מסקיו" → `sync_maskyoo_cdr()`
+
+### RLS Fix
+טבלת `seo_call_snapshots` הייתה חסומה לחלוטין (RLS ללא פוליסי). הוספנו:
+- owners/team_managers: גישה מלאה
+- campaigners/seo: צפייה בלבד ללקוחות שלהם
+
+**Architecture:**
+- `maskyoo_numbers` — מספר טלפון → לקוח + קטגוריה (organic/paid)
+- `call_logs` (provider='maskyoo') — כל השיחות הגולמיות (4,908 רשומות)
+- `seo_call_snapshots` — צברים לפי לקוח/קטגוריה/תקופה (61 snapshots)
+- `maskyoo_settings` — הגדרות API לטננט (base_url + api_token)
+
+**Commits:** see branch `claude/masquio-reports-integration-d006h5`
