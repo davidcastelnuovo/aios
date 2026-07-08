@@ -239,7 +239,9 @@ export default function DynamicTables() {
       if (!tenantId) return [];
       const { data, error } = await supabase
         .from('crm_dashboards')
-        .select('*, clients(name), agencies(name)')
+        // include the client's agency_id so dashboards that have no explicit
+        // agency_id but belong to a client in an agency still scope correctly.
+        .select('*, clients(name, agency_id), agencies(name)')
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data || [];
@@ -944,9 +946,13 @@ export default function DynamicTables() {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {dashboards
                 .filter((dashboard: any) => {
-                  // Filter by selected agency
+                  // Filter by selected agency. A dashboard's effective agency is
+                  // its own agency_id, or (when unset) its client's agency. When a
+                  // specific agency is selected, show ONLY dashboards of that agency
+                  // — previously null-agency dashboards leaked into every agency.
                   if (selectedAgency && selectedAgency !== 'all') {
-                    if (dashboard.agency_id && dashboard.agency_id !== selectedAgency) {
+                    const effectiveAgencyId = dashboard.agency_id || dashboard.clients?.agency_id || null;
+                    if (effectiveAgencyId !== selectedAgency) {
                       return false;
                     }
                   }
