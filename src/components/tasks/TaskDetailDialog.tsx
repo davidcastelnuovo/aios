@@ -332,8 +332,7 @@ export function TaskDetailDialog({
         task_id: task!.id,
         content: newUpdate,
         user_id: user.id,
-        update_type: "comment",
-      } as any);
+      });
       if (error) throw error;
     },
     onSuccess: () => {
