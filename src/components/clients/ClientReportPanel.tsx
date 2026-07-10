@@ -104,6 +104,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
   const [selectedGroupId, setSelectedGroupId] = useState("");
   const [directPhone, setDirectPhone] = useState("");
   const [emailRecipients, setEmailRecipients] = useState<string[]>([]);
+  const [emailSubject, setEmailSubject] = useState("");
   const [messageText, setMessageText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [screenshotBlob, setScreenshotBlob] = useState<Blob | null>(null);
@@ -185,8 +186,9 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
       if (client.phone) setDirectPhone(client.phone);
       if (client.email) setEmailRecipients((prev) => (prev.length === 0 ? [client.email!] : prev));
       if (client.whatsapp_group_id) setSelectedGroupId(client.whatsapp_group_id);
+      setEmailSubject(`דוח ${table.name}${client.name ? ` - ${client.name}` : ""}`);
     }
-  }, [client]);
+  }, [client, table.name]);
 
   // On every table open: clear stale screenshot, sync data, then capture fresh
   useEffect(() => {
@@ -458,7 +460,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
           reader.readAsDataURL(screenshotBlob);
         });
 
-        const subject = `דוח ${table.name}${client?.name ? ` - ${client.name}` : ""}`;
+        const subject = emailSubject || `דוח ${table.name}${client?.name ? ` - ${client.name}` : ""}`;
         const bodyHtml = buildBrandedEmailHtml({
           title: `דוח ${table.name}`,
           subtitle: client?.name ? `עבור ${client.name}` : undefined,
@@ -626,24 +628,33 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
         )}
 
         {sendEmail && (
-          <EmailRecipientsSelector
-            options={[
-              ...(client?.email
-                ? [{
-                    email: client.email,
-                    label: `${client.name} (לקוח)`,
-                    icon: "📋",
-                  } satisfies EmailOption]
-                : []),
-              ...((teamMembers || []).map((t: any) => ({
-                email: t.campaigners.email,
-                label: `${t.campaigners.full_name}${t.role_on_account ? ` (${t.role_on_account})` : ""}`,
-                icon: "👤",
-              } satisfies EmailOption))),
-            ]}
-            selectedEmails={emailRecipients}
-            onChange={setEmailRecipients}
-          />
+          <div className="space-y-2">
+            <EmailRecipientsSelector
+              options={[
+                ...(client?.email
+                  ? [{
+                      email: client.email,
+                      label: `${client.name} (לקוח)`,
+                      icon: "📋",
+                    } satisfies EmailOption]
+                  : []),
+                ...((teamMembers || []).map((t: any) => ({
+                  email: t.campaigners.email,
+                  label: `${t.campaigners.full_name}${t.role_on_account ? ` (${t.role_on_account})` : ""}`,
+                  icon: "👤",
+                } satisfies EmailOption))),
+              ]}
+              selectedEmails={emailRecipients}
+              onChange={setEmailRecipients}
+            />
+            <Input
+              value={emailSubject}
+              onChange={(e) => setEmailSubject(e.target.value)}
+              placeholder="נושא האימייל..."
+              className="h-8 text-xs"
+              dir="rtl"
+            />
+          </div>
         )}
 
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
