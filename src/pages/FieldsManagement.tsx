@@ -154,7 +154,7 @@ export default function FieldsManagement() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['custom-fields'] });
+      queryClient.invalidateQueries({ queryKey: ['custom-fields', tenantId] });
       toast.success('שדה נוסף בהצלחה');
       setIsAddDialogOpen(false);
       setNewField({
@@ -183,7 +183,7 @@ export default function FieldsManagement() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['custom-fields'] });
+      queryClient.invalidateQueries({ queryKey: ['custom-fields', tenantId] });
       toast.success('שדה עודכן בהצלחה');
     },
     onError: (error: Error) => {
@@ -201,7 +201,7 @@ export default function FieldsManagement() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['custom-fields'] });
+      queryClient.invalidateQueries({ queryKey: ['custom-fields', tenantId] });
       toast.success('שדה נמחק בהצלחה');
     },
     onError: (error: Error) => {
@@ -319,14 +319,6 @@ export default function FieldsManagement() {
         return '';
     }
   };
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <p>טוען...</p>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6 p-6" dir="rtl">

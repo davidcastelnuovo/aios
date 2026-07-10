@@ -379,8 +379,8 @@ export default function Clients() {
     },
     onSuccess: () => {
       toast.success("הסטטוס עודכן בהצלחה");
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
-      queryClient.invalidateQueries({ queryKey: ["client-onboarding"] });
+      queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["client-onboarding", tenantId] });
     },
     onError: () => {
       toast.error("שגיאה בעדכון הסטטוס");
@@ -397,7 +397,7 @@ export default function Clients() {
     },
     onSuccess: () => {
       toast.success("מצב הלקוח עודכן בהצלחה");
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
     },
     onError: () => {
       toast.error("שגיאה בעדכון מצב הלקוח");
@@ -431,7 +431,7 @@ export default function Clients() {
     },
     onSuccess: () => {
       toast.success("הקמפיינר שויך בהצלחה");
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
     },
     onError: () => {
       toast.error("שגיאה בשיוך הקמפיינר");
@@ -448,7 +448,7 @@ export default function Clients() {
     },
     onSuccess: () => {
       toast.success("הלקוח נמחק בהצלחה");
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
       setDeletingClient(null);
     },
     onError: () => {
@@ -466,7 +466,7 @@ export default function Clients() {
     },
     onSuccess: () => {
       toast.success("קישור התיקיה עודכן בהצלחה");
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
       setEditingFolderLink(null);
     },
     onError: () => {
@@ -618,10 +618,6 @@ export default function Clients() {
         return { emoji: "😊", text: "לקוח מבסוט", color: "text-green-600 bg-green-50 border-green-200" };
     }
   };
-
-  if (isLoading) {
-    return <div className="flex justify-center p-8">טוען...</div>;
-  }
 
   return (
     <div className="flex h-full min-h-0 max-h-full flex-col gap-4 overflow-hidden p-4">

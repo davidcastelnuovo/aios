@@ -417,8 +417,8 @@ export default function Users() {
       return data;
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
-      await queryClient.refetchQueries({ queryKey: ["users-with-roles"] });
+      await queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
+      await queryClient.refetchQueries({ queryKey: ["users-with-roles", tenantId] });
       toast.success("התפקיד נוסף בהצלחה");
     },
     onError: (error: Error) => {
@@ -451,8 +451,8 @@ export default function Users() {
       return data;
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
-      await queryClient.refetchQueries({ queryKey: ["users-with-roles"] });
+      await queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
+      await queryClient.refetchQueries({ queryKey: ["users-with-roles", tenantId] });
       toast.success("התפקיד הוסר בהצלחה");
     },
     onError: (error: Error) => {
@@ -480,8 +480,8 @@ export default function Users() {
       }
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
-      await queryClient.refetchQueries({ queryKey: ["users-with-roles"] });
+      await queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
+      await queryClient.refetchQueries({ queryKey: ["users-with-roles", tenantId] });
       toast.success("קמפיינר עודכן בהצלחה");
     },
     onError: (error: Error) => {
@@ -509,8 +509,8 @@ export default function Users() {
       }
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
-      await queryClient.refetchQueries({ queryKey: ["users-with-roles"] });
+      await queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
+      await queryClient.refetchQueries({ queryKey: ["users-with-roles", tenantId] });
       toast.success("איש מכירות עודכן בהצלחה");
     },
     onError: (error: Error) => {
@@ -660,8 +660,8 @@ export default function Users() {
       return data;
     },
     onSuccess: async (data) => {
-      await queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
-      await queryClient.refetchQueries({ queryKey: ["users-with-roles"] });
+      await queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
+      await queryClient.refetchQueries({ queryKey: ["users-with-roles", tenantId] });
       
       // Show success message with invitation link if available
       if (data.invitationLink) {
@@ -715,8 +715,8 @@ export default function Users() {
       },
       onSuccess: async () => {
         // Force refetch both queries
-        await queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
-        await queryClient.refetchQueries({ queryKey: ["users-with-roles"] });
+        await queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
+        await queryClient.refetchQueries({ queryKey: ["users-with-roles", tenantId] });
         toast.success("המשתמש נמחק בהצלחה");
       },
       onError: (error: Error) => {
