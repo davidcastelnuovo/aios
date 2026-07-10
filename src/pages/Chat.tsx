@@ -220,7 +220,9 @@ export default function Chat() {
         whatsapp_avatar_url: contact.whatsapp_avatar_url,
       }));
     },
-    enabled: !!tenantId && !agenciesLoading && !debouncedSearch,
+    // userAgencyIds is in the queryKey — refetch fires automatically once agencies load.
+    // No need to block the entire query while agencies are loading.
+    enabled: !!tenantId && !debouncedSearch,
     refetchInterval: 30000,
   });
 
@@ -297,7 +299,9 @@ export default function Chat() {
       const { data, error } = await supabase
         .from('telegram_messages')
         .select('chat_id, sender_name, sender_username, created_at, text, direction, tenant_id')
-        .order('created_at', { ascending: false });
+        .eq('tenant_id', tenantId)
+        .order('created_at', { ascending: false })
+        .limit(500);
       
       if (error || !data) return [];
       
@@ -544,16 +548,6 @@ export default function Chat() {
     return filteredContacts.filter(c => selectedChatIds.has(c.id));
   };
 
-  if (agenciesLoading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-2 text-sm text-muted-foreground">טוען סוכנויות...</p>
-        </div>
-      </div>
-    );
-  }
 
   if (chatFilter.kind === "platform" && chatFilter.platform === "agents") {
     return (
