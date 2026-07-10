@@ -207,7 +207,10 @@ serve(async (req) => {
       if (!to || !subject) throw new Error('Missing to or subject');
 
       // Encode subject as RFC 2047 (UTF-8 base64) so Hebrew/non-ASCII renders correctly
-      const encodedSubject = `=?UTF-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`;
+      const subjectBytes = new TextEncoder().encode(subject);
+      let subjectBinary = '';
+      for (let i = 0; i < subjectBytes.length; i++) subjectBinary += String.fromCharCode(subjectBytes[i]);
+      const encodedSubject = `=?UTF-8?B?${btoa(subjectBinary)}?=`;
       const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
       // Inline images use Content-Disposition: inline + Content-ID, referenced from HTML via cid:<id>.
       const hasInline = hasAttachments && attachments.some((a: any) => a?.disposition === 'inline' && a?.cid);
