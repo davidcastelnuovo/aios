@@ -46,6 +46,8 @@ Deno.serve(async (req) => {
     const tenantId = formData.get('tenantId') as string | null;
     const caption = formData.get('caption') as string || '';
     const fileType = formData.get('fileType') as string || 'document';
+    // Optional explicit sender instance chosen by the caller (report/dashboard sender picker).
+    const chosenIntegrationId = formData.get('integrationId') as string | null;
 
     if (!rawFile) {
       return new Response(JSON.stringify({ error: 'No file provided' }), {
@@ -103,17 +105,35 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get Green API integration — prefer the current user's connection,
-    // fall back to any active connection within the same tenant so reports
-    // can be sent even if the active user hasn't personally configured Green API.
-    let { data: integration } = await supabaseClient
-      .from('tenant_integrations')
-      .select('*')
-      .eq('tenant_id', resolvedTenantId)
-      .eq('user_id', user.id)
-      .eq('integration_type', 'green_api')
-      .eq('is_active', true)
-      .maybeSingle();
+    // Sender selection (backward compatible — no integrationId ⇒ identical to before):
+    //   1) explicit instance chosen by the caller (validated to this tenant + active),
+    //   2) else the current user's own connection,
+    //   3) else any active green_api connection within the same tenant.
+    let integration: any = null;
+
+    if (chosenIntegrationId) {
+      const { data: chosen } = await supabaseClient
+        .from('tenant_integrations')
+        .select('*')
+        .eq('id', chosenIntegrationId)
+        .eq('tenant_id', resolvedTenantId)
+        .eq('integration_type', 'green_api')
+        .eq('is_active', true)
+        .maybeSingle();
+      if (chosen?.api_key && chosen?.settings?.instance_id) integration = chosen;
+    }
+
+    if (!integration?.api_key || !integration?.settings?.instance_id) {
+      const { data: userIntegration } = await supabaseClient
+        .from('tenant_integrations')
+        .select('*')
+        .eq('tenant_id', resolvedTenantId)
+        .eq('user_id', user.id)
+        .eq('integration_type', 'green_api')
+        .eq('is_active', true)
+        .maybeSingle();
+      if (userIntegration) integration = userIntegration;
+    }
 
     if (!integration?.api_key || !integration?.settings?.instance_id) {
       const { data: tenantIntegration } = await supabaseClient
