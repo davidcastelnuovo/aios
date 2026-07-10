@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -36,6 +36,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
   const [viewDashboard, setViewDashboard] = useState<{ id: string; name: string } | null>(null);
   const [showLinkSection, setShowLinkSection] = useState(false);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  const userSelectedRef = useRef(false);
 
   // All tables for the tenant
   const { data: allTables = [], isLoading } = useQuery({
@@ -172,10 +173,20 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
       if (activeTabId !== null) setActiveTabId(null);
       return;
     }
-    if (!activeTabId || !items.find((i) => i.id === activeTabId)) {
-      setActiveTabId(items[0].id);
+    const currentExists = !!items.find((i) => i.id === activeTabId);
+    if (!currentExists) {
+      // No valid selection — prefer first dashboard, else first item
+      const firstDash = items.find((i) => i.kind === "dashboard");
+      setActiveTabId((firstDash || items[0]).id);
+    } else if (!userSelectedRef.current) {
+      // User hasn't manually picked yet: if on a table but dashboards just loaded, switch to dashboard
+      const currentItem = items.find((i) => i.id === activeTabId);
+      if (currentItem?.kind === "table") {
+        const firstDash = items.find((i) => i.kind === "dashboard");
+        if (firstDash) setActiveTabId(firstDash.id);
+      }
     }
-  }, [items, activeTabId]);
+  }, [items]);
 
   if (isLoading) {
     return (
@@ -207,7 +218,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
 
         {hasContent && (
           <div className="flex-1 min-w-0">
-            <Tabs value={activeItem?.id} onValueChange={setActiveTabId} dir="rtl">
+            <Tabs value={activeItem?.id} onValueChange={(id) => { userSelectedRef.current = true; setActiveTabId(id); }} dir="rtl">
               <TabsList className="h-9 w-full justify-start overflow-x-auto flex-nowrap">
                 {items.map((it) => (
                   <TabsTrigger

@@ -1,9 +1,6 @@
 // send-resend-email — sends a single email via the Resend API.
-// Pure sender: builds no audience and writes no rows; callers (broadcast-dispatch
-// or a test invocation) own status tracking. Requires the RESEND_API_KEY secret.
-//
 // Body: { to, subject, html?, text?, fromEmail?, fromName?, replyTo?,
-//         headers?: Record<string,string>, tags?: {name,value}[] }
+//         headers?, tags?, attachments?: [{filename, content (base64), contentType}] }
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -11,7 +8,6 @@ const corsHeaders = {
 };
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') ?? '';
-// Verified sending domain is aios.co.il — override per-call or via RESEND_FROM_EMAIL.
 const DEFAULT_FROM_EMAIL = Deno.env.get('RESEND_FROM_EMAIL') ?? 'noreply@aios.co.il';
 const DEFAULT_FROM_NAME = Deno.env.get('RESEND_FROM_NAME') ?? 'AfterLead';
 
@@ -26,7 +22,7 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'resend_not_configured', details: 'RESEND_API_KEY secret is missing' }), { status: 400, headers: corsHeaders });
     }
 
-    const { to, subject, html, text, fromEmail, fromName, replyTo, headers, tags } = await req.json();
+    const { to, subject, html, text, fromEmail, fromName, replyTo, headers, tags, attachments } = await req.json();
     if (!to || !subject || (!html && !text)) {
       return new Response(JSON.stringify({ error: 'missing_fields', details: 'to, subject and html|text are required' }), { status: 400, headers: corsHeaders });
     }
@@ -38,6 +34,19 @@ Deno.serve(async (req) => {
     if (replyTo) payload.reply_to = replyTo;
     if (headers && typeof headers === 'object') payload.headers = headers;
     if (Array.isArray(tags)) payload.tags = tags;
+    if (Array.isArray(attachments) && attachments.length > 0) {
+      // Resend expects: [{ filename, content (base64 string), content_type, content_id? }]
+      // Set content_id to enable inline CID references in HTML (cid:<content_id>)
+      payload.attachments = attachments.map((a: any) => {
+        const att: any = {
+          filename: a.filename,
+          content: a.content,
+          content_type: a.contentType || a.content_type || 'application/octet-stream',
+        };
+        if (a.content_id || a.contentId) att.content_id = a.content_id || a.contentId;
+        return att;
+      });
+    }
 
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
