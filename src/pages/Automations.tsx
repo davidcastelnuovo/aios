@@ -108,7 +108,7 @@ export default function Automations() {
 
       return [...(own || []), ...shared];
     },
-    enabled: !!tenantId && isActiveTenantSynced,
+    enabled: !!tenantId,
   });
 
   // Fetch logs for selected automation
@@ -143,7 +143,7 @@ export default function Automations() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["automations"] });
+      queryClient.invalidateQueries({ queryKey: ["automations", tenantId] });
       toast({
         title: "אוטומציה עודכנה",
       });
@@ -168,7 +168,7 @@ export default function Automations() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["automations"] });
+      queryClient.invalidateQueries({ queryKey: ["automations", tenantId] });
       toast({
         title: "אוטומציה נמחקה",
       });
@@ -242,7 +242,7 @@ export default function Automations() {
       return clone;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["automations"] });
+      queryClient.invalidateQueries({ queryKey: ["automations", tenantId] });
       toast({ title: "האוטומציה שוכפלה", description: "נוצר עותק כבוי. הפעל אותו לאחר העריכה." });
     },
     onError: (error: any) => {
@@ -313,7 +313,7 @@ export default function Automations() {
       return data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["automations"] });
+      queryClient.invalidateQueries({ queryKey: ["automations", tenantId] });
       navigate(buildPath(`automations/flow/${data.id}`));
     },
     onError: (err: any) => {
@@ -523,7 +523,7 @@ export default function Automations() {
       return data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["automations"] });
+      queryClient.invalidateQueries({ queryKey: ["automations", tenantId] });
       navigate(buildPath(`automations/flow/${data.id}`));
     },
     onError: (err: any) => {

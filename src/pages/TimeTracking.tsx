@@ -52,7 +52,8 @@ export default function TimeTracking() {
   }, []);
 
   const { data: profile } = useQuery({
-    queryKey: ["profile"],
+    // tenantId in key ensures the profile cache is scoped per-tenant (campaigner_id can differ)
+    queryKey: ["profile", tenantId],
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
@@ -62,10 +63,11 @@ export default function TimeTracking() {
         .select("campaigner_id")
         .eq("id", user.id)
         .maybeSingle();
-      
+
       if (error) throw error;
       return data;
     },
+    enabled: !!tenantId,
   });
 
   const { data: campaigners } = useQuery({
@@ -75,6 +77,7 @@ export default function TimeTracking() {
       const { data, error } = await supabase
         .from("campaigners")
         .select("*")
+        .eq("tenant_id", tenantId)
         .eq("active", true)
         .order("full_name");
       if (error) throw error;
