@@ -517,7 +517,16 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
               ],
             },
           });
-          if (error) throw new Error(error.message || "שגיאה בשליחה");
+          if (error) {
+            // Extract the real error message from the edge function response body
+            let errorMsg = error.message;
+            try {
+              const body = await (error as any).context?.json?.();
+              if (body?.error) errorMsg = body.error;
+              else if (body?.message) errorMsg = body.message;
+            } catch { /* ignore parse errors */ }
+            throw new Error(errorMsg);
+          }
           if (data?.error) throw new Error(data.error);
         }
         toast.success("הדוח נשלח באימייל בהצלחה");
