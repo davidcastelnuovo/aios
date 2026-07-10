@@ -186,7 +186,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
       if (client.phone) setDirectPhone(client.phone);
       if (client.email) setEmailRecipients((prev) => (prev.length === 0 ? [client.email!] : prev));
       if (client.whatsapp_group_id) setSelectedGroupId(client.whatsapp_group_id);
-      setEmailSubject(`דוח ${table.name}${client.name ? ` - ${client.name}` : ""}`);
+      setEmailSubject((prev) => prev || `דוח ${table.name}${client.name ? ` - ${client.name}` : ""}`);
     }
   }, [client, table.name]);
 
