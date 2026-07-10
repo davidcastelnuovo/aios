@@ -188,27 +188,33 @@ Deno.serve(async (req) => {
       });
 
       // ---- Direct API path: invoke sync-google-ads-data per table ----
-      for (const table of directApiTables) {
-        try {
-          const res = await fetch(`${supabaseUrl}/functions/v1/sync-google-ads-data`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${supabaseServiceKey}`,
-              'x-internal-cron': 'true',
-            },
-            body: JSON.stringify({ table_id: table.id }),
-          });
-          const txt = await res.text();
-          if (!res.ok) {
-            results.push({ table: table.name, status: 'error', source: 'direct_api', reason: `HTTP ${res.status}: ${txt.slice(0, 200)}` });
-          } else {
-            results.push({ table: table.name, status: 'synced', source: 'direct_api' });
+      // Process in small concurrent chunks (no long sequential sleeps) so a
+      // tenant with many accounts (~50) completes within one invocation instead
+      // of timing out partway (which previously left most tables un-synced).
+      const DIRECT_CHUNK = 5;
+      for (let i = 0; i < directApiTables.length; i += DIRECT_CHUNK) {
+        const chunk = directApiTables.slice(i, i + DIRECT_CHUNK);
+        await Promise.all(chunk.map(async (table: any) => {
+          try {
+            const res = await fetch(`${supabaseUrl}/functions/v1/sync-google-ads-data`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${supabaseServiceKey}`,
+                'x-internal-cron': 'true',
+              },
+              body: JSON.stringify({ table_id: table.id }),
+            });
+            const txt = await res.text();
+            if (!res.ok) {
+              results.push({ table: table.name, status: 'error', source: 'direct_api', reason: `HTTP ${res.status}: ${txt.slice(0, 200)}` });
+            } else {
+              results.push({ table: table.name, status: 'synced', source: 'direct_api' });
+            }
+          } catch (err) {
+            results.push({ table: table.name, status: 'error', source: 'direct_api', reason: err instanceof Error ? err.message : String(err) });
           }
-        } catch (err) {
-          results.push({ table: table.name, status: 'error', source: 'direct_api', reason: err instanceof Error ? err.message : String(err) });
-        }
-        await new Promise((r) => setTimeout(r, 1000));
+        }));
       }
 
       // ---- Make.com path (legacy) ----

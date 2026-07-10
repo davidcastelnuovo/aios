@@ -102,7 +102,13 @@ serve(async (req) => {
       };
     }
 
-    if (!config.target) {
+    // SEO report tables ('seo_unified' / 'ahrefs_reports') are backed by stored
+    // ahrefs_reports snapshots keyed by client — they do NOT need a target domain
+    // (target is only an optional filter there). Only live Site Explorer syncs
+    // require a target, so don't block reports-backed tables on a missing target.
+    const isReportsBacked = settings.data_source === 'ahrefs_reports' || settings.data_source === 'seo_unified';
+
+    if (!config.target && !isReportsBacked) {
       return new Response(
         JSON.stringify({ error: 'Missing target domain (set targetDomain in integration_settings)' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -111,7 +117,7 @@ serve(async (req) => {
 
     // SEO report tables are backed by ahrefs_reports. They should refresh from
     // stored snapshots instead of calling the older Site Explorer endpoints.
-    if (settings.data_source === 'ahrefs_reports' || settings.data_source === 'seo_unified') {
+    if (isReportsBacked) {
       const clientId = settings.clientId || settings.client_id || tableRow.client_id;
       if (!clientId) {
         return new Response(
