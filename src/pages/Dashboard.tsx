@@ -275,13 +275,15 @@ export default function Dashboard() {
         return sum + (Number(lead.estimated_deal_value || 0) || Number(lead.monthly_budget || 0) || Number(lead.three_month_budget || 0));
       }, 0);
 
-      // עכשיו שואלים את finance עם הסינון הנכון
+      // Compute activeClientIds now (needed for queries below)
+      const activeClientsList = Array.isArray(activeClients.data) ? activeClients.data : [];
+      const activeClientIds = activeClientsList.map((c) => c.id);
+
+      // Build finance query (uses state + clientTeamData from before step-1, not step-1 results)
       let financeQuery = supabase.from("finance").select("type, amount, client_id").eq("tenant_id", tenantId);
-      
       if (selectedAgency !== "all") {
         financeQuery = financeQuery.eq("agency_id", selectedAgency);
       }
-      
       if (selectedClient !== "all") {
         financeQuery = financeQuery.eq("client_id", selectedClient);
       } else if (isRestrictedClientViewer) {
@@ -291,65 +293,57 @@ export default function Dashboard() {
           financeQuery = financeQuery.eq("client_id", "00000000-0000-0000-0000-000000000000");
         }
       } else if (selectedSupplier !== "all") {
-        // אם מסננים לפי ספק, ההכנסות מסוננות לפי לקוחות הקמפיינר וההוצאות לפי supplier_id
         if (clientTeamData && clientTeamData.length > 0) {
           const campaignerClientIds = clientTeamData.map(ct => ct.client_id);
           financeQuery = financeQuery.in("client_id", campaignerClientIds);
         } else {
-          // אם אין לקוחות קשורים, לא להציג שום finance
           financeQuery = financeQuery.eq("client_id", "00000000-0000-0000-0000-000000000000");
         }
       }
-      
-      const { data: financeData } = await financeQuery;
 
-      const financeIncome = financeData?.filter(f => f.type === "income").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
-      
-      // Retainers: prefer client_tenant_financial_data when exists, otherwise fallback to legacy clients.retainer
-      const activeClientsList = Array.isArray(activeClients.data) ? activeClients.data : [];
-      const activeClientIds = activeClientsList.map((c) => c.id);
-      let retainers = 0;
-
-      if (activeClientIds.length > 0) {
-        const { data: retainersData } = await supabase
-          .from("client_tenant_financial_data")
-          .select("client_id, retainer")
-          .eq("tenant_id", tenantId)
-          .in("client_id", activeClientIds);
-
-        const hasFinancialRow = new Set<string>();
-        const retainerByClient = new Map<string, number>();
-
-        (retainersData || []).forEach((row) => {
-          hasFinancialRow.add(row.client_id);
-          retainerByClient.set(row.client_id, Number(row.retainer || 0));
-        });
-
-        retainers = activeClientsList.reduce((sum, client) => {
-          if (hasFinancialRow.has(client.id)) {
-            return sum + (retainerByClient.get(client.id) || 0);
-          }
-          return sum + Number(client.retainer || 0);
-        }, 0);
-      }
-      const totalIncome = financeIncome + retainers;
-      
-      const financeExpense = financeData?.filter(f => f.type === "expense").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
-      
-      // משיכת תשלומים ידניים מספקים
+      // Build suppliers query (fully independent)
       let suppliersQuery = supabase
         .from("suppliers")
         .select("id, payment_1, payment_2, payment_3, agency_id_1, agency_id_2, agency_id_3")
         .eq("tenant_id", tenantId);
-      
       if (selectedSupplier !== "all") {
         suppliersQuery = suppliersQuery.eq("id", selectedSupplier);
       }
 
-      const { data: suppliersData } = await suppliersQuery;
+      // Run finance, suppliers, retainers, and campaigner-payments in parallel
+      const [
+        { data: financeData },
+        { data: suppliersData },
+        { data: retainersData },
+        { data: clientTeamPaymentsData },
+      ] = await Promise.all([
+        financeQuery,
+        suppliersQuery,
+        activeClientIds.length > 0
+          ? supabase.from("client_tenant_financial_data").select("client_id, retainer").eq("tenant_id", tenantId).in("client_id", activeClientIds)
+          : Promise.resolve({ data: null as any }),
+        activeClientIds.length > 0
+          ? supabase.from("client_team").select("campaigner_payment, client_id").in("client_id", activeClientIds)
+          : Promise.resolve({ data: null as any }),
+      ]);
+
+      const financeIncome = financeData?.filter(f => f.type === "income").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
+      const financeExpense = financeData?.filter(f => f.type === "expense").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
+
+      // Retainers: prefer client_tenant_financial_data when exists, fallback to legacy clients.retainer
+      const hasFinancialRow = new Set<string>();
+      const retainerByClient = new Map<string, number>();
+      (retainersData || []).forEach((row: any) => {
+        hasFinancialRow.add(row.client_id);
+        retainerByClient.set(row.client_id, Number(row.retainer || 0));
+      });
+      const retainers = activeClientsList.reduce((sum, client) => {
+        if (hasFinancialRow.has(client.id)) return sum + (retainerByClient.get(client.id) || 0);
+        return sum + Number(client.retainer || 0);
+      }, 0);
+
       let manualSupplierPayments = 0;
-      
-      suppliersData?.forEach(supplier => {
+      suppliersData?.forEach((supplier: any) => {
         if (selectedAgency === "all") {
           manualSupplierPayments += Number(supplier.payment_1 || 0) + Number(supplier.payment_2 || 0) + Number(supplier.payment_3 || 0);
         } else {
@@ -358,19 +352,10 @@ export default function Dashboard() {
           if (supplier.agency_id_3 === selectedAgency) manualSupplierPayments += Number(supplier.payment_3 || 0);
         }
       });
-      
-      // תשלומים לקמפיינרים מ-client_team
-      let campaignerPayments = 0;
-      if (activeClientIds.length > 0) {
-        let clientTeamQuery = supabase
-          .from("client_team")
-          .select("campaigner_payment, client_id")
-          .in("client_id", activeClientIds);
-        
-        const { data: clientTeamPayments } = await clientTeamQuery;
-        campaignerPayments = clientTeamPayments?.reduce((sum, ct) => sum + Number(ct.campaigner_payment || 0), 0) || 0;
-      }
-      
+
+      const campaignerPayments = (clientTeamPaymentsData || []).reduce((sum: number, ct: any) => sum + Number(ct.campaigner_payment || 0), 0);
+
+      const totalIncome = financeIncome + retainers;
       const totalExpense = financeExpense + manualSupplierPayments + campaignerPayments;
 
       return {
