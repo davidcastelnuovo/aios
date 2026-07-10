@@ -1,46 +1,62 @@
-import { useEffect } from "react";
 import { useBroadcastDomains } from "@/hooks/useBroadcastDomains";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Mail } from "lucide-react";
 
 export interface ReportEmailSender {
+  type: "resend" | "gmail";
   fromEmail: string;
   fromName: string;
 }
 
+export const GMAIL_SENDER: ReportEmailSender = {
+  type: "gmail",
+  fromEmail: "__gmail__",
+  fromName: "Gmail מחובר",
+};
+
 interface Props {
   value: ReportEmailSender | null;
   onChange: (s: ReportEmailSender | null) => void;
+  gmailEmail?: string | null;
 }
 
 /**
- * "Send from" picker for report/dashboard emails, sourced from the same
- * Resend-verified sending domains as the broadcast module (broadcast_email_domains).
- * Renders nothing when the tenant has no verified domain — in that case the parent
- * keeps sending via the connected Gmail account (unchanged behavior).
+ * "Send from" picker for report emails.
+ * Shows verified Resend domains + the connected Gmail account.
+ * If no verified domains exist, only Gmail is shown.
  */
-export function ReportEmailSenderSelect({ value, onChange }: Props) {
+export function ReportEmailSenderSelect({ value, onChange, gmailEmail }: Props) {
   const { list } = useBroadcastDomains();
   const domains = list.data || [];
 
-  // Default to the tenant's default verified domain once options load.
-  useEffect(() => {
-    if (domains.length > 0 && !value) {
-      const d = domains.find((x) => x.is_default) || domains[0];
-      onChange({ fromEmail: `${d.default_local}@${d.domain}`, fromName: d.from_name || "" });
-    }
-  }, [domains, value, onChange]);
+  const options: ReportEmailSender[] = [
+    ...domains.map((d) => ({
+      type: "resend" as const,
+      fromEmail: `${d.default_local}@${d.domain}`,
+      fromName: d.from_name || "",
+    })),
+    {
+      type: "gmail" as const,
+      fromEmail: "__gmail__",
+      fromName: gmailEmail ? `Gmail (${gmailEmail})` : "Gmail מחובר",
+    },
+  ];
 
-  if (domains.length === 0) return null;
+  const currentValue = value?.fromEmail || "";
 
   return (
     <div className="space-y-1" dir="rtl">
       <Label className="text-xs text-muted-foreground">שלח מ (אימייל)</Label>
       <Select
-        value={value?.fromEmail || ""}
+        value={currentValue}
         onValueChange={(email) => {
-          const d = domains.find((x) => `${x.default_local}@${x.domain}` === email);
-          if (d) onChange({ fromEmail: email, fromName: d.from_name || "" });
+          if (email === "__gmail__") {
+            onChange({ type: "gmail", fromEmail: "__gmail__", fromName: gmailEmail ? `Gmail (${gmailEmail})` : "Gmail מחובר" });
+          } else {
+            const d = domains.find((x) => `${x.default_local}@${x.domain}` === email);
+            if (d) onChange({ type: "resend", fromEmail: email, fromName: d.from_name || "" });
+          }
         }}
       >
         <SelectTrigger className="h-8 text-xs">
@@ -55,6 +71,12 @@ export function ReportEmailSenderSelect({ value, onChange }: Props) {
               </SelectItem>
             );
           })}
+          <SelectItem value="__gmail__">
+            <span className="flex items-center gap-1.5">
+              <Mail className="h-3 w-3 text-blue-500" />
+              {gmailEmail ? `Gmail (${gmailEmail})` : "Gmail מחובר"}
+            </span>
+          </SelectItem>
         </SelectContent>
       </Select>
     </div>
