@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { toast } from "sonner";
@@ -29,6 +30,18 @@ interface SendReportDialogProps {
   tenantId: string;
 }
 
+async function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      resolve(result.split(",")[1]);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
 export function SendReportDialog({
   open,
   onOpenChange,
@@ -43,11 +56,11 @@ export function SendReportDialog({
   const [selectedGroupId, setSelectedGroupId] = useState<string>("");
   const [directPhone, setDirectPhone] = useState("");
   const [emailAddress, setEmailAddress] = useState("");
+  const [emailSender, setEmailSender] = useState<"aios" | "gmail">("aios");
   const [messageText, setMessageText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
-  // Generate preview URL from blob
   useEffect(() => {
     if (screenshotBlob) {
       const url = URL.createObjectURL(screenshotBlob);
@@ -57,7 +70,6 @@ export function SendReportDialog({
     setPreviewUrl(null);
   }, [screenshotBlob]);
 
-  // Fetch client data
   const { data: client } = useQuery({
     queryKey: ["client-for-report", clientId],
     queryFn: async () => {
@@ -72,7 +84,6 @@ export function SendReportDialog({
     enabled: !!clientId && open,
   });
 
-  // Fetch WhatsApp groups
   const { data: groups } = useQuery({
     queryKey: ["whatsapp-groups-for-report", tenantId],
     queryFn: async () => {
@@ -87,7 +98,6 @@ export function SendReportDialog({
     enabled: open,
   });
 
-  // Fetch active share link for the table
   const { data: shareLink } = useQuery({
     queryKey: ["table-share-link", tableId],
     queryFn: async () => {
@@ -101,14 +111,28 @@ export function SendReportDialog({
         .maybeSingle();
       const shareData = data as any;
       if (shareData?.share_token) {
-        return `https://after-lead.com/shared/table/${shareData.share_token}`;
+        return `https://aios.co.il/shared/table/${shareData.share_token}`;
       }
       return null;
     },
     enabled: open && !!tableId,
   });
 
-  // Pre-fill from client data
+  const { data: gmailToken } = useQuery({
+    queryKey: ["gmail-token-check"],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+      const { data } = await supabase
+        .from("gmail_tokens")
+        .select("google_email")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      return data;
+    },
+    enabled: open,
+  });
+
   useEffect(() => {
     if (client) {
       if (client.phone) setDirectPhone(client.phone);
@@ -116,6 +140,11 @@ export function SendReportDialog({
       if (client.whatsapp_group_id) setSelectedGroupId(client.whatsapp_group_id);
     }
   }, [client]);
+
+  useEffect(() => {
+    if (gmailToken?.google_email) setEmailSender("gmail");
+    else setEmailSender("aios");
+  }, [gmailToken]);
 
   const handleSend = async () => {
     if (!screenshotBlob) {
@@ -130,7 +159,9 @@ export function SendReportDialog({
 
     setIsSending(true);
     try {
-      // Send via WhatsApp
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
       if (sendWhatsApp) {
         const hasGroup = selectedGroupId && selectedGroupId !== "__none__";
         if (!hasGroup && !directPhone) {
@@ -139,10 +170,6 @@ export function SendReportDialog({
           return;
         }
 
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) throw new Error("Not authenticated");
-
-        // Build caption with optional share link
         const captionParts: string[] = [];
         if (messageText) captionParts.push(messageText);
         if (shareLink) captionParts.push(`\n📊 צפה בדוח המלא: ${shareLink}`);
@@ -153,41 +180,89 @@ export function SendReportDialog({
         formData.append("tenantId", tenantId);
         formData.append("fileType", "image");
         if (fullCaption) formData.append("caption", fullCaption);
-        
         if (hasGroup) {
           formData.append("groupId", selectedGroupId);
         } else if (directPhone) {
           formData.append("phoneNumber", directPhone);
         }
-        if (clientId) {
-          formData.append("clientId", clientId);
-        }
+        if (clientId) formData.append("clientId", clientId);
 
         const response = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-green-api-file`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${session.access_token}`,
-            },
-            body: formData,
-          }
+          { method: "POST", headers: { Authorization: `Bearer ${session.access_token}` }, body: formData }
         );
-
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || "שגיאה בשליחה בוואטסאפ");
         toast.success("הדוח נשלח בוואטסאפ בהצלחה");
       }
 
-      // Send via Email (placeholder - show toast for now)
       if (sendEmail) {
         if (!emailAddress) {
           toast.error("יש להזין כתובת אימייל");
           setIsSending(false);
           return;
         }
-        // TODO: Implement email sending edge function
-        toast.info("שליחה באימייל תתווסף בקרוב");
+
+        const base64 = await blobToBase64(screenshotBlob);
+        const subject = `דוח ${tableName}`;
+        const bodyParts: string[] = [];
+        if (messageText) bodyParts.push(`<p>${messageText.replace(/\n/g, "<br/>")}</p>`);
+        if (shareLink) bodyParts.push(`<p>📊 <a href="${shareLink}">צפה בדוח המלא</a></p>`);
+        bodyParts.push(`<p><img src="cid:report-screenshot" style="max-width:100%;"/></p>`);
+        const html = bodyParts.join("\n");
+
+        if (emailSender === "gmail" && gmailToken?.google_email) {
+          const response = await fetch(
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/gmail-api`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${session.access_token}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                action: "send",
+                to: emailAddress,
+                subject,
+                body: html,
+                attachments: [{
+                  filename: `report-${tableName}.png`,
+                  mimeType: "image/png",
+                  data: base64,
+                  disposition: "inline",
+                  cid: "report-screenshot",
+                }],
+              }),
+            }
+          );
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error || "שגיאה בשליחה ב-Gmail");
+          toast.success(`הדוח נשלח מ-${gmailToken.google_email}`);
+        } else {
+          const response = await fetch(
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-resend-email`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${session.access_token}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                to: emailAddress,
+                subject,
+                html,
+                attachments: [{
+                  filename: `report-${tableName}.png`,
+                  content: base64,
+                  contentType: "image/png",
+                }],
+              }),
+            }
+          );
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error || "שגיאה בשליחת אימייל");
+          toast.success("הדוח נשלח באימייל בהצלחה");
+        }
       }
 
       onOpenChange(false);
@@ -208,14 +283,12 @@ export function SendReportDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Screenshot Preview */}
           {previewUrl && (
             <div className="border rounded-lg overflow-hidden max-h-48 overflow-y-auto bg-white">
               <img src={previewUrl} alt="תצוגה מקדימה" className="w-full" />
             </div>
           )}
 
-          {/* Delivery Methods */}
           <div className="space-y-3">
             <Label className="text-sm font-medium">אמצעי שליחה</Label>
             <div className="flex gap-4">
@@ -238,7 +311,6 @@ export function SendReportDialog({
             </div>
           </div>
 
-          {/* WhatsApp Options */}
           {sendWhatsApp && (
             <div className="space-y-3 p-3 border rounded-lg bg-muted/30">
               <div>
@@ -267,37 +339,68 @@ export function SendReportDialog({
             </div>
           )}
 
-          {/* Email Options */}
           {sendEmail && (
             <div className="space-y-3 p-3 border rounded-lg bg-muted/30">
               <div>
-                <Label htmlFor="email" className="text-sm">כתובת אימייל</Label>
+                <Label htmlFor="email" className="text-sm">כתובת אימייל של הנמען</Label>
                 <Input
                   id="email"
                   type="email"
                   value={emailAddress}
                   onChange={(e) => setEmailAddress(e.target.value)}
                   placeholder="example@email.com"
+                  dir="ltr"
                 />
+              </div>
+
+              <div>
+                <Label className="text-sm mb-2 block">שלח מ-</Label>
+                <RadioGroup
+                  value={emailSender}
+                  onValueChange={(v) => setEmailSender(v as "aios" | "gmail")}
+                  className="space-y-1"
+                >
+                  <label className="flex items-center gap-2 cursor-pointer text-sm">
+                    <RadioGroupItem value="aios" id="sender-aios" />
+                    <span>
+                      AIOS{" "}
+                      <span className="text-muted-foreground text-xs">(noreply@aios.co.il)</span>
+                    </span>
+                  </label>
+                  <label className={cn(
+                    "flex items-center gap-2 text-sm",
+                    gmailToken?.google_email ? "cursor-pointer" : "cursor-not-allowed opacity-50"
+                  )}>
+                    <RadioGroupItem
+                      value="gmail"
+                      id="sender-gmail"
+                      disabled={!gmailToken?.google_email}
+                    />
+                    <span>
+                      Gmail שלי{" "}
+                      {gmailToken?.google_email
+                        ? <span className="text-muted-foreground text-xs">({gmailToken.google_email})</span>
+                        : <span className="text-muted-foreground text-xs">(לא מחובר)</span>
+                      }
+                    </span>
+                  </label>
+                </RadioGroup>
               </div>
             </div>
           )}
 
-          {/* Share Link Info */}
-          {shareLink && (
+          {shareLink ? (
             <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 text-sm text-muted-foreground">
               <Link2 className="h-4 w-4 shrink-0" />
               <span>קישור צפייה בטבלה יצורף אוטומטית להודעה</span>
             </div>
-          )}
-          {!shareLink && (
+          ) : (
             <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 text-sm text-muted-foreground">
               <Link2 className="h-4 w-4 shrink-0 opacity-50" />
               <span>אין קישור שיתוף פעיל — צור קישור דרך "שתף טבלה" כדי לצרף לינק</span>
             </div>
           )}
 
-          {/* Message Text */}
           <div>
             <Label htmlFor="message-text" className="text-sm">טקסט מלווה (אופציונלי)</Label>
             <Textarea
@@ -309,7 +412,6 @@ export function SendReportDialog({
             />
           </div>
 
-          {/* Send Button */}
           <Button
             onClick={handleSend}
             disabled={isSending || !screenshotBlob}
