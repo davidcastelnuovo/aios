@@ -181,7 +181,12 @@ serve(async (req) => {
       const existingForEmail = googleEmail
         ? allGa?.find((row: any) => row.settings?.google_email === googleEmail) || null
         : null;
-      const existingIntegration = existingForEmail || existingForUser;
+      // Only OVERWRITE an existing row when the SAME Google account reconnects
+      // (matched by email). A different email for the same user is an ADDITIONAL
+      // account → insert a new row, so connecting a second Analytics account no
+      // longer overwrites the first. If the email couldn't be read, fall back to
+      // the user's existing row to avoid creating duplicates.
+      const existingIntegration = existingForEmail || (googleEmail ? null : existingForUser);
       const existingSettings = (existingIntegration?.settings as Record<string, unknown> | null) || null;
 
       const integrationData = {
