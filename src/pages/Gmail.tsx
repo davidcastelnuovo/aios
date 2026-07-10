@@ -338,7 +338,7 @@ export default function Gmail() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['gmail-blocked-senders'] });
+      queryClient.invalidateQueries({ queryKey: ['gmail-blocked-senders', userId] });
       toast.success('השולח וכל השולחים עם אותו נושא נחסמו');
     },
     onError: () => toast.error('שגיאה בחסימת שולח'),
@@ -391,7 +391,7 @@ export default function Gmail() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['gmail-blocked-senders'] });
+      queryClient.invalidateQueries({ queryKey: ['gmail-blocked-senders', userId] });
       setSelectedIds(new Set());
       toast.success('שולחים נחסמו');
     },
@@ -410,7 +410,7 @@ export default function Gmail() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['gmail-message-categories'] });
+      queryClient.invalidateQueries({ queryKey: ['gmail-message-categories', userId] });
       setSelectedIds(new Set());
       toast.success('קטגוריה עודכנה');
     },
@@ -467,8 +467,8 @@ export default function Gmail() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['gmail-message-categories'] });
-      queryClient.invalidateQueries({ queryKey: ['gmail-category-rules'] });
+      queryClient.invalidateQueries({ queryKey: ['gmail-message-categories', userId] });
+      queryClient.invalidateQueries({ queryKey: ['gmail-category-rules', userId] });
       toast.success('קטגוריה עודכנה לכל האימיילים עם אותו נושא');
     },
   });

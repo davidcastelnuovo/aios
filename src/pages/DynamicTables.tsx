@@ -295,7 +295,7 @@ export default function DynamicTables() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['crm-dashboards'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-dashboards', tenantId] });
       toast.success('הדשבורד נמחק בהצלחה');
     },
     onError: (error: any) => {
@@ -313,7 +313,7 @@ export default function DynamicTables() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['crm-dashboards'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-dashboards', tenantId] });
       setEditingDashboard(null);
       setEditDashboardName("");
       toast.success('שם הדשבורד עודכן');
@@ -349,7 +349,7 @@ export default function DynamicTables() {
       return await response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
       setDeletingTable(null);
       toast.success('הדוח נמחק בהצלחה');
     },
@@ -399,8 +399,8 @@ export default function DynamicTables() {
       return await response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
-      queryClient.invalidateQueries({ queryKey: ['clients'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ['clients', tenantId] });
       setEditingTable(null);
       toast.success('הדוח עודכן בהצלחה');
     },

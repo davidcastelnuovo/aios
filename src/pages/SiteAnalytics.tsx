@@ -128,7 +128,7 @@ export default function SiteAnalytics() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["site_tracking_configs"] });
+      queryClient.invalidateQueries({ queryKey: ["site_tracking_configs", currentTenantId] });
       toast.success("קוד מעקב נוצר בהצלחה");
     },
     onError: (error) => {

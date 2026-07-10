@@ -149,7 +149,7 @@ export default function Signatures() {
       return doc;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["signature-documents"] });
+      queryClient.invalidateQueries({ queryKey: ["signature-documents", tenantId] });
       toast.success("המסמך נוצר בהצלחה");
       resetForm();
       setIsCreateOpen(false);
@@ -167,7 +167,7 @@ export default function Signatures() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["signature-documents"] });
+      queryClient.invalidateQueries({ queryKey: ["signature-documents", tenantId] });
       toast.success("המסמך נשלח לחתימה");
     },
   });
@@ -182,7 +182,7 @@ export default function Signatures() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["signature-documents"] });
+      queryClient.invalidateQueries({ queryKey: ["signature-documents", tenantId] });
       toast.success("המסמך נמחק");
     },
   });

@@ -184,7 +184,7 @@ export default function RankTracking() {
         client_id: "",
         agency_id: "",
       });
-      queryClient.invalidateQueries({ queryKey: ["rank-tracking-projects"] });
+      queryClient.invalidateQueries({ queryKey: ["rank-tracking-projects", tenantId] });
     },
     onError: (error: Error) => {
       toast.error(error.message || "שגיאה ביצירת פרויקט");
@@ -202,7 +202,7 @@ export default function RankTracking() {
     },
     onSuccess: () => {
       toast.success("פרויקט נמחק");
-      queryClient.invalidateQueries({ queryKey: ["rank-tracking-projects"] });
+      queryClient.invalidateQueries({ queryKey: ["rank-tracking-projects", tenantId] });
     },
     onError: () => {
       toast.error("שגיאה במחיקת פרויקט");
@@ -236,7 +236,7 @@ export default function RankTracking() {
     },
     onSuccess: (data) => {
       toast.success(`סריקה הושלמה! נבדקו ${data.checked_count} ביטויים`);
-      queryClient.invalidateQueries({ queryKey: ["rank-tracking-projects"] });
+      queryClient.invalidateQueries({ queryKey: ["rank-tracking-projects", tenantId] });
     },
     onError: (error: Error) => {
       toast.error(error.message || "שגיאה בסריקה");

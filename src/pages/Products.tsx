@@ -115,7 +115,7 @@ export default function Products() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["products", tenantId] });
       toast.success("המוצר נמחק בהצלחה");
       setDeletingProductId(null);
     },
