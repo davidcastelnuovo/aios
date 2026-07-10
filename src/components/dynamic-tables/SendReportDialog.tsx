@@ -206,7 +206,7 @@ export function SendReportDialog({
         const base64 = await blobToBase64(screenshotBlob);
         const subject = `דוח ${tableName}`;
 
-        // Build branded HTML email with embedded screenshot as data URI (works in all email clients)
+        // Branded HTML — uses CID inline for the screenshot (supported by both Gmail and Resend)
         const messageSection = messageText
           ? `<p style="color:#1e293b;font-size:15px;line-height:1.6;margin:0 0 16px;">${messageText.replace(/\n/g, "<br/>")}</p>`
           : "";
@@ -226,7 +226,7 @@ export function SendReportDialog({
         </td></tr>
         <tr><td style="padding:28px 32px;">
           ${messageSection}
-          <img src="data:image/png;base64,${base64}" alt="דוח ${tableName}" style="max-width:100%;border-radius:8px;border:1px solid #e2e8f0;display:block;"/>
+          <img src="cid:report-screenshot" alt="דוח ${tableName}" style="max-width:100%;border-radius:8px;border:1px solid #e2e8f0;display:block;"/>
           ${linkSection}
         </td></tr>
         <tr><td style="padding:16px 32px;background:#f8fafc;border-top:1px solid #e2e8f0;">
@@ -239,11 +239,6 @@ export function SendReportDialog({
 </html>`;
 
         if (emailSender === "gmail" && gmailToken?.google_email) {
-          // Gmail blocks data URIs — use CID inline attachment instead
-          const gmailHtml = html.replace(
-            `data:image/png;base64,${base64}`,
-            "cid:report-screenshot"
-          );
           const response = await fetch(
             `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/gmail-api`,
             {
@@ -256,7 +251,7 @@ export function SendReportDialog({
                 action: "send",
                 to: emailAddress,
                 subject,
-                body: gmailHtml,
+                body: html,
                 attachments: [{
                   filename: `report-${tableName}.png`,
                   mimeType: "image/png",
@@ -271,7 +266,7 @@ export function SendReportDialog({
           if (!response.ok) throw new Error(result.error || "שגיאה בשליחה ב-Gmail");
           toast.success(`הדוח נשלח מ-${gmailToken.google_email}`);
         } else {
-          // Resend: HTML with embedded data URI image (supported)
+          // Resend: inline attachment via content_id
           const response = await fetch(
             `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-resend-email`,
             {
@@ -280,7 +275,17 @@ export function SendReportDialog({
                 Authorization: `Bearer ${session.access_token}`,
                 "Content-Type": "application/json",
               },
-              body: JSON.stringify({ to: emailAddress, subject, html }),
+              body: JSON.stringify({
+                to: emailAddress,
+                subject,
+                html,
+                attachments: [{
+                  filename: `report-${tableName}.png`,
+                  content: base64,
+                  contentType: "image/png",
+                  content_id: "report-screenshot",
+                }],
+              }),
             }
           );
           const result = await response.json();

@@ -35,12 +35,17 @@ Deno.serve(async (req) => {
     if (headers && typeof headers === 'object') payload.headers = headers;
     if (Array.isArray(tags)) payload.tags = tags;
     if (Array.isArray(attachments) && attachments.length > 0) {
-      // Resend expects: [{ filename, content (base64 string), content_type }]
-      payload.attachments = attachments.map((a: any) => ({
-        filename: a.filename,
-        content: a.content,
-        content_type: a.contentType || a.content_type || 'application/octet-stream',
-      }));
+      // Resend expects: [{ filename, content (base64 string), content_type, content_id? }]
+      // Set content_id to enable inline CID references in HTML (cid:<content_id>)
+      payload.attachments = attachments.map((a: any) => {
+        const att: any = {
+          filename: a.filename,
+          content: a.content,
+          content_type: a.contentType || a.content_type || 'application/octet-stream',
+        };
+        if (a.content_id || a.contentId) att.content_id = a.content_id || a.contentId;
+        return att;
+      });
     }
 
     const res = await fetch('https://api.resend.com/emails', {
