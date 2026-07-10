@@ -1282,7 +1282,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {Object.entries(summaryByPlatform).filter(([platform]) => dashboardCampaignType === 'ecommerce' ? true : !isAnalyticsPlatform(platform)).map(([platform, metrics]: [string, any]) => {
+                      {Object.entries(summaryByPlatform).filter(([platform]) => platform !== 'ahrefs' && platform !== 'seo' && (dashboardCampaignType === 'ecommerce' ? true : !isAnalyticsPlatform(platform))).map(([platform, metrics]: [string, any]) => {
                         const config = PLATFORM_CONFIG[platform] || { name: platform, color: 'text-muted-foreground' };
                         const isAnalytics = isAnalyticsPlatform(platform);
                         return (

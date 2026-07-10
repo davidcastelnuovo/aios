@@ -1784,7 +1784,7 @@ export default function DashboardView() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {Object.entries(summaryByPlatform).filter(([platform]) => !isAnalyticsPlatform(platform)).map(([platform, metrics]: [string, any]) => {
+                          {Object.entries(summaryByPlatform).filter(([platform]) => !isAnalyticsPlatform(platform) && platform !== 'ahrefs' && platform !== 'seo').map(([platform, metrics]: [string, any]) => {
                             const config = PLATFORM_CONFIG[platform] || { name: platform, color: 'text-muted-foreground' };
                             const isAnalytics = isAnalyticsPlatform(platform);
                             return (
