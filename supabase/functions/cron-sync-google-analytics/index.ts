@@ -18,17 +18,37 @@ serve(async (req) => {
   const startedAt = new Date().toISOString();
   const results: any[] = [];
 
+  // Process tables in batches and self-invoke the next batch, so a large number
+  // of GA tables completes across chained invocations instead of timing out in
+  // one (which previously left most tables un-synced).
+  const BATCH_SIZE = 6;
+  let batchOffset = 0;
+  try { const b = await req.json(); batchOffset = Number(b?.batch_offset) || 0; } catch { /* no body */ }
+
   try {
     // Find all crm_tables that are linked to a google_analytics integration.
     // We sync per-table because sync-google-analytics-data expects { tableId }.
-    const { data: tables, error: tablesError } = await supabase
+    const { data: allTables, error: tablesError } = await supabase
       .from('crm_tables')
       .select('id, tenant_id, name, integration_settings, integration_type')
-      .eq('integration_type', 'google_analytics');
+      .eq('integration_type', 'google_analytics')
+      .order('id');
 
     if (tablesError) throw tablesError;
 
-    console.log(`[cron-ga] Found ${tables?.length || 0} GA tables to sync`);
+    const tables = (allTables || []).slice(batchOffset, batchOffset + BATCH_SIZE);
+    const hasMore = (allTables || []).length > batchOffset + BATCH_SIZE;
+    console.log(`[cron-ga] batch offset=${batchOffset} size=${tables.length} of ${(allTables || []).length} (hasMore=${hasMore})`);
+
+    // Kick off the next batch immediately (fire-and-forget) so batches run in
+    // parallel-ish and the whole set finishes well within limits.
+    if (hasMore) {
+      fetch(`${supabaseUrl}/functions/v1/cron-sync-google-analytics`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${serviceKey}` },
+        body: JSON.stringify({ batch_offset: batchOffset + BATCH_SIZE }),
+      }).catch((e) => console.error('[cron-ga] next batch trigger failed:', e?.message));
+    }
 
     // Compute 90-day window (per project rule).
     const endDate = new Date().toISOString().split('T')[0];
