@@ -140,7 +140,7 @@ export function ShareDashboardDialog({ dashboardId, dashboardName, tenantId }: S
   });
 
   const getShareUrl = (token: string) => {
-    const publicAppOrigin = "https://after-lead.com";
+    const publicAppOrigin = "https://aios.co.il";
     return `${publicAppOrigin}/shared/dashboard/${token}`;
   };
 

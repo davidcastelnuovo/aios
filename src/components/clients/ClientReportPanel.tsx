@@ -172,7 +172,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
         .maybeSingle();
       const shareData = data as any;
       if (shareData?.share_token) {
-        return `https://after-lead.com/shared/table/${shareData.share_token}`;
+        return `https://aios.co.il/shared/table/${shareData.share_token}`;
       }
       return null;
     },
@@ -335,7 +335,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
             .eq("table_id", table.id)
             .eq("share_token", existingRow.share_token);
         }
-        const url = `https://after-lead.com/shared/table/${existingRow.share_token}`;
+        const url = `https://aios.co.il/shared/table/${existingRow.share_token}`;
         queryClient.invalidateQueries({ queryKey: ["table-share-link", table.id] });
         return url;
       }
@@ -356,7 +356,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
       if (error) throw error;
       const token = (data as any)?.share_token;
       if (!token) return null;
-      const url = `https://after-lead.com/shared/table/${token}`;
+      const url = `https://aios.co.il/shared/table/${token}`;
       queryClient.invalidateQueries({ queryKey: ["table-share-link", table.id] });
       toast.success("נוצר קישור שיתוף חדש");
       return url;
