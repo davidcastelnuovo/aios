@@ -63,8 +63,7 @@ const CATEGORIES: Category[] = [
     modules: [
       { key: "marketing", label: "מחלקת שיווק", description: "פס יצור שיווקי מאוחד לכל לקוח", route: "/marketing", icon: Share2, permission: "dashboard", color: "bg-blue-500/10 text-blue-600" },
 
-      { key: "reports", label: "דוחות", description: "דוחות מותאמים אישית", route: "/reports", icon: BarChart2, permission: "reports", color: "bg-blue-500/10 text-blue-600" },
-      { key: "dynamic-tables", label: "דשבורדים ודוחות", description: "בניית דשבורדים ודוחות דינמיים", route: "/dynamic-tables", icon: Table2, permission: "dynamic_tables", color: "bg-blue-500/10 text-blue-600" },
+{ key: "dynamic-tables", label: "דשבורדים ודוחות", description: "בניית דשבורדים ודוחות דינמיים", route: "/dynamic-tables", icon: Table2, permission: "dynamic_tables", color: "bg-blue-500/10 text-blue-600" },
       { key: "chat", label: "צ'אט", description: "ניהול שיחות עם לקוחות", route: "/chat", icon: MessageSquare, permission: "chat", color: "bg-blue-500/10 text-blue-600" },
       { key: "gmail", label: "Gmail", description: "ניהול דואר אלקטרוני", route: "/gmail", icon: Mail, color: "bg-blue-500/10 text-blue-600" },
       { key: "signatures", label: "חתימות", description: "ניהול חתימות דיגיטליות", route: "/signatures", icon: PenLine, permission: "signatures", color: "bg-blue-500/10 text-blue-600" },

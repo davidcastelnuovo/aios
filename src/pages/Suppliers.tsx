@@ -46,7 +46,7 @@ export default function Suppliers() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["suppliers"] });
+      queryClient.invalidateQueries({ queryKey: ["suppliers", tenantId] });
       toast.success("הספק נמחק בהצלחה");
     },
     onError: (error: Error) => {
@@ -83,10 +83,6 @@ export default function Suppliers() {
     };
     return types[type] || type;
   };
-
-  if (isLoading) {
-    return <div className="flex justify-center p-8">טוען...</div>;
-  }
 
   return (
     <div className="space-y-6 p-6">

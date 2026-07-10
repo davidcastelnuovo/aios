@@ -183,12 +183,6 @@ export const PERMISSION_CATEGORIES: PermissionCategory[] = [
         category: "marketing",
       },
       {
-        id: "reports",
-        label: "דוחות",
-        description: "צפייה בדוחות ואנליטיקה",
-        category: "marketing",
-      },
-      {
         id: "dynamic_tables",
         label: "דשבורדים ודוחות",
         description: "יצירת דשבורדים וטבלאות מותאמות אישית",

@@ -105,7 +105,7 @@ export default function Recordings() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['recordings'] });
+      queryClient.invalidateQueries({ queryKey: ['recordings', currentTenantId] });
       toast({ title: "התמלול בוטל" });
     },
     onError: (err: any) => {
@@ -145,7 +145,7 @@ export default function Recordings() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['recordings'] });
+      queryClient.invalidateQueries({ queryKey: ['recordings', currentTenantId] });
       toast({ title: "שויך בהצלחה" });
     },
   });
@@ -159,7 +159,7 @@ export default function Recordings() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['recordings'] });
+      queryClient.invalidateQueries({ queryKey: ['recordings', currentTenantId] });
       setEditingTopicId(null);
       toast({ title: "הנושא עודכן בהצלחה" });
     },
@@ -179,7 +179,7 @@ export default function Recordings() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['recordings'] });
+      queryClient.invalidateQueries({ queryKey: ['recordings', currentTenantId] });
       toast({ title: "ההקלטה נמחקה בהצלחה" });
     },
     onError: (err: any) => {
@@ -197,7 +197,7 @@ export default function Recordings() {
       return data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['recordings'] });
+      queryClient.invalidateQueries({ queryKey: ['recordings', currentTenantId] });
       toast({ title: "הקלטות נמשכו בהצלחה", description: `נמצאו ${data.meetings_found} פגישות, עובדו ${data.recordings_processed} הקלטות` });
     },
     onError: (err: any) => {
@@ -237,7 +237,7 @@ export default function Recordings() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['recordings'] });
+      queryClient.invalidateQueries({ queryKey: ['recordings', currentTenantId] });
       toast({ title: "ההקלטה הועלתה בהצלחה" });
       setUploadOpen(false);
       setUploadTopic("");

@@ -2988,7 +2988,7 @@ export default function TeamChat() {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "team_messages", filter: `tenant_id=eq.${tenantId}` },
         (payload: any) => {
-          queryClient.invalidateQueries({ queryKey: ["team-unread-counts"] });
+          queryClient.invalidateQueries({ queryKey: ["team-unread-counts", tenantId, userId] });
           // Play sound if the message is from someone else
           if (payload.new?.sender_id !== userId) {
             playGongSound();
@@ -3087,28 +3087,26 @@ export default function TeamChat() {
   const { data: unreadCounts = {} } = useQuery<Record<string, number>>({
     queryKey: ["team-unread-counts", tenantId, userId, allChannels.map(c => c.id).join(","), readStatuses],
     queryFn: async () => {
-      const counts: Record<string, number> = {};
       const readMap = new Map(readStatuses.map((r: any) => [r.channel_id, r.last_read_at]));
-      
-      for (const ch of allChannels) {
-        const lastRead = readMap.get(ch.id);
-        let query = supabase
-          .from("team_messages")
-          .select("id", { count: "exact", head: true })
-          .eq("channel_id", ch.id)
-          .is("parent_message_id", null); // Only count top-level messages
-        
-        if (lastRead) {
-          query = query.gt("created_at", lastRead);
-        }
-        // Exclude own messages
-        query = query.neq("sender_id", userId!);
-        
-        const { count } = await query;
-        if (count && count > 0) {
-          counts[ch.id] = count;
-        }
-      }
+
+      // Run all per-channel count queries in parallel instead of sequentially
+      const results = await Promise.all(
+        allChannels.map(async (ch) => {
+          let query = supabase
+            .from("team_messages")
+            .select("id", { count: "exact", head: true })
+            .eq("channel_id", ch.id)
+            .is("parent_message_id", null)
+            .neq("sender_id", userId!);
+          const lastRead = readMap.get(ch.id);
+          if (lastRead) query = query.gt("created_at", lastRead);
+          const { count } = await query;
+          return { id: ch.id, count: count ?? 0 };
+        })
+      );
+
+      const counts: Record<string, number> = {};
+      results.forEach(({ id, count }) => { if (count > 0) counts[id] = count; });
       return counts;
     },
     enabled: !!userId && allChannels.length > 0,

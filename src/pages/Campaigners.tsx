@@ -104,7 +104,7 @@ export default function Campaigners() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["campaigners"] });
+      queryClient.invalidateQueries({ queryKey: ["campaigners", tenantId] });
       toast.success("הסכום עודכן בהצלחה");
     },
     onError: () => {
