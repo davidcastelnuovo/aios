@@ -205,13 +205,45 @@ export function SendReportDialog({
 
         const base64 = await blobToBase64(screenshotBlob);
         const subject = `דוח ${tableName}`;
-        const bodyParts: string[] = [];
-        if (messageText) bodyParts.push(`<p>${messageText.replace(/\n/g, "<br/>")}</p>`);
-        if (shareLink) bodyParts.push(`<p>📊 <a href="${shareLink}">צפה בדוח המלא</a></p>`);
-        bodyParts.push(`<p><img src="cid:report-screenshot" style="max-width:100%;"/></p>`);
-        const html = bodyParts.join("\n");
+
+        // Build branded HTML email with embedded screenshot as data URI (works in all email clients)
+        const messageSection = messageText
+          ? `<p style="color:#1e293b;font-size:15px;line-height:1.6;margin:0 0 16px;">${messageText.replace(/\n/g, "<br/>")}</p>`
+          : "";
+        const linkSection = shareLink
+          ? `<p style="margin:16px 0 0;"><a href="${shareLink}" style="display:inline-block;background:#6366f1;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:600;">📊 צפה בדוח המלא</a></p>`
+          : "";
+        const html = `<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head><meta charset="UTF-8"/></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+        <tr><td style="background:linear-gradient(135deg,#6366f1 0%,#8b5cf6 100%);padding:24px 32px;">
+          <h1 style="margin:0;color:#fff;font-size:20px;font-weight:700;">AfterLead · AIOS</h1>
+          <p style="margin:4px 0 0;color:rgba(255,255,255,0.8);font-size:13px;">דוח: ${tableName}</p>
+        </td></tr>
+        <tr><td style="padding:28px 32px;">
+          ${messageSection}
+          <img src="data:image/png;base64,${base64}" alt="דוח ${tableName}" style="max-width:100%;border-radius:8px;border:1px solid #e2e8f0;display:block;"/>
+          ${linkSection}
+        </td></tr>
+        <tr><td style="padding:16px 32px;background:#f8fafc;border-top:1px solid #e2e8f0;">
+          <p style="margin:0;color:#94a3b8;font-size:12px;">נשלח באמצעות AfterLead AIOS</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
 
         if (emailSender === "gmail" && gmailToken?.google_email) {
+          // Gmail blocks data URIs — use CID inline attachment instead
+          const gmailHtml = html.replace(
+            `data:image/png;base64,${base64}`,
+            "cid:report-screenshot"
+          );
           const response = await fetch(
             `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/gmail-api`,
             {
@@ -224,7 +256,7 @@ export function SendReportDialog({
                 action: "send",
                 to: emailAddress,
                 subject,
-                body: html,
+                body: gmailHtml,
                 attachments: [{
                   filename: `report-${tableName}.png`,
                   mimeType: "image/png",
@@ -239,6 +271,7 @@ export function SendReportDialog({
           if (!response.ok) throw new Error(result.error || "שגיאה בשליחה ב-Gmail");
           toast.success(`הדוח נשלח מ-${gmailToken.google_email}`);
         } else {
+          // Resend: HTML with embedded data URI image (supported)
           const response = await fetch(
             `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-resend-email`,
             {
@@ -247,16 +280,7 @@ export function SendReportDialog({
                 Authorization: `Bearer ${session.access_token}`,
                 "Content-Type": "application/json",
               },
-              body: JSON.stringify({
-                to: emailAddress,
-                subject,
-                html,
-                attachments: [{
-                  filename: `report-${tableName}.png`,
-                  content: base64,
-                  contentType: "image/png",
-                }],
-              }),
+              body: JSON.stringify({ to: emailAddress, subject, html }),
             }
           );
           const result = await response.json();
