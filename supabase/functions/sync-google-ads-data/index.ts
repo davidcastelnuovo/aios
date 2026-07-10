@@ -77,8 +77,13 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get table with integration settings
-    const { data: table, error: tableError } = await supabase
+    // Get table with integration settings.
+    // For authenticated internal-cron calls, read with the service-role client:
+    // the anon-key + service-bearer user client resolves as the `anon` role, so
+    // RLS hides every row and the lookup 404s (this silently broke the cron sync
+    // for ALL Google Ads tables). Real user calls keep RLS enforcement.
+    const tableClient = (isInternalCron && hasServiceRole) ? supabaseAdmin : supabase;
+    const { data: table, error: tableError } = await tableClient
       .from('crm_tables')
       .select('*')
       .eq('id', table_id)
