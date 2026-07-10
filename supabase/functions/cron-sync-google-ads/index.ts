@@ -133,11 +133,13 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const { backfill_from, backfill_to, table_ids } = body as {
+    const { backfill_from, backfill_to, table_ids, batch_offset } = body as {
       backfill_from?: string;
       backfill_to?: string;
       table_ids?: string[];
+      batch_offset?: number;
     };
+    const offset = Number(batch_offset) || 0;
 
     let startDate: string;
     let endDate: string;
@@ -154,8 +156,9 @@ Deno.serve(async (req) => {
       endDate = startDate;
     }
 
-    // Get all Google Ads tables
-    let query = supabase.from("crm_tables").select("*").eq("integration_type", "google_ads");
+    // Get all Google Ads tables (ordered so batch slicing is stable across the
+    // self-chained invocations below).
+    let query = supabase.from("crm_tables").select("*").eq("integration_type", "google_ads").order("id");
     if (table_ids && table_ids.length > 0) query = query.in("id", table_ids);
 
     const { data: tables, error: tablesError } = await query;
@@ -169,6 +172,97 @@ Deno.serve(async (req) => {
     const results: any[] = [];
     const webhookUrl = `${supabaseUrl}/functions/v1/webhook-google-ads-sync`;
 
+    // ---- Direct API path: self-chaining batches ----
+    // The Supabase edge gateway rate-limits ~28 sync-google-ads-data invocations
+    // per short window ("Rate limit exceeded … Retry after Nms"), so processing
+    // all ~50 accounts in one invocation always left roughly half un-synced.
+    // Instead process a small batch per invocation and chain the next batch
+    // (same pattern as cron-sync-facebook-insights / cron-sync-google-analytics),
+    // keeping the request rate and concurrency well under the ceiling.
+    const BATCH_SIZE = 6;
+    const DIRECT_CHUNK = 3;
+    const CHUNK_GAP_MS = 1200;
+    const NEXT_BATCH_GAP_MS = 6000;
+
+    const allDirect = (tables as any[]).filter((t: any) => {
+      const ds = (t.integration_settings as any)?.data_source;
+      return !ds || ds === 'direct_api';
+    });
+    const directBatch = allDirect.slice(offset, offset + BATCH_SIZE);
+    const hasMore = allDirect.length > offset + BATCH_SIZE;
+    console.log(`[cron-google-ads] direct batch offset=${offset} size=${directBatch.length} of ${allDirect.length} (hasMore=${hasMore})`);
+
+    const syncOne = async (table: any): Promise<{ ok: boolean; rateLimited: boolean; reason?: string }> => {
+      try {
+        const res = await fetch(`${supabaseUrl}/functions/v1/sync-google-ads-data`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseServiceKey}`,
+            'x-internal-cron': 'true',
+          },
+          body: JSON.stringify({ table_id: table.id }),
+        });
+        const txt = await res.text();
+        if (res.ok) return { ok: true, rateLimited: false };
+        const rateLimited = res.status === 429 || /rate limit/i.test(txt);
+        return { ok: false, rateLimited, reason: `HTTP ${res.status}: ${txt.slice(0, 200)}` };
+      } catch (err) {
+        return { ok: false, rateLimited: false, reason: err instanceof Error ? err.message : String(err) };
+      }
+    };
+
+    const runInChunks = async (batch: any[]): Promise<any[]> => {
+      const retryable: any[] = [];
+      for (let i = 0; i < batch.length; i += DIRECT_CHUNK) {
+        const chunk = batch.slice(i, i + DIRECT_CHUNK);
+        const outcomes = await Promise.all(chunk.map(async (table: any) => {
+          const r = await syncOne(table);
+          if (r.ok) return { table: table.name, status: 'synced', source: 'direct_api' };
+          if (r.rateLimited) { retryable.push(table); return null; }
+          return { table: table.name, status: 'error', source: 'direct_api', reason: r.reason };
+        }));
+        for (const o of outcomes) if (o) results.push(o);
+        if (i + DIRECT_CHUNK < batch.length) await new Promise((r) => setTimeout(r, CHUNK_GAP_MS));
+      }
+      return retryable;
+    };
+
+    // Process this batch, then one retry pass for anything the runtime still
+    // rate-limited (should be rare at this low concurrency).
+    let rateLimitedTables = await runInChunks(directBatch);
+    if (rateLimitedTables.length > 0) {
+      await new Promise((r) => setTimeout(r, 20000));
+      const stillFailing = await runInChunks(rateLimitedTables);
+      for (const table of stillFailing) {
+        results.push({ table: table.name, status: 'error', source: 'direct_api', reason: 'rate limited (after retry)' });
+      }
+    }
+
+    // Chain the next batch AFTER this one finished (sequential), with a short gap,
+    // so the overall request rate stays under the gateway limit.
+    if (hasMore) {
+      await new Promise((r) => setTimeout(r, NEXT_BATCH_GAP_MS));
+      fetch(`${supabaseUrl}/functions/v1/cron-sync-google-ads`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
+        body: JSON.stringify({
+          batch_offset: offset + BATCH_SIZE,
+          ...(isBackfill ? { backfill_from, backfill_to } : {}),
+          ...(table_ids ? { table_ids } : {}),
+        }),
+      }).catch((e) => console.error('[cron-google-ads] next batch trigger failed:', e?.message));
+    }
+
+    // ---- Make.com path (legacy) + zero-spend anomaly detection ----
+    // These are per-tenant and independent of the direct sync, so run them once
+    // on the first invocation only (not on each chained batch).
+    if (offset !== 0) {
+      return new Response(JSON.stringify({ success: true, batch_offset: offset, results }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Group by tenant
     const byTenant = new Map<string, typeof tables>();
     for (const t of tables) {
@@ -177,70 +271,10 @@ Deno.serve(async (req) => {
     }
 
     for (const [tenantId, tenantTables] of byTenant) {
-      // Split: direct_api tables can be synced via sync-google-ads-data without Make.
-      const directApiTables = tenantTables.filter((t: any) => {
-        const ds = (t.integration_settings as any)?.data_source;
-        return !ds || ds === 'direct_api';
-      });
       const makeTables = tenantTables.filter((t: any) => {
         const ds = (t.integration_settings as any)?.data_source;
         return ds === 'make_api' || ds === 'webhook';
       });
-
-      // ---- Direct API path: invoke sync-google-ads-data per table ----
-      // Process in small concurrent chunks with a little spacing between chunks
-      // so a tenant with many accounts (~50) completes within one invocation
-      // without (a) timing out partway or (b) tripping the Supabase edge-runtime
-      // concurrent-execution rate limit (which returns "Rate limit exceeded …
-      // Retry after Nms"). Rate-limited tables are retried once after a pause.
-      const DIRECT_CHUNK = 4;
-      const CHUNK_GAP_MS = 1500;
-
-      const syncOne = async (table: any): Promise<{ ok: boolean; rateLimited: boolean; reason?: string }> => {
-        try {
-          const res = await fetch(`${supabaseUrl}/functions/v1/sync-google-ads-data`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${supabaseServiceKey}`,
-              'x-internal-cron': 'true',
-            },
-            body: JSON.stringify({ table_id: table.id }),
-          });
-          const txt = await res.text();
-          if (res.ok) return { ok: true, rateLimited: false };
-          const rateLimited = res.status === 429 || /rate limit/i.test(txt);
-          return { ok: false, rateLimited, reason: `HTTP ${res.status}: ${txt.slice(0, 200)}` };
-        } catch (err) {
-          return { ok: false, rateLimited: false, reason: err instanceof Error ? err.message : String(err) };
-        }
-      };
-
-      const runInChunks = async (tables: any[]): Promise<any[]> => {
-        const retryable: any[] = [];
-        for (let i = 0; i < tables.length; i += DIRECT_CHUNK) {
-          const chunk = tables.slice(i, i + DIRECT_CHUNK);
-          const outcomes = await Promise.all(chunk.map(async (table: any) => {
-            const r = await syncOne(table);
-            if (r.ok) return { table: table.name, status: 'synced', source: 'direct_api' };
-            if (r.rateLimited) { retryable.push(table); return null; }
-            return { table: table.name, status: 'error', source: 'direct_api', reason: r.reason };
-          }));
-          for (const o of outcomes) if (o) results.push(o);
-          if (i + DIRECT_CHUNK < tables.length) await new Promise((r) => setTimeout(r, CHUNK_GAP_MS));
-        }
-        return retryable;
-      };
-
-      // First pass, then one retry pass for tables the edge runtime rate-limited.
-      let rateLimitedTables = await runInChunks(directApiTables);
-      if (rateLimitedTables.length > 0) {
-        await new Promise((r) => setTimeout(r, 30000));
-        const stillFailing = await runInChunks(rateLimitedTables);
-        for (const table of stillFailing) {
-          results.push({ table: table.name, status: 'error', source: 'direct_api', reason: 'rate limited (after retry)' });
-        }
-      }
 
       // ---- Make.com path (legacy) ----
       if (makeTables.length === 0) continue;
