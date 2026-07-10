@@ -1273,7 +1273,6 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
                         ) : (
                           <>
                             <TableHead className="text-right">חשיפות</TableHead>
-                            {showAnalyticsCards && <TableHead className="text-right">סשנים</TableHead>}
                             <TableHead className="text-right">קליקים</TableHead>
                             <TableHead className="text-right">עלות לקליק</TableHead>
                             <TableHead className="text-right">לידים</TableHead>
@@ -1283,7 +1282,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {Object.entries(summaryByPlatform).map(([platform, metrics]: [string, any]) => {
+                      {Object.entries(summaryByPlatform).filter(([platform]) => dashboardCampaignType === 'ecommerce' ? true : !isAnalyticsPlatform(platform)).map(([platform, metrics]: [string, any]) => {
                         const config = PLATFORM_CONFIG[platform] || { name: platform, color: 'text-muted-foreground' };
                         const isAnalytics = isAnalyticsPlatform(platform);
                         return (
@@ -1318,7 +1317,6 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
                             ) : (
                               <>
                                 <TableCell>{isAnalytics ? '-' : formatNumber(metrics.impressions)}</TableCell>
-                                {showAnalyticsCards && <TableCell>{isAnalytics ? formatNumber(metrics.sessions) : '-'}</TableCell>}
                                 <TableCell>{isAnalytics ? '-' : formatNumber(metrics.clicks)}</TableCell>
                                 <TableCell>{isAnalytics || !metrics.clicks ? '-' : formatCurrency(metrics.spend / metrics.clicks)}</TableCell>
                                 <TableCell>{isAnalytics ? '-' : formatNumber(metrics.results)}</TableCell>
@@ -1357,7 +1355,6 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
                         ) : (
                           <>
                             <TableCell>{formatNumber(totalSummary.impressions)}</TableCell>
-                            {showAnalyticsCards && <TableCell>-</TableCell>}
                             <TableCell>{formatNumber(totalSummary.clicks)}</TableCell>
                             <TableCell>{totalSummary.clicks > 0 ? formatCurrency(totalSummary.spend / totalSummary.clicks) : '-'}</TableCell>
                             <TableCell>{formatNumber(totalSummary.results)}</TableCell>

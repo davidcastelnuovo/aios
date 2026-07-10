@@ -1775,7 +1775,6 @@ export default function DashboardView() {
                               </>
                             ) : (
                               <>
-                                {showAnalyticsCards && <TableHead className="text-right">סשנים</TableHead>}
                                 <TableHead className="text-right">קליקים</TableHead>
                                 <TableHead className="text-right">עלות לקליק</TableHead>
                                 <TableHead className="text-right">לידים</TableHead>
@@ -1785,7 +1784,7 @@ export default function DashboardView() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {Object.entries(summaryByPlatform).filter(([platform]) => dashboardCampaignType === 'ecommerce' ? !isAnalyticsPlatform(platform) : true).map(([platform, metrics]: [string, any]) => {
+                          {Object.entries(summaryByPlatform).filter(([platform]) => !isAnalyticsPlatform(platform)).map(([platform, metrics]: [string, any]) => {
                             const config = PLATFORM_CONFIG[platform] || { name: platform, color: 'text-muted-foreground' };
                             const isAnalytics = isAnalyticsPlatform(platform);
                             return (
@@ -1815,7 +1814,6 @@ export default function DashboardView() {
                                   </>
                                 ) : (
                                   <>
-                                    {showAnalyticsCards && <TableCell>{isAnalytics ? formatNumber(metrics.sessions) : '-'}</TableCell>}
                                     <TableCell>{isAnalytics ? '-' : formatNumber(metrics.clicks)}</TableCell>
                                     <TableCell>{isAnalytics || !metrics.clicks ? '-' : formatCurrency(metrics.spend / metrics.clicks)}</TableCell>
                                     <TableCell>{isAnalytics ? '-' : formatNumber(metrics.results)}</TableCell>
@@ -1849,7 +1847,6 @@ export default function DashboardView() {
                               </>
                             ) : (
                               <>
-                                {showAnalyticsCards && <TableCell>-</TableCell>}
                                 <TableCell>{formatNumber(totalSummary.clicks)}</TableCell>
                                 <TableCell>{totalSummary.clicks > 0 ? formatCurrency(totalSummary.spend / totalSummary.clicks) : '-'}</TableCell>
                                 <TableCell>{formatNumber(totalSummary.results)}</TableCell>
