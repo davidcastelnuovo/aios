@@ -26,6 +26,7 @@ import { buildBrandedEmailHtml } from "@/lib/emailTemplate";
 import { EmailRecipientsSelector, type EmailOption } from "./EmailRecipientsSelector";
 import { ClientDashboardSnapshot } from "./ClientDashboardSnapshot";
 import { WhatsAppGroupSelect } from "./WhatsAppGroupSelect";
+import { ReportWhatsAppSenderSelect } from "./ReportWhatsAppSenderSelect";
 
 interface ClientDashboardPanelProps {
   dashboard: { id: string; name: string };
@@ -63,6 +64,7 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
   const [sendWhatsApp, setSendWhatsApp] = useState(true);
   const [sendEmail, setSendEmail] = useState(false);
   const [selectedGroupId, setSelectedGroupId] = useState("");
+  const [waSenderId, setWaSenderId] = useState("");
   const [directPhone, setDirectPhone] = useState("");
   const [emailRecipients, setEmailRecipients] = useState<string[]>([]);
   const [messageText, setMessageText] = useState("");
@@ -394,6 +396,7 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
         formData.append("caption", caption);
         if (selectedGroupId && selectedGroupId !== "__none__") formData.append("groupId", selectedGroupId);
         else if (directPhone) formData.append("phoneNumber", directPhone);
+        if (waSenderId) formData.append("integrationId", waSenderId);
         if (clientId) formData.append("clientId", clientId);
 
         const { data: { session } } = await supabase.auth.getSession();
@@ -520,11 +523,14 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
         </div>
 
         {sendWhatsApp && (
-          <WhatsAppGroupSelect
-            groups={groups}
-            value={selectedGroupId}
-            onValueChange={setSelectedGroupId}
-          />
+          <div className="space-y-2">
+            <ReportWhatsAppSenderSelect tenantId={tenantId} value={waSenderId} onChange={setWaSenderId} />
+            <WhatsAppGroupSelect
+              groups={groups}
+              value={selectedGroupId}
+              onValueChange={setSelectedGroupId}
+            />
+          </div>
         )}
 
         {sendEmail && (
