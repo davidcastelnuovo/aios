@@ -3080,7 +3080,9 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-table"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-count"] });
       toast({
         title: "סטטוס תגובה עודכן בהצלחה",
       });
@@ -3104,7 +3106,9 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-table"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-count"] });
       setSelectedLeads([]);
       toast({
         title: "לידים עודכנו בהצלחה",
@@ -3129,7 +3133,9 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-table"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-count"] });
       setSelectedLeads([]);
       toast({
         title: "לידים נמחקו בהצלחה",
