@@ -71,13 +71,11 @@ export default function SalesDashboard() {
         query = query.eq("agency_id", selectedAgency);
       }
 
-      const { data, error } = await query;
+      const [{ data, error }, { data: productsList, error: prodError }] = await Promise.all([
+        query,
+        supabase.from("products").select("id, name, active").eq("tenant_id", tenantId),
+      ]);
       if (error) throw error;
-
-      // Fetch valid products list to normalize and filter
-      const { data: productsList, error: prodError } = await supabase
-        .from("products")
-        .select("id, name, active");
       if (prodError) throw prodError;
 
       const idToName = new Map<string, string>();
@@ -243,10 +241,6 @@ export default function SalesDashboard() {
     enabled: !!tenantId,
     refetchInterval: 5000, // רענון כל 5 שניות
   });
-
-  if (leadsLoading) {
-    return <div className="flex justify-center p-8">טוען...</div>;
-  }
 
   const conversionRate = leadsStats?.total 
     ? ((leadsStats.closed / leadsStats.total) * 100).toFixed(1)

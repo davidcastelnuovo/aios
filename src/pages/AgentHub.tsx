@@ -60,7 +60,7 @@ export default function AgentHub() {
       return data;
     },
     onSuccess: (data) => {
-      qc.invalidateQueries({ queryKey: ["ai-agents"] });
+      qc.invalidateQueries({ queryKey: ["ai-agents", tenantId] });
       setSelectedId(data.id);
       setNewName(""); setNewTalent(""); setCreateOpen(false);
       toast.success("סוכן נוצר");
