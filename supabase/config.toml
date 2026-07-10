@@ -1,6 +1,10 @@
 project_id = "zvoijyneresvkadpprel"
 
+[functions.public-table]
+verify_jwt = false
 
+[functions.public-dashboard]
+verify_jwt = false
 
 
 [functions.run-agent-task]
