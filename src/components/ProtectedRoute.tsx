@@ -5,6 +5,8 @@ import { useUserPermissions, ModulePermission } from "@/hooks/useUserPermissions
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { resolveTenantSlug } from "@/hooks/useResolveTenant";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+
 interface ProtectedRouteProps {
   children: React.ReactNode;
   requiredPermission?: ModulePermission;
@@ -12,8 +14,11 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children, requiredPermission, redirectTo = "my-profile" }: ProtectedRouteProps) {
-  const [loading, setLoading] = useState(true);
-  const [authenticated, setAuthenticated] = useState(false);
+  // Use the cached session from React Query (useCurrentUser) to avoid a blocking
+  // async getSession() call on every navigation — this removes the per-route spinner flash.
+  const { userId, isLoading: sessionLoading } = useCurrentUser();
+  const authenticated = !sessionLoading && !!userId;
+
   const { hasPermission, isLoading: permissionsLoading } = useUserPermissions();
   const { roles, isLoading: rolesLoading } = useUserRole();
   const { buildPath } = useTenantPath();
@@ -21,20 +26,6 @@ export function ProtectedRoute({ children, requiredPermission, redirectTo = "my-
   const navigate = useNavigate();
   const [resolvingTenant, setResolvingTenant] = useState(false);
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setAuthenticated(!!session);
-      setLoading(false);
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setAuthenticated(!!session);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
   // If user is authenticated but URL lacks tenant slug, resolve and redirect
   useEffect(() => {
     const goToTenant = async () => {
@@ -44,15 +35,13 @@ export function ProtectedRoute({ children, requiredPermission, redirectTo = "my-
       if (user) {
         const slug = await resolveTenantSlug(user.id);
         if (slug) {
-          // Check user role to determine landing page
           const { data: roleData } = await (supabase as any)
             .from("user_roles")
             .select("role")
             .eq("user_id", user.id)
             .in("role", ["owner", "admin"])
             .maybeSingle();
-          
-          // Owners and admins go to dashboard, others go to my-profile
+
           const landingPage = roleData ? "dashboard" : "my-profile";
           navigate(`/t/${slug}/${landingPage}`, { replace: true });
         }
@@ -62,8 +51,8 @@ export function ProtectedRoute({ children, requiredPermission, redirectTo = "my-
     goToTenant();
   }, [authenticated, tenantSlug, navigate, resolvingTenant]);
 
-
-  if (loading) {
+  // Show spinner only while the cached session is resolving (usually instant on repeat visits)
+  if (sessionLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
@@ -71,12 +60,10 @@ export function ProtectedRoute({ children, requiredPermission, redirectTo = "my-
     );
   }
 
-  // If not authenticated, redirect to auth
   if (!authenticated) {
     return <Navigate to="/auth" replace />;
   }
 
-  // Only wait on permissions/roles once we know the user is authenticated
   if (permissionsLoading || rolesLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -84,7 +71,6 @@ export function ProtectedRoute({ children, requiredPermission, redirectTo = "my-
       </div>
     );
   }
-
 
   if (requiredPermission && !hasPermission(requiredPermission)) {
     return <Navigate to={buildPath(redirectTo)} replace />;
