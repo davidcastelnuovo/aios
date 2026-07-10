@@ -493,6 +493,23 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
         if (error) throw new Error(error.message || "שגיאה בשליחה");
         if (data?.error) throw new Error(data.error);
         toast.success("הדוח נשלח באימייל בהצלחה");
+
+        // Auto-save the email text as a monthly SEO update
+        if (messageText.trim()) {
+          try {
+            const { data: { user } } = await supabase.auth.getUser();
+            await supabase.from("client_updates").insert({
+              client_id: clientId,
+              tenant_id: tenantId,
+              user_id: user?.id,
+              content: messageText.trim(),
+              update_type: "monthly_seo",
+            } as any);
+            queryClient.invalidateQueries({ queryKey: ["client-updates"] });
+          } catch (e) {
+            console.warn("Failed to auto-save monthly SEO update:", e);
+          }
+        }
       }
     } catch (error: any) {
       console.error("Error sending report:", error);
