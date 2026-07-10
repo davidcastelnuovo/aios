@@ -27,6 +27,7 @@ import { EmailRecipientsSelector, type EmailOption } from "./EmailRecipientsSele
 import { ClientDashboardSnapshot } from "./ClientDashboardSnapshot";
 import { WhatsAppGroupSelect } from "./WhatsAppGroupSelect";
 import { ReportWhatsAppSenderSelect } from "./ReportWhatsAppSenderSelect";
+import { ReportEmailSenderSelect, type ReportEmailSender } from "./ReportEmailSenderSelect";
 
 interface ClientDashboardPanelProps {
   dashboard: { id: string; name: string };
@@ -67,6 +68,7 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
   const [waSenderId, setWaSenderId] = useState("");
   const [directPhone, setDirectPhone] = useState("");
   const [emailRecipients, setEmailRecipients] = useState<string[]>([]);
+  const [emailSender, setEmailSender] = useState<ReportEmailSender | null>(null);
   const [messageText, setMessageText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [screenshotBlob, setScreenshotBlob] = useState<Blob | null>(null);
@@ -432,30 +434,54 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
           inlineImageAlt: `דשבורד ${dashboard.name}`,
         });
 
-        const { error: gmailError } = await supabase.functions.invoke("gmail-api", {
-          body: {
-            action: "send",
-            to: emailRecipients.join(", "),
-            subject: `דשבורד ${dashboard.name}${client?.name ? ` - ${client.name}` : ""}`,
-            body: bodyHtml,
-            attachments: [{
-              filename: "dashboard.jpg",
-              mimeType: "image/jpeg",
-              data: base64Data,
-              disposition: "inline",
-              cid: "dashboard-snapshot",
-            }],
-          },
-        });
-        if (gmailError) {
-          const msg = String(gmailError.message || "");
-          if (msg.includes("Token refresh failed") || msg.includes("invalid_grant")) {
-            toast.error("חיבור Gmail פג - יש להתחבר מחדש בהגדרות");
-          } else {
-            throw gmailError;
-          }
-        } else {
+        const emailSubject = `דשבורד ${dashboard.name}${client?.name ? ` - ${client.name}` : ""}`;
+        if (emailSender) {
+          // Chosen a verified sending domain → send via Resend (same backend as broadcast).
+          const { data: resendData, error: resendError } = await supabase.functions.invoke("send-resend-email", {
+            body: {
+              to: emailRecipients,
+              subject: emailSubject,
+              html: bodyHtml,
+              fromEmail: emailSender.fromEmail,
+              fromName: emailSender.fromName || undefined,
+              attachments: [{
+                filename: "dashboard.jpg",
+                content: base64Data,
+                contentType: "image/jpeg",
+                content_id: "dashboard-snapshot",
+              }],
+            },
+          });
+          if (resendError) throw resendError;
+          if (resendData?.error) throw new Error(resendData.details ? JSON.stringify(resendData.details) : resendData.error);
           toast.success("הדשבורד נשלח באימייל");
+        } else {
+          // Default: send from the connected Gmail account (unchanged behavior).
+          const { error: gmailError } = await supabase.functions.invoke("gmail-api", {
+            body: {
+              action: "send",
+              to: emailRecipients.join(", "),
+              subject: emailSubject,
+              body: bodyHtml,
+              attachments: [{
+                filename: "dashboard.jpg",
+                mimeType: "image/jpeg",
+                data: base64Data,
+                disposition: "inline",
+                cid: "dashboard-snapshot",
+              }],
+            },
+          });
+          if (gmailError) {
+            const msg = String(gmailError.message || "");
+            if (msg.includes("Token refresh failed") || msg.includes("invalid_grant")) {
+              toast.error("חיבור Gmail פג - יש להתחבר מחדש בהגדרות");
+            } else {
+              throw gmailError;
+            }
+          } else {
+            toast.success("הדשבורד נשלח באימייל");
+          }
         }
       }
     } catch (e: any) {
@@ -534,24 +560,27 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
         )}
 
         {sendEmail && (
-          <EmailRecipientsSelector
-            options={[
-              ...(client?.email
-                ? [{
-                    email: client.email,
-                    label: `${client.name} (לקוח)`,
-                    icon: "📋",
-                  } satisfies EmailOption]
-                : []),
-              ...((teamMembers || []).map((t: any) => ({
-                email: t.campaigners.email,
-                label: `${t.campaigners.full_name}${t.role_on_account ? ` (${t.role_on_account})` : ""}`,
-                icon: "👤",
-              } satisfies EmailOption))),
-            ]}
-            selectedEmails={emailRecipients}
-            onChange={setEmailRecipients}
-          />
+          <div className="space-y-2">
+            <ReportEmailSenderSelect value={emailSender} onChange={setEmailSender} />
+            <EmailRecipientsSelector
+              options={[
+                ...(client?.email
+                  ? [{
+                      email: client.email,
+                      label: `${client.name} (לקוח)`,
+                      icon: "📋",
+                    } satisfies EmailOption]
+                  : []),
+                ...((teamMembers || []).map((t: any) => ({
+                  email: t.campaigners.email,
+                  label: `${t.campaigners.full_name}${t.role_on_account ? ` (${t.role_on_account})` : ""}`,
+                  icon: "👤",
+                } satisfies EmailOption))),
+              ]}
+              selectedEmails={emailRecipients}
+              onChange={setEmailRecipients}
+            />
+          </div>
         )}
 
         <Textarea value={messageText} onChange={(e) => setMessageText(e.target.value)} placeholder="טקסט מלווה..." />

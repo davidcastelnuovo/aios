@@ -33,6 +33,7 @@ import { buildBrandedEmailHtml } from "@/lib/emailTemplate";
 import { EmailRecipientsSelector, type EmailOption } from "./EmailRecipientsSelector";
 import { WhatsAppGroupSelect } from "./WhatsAppGroupSelect";
 import { ReportWhatsAppSenderSelect } from "./ReportWhatsAppSenderSelect";
+import { ReportEmailSenderSelect, type ReportEmailSender } from "./ReportEmailSenderSelect";
 
 interface ClientReportPanelProps {
   table: any;
@@ -107,6 +108,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
   const [directPhone, setDirectPhone] = useState("");
   const [emailRecipients, setEmailRecipients] = useState<string[]>([]);
   const [emailSubject, setEmailSubject] = useState("");
+  const [emailSender, setEmailSender] = useState<ReportEmailSender | null>(null);
   const [messageText, setMessageText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [screenshotBlob, setScreenshotBlob] = useState<Blob | null>(null);
@@ -475,26 +477,49 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
           inlineImageAlt: `דוח ${table.name}`,
         });
 
-        const { data, error } = await supabase.functions.invoke("gmail-api", {
-          body: {
-            action: "send",
-            to: emailRecipients.join(", "),
-            subject,
-            body: bodyHtml,
-            attachments: [
-              {
-                filename: `report-${table.name}.png`,
-                mimeType: "image/png",
-                data: base64Data,
-                disposition: "inline",
-                cid: "report-snapshot",
-              },
-            ],
-          },
-        });
-
-        if (error) throw new Error(error.message || "שגיאה בשליחה");
-        if (data?.error) throw new Error(data.error);
+        if (emailSender) {
+          // Chosen a verified sending domain → send via Resend (same backend as broadcast).
+          const { data, error } = await supabase.functions.invoke("send-resend-email", {
+            body: {
+              to: emailRecipients,
+              subject,
+              html: bodyHtml,
+              fromEmail: emailSender.fromEmail,
+              fromName: emailSender.fromName || undefined,
+              attachments: [
+                {
+                  filename: `report-${table.name}.png`,
+                  content: base64Data,
+                  contentType: "image/png",
+                  content_id: "report-snapshot",
+                },
+              ],
+            },
+          });
+          if (error) throw new Error(error.message || "שגיאה בשליחה");
+          if (data?.error) throw new Error(data.details ? JSON.stringify(data.details) : data.error);
+        } else {
+          // Default: send from the connected Gmail account (unchanged behavior).
+          const { data, error } = await supabase.functions.invoke("gmail-api", {
+            body: {
+              action: "send",
+              to: emailRecipients.join(", "),
+              subject,
+              body: bodyHtml,
+              attachments: [
+                {
+                  filename: `report-${table.name}.png`,
+                  mimeType: "image/png",
+                  data: base64Data,
+                  disposition: "inline",
+                  cid: "report-snapshot",
+                },
+              ],
+            },
+          });
+          if (error) throw new Error(error.message || "שגיאה בשליחה");
+          if (data?.error) throw new Error(data.error);
+        }
         toast.success("הדוח נשלח באימייל בהצלחה");
       }
     } catch (error: any) {
@@ -633,6 +658,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
 
         {sendEmail && (
           <div className="space-y-2">
+            <ReportEmailSenderSelect value={emailSender} onChange={setEmailSender} />
             <EmailRecipientsSelector
               options={[
                 ...(client?.email
