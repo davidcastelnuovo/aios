@@ -47,24 +47,19 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
       if (!currentTenantId) return [] as any[];
       
       
-      // Get agencies owned by current tenant
-      const { data: ownedAgencies, error: ownedError } = await supabase
-        .from("agencies")
-        .select("id, name")
-        .eq("tenant_id", currentTenantId)
-        .order("name");
-      
+      // Fetch owned and shared agencies in parallel
+      const [
+        { data: ownedAgencies, error: ownedError },
+        { data: sharedAccess, error: sharedError },
+      ] = await Promise.all([
+        supabase.from("agencies").select("id, name").eq("tenant_id", currentTenantId).order("name"),
+        supabase.from("agency_tenant_access").select("agency_id, agencies(id, name)").eq("accessing_tenant_id", currentTenantId),
+      ]);
+
       if (ownedError) {
         console.error("Error fetching owned agencies:", ownedError);
         return [];
       }
-      
-      // Get shared agencies via agency_tenant_access
-      const { data: sharedAccess, error: sharedError } = await supabase
-        .from("agency_tenant_access")
-        .select("agency_id, agencies(id, name)")
-        .eq("accessing_tenant_id", currentTenantId);
-      
       if (sharedError) {
         console.error("Error fetching shared agencies:", sharedError);
       }

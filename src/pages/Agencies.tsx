@@ -193,9 +193,6 @@ export default function Agencies() {
     }
   };
 
-  if (isLoading) {
-    return <div className="flex justify-center p-8">טוען...</div>;
-  }
 
   return (
     <div className="space-y-6 p-6">
