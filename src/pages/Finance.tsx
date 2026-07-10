@@ -178,9 +178,6 @@ export default function Finance() {
   const totalIncome = filteredFinanceRecords?.filter(f => f.type === "income").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
   const totalExpense = filteredFinanceRecords?.filter(f => f.type === "expense").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
 
-  if (isLoading) {
-    return <div className="flex justify-center p-8">טוען...</div>;
-  }
 
   return (
     <div className="space-y-6 p-6">

@@ -2122,10 +2122,6 @@ export default function Leads() {
 
   const activeLead = filteredLeads?.find((lead: any) => lead.id === activeId);
 
-  if (isLoading) {
-    return <div className="flex justify-center p-8">טוען...</div>;
-  }
-
   return (
     <LeadEditContext.Provider value={openLeadInChat}>
     <div className="space-y-6 p-3 md:p-6">
