@@ -302,7 +302,10 @@ export default function Clients() {
       if (error) throw error;
       return data;
     },
-    enabled: (!isRestrictedClientViewer || !!campaignerId) && !!tenantId && !!agencies,
+    // Don't gate on !!agencies — start fetching immediately with tenantId,
+    // using agencies when available (cross-tenant clients). When agencies finish
+    // loading the queryKey changes (agencies?.length) and we re-fetch automatically.
+    enabled: (!isRestrictedClientViewer || !!campaignerId) && !!tenantId,
     staleTime: 60_000, // heavy list (all clients + joins) — avoid refetching on every remount/refocus
   });
 

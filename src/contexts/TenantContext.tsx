@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode, useEffect, useRef, useCallback } from "react";
+import { createContext, useContext, useState, ReactNode, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -35,6 +35,16 @@ function safeSetLocalStorage(key: string, value: string) {
   }
 }
 
+// Cache slug → tenantId in localStorage so we can skip the DB-sync spinner
+// on repeat visits to the same tenant.
+function getCachedSlugId(slug: string): string | null {
+  return safeGetLocalStorage(`tenantSlugId_${slug}`);
+}
+
+function setCachedSlugId(slug: string, id: string) {
+  safeSetLocalStorage(`tenantSlugId_${slug}`, id);
+}
+
 export function TenantProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -44,7 +54,15 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   const [tenantSlug, setTenantSlug] = useState<string | null>(() => getSlugFromPath(window.location.pathname));
 
   const [currentTenantId, setCurrentTenantId] = useState<string | null>(() => safeGetLocalStorage("selectedTenantId"));
-  const [isActiveTenantSynced, setIsActiveTenantSynced] = useState(false);
+  // Optimistic: if localStorage slug→id cache matches the stored tenantId, skip the
+  // blocking spinner on initial load (same tenant as previous session).
+  const [isActiveTenantSynced, setIsActiveTenantSynced] = useState<boolean>(() => {
+    const slug = getSlugFromPath(window.location.pathname);
+    if (!slug) return false;
+    const cachedId = getCachedSlugId(slug);
+    const storedId = safeGetLocalStorage("selectedTenantId");
+    return !!(cachedId && storedId && cachedId === storedId);
+  });
   const [isBootstrapTimedOut, setIsBootstrapTimedOut] = useState(false);
   const previousTenantIdRef = useRef<string | null>(null);
 
@@ -92,67 +110,57 @@ export function TenantProvider({ children }: { children: ReactNode }) {
 
   // CRITICAL: "URL wins" strategy - URL is always the source of truth
   useEffect(() => {
-    if (tenantFromSlug?.id) {
+    if (tenantFromSlug?.id && tenantSlug) {
       const urlTenantId = tenantFromSlug.id;
-      
+
+      // Persist slug → id so future loads can skip the blocking spinner
+      setCachedSlugId(tenantSlug, urlTenantId);
+
       if (currentTenantId !== urlTenantId) {
         setCurrentTenantId(urlTenantId);
         setIsActiveTenantSynced(false);
       }
-      
+
       previousTenantIdRef.current = urlTenantId;
     }
   }, [tenantFromSlug?.id, tenantSlug, currentTenantId]);
 
-  // Sync tenant to database and clear cache - AWAIT the DB write
+  // Sync tenant: clear cache on switch, then unblock UI immediately.
+  // The DB write to user_active_tenant is fire-and-forget — it's used by edge
+  // functions for context, not for UI correctness, so we don't block on it.
   useEffect(() => {
-    const syncTenantToDb = async () => {
-      if (!currentTenantId) {
-        setIsActiveTenantSynced(false);
-        return;
-      }
+    if (!currentTenantId || isActiveTenantSynced) return;
 
-      if (isActiveTenantSynced) {
-        return;
-      }
+    const keysToRemove = [
+      "tasks", "clients", "agencies", "agencies-filter", "user-agency-ids",
+      "leads", "campaigners", "client-onboarding", "finance", "sales-people",
+      "suppliers", "products", "automations", "time-entries", "chat-contacts",
+      "crm-tables", "crm-records", "tenant-for-operations"
+    ];
+    keysToRemove.forEach(key => {
+      queryClient.removeQueries({ queryKey: [key] });
+    });
 
-      try {
-        const keysToRemove = [
-          "tasks", "clients", "agencies", "agencies-filter", "user-agency-ids",
-          "leads", "campaigners", "client-onboarding", "finance", "sales-people",
-          "suppliers", "products", "automations", "time-entries", "chat-contacts",
-          "crm-tables", "crm-records", "tenant-for-operations"
-        ];
+    safeSetLocalStorage("selectedTenantId", currentTenantId);
 
-        keysToRemove.forEach(key => {
-          queryClient.removeQueries({ queryKey: [key] });
+    // Unblock the UI now — don't wait for the DB round-trip.
+    setIsActiveTenantSynced(true);
+
+    // Background DB write so edge functions see the correct active tenant.
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      (supabase as any)
+        .from("user_active_tenant")
+        .upsert(
+          { user_id: user.id, tenant_id: currentTenantId, updated_at: new Date().toISOString() },
+          { onConflict: "user_id" }
+        )
+        .then(({ error }: any) => {
+          if (error) console.error("Error updating active tenant in DB:", error);
         });
-
-        safeSetLocalStorage("selectedTenantId", currentTenantId);
-        
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const { error } = await (supabase as any)
-            .from("user_active_tenant")
-            .upsert({
-              user_id: user.id,
-              tenant_id: currentTenantId,
-              updated_at: new Date().toISOString(),
-            }, { onConflict: "user_id" });
-
-          if (error) {
-            console.error("Error updating active tenant in DB:", error);
-          } else {
-          }
-        }
-      } catch (error) {
-        console.error("Error syncing tenant:", error);
-      }
-
-      setIsActiveTenantSynced(true);
-    };
-    
-    syncTenantToDb();
+    }).catch((err: any) => {
+      console.error("Error syncing tenant:", err);
+    });
   }, [currentTenantId, isActiveTenantSynced, queryClient]);
 
   // Get current user's tenant if not on tenant-scoped route

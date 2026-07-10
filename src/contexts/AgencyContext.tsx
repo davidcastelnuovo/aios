@@ -117,15 +117,8 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
     }
   }, [agencies, selectedAgency]);
 
-  // Wait for initial loading before rendering children
-  // But only block if tenant is synced and we're still loading
-  if (isActiveTenantSynced && isLoading && !agencies) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
+  // Don't block the whole app on agency loading — pages handle their own
+  // loading states while agencies load in the background.
 
   return (
     <AgencyContext.Provider value={{ selectedAgency, setSelectedAgency, agencies, isLoading }}>
