@@ -1,3 +1,5 @@
+// redeploy trigger: prior CI bundle hit a transient esm.sh 522 fetching supabase-js;
+// re-run the deploy (batch-aggregated WhatsApp report fix, PR #131).
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
 import { advanceDangerLane, getBatchResults } from '../_shared/subagent.ts'
 
