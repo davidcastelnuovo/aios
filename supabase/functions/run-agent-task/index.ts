@@ -202,7 +202,9 @@ Deno.serve(async (req) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        // Internal service-to-service call: run-ai-agent's requireAuth accepts
+        // the service-role key (or a user JWT) — the anon key is neither and 401s.
+        'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
       },
       body: JSON.stringify({
         tenant_id: task.tenant_id,
@@ -393,7 +395,8 @@ async function selfInvoke(taskId: string) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        // Self-invoke is service-to-service — requireAuth rejects the anon key.
+        'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
       },
       body: JSON.stringify({ task_id: taskId }),
     }).catch(() => {
