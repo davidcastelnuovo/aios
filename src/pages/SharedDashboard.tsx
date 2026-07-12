@@ -362,6 +362,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
         if (ct === 'ecommerce') {
           platforms[source].results += getPurchasesFromData(d);
           platforms[source].revenue += getRevenueFromData(d);
+          platforms[source].addToCart += getAddToCartFromData(d);
           platforms[source].leads += getExplicitLeadFieldsFromData(d);
         } else {
           const leads = getLeadsFromData(d);

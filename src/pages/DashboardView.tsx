@@ -534,6 +534,7 @@ export default function DashboardView() {
         if (campaignType === 'ecommerce') {
           platforms[source].results += getPurchasesFromData(data);
           platforms[source].revenue += getRevenueFromData(data);
+          platforms[source].addToCart += getAddToCartFromData(data);
           // Only count explicit lead fields for ecommerce (not conversions which are purchases)
           platforms[source].leads += getExplicitLeadFieldsFromData(data);
         } else {
