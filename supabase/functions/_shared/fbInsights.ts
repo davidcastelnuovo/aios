@@ -221,7 +221,15 @@ export function buildInsightRecord(
   const _isLeadFormObjective = ['OUTCOME_LEADS', 'LEAD_GENERATION'].includes(_objectiveForLeads);
   const _isMessagingObjective = ['OUTCOME_ENGAGEMENT', 'MESSAGES'].includes(_objectiveForLeads);
 
-  const _formLeadsValue = sumByTypes(['leadgen.other', 'leadgen_grouped', 'onsite_conversion.lead_grouped']);
+  // Use MAX across overlapping form-lead action types instead of SUM.
+  // FB reports the same submission under both leadgen_grouped AND
+  // onsite_conversion.lead_grouped (and sometimes leadgen.other), so summing
+  // them double- or triple-counts vs the Ads Manager "Results" column.
+  const _formLeadsValue = Math.max(
+    sumByTypes(['leadgen_grouped']),
+    sumByTypes(['leadgen.other']),
+    sumByTypes(['onsite_conversion.lead_grouped']),
+  );
   const _messagingLeadsValue = sumByTypes([
     'onsite_conversion.messaging_conversation_started_7d',
     'messaging_conversation_started_7d',
