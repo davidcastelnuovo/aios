@@ -194,7 +194,18 @@ export function buildInsightRecord(
   campaignStatuses: Record<string, CampaignStatus>,
   resultLeadTypesByCampaign: Record<string, string[]> = {},
 ): InsightRecord {
-  const allActions = [...(insight.actions ?? []), ...(insight.conversions ?? [])];
+  // Deduplicate: FB often returns the same event (e.g. leadgen_grouped,
+  // offsite_conversion.fb_pixel_lead) in BOTH insight.actions AND
+  // insight.conversions. Summing both arrays doubles the count. Instead, build
+  // a map keyed by action_type and take the MAX value across both arrays so
+  // each event is counted once, matching Ads Manager "Results".
+  const _actionCountMap = new Map<string, number>();
+  for (const a of [...(insight.actions ?? []), ...(insight.conversions ?? [])]) {
+    const t = String(a.action_type || '');
+    const v = parseInt(a.value) || 0;
+    _actionCountMap.set(t, Math.max(_actionCountMap.get(t) ?? 0, v));
+  }
+  const allActions = Array.from(_actionCountMap.entries()).map(([action_type, value]) => ({ action_type, value: String(value) }));
   const actionValues = insight.action_values ?? [];
   const actionTypeSet = new Set(allActions.map((a: any) => String(a.action_type || '')));
 
