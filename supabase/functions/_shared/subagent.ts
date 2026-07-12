@@ -334,6 +334,7 @@ export async function getBatchResults(
     }
     return {
       sub_task_id: row.id,
+      title: row.title ?? null,
       status,
       done: status === 'completed' || status === 'failed',
       run_count: row.run_count ?? 0,
@@ -360,6 +361,7 @@ export async function getBatchResults(
 
 export interface SubagentResultPayload {
   sub_task_id: string
+  title?: string | null
   status: string
   done: boolean
   run_count?: number

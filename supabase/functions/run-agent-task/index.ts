@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
-import { advanceDangerLane } from '../_shared/subagent.ts'
+import { advanceDangerLane, getBatchResults } from '../_shared/subagent.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -15,6 +15,77 @@ async function maybeAdvanceLane(supabase: any, task: any) {
     }
   } catch (e: any) {
     console.error('[run-agent-task] advanceDangerLane failed:', e?.message)
+  }
+}
+
+// Compose ONE concise WhatsApp report from a completed delegate_parallel batch,
+// instead of firing a separate (truncated) message per subtask. Each subtask's
+// output is a per-item finding (e.g. per-client pulse); we join them under their
+// titles, capped to a WhatsApp-friendly length with a fair per-item budget.
+function buildBatchReport(batch: {
+  total: number
+  completed: number
+  failed: number
+  tasks: Array<{ title?: string | null; status: string; output?: string; error?: string | null }>
+}): string {
+  const MAX = 3800
+  const header = `סיכום מרוכז — ${batch.completed}/${batch.total} הושלמו${batch.failed ? `, ${batch.failed} נכשלו` : ''}:`
+  const perItemBudget = Math.max(200, Math.floor((MAX - header.length) / Math.max(1, batch.tasks.length)))
+  const sections = batch.tasks.map((t) => {
+    const name = (t.title || 'ללא כותרת').trim()
+    if (t.status === 'failed') return `❌ ${name}: ${t.error || 'נכשל'}`
+    const body = (t.output || '').trim() || '—'
+    const clipped = body.length > perItemBudget ? body.slice(0, perItemBudget - 1) + '…' : body
+    return `• ${name}:\n${clipped}`
+  })
+  let msg = [header, ...sections].join('\n\n')
+  if (msg.length > MAX) msg = msg.slice(0, MAX - 1) + '…'
+  return msg
+}
+
+// When a delegate_parallel subtask reaches a terminal state (completed OR failed),
+// send exactly ONE aggregated WhatsApp report — but only once the WHOLE batch is
+// done, and only once. The insert into agent_batch_reports is the atomic claim
+// (PK batch_id), so concurrent finishers can't double-send. Best-effort.
+async function maybeSendBatchReport(supabase: any, task: any, preservedNotify: any): Promise<void> {
+  if (!preservedNotify || preservedNotify.surface !== 'whatsapp' || !task?.batch_id) return
+  try {
+    const batch = await getBatchResults(supabase, preservedNotify.tenant_id, task.batch_id)
+    if (!batch.all_done) return // not the finisher — the last subtask sends
+    const { error: claimErr } = await supabase
+      .from('agent_batch_reports')
+      .insert({ batch_id: task.batch_id })
+    if (claimErr) {
+      console.log(`[run-agent-task] WA batch report already claimed for batch ${task.batch_id}`)
+      return
+    }
+    let automationId: string | null = preservedNotify.automation_id || null
+    if (!automationId) {
+      const auto = await findCarmenSessionAutomation(
+        supabase,
+        preservedNotify.tenant_id,
+        null,
+        { isGroup: !!preservedNotify.is_group, chatId: preservedNotify.chat_id, phoneNumber: preservedNotify.phone_number },
+      )
+      automationId = auto?.id || null
+    }
+    if (!automationId) {
+      console.warn(`[run-agent-task] No automation found for WA batch report on batch ${task.batch_id}`)
+      return
+    }
+    const ok = await sendCarmenReplyViaActionStep({
+      supabase,
+      automationId,
+      tenantId: preservedNotify.tenant_id,
+      connectionUserId: preservedNotify.connection_user_id,
+      chatId: preservedNotify.chat_id,
+      phoneNumber: preservedNotify.phone_number || '',
+      isGroup: !!preservedNotify.is_group,
+      message: buildBatchReport(batch),
+    })
+    console.log(`[run-agent-task] WA batch report dispatched=${ok} for batch ${task.batch_id} (${batch.total} tasks)`)
+  } catch (e: any) {
+    console.error(`[run-agent-task] WA batch report failed for batch ${task?.batch_id}:`, e?.message)
   }
 }
 
@@ -172,6 +243,9 @@ Deno.serve(async (req) => {
       }).eq('id', task_id)
 
       await maybeAdvanceLane(supabase, task)
+      // If this failed subtask was the LAST of a delegate_parallel batch, still
+      // send the aggregated report (notify target survives on task.result/checkpoint).
+      await maybeSendBatchReport(supabase, task, (checkpoint as any)?.notify || (task.result as any)?.notify || null)
       return new Response(JSON.stringify({ success: false, error: 'Max retries exceeded' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500,
       })
@@ -249,36 +323,43 @@ Deno.serve(async (req) => {
     // Push the final output back to the user's WhatsApp chat if this subagent
     // was spawned from a WA conversation. Best-effort — failures are logged
     // but never fail the task.
-    if (preservedNotify && preservedNotify.surface === 'whatsapp' && output) {
-      try {
-        let automationId: string | null = preservedNotify.automation_id || null
-        if (!automationId) {
-          const auto = await findCarmenSessionAutomation(
-            supabase,
-            preservedNotify.tenant_id,
-            null,
-            { isGroup: !!preservedNotify.is_group, chatId: preservedNotify.chat_id, phoneNumber: preservedNotify.phone_number },
-          )
-          automationId = auto?.id || null
+    if (preservedNotify && preservedNotify.surface === 'whatsapp') {
+      if (task.batch_id) {
+        // delegate_parallel: DON'T fire one (truncated) WA message per subtask.
+        // Only the finisher sends ONE aggregated report (see maybeSendBatchReport).
+        await maybeSendBatchReport(supabase, task, preservedNotify)
+      } else if (output) {
+        // Single (non-batch) task → send its own output, as before. Best-effort.
+        try {
+          let automationId: string | null = preservedNotify.automation_id || null
+          if (!automationId) {
+            const auto = await findCarmenSessionAutomation(
+              supabase,
+              preservedNotify.tenant_id,
+              null,
+              { isGroup: !!preservedNotify.is_group, chatId: preservedNotify.chat_id, phoneNumber: preservedNotify.phone_number },
+            )
+            automationId = auto?.id || null
+          }
+          if (automationId) {
+            const trimmed = output.length > 1500 ? output.slice(0, 1497) + '…' : output
+            const ok = await sendCarmenReplyViaActionStep({
+              supabase,
+              automationId,
+              tenantId: preservedNotify.tenant_id,
+              connectionUserId: preservedNotify.connection_user_id,
+              chatId: preservedNotify.chat_id,
+              phoneNumber: preservedNotify.phone_number || '',
+              isGroup: !!preservedNotify.is_group,
+              message: trimmed,
+            })
+            console.log(`[run-agent-task] WA notify dispatched=${ok} for task ${task_id}`)
+          } else {
+            console.warn(`[run-agent-task] No automation found for WA notify on task ${task_id}`)
+          }
+        } catch (e: any) {
+          console.error(`[run-agent-task] WA notify failed for task ${task_id}:`, e?.message)
         }
-        if (automationId) {
-          const trimmed = output.length > 1500 ? output.slice(0, 1497) + '…' : output
-          const ok = await sendCarmenReplyViaActionStep({
-            supabase,
-            automationId,
-            tenantId: preservedNotify.tenant_id,
-            connectionUserId: preservedNotify.connection_user_id,
-            chatId: preservedNotify.chat_id,
-            phoneNumber: preservedNotify.phone_number || '',
-            isGroup: !!preservedNotify.is_group,
-            message: trimmed,
-          })
-          console.log(`[run-agent-task] WA notify dispatched=${ok} for task ${task_id}`)
-        } else {
-          console.warn(`[run-agent-task] No automation found for WA notify on task ${task_id}`)
-        }
-      } catch (e: any) {
-        console.error(`[run-agent-task] WA notify failed for task ${task_id}:`, e?.message)
       }
     }
 
