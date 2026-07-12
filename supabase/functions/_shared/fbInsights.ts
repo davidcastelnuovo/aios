@@ -275,25 +275,34 @@ export function buildInsightRecord(
   // for (from the ad set's promoted_object), count only that event — this is
   // what Facebook shows in the "Results" column. Avoids inflating by counting
   // the broad fb_pixel_lead, or by summing several custom events.
+  // Only lock in authoritative when it actually finds leads > 0. If the resolved
+  // event type gives 0 (e.g. an LP campaign whose ad set was classified as a form
+  // campaign, or a custom event name that doesn't match the reported action type),
+  // fall through to the heuristics so pixel/website leads are still captured.
   const _resultTypes = resultLeadTypesByCampaign[String(insight.campaign_id || '')];
   let leads: number;
   let _leadsAuthoritative = false;
   if (_resultTypes && _resultTypes.length > 0) {
-    leads = Math.max(0, ..._resultTypes.map((t) => sumByTypes([t])));
-    _leadsAuthoritative = true;
-  } else if (_isMessagingObjective) {
-    leads = _messagingLeadsValue > 0 ? _messagingLeadsValue : _websiteLeads;
-  } else if (_isLeadFormObjective) {
-    // Prefer real form submissions; if the "Leads" campaign actually drives to a
-    // website (pixel), use the pixel value instead of reporting 0.
-    leads = _formLeadsValue > 0 ? _formLeadsValue : _websiteLeads;
-  } else {
-    // Conversions / Sales / Traffic with pixel — website leads.
-    leads = _websiteLeads > 0 ? _websiteLeads : _formLeadsValue;
+    const _authLeads = Math.max(0, ..._resultTypes.map((t) => sumByTypes([t])));
+    if (_authLeads > 0) {
+      leads = _authLeads;
+      _leadsAuthoritative = true;
+    }
   }
-  // Final fallback: FB's deduplicated aggregate `lead` total. Never override an
-  // authoritative 0 (FB genuinely reported no results for the optimized event).
-  if (!_leadsAuthoritative && leads === 0) leads = _aggregateLeadValue;
+  if (!_leadsAuthoritative) {
+    if (_isMessagingObjective) {
+      leads = _messagingLeadsValue > 0 ? _messagingLeadsValue : _websiteLeads;
+    } else if (_isLeadFormObjective) {
+      // Prefer real form submissions; if the "Leads" campaign actually drives to a
+      // website (pixel), use the pixel value instead of reporting 0.
+      leads = _formLeadsValue > 0 ? _formLeadsValue : _websiteLeads;
+    } else {
+      // Conversions / Sales / Traffic with pixel — website leads.
+      leads = _websiteLeads > 0 ? _websiteLeads : _formLeadsValue;
+    }
+    // Final fallback: FB's deduplicated aggregate `lead` total.
+    if (leads === 0) leads = _aggregateLeadValue;
+  }
 
   const _spendForLog = parseFloat(insight.spend) || 0;
   if (leads === 0 && _spendForLog > 0) {
