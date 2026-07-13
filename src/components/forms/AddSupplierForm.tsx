@@ -78,7 +78,7 @@ export function AddSupplierForm() {
     },
     onSuccess: () => {
       toast.success("הספק נוסף בהצלחה");
-      queryClient.invalidateQueries({ queryKey: ["suppliers"] });
+      queryClient.invalidateQueries({ queryKey: ["suppliers", tenantId] });
       form.reset();
       setOpen(false);
     },
