@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,7 @@ function StatusBadge({ status }: { status: string }) {
 
 function ApprovalCard({ item, canDecide }: { item: any; canDecide: boolean }) {
   const qc = useQueryClient();
+  const { tenantId } = useCurrentTenant();
 
   const decide = useMutation({
     mutationFn: async (decision: "approved" | "rejected") => {
@@ -50,8 +52,8 @@ function ApprovalCard({ item, canDecide }: { item: any; canDecide: boolean }) {
       }
     },
     onSuccess: (_, d) => {
-      qc.invalidateQueries({ queryKey: ["agent-approvals"] });
-      qc.invalidateQueries({ queryKey: ["agent-approvals-global"] });
+      qc.invalidateQueries({ queryKey: ["agent-approvals", tenantId] });
+      qc.invalidateQueries({ queryKey: ["agent-approvals-global", tenantId] });
       toast.success(d === "approved" ? "אושר" : "נדחה");
     },
     onError: (e: any) => toast.error(e.message),

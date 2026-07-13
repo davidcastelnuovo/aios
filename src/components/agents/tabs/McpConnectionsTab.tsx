@@ -58,7 +58,7 @@ export function McpConnectionsTab({ agent }: { agent: any }) {
       const { error } = await supabase.from("agent_mcp_connections").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["mcp-connections"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["mcp-connections", agent.id, tenantId] }),
   });
 
   return (

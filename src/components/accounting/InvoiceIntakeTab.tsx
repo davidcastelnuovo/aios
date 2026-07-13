@@ -176,7 +176,7 @@ export function InvoiceIntakeTab() {
               clients={clients || []}
               agencies={agencies || []}
               tenantId={tenantId!}
-              onChanged={() => qc.invalidateQueries({ queryKey: ["invoice-uploads"] })}
+              onChanged={() => qc.invalidateQueries({ queryKey: ["invoice-uploads", tenantId] })}
             />
           ))}
         </div>

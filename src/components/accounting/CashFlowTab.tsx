@@ -338,7 +338,7 @@ export function CashFlowTab() {
       const { error } = await supabase.from("income_payments").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["cf-income-payments"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["cf-income-payments", tenantId] }),
   });
 
   const markExpense = useMutation({
@@ -366,7 +366,7 @@ export function CashFlowTab() {
       const { error } = await supabase.from("expense_payments").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["cf-expense-payments"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["cf-expense-payments", tenantId] }),
   });
 
   // --- CSV export ---

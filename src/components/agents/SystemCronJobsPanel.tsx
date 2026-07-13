@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -53,6 +54,7 @@ interface CronJob {
 
 export function SystemCronJobsPanel() {
   const qc = useQueryClient();
+  const { tenantId } = useCurrentTenant();
   const [editing, setEditing] = useState<CronJob | null>(null);
   const [historyJob, setHistoryJob] = useState<CronJob | null>(null);
   const [editPreset, setEditPreset] = useState("__custom");
@@ -78,7 +80,7 @@ export function SystemCronJobsPanel() {
     },
     onSuccess: () => {
       toast.success("הסטטוס עודכן");
-      qc.invalidateQueries({ queryKey: ["system-cron-jobs"] });
+      qc.invalidateQueries({ queryKey: ["system-cron-jobs", tenantId] });
     },
     onError: (e: any) => toast.error(e.message || "שגיאה"),
   });
@@ -94,7 +96,7 @@ export function SystemCronJobsPanel() {
     },
     onSuccess: () => {
       toast.success("הג'וב עודכן");
-      qc.invalidateQueries({ queryKey: ["system-cron-jobs"] });
+      qc.invalidateQueries({ queryKey: ["system-cron-jobs", tenantId] });
       setEditing(null);
     },
     onError: (e: any) => toast.error(e.message || "שגיאה"),
@@ -107,7 +109,7 @@ export function SystemCronJobsPanel() {
     },
     onSuccess: () => {
       toast.success("הג'וב הופעל");
-      setTimeout(() => qc.invalidateQueries({ queryKey: ["system-cron-jobs"] }), 2000);
+      setTimeout(() => qc.invalidateQueries({ queryKey: ["system-cron-jobs", tenantId] }), 2000);
     },
     onError: (e: any) => toast.error(e.message || "שגיאה בהפעלה"),
   });
