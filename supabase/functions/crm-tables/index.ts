@@ -36,9 +36,26 @@ serve(async (req) => {
 
     switch (req.method) {
       case 'GET': {
-        // Get user's tenant_id for filtering
-        const { data: tenantId } = await supabase
-          .rpc('get_user_tenant_id', { _user_id: user.id });
+        // Prefer the tenant the client UI is actually showing (validated
+        // against membership) over the global user_active_tenant row — that
+        // row is shared across the user's devices, so a session on another
+        // machine pointing at a different tenant must not scope this one.
+        let tenantId: string | null = null;
+        const requestedTenantId = url.searchParams.get('tenant_id');
+        if (requestedTenantId) {
+          const { data: membership } = await supabase
+            .from('tenant_users')
+            .select('tenant_id')
+            .eq('user_id', user.id)
+            .eq('tenant_id', requestedTenantId)
+            .maybeSingle();
+          if (membership) tenantId = requestedTenantId;
+        }
+        if (!tenantId) {
+          const { data: fallbackTenantId } = await supabase
+            .rpc('get_user_tenant_id', { _user_id: user.id });
+          tenantId = fallbackTenantId;
+        }
 
         // Foreign agencies shared into our tenant
         const { data: sharedAgencies } = await supabase

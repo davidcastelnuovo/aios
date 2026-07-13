@@ -260,7 +260,7 @@ export function AppSidebar() {
       if (!currentTenantId) return [];
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return [];
-      const response = await supabase.functions.invoke("crm-tables", {
+      const response = await supabase.functions.invoke(`crm-tables?tenant_id=${currentTenantId}`, {
         method: "GET",
         headers: { Authorization: `Bearer ${session.access_token}` },
       });

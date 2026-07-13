@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BarChart3, TrendingUp, TrendingDown, Minus, ExternalLink, RefreshCw } from "lucide-react";
 import { useTenantPath } from "@/hooks/useTenantPath";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts";
@@ -34,6 +35,7 @@ const getClicksFromData = (data: any) => Number(data?.clicks) || Number(data?.li
 
 export function ClientWeeklyReport({ clientId, clientName }: ClientWeeklyReportProps) {
   const tenantPath = useTenantPath();
+  const { tenantId: currentTenantId } = useCurrentTenant();
   const [dateFilter, setDateFilter] = useState('last_7_days');
 
   // Find dashboard for this client
@@ -54,9 +56,12 @@ export function ClientWeeklyReport({ clientId, clientName }: ClientWeeklyReportP
 
   // Fetch tables for the client
   const { data: tables = [], isLoading: tablesLoading } = useQuery({
-    queryKey: ['crm-tables-client-report', clientId],
+    queryKey: ['crm-tables-client-report', clientId, currentTenantId],
     queryFn: async () => {
-      const response = await supabase.functions.invoke('crm-tables', { method: 'GET' });
+      const response = await supabase.functions.invoke(
+        currentTenantId ? `crm-tables?tenant_id=${currentTenantId}` : 'crm-tables',
+        { method: 'GET' }
+      );
       if (response.error) throw response.error;
       const allTables = Array.isArray(response.data) ? response.data : [];
       return allTables.filter((t: any) => t.client_id === clientId);
