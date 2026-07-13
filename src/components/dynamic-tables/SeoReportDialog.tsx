@@ -389,7 +389,7 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
       if (error) throw error;
 
       toast({ title: "טבלת דוח SEO נוצרה בהצלחה!" });
-      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables', currentTenantId] });
       onOpenChange(false);
       // Navigate to the new table
       const tenantSlug = currentTenant?.slug || '';

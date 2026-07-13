@@ -117,7 +117,7 @@ export function SimpleTableDialog({ open, onOpenChange, assignedClientIds }: Sim
       return response.data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
       toast.success('הטבלה נוצרה בהצלחה');
       handleClose();
       navigate(buildPath(`/table/${data.slug}`));

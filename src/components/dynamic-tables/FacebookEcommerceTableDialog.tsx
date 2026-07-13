@@ -180,7 +180,7 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
       return response.data;
     },
     onSuccess: async (data) => {
-      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
       toast.success('טבלת Facebook Ecommerce נוצרה בהצלחה');
       
       // Trigger initial sync

@@ -529,8 +529,8 @@ export function GscIntegration({
       }
     },
     onSuccess: ({ siteUrl, dbUpdated }) => {
-      queryClient.invalidateQueries({ queryKey: ["user-integrations"] });
-      queryClient.invalidateQueries({ queryKey: ["gsc-keyword-data"] });
+      queryClient.invalidateQueries({ queryKey: ["user-integrations", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["gsc-keyword-data", tenantId] });
       onSiteSelected?.(siteUrl);
       if (dbUpdated) toast.success("הנכס עודכן");
     },

@@ -222,7 +222,7 @@ export function GoogleAdsTableDialog({ open, onOpenChange, assignedClientIds }: 
       return response.data;
     },
     onSuccess: async (data) => {
-      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
       toast.success('טבלת Google Ads נוצרה בהצלחה');
 
       // Trigger initial sync (direct API)

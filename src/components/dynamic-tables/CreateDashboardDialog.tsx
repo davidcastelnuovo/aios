@@ -167,7 +167,7 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
       return data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['crm-dashboards'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-dashboards', tenantId] });
       toast.success('הדשבורד נוצר בהצלחה');
       onOpenChange(false);
       resetForm();
