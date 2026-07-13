@@ -263,7 +263,7 @@ export function ImportAnalyticsDialog({ tenantId }: ImportAnalyticsDialogProps) 
       setImportResult(result);
       if (result.success) {
         toast.success(`יובאו ${result.imported} רשומות בהצלחה!`);
-        queryClient.invalidateQueries({ queryKey: ["analytics_sessions"] });
+        queryClient.invalidateQueries({ queryKey: ["analytics_sessions", tenantId] });
       } else {
         toast.warning(`יובאו ${result.imported} רשומות עם ${result.errors.length} שגיאות`);
       }

@@ -70,8 +70,8 @@ export function InteractiveCalendar() {
       listenerCleanupRef.current = listenForUnifiedConnection(() => {
         listenerCleanupRef.current = null;
         toast.success('היומן התחבר בהצלחה דרך Unified');
-        queryClient.invalidateQueries({ queryKey: ['calendar-status'] });
-        queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
+        queryClient.invalidateQueries({ queryKey: ['calendar-status', userId, tenantId] });
+        queryClient.invalidateQueries({ queryKey: ['calendar-events', userId, tenantId] });
       });
 
       await openUnifiedCalendarConnection({ tenantId });
@@ -107,7 +107,7 @@ export function InteractiveCalendar() {
     },
     onSuccess: () => {
       toast.success('האירוע עודכן בהצלחה');
-      queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
+      queryClient.invalidateQueries({ queryKey: ['calendar-events', userId, tenantId] });
       setIsEditing(false);
       setSelectedEvent(null);
     },
@@ -123,7 +123,7 @@ export function InteractiveCalendar() {
     },
     onSuccess: () => {
       toast.success('האירוע נמחק בהצלחה');
-      queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
+      queryClient.invalidateQueries({ queryKey: ['calendar-events', userId, tenantId] });
       setSelectedEvent(null);
     },
     onError: (error: Error) => {

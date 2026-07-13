@@ -64,7 +64,7 @@ export function ChangeAgencyDialog({
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["contact", contactId] });
+      queryClient.invalidateQueries({ queryKey: ["contact", contactId, tenantId] });
       queryClient.invalidateQueries({ queryKey: ["active-chats", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads", tenantId] });

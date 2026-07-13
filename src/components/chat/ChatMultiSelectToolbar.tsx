@@ -82,8 +82,8 @@ export function ChatMultiSelectToolbar({
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['chat-contact-tags'] });
-      queryClient.invalidateQueries({ queryKey: ['contact-tags-for-list'] });
+      queryClient.invalidateQueries({ queryKey: ['chat-contact-tags', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ['contact-tags-for-list', tenantId] });
       toast.success(`התג נוסף ל-${selectedContacts.length} צ'אטים`);
     },
     onError: () => {
@@ -119,8 +119,8 @@ export function ChatMultiSelectToolbar({
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['chat-contact-tags'] });
-      queryClient.invalidateQueries({ queryKey: ['contact-tags-for-list'] });
+      queryClient.invalidateQueries({ queryKey: ['chat-contact-tags', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ['contact-tags-for-list', tenantId] });
       setRemoveTagOpen(false);
       toast.success(`התג הוסר מ-${selectedContacts.length} צ'אטים`);
     },
@@ -182,8 +182,8 @@ export function ChatMultiSelectToolbar({
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['active-chats'] });
-      queryClient.invalidateQueries({ queryKey: ['unknown-contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['active-chats', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ['unknown-contacts', tenantId] });
       toast.success(`${selectedContacts.length} צ'אטים סומנו כנקראו`);
       onClearSelection();
     },

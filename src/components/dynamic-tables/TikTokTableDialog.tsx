@@ -114,7 +114,7 @@ export function TikTokTableDialog({ open, onOpenChange, assignedClientIds }: Pro
       return res.data;
     },
     onSuccess: async (data) => {
-      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
       toast.success('טבלת TikTok נוצרה');
       try {
         toast.info('מסנכרן סרטונים מ-TikTok...');
