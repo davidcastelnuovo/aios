@@ -94,8 +94,8 @@ export function IntegrationVisibilitySelector({
       if (error) throw error;
     },
     onSuccess: (_, visibility) => {
-      queryClient.invalidateQueries({ queryKey: ["integration-visibility", integrationId] });
-      queryClient.invalidateQueries({ queryKey: ["user-integrations"] });
+      queryClient.invalidateQueries({ queryKey: ["integration-visibility", integrationId, tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["user-integrations", tenantId] });
       const labels: Record<Visibility, string> = {
         private: "פרטי",
         org: "כל הארגון",

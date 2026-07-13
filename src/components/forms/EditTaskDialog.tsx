@@ -287,9 +287,9 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["client-tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["calendar-events"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", ctTenantId] });
+      queryClient.invalidateQueries({ queryKey: ["client-tasks", ctTenantId] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-events", ctTenantId] });
       toast.success("המשימה עודכנה בהצלחה");
       onOpenChange(false);
     },
@@ -308,9 +308,9 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["client-tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["calendar-events"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", ctTenantId] });
+      queryClient.invalidateQueries({ queryKey: ["client-tasks", ctTenantId] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-events", ctTenantId] });
       toast.success("המשימה נמחקה בהצלחה");
       onOpenChange(false);
     },
