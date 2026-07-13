@@ -56,7 +56,7 @@ export function SupplierInvoicesDialog({ supplier, open, onOpenChange }: Supplie
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["supplier-invoices", supplier?.id] });
+      queryClient.invalidateQueries({ queryKey: ["supplier-invoices", supplier?.id, tenantId] });
       toast.success("החשבונית נמחקה");
     },
     onError: () => toast.error("שגיאה במחיקת חשבונית"),
@@ -133,7 +133,7 @@ export function SupplierInvoicesDialog({ supplier, open, onOpenChange }: Supplie
       if (error) throw error;
 
       toast.success("החשבונית נשמרה בהצלחה!");
-      queryClient.invalidateQueries({ queryKey: ["supplier-invoices", supplier?.id] });
+      queryClient.invalidateQueries({ queryKey: ["supplier-invoices", supplier?.id, tenantId] });
       // Reset form
       setFile(null);
       setInvoiceName("");

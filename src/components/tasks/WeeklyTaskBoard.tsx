@@ -479,8 +479,8 @@ export function WeeklyTaskBoard() {
         return prev.some(t => t.id === (newTask as any).id) ? prev : [newTask as any, ...prev];
       });
 
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly", tenantId] });
       toast.success("משימה נוספה");
     },
     onError: (error) => {
@@ -505,7 +505,7 @@ export function WeeklyTaskBoard() {
       return await syncTasksToCalendar({ tenantId: tenantId! });
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["calendar-events"] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-events", tenantId] });
       toast.success(`סונכרנו ${data.synced} משימות ליומן גוגל`);
       if (data.failed > 0) {
         toast.warning(`${data.failed} משימות נכשלו בסנכרון`);
@@ -552,7 +552,7 @@ export function WeeklyTaskBoard() {
       );
     },
     onSuccess: ({ completed }) => {
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
       if (completed) {
         confetti({
           particleCount: 50,
@@ -628,9 +628,9 @@ export function WeeklyTaskBoard() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["calendar-events"] });
-      queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-events", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly", tenantId] });
       toast.success("תאריך המשימה עודכן");
     },
     onError: () => {
@@ -661,11 +661,11 @@ export function WeeklyTaskBoard() {
       setLocalTasks((prev) => prev.map(patch));
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
       toast.success("הלקוח עודכן");
     },
     onError: () => {
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
       toast.error("שגיאה בעדכון הלקוח");
     },
   });
@@ -694,11 +694,11 @@ export function WeeklyTaskBoard() {
       setLocalTasks((prev) => prev.map(patch));
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
       toast.success("הקמפיינר עודכן");
     },
     onError: () => {
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
       toast.error("שגיאה בעדכון הקמפיינר");
     },
   });
@@ -715,7 +715,7 @@ export function WeeklyTaskBoard() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
     },
     onError: () => {
       toast.error("שגיאה בעדכון סדר המשימות");
@@ -739,8 +739,8 @@ export function WeeklyTaskBoard() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly", tenantId] });
       toast.success("המשימה נמחקה");
     },
     onError: () => {
@@ -763,7 +763,7 @@ export function WeeklyTaskBoard() {
       setLocalTasks(prev => prev.map(t => 
         t.id === taskId ? { ...t, duration_minutes: duration } : t
       ));
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
       toast.success("משך המשימה עודכן");
     },
     onError: () => {
@@ -790,7 +790,7 @@ export function WeeklyTaskBoard() {
       return await updateCalEvent({ eventId, summary, description, start, end }, { tenantId: tenantId! });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly"] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly", tenantId] });
       toast.success("האירוע עודכן בהצלחה");
       setCalendarEventDialogOpen(false);
       setSelectedCalendarEvent(null);
@@ -807,7 +807,7 @@ export function WeeklyTaskBoard() {
       return await delCalEvent(eventId, { tenantId: tenantId! });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly"] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly", tenantId] });
       toast.success("האירוע נמחק בהצלחה");
       setCalendarEventDialogOpen(false);
       setSelectedCalendarEvent(null);
@@ -1514,7 +1514,7 @@ export function WeeklyTaskBoard() {
               console.error("Error creating task from calendar event:", error);
               return;
             }
-            queryClient.invalidateQueries({ queryKey: ["tasks"] });
+            queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
             toast.success("משימה נוצרה בהצלחה");
           });
         }}

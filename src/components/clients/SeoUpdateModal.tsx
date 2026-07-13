@@ -107,7 +107,7 @@ export function SeoUpdateModal({
     },
     onSuccess: () => {
       toast.success("עדכון SEO נשמר בהצלחה");
-      queryClient.invalidateQueries({ queryKey: ["seo-monthly-history", clientId] });
+      queryClient.invalidateQueries({ queryKey: ["seo-monthly-history", clientId, tenantId] });
       queryClient.invalidateQueries({ queryKey: ["seo-monthly-latest"] });
       queryClient.invalidateQueries({ queryKey: ["seo-monthly-single", clientId] });
       queryClient.invalidateQueries({ queryKey: ["dmm-clients"] });
