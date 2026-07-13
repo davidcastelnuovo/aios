@@ -269,7 +269,7 @@ export default function AccountingIntegrations() {
     onSuccess: (payment_month) => {
       if (payment_month) setSelectedMonth(payment_month);
       queryClient.invalidateQueries({ queryKey: ["one-time-incomes-all", currentTenantId] });
-      queryClient.invalidateQueries({ queryKey: ["finance-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["finance-summary", currentTenantId] });
       toast.success("הכנסה חד פעמית נוספה");
       setAddOneTimeIncomeOpen(false);
       setOneTimeIncomeForm({ client_id: "", product_name: "", amount: "", income_date: "", notes: "" });
@@ -297,7 +297,7 @@ export default function AccountingIntegrations() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["accounting-clients", currentTenantId] });
-      queryClient.invalidateQueries({ queryKey: ["finance-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["finance-summary", currentTenantId] });
       toast.success("סטטוס עודכן");
     },
   });
