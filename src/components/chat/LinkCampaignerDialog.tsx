@@ -86,11 +86,11 @@ export function LinkCampaignerDialog({
     },
     onSuccess: (campaignerId) => {
       toast.success(`מספר הטלפון עודכן בהצלחה ל${t('role_campaigner')}`);
-      queryClient.invalidateQueries({ queryKey: ["active-chats"] });
-      queryClient.invalidateQueries({ queryKey: ["unknown-contacts"] });
-      queryClient.invalidateQueries({ queryKey: ["chat-messages"] });
-      queryClient.invalidateQueries({ queryKey: ["chat-contacts"] });
-      queryClient.invalidateQueries({ queryKey: ["campaigners"] });
+      queryClient.invalidateQueries({ queryKey: ["active-chats", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["unknown-contacts", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["chat-messages", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["chat-contacts", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["campaigners", tenantId] });
       onSuccess(campaignerId);
       onOpenChange(false);
       setSelectedCampaignerId("");

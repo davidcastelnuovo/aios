@@ -81,7 +81,7 @@ export function CampaignerMeetingTab({ campaigner, tenantId }: CampaignerMeeting
       contactType: 'campaigner',
       additionalEmails: additionalEmails.filter((e, i, self) => self.indexOf(e) === i),
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ["campaigners"] });
+        queryClient.invalidateQueries({ queryKey: ["campaigners", tenantId] });
         setSelectedTeamMembers([]);
       },
     });
