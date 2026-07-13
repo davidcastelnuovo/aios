@@ -232,6 +232,7 @@ export default function ChatIntegrations() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['integration-manychat', tenantId] });
       queryClient.invalidateQueries({ queryKey: ['integration-green-api', tenantId, userId] });
+      queryClient.invalidateQueries({ queryKey: ['integration-manus-wa', tenantId, userId] });
       toast.success('סטטוס חיבור עודכן');
     },
     onError: (error: any) => {
