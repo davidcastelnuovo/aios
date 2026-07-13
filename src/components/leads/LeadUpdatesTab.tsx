@@ -125,7 +125,7 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["lead-updates"] });
+      queryClient.invalidateQueries({ queryKey: ["lead-updates", tenantId] });
       setNewUpdate("");
       toast.success("העדכון נוסף בהצלחה");
     },
@@ -144,7 +144,7 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["lead-updates"] });
+      queryClient.invalidateQueries({ queryKey: ["lead-updates", tenantId] });
       setEditingUpdateId(null);
       setEditingUpdateContent("");
       toast.success("העדכון נערך בהצלחה");
@@ -164,7 +164,7 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["lead-updates"] });
+      queryClient.invalidateQueries({ queryKey: ["lead-updates", tenantId] });
       toast.success("העדכון נמחק בהצלחה");
     },
     onError: () => {
@@ -181,8 +181,8 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["lead-tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["lead-tasks", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
       toast.success("סטטוס המשימה עודכן");
     },
     onError: () => {

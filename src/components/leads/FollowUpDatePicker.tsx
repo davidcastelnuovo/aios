@@ -104,9 +104,9 @@ export function FollowUpDatePicker({
         queryClient.setQueriesData({ queryKey: ["leads-kanban"] }, updateLeadInCache);
         queryClient.setQueriesData({ queryKey: ["leads-table"] }, updateLeadInCache);
       } else {
-        queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
-        queryClient.invalidateQueries({ queryKey: ["leads-table"] });
-        queryClient.invalidateQueries({ queryKey: ["leads-count"] });
+        queryClient.invalidateQueries({ queryKey: ["leads-kanban", tenantId] });
+        queryClient.invalidateQueries({ queryKey: ["leads-table", tenantId] });
+        queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId] });
       }
 
       toast({
