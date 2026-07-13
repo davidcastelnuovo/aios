@@ -40,9 +40,12 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
 
   // All tables for the tenant
   const { data: allTables = [], isLoading } = useQuery({
-    queryKey: ["all-crm-tables"],
+    queryKey: ["all-crm-tables", tenantId],
     queryFn: async () => {
-      const response = await supabase.functions.invoke("crm-tables", { method: "GET" });
+      const response = await supabase.functions.invoke(
+        tenantId ? `crm-tables?tenant_id=${tenantId}` : "crm-tables",
+        { method: "GET" }
+      );
       if (response.error) throw response.error;
       return Array.isArray(response.data) ? response.data : [];
     },

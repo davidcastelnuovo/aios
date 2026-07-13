@@ -199,7 +199,10 @@ export default function DashboardView() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
 
-      const response = await supabase.functions.invoke('crm-tables', { method: 'GET' });
+      const response = await supabase.functions.invoke(
+        currentTenantId ? `crm-tables?tenant_id=${currentTenantId}` : 'crm-tables',
+        { method: 'GET' }
+      );
       if (response.error) throw response.error;
       const allTables = Array.isArray(response.data) ? response.data : [];
       return allTables.filter((t: any) => t.client_id === dashboard.client_id);
@@ -534,6 +537,7 @@ export default function DashboardView() {
         if (campaignType === 'ecommerce') {
           platforms[source].results += getPurchasesFromData(data);
           platforms[source].revenue += getRevenueFromData(data);
+          platforms[source].addToCart += getAddToCartFromData(data);
           // Only count explicit lead fields for ecommerce (not conversions which are purchases)
           platforms[source].leads += getExplicitLeadFieldsFromData(data);
         } else {
@@ -1766,8 +1770,8 @@ export default function DashboardView() {
                             <TableHead className="text-right">חשיפות</TableHead>
                             {dashboardCampaignType === 'ecommerce' ? (
                               <>
-                                <TableHead className="text-right">סשנים</TableHead>
-                                <TableHead className="text-right">סשנים יחודיים</TableHead>
+                                <TableHead className="text-right">קליקים</TableHead>
+                                <TableHead className="text-right">עלות לקליק</TableHead>
                                 <TableHead className="text-right">הוספה לעגלה</TableHead>
                                 <TableHead className="text-right">רכישות</TableHead>
                                 <TableHead className="text-right">הכנסות</TableHead>
@@ -1799,8 +1803,8 @@ export default function DashboardView() {
                                 <TableCell>{isAnalytics ? '-' : formatNumber(metrics.impressions)}</TableCell>
                                 {dashboardCampaignType === 'ecommerce' ? (
                                   <>
-                                    <TableCell>{isAnalytics ? formatNumber(metrics.sessions) : '-'}</TableCell>
-                                    <TableCell>{isAnalytics ? formatNumber(metrics.users) : '-'}</TableCell>
+                                    <TableCell>{isAnalytics ? '-' : formatNumber(metrics.clicks)}</TableCell>
+                                    <TableCell>{isAnalytics || !metrics.clicks ? '-' : formatCurrency(metrics.spend / metrics.clicks)}</TableCell>
                                     <TableCell>{formatNumber(metrics.addToCart)}</TableCell>
                                     <TableCell>{formatNumber(metrics.results)}</TableCell>
                                     <TableCell>{formatCurrency(metrics.revenue)}</TableCell>
@@ -1826,18 +1830,20 @@ export default function DashboardView() {
                           <TableRow className="bg-muted/50 font-bold border-t-2">
                             <TableCell>
                               סה"כ
-                              {dashboardCampaignType === 'ecommerce' && summaryByPlatform['google_analytics'] && (
-                                <span className="text-xs font-normal text-muted-foreground block">הכנסות מ-Analytics / הוצאות פרסום</span>
+                              {dashboardCampaignType === 'ecommerce' && (
+                                <span className="text-xs font-normal text-muted-foreground block">
+                                  {totalSummary.revenueWoo > 0 ? 'הכנסות WooCommerce / הוצאות פרסום' : 'הכנסות מ-Analytics / הוצאות פרסום'}
+                                </span>
                               )}
                             </TableCell>
                             <TableCell>{formatCurrency(totalSummary.spend)}</TableCell>
                             <TableCell>{formatNumber(totalSummary.impressions)}</TableCell>
                             {dashboardCampaignType === 'ecommerce' ? (
                               <>
-                                <TableCell>{formatNumber(totalSummary.analyticsSessions)}</TableCell>
-                                <TableCell>{formatNumber(totalSummary.analyticsUsers)}</TableCell>
+                                <TableCell>{formatNumber(totalSummary.clicks)}</TableCell>
+                                <TableCell>{totalSummary.clicks > 0 ? formatCurrency(totalSummary.spend / totalSummary.clicks) : '-'}</TableCell>
                                 <TableCell>{formatNumber(totalSummary.analyticsAddToCart)}</TableCell>
-                                <TableCell>{formatNumber(totalSummary.analyticsPurchases || totalSummary.results)}</TableCell>
+                                <TableCell>{formatNumber(totalSummary.revenueWoo > 0 ? totalSummary.ordersWoo : (totalSummary.analyticsPurchases || totalSummary.results))}</TableCell>
                                 <TableCell>{formatCurrency(totalSummary.revenue)}</TableCell>
                                 <TableCell>
                                   <span className={combinedRoas >= 1 ? 'text-green-600' : 'text-red-600'}>
@@ -1858,7 +1864,7 @@ export default function DashboardView() {
                       </Table>
                     </div>
                     <p className="text-xs text-muted-foreground mt-3 px-1">
-                      * נתוני רכישות וערך רכישות של פייסבוק מבוססים על דיווח פייסבוק (כולל ייחוס צפייה וחלון 7 ימים), ועשויים להיות גבוהים מנתוני Analytics בשל ספירה כפולה בין קמפיינים. ה-ROAS הכללי בשורת הסה"כ מחושב לפי הכנסות Analytics בלבד.
+                      * נתוני רכישות וערך רכישות של פייסבוק מבוססים על דיווח פייסבוק (כולל ייחוס צפייה וחלון 7 ימים), ועשויים להיות גבוהים מהמכירות בפועל בשל ספירה כפולה בין קמפיינים. ה-ROAS הכללי בשורת הסה"כ מחושב לפי הכנסות {totalSummary.revenueWoo > 0 ? 'WooCommerce' : 'Analytics'} בפועל חלקי סך הוצאות הפרסום.
                     </p>
                   </CardContent>
                 </Card>

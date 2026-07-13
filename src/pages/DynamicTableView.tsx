@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTenantPath } from "@/hooks/useTenantPath";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { toast } from "sonner";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import {
@@ -106,6 +107,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
   const [searchParams] = useSearchParams();
   const isEmbed = embedMode || searchParams.get('embed') === '1';
   const { buildPath } = useTenantPath();
+  const { tenantId: currentTenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
   
   const [newColumnName, setNewColumnName] = useState("");
@@ -220,11 +222,14 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
   };
 
   const { data: tables, isLoading: tablesLoading, isFetching: tablesFetching, error: tablesError } = useQuery({
-    queryKey: ['crm-tables'],
+    queryKey: ['crm-tables', currentTenantId],
     queryFn: async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
-      const response = await supabase.functions.invoke('crm-tables', { method: 'GET' });
+      const response = await supabase.functions.invoke(
+        currentTenantId ? `crm-tables?tenant_id=${currentTenantId}` : 'crm-tables',
+        { method: 'GET' }
+      );
       if (response.error) {
         console.error('[DynamicTableView] crm-tables fetch failed:', response.error);
         throw response.error;

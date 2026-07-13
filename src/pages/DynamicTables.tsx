@@ -221,7 +221,10 @@ export default function DynamicTables() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
 
-      const response = await supabase.functions.invoke('crm-tables', {
+      // Pass the UI's tenant explicitly — the function otherwise falls back to
+      // the global user_active_tenant row, which another device may have
+      // pointed at a different tenant.
+      const response = await supabase.functions.invoke(`crm-tables?tenant_id=${tenantId}`, {
         method: 'GET',
       });
 

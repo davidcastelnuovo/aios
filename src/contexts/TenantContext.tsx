@@ -126,8 +126,6 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   }, [tenantFromSlug?.id, tenantSlug, currentTenantId]);
 
   // Sync tenant: clear cache on switch, then unblock UI immediately.
-  // The DB write to user_active_tenant is fire-and-forget — it's used by edge
-  // functions for context, not for UI correctness, so we don't block on it.
   useEffect(() => {
     if (!currentTenantId || isActiveTenantSynced) return;
 
@@ -145,8 +143,16 @@ export function TenantProvider({ children }: { children: ReactNode }) {
 
     // Unblock the UI now — don't wait for the DB round-trip.
     setIsActiveTenantSynced(true);
+  }, [currentTenantId, isActiveTenantSynced, queryClient]);
 
-    // Background DB write so edge functions see the correct active tenant.
+  // Re-assert the active tenant in the DB on EVERY load and tenant change —
+  // not only on an explicit switch. user_active_tenant is a single global row
+  // per user consumed by edge functions and RLS (get_user_tenant_id); another
+  // device may have pointed it at a different tenant (e.g. home machine on
+  // one org, office machine on another), which silently scopes edge-function
+  // data to the wrong tenant while the UI shows the current one.
+  useEffect(() => {
+    if (!currentTenantId) return;
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return;
       (supabase as any)
@@ -161,7 +167,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     }).catch((err: any) => {
       console.error("Error syncing tenant:", err);
     });
-  }, [currentTenantId, isActiveTenantSynced, queryClient]);
+  }, [currentTenantId]);
 
   // Get current user's tenant if not on tenant-scoped route
   const { data: userTenant, isLoading: isLoadingUserTenant } = useQuery({
