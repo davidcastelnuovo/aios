@@ -28,6 +28,7 @@ interface DbSkillRow {
   output_template: string | null
   allowed_tools: string[] | null
   triggers: string[] | null
+  trigger_phrases: string[] | null
   goal: string | null
   constraints: string | null
   handoff_slugs: string[] | null
@@ -90,7 +91,13 @@ function getServiceClient() {
 }
 
 function rowToSkill(row: DbSkillRow): CarmenSkill {
-  const triggerStrings = row.triggers || []
+  // Union of both trigger columns: seeded skins use `triggers`, agent-created
+  // skins historically wrote `trigger_phrases`. Reading only one column left
+  // ~10 skins unroutable — accept both so a skin can never go dead again.
+  const triggerStrings = Array.from(new Set([
+    ...(row.triggers || []),
+    ...(row.trigger_phrases || []),
+  ].filter(Boolean)))
   const regexes = triggerStrings.map((t) => {
     // Build a lenient regex: word boundaries optional for Hebrew, escape regex chars
     const escaped = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s*')
@@ -105,6 +112,11 @@ function rowToSkill(row: DbSkillRow): CarmenSkill {
   // previously stored but never reached the prompt).
   if (row.steps) promptParts.push('שלבי עבודה (בצעי לפי הסדר, אלא אם המשתמש ביקש אחרת):\n' + row.steps)
   if (row.output_template) promptParts.push('פורמט פלט חובה:\n' + row.output_template)
+  // Skin → capability link: name the tools this skin works with, so the model
+  // reaches for the right tool immediately instead of exploring.
+  if (row.allowed_tools && row.allowed_tools.length > 0) {
+    promptParts.push('🔧 כלים לשימוש בסקיל זה: ' + row.allowed_tools.join(', '))
+  }
   return {
     id: row.slug,
     triggers: regexes,
@@ -126,7 +138,7 @@ async function loadSkillsForTenant(tenantId: string | null): Promise<CarmenSkill
     // Pull global + this tenant. Tenant overrides global on the same slug.
     const { data, error } = await sb
       .from('ai_skills')
-      .select('slug,system_prompt,output_template,allowed_tools,triggers,goal,constraints,handoff_slugs,steps,version,scope,tenant_id')
+      .select('slug,system_prompt,output_template,allowed_tools,triggers,trigger_phrases,goal,constraints,handoff_slugs,steps,version,scope,tenant_id')
       .eq('is_active', true)
       .or(tenantId ? `scope.eq.global,and(scope.eq.tenant,tenant_id.eq.${tenantId})` : 'scope.eq.global')
 
