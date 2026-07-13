@@ -382,7 +382,7 @@ export function AddAutomationForm() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["automations"] });
+      queryClient.invalidateQueries({ queryKey: ["automations", tenantId] });
       toast({
         title: "אוטומציה נוספה בהצלחה",
       });

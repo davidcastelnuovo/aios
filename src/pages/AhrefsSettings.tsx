@@ -161,8 +161,8 @@ export default function AhrefsSettings() {
     },
     onSuccess: () => {
       toast.success('הדוח שויך ללקוח בהצלחה ודוח SEO נוצר אוטומטית');
-      queryClient.invalidateQueries({ queryKey: ['ahrefs-reports'] });
-      queryClient.invalidateQueries({ queryKey: ['clients-for-ahrefs'] });
+      queryClient.invalidateQueries({ queryKey: ['ahrefs-reports', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ['clients-for-ahrefs', tenantId] });
       queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
       setClientSearchOpen(null);
       setClientSearch("");

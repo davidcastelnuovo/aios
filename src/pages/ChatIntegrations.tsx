@@ -254,8 +254,8 @@ export default function ChatIntegrations() {
     onSuccess: () => {
       toast.success('סטטוס קבוצה עודכן בהצלחה');
       queryClient.invalidateQueries({ queryKey: ['whatsapp-groups', tenantId] });
-      queryClient.invalidateQueries({ queryKey: ['chat-contacts'] });
-      queryClient.invalidateQueries({ queryKey: ['unknown-contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['chat-contacts', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ['unknown-contacts', tenantId] });
     },
     onError: (error) => {
       toast.error('שגיאה בעדכון סטטוס קבוצה');

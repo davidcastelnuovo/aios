@@ -412,11 +412,11 @@ const updateMutation = useMutation({
     },
     onSuccess: () => {
       // Refetch to get fresh data from server
-      queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
-      queryClient.invalidateQueries({ queryKey: ["leads-table"] });
-      queryClient.invalidateQueries({ queryKey: ["leads-count"] });
-      queryClient.invalidateQueries({ queryKey: ["lead-sales-people", lead.id] });
-      queryClient.invalidateQueries({ queryKey: ["lead-detail", lead.id] });
+      queryClient.invalidateQueries({ queryKey: ["leads-kanban", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-table", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["lead-sales-people", tenantId, lead.id] });
+      queryClient.invalidateQueries({ queryKey: ["lead-detail", tenantId, lead.id] });
       sonnerToast.success("ליד עודכן בהצלחה");
     },
     onError: (error: any, _values, context) => {
@@ -440,7 +440,7 @@ const updateMutation = useMutation({
       contactId: lead.id,
       contactType: 'lead',
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ["leads"] });
+        queryClient.invalidateQueries({ queryKey: ["leads", tenantId] });
       },
     });
   };

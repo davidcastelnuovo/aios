@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useTerminology } from "@/hooks/useTerminology";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 const formSchema = z.object({
   name: z.string().min(1, "שם הסוכנות הוא שדה חובה"),
@@ -54,6 +55,7 @@ interface EditAgencyDialogProps {
 export function EditAgencyDialog({ agency, open, onOpenChange }: EditAgencyDialogProps) {
   const queryClient = useQueryClient();
   const { t } = useTerminology();
+  const { tenantId } = useCurrentTenant();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -100,7 +102,7 @@ export function EditAgencyDialog({ agency, open, onOpenChange }: EditAgencyDialo
     },
     onSuccess: () => {
       toast.success(`${t('agency')} עודכנה בהצלחה`);
-      queryClient.invalidateQueries({ queryKey: ["agencies-list"] });
+      queryClient.invalidateQueries({ queryKey: ["agencies-list", tenantId] });
       onOpenChange(false);
     },
     onError: (error) => {

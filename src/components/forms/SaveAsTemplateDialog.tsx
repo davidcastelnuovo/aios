@@ -57,7 +57,7 @@ export function SaveAsTemplateDialog({
       return result;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tenant-templates"] });
+      queryClient.invalidateQueries({ queryKey: ["tenant-templates", tenant.id] });
       toast.success("הטמפלייט נשמר בהצלחה!");
       setFormData({
         name: "",

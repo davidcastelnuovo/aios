@@ -355,8 +355,8 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
       // from the client to avoid duplicate notifications.
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["client-onboarding"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", currentTenantId] });
+      queryClient.invalidateQueries({ queryKey: ["client-onboarding", currentTenantId] });
       toast.success("המשימה נוספה בהצלחה ותופיע במודול משימות");
       form.reset();
       setOpen(false);
