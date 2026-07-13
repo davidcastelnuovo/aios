@@ -68,7 +68,7 @@ export function IntegrationVisibilitySelector({
 
   // Fetch current visibility
   const { data: integration, isLoading } = useQuery({
-    queryKey: ["integration-visibility", integrationId],
+    queryKey: ["integration-visibility", integrationId, tenantId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tenant_integrations")
