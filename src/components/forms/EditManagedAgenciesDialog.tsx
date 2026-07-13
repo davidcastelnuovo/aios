@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 interface EditManagedAgenciesDialogProps {
   open: boolean;
@@ -32,6 +33,7 @@ export default function EditManagedAgenciesDialog({
     user.managed_agencies.map((a) => a.id)
   );
   const queryClient = useQueryClient();
+  const { tenantId } = useCurrentTenant();
 
   const { data: agencies } = useQuery({
     queryKey: ["agencies"],
@@ -64,7 +66,7 @@ export default function EditManagedAgenciesDialog({
     },
     onSuccess: () => {
       toast.success("הסוכנויות עודכנו בהצלחה");
-      queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
+      queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
       onOpenChange(false);
     },
     onError: () => {

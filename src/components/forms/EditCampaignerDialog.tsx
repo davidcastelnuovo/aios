@@ -45,6 +45,7 @@ export function EditCampaignerDialog({ campaigner, open: externalOpen, onOpenCha
     if (onOpenChange) onOpenChange(value);
     if (!isControlled) setInternalOpen(value);
   };
+  const { tenantId } = useCurrentTenant();
   const { teamRoles, isLoading: rolesLoading } = useTeamRoles();
   const [agencySearchEC, setAgencySearchEC] = useState("");
   const [formData, setFormData] = useState({
@@ -125,7 +126,7 @@ export function EditCampaignerDialog({ campaigner, open: externalOpen, onOpenCha
       toast({
         title: "איש הצוות עודכן בהצלחה",
       });
-      queryClient.invalidateQueries({ queryKey: ["campaigners"] });
+      queryClient.invalidateQueries({ queryKey: ["campaigners", tenantId] });
       setOpen(false);
     },
     onError: (error) => {
@@ -164,7 +165,7 @@ export function EditCampaignerDialog({ campaigner, open: externalOpen, onOpenCha
       toast({
         title: "איש הצוות נמחק בהצלחה",
       });
-      queryClient.invalidateQueries({ queryKey: ["campaigners"] });
+      queryClient.invalidateQueries({ queryKey: ["campaigners", tenantId] });
       setOpen(false);
     },
     onError: (error) => {

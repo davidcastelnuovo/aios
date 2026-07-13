@@ -78,7 +78,7 @@ export default function AddProductForm({ onSuccess }: AddProductFormProps) {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["products", tenantId] });
       toast.success("המוצר נוצר בהצלחה");
       form.reset();
       onSuccess();

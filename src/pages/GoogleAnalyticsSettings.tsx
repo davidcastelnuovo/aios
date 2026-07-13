@@ -102,7 +102,7 @@ export default function GoogleAnalyticsSettings() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['google-analytics-integrations'] });
+      queryClient.invalidateQueries({ queryKey: ['google-analytics-integrations', currentTenantId] });
       toast.success("החיבור ל-Google Analytics נותק");
     },
     onError: (error) => {

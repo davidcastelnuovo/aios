@@ -551,7 +551,7 @@ export default function AgentTasksPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["agent_tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["agent_tasks", tenantId] });
       setDialogOpen(false);
       setForm({ ...defaultForm });
       toast.success("משימה נוצרה בהצלחה");
@@ -640,11 +640,11 @@ export default function AgentTasksPage() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["agent_tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["agent_tasks", tenantId] });
       toast.success("המשימה הושלמה");
     },
     onError: (err: any) => {
-      queryClient.invalidateQueries({ queryKey: ["agent_tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["agent_tasks", tenantId] });
       toast.error("שגיאה בהרצת המשימה: " + err.message);
     },
   });
@@ -655,7 +655,7 @@ export default function AgentTasksPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["agent_tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["agent_tasks", tenantId] });
       toast.success("משימה נמחקה");
     },
     onError: () => toast.error("שגיאה במחיקת משימה"),
@@ -679,7 +679,7 @@ export default function AgentTasksPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["agent_tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["agent_tasks", tenantId] });
       setEditingTask(null);
       toast.success("המשימה עודכנה");
     },
@@ -698,7 +698,7 @@ export default function AgentTasksPage() {
       toast.error("שגיאה באיפוס המשימה");
       return;
     }
-    await queryClient.invalidateQueries({ queryKey: ["agent_tasks"] });
+    await queryClient.invalidateQueries({ queryKey: ["agent_tasks", tenantId] });
     runTask.mutate({ ...task, status: "pending" });
   };
 
