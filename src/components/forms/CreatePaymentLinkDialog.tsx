@@ -70,7 +70,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
     },
     onSuccess: (data) => {
       setPaymentUrl(data.paymentUrl);
-      queryClient.invalidateQueries({ queryKey: ['payment-links'] });
+      queryClient.invalidateQueries({ queryKey: ['payment-links', tenantId] });
       
       if (data.emailSent) {
         toast.success('קישור התשלום נוצר ונשלח ללקוח במייל!');

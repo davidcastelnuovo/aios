@@ -299,8 +299,8 @@ export function ImportLeadsSheet({ trigger }: ImportLeadsSheetProps) {
         toast.warning(`${data.errors.length} שגיאות בייבוא - ראה קונסול`);
       }
       
-      queryClient.invalidateQueries({ queryKey: ['leads'] });
-      queryClient.invalidateQueries({ queryKey: ['lead-updates'] });
+      queryClient.invalidateQueries({ queryKey: ['leads', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ['lead-updates', tenantId] });
     } catch (error: any) {
       console.error('Import error:', error);
       toast.error(error.message || "שגיאה בייבוא הנתונים");
