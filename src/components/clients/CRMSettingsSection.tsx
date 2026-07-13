@@ -164,8 +164,8 @@ export function CRMSettingsSection({ client, onUpdate }: CRMSettingsSectionProps
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["seo-history", client.id] });
-      queryClient.invalidateQueries({ queryKey: ["seo-monthly-updates"] });
+      queryClient.invalidateQueries({ queryKey: ["seo-history", client.id, tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["seo-monthly-updates", tenantId] });
       setSeoOpen(false);
       setSeoNotes("");
       toast.success("עדכון SEO נשמר");

@@ -203,8 +203,8 @@ export function useProvisionClientChannels() {
         if (!dashErr) summary.dashboardCreated = true;
       }
 
-      qc.invalidateQueries({ queryKey: ["all-crm-tables"] });
-      qc.invalidateQueries({ queryKey: ["crm-tables"] });
+      qc.invalidateQueries({ queryKey: ["all-crm-tables", tenantId] });
+      qc.invalidateQueries({ queryKey: ["crm-tables", tenantId] });
       qc.invalidateQueries({ queryKey: ["client-dashboards", clientId] });
       return summary;
     } finally {

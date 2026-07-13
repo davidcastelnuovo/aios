@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
@@ -30,6 +31,7 @@ const STATUS_LABELS: Record<string, { label: string; variant: "default" | "secon
 
 export function WorkItemSidePanel({ itemId, onClose }: Props) {
   const queryClient = useQueryClient();
+  const { tenantId } = useCurrentTenant();
   const [item, setItem] = useState<any>(null);
   const [stages, setStages] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
@@ -144,7 +146,7 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
       refetchRuns();
       refetchAssets();
       loadItem();
-      queryClient.invalidateQueries({ queryKey: ["marketing-items-calendar"] });
+      queryClient.invalidateQueries({ queryKey: ["marketing-items-calendar", tenantId] });
     } catch (e: any) {
       toast({ title: "שגיאה", description: e.message, variant: "destructive" });
     } finally {
@@ -162,7 +164,7 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
       refetchRuns();
       refetchAssets();
       loadItem();
-      queryClient.invalidateQueries({ queryKey: ["marketing-items-calendar"] });
+      queryClient.invalidateQueries({ queryKey: ["marketing-items-calendar", tenantId] });
       if (error) throw error;
       if ((data as any)?.error) {
         toast({ title: "שגיאה בהרצת הפייפליין", description: (data as any).error, variant: "destructive" });

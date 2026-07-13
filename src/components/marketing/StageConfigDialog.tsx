@@ -165,7 +165,7 @@ export function StageConfigDialog({ stage, tenantId, clientId, track, onClose, o
         .eq("id", stage.id);
       if (error) throw error;
       toast.success("✓ השלב נשמר בהצלחה");
-      queryClient.invalidateQueries({ queryKey: ["marketing-stages", stage.pipeline_id] });
+      queryClient.invalidateQueries({ queryKey: ["marketing-stages", stage.pipeline_id, tenantId] });
       onSaved();
       onClose();
     } catch (e: any) {

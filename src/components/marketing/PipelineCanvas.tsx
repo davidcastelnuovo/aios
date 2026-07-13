@@ -218,7 +218,7 @@ export function PipelineCanvas({ pipelineId, tenantId, clientId, track, onSelect
         onClose={() => setOpenStageId(null)}
         onSaved={() => {
           refetchStages();
-          queryClient.invalidateQueries({ queryKey: ["marketing-stages", pipelineId] });
+          queryClient.invalidateQueries({ queryKey: ["marketing-stages", pipelineId, tenantId] });
         }}
       />
     </div>

@@ -63,7 +63,7 @@ export function EvalsTab({ agent }: { agent: any }) {
     },
     onSuccess: (d) => {
       toast.success(`Eval הסתיים: ${d?.passed}/${d?.total} עברו (avg ${Number(d?.avg_score).toFixed(1)})`);
-      qc.invalidateQueries({ queryKey: ["agent-eval-runs"] });
+      qc.invalidateQueries({ queryKey: ["agent-eval-runs", tenantId] });
     },
     onError: (e: any) => toast.error(e.message),
   });

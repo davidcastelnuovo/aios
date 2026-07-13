@@ -111,7 +111,7 @@ export function ToolRegistryTab() {
       const { error } = await supabase.from("agent_tools").update({ enabled }).eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["agent-tools-registry"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["agent-tools-registry", tenantId] }),
   });
 
   const openEditor = (tool?: AgentTool) => {

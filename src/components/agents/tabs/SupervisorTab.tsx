@@ -82,7 +82,7 @@ export function SupervisorTab({ agent }: { agent: any }) {
     },
     onSuccess: (d) => {
       toast.success("Supervisor רץ — " + (d?.delegations?.length ?? 0) + " האצלות");
-      qc.invalidateQueries({ queryKey: ["agent-runs"] });
+      qc.invalidateQueries({ queryKey: ["agent-runs", tenantId] });
     },
     onError: (e: any) => toast.error(e.message),
   });

@@ -108,9 +108,9 @@ export function SeoUpdateModal({
     onSuccess: () => {
       toast.success("עדכון SEO נשמר בהצלחה");
       queryClient.invalidateQueries({ queryKey: ["seo-monthly-history", clientId, tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["seo-monthly-latest"] });
+      queryClient.invalidateQueries({ queryKey: ["seo-monthly-latest", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["seo-monthly-single", clientId] });
-      queryClient.invalidateQueries({ queryKey: ["dmm-clients"] });
+      queryClient.invalidateQueries({ queryKey: ["dmm-clients", tenantId] });
       setNotes("");
       onOpenChange(false);
     },
