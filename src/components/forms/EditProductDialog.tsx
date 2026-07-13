@@ -114,7 +114,7 @@ export default function EditProductDialog({
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["products", tenantId] });
       toast.success("המוצר עודכן בהצלחה");
       onOpenChange(false);
     },
