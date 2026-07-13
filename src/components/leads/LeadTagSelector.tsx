@@ -131,8 +131,8 @@ export function LeadTagSelector({ leadId, initialTagIds }: LeadTagSelectorProps)
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['lead-tags', leadId] });
       // Invalidate all visible-leads tag queries (they use different queryKeys with lead IDs)
-      queryClient.invalidateQueries({ queryKey: ['leads-tags-visible'] });
-      queryClient.invalidateQueries({ queryKey: ['leads-tags-table'] });
+      queryClient.invalidateQueries({ queryKey: ['leads-tags-visible', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ['leads-tags-table', tenantId] });
     },
   });
 
@@ -255,6 +255,7 @@ interface LeadTagBadgesEditableProps {
 }
 
 export function LeadTagBadgesEditable({ leadId, allTags, tagIds }: LeadTagBadgesEditableProps) {
+  const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
   
   const removeTagMutation = useMutation({
@@ -282,8 +283,8 @@ export function LeadTagBadgesEditable({ leadId, allTags, tagIds }: LeadTagBadges
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['lead-tags', leadId] });
-      queryClient.invalidateQueries({ queryKey: ['leads-tags-visible'] });
-      queryClient.invalidateQueries({ queryKey: ['leads-tags-table'] });
+      queryClient.invalidateQueries({ queryKey: ['leads-tags-visible', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ['leads-tags-table', tenantId] });
     },
   });
 

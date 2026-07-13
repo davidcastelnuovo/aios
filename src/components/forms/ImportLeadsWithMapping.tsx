@@ -1073,14 +1073,13 @@ export function ImportLeadsWithMapping() {
       }
 
       setImportResult({ updates: uniqueLeadUpdates.length, inserts: uniqueLeadInserts.length, leadUpdates: leadUpdateRecords.length });
-      queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
-      queryClient.invalidateQueries({ queryKey: ["leads-table"] });
-      queryClient.invalidateQueries({ queryKey: ["leads-count"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-kanban", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-table", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["lead-statuses", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["chat-tags", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["leads-tags-bulk"] });
       queryClient.invalidateQueries({ queryKey: ["leads-tags-bulk", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["lead-updates"] });
+      queryClient.invalidateQueries({ queryKey: ["lead-updates", tenantId] });
       
       toast({
         title: "הצלחה!",

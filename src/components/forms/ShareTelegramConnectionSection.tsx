@@ -105,7 +105,7 @@ export function ShareTelegramConnectionSection({
     },
     onSuccess: () => {
       toast.success("השיתופים נשמרו בהצלחה");
-      queryClient.invalidateQueries({ queryKey: ["telegram-bot-shares"] });
+      queryClient.invalidateQueries({ queryKey: ["telegram-bot-shares", currentTenantId] });
     },
     onError: (error) => {
       toast.error("שגיאה בשמירת השיתופים: " + (error as Error).message);

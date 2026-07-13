@@ -133,7 +133,7 @@ export default function SummarizeRecordingDialog({
         if (data?.transcription_status === 'completed' && data?.transcription) {
           setTranscript(data.transcription);
           stopPolling();
-          queryClient.invalidateQueries({ queryKey: ['recordings'] });
+          queryClient.invalidateQueries({ queryKey: ['recordings', currentTenantId] });
           toast({ title: "התמלול הושלם בהצלחה!" });
         } else if (data?.transcription_status === 'failed') {
           stopPolling();
@@ -247,7 +247,7 @@ export default function SummarizeRecordingDialog({
 
       if (data?.text) {
         setTranscript(data.text);
-        queryClient.invalidateQueries({ queryKey: ['recordings'] });
+        queryClient.invalidateQueries({ queryKey: ['recordings', currentTenantId] });
         toast({ title: "התמלול הושלם בהצלחה!" });
         setIsTranscribing(false);
         return;
@@ -320,7 +320,7 @@ export default function SummarizeRecordingDialog({
         file_name: data.file_name,
       });
 
-      queryClient.invalidateQueries({ queryKey: ['recordings'] });
+      queryClient.invalidateQueries({ queryKey: ['recordings', currentTenantId] });
       toast({ title: "הסיכום נוצר בהצלחה!", description: "הקובץ נשמר ושויך" });
     } catch (err: any) {
       toast({
@@ -473,7 +473,7 @@ export default function SummarizeRecordingDialog({
                           if (refreshError) throw refreshError;
                           
                           toast({ title: "קישורים רוענו, מנסה שוב..." });
-                          queryClient.invalidateQueries({ queryKey: ['recordings'] });
+                          queryClient.invalidateQueries({ queryKey: ['recordings', currentTenantId] });
                           
                           // Reset status and retry
                           await supabase

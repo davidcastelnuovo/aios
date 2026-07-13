@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Copy, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 interface DuplicateClientDialogProps {
   open: boolean;
@@ -26,6 +27,7 @@ export function DuplicateClientDialog({
   inline = false,
 }: DuplicateClientDialogProps) {
   const queryClient = useQueryClient();
+  const { tenantId } = useCurrentTenant();
   const [newName, setNewName] = useState("");
   const [includeContacts, setIncludeContacts] = useState(true);
   const [includeTeam, setIncludeTeam] = useState(true);
@@ -64,7 +66,7 @@ export function DuplicateClientDialog({
       toast.success(
         parts.length ? `הלקוח שוכפל בהצלחה (כולל ${parts.join(", ")})` : "הלקוח שוכפל בהצלחה"
       );
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
       onOpenChange(false);
       onDuplicated?.(data.newClientId);
     },

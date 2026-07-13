@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantPath } from "@/hooks/useTenantPath";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import Papa from "papaparse";
 
 const useBuildPath = () => {
@@ -55,6 +56,7 @@ export default function RankTrackingProject() {
   const { projectId } = useParams<{ projectId: string }>();
   const tenantPath = useBuildPath();
   const queryClient = useQueryClient();
+  const { tenantId } = useCurrentTenant();
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [newKeywords, setNewKeywords] = useState("");
   const [selectedKeywordId, setSelectedKeywordId] = useState<string | null>(null);
@@ -144,7 +146,7 @@ export default function RankTrackingProject() {
       toast.success("ביטויים נוספו בהצלחה!");
       setIsAddOpen(false);
       setNewKeywords("");
-      queryClient.invalidateQueries({ queryKey: ["rank-tracking-keywords"] });
+      queryClient.invalidateQueries({ queryKey: ["rank-tracking-keywords", tenantId] });
     },
     onError: (error: Error) => {
       toast.error(error.message || "שגיאה בהוספת ביטויים");
@@ -162,7 +164,7 @@ export default function RankTrackingProject() {
     },
     onSuccess: () => {
       toast.success("ביטוי נמחק");
-      queryClient.invalidateQueries({ queryKey: ["rank-tracking-keywords"] });
+      queryClient.invalidateQueries({ queryKey: ["rank-tracking-keywords", tenantId] });
     },
     onError: () => {
       toast.error("שגיאה במחיקת ביטוי");

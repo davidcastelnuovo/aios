@@ -111,7 +111,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
     });
     if (error) { toast.error("שגיאה בשיוך הטבלה"); return; }
     toast.success("טבלה שויכה בהצלחה");
-    queryClient.invalidateQueries({ queryKey: ["all-crm-tables"] });
+    queryClient.invalidateQueries({ queryKey: ["all-crm-tables", tenantId] });
     setTableSearch("");
     setShowTableDropdown(false);
   };
@@ -123,7 +123,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
     });
     if (error) { toast.error("שגיאה בהסרת השיוך"); return; }
     toast.success("שיוך הטבלה הוסר");
-    queryClient.invalidateQueries({ queryKey: ["all-crm-tables"] });
+    queryClient.invalidateQueries({ queryKey: ["all-crm-tables", tenantId] });
   };
 
   // Link/unlink dashboard
@@ -135,7 +135,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
     if (error) { toast.error("שגיאה בשיוך הדשבורד"); return; }
     toast.success("דשבורד שויך בהצלחה");
     queryClient.invalidateQueries({ queryKey: ["client-dashboards", clientId] });
-    queryClient.invalidateQueries({ queryKey: ["all-dashboards"] });
+    queryClient.invalidateQueries({ queryKey: ["all-dashboards", tenantId] });
     setDashboardSearch("");
     setShowDashboardDropdown(false);
   };
@@ -148,7 +148,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
     if (error) { toast.error("שגיאה בהסרת השיוך"); return; }
     toast.success("שיוך הדשבורד הוסר");
     queryClient.invalidateQueries({ queryKey: ["client-dashboards", clientId] });
-    queryClient.invalidateQueries({ queryKey: ["all-dashboards"] });
+    queryClient.invalidateQueries({ queryKey: ["all-dashboards", tenantId] });
   };
 
   const renderTableIcon = (table: any) => getIntegrationIcon(table?.integration_type);

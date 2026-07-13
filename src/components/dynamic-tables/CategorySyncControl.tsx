@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { isSeoReportSource } from "@/lib/seoReports";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 interface CategoryTable {
   id: string;
@@ -267,6 +268,7 @@ async function syncTrackedOnlyForTable(t: CategoryTable) {
 
 export function CategorySyncControl({ category, tables }: Props) {
   const queryClient = useQueryClient();
+  const { tenantId } = useCurrentTenant();
   const [isSyncing, setIsSyncing] = useState(false);
   const [isTrackedSyncing, setIsTrackedSyncing] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
@@ -348,10 +350,10 @@ export function CategorySyncControl({ category, tables }: Props) {
       toast.warning(`סונכרנו ${success} דוחות, ${failed} נכשלו`);
     }
     // Refresh tables list so last_sync_at updates
-    queryClient.invalidateQueries({ queryKey: ["crm-tables"] });
-    queryClient.invalidateQueries({ queryKey: ["dynamic-tables"] });
-    queryClient.invalidateQueries({ queryKey: ["ahrefs-reports"] });
-    queryClient.invalidateQueries({ queryKey: ["seo-dashboard-reports"] });
+    queryClient.invalidateQueries({ queryKey: ["crm-tables", tenantId] });
+    queryClient.invalidateQueries({ queryKey: ["dynamic-tables", tenantId] });
+    queryClient.invalidateQueries({ queryKey: ["ahrefs-reports", tenantId] });
+    queryClient.invalidateQueries({ queryKey: ["seo-dashboard-reports", tenantId] });
   };
 
   const handleSyncTrackedOnly = async () => {
@@ -386,10 +388,10 @@ export function CategorySyncControl({ category, tables }: Props) {
     } else {
       toast.warning(`סונכרנו ${success} דוחות (${totalTracked} ביטויים), ${failed} נכשלו`);
     }
-    queryClient.invalidateQueries({ queryKey: ["crm-tables"] });
-    queryClient.invalidateQueries({ queryKey: ["dynamic-tables"] });
-    queryClient.invalidateQueries({ queryKey: ["ahrefs-reports"] });
-    queryClient.invalidateQueries({ queryKey: ["seo-dashboard-reports"] });
+    queryClient.invalidateQueries({ queryKey: ["crm-tables", tenantId] });
+    queryClient.invalidateQueries({ queryKey: ["dynamic-tables", tenantId] });
+    queryClient.invalidateQueries({ queryKey: ["ahrefs-reports", tenantId] });
+    queryClient.invalidateQueries({ queryKey: ["seo-dashboard-reports", tenantId] });
   };
 
   let lastSyncLabel: string;

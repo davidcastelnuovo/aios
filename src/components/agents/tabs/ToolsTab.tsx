@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -12,6 +13,7 @@ import { AGENT_TOOLS_CATALOG as ALL_TOOLS } from "@/lib/agentToolsCatalog";
 
 export function ToolsTab({ agent }: { agent: any }) {
   const qc = useQueryClient();
+  const { tenantId } = useCurrentTenant();
   const [selected, setSelected] = useState<Set<string>>(new Set(agent.allowed_tools || []));
   const [search, setSearch] = useState("");
 
@@ -28,7 +30,7 @@ export function ToolsTab({ agent }: { agent: any }) {
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["ai-agents"] });
+      qc.invalidateQueries({ queryKey: ["ai-agents", tenantId] });
       toast.success("הכלים נשמרו");
     },
     onError: (e: any) => toast.error(e.message),

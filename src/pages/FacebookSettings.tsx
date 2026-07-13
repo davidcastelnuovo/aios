@@ -172,8 +172,8 @@ export default function FacebookSettings() {
     },
     onSuccess: () => {
       toast.success('החיבור לפייסבוק נותק בהצלחה');
-      queryClient.invalidateQueries({ queryKey: ['user-integrations'] });
-      queryClient.invalidateQueries({ queryKey: ['user-integrations'] });
+      queryClient.invalidateQueries({ queryKey: ['user-integrations', currentTenant?.id] });
+      queryClient.invalidateQueries({ queryKey: ['user-integrations', currentTenant?.id] });
     },
     onError: (error) => {
       toast.error('שגיאה בניתוק: ' + (error as Error).message);
@@ -194,7 +194,7 @@ export default function FacebookSettings() {
     },
     onSuccess: () => {
       toast.success('העמוד נרשם בהצלחה לקבלת לידים');
-      queryClient.invalidateQueries({ queryKey: ['user-integrations'] });
+      queryClient.invalidateQueries({ queryKey: ['user-integrations', currentTenant?.id] });
     },
     onError: (error) => {
       toast.error('שגיאה ברישום העמוד: ' + (error as Error).message);
@@ -232,7 +232,7 @@ export default function FacebookSettings() {
     },
     onSuccess: () => {
       toast.success('הגדרות CAPI נשמרו בהצלחה');
-      queryClient.invalidateQueries({ queryKey: ['user-integrations'] });
+      queryClient.invalidateQueries({ queryKey: ['user-integrations', currentTenant?.id] });
     },
     onError: (error) => {
       toast.error('שגיאה בשמירת ההגדרות: ' + (error as Error).message);
@@ -259,7 +259,7 @@ export default function FacebookSettings() {
     onSuccess: () => {
       toast.success('Token נשמר בהצלחה');
       setManualToken('');
-      queryClient.invalidateQueries({ queryKey: ['user-integrations'] });
+      queryClient.invalidateQueries({ queryKey: ['user-integrations', currentTenant?.id] });
     },
     onError: (error) => {
       toast.error('שגיאה בשמירת Token: ' + (error as Error).message);
@@ -288,7 +288,7 @@ export default function FacebookSettings() {
     onSuccess: (data) => {
       if (data?.success) {
         toast.success(`ליד טסט נוצר בהצלחה! ID: ${data.lead_id}`);
-        queryClient.invalidateQueries({ queryKey: ['leads'] });
+        queryClient.invalidateQueries({ queryKey: ['leads', currentTenant?.id] });
       } else {
         toast.error('שגיאה: ' + (data?.error || 'Unknown error'));
       }
@@ -320,7 +320,7 @@ export default function FacebookSettings() {
         } else {
           toast.info('לא נמצאו לידים חדשים');
         }
-        queryClient.invalidateQueries({ queryKey: ['leads'] });
+        queryClient.invalidateQueries({ queryKey: ['leads', currentTenant?.id] });
       } else {
         toast.error('שגיאה: ' + (data?.error || 'Unknown error'));
       }

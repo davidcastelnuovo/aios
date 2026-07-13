@@ -241,8 +241,8 @@ export default function Chat() {
         },
         (payload) => {
           // Invalidate queries to refresh the list with new group name
-          queryClient.invalidateQueries({ queryKey: ['active-chats'] });
-          queryClient.invalidateQueries({ queryKey: ['contact'] });
+          queryClient.invalidateQueries({ queryKey: ['active-chats', tenantId] });
+          queryClient.invalidateQueries({ queryKey: ['contact', tenantId] });
         }
       )
       .subscribe();
@@ -490,8 +490,8 @@ export default function Chat() {
       if (error) throw error;
       
       toast.success('ההיסטוריה נמחקה לצמיתות');
-      queryClient.invalidateQueries({ queryKey: ['active-chats'] });
-      queryClient.invalidateQueries({ queryKey: ['unknown-contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['active-chats', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ['unknown-contacts', tenantId] });
 
       setShowClearHistoryDialog(false);
       setSelectedContact(null);
@@ -593,8 +593,8 @@ export default function Chat() {
                     
                     if (error) throw error;
                     toast.success('כל ההודעות סומנו כנקראו');
-                    queryClient.invalidateQueries({ queryKey: ['active-chats'] });
-                    queryClient.invalidateQueries({ queryKey: ['unknown-contacts'] });
+                    queryClient.invalidateQueries({ queryKey: ['active-chats', tenantId] });
+                    queryClient.invalidateQueries({ queryKey: ['unknown-contacts', tenantId] });
                   } catch (err) {
                     console.error('Error marking all as read:', err);
                     toast.error('שגיאה בסימון הודעות כנקראו');

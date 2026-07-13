@@ -275,8 +275,8 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
     onSuccess: () => {
       toast.success(`ה${t('role_campaigner')} שויך בהצלחה`);
       refetchAssigned();
-      queryClient.invalidateQueries({ queryKey: ["accounting-campaigner-payments"] });
-      queryClient.invalidateQueries({ queryKey: ["finance-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["accounting-campaigner-payments", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["finance-summary", tenantId] });
     },
     onError: () => {
       toast.error("שגיאה בשיוך הקמפיינר");
@@ -295,8 +295,8 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
     onSuccess: () => {
       toast.success("הקמפיינר הוסר בהצלחה");
       refetchAssigned();
-      queryClient.invalidateQueries({ queryKey: ["accounting-campaigner-payments"] });
-      queryClient.invalidateQueries({ queryKey: ["finance-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["accounting-campaigner-payments", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["finance-summary", tenantId] });
     },
     onError: () => {
       toast.error("שגיאה בהסרת הקמפיינר");
@@ -314,8 +314,8 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
     onSuccess: () => {
       toast.success("עלות הקמפיינר עודכנה");
       refetchAssigned();
-      queryClient.invalidateQueries({ queryKey: ["accounting-campaigner-payments"] });
-      queryClient.invalidateQueries({ queryKey: ["finance-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["accounting-campaigner-payments", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["finance-summary", tenantId] });
     },
     onError: () => {
       toast.error("שגיאה בעדכון עלות הקמפיינר");
@@ -479,11 +479,11 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
     },
     onSuccess: () => {
       toast.success("הלקוח עודכן בהצלחה");
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
-      queryClient.invalidateQueries({ queryKey: ["client-tenant-financial-data"] });
-      queryClient.invalidateQueries({ queryKey: ["client-financial-data"] });
-      queryClient.invalidateQueries({ queryKey: ["accounting-clients"] });
-      queryClient.invalidateQueries({ queryKey: ["finance-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["client-tenant-financial-data", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["client-financial-data", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["accounting-clients", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["finance-summary", tenantId] });
       onOpenChange(false);
     },
     onError: (error: any) => {
@@ -511,7 +511,7 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
       contactType: 'client',
       additionalEmails: [...selectedMeetingEmails, ...selectedTeamMembers],
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ["clients"] });
+        queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
         setSelectedMeetingEmails([]);
         setSelectedTeamMembers([]);
       },

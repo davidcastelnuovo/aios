@@ -192,9 +192,9 @@ export function ConvertContactDialog({
         );
       }
 
-      queryClient.invalidateQueries({ queryKey: ["chat-contacts"] });
-      queryClient.invalidateQueries({ queryKey: ["chat-messages"] });
-      queryClient.invalidateQueries({ queryKey: ["unknown-contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["chat-contacts", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["chat-messages", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["unknown-contacts", tenantId] });
       onOpenChange(false);
       onSuccess(result.id, result.type);
     },

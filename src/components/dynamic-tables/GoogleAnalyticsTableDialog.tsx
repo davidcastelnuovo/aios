@@ -147,7 +147,7 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
       if (error) throw error;
 
       toast({ title: "טבלת Google Analytics נוצרה בהצלחה!" });
-      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables', activeTenantId] });
       onOpenChange(false);
       resetForm();
     } catch (error: unknown) {

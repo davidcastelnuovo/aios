@@ -202,7 +202,7 @@ export function FacebookTableDialog({ open, onOpenChange, assignedClientIds }: F
       return response.data;
     },
     onSuccess: async (data) => {
-      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
       toast.success('טבלת Facebook Insights נוצרה בהצלחה');
 
       // Trigger initial sync

@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { syncProfileToTeamMember } from "@/hooks/useSyncProfileTeamMember";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 interface EditUserNameDialogProps {
   userId: string | null;
@@ -28,6 +29,7 @@ export function EditUserNameDialog({
 }: EditUserNameDialogProps) {
   const [fullName, setFullName] = useState(currentFullName || "");
   const queryClient = useQueryClient();
+  const { tenantId } = useCurrentTenant();
 
   useEffect(() => {
     setFullName(currentFullName || "");
@@ -48,9 +50,9 @@ export function EditUserNameDialog({
       await syncProfileToTeamMember(userId);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
-      queryClient.invalidateQueries({ queryKey: ["campaigners"] });
-      queryClient.invalidateQueries({ queryKey: ["sales-people-all"] });
+      queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["campaigners", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["sales-people-all", tenantId] });
       toast.success("השם עודכן בהצלחה");
       onClose();
     },

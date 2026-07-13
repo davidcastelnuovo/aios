@@ -134,7 +134,7 @@ export default function CampaignAlerts() {
       return;
     }
     toast.success("סומן כטופל");
-    qc.invalidateQueries({ queryKey: ["campaign-alerts"] });
+    qc.invalidateQueries({ queryKey: ["campaign-alerts", tenantId] });
   };
 
   const resolve = async (id: string) => {
@@ -147,7 +147,7 @@ export default function CampaignAlerts() {
       return;
     }
     toast.success("ההתראה נסגרה");
-    qc.invalidateQueries({ queryKey: ["campaign-alerts"] });
+    qc.invalidateQueries({ queryKey: ["campaign-alerts", tenantId] });
   };
 
   const scanNow = async () => {

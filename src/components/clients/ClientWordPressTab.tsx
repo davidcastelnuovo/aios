@@ -12,6 +12,7 @@ import { he } from "date-fns/locale";
 import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 interface ClientWordPressTabProps {
   clientId: string;
@@ -19,6 +20,7 @@ interface ClientWordPressTabProps {
 
 export function ClientWordPressTab({ clientId }: ClientWordPressTabProps) {
   const queryClient = useQueryClient();
+  const { tenantId } = useCurrentTenant();
   const [syncingId, setSyncingId] = useState<string | null>(null);
 
   // Fetch sites linked to this client
@@ -97,9 +99,9 @@ export function ClientWordPressTab({ clientId }: ClientWordPressTabProps) {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["client-wp-sites", clientId] });
-      queryClient.invalidateQueries({ queryKey: ["client-woo-orders"] });
-      queryClient.invalidateQueries({ queryKey: ["client-woo-products"] });
-      queryClient.invalidateQueries({ queryKey: ["client-woo-customers"] });
+      queryClient.invalidateQueries({ queryKey: ["client-woo-orders", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["client-woo-products", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["client-woo-customers", tenantId] });
       toast.success(
         `סנכרון הושלם: ${data?.orders_synced ?? 0} הזמנות, ${data?.products_synced ?? 0} מוצרים, ${data?.customers_synced ?? 0} לקוחות`
       );

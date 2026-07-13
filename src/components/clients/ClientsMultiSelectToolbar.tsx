@@ -65,8 +65,8 @@ export function ClientsMultiSelectToolbar({
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
-      queryClient.invalidateQueries({ queryKey: ["client-onboarding"] });
+      queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["client-onboarding", tenantId] });
       toast.success(`הסוכנות עודכנה ל-${selectedIds.length} לקוחות`);
       onClearSelection();
     },
@@ -82,8 +82,8 @@ export function ClientsMultiSelectToolbar({
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
-      queryClient.invalidateQueries({ queryKey: ["client-onboarding"] });
+      queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["client-onboarding", tenantId] });
       toast.success(`הסטטוס עודכן ל-${selectedIds.length} לקוחות`);
       onClearSelection();
     },
@@ -99,7 +99,7 @@ export function ClientsMultiSelectToolbar({
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
       toast.success(`${selectedIds.length} לקוחות נמחקו בהצלחה`);
       onClearSelection();
       setShowDeleteConfirm(false);

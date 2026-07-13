@@ -565,9 +565,9 @@ export default function FlowEditor() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["automation-flow-steps", automationId] });
-      queryClient.invalidateQueries({ queryKey: ["automation", automationId] });
-      queryClient.invalidateQueries({ queryKey: ["automations"] });
+      queryClient.invalidateQueries({ queryKey: ["automation-flow-steps", automationId, tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["automation", automationId, tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["automations", tenantId] });
       toast({ title: "הפלוו נשמר בהצלחה!" });
     },
     onError: (err: any) => {
@@ -596,8 +596,8 @@ export default function FlowEditor() {
       return { previous };
     },
     onSuccess: (_, nextActive) => {
-      queryClient.invalidateQueries({ queryKey: ["automation", automationId] });
-      queryClient.invalidateQueries({ queryKey: ["automations"] });
+      queryClient.invalidateQueries({ queryKey: ["automation", automationId, tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["automations", tenantId] });
       toast({ title: nextActive ? "אוטומציה הופעלה" : "אוטומציה הושהתה" });
     },
     onError: (err: any, _nextActive, context) => {

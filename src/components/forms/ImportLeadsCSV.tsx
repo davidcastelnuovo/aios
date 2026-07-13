@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Upload, FileSpreadsheet } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import Papa from "papaparse";
 
 export function ImportLeadsCSV() {
@@ -12,6 +13,7 @@ export function ImportLeadsCSV() {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { tenantId } = useCurrentTenant();
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -378,7 +380,7 @@ export function ImportLeadsCSV() {
         if (insertError) throw insertError;
       }
 
-      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      queryClient.invalidateQueries({ queryKey: ["leads", tenantId] });
       toast({
         title: "הצלחה!",
         description: `${updates.length} לידים עודכנו, ${inserts.length} לידים חדשים נוספו. (${validLeads.length} סה"כ)`,

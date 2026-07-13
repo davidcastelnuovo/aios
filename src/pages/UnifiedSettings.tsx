@@ -68,7 +68,7 @@ export default function UnifiedSettings() {
       });
       if (error) throw error;
       toast({ title: "החיבור נותק בהצלחה" });
-      queryClient.invalidateQueries({ queryKey: ["unified-connections"] });
+      queryClient.invalidateQueries({ queryKey: ["unified-connections", currentTenantId] });
     } catch (error: any) {
       toast({ title: "שגיאה בניתוק", description: error.message, variant: "destructive" });
     }

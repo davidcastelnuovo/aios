@@ -107,7 +107,7 @@ export default function TerminologyManagement({ category = 'modules' }: Terminol
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['terminology'] });
+      queryClient.invalidateQueries({ queryKey: ['terminology', tenantId] });
       toast.success('המונח עודכן בהצלחה');
       setIsEditDialogOpen(false);
     },
@@ -132,7 +132,7 @@ export default function TerminologyManagement({ category = 'modules' }: Terminol
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['terminology'] });
+      queryClient.invalidateQueries({ queryKey: ['terminology', tenantId] });
       toast.success('המונח אופס לברירת מחדל');
     },
     onError: (error: Error) => {
@@ -164,7 +164,7 @@ export default function TerminologyManagement({ category = 'modules' }: Terminol
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['terminology-presets'] });
+      queryClient.invalidateQueries({ queryKey: ['terminology-presets', tenantId] });
       toast.success('הפריסט נשמר בהצלחה');
       setIsSavePresetDialogOpen(false);
       setPresetForm({ name: '', description: '', isPublic: false });

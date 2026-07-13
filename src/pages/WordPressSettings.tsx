@@ -300,8 +300,8 @@ export default function WordPressSettings() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["wordpress-sites-admin"] });
-      queryClient.invalidateQueries({ queryKey: ["wordpress-sites"] });
+      queryClient.invalidateQueries({ queryKey: ["wordpress-sites-admin", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["wordpress-sites", tenantId] });
       toast.success("אתר וורדפרס נוסף בהצלחה");
       setAddOpen(false);
       setForm({ ...emptyForm });
@@ -336,8 +336,8 @@ export default function WordPressSettings() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["wordpress-sites-admin"] });
-      queryClient.invalidateQueries({ queryKey: ["wordpress-sites"] });
+      queryClient.invalidateQueries({ queryKey: ["wordpress-sites-admin", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["wordpress-sites", tenantId] });
       toast.success("אתר עודכן בהצלחה");
       setEditSite(null);
       setForm({ ...emptyForm });
@@ -355,8 +355,8 @@ export default function WordPressSettings() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["wordpress-sites-admin"] });
-      queryClient.invalidateQueries({ queryKey: ["wordpress-sites"] });
+      queryClient.invalidateQueries({ queryKey: ["wordpress-sites-admin", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["wordpress-sites", tenantId] });
       toast.success("אתר נמחק");
     },
     onError: (e: Error) => toast.error("שגיאה: " + e.message),
@@ -372,7 +372,7 @@ export default function WordPressSettings() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["wordpress-sites-admin"] });
+      queryClient.invalidateQueries({ queryKey: ["wordpress-sites-admin", tenantId] });
     },
   });
 
@@ -398,8 +398,8 @@ export default function WordPressSettings() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["wordpress-sites-admin"] });
-      queryClient.invalidateQueries({ queryKey: ["wordpress-sites"] });
+      queryClient.invalidateQueries({ queryKey: ["wordpress-sites-admin", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["wordpress-sites", tenantId] });
       toast.success("השיוך עודכן בהצלחה");
       setLinkSite(null);
     },
@@ -645,7 +645,7 @@ export default function WordPressSettings() {
       // Sync local per-mode drafts with what was saved
       if (mode === "form") setFormDraft(clean);
       else setSlugDraft(clean);
-      await queryClient.invalidateQueries({ queryKey: ["wordpress-sites-admin"] });
+      await queryClient.invalidateQueries({ queryKey: ["wordpress-sites-admin", tenantId] });
       toast.success("המיפוי נשמר. סנכרן את דוח גוגל אדס כדי לראות את ההשפעה");
       // Keep dialog open so the user immediately sees the persisted selection
     },
@@ -675,7 +675,7 @@ export default function WordPressSettings() {
       return data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["wordpress-sites-admin"] });
+      queryClient.invalidateQueries({ queryKey: ["wordpress-sites-admin", tenantId] });
       toast.success(
         `סנכרון הושלם: ${data?.orders_synced ?? 0} הזמנות, ${data?.products_synced ?? 0} מוצרים, ${data?.customers_synced ?? 0} לקוחות`
       );

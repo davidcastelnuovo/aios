@@ -82,7 +82,7 @@ export default function GmailSettings() {
   useEffect(() => {
     const handler = (event: MessageEvent) => {
       if (event.data?.type === 'gmail_connected') {
-        queryClient.invalidateQueries({ queryKey: ['gmail-status'] });
+        queryClient.invalidateQueries({ queryKey: ['gmail-status', userId] });
         toast.success('Gmail התחבר בהצלחה!');
       }
     };
@@ -99,7 +99,7 @@ export default function GmailSettings() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['gmail-status'] });
+      queryClient.invalidateQueries({ queryKey: ['gmail-status', userId] });
       toast.success('Gmail נותק בהצלחה');
     },
   });
@@ -147,7 +147,7 @@ export default function GmailSettings() {
     onSuccess: () => {
       setNewCategoryName('');
       setNewCategoryLabelId('');
-      queryClient.invalidateQueries({ queryKey: ['gmail-categories'] });
+      queryClient.invalidateQueries({ queryKey: ['gmail-categories', tenantId] });
       toast.success('קטגוריה נוספה');
     },
     onError: () => toast.error('שגיאה בהוספת קטגוריה'),
@@ -159,7 +159,7 @@ export default function GmailSettings() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['gmail-categories'] });
+      queryClient.invalidateQueries({ queryKey: ['gmail-categories', tenantId] });
       toast.success('קטגוריה נמחקה');
     },
   });
@@ -178,7 +178,7 @@ export default function GmailSettings() {
     },
     onSuccess: () => {
       setNewBlockedEmail('');
-      queryClient.invalidateQueries({ queryKey: ['gmail-blocked-senders'] });
+      queryClient.invalidateQueries({ queryKey: ['gmail-blocked-senders', userId] });
       toast.success('כתובת נחסמה');
     },
     onError: (e: any) => {
@@ -193,7 +193,7 @@ export default function GmailSettings() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['gmail-blocked-senders'] });
+      queryClient.invalidateQueries({ queryKey: ['gmail-blocked-senders', userId] });
       toast.success('החסימה הוסרה');
     },
   });
@@ -414,8 +414,8 @@ function AllowedLabelsSection({ tenantId, userId, isConnected }: { tenantId: str
         });
       if (error) { toast.error('שגיאה בהוספת תגית'); return; }
     }
-    queryClient.invalidateQueries({ queryKey: ['gmail-allowed-labels-full'] });
-    queryClient.invalidateQueries({ queryKey: ['gmail-allowed-label-ids'] });
+    queryClient.invalidateQueries({ queryKey: ['gmail-allowed-labels-full', userId] });
+    queryClient.invalidateQueries({ queryKey: ['gmail-allowed-label-ids', userId] });
   };
 
   return (

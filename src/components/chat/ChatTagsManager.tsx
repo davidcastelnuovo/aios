@@ -243,7 +243,7 @@ export function ChatTagsManager({ trigger, open: controlledOpen, onOpenChange, s
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['chat-tags'] });
+      queryClient.invalidateQueries({ queryKey: ['chat-tags', tenantId] });
       setNewTagName("");
       toast.success('התגית נוצרה בהצלחה');
     },
@@ -266,7 +266,7 @@ export function ChatTagsManager({ trigger, open: controlledOpen, onOpenChange, s
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['chat-tags'] });
+      queryClient.invalidateQueries({ queryKey: ['chat-tags', tenantId] });
     },
     onError: () => {
       toast.error('שגיאה בעדכון התגית');
@@ -283,7 +283,7 @@ export function ChatTagsManager({ trigger, open: controlledOpen, onOpenChange, s
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['chat-tags'] });
+      queryClient.invalidateQueries({ queryKey: ['chat-tags', tenantId] });
       toast.success('התגית נמחקה');
     },
     onError: () => {
@@ -302,7 +302,7 @@ export function ChatTagsManager({ trigger, open: controlledOpen, onOpenChange, s
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['chat-tags'] });
+      queryClient.invalidateQueries({ queryKey: ['chat-tags', tenantId] });
       setLocalTags(null);
     },
     onError: () => {

@@ -71,7 +71,7 @@ export default function ZoomSettings() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['zoom-integration'] });
+      queryClient.invalidateQueries({ queryKey: ['zoom-integration', currentTenantId] });
       toast({ title: "נשמר בהצלחה", description: "הגדרות Zoom נשמרו" });
     },
     onError: (err: any) => {

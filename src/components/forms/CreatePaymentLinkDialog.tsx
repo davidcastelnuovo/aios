@@ -10,6 +10,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Loader2, Copy, ExternalLink, CheckCircle, CreditCard } from 'lucide-react';
+import { useCurrentTenant } from '@/hooks/useCurrentTenant';
 
 interface CreatePaymentLinkDialogProps {
   open: boolean;
@@ -29,6 +30,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
   client
 }) => {
   const queryClient = useQueryClient();
+  const { tenantId } = useCurrentTenant();
   const [amount, setAmount] = useState<string>(client?.retainer?.toString() || '');
   const [description, setDescription] = useState<string>('');
   const [sendEmail, setSendEmail] = useState<boolean>(true);
@@ -68,7 +70,7 @@ export const CreatePaymentLinkDialog: React.FC<CreatePaymentLinkDialogProps> = (
     },
     onSuccess: (data) => {
       setPaymentUrl(data.paymentUrl);
-      queryClient.invalidateQueries({ queryKey: ['payment-links'] });
+      queryClient.invalidateQueries({ queryKey: ['payment-links', tenantId] });
       
       if (data.emailSent) {
         toast.success('קישור התשלום נוצר ונשלח ללקוח במייל!');

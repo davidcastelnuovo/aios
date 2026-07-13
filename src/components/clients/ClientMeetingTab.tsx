@@ -98,7 +98,7 @@ export function ClientMeetingTab({ client, tenantId }: ClientMeetingTabProps) {
       contactType: 'client',
       additionalEmails: [...selectedMeetingEmails, ...selectedTeamMembers],
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ["clients"] });
+        queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
         setSelectedMeetingEmails([]);
         setSelectedTeamMembers([]);
       },

@@ -274,7 +274,7 @@ export function TaskDetailDialog({
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
       toast.success("המשימה עודכנה");
       onOpenChange(false);
     },
@@ -296,7 +296,7 @@ export function TaskDetailDialog({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["task-collaborators", task?.id] });
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
       setSelectedCollaborator("");
       toast.success("איש צוות נוסף למשימה");
     },
@@ -316,7 +316,7 @@ export function TaskDetailDialog({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["task-collaborators", task?.id] });
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
       toast.success("איש צוות הוסר מהמשימה");
     },
     onError: () => {
@@ -337,7 +337,7 @@ export function TaskDetailDialog({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["task-updates", task?.id] });
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
       setNewUpdate("");
       toast.success("עדכון נוסף");
     },

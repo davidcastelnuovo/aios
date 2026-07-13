@@ -190,7 +190,7 @@ export function LeadFiltersDialog({
         title: "פריסט נשמר בהצלחה",
       });
 
-      queryClient.invalidateQueries({ queryKey: ["lead-filter-presets"] });
+      queryClient.invalidateQueries({ queryKey: ["lead-filter-presets", tenantId] });
       setSaveDialogOpen(false);
       setPresetName("");
     } catch (error: any) {
@@ -232,7 +232,7 @@ export function LeadFiltersDialog({
         title: "פריסט עודכן בהצלחה",
       });
 
-      queryClient.invalidateQueries({ queryKey: ["lead-filter-presets"] });
+      queryClient.invalidateQueries({ queryKey: ["lead-filter-presets", tenantId] });
       onPresetUpdated?.();
       onOpenChange(false);
     } catch (error: any) {

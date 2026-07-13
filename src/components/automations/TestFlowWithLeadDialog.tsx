@@ -204,7 +204,7 @@ export function TestFlowWithLeadDialog({
       const synced = (data as any)?.synced ?? 0;
       const skipped = (data as any)?.skipped ?? 0;
       toast({ title: "סנכרון הושלם", description: `${synced} לידים חדשים, ${skipped} כפולים` });
-      await queryClient.invalidateQueries({ queryKey: ["leads-for-flow-test"] });
+      await queryClient.invalidateQueries({ queryKey: ["leads-for-flow-test", tenantId] });
     } catch (e: any) {
       console.error(e);
       toast({ title: "שגיאת סנכרון", description: e?.message || "כשל בסנכרון מפייסבוק", variant: "destructive" });
@@ -470,8 +470,8 @@ export function TestFlowWithLeadDialog({
       const successCount = results.filter((r) => r.success).length;
       toast({ title: "בדיקה הושלמה", description: `${successCount}/${results.length} הצליחו` });
       // Refresh execution history so the new run shows up immediately
-      queryClient.invalidateQueries({ queryKey: ["automation-logs-flow", automationId] });
-      queryClient.invalidateQueries({ queryKey: ["automation-logs", automationId] });
+      queryClient.invalidateQueries({ queryKey: ["automation-logs-flow", automationId, tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["automation-logs", automationId, tenantId] });
     },
     onError: (error: any) => {
       setTestResults([{ leadId: "", leadName: "", success: false, error: error.message }]);

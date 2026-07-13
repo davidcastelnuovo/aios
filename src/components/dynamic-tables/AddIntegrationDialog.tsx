@@ -223,8 +223,8 @@ export function AddIntegrationDialog({
       if (updateError) throw updateError;
 
       toast({ title: "החיבור נוסף בהצלחה!" });
-      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
-      queryClient.invalidateQueries({ queryKey: ['crm-table', tableId] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables', activeTenantId] });
+      queryClient.invalidateQueries({ queryKey: ['crm-table', tableId, activeTenantId] });
       onIntegrationAdded();
       onOpenChange(false);
       setSelectedPlatform(null);

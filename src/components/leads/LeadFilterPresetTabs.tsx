@@ -81,7 +81,7 @@ export function LeadFilterPresetTabs({
       return presetId;
     },
     onSuccess: (deletedPresetId) => {
-      queryClient.invalidateQueries({ queryKey: ["lead-filter-presets"] });
+      queryClient.invalidateQueries({ queryKey: ["lead-filter-presets", tenantId] });
       toast({ title: "פריסט נמחק בהצלחה" });
       if (activePresetId === deletedPresetId) {
         onPresetSelect(null);

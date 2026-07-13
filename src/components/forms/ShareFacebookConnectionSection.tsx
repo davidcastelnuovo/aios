@@ -58,7 +58,7 @@ export function ShareFacebookConnectionSection({
 
   // Fetch existing shares for this integration
   const { data: existingShares, isLoading: loadingShares } = useQuery({
-    queryKey: ['facebook-integration-shares', integrationId],
+    queryKey: ['facebook-integration-shares', integrationId, currentTenantId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('tenant_integrations')
@@ -116,7 +116,7 @@ export function ShareFacebookConnectionSection({
     },
     onSuccess: () => {
       toast.success('השיתופים נשמרו בהצלחה');
-      queryClient.invalidateQueries({ queryKey: ['facebook-integration-shares'] });
+      queryClient.invalidateQueries({ queryKey: ['facebook-integration-shares', integrationId, currentTenantId] });
     },
     onError: (error) => {
       toast.error('שגיאה בשמירת השיתופים: ' + (error as Error).message);

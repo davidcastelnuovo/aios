@@ -125,8 +125,8 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
         description: `${data?.keywords_count ?? 0} מילות מפתח נטענו עבור ${data?.domain || domain}`,
       });
       queryClient.invalidateQueries({ queryKey: ['seo-reports', currentTenantId, selectedClient] });
-      queryClient.invalidateQueries({ queryKey: ['ahrefs-reports'] });
-      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      queryClient.invalidateQueries({ queryKey: ['ahrefs-reports', currentTenantId] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables', currentTenantId] });
     } catch (err: any) {
       toast({
         title: 'שגיאה ביצירת דוח מ-Ahrefs',
@@ -389,7 +389,7 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
       if (error) throw error;
 
       toast({ title: "טבלת דוח SEO נוצרה בהצלחה!" });
-      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables', currentTenantId] });
       onOpenChange(false);
       // Navigate to the new table
       const tenantSlug = currentTenant?.slug || '';
@@ -471,8 +471,8 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
 
       toast({ title: 'דוח ה-SEO נוצר בהצלחה' });
       queryClient.invalidateQueries({ queryKey: ['seo-reports', currentTenantId, selectedClient] });
-      queryClient.invalidateQueries({ queryKey: ['ahrefs-reports'] });
-      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      queryClient.invalidateQueries({ queryKey: ['ahrefs-reports', currentTenantId] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables', currentTenantId] });
       onOpenChange(false);
       const tenantSlug = currentTenant?.slug || '';
       if (tenantSlug) navigate(`/t/${tenantSlug}/table/${slug}`);

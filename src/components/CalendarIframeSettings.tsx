@@ -49,8 +49,8 @@ export function CalendarIframeSettings() {
     const newProvider: CalendarProvider = useUnified ? "unified" : "direct";
     setProvider(newProvider);
     localStorage.setItem(PROVIDER_STORAGE_KEY, newProvider);
-    queryClient.invalidateQueries({ queryKey: ["calendar-status"] });
-    queryClient.invalidateQueries({ queryKey: ["calendar-events"] });
+    queryClient.invalidateQueries({ queryKey: ["calendar-status", userId, tenantId] });
+    queryClient.invalidateQueries({ queryKey: ["calendar-events", tenantId] });
   };
 
   // Check connection status
@@ -73,8 +73,8 @@ export function CalendarIframeSettings() {
       listenerCleanupRef.current?.();
       listenerCleanupRef.current = listenForUnifiedConnection(() => {
         listenerCleanupRef.current = null;
-        queryClient.invalidateQueries({ queryKey: ["calendar-status"] });
-        queryClient.invalidateQueries({ queryKey: ["calendar-events"] });
+        queryClient.invalidateQueries({ queryKey: ["calendar-status", userId, tenantId] });
+        queryClient.invalidateQueries({ queryKey: ["calendar-events", tenantId] });
         toast.success("היומן חובר בהצלחה דרך Unified!");
       });
       await openUnifiedCalendarConnection({ tenantId });
@@ -96,8 +96,8 @@ export function CalendarIframeSettings() {
         const handler = (event: MessageEvent) => {
           if (event.data?.type === "calendar_connected") {
             window.removeEventListener("message", handler);
-            queryClient.invalidateQueries({ queryKey: ["calendar-status"] });
-            queryClient.invalidateQueries({ queryKey: ["calendar-events"] });
+            queryClient.invalidateQueries({ queryKey: ["calendar-status", userId, tenantId] });
+            queryClient.invalidateQueries({ queryKey: ["calendar-events", tenantId] });
             toast.success("היומן חובר בהצלחה ישירות לגוגל!");
             resolve();
           }
@@ -127,8 +127,8 @@ export function CalendarIframeSettings() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["calendar-status"] });
-      queryClient.invalidateQueries({ queryKey: ["calendar-events"] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-status", userId, tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-events", tenantId] });
       toast.success("הלוח השנה נותק בהצלחה");
     },
     onError: (error) => {
@@ -142,8 +142,8 @@ export function CalendarIframeSettings() {
       await disconnectDirectGoogleCalendar();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["calendar-status"] });
-      queryClient.invalidateQueries({ queryKey: ["calendar-events"] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-status", userId, tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-events", tenantId] });
       toast.success("הלוח השנה נותק בהצלחה");
     },
     onError: (error) => {

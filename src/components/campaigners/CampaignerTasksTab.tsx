@@ -69,8 +69,8 @@ export function CampaignerTasksTab({ campaignerId, campaignerName }: CampaignerT
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["campaigner-tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["campaigner-tasks", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
       toast.success("סטטוס המשימה עודכן");
     },
     onError: () => {

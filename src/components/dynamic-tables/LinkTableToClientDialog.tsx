@@ -101,9 +101,9 @@ export function LinkTableToClientDialog({
     },
     onSuccess: () => {
       toast.success("הטבלה שויכה ללקוח בהצלחה");
-      queryClient.invalidateQueries({ queryKey: ["crm-table"] });
-      queryClient.invalidateQueries({ queryKey: ["crm-tables"] });
-      queryClient.invalidateQueries({ queryKey: ["client-dashboard-tables"] });
+      queryClient.invalidateQueries({ queryKey: ["crm-table", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["crm-tables", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["client-dashboard-tables", tenantId] });
       setOpen(false);
     },
     onError: (e: Error) => {

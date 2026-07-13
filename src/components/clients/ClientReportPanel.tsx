@@ -226,8 +226,8 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
       // 2. Force the snapshot subtree to refetch its queries (ahrefs/GSC/GA/etc.)
       await queryClient.invalidateQueries({ queryKey: ["client-report-data", table.id] });
       await queryClient.invalidateQueries({ queryKey: ["seo-combined-snapshot", table.id] });
-      await queryClient.invalidateQueries({ queryKey: ["ahrefs-reports"] });
-      await queryClient.invalidateQueries({ queryKey: ["gsc-keywords"] });
+      await queryClient.invalidateQueries({ queryKey: ["ahrefs-reports", tenantId] });
+      await queryClient.invalidateQueries({ queryKey: ["gsc-keywords", tenantId] });
 
       // 3. Wait for the snapshot DOM to render with fresh data, then capture
       const delay = table.integration_type === "ahrefs" ? 6000 : 3000;
@@ -440,7 +440,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
               content: messageText.trim(),
               update_type: "weekly_update",
             } as any);
-            queryClient.invalidateQueries({ queryKey: ["client-updates"] });
+            queryClient.invalidateQueries({ queryKey: ["client-updates", tenantId] });
           } catch (e) {
             console.warn("Failed to auto-save weekly update:", e);
           }
@@ -533,7 +533,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
               content: messageText.trim(),
               update_type: "monthly_seo",
             } as any);
-            queryClient.invalidateQueries({ queryKey: ["client-updates"] });
+            queryClient.invalidateQueries({ queryKey: ["client-updates", tenantId] });
           } catch (e) {
             console.warn("Failed to auto-save monthly SEO update:", e);
           }

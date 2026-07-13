@@ -95,7 +95,7 @@ export function GithubAgentPanel() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["agent-credentials"] });
+      queryClient.invalidateQueries({ queryKey: ["agent-credentials", tenantId] });
       toast.success("GitHub Token נשמר בהצלחה");
       setTokenInput("");
     },
@@ -120,8 +120,8 @@ export function GithubAgentPanel() {
       if (error) throw error;
       setChatResponse(data);
       setChatMessage("");
-      queryClient.invalidateQueries({ queryKey: ["agent-approvals"] });
-      queryClient.invalidateQueries({ queryKey: ["agent-action-log"] });
+      queryClient.invalidateQueries({ queryKey: ["agent-approvals", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["agent-action-log", tenantId] });
     } catch (e: any) {
       toast.error("שגיאה: " + (e.message || "Unknown"));
     } finally {
@@ -137,8 +137,8 @@ export function GithubAgentPanel() {
       });
       if (error) throw error;
       toast.success(action === "approve_action" ? "אושר!" : "נדחה");
-      queryClient.invalidateQueries({ queryKey: ["agent-approvals"] });
-      queryClient.invalidateQueries({ queryKey: ["agent-action-log"] });
+      queryClient.invalidateQueries({ queryKey: ["agent-approvals", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["agent-action-log", tenantId] });
     } catch (e: any) {
       toast.error("שגיאה: " + e.message);
     }

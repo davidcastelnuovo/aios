@@ -48,7 +48,7 @@ export default function UnifiedProviderPicker({ open, onOpenChange, selectedCate
     const handler = (event: MessageEvent) => {
       if (event.data?.type === "unified-connected") {
         toast({ title: "החיבור נשמר בהצלחה!" });
-        queryClient.invalidateQueries({ queryKey: ["unified-connections"] });
+        queryClient.invalidateQueries({ queryKey: ["unified-connections", tenantId] });
         handleOpenChange(false);
       }
     };

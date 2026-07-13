@@ -90,8 +90,8 @@ export function AssignPhoneFromWhatsAppDialog({
     },
     onSuccess: () => {
       toast.success(`מספר טלפון שויך ל${clientName}`);
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
-      queryClient.invalidateQueries({ queryKey: ["active-chats"] });
+      queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["active-chats", tenantId] });
       onSuccess?.();
       onOpenChange(false);
     },

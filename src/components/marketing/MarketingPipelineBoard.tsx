@@ -463,7 +463,7 @@ export function MarketingPipelineBoard({
       if (error) throw error;
       toast({ title: "השלב הורץ בהצלחה" });
       refetchItems();
-      queryClient.invalidateQueries({ queryKey: ["marketing-assets", item.id] });
+      queryClient.invalidateQueries({ queryKey: ["marketing-assets", item.id, tenantId] });
     } catch (e: any) {
       toast({ title: "שגיאה בהרצה", description: e.message, variant: "destructive" });
     } finally {
@@ -520,7 +520,7 @@ export function MarketingPipelineBoard({
         onClose={() => setOpenStageId(null)}
         onSaved={() => {
           refetchStages();
-          queryClient.invalidateQueries({ queryKey: ["marketing-stages", pipelineId] });
+          queryClient.invalidateQueries({ queryKey: ["marketing-stages", pipelineId, tenantId] });
         }}
       />
 

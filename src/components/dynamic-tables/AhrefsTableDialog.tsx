@@ -183,7 +183,7 @@ export function AhrefsTableDialog({ open, onOpenChange, assignedClientIds }: Ahr
       if (error) throw error;
 
       toast({ title: "טבלת Ahrefs נוצרה בהצלחה!" });
-      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables', activeTenantId] });
       onOpenChange(false);
       resetForm();
     } catch (error: any) {

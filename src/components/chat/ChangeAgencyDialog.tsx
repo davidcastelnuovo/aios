@@ -64,10 +64,10 @@ export function ChangeAgencyDialog({
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["contact", contactId] });
-      queryClient.invalidateQueries({ queryKey: ["active-chats"] });
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
-      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      queryClient.invalidateQueries({ queryKey: ["contact", contactId, tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["active-chats", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads", tenantId] });
       toast.success("הסוכנות עודכנה בהצלחה");
       onOpenChange(false);
       onSuccess?.();

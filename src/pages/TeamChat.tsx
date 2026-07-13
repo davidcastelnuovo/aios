@@ -1780,7 +1780,7 @@ function ManageChannelMembersDialog({
     },
     onSuccess: () => {
       toast.success("הגדרות התראות נשמרו");
-      queryClient.invalidateQueries({ queryKey: ["team-channels"] });
+      queryClient.invalidateQueries({ queryKey: ["team-channels", tenantId] });
       onChanged();
     },
     onError: (err: any) => toast.error("שגיאה בשמירה: " + err.message),
@@ -1788,7 +1788,7 @@ function ManageChannelMembersDialog({
 
   // Fetch existing invite link
   const { data: existingInvite } = useQuery({
-    queryKey: ["team-channel-invite", channel.id],
+    queryKey: ["team-channel-invite", tenantId, channel.id],
     queryFn: async () => {
       const { data } = await supabase
         .from("team_channel_invites")
@@ -1826,7 +1826,7 @@ function ManageChannelMembersDialog({
     onSuccess: (data) => {
       const link = `${getPublicOrigin()}/chat-invite/${data.token}`;
       setInviteLink(link);
-      queryClient.invalidateQueries({ queryKey: ["team-channel-invite", channel.id] });
+      queryClient.invalidateQueries({ queryKey: ["team-channel-invite", tenantId, channel.id] });
       toast.success("קישור הזמנה נוצר בהצלחה");
     },
     onError: (err: any) => toast.error(err.message),
@@ -1864,7 +1864,7 @@ function ManageChannelMembersDialog({
 
   // Fetch member profiles
   const { data: memberProfiles = [] } = useQuery({
-    queryKey: ["team-member-profiles", channel.id],
+    queryKey: ["team-member-profiles", tenantId, channel.id],
     queryFn: async () => {
       const memberIds = members.map((m) => m.user_id);
       if (memberIds.length === 0) return [];
@@ -1889,8 +1889,8 @@ function ManageChannelMembersDialog({
     },
     onSuccess: () => {
       toast.success("החבר נוסף בהצלחה");
-      queryClient.invalidateQueries({ queryKey: ["team-channel-members", channel.id] });
-      queryClient.invalidateQueries({ queryKey: ["team-member-profiles", channel.id] });
+      queryClient.invalidateQueries({ queryKey: ["team-channel-members", tenantId, channel.id] });
+      queryClient.invalidateQueries({ queryKey: ["team-member-profiles", tenantId, channel.id] });
       onChanged();
     },
     onError: (err: any) => toast.error(err.message),
@@ -1907,8 +1907,8 @@ function ManageChannelMembersDialog({
     },
     onSuccess: () => {
       toast.success("החבר הוסר מהקבוצה");
-      queryClient.invalidateQueries({ queryKey: ["team-channel-members", channel.id] });
-      queryClient.invalidateQueries({ queryKey: ["team-member-profiles", channel.id] });
+      queryClient.invalidateQueries({ queryKey: ["team-channel-members", tenantId, channel.id] });
+      queryClient.invalidateQueries({ queryKey: ["team-member-profiles", tenantId, channel.id] });
       onChanged();
     },
     onError: (err: any) => toast.error(err.message),
@@ -1950,7 +1950,7 @@ function ManageChannelMembersDialog({
                     onRemove={() => removeMember.mutate(member.user_id)}
                     removeDisabled={removeMember.isPending}
                     onNameUpdated={() => {
-                      queryClient.invalidateQueries({ queryKey: ["team-member-profiles", channel.id] });
+                      queryClient.invalidateQueries({ queryKey: ["team-member-profiles", tenantId, channel.id] });
                       queryClient.invalidateQueries({ queryKey: ["tenant-users-for-members", tenantId] });
                     }}
                   />
@@ -2602,7 +2602,7 @@ function ThreadDialog({
       setReplyText("");
       refetchReplies();
       // Invalidate main messages to update reply_count
-      queryClient.invalidateQueries({ queryKey: ["team-messages", channelId] });
+      queryClient.invalidateQueries({ queryKey: ["team-messages", tenantId, channelId] });
     },
     onError: (err: any) => toast.error(err.message),
   });
@@ -2872,7 +2872,7 @@ export default function TeamChat() {
 
   // Fetch messages for active channel (excluding replies - only top-level)
   const { data: messages = [], refetch: refetchMessages } = useQuery({
-    queryKey: ["team-messages", activeChannelId],
+    queryKey: ["team-messages", tenantId, activeChannelId],
     queryFn: async () => {
       // Fetch all messages (including replies) for the channel
       const { data: allMsgs, error } = await supabase
@@ -2913,7 +2913,7 @@ export default function TeamChat() {
 
   // Fetch members for active channel
   const { data: members = [] } = useQuery({
-    queryKey: ["team-channel-members", activeChannelId],
+    queryKey: ["team-channel-members", tenantId, activeChannelId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("team_channel_members")
@@ -3125,7 +3125,7 @@ export default function TeamChat() {
         last_read_message_id: null,
       }, { onConflict: "channel_id,user_id" });
     queryClient.invalidateQueries({ queryKey: ["team-read-status", userId, tenantId] });
-    queryClient.invalidateQueries({ queryKey: ["team-unread-counts"] });
+    queryClient.invalidateQueries({ queryKey: ["team-unread-counts", tenantId] });
   }, [userId, tenantId, queryClient]);
 
   // Mark as read when channel changes
@@ -3171,7 +3171,7 @@ export default function TeamChat() {
                 members={members}
                 tenantId={tenantId}
                 currentUserId={userId}
-                onMembersChanged={() => queryClient.invalidateQueries({ queryKey: ["team-channel-members", activeChannelId] })}
+                onMembersChanged={() => queryClient.invalidateQueries({ queryKey: ["team-channel-members", tenantId, activeChannelId] })}
                 onBack={isMobile ? () => setActiveChannelId(null) : undefined}
                 onChannelUpdated={() => refetchChannels()}
                 onChannelDeleted={() => { setActiveChannelId(null); refetchChannels(); }}

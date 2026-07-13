@@ -87,7 +87,7 @@ export function ToolRegistryTab() {
       }
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["agent-tools-registry"] });
+      qc.invalidateQueries({ queryKey: ["agent-tools-registry", tenantId] });
       toast.success("נשמר");
       setEditing(null);
     },
@@ -100,7 +100,7 @@ export function ToolRegistryTab() {
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["agent-tools-registry"] });
+      qc.invalidateQueries({ queryKey: ["agent-tools-registry", tenantId] });
       toast.success("נמחק");
     },
     onError: (e: any) => toast.error(e.message),
@@ -111,7 +111,7 @@ export function ToolRegistryTab() {
       const { error } = await supabase.from("agent_tools").update({ enabled }).eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["agent-tools-registry"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["agent-tools-registry", tenantId] }),
   });
 
   const openEditor = (tool?: AgentTool) => {

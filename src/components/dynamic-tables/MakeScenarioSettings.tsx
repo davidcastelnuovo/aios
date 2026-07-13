@@ -184,7 +184,7 @@ export function MakeScenarioSettings({ table, onSync, isSyncing }: MakeScenarioS
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables', table?.tenant_id] });
       toast.success('ההגדרות נשמרו בהצלחה');
       setHasChanges(false);
     },
@@ -236,8 +236,8 @@ export function MakeScenarioSettings({ table, onSync, isSyncing }: MakeScenarioS
       toast.success('הסנכרון הופעל! הנתונים יתעדכנו בקרוב.');
       // Refetch records after a delay
       setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
-        queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+        queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id, table?.tenant_id] });
+        queryClient.invalidateQueries({ queryKey: ['crm-tables', table?.tenant_id] });
       }, 5000);
     },
     onError: (error: any) => {
@@ -268,8 +268,8 @@ export function MakeScenarioSettings({ table, onSync, isSyncing }: MakeScenarioS
     onSuccess: () => {
       toast.success('הסנריו הורץ בהצלחה! הנתונים יתעדכנו בקרוב.');
       setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
-        queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+        queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id, table?.tenant_id] });
+        queryClient.invalidateQueries({ queryKey: ['crm-tables', table?.tenant_id] });
       }, 5000);
     },
     onError: (error: any) => {

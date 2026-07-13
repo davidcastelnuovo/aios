@@ -115,7 +115,7 @@ export default function TimeTracking() {
 
   // Query for active break
   const { data: activeBreak } = useQuery({
-    queryKey: ["active-break", activeEntry?.id],
+    queryKey: ["active-break", tenantId, activeEntry?.id],
     queryFn: async () => {
       if (!activeEntry?.id) return null;
 
@@ -137,7 +137,7 @@ export default function TimeTracking() {
 
   // Query for all breaks of active entry (to calculate total break time)
   const { data: activeEntryBreaks } = useQuery({
-    queryKey: ["active-entry-breaks", activeEntry?.id],
+    queryKey: ["active-entry-breaks", tenantId, activeEntry?.id],
     queryFn: async () => {
       if (!activeEntry?.id) return [];
 
@@ -227,8 +227,8 @@ export default function TimeTracking() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["active-time-entry"] });
-      queryClient.invalidateQueries({ queryKey: ["time-entries"] });
+      queryClient.invalidateQueries({ queryKey: ["active-time-entry", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["time-entries", tenantId] });
       toast.success("השעון התחיל");
     },
     onError: (err) => {
@@ -254,10 +254,10 @@ export default function TimeTracking() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["active-time-entry"] });
-      queryClient.invalidateQueries({ queryKey: ["time-entries"] });
-      queryClient.invalidateQueries({ queryKey: ["active-break"] });
-      queryClient.invalidateQueries({ queryKey: ["active-entry-breaks"] });
+      queryClient.invalidateQueries({ queryKey: ["active-time-entry", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["time-entries", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["active-break", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["active-entry-breaks", tenantId] });
       toast.success("השעון נעצר");
     },
     onError: () => {
@@ -281,8 +281,8 @@ export default function TimeTracking() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["active-break"] });
-      queryClient.invalidateQueries({ queryKey: ["active-entry-breaks"] });
+      queryClient.invalidateQueries({ queryKey: ["active-break", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["active-entry-breaks", tenantId] });
       toast.success("הפסקה התחילה");
     },
     onError: () => {
@@ -301,8 +301,8 @@ export default function TimeTracking() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["active-break"] });
-      queryClient.invalidateQueries({ queryKey: ["active-entry-breaks"] });
+      queryClient.invalidateQueries({ queryKey: ["active-break", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["active-entry-breaks", tenantId] });
       toast.success("הפסקה הסתיימה");
     },
     onError: () => {
@@ -320,7 +320,7 @@ export default function TimeTracking() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["time-entries"] });
+      queryClient.invalidateQueries({ queryKey: ["time-entries", tenantId] });
       toast.success("הרשומה נמחקה");
     },
     onError: () => {
@@ -341,8 +341,8 @@ export default function TimeTracking() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["time-entries"] });
-      queryClient.invalidateQueries({ queryKey: ["active-time-entry"] });
+      queryClient.invalidateQueries({ queryKey: ["time-entries", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["active-time-entry", tenantId] });
       setEditingEntry(null);
       toast.success("הרשומה עודכנה");
     },

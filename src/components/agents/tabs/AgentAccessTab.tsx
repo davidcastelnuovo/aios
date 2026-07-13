@@ -82,7 +82,7 @@ export function AgentAccessTab({ agent }: { agent: any }) {
     },
     onSuccess: () => {
       toast.success("הגישות נשמרו");
-      queryClient.invalidateQueries({ queryKey: ["ai-agents"] });
+      queryClient.invalidateQueries({ queryKey: ["ai-agents", tenantId] });
     },
     onError: (e: any) => toast.error("שמירה נכשלה: " + (e?.message || e)),
   });

@@ -67,7 +67,7 @@ export default function TelegramSettings() {
     onSuccess: (data) => {
       toast.success(`בוט ${data.bot_name} חובר בהצלחה!`);
       setBotToken("");
-      queryClient.invalidateQueries({ queryKey: ["telegram-bot-state"] });
+      queryClient.invalidateQueries({ queryKey: ["telegram-bot-state", currentTenantId] });
     },
     onError: (error: Error) => {
       toast.error(`שגיאה: ${error.message}`);
@@ -86,7 +86,7 @@ export default function TelegramSettings() {
     },
     onSuccess: () => {
       toast.success("הבוט נותק בהצלחה");
-      queryClient.invalidateQueries({ queryKey: ["telegram-bot-state"] });
+      queryClient.invalidateQueries({ queryKey: ["telegram-bot-state", currentTenantId] });
     },
     onError: () => toast.error("שגיאה בניתוק הבוט"),
   });
@@ -102,7 +102,7 @@ export default function TelegramSettings() {
     },
     onSuccess: () => {
       toast.success("השיתוף הוסר");
-      queryClient.invalidateQueries({ queryKey: ["telegram-bot-state"] });
+      queryClient.invalidateQueries({ queryKey: ["telegram-bot-state", currentTenantId] });
     },
     onError: (e: Error) => toast.error("שגיאה: " + e.message),
   });

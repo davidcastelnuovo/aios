@@ -104,7 +104,7 @@ export default function AISupport() {
       if (currentConversationId === convId) {
         startNewConversation();
       }
-      queryClient.invalidateQueries({ queryKey: ['ai-conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['ai-conversations', tenantId] });
       toast({ title: "השיחה נמחקה" });
     } catch (err: any) {
       toast({ title: "שגיאה", description: err.message, variant: "destructive" });
@@ -205,7 +205,7 @@ export default function AISupport() {
               setCurrentConversationId(parsed.id);
             } else if (parsed.type === 'title_update') {
               // Title was auto-generated, refresh conversation list
-              queryClient.invalidateQueries({ queryKey: ['ai-conversations'] });
+              queryClient.invalidateQueries({ queryKey: ['ai-conversations', tenantId] });
             } else if (parsed.type === 'invalidate') {
               invalidateAIEntityQueries(queryClient, parsed.entity);
             } else if (parsed.type === 'done') {
@@ -219,7 +219,7 @@ export default function AISupport() {
               }
               setIsStreaming(false);
               
-              queryClient.invalidateQueries({ queryKey: ['ai-conversations'] });
+              queryClient.invalidateQueries({ queryKey: ['ai-conversations', tenantId] });
             }
           } catch (e) {
             console.error('Parse error:', e);

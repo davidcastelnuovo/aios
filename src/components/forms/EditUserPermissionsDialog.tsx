@@ -119,7 +119,7 @@ export function EditUserPermissionsDialog({
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["user-permissions"] });
+      queryClient.invalidateQueries({ queryKey: ["user-permissions", tenantId] });
       toast.success("ההרשאות עודכנו בהצלחה");
       onOpenChange(false);
     },

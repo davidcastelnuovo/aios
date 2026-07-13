@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,6 +12,7 @@ import { Search, Check, X, RefreshCw, ExternalLink, Key, Zap, DollarSign, Mail, 
 
 export default function SerpApiSettings() {
   const queryClient = useQueryClient();
+  const { tenantId } = useCurrentTenant();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -87,9 +89,9 @@ export default function SerpApiSettings() {
       toast.success(`DataForSEO מחובר בהצלחה! יתרה: $${data.balance}`);
       setEmail("");
       setPassword("");
-      queryClient.invalidateQueries({ queryKey: ["dataforseo-status"] });
-      queryClient.invalidateQueries({ queryKey: ["dataforseo-account"] });
-      queryClient.invalidateQueries({ queryKey: ["serpapi-status"] });
+      queryClient.invalidateQueries({ queryKey: ["dataforseo-status", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["dataforseo-account", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["serpapi-status", tenantId] });
     },
     onError: (error: Error) => {
       toast.error(error.message || "שגיאה בחיבור");
@@ -119,9 +121,9 @@ export default function SerpApiSettings() {
     },
     onSuccess: () => {
       toast.success("DataForSEO נותק");
-      queryClient.invalidateQueries({ queryKey: ["dataforseo-status"] });
-      queryClient.invalidateQueries({ queryKey: ["dataforseo-account"] });
-      queryClient.invalidateQueries({ queryKey: ["serpapi-status"] });
+      queryClient.invalidateQueries({ queryKey: ["dataforseo-status", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["dataforseo-account", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["serpapi-status", tenantId] });
     },
     onError: (error: Error) => {
       toast.error(error.message || "שגיאה בניתוק");

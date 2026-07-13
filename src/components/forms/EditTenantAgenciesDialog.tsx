@@ -101,9 +101,9 @@ export default function EditTenantAgenciesDialog({
     },
     onSuccess: () => {
       toast.success("הגישות לסוכנויות עודכנו בהצלחה");
-      queryClient.invalidateQueries({ queryKey: ["agency-tenant-access"] });
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["agency-tenant-access", currentTenantId] });
+      queryClient.invalidateQueries({ queryKey: ["clients", currentTenantId] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", currentTenantId] });
       onOpenChange(false);
     },
     onError: (error) => {

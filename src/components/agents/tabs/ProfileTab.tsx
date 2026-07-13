@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -27,6 +28,7 @@ function isCarmen(name: string) {
 
 export function ProfileTab({ agent }: { agent: any }) {
   const qc = useQueryClient();
+  const { tenantId } = useCurrentTenant();
   const carmen = isCarmen(agent.name);
 
   const [form, setForm] = useState(() => initialForm(agent));
@@ -48,7 +50,7 @@ export function ProfileTab({ agent }: { agent: any }) {
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["ai-agents"] });
+      qc.invalidateQueries({ queryKey: ["ai-agents", tenantId] });
       setDirty(false);
       toast.success("הפרופיל נשמר");
     },
@@ -203,7 +205,7 @@ export function ProfileTab({ agent }: { agent: any }) {
           <Field label="המוח (LLM)" hint="ניתן לעדכן כאן או בכותרת">
             <BrainSelector value={agent.engine} onChange={async (engine) => {
               await supabase.from("ai_agents").update({ engine }).eq("id", agent.id);
-              qc.invalidateQueries({ queryKey: ["ai-agents"] });
+              qc.invalidateQueries({ queryKey: ["ai-agents", tenantId] });
               toast.success("המוח עודכן");
             }} />
           </Field>
@@ -305,7 +307,7 @@ function MoodCard({ agent }: { agent: any }) {
       .eq("id", agent.id);
     setSaving(false);
     if (error) { toast.error(error.message); return; }
-    qc.invalidateQueries({ queryKey: ["ai-agents"] });
+    qc.invalidateQueries({ queryKey: ["ai-agents", tenantId] });
     const opt = MOOD_OPTIONS.find(o => o.value === v);
     toast.success(`מצב הרוח עודכן: ${opt?.emoji} ${opt?.label}`);
   };
@@ -371,7 +373,7 @@ function VoiceCard({ agent }: { agent: any }) {
       .eq("id", agent.id);
     setSaving(false);
     if (error) { toast.error(error.message); return; }
-    qc.invalidateQueries({ queryKey: ["ai-agents"] });
+    qc.invalidateQueries({ queryKey: ["ai-agents", tenantId] });
     toast.success(v === "none" ? "קול כובה — תשובות בטקסט בלבד" : "הקול עודכן");
   };
 

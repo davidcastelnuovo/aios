@@ -305,8 +305,8 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
       setSelectedAgency("");
       setSelectedSalesPersonIds([]);
       setSelectedTag("");
-      queryClient.invalidateQueries({ queryKey: ['facebook-integration-settings'] });
-      queryClient.invalidateQueries({ queryKey: ['facebook-lead-ads-integration'] });
+      queryClient.invalidateQueries({ queryKey: ['facebook-integration-settings', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ['facebook-lead-ads-integration', tenantId] });
     },
     onError: (error) => {
       toast.error('שגיאה בשמירת המיפוי: ' + (error as Error).message);
@@ -339,8 +339,8 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
     },
     onSuccess: () => {
       toast.success('הטופס הוסר בהצלחה');
-      queryClient.invalidateQueries({ queryKey: ['facebook-integration-settings'] });
-      queryClient.invalidateQueries({ queryKey: ['facebook-lead-ads-integration'] });
+      queryClient.invalidateQueries({ queryKey: ['facebook-integration-settings', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ['facebook-lead-ads-integration', tenantId] });
     },
     onError: (error) => {
       toast.error('שגיאה בהסרת הטופס: ' + (error as Error).message);

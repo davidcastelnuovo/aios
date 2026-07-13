@@ -344,7 +344,7 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["automations"] });
+      queryClient.invalidateQueries({ queryKey: ["automations", tenantId] });
       toast.success("האוטומציה עודכנה בהצלחה");
       onOpenChange(false);
     },

@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, X, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { useTeamRoles, useUpdateTeamRoles, TeamRole } from "@/hooks/useTeamRoles";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,6 +29,7 @@ export function TeamRolesManager() {
   const { teamRoles, isLoading, orgType, defaultRoles } = useTeamRoles();
   const { updateRoles } = useUpdateTeamRoles();
   const queryClient = useQueryClient();
+  const { tenantId } = useCurrentTenant();
 
   const [customRoles, setCustomRoles] = useState<TeamRole[]>(teamRoles);
   const [newRoleKey, setNewRoleKey] = useState("");
@@ -45,8 +47,8 @@ export function TeamRolesManager() {
     },
     onSuccess: () => {
       toast.success("תפקידי הצוות עודכנו בהצלחה");
-      queryClient.invalidateQueries({ queryKey: ["tenant-team-roles"] });
-      queryClient.invalidateQueries({ queryKey: ["tenant-org-type"] });
+      queryClient.invalidateQueries({ queryKey: ["tenant-team-roles", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["tenant-org-type", tenantId] });
       setHasChanges(false);
     },
     onError: (error: Error) => {

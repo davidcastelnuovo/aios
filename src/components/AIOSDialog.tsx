@@ -303,7 +303,7 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
                 setStreamingMessage("");
               }
               setIsStreaming(false);
-              queryClient.invalidateQueries({ queryKey: ['ai-conversations'] });
+              queryClient.invalidateQueries({ queryKey: ['ai-conversations', tenantId] });
             }
           } catch (e) {
             console.error('Parse error:', e);
@@ -329,7 +329,7 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
           setStreamingMessage("");
         }
         setIsStreaming(false);
-        queryClient.invalidateQueries({ queryKey: ['ai-conversations'] });
+        queryClient.invalidateQueries({ queryKey: ['ai-conversations', tenantId] });
       }
     } catch (error: any) {
       console.error('Error sending message:', error);
@@ -587,7 +587,7 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
                 setStreamingMessage("");
               }
               setIsStreaming(false);
-              queryClient.invalidateQueries({ queryKey: ['ai-conversations'] });
+              queryClient.invalidateQueries({ queryKey: ['ai-conversations', tenantId] });
             }
           } catch (e) { console.error('Parse error:', e); }
         }
@@ -601,7 +601,7 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
         }
         setStreamingMessage("");
         setIsStreaming(false);
-        queryClient.invalidateQueries({ queryKey: ['ai-conversations'] });
+        queryClient.invalidateQueries({ queryKey: ['ai-conversations', tenantId] });
       }
     } catch (error: any) {
       console.error('Error sending message:', error);

@@ -71,7 +71,7 @@ export default function GoogleSearchConsoleSettings() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['user-integrations'] });
+      queryClient.invalidateQueries({ queryKey: ['user-integrations', currentTenantId] });
       toast.success("החיבור ל-Google Search Console נותק");
     },
     onError: (error) => {

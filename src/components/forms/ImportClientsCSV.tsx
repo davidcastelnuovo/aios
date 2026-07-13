@@ -522,7 +522,7 @@ export function ImportClientsCSV({ externalOpen, onExternalOpenChange }: ImportC
           toast.success(title);
         }
       }
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
       handleClose();
     },
     onError: (error: any) => {

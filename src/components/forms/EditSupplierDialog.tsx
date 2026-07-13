@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -55,6 +56,7 @@ interface EditSupplierDialogProps {
 
 export function EditSupplierDialog({ supplier, open, onOpenChange }: EditSupplierDialogProps) {
   const queryClient = useQueryClient();
+  const { tenantId } = useCurrentTenant();
 
   const { data: agencies } = useQuery({
     queryKey: ["agencies"],
@@ -125,7 +127,7 @@ export function EditSupplierDialog({ supplier, open, onOpenChange }: EditSupplie
     },
     onSuccess: () => {
       toast.success("הספק עודכן בהצלחה");
-      queryClient.invalidateQueries({ queryKey: ["suppliers"] });
+      queryClient.invalidateQueries({ queryKey: ["suppliers", tenantId] });
       onOpenChange(false);
     },
     onError: (error: any) => {

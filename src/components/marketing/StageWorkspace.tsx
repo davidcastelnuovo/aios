@@ -483,8 +483,8 @@ ${itemsSummary ? `פריטי תוכן נוכחיים:\n${itemsSummary}` : ""}
       });
       if (error) throw error;
       toast({ title: "השלב הורץ בהצלחה" });
-      queryClient.invalidateQueries({ queryKey: ["marketing-items", pipelineId] });
-      queryClient.invalidateQueries({ queryKey: ["marketing-assets", itemId] });
+      queryClient.invalidateQueries({ queryKey: ["marketing-items", pipelineId, tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["marketing-assets", itemId, tenantId] });
     } catch (e: any) {
       toast({ title: "שגיאה בהרצה", description: e.message, variant: "destructive" });
     } finally {
@@ -498,7 +498,7 @@ ${itemsSummary ? `פריטי תוכן נוכחיים:\n${itemsSummary}` : ""}
         .from("marketing_work_items")
         .update({ status: "approved" })
         .eq("id", itemId);
-      queryClient.invalidateQueries({ queryKey: ["marketing-items", pipelineId] });
+      queryClient.invalidateQueries({ queryKey: ["marketing-items", pipelineId, tenantId] });
       toast({ title: "הפריט אושר" });
     } catch (e: any) {
       toast({ title: "שגיאה באישור", description: e.message, variant: "destructive" });
@@ -511,7 +511,7 @@ ${itemsSummary ? `פריטי תוכן נוכחיים:\n${itemsSummary}` : ""}
         .from("marketing_work_items")
         .update({ status: "draft" })
         .eq("id", itemId);
-      queryClient.invalidateQueries({ queryKey: ["marketing-items", pipelineId] });
+      queryClient.invalidateQueries({ queryKey: ["marketing-items", pipelineId, tenantId] });
       toast({ title: "הפריט נדחה וחזר לטיוטה" });
     } catch (e: any) {
       toast({ title: "שגיאה בדחייה", description: e.message, variant: "destructive" });

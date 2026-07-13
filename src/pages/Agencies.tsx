@@ -125,8 +125,8 @@ export default function Agencies() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["agencies-list"] });
-      queryClient.invalidateQueries({ queryKey: ["agencies"] });
+      queryClient.invalidateQueries({ queryKey: ["agencies-list", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["agencies", tenantId] });
       toast({
         title: "הסוכנות נמחקה בהצלחה",
       });
@@ -151,8 +151,8 @@ export default function Agencies() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["agencies-list"] });
-      queryClient.invalidateQueries({ queryKey: ["agencies"] });
+      queryClient.invalidateQueries({ queryKey: ["agencies-list", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["agencies", tenantId] });
       toast({
         title: "סוכנות ברירת מחדל עודכנה",
         description: "לידים חדשים ישויכו לסוכנות זו אוטומטית",

@@ -107,7 +107,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
   const [searchParams] = useSearchParams();
   const isEmbed = embedMode || searchParams.get('embed') === '1';
   const { buildPath } = useTenantPath();
-  const { tenantId: currentTenantId } = useCurrentTenant();
+  const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
   
   const [newColumnName, setNewColumnName] = useState("");
@@ -222,12 +222,12 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
   };
 
   const { data: tables, isLoading: tablesLoading, isFetching: tablesFetching, error: tablesError } = useQuery({
-    queryKey: ['crm-tables', currentTenantId],
+    queryKey: ['crm-tables', tenantId],
     queryFn: async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
       const response = await supabase.functions.invoke(
-        currentTenantId ? `crm-tables?tenant_id=${currentTenantId}` : 'crm-tables',
+        tenantId ? `crm-tables?tenant_id=${tenantId}` : 'crm-tables',
         { method: 'GET' }
       );
       if (response.error) {
@@ -642,7 +642,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     },
     onSuccess: () => {
       toast.success('הטבלה נמחקה בהצלחה');
-      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
       navigate(buildPath('/dynamic-tables'));
     },
     onError: (error: any) => {
@@ -668,7 +668,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
-      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
       const typeLabel = table?.integration_type === 'facebook_ecommerce' ? 'נתוני מכירות מפייסבוק' : 'נתוני פייסבוק';
       toast.success(`${typeLabel} סונכרנו בהצלחה (${data.records_synced} שורות)`);
     },
@@ -913,7 +913,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
         // Refetch records after a delay to allow webhook to process
         setTimeout(() => {
           queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
-          queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+          queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
         }, 5000);
       } else {
         toast.info(data?.message || 'הסנכרון הופעל');
@@ -950,7 +950,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
-      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
       toast.success(`נתוני Google Ads סונכרנו בהצלחה (${data?.records_synced || 0} שורות)`);
     },
     onError: (error: any) => {
@@ -978,7 +978,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
-      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
       toast.success(`נתוני Google Analytics סונכרנו בהצלחה (${data?.records_synced || 0} שורות)`);
     },
     onError: (error: any) => {
@@ -1001,7 +1001,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
-      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
       toast.success(`נתוני Search Console סונכרנו בהצלחה (${data?.records_synced || 0} שורות)`);
     },
     onError: (error: any) => {
@@ -1205,9 +1205,9 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
       queryClient.invalidateQueries({ queryKey: ['crm-fields', table?.id] });
-      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
-      queryClient.invalidateQueries({ queryKey: ['seo-dashboard-reports'] });
-      queryClient.invalidateQueries({ queryKey: ['ahrefs-reports'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ['seo-dashboard-reports', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ['ahrefs-reports', tenantId] });
       toast.success(`נתוני SEO סונכרנו בהצלחה (${data?.recordsCount || 0} שורות)`);
     },
     onError: (error: any) => {
@@ -1258,7 +1258,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       return { adAccountId };
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
       setShowSettingsDialog(false);
       toast.success('הגדרות הטבלה עודכנו בהצלחה');
     },
@@ -1386,7 +1386,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     },
     onSuccess: () => {
       toast.success('הסנריו שוכפל וחובר לטבלה בהצלחה! כעת ניתן לסנכרן נתונים.');
-      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
     },
     onError: (err: Error) => {
       toast.error(err.message);
@@ -1424,7 +1424,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     },
     onSuccess: () => {
       toast.success('הסנריו הופעל בהצלחה! כעת ניתן לסנכרן נתונים.');
-      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
     },
     onError: (err: Error) => {
       toast.error(err.message);
@@ -1500,7 +1500,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     },
     onSuccess: () => {
       toast.success('הסנריו תוקן! כעת ניתן להריץ סנכרון.');
-      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
     },
     onError: (err: Error) => {
       toast.error(err.message);
@@ -1524,7 +1524,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
           <p className="text-muted-foreground mb-2">לא ניתן לטעון את רשימת הטבלאות מהשרת. ייתכן שתפוג ההתחברות — נסה להתנתק ולהתחבר מחדש.</p>
           <p className="text-xs text-muted-foreground mb-4">{(tablesError as any)?.message || String(tablesError)}</p>
           <div className="flex gap-2 justify-center">
-            <Button onClick={() => queryClient.invalidateQueries({ queryKey: ['crm-tables'] })}>
+            <Button onClick={() => queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] })}>
               נסה שוב
             </Button>
             <Button variant="outline" onClick={() => navigate(buildPath('/dynamic-tables'))}>
@@ -2360,8 +2360,8 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                         }
                       }
 
-                      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
-                      queryClient.invalidateQueries({ queryKey: ['clients'] });
+                      queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
+                      queryClient.invalidateQueries({ queryKey: ['clients', tenantId] });
                       setShowGoogleSettingsDialog(false);
                       toast.success(linkedClientId ? 'הגדרות נשמרו ושויכו ללקוח' : 'הגדרות Google Ads עודכנו בהצלחה');
                     } catch (err: any) {

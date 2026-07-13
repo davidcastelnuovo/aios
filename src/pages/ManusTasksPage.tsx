@@ -62,7 +62,7 @@ export default function ManusTasksPage() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['manus-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['manus-tasks', currentTenantId] });
       toast.success("משימה נוצרה בהצלחה ב-Manus!");
       setPrompt("");
       setCreateOpen(false);
@@ -80,7 +80,7 @@ export default function ManusTasksPage() {
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      queryClient.invalidateQueries({ queryKey: ['manus-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['manus-tasks', currentTenantId] });
       toast.success("הסטטוס עודכן");
     } catch (err: any) {
       toast.error(`שגיאה: ${err.message}`);

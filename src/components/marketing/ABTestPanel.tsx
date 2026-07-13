@@ -45,7 +45,7 @@ export function ABTestPanel({ workItemId, tenantId, brief, channel, onVariantSel
     },
     onSuccess: (_, variant) => {
       toast.success("גרסה נבחרה!");
-      queryClient.invalidateQueries({ queryKey: ["ab-test-variants", workItemId] });
+      queryClient.invalidateQueries({ queryKey: ["ab-test-variants", workItemId, tenantId] });
       onVariantSelected(variant);
     },
     onError: (e: any) => toast.error("שגיאה: " + e.message),

@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { BrainSelector } from "./BrainSelector";
@@ -44,6 +45,7 @@ function isCarmen(name: string) {
 
 export function AgentEditor({ agent }: { agent: any }) {
   const qc = useQueryClient();
+  const { tenantId } = useCurrentTenant();
   const carmen = isCarmen(agent.name);
 
   const updateEngine = useMutation({
@@ -52,7 +54,7 @@ export function AgentEditor({ agent }: { agent: any }) {
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["ai-agents"] });
+      qc.invalidateQueries({ queryKey: ["ai-agents", tenantId] });
       toast.success("המוח עודכן");
     },
     onError: (e: any) => toast.error(e.message),

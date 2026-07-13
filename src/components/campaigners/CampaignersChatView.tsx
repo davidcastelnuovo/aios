@@ -84,7 +84,7 @@ export function CampaignersChatView({ initialCampaignerId }: { initialCampaigner
           .from("profiles")
           .update({ full_name: patch.full_name })
           .eq("id", linkedProfile.id);
-        queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
+        queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
       }
     }
 

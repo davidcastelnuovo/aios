@@ -68,7 +68,7 @@ export function IntegrationVisibilitySelector({
 
   // Fetch current visibility
   const { data: integration, isLoading } = useQuery({
-    queryKey: ["integration-visibility", integrationId],
+    queryKey: ["integration-visibility", integrationId, tenantId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tenant_integrations")
@@ -94,8 +94,8 @@ export function IntegrationVisibilitySelector({
       if (error) throw error;
     },
     onSuccess: (_, visibility) => {
-      queryClient.invalidateQueries({ queryKey: ["integration-visibility", integrationId] });
-      queryClient.invalidateQueries({ queryKey: ["user-integrations"] });
+      queryClient.invalidateQueries({ queryKey: ["integration-visibility", integrationId, tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["user-integrations", tenantId] });
       const labels: Record<Visibility, string> = {
         private: "פרטי",
         org: "כל הארגון",
