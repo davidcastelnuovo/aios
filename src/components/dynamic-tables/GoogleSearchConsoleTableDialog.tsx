@@ -151,7 +151,7 @@ export function GoogleSearchConsoleTableDialog({ open, onOpenChange, assignedCli
       if (error) throw error;
 
       toast({ title: "טבלת Search Console נוצרה בהצלחה!" });
-      queryClient.invalidateQueries({ queryKey: ["crm-tables"] });
+      queryClient.invalidateQueries({ queryKey: ["crm-tables", activeTenantId] });
       onOpenChange(false);
       resetForm();
     } catch (error: any) {
