@@ -183,9 +183,9 @@ export function LeadsChatView({
       if (error) throw error;
       toast.success(`${selectedLeadIds.size} לידים עודכנו`);
       exitMultiSelect();
-      queryClient.invalidateQueries({ queryKey: ["leads-table"] });
-      queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
-      queryClient.invalidateQueries({ queryKey: ["leads-count"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-table", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-kanban", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId] });
     } catch (error: any) {
       toast.error("שגיאה בעדכון: " + error.message);
     } finally {
