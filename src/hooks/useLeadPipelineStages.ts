@@ -52,7 +52,7 @@ export function useLeadPipelineStageMutations() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["lead-pipeline-stages"] });
+      queryClient.invalidateQueries({ queryKey: ["lead-pipeline-stages", tenantId] });
     },
     onError: (error: Error) => {
       toast.error("שגיאה בעדכון שלב: " + error.message);
@@ -86,7 +86,7 @@ export function useLeadPipelineStageMutations() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["lead-pipeline-stages"] });
+      queryClient.invalidateQueries({ queryKey: ["lead-pipeline-stages", tenantId] });
       toast.success("שלב נוסף בהצלחה");
     },
     onError: (error: Error) => {
@@ -104,7 +104,7 @@ export function useLeadPipelineStageMutations() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["lead-pipeline-stages"] });
+      queryClient.invalidateQueries({ queryKey: ["lead-pipeline-stages", tenantId] });
       toast.success("שלב נמחק");
     },
     onError: (error: Error) => {
@@ -124,7 +124,7 @@ export function useLeadPipelineStageMutations() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["lead-pipeline-stages"] });
+      queryClient.invalidateQueries({ queryKey: ["lead-pipeline-stages", tenantId] });
     },
   });
 

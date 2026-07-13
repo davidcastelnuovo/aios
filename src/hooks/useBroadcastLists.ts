@@ -93,7 +93,7 @@ export function useBroadcastLists() {
 
   const useMembers = (listId: string | undefined) =>
     useQuery({
-      queryKey: ["broadcast-list-members", listId],
+      queryKey: ["broadcast-list-members", tenantId, listId],
       enabled: !!listId,
       queryFn: async (): Promise<ListMember[]> => {
         const { data, error } = await supabase
@@ -134,7 +134,7 @@ export function useBroadcastLists() {
       return payload.length;
     },
     onSuccess: (_d, v) => {
-      qc.invalidateQueries({ queryKey: ["broadcast-list-members", v.listId] });
+      qc.invalidateQueries({ queryKey: ["broadcast-list-members", tenantId, v.listId] });
       qc.invalidateQueries({ queryKey: ["broadcast-lists", tenantId] });
     },
   });
@@ -146,7 +146,7 @@ export function useBroadcastLists() {
       await recomputeCount(listId);
     },
     onSuccess: (_d, v) => {
-      qc.invalidateQueries({ queryKey: ["broadcast-list-members", v.listId] });
+      qc.invalidateQueries({ queryKey: ["broadcast-list-members", tenantId, v.listId] });
       qc.invalidateQueries({ queryKey: ["broadcast-lists", tenantId] });
     },
   });
@@ -172,7 +172,7 @@ export function useBroadcastLists() {
       return data as { success: boolean; total: number };
     },
     onSuccess: (_d, v) => {
-      qc.invalidateQueries({ queryKey: ["broadcast-list-members", v.listId] });
+      qc.invalidateQueries({ queryKey: ["broadcast-list-members", tenantId, v.listId] });
       qc.invalidateQueries({ queryKey: ["broadcast-lists", tenantId] });
     },
   });
