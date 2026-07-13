@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { useQueryClient } from "@tanstack/react-query";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 interface LeadsChatViewProps {
   leads: any[];
@@ -73,6 +74,7 @@ export function LeadsChatView({
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [callDialogOpen, setCallDialogOpen] = useState(false);
   const queryClient = useQueryClient();
+  const { tenantId } = useCurrentTenant();
 
   // Auto-select first lead on desktop only
   useEffect(() => {
@@ -145,9 +147,9 @@ export function LeadsChatView({
         setSelectedLeadId(null);
       }
       exitMultiSelect();
-      queryClient.invalidateQueries({ queryKey: ["leads-table"] });
-      queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
-      queryClient.invalidateQueries({ queryKey: ["leads-count"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-table", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-kanban", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId] });
     } catch (error: any) {
       toast.error("שגיאה במחיקה: " + error.message);
     } finally {
@@ -163,9 +165,9 @@ export function LeadsChatView({
       if (error) throw error;
       toast.success(`${selectedLeadIds.size} לידים עודכנו`);
       exitMultiSelect();
-      queryClient.invalidateQueries({ queryKey: ["leads-table"] });
-      queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
-      queryClient.invalidateQueries({ queryKey: ["leads-count"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-table", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-kanban", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId] });
     } catch (error: any) {
       toast.error("שגיאה בעדכון: " + error.message);
     } finally {
