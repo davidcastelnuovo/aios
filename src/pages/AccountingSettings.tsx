@@ -73,7 +73,7 @@ export default function AccountingSettings() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tenant-integration"] });
+      queryClient.invalidateQueries({ queryKey: ["tenant-integration", tenantId] });
       toast.success("הגדרות האינטגרציה עודכנו בהצלחה");
     },
     onError: (error) => {

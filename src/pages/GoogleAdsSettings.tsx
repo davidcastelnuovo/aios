@@ -259,7 +259,7 @@ export default function GoogleAdsSettings() {
     },
     onSuccess: () => {
       toast.success('חיבור Google Ads דרך Make נשמר בהצלחה');
-      queryClient.invalidateQueries({ queryKey: ['google-ads-via-make-integration'] });
+      queryClient.invalidateQueries({ queryKey: ['google-ads-via-make-integration', currentTenant?.id] });
     },
     onError: (error) => {
       toast.error('שגיאה בשמירת החיבור: ' + (error as Error).message);
@@ -279,7 +279,7 @@ export default function GoogleAdsSettings() {
     onSuccess: () => {
       toast.success('החיבור נותק בהצלחה');
       setSelectedConnection("");
-      queryClient.invalidateQueries({ queryKey: ['google-ads-via-make-integration'] });
+      queryClient.invalidateQueries({ queryKey: ['google-ads-via-make-integration', currentTenant?.id] });
     },
     onError: (error) => {
       toast.error('שגיאה בניתוק: ' + (error as Error).message);
@@ -328,7 +328,7 @@ export default function GoogleAdsSettings() {
     },
     onSuccess: () => {
       toast.success('הגדרות Make נשמרו בהצלחה');
-      queryClient.invalidateQueries({ queryKey: ['google-ads-make-integration'] });
+      queryClient.invalidateQueries({ queryKey: ['google-ads-make-integration', currentTenant?.id] });
     },
     onError: (error) => {
       toast.error('שגיאה בשמירת הגדרות: ' + (error as Error).message);
@@ -376,8 +376,8 @@ export default function GoogleAdsSettings() {
     },
     onSuccess: () => {
       toast.success('החיבור ל-Google Ads נותק בהצלחה');
-      queryClient.invalidateQueries({ queryKey: ['google-ads-integration'] });
-      queryClient.invalidateQueries({ queryKey: ['user-integrations'] });
+      queryClient.invalidateQueries({ queryKey: ['google-ads-integration', currentTenant?.id] });
+      queryClient.invalidateQueries({ queryKey: ['user-integrations', currentTenant?.id] });
     },
     onError: (error) => {
       toast.error('שגיאה בניתוק: ' + (error as Error).message);
@@ -409,7 +409,7 @@ export default function GoogleAdsSettings() {
       } else {
         toast.warning('לא נמצא חיבור פעיל ל-Google Ads');
       }
-      queryClient.invalidateQueries({ queryKey: ['google-ads-integration'] });
+      queryClient.invalidateQueries({ queryKey: ['google-ads-integration', currentTenant?.id] });
     },
     onError: (error) => {
       toast.error('שגיאה בבדיקת סטטוס: ' + (error as Error).message);

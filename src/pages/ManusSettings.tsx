@@ -64,7 +64,7 @@ export default function ManusSettings() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['manus-integration'] });
+      queryClient.invalidateQueries({ queryKey: ['manus-integration', currentTenantId] });
       toast.success("מפתח API של Manus נשמר בהצלחה");
       setApiKey("");
     },
@@ -98,7 +98,7 @@ export default function ManusSettings() {
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      queryClient.invalidateQueries({ queryKey: ['manus-integration'] });
+      queryClient.invalidateQueries({ queryKey: ['manus-integration', currentTenantId] });
       toast.success("Webhook נרשם בהצלחה!");
     } catch (err: any) {
       toast.error(`שגיאה ברישום webhook: ${err.message}`);
@@ -114,7 +114,7 @@ export default function ManusSettings() {
     if (error) {
       toast.error("שגיאה בניתוק");
     } else {
-      queryClient.invalidateQueries({ queryKey: ['manus-integration'] });
+      queryClient.invalidateQueries({ queryKey: ['manus-integration', currentTenantId] });
       toast.success("Manus נותק בהצלחה");
     }
   };

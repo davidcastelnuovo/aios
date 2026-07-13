@@ -246,7 +246,7 @@ export default function MakeSettings() {
       if (insertError) throw insertError;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["make-integration"] });
+      queryClient.invalidateQueries({ queryKey: ["make-integration", currentTenantId] });
       toast({
         title: "ההגדרות נשמרו",
         description: "החיבור ל-Make.com הוגדר בהצלחה",
@@ -272,7 +272,7 @@ export default function MakeSettings() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["make-integration"] });
+      queryClient.invalidateQueries({ queryKey: ["make-integration", currentTenantId] });
       toast({
         title: "החיבור נותק",
         description: "האינטגרציה עם Make.com נותקה",

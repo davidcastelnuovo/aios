@@ -163,7 +163,7 @@ export default function AhrefsSettings() {
       toast.success('הדוח שויך ללקוח בהצלחה ודוח SEO נוצר אוטומטית');
       queryClient.invalidateQueries({ queryKey: ['ahrefs-reports', tenantId] });
       queryClient.invalidateQueries({ queryKey: ['clients-for-ahrefs', tenantId] });
-      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
       setClientSearchOpen(null);
       setClientSearch("");
     },
@@ -217,7 +217,7 @@ export default function AhrefsSettings() {
     },
     onSuccess: () => {
       toast.success('התחברת בהצלחה ל-Ahrefs');
-      queryClient.invalidateQueries({ queryKey: ['ahrefs-status'] });
+      queryClient.invalidateQueries({ queryKey: ['ahrefs-status', tenantId] });
     },
     onError: (error: Error) => {
       toast.error(`שגיאה בהתחברות: ${error.message}`);
@@ -245,7 +245,7 @@ export default function AhrefsSettings() {
     },
     onSuccess: () => {
       toast.success('התנתקת מ-Ahrefs');
-      queryClient.invalidateQueries({ queryKey: ['ahrefs-status'] });
+      queryClient.invalidateQueries({ queryKey: ['ahrefs-status', tenantId] });
     },
     onError: (error: Error) => {
       toast.error(`שגיאה בהתנתקות: ${error.message}`);

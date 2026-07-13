@@ -68,7 +68,7 @@ export default function MaskyooSettings() {
     },
     onSuccess: () => {
       toast.success("הגדרות Maskyoo נשמרו");
-      queryClient.invalidateQueries({ queryKey: ["maskyoo-settings"] });
+      queryClient.invalidateQueries({ queryKey: ["maskyoo-settings", tenantId] });
     },
     onError: (e: any) => toast.error("שגיאה בשמירה", { description: e.message }),
   });

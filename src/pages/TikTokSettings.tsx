@@ -42,8 +42,8 @@ export default function TikTokSettings() {
     },
     onSuccess: () => {
       toast.success('חשבון TikTok חובר בהצלחה');
-      queryClient.invalidateQueries({ queryKey: ['tiktok-integration'] });
-      queryClient.invalidateQueries({ queryKey: ['tiktok-integration-status'] });
+      queryClient.invalidateQueries({ queryKey: ['tiktok-integration', currentTenantId] });
+      queryClient.invalidateQueries({ queryKey: ['tiktok-integration-status', currentTenantId] });
     },
     onError: (e: any) => toast.error('כשל בחיבור: ' + (e?.message || 'שגיאה לא ידועה')),
     onSettled: () => setBusy(null),
@@ -57,8 +57,8 @@ export default function TikTokSettings() {
     },
     onSuccess: () => {
       toast.success('החשבון נותק');
-      queryClient.invalidateQueries({ queryKey: ['tiktok-integration'] });
-      queryClient.invalidateQueries({ queryKey: ['tiktok-integration-status'] });
+      queryClient.invalidateQueries({ queryKey: ['tiktok-integration', currentTenantId] });
+      queryClient.invalidateQueries({ queryKey: ['tiktok-integration-status', currentTenantId] });
     },
     onError: (e: any) => toast.error('שגיאה בניתוק: ' + (e?.message || '')),
     onSettled: () => setBusy(null),

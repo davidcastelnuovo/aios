@@ -670,7 +670,7 @@ export default function AgentTasksPage() {
         .eq("id", task.id);
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["agent_tasks"] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["agent_tasks", tenantId] }),
   });
 
   const updateTask = useMutation({
