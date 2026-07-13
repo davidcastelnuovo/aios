@@ -103,8 +103,8 @@ export default function TelephonySettings() {
     },
     onSuccess: () => {
       toast.success("הגדרות טלפוניה נשמרו בהצלחה");
-      queryClient.invalidateQueries({ queryKey: ["telephony-settings"] });
-      queryClient.invalidateQueries({ queryKey: ["paycall-integration"] });
+      queryClient.invalidateQueries({ queryKey: ["telephony-settings", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["paycall-integration", tenantId] });
     },
     onError: (err: any) => {
       toast.error("שגיאה בשמירת הגדרות", { description: err.message });

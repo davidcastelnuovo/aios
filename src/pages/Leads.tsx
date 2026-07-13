@@ -1500,8 +1500,8 @@ export default function Leads() {
         return next;
       });
       // Re-fetch to restore correct state
-      queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
-      queryClient.invalidateQueries({ queryKey: ["leads-table"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-kanban", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-table", tenantId] });
       toast({
         title: "שגיאה בעדכון סטטוס",
         description: error.message,
@@ -1610,8 +1610,8 @@ export default function Leads() {
     },
     onError: (error: any) => {
       // Re-fetch to restore correct state on error
-      queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
-      queryClient.invalidateQueries({ queryKey: ["leads-table"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-kanban", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-table", tenantId] });
       toast({
         title: "שגיאה בעדכון סטטוס תגובה",
         description: error.message,
@@ -1620,9 +1620,9 @@ export default function Leads() {
     },
     onSettled: () => {
       // Reconcile all views with backend
-      queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
-      queryClient.invalidateQueries({ queryKey: ["leads-table"] });
-      queryClient.invalidateQueries({ queryKey: ["leads-count"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-kanban", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-table", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId] });
     },
   });
 
@@ -3080,9 +3080,9 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
-      queryClient.invalidateQueries({ queryKey: ["leads-table"] });
-      queryClient.invalidateQueries({ queryKey: ["leads-count"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-kanban", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-table", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId] });
       toast({
         title: "סטטוס תגובה עודכן בהצלחה",
       });
@@ -3106,9 +3106,9 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
-      queryClient.invalidateQueries({ queryKey: ["leads-table"] });
-      queryClient.invalidateQueries({ queryKey: ["leads-count"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-kanban", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-table", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId] });
       setSelectedLeads([]);
       toast({
         title: "לידים עודכנו בהצלחה",
@@ -3133,9 +3133,9 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
-      queryClient.invalidateQueries({ queryKey: ["leads-table"] });
-      queryClient.invalidateQueries({ queryKey: ["leads-count"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-kanban", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-table", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId] });
       setSelectedLeads([]);
       toast({
         title: "לידים נמחקו בהצלחה",
@@ -3194,10 +3194,10 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
       if (legacyError) console.warn("Legacy sales_person_id update failed:", legacyError);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
-      queryClient.invalidateQueries({ queryKey: ["leads-table"] });
-      queryClient.invalidateQueries({ queryKey: ["leads-count"] });
-      queryClient.invalidateQueries({ queryKey: ["lead-sales-people"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-kanban", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-table", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["lead-sales-people", tenantId] });
       setSelectedLeads([]);
       setAssignDialogOpen(false);
       setSelectedSalesPeople([]);

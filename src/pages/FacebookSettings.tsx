@@ -288,7 +288,7 @@ export default function FacebookSettings() {
     onSuccess: (data) => {
       if (data?.success) {
         toast.success(`ליד טסט נוצר בהצלחה! ID: ${data.lead_id}`);
-        queryClient.invalidateQueries({ queryKey: ['leads'] });
+        queryClient.invalidateQueries({ queryKey: ['leads', currentTenant?.id] });
       } else {
         toast.error('שגיאה: ' + (data?.error || 'Unknown error'));
       }
@@ -320,7 +320,7 @@ export default function FacebookSettings() {
         } else {
           toast.info('לא נמצאו לידים חדשים');
         }
-        queryClient.invalidateQueries({ queryKey: ['leads'] });
+        queryClient.invalidateQueries({ queryKey: ['leads', currentTenant?.id] });
       } else {
         toast.error('שגיאה: ' + (data?.error || 'Unknown error'));
       }
