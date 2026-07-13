@@ -226,7 +226,10 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     queryFn: async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
-      const response = await supabase.functions.invoke('crm-tables', { method: 'GET' });
+      const response = await supabase.functions.invoke(
+        tenantId ? `crm-tables?tenant_id=${tenantId}` : 'crm-tables',
+        { method: 'GET' }
+      );
       if (response.error) {
         console.error('[DynamicTableView] crm-tables fetch failed:', response.error);
         throw response.error;

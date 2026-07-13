@@ -115,7 +115,11 @@ export function useProvisionClientChannels() {
       }
 
       // Existing tables already linked to this client (idempotency).
-      const listRes = await supabase.functions.invoke("crm-tables", { method: "GET" });
+      // Scope to the client's tenant explicitly (not the global active-tenant row).
+      const listRes = await supabase.functions.invoke(
+        tenantId ? `crm-tables?tenant_id=${tenantId}` : "crm-tables",
+        { method: "GET" }
+      );
       if (listRes.error) throw listRes.error;
       const existing = (Array.isArray(listRes.data) ? listRes.data : []).filter(
         (t: any) => t.client_id === clientId
