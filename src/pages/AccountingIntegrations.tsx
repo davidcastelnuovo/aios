@@ -159,10 +159,10 @@ export default function AccountingIntegrations() {
     queryFn: async () => {
       if (!currentTenantId) return [];
       
-      const { data: ownedAgencies } = await supabase
-        .from("agencies").select("id").eq("tenant_id", currentTenantId);
-      const { data: sharedAgencies } = await supabase
-        .from("agency_tenant_access").select("agency_id").eq("accessing_tenant_id", currentTenantId);
+      const [{ data: ownedAgencies }, { data: sharedAgencies }] = await Promise.all([
+        supabase.from("agencies").select("id").eq("tenant_id", currentTenantId),
+        supabase.from("agency_tenant_access").select("agency_id").eq("accessing_tenant_id", currentTenantId),
+      ]);
       
       let agencyIds = [
         ...(ownedAgencies || []).map(a => a.id),
@@ -268,7 +268,7 @@ export default function AccountingIntegrations() {
     },
     onSuccess: (payment_month) => {
       if (payment_month) setSelectedMonth(payment_month);
-      queryClient.invalidateQueries({ queryKey: ["one-time-incomes-all"] });
+      queryClient.invalidateQueries({ queryKey: ["one-time-incomes-all", currentTenantId] });
       queryClient.invalidateQueries({ queryKey: ["finance-summary"] });
       toast.success("הכנסה חד פעמית נוספה");
       setAddOneTimeIncomeOpen(false);
@@ -284,7 +284,7 @@ export default function AccountingIntegrations() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["one-time-incomes-all"] });
+      queryClient.invalidateQueries({ queryKey: ["one-time-incomes-all", currentTenantId] });
       toast.success("נמחק");
     },
   });
@@ -296,7 +296,7 @@ export default function AccountingIntegrations() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["accounting-clients"] });
+      queryClient.invalidateQueries({ queryKey: ["accounting-clients", currentTenantId] });
       queryClient.invalidateQueries({ queryKey: ["finance-summary"] });
       toast.success("סטטוס עודכן");
     },
