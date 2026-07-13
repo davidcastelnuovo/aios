@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import {
   Dialog,
   DialogContent,
@@ -29,6 +30,7 @@ export function ImportClientsSheet({ externalOpen, onExternalOpenChange }: Impor
   const [sheetId, setSheetId] = useState("");
   const [range, setRange] = useState("Sheet1!A:I");
   const queryClient = useQueryClient();
+  const { tenantId } = useCurrentTenant();
 
   const mutation = useMutation({
     mutationFn: async ({ sheetId, range }: { sheetId: string; range: string }) => {
@@ -50,7 +52,7 @@ export function ImportClientsSheet({ externalOpen, onExternalOpenChange }: Impor
       } else {
         toast.success(`יובאו ${data.imported} לקוחות בהצלחה`);
       }
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
       setOpen(false);
       setSheetId("");
       setRange("Sheet1!A:I");

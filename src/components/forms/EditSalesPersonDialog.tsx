@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Pencil, Check, ChevronsUpDown } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 const formSchema = z.object({
   full_name: z.string().min(1, "שם מלא הוא שדה חובה"),
@@ -38,6 +39,7 @@ export function EditSalesPersonDialog({ salesPerson }: EditSalesPersonDialogProp
   const [agencyPopoverOpen, setAgencyPopoverOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { tenantId } = useCurrentTenant();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -77,7 +79,7 @@ export function EditSalesPersonDialog({ salesPerson }: EditSalesPersonDialogProp
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sales-people"] });
+      queryClient.invalidateQueries({ queryKey: ["sales-people", tenantId] });
       toast({
         title: "איש מכירות עודכן בהצלחה",
       });

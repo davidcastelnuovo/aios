@@ -131,10 +131,10 @@ export function EditUserCampaignerDialog({
       }
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
+      await queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
       await queryClient.invalidateQueries({ queryKey: ["user-campaigner"] });
       await queryClient.invalidateQueries({ queryKey: ["campaigners"] });
-      await queryClient.refetchQueries({ queryKey: ["users-with-roles"] });
+      await queryClient.refetchQueries({ queryKey: ["users-with-roles", tenantId] });
       toast.success("איש הצוות המשויך עודכן בהצלחה");
       onOpenChange(false);
     },

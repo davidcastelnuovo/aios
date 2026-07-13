@@ -12,6 +12,7 @@ import { he } from "date-fns/locale";
 import { toast } from "sonner";
 import AddTaskForm from "@/components/forms/AddTaskForm";
 import EditTaskDialog from "@/components/forms/EditTaskDialog";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 interface ClientTasksTabProps {
   clientId: string;
@@ -25,6 +26,7 @@ export function ClientTasksTab({ clientId, clientName }: ClientTasksTabProps) {
   const [editingTask, setEditingTask] = useState<any>(null);
   const [showAddTask, setShowAddTask] = useState(false);
   const queryClient = useQueryClient();
+  const { tenantId } = useCurrentTenant();
 
   const { data: tasks, isLoading } = useQuery({
     queryKey: ["client-tasks", clientId, dateFilter],
@@ -66,8 +68,8 @@ export function ClientTasksTab({ clientId, clientName }: ClientTasksTabProps) {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["client-tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["client-tasks", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
       toast.success("סטטוס המשימה עודכן");
     },
     onError: () => {
