@@ -297,9 +297,9 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["active-chats"] });
-      queryClient.invalidateQueries({ queryKey: ["unknown-contacts"] });
-      queryClient.invalidateQueries({ queryKey: ["contact-tags-for-list"] });
+      queryClient.invalidateQueries({ queryKey: ["active-chats", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["unknown-contacts", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["contact-tags-for-list", tenantId] });
     },
   });
 
@@ -371,9 +371,9 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
     },
     onSuccess: () => {
       toast.success("השיחה נחסמה בהצלחה - ההודעות לא יישמרו יותר");
-      queryClient.invalidateQueries({ queryKey: ["chat-contacts"] });
-      queryClient.invalidateQueries({ queryKey: ["unknown-contacts"] });
-      queryClient.invalidateQueries({ queryKey: ["active-chats"] });
+      queryClient.invalidateQueries({ queryKey: ["chat-contacts", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["unknown-contacts", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["active-chats", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["chat-messages", contactId, contactType, senderPhone] });
       onBack?.();
     },
@@ -923,8 +923,8 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
             type={convertType}
             onSuccess={(id, type) => {
               setConvertDialogOpen(false);
-              queryClient.invalidateQueries({ queryKey: ["chat-contacts"] });
-              queryClient.invalidateQueries({ queryKey: ["unknown-contacts"] });
+              queryClient.invalidateQueries({ queryKey: ["chat-contacts", tenantId] });
+              queryClient.invalidateQueries({ queryKey: ["unknown-contacts", tenantId] });
               if (onBack) onBack();
             }}
           />
@@ -935,8 +935,8 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
             senderName={contact?.name}
             onSuccess={(id, type) => {
               setLinkDialogOpen(false);
-              queryClient.invalidateQueries({ queryKey: ["chat-contacts"] });
-              queryClient.invalidateQueries({ queryKey: ["unknown-contacts"] });
+              queryClient.invalidateQueries({ queryKey: ["chat-contacts", tenantId] });
+              queryClient.invalidateQueries({ queryKey: ["unknown-contacts", tenantId] });
               if (onBack) onBack();
             }}
           />
@@ -949,7 +949,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
             onSuccess={() => {
               setLinkPhoneDialogOpen(false);
               queryClient.invalidateQueries({ queryKey: ["contact", contactId, contactType] });
-              queryClient.invalidateQueries({ queryKey: ["chat-contacts"] });
+              queryClient.invalidateQueries({ queryKey: ["chat-contacts", tenantId] });
             }}
           />
           <LinkCampaignerDialog
@@ -959,8 +959,8 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
             senderName={contact?.name}
             onSuccess={(campaignerId) => {
               setLinkCampaignerDialogOpen(false);
-              queryClient.invalidateQueries({ queryKey: ["chat-contacts"] });
-              queryClient.invalidateQueries({ queryKey: ["unknown-contacts"] });
+              queryClient.invalidateQueries({ queryKey: ["chat-contacts", tenantId] });
+              queryClient.invalidateQueries({ queryKey: ["unknown-contacts", tenantId] });
               if (onBack) onBack();
             }}
           />

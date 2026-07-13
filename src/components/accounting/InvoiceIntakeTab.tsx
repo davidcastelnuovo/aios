@@ -100,7 +100,7 @@ export function InvoiceIntakeTab() {
         }
       }
       toast.success("החשבוניות הועלו ונשלחו לזיהוי");
-      qc.invalidateQueries({ queryKey: ["invoice-uploads"] });
+      qc.invalidateQueries({ queryKey: ["invoice-uploads", tenantId] });
     } catch (e: any) {
       console.error(e);
       toast.error(e?.message || "שגיאה בהעלאה");

@@ -228,7 +228,7 @@ export function ClientsChatView({
       const idx = clients.findIndex(c => c.id === id);
       const next = clients[idx + 1] || clients[idx - 1] || null;
       setSelectedClientId(next?.id || null);
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
     } catch (error: any) {
       toast.error("שגיאה במחיקת לקוח: " + error.message);
     } finally {

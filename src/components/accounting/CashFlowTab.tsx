@@ -327,7 +327,7 @@ export function CashFlowTab() {
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["cf-income-payments"] });
+      qc.invalidateQueries({ queryKey: ["cf-income-payments", tenantId] });
       toast.success("נרשם כנגבה");
     },
     onError: (e: any) => toast.error(e.message),
@@ -355,7 +355,7 @@ export function CashFlowTab() {
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["cf-expense-payments"] });
+      qc.invalidateQueries({ queryKey: ["cf-expense-payments", tenantId] });
       toast.success("נרשם כשולם");
     },
     onError: (e: any) => toast.error(e.message),

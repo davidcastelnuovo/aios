@@ -127,8 +127,8 @@ export function CalendarIframeSettings() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["calendar-status"] });
-      queryClient.invalidateQueries({ queryKey: ["calendar-events"] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-status", userId, tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-events", tenantId] });
       toast.success("הלוח השנה נותק בהצלחה");
     },
     onError: (error) => {
@@ -142,8 +142,8 @@ export function CalendarIframeSettings() {
       await disconnectDirectGoogleCalendar();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["calendar-status"] });
-      queryClient.invalidateQueries({ queryKey: ["calendar-events"] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-status", userId, tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-events", tenantId] });
       toast.success("הלוח השנה נותק בהצלחה");
     },
     onError: (error) => {
