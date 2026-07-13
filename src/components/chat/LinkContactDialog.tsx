@@ -145,9 +145,9 @@ export function LinkContactDialog({
     },
     onSuccess: (result) => {
       toast.success(`שויך בהצלחה ל${selectedType === 'client' ? 'לקוח' : selectedType === 'lead' ? 'ליד' : 'קבוצה'}`);
-      queryClient.invalidateQueries({ queryKey: ["active-chats"] });
-      queryClient.invalidateQueries({ queryKey: ["unknown-contacts"] });
-      queryClient.invalidateQueries({ queryKey: ["chat-messages"] });
+      queryClient.invalidateQueries({ queryKey: ["active-chats", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["unknown-contacts", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["chat-messages", tenantId] });
       onSuccess(form.getValues().contact_id, result.type as "client" | "lead" | "group");
       onOpenChange(false);
       form.reset();

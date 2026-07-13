@@ -124,10 +124,10 @@ export function LinkPhoneDialog({
     },
     onSuccess: (result) => {
       toast.success(`הטלפון עודכן בהצלחה ל${selectedType === 'client' ? 'לקוח' : 'ליד'}`);
-      queryClient.invalidateQueries({ queryKey: ["active-chats"] });
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
-      queryClient.invalidateQueries({ queryKey: ["leads"] });
-      queryClient.invalidateQueries({ queryKey: ["contact"] });
+      queryClient.invalidateQueries({ queryKey: ["active-chats", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["contact", tenantId] });
       onSuccess?.();
       onOpenChange(false);
       form.reset();

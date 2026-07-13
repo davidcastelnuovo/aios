@@ -140,7 +140,7 @@ export function ConvertMessageToTaskDialog({
     },
     onSuccess: () => {
       toast.success("המשימה נוצרה בהצלחה");
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
       onOpenChange(false);
       form.reset();
     },
