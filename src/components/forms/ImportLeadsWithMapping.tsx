@@ -1076,8 +1076,7 @@ export function ImportLeadsWithMapping() {
       queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
       queryClient.invalidateQueries({ queryKey: ["leads-table"] });
       queryClient.invalidateQueries({ queryKey: ["leads-count"] });
-      queryClient.invalidateQueries({ queryKey: ["lead-statuses"] });
-      queryClient.invalidateQueries({ queryKey: ["chat-tags"] });
+      queryClient.invalidateQueries({ queryKey: ["lead-statuses", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["chat-tags", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-tags-bulk"] });
       queryClient.invalidateQueries({ queryKey: ["leads-tags-bulk", tenantId] });

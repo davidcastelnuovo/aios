@@ -80,7 +80,7 @@ export function GoalTree() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["goals"] });
+      queryClient.invalidateQueries({ queryKey: ["goals", tenantId] });
       setNewGoalTitle("");
       setAddingGoal(false);
       toast.success("יעד נוצר בהצלחה");
@@ -97,7 +97,7 @@ export function GoalTree() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["goals"] });
+      queryClient.invalidateQueries({ queryKey: ["goals", tenantId] });
       toast.success("סטטוס היעד עודכן");
     },
   });
