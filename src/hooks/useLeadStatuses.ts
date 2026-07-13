@@ -52,7 +52,7 @@ export function useLeadStatusMutations() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["lead-statuses"] });
+      queryClient.invalidateQueries({ queryKey: ["lead-statuses", tenantId] });
     },
     onError: (error: Error) => {
       toast.error("שגיאה בעדכון סטטוס: " + error.message);
@@ -87,7 +87,7 @@ export function useLeadStatusMutations() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["lead-statuses"] });
+      queryClient.invalidateQueries({ queryKey: ["lead-statuses", tenantId] });
       toast.success("סטטוס נוסף בהצלחה");
     },
     onError: (error: Error) => {
@@ -105,7 +105,7 @@ export function useLeadStatusMutations() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["lead-statuses"] });
+      queryClient.invalidateQueries({ queryKey: ["lead-statuses", tenantId] });
       toast.success("סטטוס נמחק");
     },
     onError: (error: Error) => {
@@ -151,7 +151,7 @@ export function useLeadStatusMutations() {
       toast.error("שגיאה בעדכון סדר הסטטוסים");
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["lead-statuses"] });
+      queryClient.invalidateQueries({ queryKey: ["lead-statuses", tenantId] });
     },
   });
 
