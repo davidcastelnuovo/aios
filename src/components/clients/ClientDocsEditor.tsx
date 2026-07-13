@@ -26,7 +26,7 @@ export function ClientDocsEditor({ client, tenantId }: ClientDocsEditorProps) {
     if (error) {
       toast.error("שגיאה בעדכון קישורים");
     } else {
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
     }
   };
 
@@ -39,7 +39,7 @@ export function ClientDocsEditor({ client, tenantId }: ClientDocsEditorProps) {
     if (error) {
       toast.error("שגיאה בעדכון קבצים");
     } else {
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
     }
   };
 

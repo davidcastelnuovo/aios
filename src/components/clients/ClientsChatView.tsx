@@ -270,7 +270,7 @@ export function ClientsChatView({
         setSelectedClientId(null);
       }
       exitMultiSelect();
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
     } catch (error: any) {
       toast.error("שגיאה במחיקה: " + error.message);
     } finally {
@@ -287,7 +287,7 @@ export function ClientsChatView({
       if (error) throw error;
       toast.success(`${selectedClientIds.size} לקוחות עודכנו`);
       exitMultiSelect();
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
     } catch (error: any) {
       toast.error("שגיאה בעדכון: " + error.message);
     } finally {
@@ -303,7 +303,7 @@ export function ClientsChatView({
       if (error) throw error;
       toast.success(`${selectedClientIds.size} לקוחות עודכנו`);
       exitMultiSelect();
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
     } catch (error: any) {
       toast.error("שגיאה בעדכון: " + error.message);
     } finally {
@@ -316,7 +316,7 @@ export function ClientsChatView({
       const { error } = await supabase.from("clients").update({ status: status as any }).eq("id", clientId);
       if (error) throw error;
       toast.success("הסטטוס עודכן בהצלחה");
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
     } catch {
       toast.error("שגיאה בעדכון הסטטוס");
     }
@@ -327,7 +327,7 @@ export function ClientsChatView({
       const { error } = await supabase.from("clients").update({ mood_status: moodStatus as any }).eq("id", clientId);
       if (error) throw error;
       toast.success("מצב הלקוח עודכן בהצלחה");
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
     } catch {
       toast.error("שגיאה בעדכון מצב הלקוח");
     }
@@ -343,7 +343,7 @@ export function ClientsChatView({
       if (error) throw error;
       if (!data || data.length === 0) throw new Error("Update blocked by permissions");
       toast.success("עודכן בהצלחה");
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
     } catch {
       toast.error("שגיאה בעדכון");
     }
@@ -834,7 +834,7 @@ export function ClientsChatView({
                   contactType="client"
                   currentAgencyId={selectedClient.agency_id}
                   contactName={selectedClient.name}
-                  onSuccess={() => queryClient.invalidateQueries({ queryKey: ["clients"] })}
+                  onSuccess={() => queryClient.invalidateQueries({ queryKey: ["clients", tenantId] })}
                 />
                 <CreateOrgForClientDialog
                   inline
@@ -1072,7 +1072,7 @@ export function ClientsChatView({
                               toast.success("איש קשר נוסף");
                               setAddingContact(false);
                               setNewContact({ contact_name: "", phone: "", email: "", role: "" });
-                              queryClient.invalidateQueries({ queryKey: ["client-contacts", selectedClient.id] });
+                              queryClient.invalidateQueries({ queryKey: ["client-contacts", selectedClient.id, tenantId] });
                             } catch { toast.error("שגיאה בהוספת איש קשר"); }
                           }}>שמור</Button>
                         </div>
@@ -1104,7 +1104,7 @@ export function ClientsChatView({
                                       if (error) throw error;
                                       toast.success("איש קשר עודכן");
                                       setEditingContactId(null);
-                                      queryClient.invalidateQueries({ queryKey: ["client-contacts", selectedClient.id] });
+                                      queryClient.invalidateQueries({ queryKey: ["client-contacts", selectedClient.id, tenantId] });
                                     } catch { toast.error("שגיאה בעדכון איש קשר"); }
                                   }}>שמור</Button>
                                 </div>
@@ -1118,7 +1118,7 @@ export function ClientsChatView({
                                         const { error } = await supabase.from("client_contacts").delete().eq("id", contact.id);
                                         if (error) throw error;
                                         toast.success("איש קשר נמחק");
-                                        queryClient.invalidateQueries({ queryKey: ["client-contacts", selectedClient.id] });
+                                        queryClient.invalidateQueries({ queryKey: ["client-contacts", selectedClient.id, tenantId] });
                                       } catch { toast.error("שגיאה במחיקה"); }
                                     }}>
                                     <Trash2 className="h-3 w-3" />
@@ -1186,7 +1186,7 @@ export function ClientsChatView({
                                 toast.error("שגיאה בהסרת קמפיינר");
                               } else {
                                 toast.success("הקמפיינר הוסר");
-                                queryClient.invalidateQueries({ queryKey: ["clients"] });
+                                queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
                               }
                             }}
                           />
@@ -1216,7 +1216,7 @@ export function ClientsChatView({
                                     toast.error("שגיאה בשיוך קמפיינר");
                                   } else {
                                     toast.success("הקמפיינר שויך בהצלחה");
-                                    queryClient.invalidateQueries({ queryKey: ["clients"] });
+                                    queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
                                   }
                                 }}
                               >
@@ -1235,7 +1235,7 @@ export function ClientsChatView({
                   </div>
 
                   {/* ── CRM Settings ──────────────────────────────────────────── */}
-                  <CRMSettingsSection client={selectedClient} onUpdate={() => queryClient.invalidateQueries({ queryKey: ["clients"] })} />
+                  <CRMSettingsSection client={selectedClient} onUpdate={() => queryClient.invalidateQueries({ queryKey: ["clients", tenantId] })} />
 
                 </TabsContent>
 
@@ -1332,7 +1332,7 @@ export function ClientsChatView({
                         clientId={selectedClient.id}
                         clientName={selectedClient.name || "לקוח"}
                         onSuccess={() => {
-                          queryClient.invalidateQueries({ queryKey: ["clients"] });
+                          queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
                         }}
                       />
                     </div>

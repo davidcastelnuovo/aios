@@ -125,10 +125,10 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["comm-log-latest", clientId] });
-      queryClient.invalidateQueries({ queryKey: ["communication-logs-latest"] });
-      queryClient.invalidateQueries({ queryKey: ["comm-logs-agency"] });
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
-      queryClient.invalidateQueries({ queryKey: ["clients-chat"] });
+      queryClient.invalidateQueries({ queryKey: ["communication-logs-latest", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["comm-logs-agency", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["clients-chat", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["client", clientId] });
       toast.success("מצב לקוח עודכן");
     },
