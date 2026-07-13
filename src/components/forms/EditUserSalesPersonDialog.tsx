@@ -122,9 +122,9 @@ export function EditUserSalesPersonDialog({
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
+      queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["user-sales-person", userId] });
-      queryClient.invalidateQueries({ queryKey: ["sales-people-all"] });
+      queryClient.invalidateQueries({ queryKey: ["sales-people-all", tenantId] });
       toast.success("איש מכירות עודכן בהצלחה");
       onClose();
     },

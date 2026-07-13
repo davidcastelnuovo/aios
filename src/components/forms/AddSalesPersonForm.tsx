@@ -134,7 +134,7 @@ export function AddSalesPersonForm() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sales-people"] });
+      queryClient.invalidateQueries({ queryKey: ["sales-people", tenantId] });
       toast({
         title: "איש מכירות נוסף בהצלחה",
       });

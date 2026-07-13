@@ -185,7 +185,7 @@ export function AddClientForm() {
     },
     onSuccess: () => {
       toast.success("הלקוח נוסף בהצלחה");
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
       form.reset();
       setAdditionalContacts([]);
       setOpen(false);

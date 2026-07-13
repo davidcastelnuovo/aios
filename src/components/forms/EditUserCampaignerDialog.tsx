@@ -132,8 +132,8 @@ export function EditUserCampaignerDialog({
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
-      await queryClient.invalidateQueries({ queryKey: ["user-campaigner"] });
-      await queryClient.invalidateQueries({ queryKey: ["campaigners"] });
+      await queryClient.invalidateQueries({ queryKey: ["user-campaigner", tenantId] });
+      await queryClient.invalidateQueries({ queryKey: ["campaigners", tenantId] });
       await queryClient.refetchQueries({ queryKey: ["users-with-roles", tenantId] });
       toast.success("איש הצוות המשויך עודכן בהצלחה");
       onOpenChange(false);

@@ -157,7 +157,7 @@ export function EditUserAgenciesDialog({
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
+      queryClient.invalidateQueries({ queryKey: ["users-with-roles", currentTenant?.id] });
       queryClient.invalidateQueries({ queryKey: ["user-agencies", userId] });
       toast.success("הסוכנויות עודכנו בהצלחה");
       onOpenChange(false);

@@ -82,7 +82,7 @@ export function AddAgencyForm() {
     },
     onSuccess: () => {
       toast.success(`${t('agency')} נוספה בהצלחה`);
-      queryClient.invalidateQueries({ queryKey: ["agencies"] });
+      queryClient.invalidateQueries({ queryKey: ["agencies", tenantId] });
       form.reset();
       setOpen(false);
     },
