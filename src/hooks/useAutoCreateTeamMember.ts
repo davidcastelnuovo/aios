@@ -79,10 +79,10 @@ export function useAutoCreateTeamMember() {
       return campaigner;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["campaigners"] });
-      queryClient.invalidateQueries({ queryKey: ["campaigner_agencies"] });
-      queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
-      queryClient.invalidateQueries({ queryKey: ["user-campaigner"] });
+      queryClient.invalidateQueries({ queryKey: ["campaigners", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["campaigner_agencies", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["user-campaigner", tenantId] });
       toast.success("איש צוות נוצר ושויך למשתמש בהצלחה");
     },
     onError: (error: Error) => {
@@ -125,9 +125,9 @@ export function useAutoCreateTeamMember() {
       return salesPerson;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sales-people"] });
-      queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
-      queryClient.invalidateQueries({ queryKey: ["user-sales-person"] });
+      queryClient.invalidateQueries({ queryKey: ["sales-people", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["user-sales-person", tenantId] });
       toast.success("איש מכירות נוצר ושויך למשתמש בהצלחה");
     },
     onError: (error: Error) => {

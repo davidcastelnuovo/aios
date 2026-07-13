@@ -483,7 +483,7 @@ export default function AgentTasksPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["heartbeat_settings"] });
+      queryClient.invalidateQueries({ queryKey: ["heartbeat_settings", tenantId] });
       toast.success("הגדרות Heartbeat נשמרו");
     },
     onError: () => toast.error("שגיאה בשמירת הגדרות"),

@@ -180,7 +180,7 @@ export function useBroadcastLists() {
   // ── Auto-add rules ──
   const useRules = (listId: string | undefined) =>
     useQuery({
-      queryKey: ["broadcast-list-rules", listId],
+      queryKey: ["broadcast-list-rules", tenantId, listId],
       enabled: !!listId,
       queryFn: async (): Promise<ListRule[]> => {
         const { data, error } = await supabase.from("broadcast_list_rules").select("*").eq("list_id", listId);
@@ -196,7 +196,7 @@ export function useBroadcastLists() {
       });
       if (error) throw error;
     },
-    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ["broadcast-list-rules", v.listId] }),
+    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ["broadcast-list-rules", tenantId, v.listId] }),
   });
 
   const deleteRule = useMutation({
@@ -204,7 +204,7 @@ export function useBroadcastLists() {
       const { error } = await supabase.from("broadcast_list_rules").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ["broadcast-list-rules", v.listId] }),
+    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ["broadcast-list-rules", tenantId, v.listId] }),
   });
 
   return {

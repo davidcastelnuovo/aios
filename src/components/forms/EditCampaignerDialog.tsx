@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useTeamRoles } from "@/hooks/useTeamRoles";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 interface EditCampaignerDialogProps {
   campaigner: {
