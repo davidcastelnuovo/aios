@@ -328,3 +328,17 @@ Claude Code health-check skill written to `ai_skills` (scope=tenant, created_by_
 - `maskyoo_settings` — הגדרות API לטננט (base_url + api_token)
 
 **Commits:** see branch `claude/masquio-reports-integration-d006h5`
+
+---
+
+## 2026-07-13 — סקין "מנהלת צוות" (team_manager)
+
+**מה זה:** מענה אישי לכל חבר צוות — שיוך לקוחות (client_team), פרטי קשר (טלפון/אימייל מה-roster), משימות — עם מדיניות פרטיות קשיחה: קמפיינר מקבל מידע רק על הלקוחות המשויכים אליו; לעולם לא נתוני קמפיינר אחר. owner/team_manager רואים הכל. פרטי קשר של חברי צוות מותרים לשיתוף פנימי.
+
+**איך זה עובד:** רוכב על תשתית קיימת בלבד — זיהוי הפונה בפרומפט (callerName/callerRole), ה-roster המוזרק, והאכיפה בקוד (`assertCallerCanAccessClient` + סקופ client_team ב-list_clients/get_client_info/list_tasks). הסקין מוסיף שכבת פרומפט: פרסונה, חוקים קשיחים ופרוצדורה.
+
+**Skin row:** `ai_skills` slug=`team_manager`, scope=tenant (MarketingCaptain). Seed: `supabase/migrations/20260713110000_seed_skin_team_manager.sql`.
+
+**Triggers:** מנהלת צוות / הצוות שלי / מי מטפל ב / מי הקמפיינר של / הלקוחות של / אילו לקוחות משויכים / פרטי קשר של / המייל של / הטלפון של / מי אחראי על
+
+**Tools:** list_campaigners, list_clients, get_client_info, list_tasks, search_tasks, create_task, send_message_to_campaigner, kb_search, kb_open, kb_list_folder
