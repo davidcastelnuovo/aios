@@ -36,6 +36,16 @@ function fmt(n: number, digits = 1): string {
   return Number(n.toFixed(digits)).toString();
 }
 
+// Display the pathname when the URL parses; fall back to the raw string so a
+// malformed URL doesn't crash the whole table.
+function safePathname(url: string): string {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return url;
+  }
+}
+
 function PositionChange({ value }: { value: number | null }) {
   if (value === null || value === undefined) return <span className="text-xs text-muted-foreground">—</span>;
   // Round to 1 decimal to avoid floating-point noise like 0.3999999999999999
@@ -107,8 +117,19 @@ function KeywordRow({ kw, show3Month, showYearly, showPrevMonth, showGsc }: { kw
       <td className="p-3 text-center">{kw.traffic != null ? Number(kw.traffic).toLocaleString() : '—'}</td>
       <td className="p-3 text-center">{kw.volume != null ? Number(kw.volume).toLocaleString() : '—'}</td>
 
-      <td className="p-3 text-right text-xs max-w-[200px] truncate text-muted-foreground" title={kw.url}>
-        {kw.url ? new URL(kw.url).pathname : '—'}
+      <td className="p-3 text-right text-xs max-w-[200px] truncate" title={kw.url}>
+        {kw.url ? (
+          <a
+            href={kw.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            dir="ltr"
+            className="text-primary hover:underline"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {safePathname(kw.url)}
+          </a>
+        ) : <span className="text-muted-foreground">—</span>}
       </td>
     </tr>
   );
