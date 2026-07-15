@@ -48,11 +48,14 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
     ? allIntegrations.find(i => i.id === selectedIntegrationId) || allIntegrations[0] || null
     : allIntegrations[0] || null;
 
-  // Fetch properties (direct API)
-  const { data: properties, isLoading: propertiesLoading } = useQuery({
+  // Fetch properties (direct API). Keep the full response — the function
+  // returns needs_reconnect/reason when the connection's Google token is
+  // revoked or the API errors, and we must surface that instead of showing
+  // an empty "no results" list.
+  const { data: propertiesResponse, isLoading: propertiesLoading } = useQuery({
     queryKey: ['ga-properties', integration?.id],
     queryFn: async () => {
-      if (!integration) return [];
+      if (!integration) return null;
 
       const { data, error } = await supabase.functions.invoke('google-analytics-auth?action=get_properties', {
         body: {
@@ -61,10 +64,25 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
       });
 
       if (error) throw error;
-      return (data?.properties || []) as GAProperty[];
+      return data as {
+        properties?: GAProperty[];
+        needs_reconnect?: boolean;
+        owner_email?: string | null;
+        reason?: string;
+        error_detail?: string;
+      };
     },
     enabled: !!integration,
   });
+
+  const properties = (propertiesResponse?.properties || []) as GAProperty[];
+  const connectionProblem = propertiesResponse?.needs_reconnect
+    ? {
+        ownerEmail: propertiesResponse.owner_email || (integration?.settings as any)?.google_email || '',
+        reason: propertiesResponse.reason || '',
+        detail: propertiesResponse.error_detail || '',
+      }
+    : null;
 
   // Fetch agencies
   const { data: agencies } = useQuery({
@@ -239,6 +257,24 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
                   </div>
                 )}
 
+                {connectionProblem && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription className="space-y-1">
+                      <div>
+                        החיבור {connectionProblem.ownerEmail ? `של ${connectionProblem.ownerEmail} ` : ''}דורש התחברות מחדש ל-Google —
+                        {' '}ההרשאה פגה או נשללה, ולכן לא ניתן למשוך את רשימת הנכסים.
+                      </div>
+                      <div className="text-xs">
+                        {(integration as any)?._isOwn
+                          ? 'עבור להגדרות Google Analytics והתחבר מחדש.'
+                          : `בעל/ת החיבור (${(integration as any)?._sharedByName || connectionProblem.ownerEmail || 'המשתמש שחיבר'}) צריך/ה להתחבר מחדש בהגדרות Google Analytics.`}
+                        {connectionProblem.detail ? ` (${connectionProblem.detail})` : ''}
+                      </div>
+                    </AlertDescription>
+                  </Alert>
+                )}
+
                 <div className="space-y-2">
                   <Label>שם הטבלה *</Label>
                   <Input
@@ -270,7 +306,7 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
                       </div>
                       {filteredProperties.length === 0 ? (
                         <div className="text-center py-4 text-muted-foreground text-sm">
-                          לא נמצאו תוצאות
+                          {connectionProblem ? 'החיבור דורש התחברות מחדש — ראה הודעה למעלה' : 'לא נמצאו תוצאות'}
                         </div>
                       ) : (
                         filteredProperties.map((prop) => (
