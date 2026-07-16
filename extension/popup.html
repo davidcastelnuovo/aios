@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <title>AIOS Meeting Recorder</title>
+  <link rel="stylesheet" href="/src/styles.css" />
+</head>
+<body class="popup">
+  <header class="header">
+    <div class="logo">AIOS</div>
+    <div class="subtitle">מקליט פגישות</div>
+  </header>
+
+  <main id="app">
+    <div id="loading" class="state">
+      <div class="spinner"></div>
+      <div>טוען...</div>
+    </div>
+
+    <form id="login" class="state hidden">
+      <label>אימייל
+        <input type="email" id="login-email" autocomplete="username" required dir="ltr" />
+      </label>
+      <label>סיסמה
+        <input type="password" id="login-password" autocomplete="current-password" required dir="ltr" />
+      </label>
+      <button type="submit" class="btn primary" id="login-btn">התחברות</button>
+      <div id="login-error" class="error hidden"></div>
+    </form>
+
+    <div id="main" class="state hidden">
+      <label>ארגון
+        <select id="tenant-select"></select>
+      </label>
+      <label>לקוח (אופציונלי)
+        <select id="client-select">
+          <option value="">— ללא שיוך —</option>
+        </select>
+      </label>
+      <label>נושא הפגישה (אופציונלי)
+        <input type="text" id="topic-input" placeholder="למשל: פגישת אפיון עם הלקוח" />
+      </label>
+      <label class="checkbox">
+        <input type="checkbox" id="audio-only" />
+        אודיו בלבד (ללא וידאו — קובץ קטן משמעותית)
+      </label>
+      <button class="btn primary" id="start-btn">🎬 התחל הקלטה</button>
+      <div id="main-error" class="error hidden"></div>
+      <div class="footer">
+        <span id="user-email" dir="ltr"></span>
+        <button class="link" id="logout-btn">התנתקות</button>
+      </div>
+    </div>
+  </main>
+
+  <script type="module" src="/src/popup.ts"></script>
+</body>
+</html>

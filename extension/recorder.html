@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <title>AIOS — הקלטת פגישה</title>
+  <link rel="stylesheet" href="/src/styles.css" />
+</head>
+<body class="recorder">
+  <header class="header">
+    <div class="logo">AIOS</div>
+    <div class="subtitle">הקלטת פגישה</div>
+  </header>
+
+  <main>
+    <div class="state">
+      <div class="rec-info">
+        <div>נושא: <b id="info-topic">—</b></div>
+        <div>לקוח: <b id="info-client">—</b></div>
+        <div id="info-mode" class="hidden">🎙️ מצב אודיו בלבד</div>
+      </div>
+
+      <div class="timer" id="timer">00:00</div>
+
+      <button class="btn primary" id="start-btn">🖥️ בחר מסך והתחל הקלטה</button>
+      <button class="btn danger hidden" id="stop-btn">⏹️ עצור הקלטה והעלה</button>
+
+      <div class="progress hidden" id="progress"><div id="progress-bar"></div></div>
+      <div class="status" id="status"></div>
+    </div>
+  </main>
+
+  <script type="module" src="/src/recorder.ts"></script>
+</body>
+</html>

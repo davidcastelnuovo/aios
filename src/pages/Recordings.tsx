@@ -24,7 +24,7 @@ export default function Recordings() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<"all" | "client" | "lead" | "unassigned">("all");
-  const [filterSource, setFilterSource] = useState<"all" | "zoom" | "manual">("all");
+  const [filterSource, setFilterSource] = useState<"all" | "zoom" | "manual" | "chrome_extension">("all");
   const [fetchFromDate, setFetchFromDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 30);
@@ -254,6 +254,7 @@ export default function Recordings() {
     switch (source) {
       case 'zoom': return 'Zoom';
       case 'manual': return 'העלאה ידנית';
+      case 'chrome_extension': return 'הקלטת מסך';
       case 'google_meet': return 'Google Meet';
       default: return source || 'Zoom';
     }
@@ -462,6 +463,7 @@ export default function Recordings() {
                 <SelectItem value="all">כל המקורות</SelectItem>
                 <SelectItem value="zoom">Zoom</SelectItem>
                 <SelectItem value="manual">העלאה ידנית</SelectItem>
+                <SelectItem value="chrome_extension">הקלטת מסך</SelectItem>
               </SelectContent>
             </Select>
             <Select value={filterType} onValueChange={(val: any) => setFilterType(val)}>
@@ -691,7 +693,7 @@ export default function Recordings() {
                                   onClick={() => {
                                     const allIds = rec._group?.map((r: any) => r.id) || [rec.id];
                                     const filePaths = (rec._group || [rec])
-                                      .map((r: any) => r.file_path)
+                                      .flatMap((r: any) => [r.file_path, r.audio_file_path])
                                       .filter(Boolean);
                                     deleteMutation.mutate({ recordingIds: allIds, filePaths });
                                   }}

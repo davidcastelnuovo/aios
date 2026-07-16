@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import ChatViewComponent from "@/components/chat/ChatView";
-import { User, Phone, PhoneCall, Building2, Clock, Search, Mail, Globe, CheckSquare, Trash2, MessageSquare, FileText, DollarSign, X, Edit, Pencil, Check, Users, Plus, UserPlus, BarChart3, FolderOpen, Link, KeyRound, Calendar as CalendarIcon, Copy, Loader2 } from "lucide-react";
+import { User, Phone, PhoneCall, Building2, Clock, Search, Mail, Globe, CheckSquare, Trash2, MessageSquare, FileText, DollarSign, X, Edit, Pencil, Check, Users, Plus, UserPlus, BarChart3, FolderOpen, Link, KeyRound, Calendar as CalendarIcon, Copy, Loader2, Video } from "lucide-react";
 import { DuplicateClientDialog } from "@/components/forms/DuplicateClientDialog";
 import { CreateOrgForClientDialog } from "@/components/clients/CreateOrgForClientDialog";
 import { AssignPhoneFromWhatsAppDialog } from "@/components/chat/AssignPhoneFromWhatsAppDialog";
@@ -30,6 +30,7 @@ import { FolderLinksField } from "@/components/forms/FolderLinksField";
 import { AttachmentsField } from "@/components/forms/AttachmentsField";
 import { useFolderLinksAndAttachments } from "@/hooks/useFolderLinksAndAttachments";
 import { ClientMeetingTab } from "@/components/clients/ClientMeetingTab";
+import { ClientRecordingsTab } from "@/components/clients/ClientRecordingsTab";
 import { CRMSettingsSection } from "@/components/clients/CRMSettingsSection";
 import { ChangeAgencyDialog } from "@/components/chat/ChangeAgencyDialog";
 import AddTaskForm from "@/components/forms/AddTaskForm";
@@ -847,7 +848,7 @@ export function ClientsChatView({
 
             {/* Detail tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0 flex flex-col overflow-hidden">
-              <TabsList className={cn("mx-4 mt-3 grid w-auto max-w-4xl h-9 bg-muted/50 mr-4 ml-auto", canViewFinance ? "grid-cols-11" : "grid-cols-10")}>
+              <TabsList className={cn("mx-4 mt-3 grid w-auto max-w-4xl h-9 bg-muted/50 mr-4 ml-auto", canViewFinance ? "grid-cols-12" : "grid-cols-11")}>
                 <TabsTrigger value="details" className="text-xs gap-1">
                   <FileText className="h-3.5 w-3.5" />
                   פרטי לקוח
@@ -873,6 +874,10 @@ export function ClientsChatView({
                 <TabsTrigger value="meeting" className="text-xs gap-1">
                   <CalendarIcon className="h-3.5 w-3.5" />
                   פגישה
+                </TabsTrigger>
+                <TabsTrigger value="recordings" className="text-xs gap-1">
+                  <Video className="h-3.5 w-3.5" />
+                  הקלטות
                 </TabsTrigger>
                 <TabsTrigger value="report" className="text-xs gap-1">
                   <BarChart3 className="h-3.5 w-3.5" />
@@ -1278,6 +1283,10 @@ export function ClientsChatView({
 
                 <TabsContent value="meeting" className="mt-0">
                   <ClientMeetingTab client={selectedClient} tenantId={tenantId} />
+                </TabsContent>
+
+                <TabsContent value="recordings" className="mt-0">
+                  <ClientRecordingsTab clientId={selectedClient.id} tenantId={tenantId} />
                 </TabsContent>
 
                 <TabsContent value="report" className="mt-0">
