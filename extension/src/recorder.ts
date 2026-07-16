@@ -9,9 +9,13 @@ const clientName = params.get("clientName") || "";
 const topic = params.get("topic") || "";
 const audioOnly = params.get("audioOnly") === "1";
 
-// The transcription track is rotated into standalone hour-long webm files so
-// every part stays far below Whisper's 25MB/request cap (32kbps ≈ 14MB/hour).
-const SEGMENT_MS = 60 * 60 * 1000;
+// Transcription audio is recorded as TWO separate channels — the mic (the
+// recording user) and system/tab audio (everyone else) — so speaker
+// attribution is physical, not guessed. Each channel rotates into a
+// standalone webm part every 10 minutes and is uploaded DURING the meeting:
+// a crash loses at most the last few minutes, and transcription of all parts
+// runs in parallel the moment the meeting ends.
+const SEGMENT_MS = 10 * 60 * 1000;
 
 const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const startBtn = el<HTMLButtonElement>("start-btn");
@@ -29,17 +33,26 @@ let displayStream: MediaStream | null = null;
 let micStream: MediaStream | null = null;
 let audioContext: AudioContext | null = null;
 
-// Continuous recorder for playback: screen video (or full audio in audio-only mode).
+// Continuous recorder for playback: screen video (or full mixed audio in audio-only mode).
 let archiveRecorder: MediaRecorder | null = null;
 const archiveChunks: Blob[] = [];
 
-// Rotating low-bitrate audio recorder for transcription.
-let segmentRecorder: MediaRecorder | null = null;
-let segmentChunks: Blob[] = [];
-const audioPartBlobs: Blob[] = [];
+interface Channel {
+  name: "mic" | "sys";
+  stream: MediaStream;
+  recorder: MediaRecorder | null;
+  chunks: Blob[];
+  partNum: number;
+}
+
+const channels: Channel[] = [];
 let segmentTimer: number | undefined;
 let audioMime: string | undefined;
-let mixedAudioStream: MediaStream | null = null;
+
+let recordingId: string | null = null;
+const uploadedPartPaths: string[] = [];
+const failedParts: { path: string; blob: Blob }[] = [];
+const pendingUploads: Promise<void>[] = [];
 
 let startedAt = 0;
 let timerInterval: number | undefined;
@@ -64,22 +77,87 @@ function pickMimeType(candidates: string[]): string | undefined {
   return candidates.find((t) => MediaRecorder.isTypeSupported(t));
 }
 
-function startSegmentRecorder() {
-  if (!mixedAudioStream) return;
-  segmentChunks = [];
-  segmentRecorder = new MediaRecorder(mixedAudioStream, {
+async function uploadWithRetry(path: string, blob: Blob, contentType: string, attempts = 3): Promise<void> {
+  let lastError: unknown;
+  for (let i = 0; i < attempts; i++) {
+    const { error } = await supabase.storage.from("recordings").upload(path, blob, {
+      contentType,
+      upsert: true,
+    });
+    if (!error) return;
+    lastError = error;
+    console.error(`upload attempt ${i + 1} failed for ${path}:`, error);
+    await new Promise((r) => setTimeout(r, 2000 * (i + 1)));
+  }
+  throw lastError instanceof Error ? lastError : new Error(String((lastError as { message?: string })?.message ?? lastError));
+}
+
+// Progressive save: called for every finished segment, during the meeting.
+function uploadPart(channel: "mic" | "sys", partNum: number, blob: Blob) {
+  const path = `${tenantId}/${startedAt}_${channel}_part${partNum}.webm`;
+  const job = (async () => {
+    try {
+      await uploadWithRetry(path, blob, "audio/webm");
+      uploadedPartPaths.push(path);
+      if (recordingId) {
+        await supabase
+          .from("zoom_recordings")
+          .update({ audio_file_paths: [...uploadedPartPaths].sort() })
+          .eq("id", recordingId);
+      }
+      if (recording) {
+        setStatus(`☁️ ${uploadedPartPaths.length} קטעים נשמרו בענן — ההקלטה מוגנת`, true);
+      }
+    } catch (err) {
+      console.error(`part upload failed, will retry at stop: ${path}`, err);
+      failedParts.push({ path, blob });
+    }
+  })();
+  pendingUploads.push(job);
+}
+
+function startChannelRecorder(channel: Channel) {
+  channel.chunks = [];
+  channel.recorder = new MediaRecorder(channel.stream, {
     mimeType: audioMime,
     audioBitsPerSecond: 32_000,
   });
-  segmentRecorder.ondataavailable = (e) => { if (e.data.size > 0) segmentChunks.push(e.data); };
-  // Runs before stopRecorder's promise resolves, so parts land in order.
-  segmentRecorder.onstop = () => {
-    if (segmentChunks.length > 0) {
-      audioPartBlobs.push(new Blob(segmentChunks, { type: "audio/webm" }));
+  channel.recorder.ondataavailable = (e) => { if (e.data.size > 0) channel.chunks.push(e.data); };
+  // Fires on rotation and on final stop — ship the finished part right away.
+  channel.recorder.onstop = () => {
+    if (channel.chunks.length > 0) {
+      channel.partNum += 1;
+      uploadPart(channel.name, channel.partNum, new Blob(channel.chunks, { type: "audio/webm" }));
     }
-    segmentChunks = [];
+    channel.chunks = [];
   };
-  segmentRecorder.start(1000);
+  channel.recorder.start(1000);
+}
+
+// Register the recording in AIOS as soon as it starts, so segments uploaded
+// mid-meeting are attached to a row even if the browser crashes before "stop".
+async function createRecordingRow(): Promise<void> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return;
+  const { data, error } = await supabase
+    .from("zoom_recordings")
+    .insert({
+      tenant_id: tenantId,
+      meeting_id: `ext_${startedAt}`,
+      meeting_topic: topic || `הקלטת פגישה ${new Date(startedAt).toLocaleDateString("he-IL")}`,
+      recording_type: audioOnly ? "audio_only" : "screen_capture",
+      start_time: new Date(startedAt).toISOString(),
+      source: "chrome_extension",
+      client_id: clientId,
+      host_email: session.user.email ?? null,
+    })
+    .select("id")
+    .single();
+  if (error || !data) {
+    console.error("early row insert failed (will insert at stop):", error);
+    return;
+  }
+  recordingId = data.id;
 }
 
 async function startRecording() {
@@ -104,27 +182,30 @@ async function startRecording() {
     setStatus("⚠️ אין גישה למיקרופון — מוקלט אודיו מערכת בלבד");
   }
 
-  // Mix system audio + mic into a single track.
+  const sysTracks = displayStream.getAudioTracks();
+  const micTracks = micStream?.getAudioTracks() ?? [];
+
+  // Mixed track for the playback recording only (transcription uses the raw channels).
   audioContext = new AudioContext();
   const destination = audioContext.createMediaStreamDestination();
-  if (displayStream.getAudioTracks().length > 0) {
-    audioContext.createMediaStreamSource(new MediaStream(displayStream.getAudioTracks())).connect(destination);
+  if (sysTracks.length > 0) {
+    audioContext.createMediaStreamSource(new MediaStream(sysTracks)).connect(destination);
   }
-  if (micStream && micStream.getAudioTracks().length > 0) {
-    audioContext.createMediaStreamSource(micStream).connect(destination);
+  if (micTracks.length > 0) {
+    audioContext.createMediaStreamSource(new MediaStream(micTracks)).connect(destination);
   }
-  const mixedAudioTracks = destination.stream.getAudioTracks();
-  mixedAudioStream = mixedAudioTracks.length > 0 ? new MediaStream(mixedAudioTracks) : null;
-  if (!mixedAudioStream && !audioOnly) {
+  const mixedTracks = destination.stream.getAudioTracks();
+  if (mixedTracks.length === 0 && !audioOnly) {
     setStatus("⚠️ אין מקור אודיו — מוקלט וידאו בלבד");
   }
 
   audioMime = pickMimeType(["audio/webm;codecs=opus", "audio/webm"]);
+  startedAt = Date.now();
 
-  // Playback recording: full video, or continuous audio in audio-only mode.
+  // Playback recording: full video, or continuous mixed audio in audio-only mode.
   if (!audioOnly) {
     const videoMime = pickMimeType(["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"]);
-    const archiveStream = new MediaStream([...displayStream.getVideoTracks(), ...mixedAudioTracks]);
+    const archiveStream = new MediaStream([...displayStream.getVideoTracks(), ...mixedTracks]);
     archiveRecorder = new MediaRecorder(archiveStream, {
       mimeType: videoMime,
       videoBitsPerSecond: 1_000_000,
@@ -132,8 +213,8 @@ async function startRecording() {
     });
     archiveRecorder.ondataavailable = (e) => { if (e.data.size > 0) archiveChunks.push(e.data); };
     archiveRecorder.start(1000);
-  } else if (mixedAudioStream) {
-    archiveRecorder = new MediaRecorder(mixedAudioStream, {
+  } else if (mixedTracks.length > 0) {
+    archiveRecorder = new MediaRecorder(new MediaStream(mixedTracks), {
       mimeType: audioMime,
       audioBitsPerSecond: 32_000,
     });
@@ -141,17 +222,25 @@ async function startRecording() {
     archiveRecorder.start(1000);
   }
 
-  // Transcription recording: rotated hourly into standalone parts.
-  if (mixedAudioStream) {
-    startSegmentRecorder();
+  // Transcription channels — separate mic and system recorders, rotated together.
+  if (micTracks.length > 0) {
+    channels.push({ name: "mic", stream: new MediaStream(micTracks), recorder: null, chunks: [], partNum: 0 });
+  }
+  if (sysTracks.length > 0) {
+    channels.push({ name: "sys", stream: new MediaStream(sysTracks), recorder: null, chunks: [], partNum: 0 });
+  }
+  for (const channel of channels) startChannelRecorder(channel);
+  if (channels.length > 0) {
     segmentTimer = window.setInterval(() => {
-      if (!recording || !segmentRecorder) return;
-      segmentRecorder.stop(); // onstop pushes the finished part
-      startSegmentRecorder();
+      if (!recording) return;
+      for (const channel of channels) {
+        channel.recorder?.stop(); // onstop uploads the finished part
+        startChannelRecorder(channel);
+      }
     }, SEGMENT_MS);
   }
 
-  if (!archiveRecorder && !segmentRecorder) {
+  if (!archiveRecorder && channels.length === 0) {
     setStatus("אין מה להקליט — לא נמצא מקור וידאו או אודיו");
     cleanupStreams();
     startBtn.disabled = false;
@@ -159,7 +248,6 @@ async function startRecording() {
   }
 
   recording = true;
-  startedAt = Date.now();
   startBtn.classList.add("hidden");
   stopBtn.classList.remove("hidden");
   timerEl.classList.add("recording");
@@ -167,6 +255,8 @@ async function startRecording() {
   timerInterval = window.setInterval(() => {
     timerEl.innerHTML = `${formatElapsed(Date.now() - startedAt)}<span class="rec-dot"></span>`;
   }, 1000);
+
+  void createRecordingRow();
 
   // Stop when the user clicks Chrome's native "Stop sharing" bar.
   displayStream.getVideoTracks()[0]?.addEventListener("ended", () => {
@@ -187,23 +277,7 @@ function cleanupStreams() {
   micStream?.getTracks().forEach((t) => t.stop());
   audioContext?.close().catch(() => {});
   displayStream = micStream = null;
-  mixedAudioStream = null;
   audioContext = null;
-}
-
-async function uploadWithRetry(path: string, blob: Blob, contentType: string, attempts = 3): Promise<void> {
-  let lastError: unknown;
-  for (let i = 0; i < attempts; i++) {
-    const { error } = await supabase.storage.from("recordings").upload(path, blob, {
-      contentType,
-      upsert: true,
-    });
-    if (!error) return;
-    lastError = error;
-    console.error(`upload attempt ${i + 1} failed:`, error);
-    await new Promise((r) => setTimeout(r, 2000 * (i + 1)));
-  }
-  throw lastError instanceof Error ? lastError : new Error(String((lastError as { message?: string })?.message ?? lastError));
 }
 
 async function stopAndUpload() {
@@ -216,94 +290,99 @@ async function stopAndUpload() {
   timerEl.textContent = formatElapsed(Date.now() - startedAt);
 
   setStatus("עוצר הקלטה...");
-  await Promise.all([stopRecorder(archiveRecorder), stopRecorder(segmentRecorder)]);
+  await Promise.all([
+    stopRecorder(archiveRecorder),
+    ...channels.map((c) => stopRecorder(c.recorder)),
+  ]);
   cleanupStreams();
 
   const durationMinutes = Math.max(1, Math.round((Date.now() - startedAt) / 60000));
-  const ts = Date.now();
   const archiveBlob = archiveChunks.length > 0
     ? new Blob(archiveChunks, { type: audioOnly ? "audio/webm" : "video/webm" })
     : null;
 
-  if (!archiveBlob && audioPartBlobs.length === 0) {
-    setStatus("ההקלטה ריקה — לא הועלה דבר");
-    return;
-  }
-
-  await uploadAndRegister(archiveBlob, [...audioPartBlobs], durationMinutes, ts);
+  await finalizeUpload(archiveBlob, durationMinutes);
 }
 
-async function uploadAndRegister(
-  archiveBlob: Blob | null,
-  audioParts: Blob[],
-  durationMinutes: number,
-  ts: number,
-) {
+async function finalizeUpload(archiveBlob: Blob | null, durationMinutes: number) {
   progressEl.classList.remove("hidden");
+  progressBar.style.width = "10%";
 
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error("פג תוקף ההתחברות — נא להתחבר מחדש בחלונית התוסף");
 
-    const totalUploads = (archiveBlob ? 1 : 0) + audioParts.length;
-    let done = 0;
-    const bump = () => {
-      done += 1;
-      progressBar.style.width = `${Math.round((done / (totalUploads + 1)) * 90)}%`;
-    };
+    // Wait for in-flight segment uploads (incl. the final rotation parts).
+    setStatus("ממתין לסיום שמירת הקטעים...");
+    await Promise.allSettled(pendingUploads);
+    progressBar.style.width = "40%";
+
+    // Retry anything that failed mid-meeting.
+    const retries = failedParts.splice(0, failedParts.length);
+    for (const { path, blob } of retries) {
+      setStatus(`מעלה מחדש קטע שנכשל...`);
+      await uploadWithRetry(path, blob, "audio/webm");
+      uploadedPartPaths.push(path);
+    }
+
+    if (!archiveBlob && uploadedPartPaths.length === 0) {
+      setStatus("ההקלטה ריקה — לא הועלה דבר");
+      return;
+    }
 
     let filePath: string | null = null;
     if (archiveBlob) {
       setStatus(`מעלה ${audioOnly ? "אודיו" : "וידאו"} (${(archiveBlob.size / 1024 / 1024).toFixed(1)}MB)...`);
-      filePath = `${tenantId}/${ts}.webm`;
+      filePath = `${tenantId}/${startedAt}.webm`;
       await uploadWithRetry(filePath, archiveBlob, archiveBlob.type);
-      bump();
+    } else if (uploadedPartPaths.length > 0) {
+      filePath = [...uploadedPartPaths].sort()[0];
     }
-
-    const audioPartPaths: string[] = [];
-    for (let i = 0; i < audioParts.length; i++) {
-      setStatus(`מעלה אודיו לתמלול — קטע ${i + 1}/${audioParts.length} (${(audioParts[i].size / 1024 / 1024).toFixed(1)}MB)...`);
-      const partPath = `${tenantId}/${ts}_audio_part${i + 1}.webm`;
-      await uploadWithRetry(partPath, audioParts[i], "audio/webm");
-      audioPartPaths.push(partPath);
-      bump();
-    }
-
-    // No separate playback file (shouldn't happen) — fall back to the first part.
-    if (!filePath && audioPartPaths.length > 0) {
-      filePath = audioPartPaths[0];
-    }
+    progressBar.style.width = "75%";
 
     setStatus("רושם את ההקלטה במערכת...");
+    const finalPaths = [...uploadedPartPaths].sort();
+    const rowData = {
+      duration: durationMinutes,
+      file_path: filePath,
+      audio_file_paths: finalPaths.length > 0 ? finalPaths : null,
+      file_size: (archiveBlob?.size ?? 0),
+    };
 
-    const { data: inserted, error: insertError } = await supabase
-      .from("zoom_recordings")
-      .insert({
-        tenant_id: tenantId,
-        meeting_id: `ext_${ts}`,
-        meeting_topic: topic || `הקלטת פגישה ${new Date(startedAt).toLocaleDateString("he-IL")}`,
-        recording_type: audioOnly ? "audio_only" : "screen_capture",
-        start_time: new Date(startedAt).toISOString(),
-        duration: durationMinutes,
-        source: "chrome_extension",
-        file_path: filePath,
-        audio_file_paths: audioPartPaths.length > 0 ? audioPartPaths : null,
-        file_size: (archiveBlob?.size ?? 0) + audioParts.reduce((sum, b) => sum + b.size, 0),
-        client_id: clientId,
-        host_email: session.user.email ?? null,
-      })
-      .select("id")
-      .single();
-
-    if (insertError || !inserted) {
-      throw new Error("שגיאה ברישום ההקלטה: " + (insertError?.message ?? "unknown"));
+    if (recordingId) {
+      const { error: updateError } = await supabase
+        .from("zoom_recordings")
+        .update(rowData)
+        .eq("id", recordingId);
+      if (updateError) throw new Error("שגיאה בעדכון ההקלטה: " + updateError.message);
+    } else {
+      // Early insert failed at start — create the row now.
+      const { data: inserted, error: insertError } = await supabase
+        .from("zoom_recordings")
+        .insert({
+          tenant_id: tenantId,
+          meeting_id: `ext_${startedAt}`,
+          meeting_topic: topic || `הקלטת פגישה ${new Date(startedAt).toLocaleDateString("he-IL")}`,
+          recording_type: audioOnly ? "audio_only" : "screen_capture",
+          start_time: new Date(startedAt).toISOString(),
+          source: "chrome_extension",
+          client_id: clientId,
+          host_email: session.user.email ?? null,
+          ...rowData,
+        })
+        .select("id")
+        .single();
+      if (insertError || !inserted) {
+        throw new Error("שגיאה ברישום ההקלטה: " + (insertError?.message ?? "unknown"));
+      }
+      recordingId = inserted.id;
     }
 
     setStatus("מפעיל תמלול וסיכום...");
-    progressBar.style.width = "95%";
+    progressBar.style.width = "90%";
 
     const { error: fnError } = await supabase.functions.invoke("ingest-extension-recording", {
-      body: { recording_id: inserted.id },
+      body: { recording_id: recordingId },
     });
     if (fnError) {
       console.error("ingest-extension-recording:", fnError);
@@ -313,7 +392,7 @@ async function uploadAndRegister(
     progressBar.style.width = "100%";
     const recordingsUrl = tenantSlug ? `${APP_ORIGIN}/t/${tenantSlug}/recordings` : APP_ORIGIN;
     statusEl.classList.add("ok");
-    statusEl.innerHTML = `✅ ההקלטה הועלתה ומעובדת ברקע (תמלול${clientId ? " + סיכום + בריף" : ""}).<br/><a href="${recordingsUrl}" target="_blank" rel="noreferrer">פתח את ספריית ההקלטות</a>`;
+    statusEl.innerHTML = `✅ ההקלטה הועלתה ומעובדת ברקע (תמלול עם דוברים${clientId ? " + סיכום + בריף" : ""}).<br/><a href="${recordingsUrl}" target="_blank" rel="noreferrer">פתח את ספריית ההקלטות</a>`;
   } catch (err) {
     console.error(err);
     progressEl.classList.add("hidden");
@@ -324,7 +403,7 @@ async function uploadAndRegister(
     stopBtn.textContent = "נסה להעלות שוב";
     stopBtn.onclick = () => {
       stopBtn.disabled = true;
-      uploadAndRegister(archiveBlob, audioParts, durationMinutes, ts);
+      finalizeUpload(archiveBlob, durationMinutes);
     };
   }
 }
