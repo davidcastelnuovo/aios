@@ -1,7 +1,7 @@
 // redeploy trigger: rebundle _shared/ai.ts OpenAI key fallback (env secret → llm integration)
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { aiDiarizeTranscribe, aiTranscribe, aiTranscribeVerbose } from '../_shared/ai.ts';
+import { aiDiarizeTranscribe, aiTranscribe, aiTranscribeVerbose, aiVisionJSON } from '../_shared/ai.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -267,6 +267,7 @@ async function transcribeChannelParts(supabase: any, recordingId: string, paths:
   // segmented sys parts are skipped (they exist as a crash-safe fallback).
   type TimedSegment = { at: number; channel: string; text: string };
   const sysFullPath = paths.find((p) => /_sys_full\.\w+$/.test(p));
+  const labelOverrides = new Map<string, string>();
   let diarized: TimedSegment[] | null = null;
   if (sysFullPath) {
     const { data: fullBlob, error: fullErr } = await supabase.storage.from('recordings').download(sysFullPath);
@@ -281,6 +282,13 @@ async function transcribeChannelParts(supabase: any, recordingId: string, paths:
         });
         console.log(`🗣️ Diarization: ${speakerOrder.size} speakers, ${segs.length} segments`);
         await touchProcessing(supabase, recordingId);
+        // Best-effort: read real names off sampled screen frames (Zoom/Meet
+        // name labels + active-speaker highlight). Failures keep משתתף N.
+        try {
+          await resolveSpeakerNames(supabase, sysFullPath, segs, speakerOrder, labelOverrides);
+        } catch (nameErr) {
+          console.error('🖼️ Speaker naming failed (non-fatal):', nameErr);
+        }
       } else {
         console.log('🗣️ Diarization unavailable (no ELEVENLABS_API_KEY or Scribe error) — falling back to Whisper on sys parts');
       }
@@ -348,15 +356,83 @@ async function transcribeChannelParts(supabase: any, recordingId: string, paths:
       current.texts.push(seg.text);
     } else {
       if (current) {
-        lines.push(`[${formatClock(current.at)}] ${channelLabel(current.channel)}: ${current.texts.join(' ')}`);
+        lines.push(`[${formatClock(current.at)}] ${labelOverrides.get(current.channel) ?? channelLabel(current.channel)}: ${current.texts.join(' ')}`);
       }
       current = { at: seg.at, channel: seg.channel, texts: [seg.text] };
     }
   }
   if (current) {
-    lines.push(`[${formatClock(current.at)}] ${channelLabel(current.channel)}: ${current.texts.join(' ')}`);
+    lines.push(`[${formatClock(current.at)}] ${labelOverrides.get(current.channel) ?? channelLabel(current.channel)}: ${current.texts.join(' ')}`);
   }
   return lines.join('\n');
+}
+
+// ── Speaker naming from sampled screen frames ─────────────────────────
+// The extension uploads a screenshot every ~60s ({ts}_frame_{sec}.jpg). For
+// each diarized speaker we pick frames captured while they were talking and
+// ask a vision model to read the active-speaker name label (Zoom/Meet
+// highlight). Works when participant tiles are visible; during screen-share
+// stretches there may be no usable frame — the guest keeps its numeric label.
+async function resolveSpeakerNames(
+  supabase: any,
+  sysFullPath: string,
+  segs: { start: number; end: number; speaker: string; text: string }[],
+  speakerOrder: Map<string, number>,
+  overrides: Map<string, string>,
+): Promise<void> {
+  const pathMatch = sysFullPath.match(/^(.+)\/(\d+)_sys_full\.\w+$/);
+  if (!pathMatch) return;
+  const [, folder, ts] = pathMatch;
+
+  const { data: files } = await supabase.storage
+    .from('recordings')
+    .list(folder, { limit: 300, search: `${ts}_frame_` });
+  const frames = (files || [])
+    .map((f: any) => {
+      const fm = String(f.name).match(/_frame_(\d+)\.jpg$/);
+      return fm ? { path: `${folder}/${f.name}`, sec: parseInt(fm[1], 10) } : null;
+    })
+    .filter(Boolean) as { path: string; sec: number }[];
+  if (frames.length === 0) {
+    console.log('🖼️ No sampled frames for this recording — keeping numeric speaker labels');
+    return;
+  }
+
+  for (const [speaker, n] of speakerOrder.entries()) {
+    // Longest utterances first — the speaker highlight is most likely visible.
+    const candidates = segs
+      .filter((s) => s.speaker === speaker && s.end - s.start >= 3)
+      .sort((a, b) => (b.end - b.start) - (a.end - a.start))
+      .slice(0, 8);
+
+    const chosen: { path: string; sec: number }[] = [];
+    for (const seg of candidates) {
+      const inWindow = frames
+        .filter((f) => f.sec >= seg.start - 3 && f.sec <= seg.end + 3)
+        .sort((a, b) => Math.abs(a.sec - (seg.start + seg.end) / 2) - Math.abs(b.sec - (seg.start + seg.end) / 2));
+      const best = inWindow.find((f) => !chosen.some((c) => c.path === f.path));
+      if (best) chosen.push(best);
+      if (chosen.length >= 3) break;
+    }
+    if (chosen.length === 0) continue;
+
+    const blobs: Blob[] = [];
+    for (const frame of chosen) {
+      const { data: blob } = await supabase.storage.from('recordings').download(frame.path);
+      if (blob) blobs.push(blob);
+    }
+    if (blobs.length === 0) continue;
+
+    const result = await aiVisionJSON(
+      `בצילומי המסך האלה מפגישת וידאו (Zoom/Google Meet/Teams), אותו משתתף מדבר בכל התמונות — הוא מסומן כדובר הפעיל (מסגרת צבעונית סביב האריח שלו, או אינדיקציית קול לצד שמו). קרא את תווית השם המוצגת על האריח של הדובר הפעיל. אם לא רואים רשת משתתפים, או שאי אפשר לקבוע בוודאות מי הדובר, החזר null. החזר JSON בלבד: {"name": string | null}`,
+      blobs,
+    );
+    const name = typeof result?.name === 'string' ? result.name.trim() : '';
+    if (name && name.length <= 60) {
+      overrides.set(`guest${n}`, name);
+      console.log(`🖼️ Speaker guest${n} identified as "${name}" (${blobs.length} frames)`);
+    }
+  }
 }
 
 // Bump updated_at while a multi-chunk transcription runs so the UI's

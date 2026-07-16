@@ -170,6 +170,22 @@ export default function Recordings() {
       // Delete files from storage if they exist
       if (filePaths.length > 0) {
         await supabase.storage.from('recordings').remove(filePaths);
+        // Extension recordings also leave sampled screen frames ({ts}_frame_N.jpg)
+        // used for speaker naming — sweep them by the shared timestamp prefix.
+        const framePrefixes = new Set<string>();
+        for (const p of filePaths) {
+          const m = p.match(/^(.+)\/(\d+)(?:_[a-z_0-9]+)?\.webm$/);
+          if (m) framePrefixes.add(`${m[1]}|${m[2]}`);
+        }
+        for (const key of framePrefixes) {
+          const [folder, ts] = key.split('|');
+          const { data: frames } = await supabase.storage
+            .from('recordings')
+            .list(folder, { limit: 300, search: `${ts}_frame_` });
+          if (frames && frames.length > 0) {
+            await supabase.storage.from('recordings').remove(frames.map((f) => `${folder}/${f.name}`));
+          }
+        }
       }
       // Delete from DB
       const { error } = await supabase
