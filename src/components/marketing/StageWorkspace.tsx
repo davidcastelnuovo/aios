@@ -512,12 +512,30 @@ ${itemsSummary ? `פריטי תוכן נוכחיים:\n${itemsSummary}` : ""}
 
   const handleApprove = async (itemId: string) => {
     try {
-      await supabase
+      const { data: stages, error: stagesError } = await supabase
+        .from("marketing_pipeline_stages")
+        .select("id, sort_order")
+        .eq("pipeline_id", pipelineId)
+        .order("sort_order");
+      if (stagesError) throw stagesError;
+
+      const currentIndex = (stages ?? []).findIndex((candidate) => candidate.id === stage.id);
+      const nextStage = currentIndex >= 0 ? stages?.[currentIndex + 1] : null;
+      const update = nextStage
+        ? { current_stage_id: nextStage.id, status: "draft" }
+        : { status: "approved" };
+
+      const { error: updateError } = await supabase
         .from("marketing_work_items")
-        .update({ status: "approved" })
-        .eq("id", itemId);
+        .update(update)
+        .eq("id", itemId)
+        .eq("tenant_id", tenantId);
+      if (updateError) throw updateError;
+
       queryClient.invalidateQueries({ queryKey: ["marketing-items", pipelineId, tenantId] });
-      toast({ title: "הפריט אושר" });
+      toast({
+        title: nextStage ? "הפריט אושר והועבר לשלב הבא" : "הפריט אושר",
+      });
     } catch (e: any) {
       toast({ title: "שגיאה באישור", description: e.message, variant: "destructive" });
     }
