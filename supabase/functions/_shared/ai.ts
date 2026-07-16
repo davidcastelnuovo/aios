@@ -169,6 +169,51 @@ export async function aiTranscribe(
   }
 }
 
+// Timestamped speech-to-text (OpenAI Whisper, verbose_json). Returns per-segment
+// timings so multi-channel recordings can be merged into a speaker timeline.
+// Segments Whisper flags as probable non-speech are dropped — Whisper is known
+// to hallucinate text on silence (e.g. a mostly-quiet mic channel).
+export interface TranscriptSegment {
+  start: number; // seconds within this audio file
+  end: number;
+  text: string;
+}
+
+export async function aiTranscribeVerbose(
+  audio: Blob,
+  opts?: { language?: string; filename?: string },
+): Promise<{ text: string; segments: TranscriptSegment[]; duration: number } | null> {
+  const key = await resolveOpenAIKey();
+  if (!key) return null;
+  try {
+    const form = new FormData();
+    form.append("file", audio, opts?.filename || "audio.ogg");
+    form.append("model", "whisper-1");
+    form.append("language", opts?.language || "he");
+    form.append("response_format", "verbose_json");
+    const r = await fetch(`${OPENAI_BASE}/audio/transcriptions`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${key}` }, // let fetch set the multipart boundary
+      body: form,
+    });
+    if (!r.ok) return null;
+    const j = await r.json();
+    // deno-lint-ignore no-explicit-any
+    const segments: TranscriptSegment[] = (Array.isArray(j?.segments) ? j.segments : [])
+      // deno-lint-ignore no-explicit-any
+      .filter((s: any) => (s?.no_speech_prob ?? 0) < 0.6 && (s?.text ?? "").trim())
+      // deno-lint-ignore no-explicit-any
+      .map((s: any) => ({ start: Number(s.start) || 0, end: Number(s.end) || 0, text: String(s.text).trim() }));
+    return {
+      text: (j?.text ?? "").toString().trim(),
+      segments,
+      duration: Number(j?.duration) || (segments.length ? segments[segments.length - 1].end : 0),
+    };
+  } catch {
+    return null;
+  }
+}
+
 // OpenAI TTS voices usable for Carmen. 'shimmer'/'nova' read Hebrew well.
 export const AI_VOICES = ["alloy", "echo", "fable", "onyx", "nova", "shimmer", "coral", "sage"] as const;
 

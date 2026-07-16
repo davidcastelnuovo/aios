@@ -1,7 +1,7 @@
 // redeploy trigger: rebundle _shared/ai.ts OpenAI key fallback (env secret → llm integration)
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { aiTranscribe } from '../_shared/ai.ts';
+import { aiTranscribe, aiTranscribeVerbose } from '../_shared/ai.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -83,34 +83,27 @@ serve(async (req) => {
 
     await setTranscriptionStatus(supabase, recording_id, 'processing');
 
-    // Case 0: Pre-segmented transcription audio (long extension recordings) —
-    // each part is a standalone file under the Whisper cap; transcribe in order.
+    // Case 0: Pre-segmented transcription audio (extension recordings) — each
+    // part is a standalone file under the Whisper cap. Mic and system audio are
+    // separate channels (…_mic_partN / …_sys_partN), so speaker attribution is
+    // a physical fact, not a guess: mic = the recording user, sys = everyone else.
     const audioParts: string[] = Array.isArray(recording.audio_file_paths)
       ? recording.audio_file_paths.filter(Boolean)
       : [];
     if (audioParts.length > 0) {
-      const pieces: string[] = [];
-      for (let i = 0; i < audioParts.length; i++) {
-        console.log(`🎙️ Transcribing segment ${i + 1}/${audioParts.length}: ${audioParts[i]}`);
-        const { data: partData, error: partError } = await supabase.storage
-          .from('recordings')
-          .download(audioParts[i]);
-        if (partError || !partData) {
-          const msg = `Failed to download segment ${i + 1}/${audioParts.length}: ${partError?.message || 'unknown'}`;
-          await setTranscriptionStatus(supabase, recording_id, 'failed', undefined, msg);
-          return new Response(JSON.stringify({ error: msg }), {
-            status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-        }
-        pieces.push(await whisperTranscribe(partData, partData.type || 'audio/webm'));
-        // Touch the row between segments so UI stale-detection sees live progress.
-        await touchProcessing(supabase, recording_id);
+      try {
+        const text = await transcribeChannelParts(supabase, recording_id, audioParts);
+        await setTranscriptionStatus(supabase, recording_id, 'completed', text);
+        return new Response(JSON.stringify({ text }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      } catch (segErr) {
+        const msg = segErr instanceof Error ? segErr.message : String(segErr);
+        await setTranscriptionStatus(supabase, recording_id, 'failed', undefined, msg);
+        return new Response(JSON.stringify({ error: msg }), {
+          status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
       }
-      const text = pieces.join('\n\n');
-      await setTranscriptionStatus(supabase, recording_id, 'completed', text);
-      return new Response(JSON.stringify({ text }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
     }
 
     let audioBlob: Blob | null = null;
@@ -231,6 +224,104 @@ async function whisperTranscribe(audioBlob: Blob, contentType: string): Promise<
   const text = await aiTranscribe(audioBlob, { language: 'he', filename: `recording.${ext}` });
   if (!text) throw new Error('Whisper returned empty transcription');
   return text;
+}
+
+// ── Channel-aware segmented transcription ─────────────────────────────
+// Parts follow the extension's naming convention:
+//   {tenant}/{ts}_mic_partN.webm  → the recording user's microphone
+//   {tenant}/{ts}_sys_partN.webm  → system/tab audio (other participants)
+//   {tenant}/{ts}_audio_partN.webm → legacy mixed channel (no speakers)
+// Each channel's parts are consecutive slices of the same timeline; Whisper's
+// verbose_json gives per-segment timings which we shift by the cumulative
+// duration of earlier parts, then interleave channels into a speaker timeline.
+
+const CHANNEL_LABELS: Record<string, string> = { mic: 'מקליט', sys: 'משתתפים' };
+
+function partChannel(path: string): { channel: 'mic' | 'sys' | 'mixed'; part: number } {
+  const m = path.match(/_(mic|sys|audio)_part(\d+)\.\w+$/);
+  if (!m) return { channel: 'mixed', part: 0 };
+  return { channel: m[1] === 'audio' ? 'mixed' : (m[1] as 'mic' | 'sys'), part: parseInt(m[2], 10) };
+}
+
+function formatClock(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const mm = String(m).padStart(2, '0');
+  const ss = String(sec).padStart(2, '0');
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+async function transcribeChannelParts(supabase: any, recordingId: string, paths: string[]): Promise<string> {
+  // Group parts per channel, ordered by part number (fallback: array order).
+  const channels = new Map<string, { path: string; part: number }[]>();
+  paths.forEach((path, i) => {
+    const { channel, part } = partChannel(path);
+    if (!channels.has(channel)) channels.set(channel, []);
+    channels.get(channel)!.push({ path, part: part || i + 1 });
+  });
+  for (const list of channels.values()) list.sort((a, b) => a.part - b.part);
+
+  // Download + transcribe every part in parallel (each is a few MB).
+  type PartResult = { channel: string; part: number; segments: { start: number; end: number; text: string }[]; duration: number };
+  const jobs: Promise<PartResult>[] = [];
+  for (const [channel, list] of channels.entries()) {
+    for (const { path, part } of list) {
+      jobs.push((async () => {
+        const { data: blob, error } = await supabase.storage.from('recordings').download(path);
+        if (error || !blob) throw new Error(`Failed to download segment ${path}: ${error?.message || 'unknown'}`);
+        if (blob.size > WHISPER_MAX_BYTES) throw new Error(`Segment ${path} exceeds 25MB`);
+        console.log(`🎙️ Transcribing ${channel} part ${part} (${(blob.size / 1024 / 1024).toFixed(1)}MB)`);
+        const verbose = await aiTranscribeVerbose(blob, { language: 'he', filename: `part.webm` });
+        if (!verbose) throw new Error(`Whisper failed on segment ${path}`);
+        return { channel, part, segments: verbose.segments, duration: verbose.duration };
+      })());
+    }
+  }
+  const results = await Promise.all(jobs);
+  await touchProcessing(supabase, recordingId);
+
+  // Shift each part's segments by the cumulative duration of earlier parts.
+  type TimedSegment = { at: number; channel: string; text: string };
+  const timeline: TimedSegment[] = [];
+  for (const channel of channels.keys()) {
+    const parts = results.filter((r) => r.channel === channel).sort((a, b) => a.part - b.part);
+    let offset = 0;
+    for (const p of parts) {
+      for (const seg of p.segments) {
+        timeline.push({ at: offset + seg.start, channel, text: seg.text });
+      }
+      offset += p.duration;
+    }
+  }
+
+  if (timeline.length === 0) throw new Error('Whisper returned empty transcription');
+  timeline.sort((a, b) => a.at - b.at);
+
+  // Single mixed channel → plain transcript (legacy behavior, no fake speakers).
+  const hasSpeakers = channels.has('mic') || channels.has('sys');
+  if (!hasSpeakers) {
+    return timeline.map((s) => s.text).join(' ');
+  }
+
+  // Coalesce consecutive same-speaker segments into one line.
+  const lines: string[] = [];
+  let current: { at: number; channel: string; texts: string[] } | null = null;
+  for (const seg of timeline) {
+    if (current && current.channel === seg.channel) {
+      current.texts.push(seg.text);
+    } else {
+      if (current) {
+        lines.push(`[${formatClock(current.at)}] ${CHANNEL_LABELS[current.channel] || current.channel}: ${current.texts.join(' ')}`);
+      }
+      current = { at: seg.at, channel: seg.channel, texts: [seg.text] };
+    }
+  }
+  if (current) {
+    lines.push(`[${formatClock(current.at)}] ${CHANNEL_LABELS[current.channel] || current.channel}: ${current.texts.join(' ')}`);
+  }
+  return lines.join('\n');
 }
 
 // Bump updated_at while a multi-chunk transcription runs so the UI's
