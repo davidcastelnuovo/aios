@@ -108,7 +108,7 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
 
   // Check if Facebook is connected
   const { data: facebookIntegration, isLoading: checkingFacebook } = useQuery({
-    queryKey: ['facebook-integration-status'],
+    queryKey: ['facebook-integration-status', tenantId],
     queryFn: async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return null;
@@ -132,7 +132,7 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
 
   // Fetch ad accounts
   const { data: adAccountsData, isLoading: loadingAdAccounts, error: adAccountsError } = useQuery({
-    queryKey: ['facebook-ad-accounts'],
+    queryKey: ['facebook-ad-accounts', tenantId],
     queryFn: async () => {
       const response = await supabase.functions.invoke('get-facebook-ad-accounts', {
         method: 'GET',

@@ -43,12 +43,13 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
     queryKey: ["all-crm-tables", tenantId],
     queryFn: async () => {
       const response = await supabase.functions.invoke(
-        tenantId ? `crm-tables?tenant_id=${tenantId}` : "crm-tables",
+        `crm-tables?tenant_id=${tenantId}`,
         { method: "GET" }
       );
       if (response.error) throw response.error;
       return Array.isArray(response.data) ? response.data : [];
     },
+    enabled: !!tenantId,
   });
 
   const tables = useMemo(() => allTables.filter((t: any) => t.client_id === clientId), [allTables, clientId]);

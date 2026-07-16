@@ -245,6 +245,7 @@ export default function DynamicTables() {
         // include the client's agency_id so dashboards that have no explicit
         // agency_id but belong to a client in an agency still scope correctly.
         .select('*, clients(name, agency_id), agencies(name)')
+        .eq('tenant_id', tenantId)
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data || [];

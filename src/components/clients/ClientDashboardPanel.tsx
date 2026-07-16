@@ -183,7 +183,7 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
             .eq("dashboard_id", dashboard.id)
             .eq("share_token", existingRow.share_token);
         }
-        queryClient.invalidateQueries({ queryKey: ["dashboard-share-link", dashboard.id, tenantId] });
+        queryClient.invalidateQueries({ queryKey: ["dashboard-share-link", dashboard.id] });
         return existingRow.share_token as string;
       }
 
@@ -202,7 +202,7 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
       if (error) throw error;
       const token = (data as any)?.share_token;
       if (!token) return null;
-      queryClient.invalidateQueries({ queryKey: ["dashboard-share-link", dashboard.id, tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-share-link", dashboard.id] });
       toast.success("נוצר קישור שיתוף חדש");
       return token;
     } catch (err) {

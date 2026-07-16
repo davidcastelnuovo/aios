@@ -146,7 +146,7 @@ export default function RankTrackingProject() {
       toast.success("ביטויים נוספו בהצלחה!");
       setIsAddOpen(false);
       setNewKeywords("");
-      queryClient.invalidateQueries({ queryKey: ["rank-tracking-keywords", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["rank-tracking-keywords", projectId] });
     },
     onError: (error: Error) => {
       toast.error(error.message || "שגיאה בהוספת ביטויים");
@@ -164,7 +164,7 @@ export default function RankTrackingProject() {
     },
     onSuccess: () => {
       toast.success("ביטוי נמחק");
-      queryClient.invalidateQueries({ queryKey: ["rank-tracking-keywords", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["rank-tracking-keywords", projectId] });
     },
     onError: () => {
       toast.error("שגיאה במחיקת ביטוי");
