@@ -6,6 +6,11 @@ interface TenantOption {
   slug: string | null;
 }
 
+interface ClientOption {
+  id: string;
+  name: string;
+}
+
 const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
 const loadingEl = el<HTMLDivElement>("loading");
@@ -13,8 +18,10 @@ const loginEl = el<HTMLFormElement>("login");
 const mainEl = el<HTMLDivElement>("main");
 const loginError = el<HTMLDivElement>("login-error");
 const mainError = el<HTMLDivElement>("main-error");
-const tenantSelect = el<HTMLSelectElement>("tenant-select");
-const clientSelect = el<HTMLSelectElement>("client-select");
+const tenantInput = el<HTMLInputElement>("tenant-input");
+const tenantList = el<HTMLDataListElement>("tenant-list");
+const clientInput = el<HTMLInputElement>("client-input");
+const clientList = el<HTMLDataListElement>("client-list");
 const topicInput = el<HTMLInputElement>("topic-input");
 const audioOnlyCheckbox = el<HTMLInputElement>("audio-only");
 const modeSelect = el<HTMLSelectElement>("mode-select");
@@ -26,6 +33,8 @@ modeSelect.addEventListener("change", () => {
 });
 
 let tenants: TenantOption[] = [];
+let clients: ClientOption[] = [];
+let selectedTenantId: string | null = null;
 
 function show(state: "loading" | "login" | "main") {
   loadingEl.classList.toggle("hidden", state !== "loading");
@@ -37,6 +46,23 @@ function showError(target: HTMLElement, message: string | null) {
   target.classList.toggle("hidden", !message);
   target.textContent = message ?? "";
 }
+
+function fillDatalist(list: HTMLDataListElement, names: string[]) {
+  list.innerHTML = "";
+  for (const name of names) {
+    const opt = document.createElement("option");
+    opt.value = name;
+    list.appendChild(opt);
+  }
+}
+
+const findByName = <T extends { name: string }>(items: T[], typed: string): T | null => {
+  const q = typed.trim();
+  if (!q) return null;
+  return items.find((i) => i.name === q)
+    ?? items.find((i) => i.name.toLowerCase() === q.toLowerCase())
+    ?? null;
+};
 
 async function loadTenants(): Promise<TenantOption[]> {
   const { data, error } = await supabase
@@ -56,26 +82,25 @@ async function loadTenants(): Promise<TenantOption[]> {
 }
 
 async function loadClients(tenantId: string) {
-  clientSelect.innerHTML = '<option value="">— ללא שיוך —</option>';
+  clients = [];
+  fillDatalist(clientList, []);
+  // Only clients the team actually works with — active or onboarding.
   const { data, error } = await supabase
     .from("clients")
-    .select("id, name")
+    .select("id, name, status")
     .eq("tenant_id", tenantId)
+    .in("status", ["active", "onboarding"])
     .order("name");
   if (error) {
     console.error("loadClients:", error);
     return;
   }
-  for (const client of data ?? []) {
-    const opt = document.createElement("option");
-    opt.value = client.id;
-    opt.textContent = client.name;
-    clientSelect.appendChild(opt);
-  }
+  clients = (data ?? []).map((c) => ({ id: c.id, name: c.name }));
+  fillDatalist(clientList, clients.map((c) => c.name));
+
   const { lastClientId } = await chrome.storage.local.get("lastClientId");
-  if (lastClientId && [...clientSelect.options].some((o) => o.value === lastClientId)) {
-    clientSelect.value = lastClientId;
-  }
+  const last = clients.find((c) => c.id === lastClientId);
+  clientInput.value = last?.name ?? "";
 }
 
 // RLS on zoom_recordings/clients resolves the tenant via user_active_tenant
@@ -93,13 +118,25 @@ async function persistActiveTenant(tenantId: string) {
   if (error) console.error("persistActiveTenant:", error);
 }
 
-async function onTenantChange() {
-  const tenantId = tenantSelect.value;
-  if (!tenantId) return;
-  await chrome.storage.local.set({ lastTenantId: tenantId });
-  await persistActiveTenant(tenantId);
-  await loadClients(tenantId);
+async function selectTenant(tenant: TenantOption) {
+  selectedTenantId = tenant.id;
+  tenantInput.value = tenant.name;
+  await chrome.storage.local.set({ lastTenantId: tenant.id });
+  await persistActiveTenant(tenant.id);
+  await loadClients(tenant.id);
 }
+
+tenantInput.addEventListener("change", async () => {
+  const tenant = findByName(tenants, tenantInput.value);
+  if (tenant && tenant.id !== selectedTenantId) {
+    await selectTenant(tenant);
+  } else if (!tenant) {
+    selectedTenantId = null;
+    clients = [];
+    fillDatalist(clientList, []);
+    clientInput.value = "";
+  }
+});
 
 async function initMain() {
   const { data: { session } } = await supabase.auth.getSession();
@@ -124,13 +161,7 @@ async function initMain() {
     return;
   }
 
-  tenantSelect.innerHTML = "";
-  for (const tenant of tenants) {
-    const opt = document.createElement("option");
-    opt.value = tenant.id;
-    opt.textContent = tenant.name;
-    tenantSelect.appendChild(opt);
-  }
+  fillDatalist(tenantList, tenants.map((t) => t.name));
 
   // Preselect the org the user is ACTIVE on in the web app (user_active_tenant)
   // — with multiple orgs, an arbitrary default causes RLS clashes with the SPA.
@@ -139,13 +170,12 @@ async function initMain() {
     .select("tenant_id")
     .maybeSingle();
   const { lastTenantId } = await chrome.storage.local.get("lastTenantId");
-  const preferred = [activeRow?.tenant_id, lastTenantId].find(
-    (id) => id && tenants.some((t) => t.id === id),
-  );
-  if (preferred) tenantSelect.value = preferred;
+  const preferred = tenants.find((t) => t.id === activeRow?.tenant_id)
+    ?? tenants.find((t) => t.id === lastTenantId)
+    ?? (tenants.length === 1 ? tenants[0] : null);
 
   show("main");
-  await onTenantChange();
+  if (preferred) await selectTenant(preferred);
 }
 
 loginEl.addEventListener("submit", async (e) => {
@@ -167,8 +197,6 @@ loginEl.addEventListener("submit", async (e) => {
   await initMain();
 });
 
-tenantSelect.addEventListener("change", onTenantChange);
-
 el<HTMLButtonElement>("logout-btn").addEventListener("click", async () => {
   await supabase.auth.signOut();
   show("login");
@@ -176,23 +204,27 @@ el<HTMLButtonElement>("logout-btn").addEventListener("click", async () => {
 
 el<HTMLButtonElement>("start-btn").addEventListener("click", async () => {
   showError(mainError, null);
-  const tenantId = tenantSelect.value;
-  if (!tenantId) {
-    showError(mainError, "נא לבחור ארגון");
+
+  const tenant = findByName(tenants, tenantInput.value);
+  if (!tenant) {
+    showError(mainError, "נא לבחור ארגון מהרשימה (הקלד ובחר מההשלמות)");
     return;
   }
-  const tenant = tenants.find((t) => t.id === tenantId);
-  const clientId = clientSelect.value;
-  const clientName = clientId
-    ? clientSelect.options[clientSelect.selectedIndex]?.textContent ?? ""
-    : "";
-  await chrome.storage.local.set({ lastClientId: clientId });
+  if (tenant.id !== selectedTenantId) await selectTenant(tenant);
+
+  const typedClient = clientInput.value.trim();
+  const client = findByName(clients, typedClient);
+  if (typedClient && !client) {
+    showError(mainError, `הלקוח "${typedClient}" לא נמצא ברשימת הפעילים — בחר מההשלמות או השאר ריק`);
+    return;
+  }
+  await chrome.storage.local.set({ lastClientId: client?.id ?? "" });
 
   const params = new URLSearchParams({
-    tenant: tenantId,
-    slug: tenant?.slug ?? "",
-    client: clientId,
-    clientName,
+    tenant: tenant.id,
+    slug: tenant.slug ?? "",
+    client: client?.id ?? "",
+    clientName: client?.name ?? "",
     topic: topicInput.value.trim(),
     audioOnly: audioOnlyCheckbox.checked ? "1" : "",
     mode: modeSelect.value,
