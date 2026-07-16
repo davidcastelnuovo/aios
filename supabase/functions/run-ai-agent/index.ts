@@ -100,6 +100,7 @@ const ALL_TOOLS = [
   { name: 'send_message', description: 'שליחת הודעת WhatsApp ללקוח או ליד', parameters: { type: 'object', properties: { contact_type: { type: 'string', enum: ['lead', 'client'] }, contact_id: { type: 'string' }, message_text: { type: 'string' } }, required: ['contact_type', 'contact_id', 'message_text'] } },
   // SEARCH
   { name: 'search_entities', description: 'חיפוש סוכנויות, לקוחות, קמפיינרים או לידים לפי שם. עבור client: אם הקורא הוא קמפיינר WhatsApp, התוצאות מוגבלות אוטומטית ללקוחות שלו אלא אם הועבר all_scopes=true. ניתן לסנן clients/leads לפי agency_id.', parameters: { type: 'object', properties: { entity_type: { type: 'string', enum: ['agency', 'client', 'campaigner', 'lead'] }, search_term: { type: 'string' }, agency_id: { type: 'string', description: 'הגבלה לסוכנות מסוימת (רלוונטי ל-client/lead)' }, all_scopes: { type: 'boolean', description: 'דרוס את סקופ הקמפיינר והחזר תוצאות מכל הארגון.' } }, required: ['entity_type', 'search_term'] } },
+  { name: 'query_system_graph', description: 'חיפוש לקריאה בלבד בגרף הארכיטקטורה של AIOS: קוד, Edge Functions, טבלאות SQL, מודולים וקשרים ביניהם. השתמשי רק לשאלות טכניות על מבנה המערכת, מיקום מימוש, תלות בין רכיבים או השפעת שינוי. הכלי זמין למנהלים בלבד ואינו מחזיר נתוני לקוחות.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'מונחים טכניים לחיפוש, רצוי באנגלית ושמות רכיבים מדויקים' }, depth: { type: 'integer', minimum: 0, maximum: 3, description: 'עומק ניווט בקשרים, ברירת מחדל 2' }, limit: { type: 'integer', minimum: 1, maximum: 80, description: 'מספר צמתים מרבי, ברירת מחדל 40' } }, required: ['query'] } },
   // MANUS AI - Complex task delegation
   { name: 'delegate_to_manus', description: 'שליחת משימה מורכבת ל-Manus AI לביצוע ברקע (מחקר שוק, ניתוח קמפיינים, יצירת תוכן, ניתוח נתונים). המשימה רצה ברקע ועשויה לקחת דקות עד שעות.', parameters: { type: 'object', properties: { prompt: { type: 'string', description: 'תיאור מפורט של המשימה לביצוע' }, context_data: { type: 'string', description: 'נתוני הקשר רלוונטיים (למשל נתוני קמפיינים)' } }, required: ['prompt'] } },
   { name: 'send_message_to_manus', description: 'שליחת הודעה ישירה ל-Manus agent פעיל (תקשורת ישירה). משמש לשאלות, עדכונים, או המשך שיחה עם Manus על משימה קיימת. מחזיר מיידית ללא המתנה לתשובה.', parameters: { type: 'object', properties: { message: { type: 'string', description: 'ההודעה לשליחה ל-Manus' }, task_id: { type: 'string', description: 'מזהה המשימה הקיימת (אופציונלי — אם לא מוגדר ישתמש ב-agent-default)' } }, required: ['message'] } },
@@ -609,6 +610,18 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
   // Caller-scope bundle for assertCallerCanAccessClient (client-scoped mutations).
   const callerScope = { callerCampaignerId, isManagerRole, isTeamManager, managedAgencyIds, accessibleTenantIds }
   switch (name) {
+    case 'query_system_graph': {
+      if (!isManagerRole) throw new Error('אין הרשאה לעיין בגרף המערכת')
+      const query = String(args.query || '').trim()
+      if (!query) throw new Error('query is required')
+      const { data, error } = await supabase.rpc('carmen_query_system_graph', {
+        p_query: query,
+        p_depth: Math.min(3, Math.max(0, Number(args.depth ?? 2))),
+        p_limit: Math.min(80, Math.max(1, Number(args.limit ?? 40))),
+      })
+      if (error) throw error
+      return { count: data?.length || 0, nodes: data || [], read_only: true }
+    }
     case 'create_lead': {
       const { data: agency } = await supabase.from('agencies').select('id').in('tenant_id', accessibleTenantIds).limit(1).single()
       const { data, error } = await supabase.from('leads').insert({
@@ -4012,6 +4025,11 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     const disabledTools = ((agent as any).disabled_tools || []) as string[]
     if (disabledTools.length > 0) {
       filteredTools = filteredTools.filter(t => !disabledTools.includes(t.name))
+    }
+    // The system graph contains internal architecture. Keep it invisible to
+    // non-manager callers even if an agent's allowlist includes the tool.
+    if (!isManagerRoleCaller) {
+      filteredTools = filteredTools.filter(t => t.name !== 'query_system_graph')
     }
 
     // 4a. Surface-based delegation guard.
