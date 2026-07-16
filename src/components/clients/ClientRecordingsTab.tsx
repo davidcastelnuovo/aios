@@ -25,6 +25,7 @@ import {
 import { format } from "date-fns";
 import { toast } from "sonner";
 import SummarizeRecordingDialog from "@/components/SummarizeRecordingDialog";
+import { SummaryViewerDialog } from "@/components/recordings/SummaryViewerDialog";
 import { useTenantPath } from "@/hooks/useTenantPath";
 
 interface ClientRecordingsTabProps {
@@ -44,6 +45,8 @@ interface RecordingRow {
   transcription: string | null;
   transcription_status: string | null;
   summary_file_url: string | null;
+  summary_md: string | null;
+  client_id: string | null;
 }
 
 interface WorkItemRow {
@@ -70,6 +73,7 @@ export function ClientRecordingsTab({ clientId, tenantId }: ClientRecordingsTabP
   const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
   const [transcriptRecording, setTranscriptRecording] = useState<RecordingRow | null>(null);
   const [summarizeRecording, setSummarizeRecording] = useState<RecordingRow | null>(null);
+  const [summaryRecording, setSummaryRecording] = useState<RecordingRow | null>(null);
 
   const { data: recordings = [], isLoading } = useQuery({
     queryKey: ["client-recordings", tenantId, clientId],
@@ -200,11 +204,9 @@ export function ClientRecordingsTab({ clientId, tenantId }: ClientRecordingsTabP
                       <FileText className="h-3.5 w-3.5 ml-1" />תמלול
                     </Button>
                   )}
-                  {rec.summary_file_url ? (
-                    <Button size="sm" variant="outline" asChild>
-                      <a href={rec.summary_file_url} target="_blank" rel="noreferrer">
-                        <Download className="h-3.5 w-3.5 ml-1" />סיכום
-                      </a>
+                  {(rec.summary_md || rec.summary_file_url) ? (
+                    <Button size="sm" variant="outline" onClick={() => setSummaryRecording(rec)}>
+                      <FileText className="h-3.5 w-3.5 ml-1" />סיכום
                     </Button>
                   ) : (
                     <Button size="sm" variant="outline" onClick={() => setSummarizeRecording(rec)}>
@@ -254,6 +256,15 @@ export function ClientRecordingsTab({ clientId, tenantId }: ClientRecordingsTabP
           open={!!summarizeRecording}
           onOpenChange={(open) => !open && setSummarizeRecording(null)}
           recording={summarizeRecording}
+        />
+      )}
+
+      {summaryRecording && (
+        <SummaryViewerDialog
+          open={!!summaryRecording}
+          onOpenChange={(open) => !open && setSummaryRecording(null)}
+          recording={summaryRecording}
+          tenantId={tenantId}
         />
       )}
     </div>
