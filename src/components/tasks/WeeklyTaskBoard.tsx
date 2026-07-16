@@ -633,8 +633,8 @@ export function WeeklyTaskBoard() {
       queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly", tenantId] });
       toast.success("תאריך המשימה עודכן");
     },
-    onError: () => {
-      toast.error("שגיאה בעדכון התאריך");
+    onError: (error: Error) => {
+      toast.error(`שגיאה בעדכון התאריך: ${error.message}`);
     },
   });
 

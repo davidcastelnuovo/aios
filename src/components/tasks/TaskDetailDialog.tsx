@@ -278,8 +278,8 @@ export function TaskDetailDialog({
       toast.success("המשימה עודכנה");
       onOpenChange(false);
     },
-    onError: () => {
-      toast.error("שגיאה בעדכון המשימה");
+    onError: (error: Error) => {
+      toast.error(`שגיאה בעדכון המשימה: ${error.message}`);
     },
   });
 
