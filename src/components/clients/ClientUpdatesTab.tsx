@@ -88,7 +88,7 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
       try {
         const { data, error } = await (supabase as any)
           .from("communication_logs")
-          .select("status, interaction_type, notes, created_at")
+          .select("status, interaction_type, note, created_at")
           .eq("client_id", clientId)
           .order("created_at", { ascending: false })
           .limit(1)
@@ -119,7 +119,7 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
           tenant_id: tenantId,
           status: statusToSave,
           interaction_type: commInteraction,
-          created_by: user.id,
+          updated_by: user.id,
         });
       if (logError) console.warn("communication_logs insert failed:", logError);
     },
