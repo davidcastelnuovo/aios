@@ -4317,6 +4317,24 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
 
   } catch (error: any) {
     console.error('run-ai-agent error:', error)
+    // Persist the failure so it's diagnosable from the DB (console logs are ephemeral
+    // and invisible to monitoring). Fire-and-forget — never mask the original error.
+    try {
+      const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+      await sb.from('error_logs').insert({
+        source: 'run-ai-agent',
+        tenant_id: bodyJson?.tenant_id || null,
+        error_message: String(error?.message || error).slice(0, 2000),
+        error_stack: String(error?.stack || '').slice(0, 4000) || null,
+        context: {
+          surface,
+          agent_id: bodyJson?.agent_id || null,
+          command_preview: String(bodyJson?.command_text || '').slice(0, 120),
+        },
+      })
+    } catch (logErr) {
+      console.error('run-ai-agent error_logs insert failed:', logErr)
+    }
     return new Response(JSON.stringify({ success: false, error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400,
     })
