@@ -540,7 +540,9 @@ export default function Clients() {
       )
     : serviceFilteredClients;
 
-  const hideInactiveFiltered = hideInactive 
+  // Explicit status selection overrides "hide inactive" — otherwise picking
+  // "מושהה"/"עזב" would always show an empty list
+  const hideInactiveFiltered = hideInactive && statusFilter === "all"
     ? searchedClients?.filter(client => client.status === "active" || client.status === "onboarding")
     : searchedClients;
 
@@ -622,18 +624,69 @@ export default function Clients() {
   return (
     <div className="flex h-full min-h-0 max-h-full flex-col gap-4 overflow-hidden p-4">
       <div className="flex items-center gap-2 flex-wrap">
-        <h2 className="text-2xl font-bold ml-auto">לקוחות</h2>
+        <h2 className="text-2xl font-bold">לקוחות</h2>
 
-          <div className="relative min-w-[180px]">
-            <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="חפש לקוח..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pr-9 h-9"
-            />
+          {/* Inline quick filters — visible next to the page title */}
+          <div className="flex items-center gap-2 flex-wrap ml-auto">
+            {(isTeamManager || isOwner) && (
+              <Select value={selectedCampaigner} onValueChange={setSelectedCampaigner}>
+                <SelectTrigger className="h-9 w-[150px]">
+                  <SelectValue placeholder="קמפיינר" />
+                </SelectTrigger>
+                <SelectContent className="bg-background">
+                  <SelectItem value="all">כל הקמפיינרים</SelectItem>
+                  {campaigners?.map((campaigner) => (
+                    <SelectItem key={campaigner.id} value={campaigner.id}>
+                      {campaigner.full_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-9 w-[130px]">
+                <SelectValue placeholder="סטטוס" />
+              </SelectTrigger>
+              <SelectContent className="bg-background">
+                <SelectItem value="all">כל הסטטוסים</SelectItem>
+                <SelectItem value="active">פעיל</SelectItem>
+                <SelectItem value="onboarding">בקליטה</SelectItem>
+                <SelectItem value="paused">מושהה</SelectItem>
+                <SelectItem value="ended">עזב</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={selectedService} onValueChange={setSelectedService}>
+              <SelectTrigger className="h-9 w-[140px]">
+                <SelectValue placeholder="סוג לקוח" />
+              </SelectTrigger>
+              <SelectContent className="bg-background">
+                <SelectItem value="all">כל סוגי הלקוחות</SelectItem>
+                <SelectItem value="seo">SEO</SelectItem>
+                <SelectItem value="ppc_google">PPC Google</SelectItem>
+                <SelectItem value="ppc_meta">PPC Meta</SelectItem>
+                <SelectItem value="social">Social</SelectItem>
+                <SelectItem value="full_social">Full Social</SelectItem>
+                <SelectItem value="social_meta">Social Meta</SelectItem>
+                <SelectItem value="automation">Automation</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
+
+          {/* Toolbar search is redundant in chat view — the chat sidebar has its own search */}
+          {viewMode !== "chat" && (
+            <div className="relative min-w-[180px]">
+              <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="חפש לקוח..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pr-9 h-9"
+              />
+            </div>
+          )}
 
           {/* Filters button */}
           <Button variant="outline" size="sm" className="h-9 relative" onClick={() => setShowFiltersDialog(true)}>
