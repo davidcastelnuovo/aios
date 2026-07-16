@@ -1,7 +1,7 @@
 // redeploy trigger: rebundle _shared/ai.ts OpenAI key fallback (env secret → llm integration)
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { aiTranscribe, aiTranscribeVerbose } from '../_shared/ai.ts';
+import { aiDiarizeTranscribe, aiTranscribe, aiTranscribeVerbose } from '../_shared/ai.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -237,6 +237,13 @@ async function whisperTranscribe(audioBlob: Blob, contentType: string): Promise<
 
 const CHANNEL_LABELS: Record<string, string> = { mic: 'מקליט', sys: 'משתתפים' };
 
+function channelLabel(channel: string): string {
+  if (CHANNEL_LABELS[channel]) return CHANNEL_LABELS[channel];
+  const guest = channel.match(/^guest(\d+)$/);
+  if (guest) return `משתתף ${guest[1]}`;
+  return channel;
+}
+
 function partChannel(path: string): { channel: 'mic' | 'sys' | 'mixed'; part: number } {
   const m = path.match(/_(mic|sys|audio)_part(\d+)\.\w+$/);
   if (!m) return { channel: 'mixed', part: 0 };
@@ -254,13 +261,42 @@ function formatClock(totalSeconds: number): string {
 }
 
 async function transcribeChannelParts(supabase: any, recordingId: string, paths: string[]): Promise<string> {
+  // Full-length system channel ({ts}_sys_full.webm): diarize it as ONE file so
+  // speaker identities stay consistent across the whole meeting ("משתתף 2" in
+  // minute 5 is the same person in minute 80). When diarization succeeds, the
+  // segmented sys parts are skipped (they exist as a crash-safe fallback).
+  type TimedSegment = { at: number; channel: string; text: string };
+  const sysFullPath = paths.find((p) => /_sys_full\.\w+$/.test(p));
+  let diarized: TimedSegment[] | null = null;
+  if (sysFullPath) {
+    const { data: fullBlob, error: fullErr } = await supabase.storage.from('recordings').download(sysFullPath);
+    if (!fullErr && fullBlob) {
+      console.log(`🗣️ Diarizing system channel (${(fullBlob.size / 1024 / 1024).toFixed(1)}MB) via Scribe`);
+      const segs = await aiDiarizeTranscribe(fullBlob, { filename: 'sys_full.webm' });
+      if (segs) {
+        const speakerOrder = new Map<string, number>();
+        diarized = segs.map((s) => {
+          if (!speakerOrder.has(s.speaker)) speakerOrder.set(s.speaker, speakerOrder.size + 1);
+          return { at: s.start, channel: `guest${speakerOrder.get(s.speaker)}`, text: s.text };
+        });
+        console.log(`🗣️ Diarization: ${speakerOrder.size} speakers, ${segs.length} segments`);
+        await touchProcessing(supabase, recordingId);
+      } else {
+        console.log('🗣️ Diarization unavailable (no ELEVENLABS_API_KEY or Scribe error) — falling back to Whisper on sys parts');
+      }
+    }
+  }
+
   // Group parts per channel, ordered by part number (fallback: array order).
   const channels = new Map<string, { path: string; part: number }[]>();
-  paths.forEach((path, i) => {
-    const { channel, part } = partChannel(path);
-    if (!channels.has(channel)) channels.set(channel, []);
-    channels.get(channel)!.push({ path, part: part || i + 1 });
-  });
+  paths
+    .filter((path) => path !== sysFullPath)
+    .filter((path) => !(diarized && partChannel(path).channel === 'sys'))
+    .forEach((path, i) => {
+      const { channel, part } = partChannel(path);
+      if (!channels.has(channel)) channels.set(channel, []);
+      channels.get(channel)!.push({ path, part: part || i + 1 });
+    });
   for (const list of channels.values()) list.sort((a, b) => a.part - b.part);
 
   // Download + transcribe every part in parallel (each is a few MB).
@@ -283,8 +319,7 @@ async function transcribeChannelParts(supabase: any, recordingId: string, paths:
   await touchProcessing(supabase, recordingId);
 
   // Shift each part's segments by the cumulative duration of earlier parts.
-  type TimedSegment = { at: number; channel: string; text: string };
-  const timeline: TimedSegment[] = [];
+  const timeline: TimedSegment[] = diarized ? [...diarized] : [];
   for (const channel of channels.keys()) {
     const parts = results.filter((r) => r.channel === channel).sort((a, b) => a.part - b.part);
     let offset = 0;
@@ -300,7 +335,7 @@ async function transcribeChannelParts(supabase: any, recordingId: string, paths:
   timeline.sort((a, b) => a.at - b.at);
 
   // Single mixed channel → plain transcript (legacy behavior, no fake speakers).
-  const hasSpeakers = channels.has('mic') || channels.has('sys');
+  const hasSpeakers = channels.has('mic') || channels.has('sys') || !!diarized;
   if (!hasSpeakers) {
     return timeline.map((s) => s.text).join(' ');
   }
@@ -313,13 +348,13 @@ async function transcribeChannelParts(supabase: any, recordingId: string, paths:
       current.texts.push(seg.text);
     } else {
       if (current) {
-        lines.push(`[${formatClock(current.at)}] ${CHANNEL_LABELS[current.channel] || current.channel}: ${current.texts.join(' ')}`);
+        lines.push(`[${formatClock(current.at)}] ${channelLabel(current.channel)}: ${current.texts.join(' ')}`);
       }
       current = { at: seg.at, channel: seg.channel, texts: [seg.text] };
     }
   }
   if (current) {
-    lines.push(`[${formatClock(current.at)}] ${CHANNEL_LABELS[current.channel] || current.channel}: ${current.texts.join(' ')}`);
+    lines.push(`[${formatClock(current.at)}] ${channelLabel(current.channel)}: ${current.texts.join(' ')}`);
   }
   return lines.join('\n');
 }

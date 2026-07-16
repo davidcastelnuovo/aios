@@ -37,6 +37,12 @@ let audioContext: AudioContext | null = null;
 let archiveRecorder: MediaRecorder | null = null;
 const archiveChunks: Blob[] = [];
 
+// Continuous system-audio recorder for speaker diarization: the whole meeting
+// as ONE file, so "משתתף 2" keeps the same identity from minute 5 to minute 80.
+// The rotating sys segments remain the crash-safe fallback.
+let sysFullRecorder: MediaRecorder | null = null;
+const sysFullChunks: Blob[] = [];
+
 interface Channel {
   name: "mic" | "sys";
   stream: MediaStream;
@@ -228,6 +234,14 @@ async function startRecording() {
   }
   if (sysTracks.length > 0) {
     channels.push({ name: "sys", stream: new MediaStream(sysTracks), recorder: null, chunks: [], partNum: 0 });
+
+    // Full-length system channel for diarization (uploaded at stop).
+    sysFullRecorder = new MediaRecorder(new MediaStream(sysTracks), {
+      mimeType: audioMime,
+      audioBitsPerSecond: 32_000,
+    });
+    sysFullRecorder.ondataavailable = (e) => { if (e.data.size > 0) sysFullChunks.push(e.data); };
+    sysFullRecorder.start(1000);
   }
   for (const channel of channels) startChannelRecorder(channel);
   if (channels.length > 0) {
@@ -292,6 +306,7 @@ async function stopAndUpload() {
   setStatus("עוצר הקלטה...");
   await Promise.all([
     stopRecorder(archiveRecorder),
+    stopRecorder(sysFullRecorder),
     ...channels.map((c) => stopRecorder(c.recorder)),
   ]);
   cleanupStreams();
@@ -300,11 +315,14 @@ async function stopAndUpload() {
   const archiveBlob = archiveChunks.length > 0
     ? new Blob(archiveChunks, { type: audioOnly ? "audio/webm" : "video/webm" })
     : null;
+  const sysFullBlob = sysFullChunks.length > 0
+    ? new Blob(sysFullChunks, { type: "audio/webm" })
+    : null;
 
-  await finalizeUpload(archiveBlob, durationMinutes);
+  await finalizeUpload(archiveBlob, sysFullBlob, durationMinutes);
 }
 
-async function finalizeUpload(archiveBlob: Blob | null, durationMinutes: number) {
+async function finalizeUpload(archiveBlob: Blob | null, sysFullBlob: Blob | null, durationMinutes: number) {
   progressEl.classList.remove("hidden");
   progressBar.style.width = "10%";
 
@@ -325,9 +343,17 @@ async function finalizeUpload(archiveBlob: Blob | null, durationMinutes: number)
       uploadedPartPaths.push(path);
     }
 
-    if (!archiveBlob && uploadedPartPaths.length === 0) {
+    if (!archiveBlob && !sysFullBlob && uploadedPartPaths.length === 0) {
       setStatus("ההקלטה ריקה — לא הועלה דבר");
       return;
+    }
+
+    // Full system channel for diarization — one continuous file.
+    if (sysFullBlob) {
+      const sysFullPath = `${tenantId}/${startedAt}_sys_full.webm`;
+      setStatus(`מעלה ערוץ משתתפים לזיהוי דוברים (${(sysFullBlob.size / 1024 / 1024).toFixed(1)}MB)...`);
+      await uploadWithRetry(sysFullPath, sysFullBlob, "audio/webm");
+      if (!uploadedPartPaths.includes(sysFullPath)) uploadedPartPaths.push(sysFullPath);
     }
 
     let filePath: string | null = null;
@@ -403,7 +429,7 @@ async function finalizeUpload(archiveBlob: Blob | null, durationMinutes: number)
     stopBtn.textContent = "נסה להעלות שוב";
     stopBtn.onclick = () => {
       stopBtn.disabled = true;
-      finalizeUpload(archiveBlob, durationMinutes);
+      finalizeUpload(archiveBlob, sysFullBlob, durationMinutes);
     };
   }
 }

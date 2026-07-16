@@ -214,6 +214,73 @@ export async function aiTranscribeVerbose(
   }
 }
 
+// Diarized speech-to-text (ElevenLabs Scribe v2) — separates multiple speakers
+// in one audio file. Used for the system/tab channel of meeting recordings so
+// remote participants get individual labels. Requires ELEVENLABS_API_KEY;
+// returns null when the key is missing or the request fails (callers fall
+// back to Whisper without diarization). Language is auto-detected (handles
+// mixed Hebrew/English meetings).
+export interface DiarizedSegment {
+  start: number;
+  end: number;
+  speaker: string; // e.g. "speaker_0"
+  text: string;
+}
+
+export async function aiDiarizeTranscribe(
+  audio: Blob,
+  opts?: { filename?: string },
+): Promise<DiarizedSegment[] | null> {
+  const key = Deno.env.get("ELEVENLABS_API_KEY");
+  if (!key) return null;
+  try {
+    const form = new FormData();
+    form.append("file", audio, opts?.filename || "audio.webm");
+    form.append("model_id", "scribe_v2");
+    form.append("diarize", "true");
+    const r = await fetch("https://api.elevenlabs.io/v1/speech-to-text", {
+      method: "POST",
+      headers: { "xi-api-key": key },
+      body: form,
+    });
+    if (!r.ok) {
+      console.error("[scribe] error", r.status, (await r.text()).slice(0, 300));
+      return null;
+    }
+    const j = await r.json();
+    // deno-lint-ignore no-explicit-any
+    const words: any[] = Array.isArray(j?.words) ? j.words : [];
+    const segments: DiarizedSegment[] = [];
+    let current: DiarizedSegment | null = null;
+    for (const w of words) {
+      if (w?.type === "audio_event") continue;
+      const text = String(w?.text ?? "");
+      if (!text) continue;
+      const speaker = String(w?.speaker_id ?? "speaker_0");
+      if (current && current.speaker === speaker) {
+        current.text += text;
+        current.end = Number(w?.end) || current.end;
+      } else {
+        if (current) segments.push(current);
+        current = {
+          start: Number(w?.start) || 0,
+          end: Number(w?.end) || 0,
+          speaker,
+          text,
+        };
+      }
+    }
+    if (current) segments.push(current);
+    const cleaned = segments
+      .map((s) => ({ ...s, text: s.text.trim() }))
+      .filter((s) => s.text);
+    return cleaned.length > 0 ? cleaned : null;
+  } catch (e) {
+    console.error("[scribe] failed", e);
+    return null;
+  }
+}
+
 // OpenAI TTS voices usable for Carmen. 'shimmer'/'nova' read Hebrew well.
 export const AI_VOICES = ["alloy", "echo", "fable", "onyx", "nova", "shimmer", "coral", "sage"] as const;
 
