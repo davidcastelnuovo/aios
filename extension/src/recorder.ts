@@ -39,18 +39,79 @@ if (audioOnly) {
   modeEl.textContent = "🖥️ הקלטת מסך / הדרכה";
   modeEl.classList.remove("hidden");
 }
-if (mode === "screen" && cameraEnabled) {
-  cameraBtn.classList.remove("hidden");
-  screenHint.classList.remove("hidden");
-}
-
-// Camera bubble: an always-on-top Picture-in-Picture window showing the camera.
-// When the user records the ENTIRE screen, the bubble is captured as part of
-// the recording — no canvas compositing (which freezes in background windows).
 let cameraStream: MediaStream | null = null;
 // deno-style loose typing: documentPictureInPicture is Chrome 116+
 let pipWindow: Window | null = null;
 
+// Compositing (insertable streams) burns the camera bubble INTO the recorded
+// frames — a perfect borderless circle, nothing floating on screen. Falls back
+// to the always-on-top PiP bubble on browsers without the API.
+// deno-lint-ignore no-explicit-any
+const supportsCompositing = typeof (window as any).MediaStreamTrackProcessor !== "undefined"
+  // deno-lint-ignore no-explicit-any
+  && typeof (window as any).MediaStreamTrackGenerator !== "undefined";
+
+const cameraSetup = el<HTMLDivElement>("camera-setup");
+const camPreview = el<HTMLVideoElement>("cam-preview");
+const cornerSelect = el<HTMLSelectElement>("corner-select");
+let compositeWorker: Worker | null = null;
+
+if (mode === "screen" && cameraEnabled) {
+  if (supportsCompositing) {
+    cameraSetup.classList.remove("hidden");
+    screenHint.textContent = "💡 העיגול יוטמע בתוך ההקלטה עצמה — אפשר למזער את החלון הזה אחרי ההתחלה";
+    screenHint.classList.remove("hidden");
+    void initCameraPreview();
+  } else {
+    cameraBtn.classList.remove("hidden");
+    screenHint.textContent = "💡 כדי שהמצלמה תיכלל בהקלטה — בחר \"המסך כולו\" (Entire Screen)";
+    screenHint.classList.remove("hidden");
+  }
+}
+
+async function initCameraPreview() {
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 640 }, height: { ideal: 640 }, facingMode: "user" },
+    });
+    camPreview.srcObject = cameraStream;
+  } catch {
+    setStatus("⚠️ אין גישה למצלמה — ההקלטה תמשיך בלי בועה");
+    cameraSetup.classList.add("hidden");
+  }
+}
+
+cornerSelect.addEventListener("change", () => {
+  compositeWorker?.postMessage({ corner: cornerSelect.value });
+});
+
+// Returns a video track with the camera bubble burned in (or the raw track).
+function buildCompositedTrack(displayTrack: MediaStreamTrack): MediaStreamTrack {
+  if (!supportsCompositing || !cameraStream || cameraStream.getVideoTracks().length === 0) {
+    return displayTrack;
+  }
+  try {
+    // deno-lint-ignore no-explicit-any
+    const ScreenProcessor = (window as any).MediaStreamTrackProcessor;
+    // deno-lint-ignore no-explicit-any
+    const Generator = (window as any).MediaStreamTrackGenerator;
+    const screenProc = new ScreenProcessor({ track: displayTrack });
+    const camProc = new ScreenProcessor({ track: cameraStream.getVideoTracks()[0] });
+    const generator = new Generator({ kind: "video" });
+    compositeWorker = new Worker(new URL("./compositeWorker.ts", import.meta.url), { type: "module" });
+    compositeWorker.postMessage(
+      { screen: screenProc.readable, cam: camProc.readable, out: generator.writable, corner: cornerSelect.value },
+      [screenProc.readable, camProc.readable, generator.writable],
+    );
+    return generator as MediaStreamTrack;
+  } catch (err) {
+    console.error("compositing failed, recording raw screen:", err);
+    return displayTrack;
+  }
+}
+
+// Fallback camera bubble (no insertable-streams support): an always-on-top
+// Picture-in-Picture window, captured when recording the entire screen.
 async function startCameraBubble() {
   cameraBtn.disabled = true;
   try {
@@ -366,7 +427,11 @@ async function startRecording() {
   // Playback recording: full video, or continuous mixed audio in audio-only mode.
   if (!audioOnly) {
     const videoMime = pickMimeType(["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"]);
-    const archiveStream = new MediaStream([...displayStream.getVideoTracks(), ...mixedTracks]);
+    const rawVideoTrack = displayStream.getVideoTracks()[0];
+    const videoTrack = mode === "screen" && cameraEnabled
+      ? buildCompositedTrack(rawVideoTrack)
+      : rawVideoTrack;
+    const archiveStream = new MediaStream([videoTrack, ...mixedTracks]);
     archiveRecorder = new MediaRecorder(archiveStream, {
       mimeType: videoMime,
       videoBitsPerSecond: 1_000_000,
@@ -445,6 +510,9 @@ function stopRecorder(recorder: MediaRecorder | null): Promise<void> {
 }
 
 function cleanupStreams() {
+  compositeWorker?.terminate();
+  compositeWorker = null;
+  camPreview.srcObject = null;
   stopCameraBubble();
   displayStream?.getTracks().forEach((t) => t.stop());
   micStream?.getTracks().forEach((t) => t.stop());
