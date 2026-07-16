@@ -17,6 +17,13 @@ const tenantSelect = el<HTMLSelectElement>("tenant-select");
 const clientSelect = el<HTMLSelectElement>("client-select");
 const topicInput = el<HTMLInputElement>("topic-input");
 const audioOnlyCheckbox = el<HTMLInputElement>("audio-only");
+const modeSelect = el<HTMLSelectElement>("mode-select");
+const cameraRow = el<HTMLLabelElement>("camera-row");
+const cameraToggle = el<HTMLInputElement>("camera-toggle");
+
+modeSelect.addEventListener("change", () => {
+  cameraRow.classList.toggle("hidden", modeSelect.value !== "screen");
+});
 
 let tenants: TenantOption[] = [];
 
@@ -188,6 +195,8 @@ el<HTMLButtonElement>("start-btn").addEventListener("click", async () => {
     clientName,
     topic: topicInput.value.trim(),
     audioOnly: audioOnlyCheckbox.checked ? "1" : "",
+    mode: modeSelect.value,
+    camera: modeSelect.value === "screen" && cameraToggle.checked ? "1" : "",
   });
 
   await chrome.windows.create({
