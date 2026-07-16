@@ -12,6 +12,9 @@ import { useTenant } from "@/contexts/TenantContext";
 import { Loader2, FileText, Sparkles, Download, ExternalLink, Mic, RotateCcw } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { SUMMARY_PROSE_CLASS } from "@/components/recordings/SummaryViewerDialog";
 
 interface SummarizeRecordingDialogProps {
   open: boolean;
@@ -588,8 +591,11 @@ export default function SummarizeRecordingDialog({
               <div
                 className="bg-muted/50 rounded-lg p-4 text-sm leading-relaxed max-h-[300px] overflow-y-auto"
                 dir="rtl"
-                dangerouslySetInnerHTML={{ __html: result.summary }}
-              />
+              >
+                <div className={SUMMARY_PROSE_CLASS}>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{result.summary}</ReactMarkdown>
+                </div>
+              </div>
               {result.file_url && (
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" asChild>

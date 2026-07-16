@@ -266,3 +266,7 @@ verify_jwt = false
 
 [functions.run-migration-visibility]
 verify_jwt = false
+
+# Chrome-extension recording ingest — requires the user's session JWT.
+[functions.ingest-extension-recording]
+verify_jwt = true

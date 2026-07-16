@@ -525,9 +525,10 @@ export async function runCarmenAI(
   });
 
 
-  // Try once; on hard failure (network error, non-2xx, or empty output) retry exactly
-  // once after a 1s delay. If the retry also fails, throw — the caller will swallow
-  // the error and stay silent rather than send a fake "טכנית" reply to WhatsApp.
+  // Try once; retry once after 1s ONLY for transient failures (network error, 5xx,
+  // empty output). A 4xx is deterministic — retrying just doubles the latency and the
+  // load, so it throws immediately. The error carries the response body so the real
+  // reason (from run-ai-agent's catch) reaches the webhook logs.
   const attempt = async (): Promise<string> => {
     const res = await fetch(`${supabaseUrl}/functions/v1/run-ai-agent`, {
       method: 'POST',
@@ -535,7 +536,10 @@ export async function runCarmenAI(
       body,
     });
     if (!res.ok) {
-      throw new Error(`run-ai-agent ${res.status}`);
+      const detail = (await res.text().catch(() => '')).slice(0, 300);
+      const err: any = new Error(`run-ai-agent ${res.status}${detail ? ` — ${detail}` : ''}`);
+      err.permanent = res.status >= 400 && res.status < 500;
+      throw err;
     }
     const data = await res.json();
     const out = (data?.output || '').toString().trim();
@@ -545,8 +549,9 @@ export async function runCarmenAI(
 
   try {
     return await attempt();
-  } catch (firstErr) {
+  } catch (firstErr: any) {
     console.error('❌ runCarmenAI attempt 1 failed:', firstErr);
+    if (firstErr?.permanent) throw firstErr;
     await new Promise(r => setTimeout(r, 1000));
     try {
       return await attempt();

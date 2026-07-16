@@ -169,6 +169,164 @@ export async function aiTranscribe(
   }
 }
 
+// Timestamped speech-to-text (OpenAI Whisper, verbose_json). Returns per-segment
+// timings so multi-channel recordings can be merged into a speaker timeline.
+// Segments Whisper flags as probable non-speech are dropped — Whisper is known
+// to hallucinate text on silence (e.g. a mostly-quiet mic channel).
+export interface TranscriptSegment {
+  start: number; // seconds within this audio file
+  end: number;
+  text: string;
+}
+
+export async function aiTranscribeVerbose(
+  audio: Blob,
+  opts?: { language?: string; filename?: string },
+): Promise<{ text: string; segments: TranscriptSegment[]; duration: number } | null> {
+  const key = await resolveOpenAIKey();
+  if (!key) return null;
+  try {
+    const form = new FormData();
+    form.append("file", audio, opts?.filename || "audio.ogg");
+    form.append("model", "whisper-1");
+    form.append("language", opts?.language || "he");
+    form.append("response_format", "verbose_json");
+    const r = await fetch(`${OPENAI_BASE}/audio/transcriptions`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${key}` }, // let fetch set the multipart boundary
+      body: form,
+    });
+    if (!r.ok) return null;
+    const j = await r.json();
+    // deno-lint-ignore no-explicit-any
+    const segments: TranscriptSegment[] = (Array.isArray(j?.segments) ? j.segments : [])
+      // deno-lint-ignore no-explicit-any
+      .filter((s: any) => (s?.no_speech_prob ?? 0) < 0.6 && (s?.text ?? "").trim())
+      // deno-lint-ignore no-explicit-any
+      .map((s: any) => ({ start: Number(s.start) || 0, end: Number(s.end) || 0, text: String(s.text).trim() }));
+    return {
+      text: (j?.text ?? "").toString().trim(),
+      segments,
+      duration: Number(j?.duration) || (segments.length ? segments[segments.length - 1].end : 0),
+    };
+  } catch {
+    return null;
+  }
+}
+
+// Vision chat (gpt-4o-mini) returning parsed JSON. Images are inlined as
+// base64 data URLs. Used e.g. to read speaker name labels off meeting
+// screenshots. Returns null on any failure.
+export async function aiVisionJSON(
+  prompt: string,
+  images: Blob[],
+  opts?: { model?: string },
+  // deno-lint-ignore no-explicit-any
+): Promise<any | null> {
+  const key = await resolveOpenAIKey();
+  if (!key || images.length === 0) return null;
+  try {
+    // deno-lint-ignore no-explicit-any
+    const content: any[] = [{ type: "text", text: prompt }];
+    for (const img of images) {
+      const bytes = new Uint8Array(await img.arrayBuffer());
+      let binary = "";
+      for (let i = 0; i < bytes.length; i += 8192) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+      }
+      content.push({
+        type: "image_url",
+        image_url: { url: `data:image/jpeg;base64,${btoa(binary)}` },
+      });
+    }
+    const r = await fetch(`${OPENAI_BASE}/chat/completions`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: opts?.model || "gpt-4o-mini",
+        response_format: { type: "json_object" },
+        messages: [{ role: "user", content }],
+      }),
+    });
+    if (!r.ok) {
+      console.error("[vision] error", r.status, (await r.text()).slice(0, 200));
+      return null;
+    }
+    const j = await r.json();
+    return JSON.parse(j?.choices?.[0]?.message?.content ?? "null");
+  } catch (e) {
+    console.error("[vision] failed", e);
+    return null;
+  }
+}
+
+// Diarized speech-to-text (ElevenLabs Scribe v2) — separates multiple speakers
+// in one audio file. Used for the system/tab channel of meeting recordings so
+// remote participants get individual labels. Requires ELEVENLABS_API_KEY;
+// returns null when the key is missing or the request fails (callers fall
+// back to Whisper without diarization). Language is auto-detected (handles
+// mixed Hebrew/English meetings).
+export interface DiarizedSegment {
+  start: number;
+  end: number;
+  speaker: string; // e.g. "speaker_0"
+  text: string;
+}
+
+export async function aiDiarizeTranscribe(
+  audio: Blob,
+  opts?: { filename?: string },
+): Promise<DiarizedSegment[] | null> {
+  const key = Deno.env.get("ELEVENLABS_API_KEY");
+  if (!key) return null;
+  try {
+    const form = new FormData();
+    form.append("file", audio, opts?.filename || "audio.webm");
+    form.append("model_id", "scribe_v2");
+    form.append("diarize", "true");
+    const r = await fetch("https://api.elevenlabs.io/v1/speech-to-text", {
+      method: "POST",
+      headers: { "xi-api-key": key },
+      body: form,
+    });
+    if (!r.ok) {
+      console.error("[scribe] error", r.status, (await r.text()).slice(0, 300));
+      return null;
+    }
+    const j = await r.json();
+    // deno-lint-ignore no-explicit-any
+    const words: any[] = Array.isArray(j?.words) ? j.words : [];
+    const segments: DiarizedSegment[] = [];
+    let current: DiarizedSegment | null = null;
+    for (const w of words) {
+      if (w?.type === "audio_event") continue;
+      const text = String(w?.text ?? "");
+      if (!text) continue;
+      const speaker = String(w?.speaker_id ?? "speaker_0");
+      if (current && current.speaker === speaker) {
+        current.text += text;
+        current.end = Number(w?.end) || current.end;
+      } else {
+        if (current) segments.push(current);
+        current = {
+          start: Number(w?.start) || 0,
+          end: Number(w?.end) || 0,
+          speaker,
+          text,
+        };
+      }
+    }
+    if (current) segments.push(current);
+    const cleaned = segments
+      .map((s) => ({ ...s, text: s.text.trim() }))
+      .filter((s) => s.text);
+    return cleaned.length > 0 ? cleaned : null;
+  } catch (e) {
+    console.error("[scribe] failed", e);
+    return null;
+  }
+}
+
 // OpenAI TTS voices usable for Carmen. 'shimmer'/'nova' read Hebrew well.
 export const AI_VOICES = ["alloy", "echo", "fable", "onyx", "nova", "shimmer", "coral", "sage"] as const;
 

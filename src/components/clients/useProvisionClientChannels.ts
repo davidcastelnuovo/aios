@@ -37,7 +37,14 @@ const TABLE_META: Record<
     label: "Facebook",
     category: "Facebook Insights",
     needsIntegrationId: false,
-    build: (v) => ({ ad_account_id: v, currency: "ILS", date_range: "last_30_days", sync_frequency: "daily" }),
+    // Graph API requires the act_ prefix on ad account ids; the client field
+    // usually holds the bare number.
+    build: (v) => ({
+      ad_account_id: v.startsWith("act_") ? v : `act_${v}`,
+      currency: "ILS",
+      date_range: "last_30_days",
+      sync_frequency: "daily",
+    }),
   },
   ahrefs: {
     label: "Ahrefs",
@@ -181,7 +188,9 @@ export function useProvisionClientChannels() {
         const syncFn = syncFunctionFor(p.integrationType);
         if (!syncFn) continue;
         try {
-          const res = await supabase.functions.invoke(syncFn, { body: { tableId: p.id, tenantId } });
+          // Both sync functions read snake_case table_id — camelCase tableId
+          // made every initial provisioning sync fail silently with 400.
+          const res = await supabase.functions.invoke(syncFn, { body: { table_id: p.id } });
           if (!res.error) summary.synced.push(p.label);
         } catch {
           // ignore — manual sync remains available in the report panel

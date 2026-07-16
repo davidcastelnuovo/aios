@@ -3496,9 +3496,11 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
       supabase.from('tenants').select('name, type').eq('id', resolvedTenantId).single(),
       supabase.from('agencies').select('id, name, tenant_id').eq('tenant_id', resolvedTenantId).order('name').limit(50),
       Promise.all([
+        // leads: rows needed for the per-status breakdown (status column only).
         supabase.from('leads').select('status', { count: 'exact', head: false }).eq('tenant_id', resolvedTenantId),
-        supabase.from('clients').select('id', { count: 'exact', head: false }).eq('tenant_id', resolvedTenantId),
-        supabase.from('tasks').select('id', { count: 'exact', head: false }).eq('tenant_id', resolvedTenantId).eq('status', 'open'),
+        // clients/tasks: only the count is used — head:true skips row payloads.
+        supabase.from('clients').select('id', { count: 'exact', head: true }).eq('tenant_id', resolvedTenantId),
+        supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('tenant_id', resolvedTenantId).eq('status', 'open'),
       ]),
       supabase.from('ai_memory').select('key, content, category').eq('tenant_id', resolvedTenantId).order('updated_at', { ascending: false }).limit(30),
       supabase.from('campaigners').select('id, full_name, phone, email, role').eq('tenant_id', resolvedTenantId).order('full_name').limit(50),
@@ -3534,8 +3536,8 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
         ? `חשוב: יש לך גישה לקריאה/עדכון של לקוחות, לידים, משימות ושיחות מהסוכנויות המשותפות לעיל — גם אם הן שייכות לארגון אחר. כשמחפשים לקוח/ליד, חפשו גם בסוכנויות המשותפות.`
         : '',
       `לידים: ${leadsData.data?.length || 0} (${Object.entries(leadsByStatus).map(([k,v]) => `${k}: ${v}`).join(', ')})`,
-      `לקוחות פעילים: ${clientsData.data?.length || 0}`,
-      `משימות פתוחות: ${tasksData.data?.length || 0}`,
+      `לקוחות פעילים: ${clientsData.count ?? 0}`,
+      `משימות פתוחות: ${tasksData.count ?? 0}`,
       teamRosterLine,
     ].filter(Boolean).join('\n')
     const isCarmen = agent.name?.toLowerCase().includes('carmen') || agent.name?.includes('כרמן')
@@ -3566,8 +3568,8 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
         sharedAgenciesCount: sharedAgencies.length,
         leadsByStatus,
         totalLeads: leadsData.data?.length || 0,
-        activeClients: clientsData.data?.length || 0,
-        openTasks: tasksData.data?.length || 0,
+        activeClients: clientsData.count ?? 0,
+        openTasks: tasksData.count ?? 0,
       }
       
       const memoryItemsObj: any = {
@@ -3848,7 +3850,7 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
           const { data: ftsHits } = await supabase
             .from('ai_skills')
             .select('id, name, description, steps, version, usage_count')
-            .eq('tenant_id', tenantId)
+            .eq('tenant_id', resolvedTenantId)
             .eq('is_active', true)
             .textSearch('search_vector', tsQuery, { type: 'websearch', config: 'simple' })
             .limit(3)
@@ -4090,6 +4092,23 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     if (activeSkillsBlock) {
       systemPrompt += activeSkillsBlock
       console.log(`[AGENT] Active skills (${surface}): ${matchedSkills.join(', ')} | sources: ${_matchedSkills.map(s => s.source).join(',')}`)
+      // Skin → capability enforcement: a matched skin's allowed_tools are
+      // guaranteed to be available, even when agent.allowed_tools narrows the
+      // set. Explicitly disabled tools stay disabled (denylist wins).
+      const skillToolNames = new Set(_matchedSkills.flatMap(s => s.tools || []))
+      if (skillToolNames.size > 0) {
+        const present = new Set(filteredTools.map(t => t.name))
+        const missing = ALL_TOOLS.filter(t =>
+          skillToolNames.has(t.name) && !present.has(t.name) && !disabledTools.includes(t.name))
+        if (missing.length > 0) {
+          filteredTools = [...filteredTools, ...missing]
+          console.log(`[AGENT] Skill tools added: ${missing.map(t => t.name).join(', ')}`)
+        }
+      }
+      // Usage signal (fire-and-forget): matched skins bump usage_count so real
+      // usage data accumulates for ranking/cleanup. Never blocks the reply.
+      supabase.rpc('bump_skill_usage_by_slug', { p_slugs: matchedSkills, p_tenant_id: skillTenantId })
+        .then(() => {}, () => {})
     }
     // Surface instruction-capture confirmation in the system prompt so the model knows
     // a rule was just persisted and can acknowledge it briefly without re-saving.
@@ -4298,6 +4317,24 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
 
   } catch (error: any) {
     console.error('run-ai-agent error:', error)
+    // Persist the failure so it's diagnosable from the DB (console logs are ephemeral
+    // and invisible to monitoring). Fire-and-forget — never mask the original error.
+    try {
+      const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+      await sb.from('error_logs').insert({
+        source: 'run-ai-agent',
+        tenant_id: bodyJson?.tenant_id || null,
+        error_message: String(error?.message || error).slice(0, 2000),
+        error_stack: String(error?.stack || '').slice(0, 4000) || null,
+        context: {
+          surface,
+          agent_id: bodyJson?.agent_id || null,
+          command_preview: String(bodyJson?.command_text || '').slice(0, 120),
+        },
+      })
+    } catch (logErr) {
+      console.error('run-ai-agent error_logs insert failed:', logErr)
+    }
     return new Response(JSON.stringify({ success: false, error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400,
     })

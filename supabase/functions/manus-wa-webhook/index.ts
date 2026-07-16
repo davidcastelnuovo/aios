@@ -247,6 +247,45 @@ Deno.serve(async (req) => {
     const messageText = await resolveMessageText(payload, msgContainer);
     const messageId = String(payload.id || '');
 
+    // AUTO LID RESOLUTION 1/2 — real phone in the payload. Newer Baileys exposes the
+    // sender's actual number alongside the LID (senderPn / participantPn); if the
+    // gateway forwards any real-phone field that differs from the LID digits, use it
+    // directly — no aliases or pairing needed.
+    let lidAutoResolved = false;
+    if (isLidEvent && !isOutgoingFromPhone && !isGroup) {
+      const lidDigits = counterpartPhone.replace(/\D/g, '');
+      const candidates = [payload.senderPn, payload.participantPn, payload.senderPhone, payload.senderNumber]
+        .map((v: unknown) => String(v || '').split('@')[0].replace(/\D/g, ''))
+        .filter((d: string) => d && d.length >= 9 && d.length <= 15 && d !== lidDigits);
+      if (candidates.length > 0) {
+        counterpartPhone = candidates[0];
+        counterpartRaw = `${counterpartPhone}@c.us`;
+        normalized = normalizePhone(counterpartPhone);
+        lidAutoResolved = true;
+        console.log('[manus-wa] LID auto-resolved from payload real-phone field', { lid: lidDigits, phone: counterpartPhone });
+        // Persist the mapping so future events resolve even without the payload field.
+        supabase.from('wa_lid_map')
+          .upsert({ lid: lidDigits, phone: counterpartPhone, connection_user_id: connectionUserId, source: 'payload' }, { onConflict: 'lid' })
+          .then(() => {}, () => {});
+      } else if (lidDigits) {
+        // AUTO LID RESOLUTION 2/2 — learned map. Any previously learned lid→phone pair
+        // (from payload fields or Green-API pairing, across all tenants on this system)
+        // resolves deterministically with zero configuration.
+        const { data: known } = await supabase
+          .from('wa_lid_map')
+          .select('phone')
+          .eq('lid', lidDigits)
+          .maybeSingle();
+        if (known?.phone) {
+          counterpartPhone = String(known.phone);
+          counterpartRaw = `${counterpartPhone}@c.us`;
+          normalized = normalizePhone(counterpartPhone);
+          lidAutoResolved = true;
+          console.log('[manus-wa] LID auto-resolved from learned map', { lid: lidDigits, phone: counterpartPhone });
+        }
+      }
+    }
+
     // ===== ATOMIC DEDUP =====
     // Manus occasionally delivers the same webhook twice. Without this guard
     // Carmen would run twice and reply twice (esp. in groups, which had no
@@ -301,7 +340,10 @@ Deno.serve(async (req) => {
     // as the direction/contact source AND route Carmen replies through Green API
     // (so the reply comes from the same WhatsApp number the operator actually used).
     let pairedFromGreenApi = false;
-    if (!isOutgoingFromPhone && !isGroup && isLidEvent && messageText.trim()) {
+    // When the LID was already deterministically resolved (payload field / learned map),
+    // the 2.6s pairing wait is pure latency — skip it. Pairing remains for unresolved LIDs
+    // (it both fixes direction for own-outbound mirrors and feeds the learned map).
+    if (!isOutgoingFromPhone && !isGroup && isLidEvent && messageText.trim() && !lidAutoResolved) {
       await new Promise((resolve) => setTimeout(resolve, 2600));
       const { data: greenMatches } = await supabase
         .from('chat_messages')
@@ -328,6 +370,14 @@ Deno.serve(async (req) => {
         ).split('@')[0].replace(/[^0-9]/g, '');
         pairedFromGreenApi = true;
         console.log('[manus-wa] paired LID event with Green API outbound', { messageId, counterpartPhone, sourcePhoneNumber });
+        // AUTO LID LEARNING — a successful pairing proves lid↔phone; persist it so
+        // future events (any tenant on this system) resolve without pairing or config.
+        const learnedLid = fromRaw.split('@')[0].replace(/\D/g, '');
+        if (learnedLid && learnedLid !== counterpartPhone.replace(/\D/g, '')) {
+          supabase.from('wa_lid_map')
+            .upsert({ lid: learnedLid, phone: counterpartPhone.replace(/\D/g, ''), connection_user_id: connectionUserId, source: 'green_api_pairing' }, { onConflict: 'lid' })
+            .then(() => {}, () => {});
+        }
       }
     }
 
@@ -338,7 +388,7 @@ Deno.serve(async (req) => {
     // fromMeFlag guard: when David sends OUTBOUND to a third party (e.g. Ana), the
     // to-field is already a real phone and the LID resolver must NOT overwrite it with
     // a Carmen session phone — that is the root cause of Carmen responding to "Hi Ana".
-    if (!isGroup && !pairedFromGreenApi && isLidEvent && !fromMeFlag) {
+    if (!isGroup && !pairedFromGreenApi && isLidEvent && !fromMeFlag && !lidAutoResolved) {
       try {
         const carmenAutomation = await findCarmenSessionAutomation(supabase, tenantId, integ.id, {
           isGroup: false,
@@ -354,13 +404,24 @@ Deno.serve(async (req) => {
         const since = new Date(Date.now() - idleMin * 60 * 1000).toISOString();
 
         // Resolution priority for LID events on private Carmen flows:
+        // 0) Explicit LID→phone map in the automation config (carmen_lid_aliases) — the only
+        //    deterministic option on a cold start when several phones are allowed.
         // 1) Explicit allowed phones (specific_phone scope) — pick fresh session phone, else single allowed phone.
         // 2) Otherwise (scope=all or no allowed list) — pick the unique fresh active Carmen session
         //    on this connection. This is what enables continuation messages without re-saying "כרמן".
         let aliasPhone: string | null = null;
         let aliasReason = '';
 
-        if (scopeMode === 'specific_phone' && allowedPhones.length >= 1) {
+        const lidAliases: Record<string, string> = (cfg.carmen_lid_aliases && typeof cfg.carmen_lid_aliases === 'object')
+          ? cfg.carmen_lid_aliases
+          : {};
+        const lidKey = String(counterpartPhone || '').replace(/\D/g, '');
+        if (lidKey && lidAliases[lidKey]) {
+          aliasPhone = String(lidAliases[lidKey]).replace(/\D/g, '');
+          aliasReason = 'configured_lid_alias';
+        }
+
+        if (!aliasPhone && scopeMode === 'specific_phone' && allowedPhones.length >= 1) {
           if (allowedPhones.length === 1) {
             aliasPhone = allowedPhones[0] as string;
             aliasReason = 'single_allowed_phone';
